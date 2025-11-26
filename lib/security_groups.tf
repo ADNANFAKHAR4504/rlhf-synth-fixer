@@ -2,7 +2,7 @@
 resource "aws_security_group" "cluster" {
   name        = "eks-cluster-sg-${var.environment_suffix}"
   description = "Security group for EKS cluster control plane"
-  vpc_id      = var.vpc_id
+  vpc_id      = aws_vpc.main.id
 
   egress {
     from_port   = 0
@@ -32,7 +32,7 @@ resource "aws_security_group_rule" "cluster_ingress_nodes" {
 resource "aws_security_group" "nodes" {
   name        = "eks-nodes-sg-${var.environment_suffix}"
   description = "Security group for EKS worker nodes"
-  vpc_id      = var.vpc_id
+  vpc_id      = aws_vpc.main.id
 
   egress {
     from_port   = 0

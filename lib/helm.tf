@@ -28,7 +28,7 @@ resource "helm_release" "lb_controller" {
 
   set {
     name  = "vpcId"
-    value = var.vpc_id
+    value = aws_vpc.main.id
   }
 
   set {

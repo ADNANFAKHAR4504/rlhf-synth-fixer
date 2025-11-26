@@ -44,7 +44,7 @@ resource "aws_eks_node_group" "main" {
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = "managed-nodes-${var.environment_suffix}"
   node_role_arn   = aws_iam_role.node_group.arn
-  subnet_ids      = var.private_subnet_ids
+  subnet_ids      = [for s in aws_subnet.private : s.id]
 
   ami_type       = "BOTTLEROCKET_x86_64"
   capacity_type  = "ON_DEMAND"
