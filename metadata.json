@@ -7,6 +7,10 @@
   "category": "Serverless & Event-Driven",
   "subcategory": "Lambda Functions",
   "training_quality": 9,
+  "team": "synth",
+  "startedAt": "2025-11-27T22:00:00Z",
+  "turn_type": "single",
+  "subject_labels": ["Serverless & Event-Driven"],
   "files_created": [
     "lib/main.py",
     "lib/lambda/payment_webhook.py",
