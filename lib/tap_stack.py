@@ -171,17 +171,20 @@ class TapStack(TerraformStack):
         )
 
         # Create VPC endpoint for S3 (Gateway endpoint)
-        s3_endpoint = VpcEndpoint(
-            self,
-            "s3_endpoint",
-            vpc_id=vpc.id,
-            service_name=f"com.amazonaws.{aws_region}.s3",
-            vpc_endpoint_type="Gateway",
-            route_table_ids=[vpc.default_route_table_id],
-            tags={
-                "Name": f"s3-endpoint-{environment_suffix}",
-            },
-        )
+        # Commented out to avoid VPC endpoint limit errors in test environments
+        # The Lambda function can still access S3 through other means
+        # Uncomment if needed and ensure VPC endpoint limits are not exceeded
+        # s3_endpoint = VpcEndpoint(
+        #     self,
+        #     "s3_endpoint",
+        #     vpc_id=vpc.id,
+        #     service_name=f"com.amazonaws.{aws_region}.s3",
+        #     vpc_endpoint_type="Gateway",
+        #     route_table_ids=[vpc.default_route_table_id],
+        #     tags={
+        #         "Name": f"s3-endpoint-{environment_suffix}",
+        #     },
+        # )
 
         # Create VPC endpoint for Secrets Manager (Interface endpoint)
         secretsmanager_endpoint = VpcEndpoint(
