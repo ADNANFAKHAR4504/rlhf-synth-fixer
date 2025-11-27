@@ -1,6 +1,6 @@
 # CloudWatch Log Group for VPC Flow Logs
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
-  name              = "/aws/vpc/flow-logs-${var.environment_suffix}"
+  name              = "/aws/vpc/payment-flow-logs-${var.environment_suffix}"
   retention_in_days = 30
 
   tags = {
@@ -12,7 +12,7 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
 
 # IAM Role for VPC Flow Logs
 resource "aws_iam_role" "vpc_flow_logs" {
-  name = "vpc-flow-logs-role-${var.environment_suffix}"
+  name = "payment-flow-logs-role-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -28,7 +28,7 @@ resource "aws_iam_role" "vpc_flow_logs" {
   })
 
   tags = {
-    Name        = "vpc-flow-logs-role-${var.environment_suffix}"
+    Name        = "payment-flow-logs-role-${var.environment_suffix}"
     Environment = "Production"
     Project     = "PaymentGateway"
   }
@@ -36,7 +36,7 @@ resource "aws_iam_role" "vpc_flow_logs" {
 
 # IAM Policy for VPC Flow Logs
 resource "aws_iam_role_policy" "vpc_flow_logs" {
-  name = "vpc-flow-logs-policy-${var.environment_suffix}"
+  name = "payment-flow-logs-policy-${var.environment_suffix}"
   role = aws_iam_role.vpc_flow_logs.id
 
   policy = jsonencode({
