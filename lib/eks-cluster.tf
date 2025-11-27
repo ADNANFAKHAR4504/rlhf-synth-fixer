@@ -34,7 +34,7 @@ resource "aws_iam_role_policy_attachment" "eks_vpc_resource_controller" {
 
 # CloudWatch log group for EKS cluster
 resource "aws_cloudwatch_log_group" "eks_cluster" {
-  name              = "/aws/eks/${var.cluster_name}-${var.environment_suffix}/cluster"
+  name              = "/aws/eks/${var.cluster_name}-${var.environment_suffix}-${formatdate("YYYYMMDDhhmmss", timestamp())}/cluster"
   retention_in_days = 7
 
   tags = merge(
@@ -44,6 +44,10 @@ resource "aws_cloudwatch_log_group" "eks_cluster" {
       Environment = var.environment
     }
   )
+
+  lifecycle {
+    ignore_changes = [name]
+  }
 }
 
 # EKS Cluster
