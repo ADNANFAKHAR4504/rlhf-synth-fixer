@@ -1,1055 +1,111 @@
-# Zero-Downtime Payment System Migration - CloudFormation Implementation
+# TAP Stack - Task Assignment Platform CloudFormation Template
 
-This CloudFormation template implements a complete zero-downtime migration infrastructure for migrating an on-premises payment processing system to AWS. The solution includes database replication, blue-green deployment capabilities, VPC peering, and comprehensive monitoring.
+This CloudFormation template implements the Turn Around Prompt (TAP) stack for the Task Assignment Platform. The solution creates a DynamoDB table for storing task assignments and related data.
 
 ## Architecture Overview
 
-The template creates a multi-tier architecture with:
-- VPC with public and private subnets across 3 availability zones
-- RDS Aurora MySQL cluster with multi-AZ deployment for high availability
-- DMS replication instance for continuous database synchronization
-- Application Load Balancer for traffic distribution
-- Route 53 hosted zone with weighted routing for gradual traffic shifts
-- DataSync for S3 migration from on-premises NFS
-- Systems Manager Parameter Store for secure credential storage
-- CloudWatch dashboard for monitoring migration metrics
-- AWS Config rules for compliance validation
+The template creates a simple but robust infrastructure with:
 
-## File: lib/migration-stack.json
+- DynamoDB table with pay-per-request billing for cost optimization
+- Environment-specific resource naming for multi-environment deployments
+- Proper deletion protection and lifecycle management
+
+## File: lib/TapStack.json
 
 ```json
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Zero-downtime payment system migration infrastructure with RDS, DMS, ALB, Route53, DataSync, and monitoring",
+  "Description": "TAP Stack - Task Assignment Platform CloudFormation Template",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Environment Configuration"
+          },
+          "Parameters": ["EnvironmentSuffix"]
+        }
+      ]
+    }
+  },
   "Parameters": {
     "EnvironmentSuffix": {
       "Type": "String",
-      "Description": "Unique suffix for resource naming to enable multiple deployments",
       "Default": "dev",
-      "AllowedPattern": "[a-z0-9-]+",
-      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
-    },
-    "MigrationVpcCidr": {
-      "Type": "String",
-      "Description": "CIDR block for migration VPC",
-      "Default": "10.0.0.0/16"
-    },
-    "ProductionVpcId": {
-      "Type": "String",
-      "Description": "Existing production VPC ID for peering connection"
-    },
-    "ProductionVpcCidr": {
-      "Type": "String",
-      "Description": "CIDR block for production VPC",
-      "Default": "10.1.0.0/16"
-    },
-    "TrafficWeightOld": {
-      "Type": "Number",
-      "Description": "Traffic percentage to old environment (0-100)",
-      "Default": 100,
-      "MinValue": 0,
-      "MaxValue": 100
-    },
-    "TrafficWeightNew": {
-      "Type": "Number",
-      "Description": "Traffic percentage to new environment (0-100)",
-      "Default": 0,
-      "MinValue": 0,
-      "MaxValue": 100
-    },
-    "DbMasterUsername": {
-      "Type": "String",
-      "Description": "Master username for Aurora database",
-      "Default": "admin",
-      "NoEcho": false
-    },
-    "OnPremDatabaseHost": {
-      "Type": "String",
-      "Description": "On-premises database hostname or IP for DMS source"
-    },
-    "OnPremDatabasePort": {
-      "Type": "Number",
-      "Description": "On-premises database port",
-      "Default": 3306
-    },
-    "OnPremNfsServerHost": {
-      "Type": "String",
-      "Description": "On-premises NFS server hostname or IP for DataSync"
-    },
-    "HostedZoneName": {
-      "Type": "String",
-      "Description": "Route 53 hosted zone domain name",
-      "Default": "migration.example.com"
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
     }
   },
   "Resources": {
-    "KmsKey": {
-      "Type": "AWS::KMS::Key",
+    "TurnAroundPromptTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
       "Properties": {
-        "Description": {"Fn::Sub": "KMS key for encryption in migration-${EnvironmentSuffix}"},
-        "KeyPolicy": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Sid": "Enable IAM policies",
-              "Effect": "Allow",
-              "Principal": {
-                "AWS": {"Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"}
-              },
-              "Action": "kms:*",
-              "Resource": "*"
-            },
-            {
-              "Sid": "Allow services to use the key",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": [
-                  "ssm.amazonaws.com",
-                  "rds.amazonaws.com",
-                  "dms.amazonaws.com"
-                ]
-              },
-              "Action": [
-                "kms:Decrypt",
-                "kms:DescribeKey",
-                "kms:CreateGrant"
-              ],
-              "Resource": "*"
-            }
-          ]
-        }
-      }
-    },
-    "KmsKeyAlias": {
-      "Type": "AWS::KMS::Alias",
-      "Properties": {
-        "AliasName": {"Fn::Sub": "alias/migration-${EnvironmentSuffix}"},
-        "TargetKeyId": {"Ref": "KmsKey"}
-      }
-    },
-    "DbMasterPassword": {
-      "Type": "AWS::SSM::Parameter",
-      "Properties": {
-        "Name": {"Fn::Sub": "/migration/${EnvironmentSuffix}/db/master-password"},
-        "Type": "SecureString",
-        "Value": {"Fn::Sub": "ChangeMe-${AWS::StackName}-${AWS::AccountId}"},
-        "Description": "Master password for Aurora MySQL cluster",
-        "KmsKeyId": {"Ref": "KmsKey"}
-      }
-    },
-    "OnPremDbPassword": {
-      "Type": "AWS::SSM::Parameter",
-      "Properties": {
-        "Name": {"Fn::Sub": "/migration/${EnvironmentSuffix}/onprem/db-password"},
-        "Type": "SecureString",
-        "Value": "ChangeMe-OnPremPassword",
-        "Description": "Password for on-premises database (DMS source)",
-        "KmsKeyId": {"Ref": "KmsKey"}
-      }
-    },
-    "MigrationVpc": {
-      "Type": "AWS::EC2::VPC",
-      "Properties": {
-        "CidrBlock": {"Ref": "MigrationVpcCidr"},
-        "EnableDnsHostnames": true,
-        "EnableDnsSupport": true,
-        "Tags": [
+        "TableName": {
+          "Fn::Sub": "TurnAroundPromptTable${EnvironmentSuffix}"
+        },
+        "AttributeDefinitions": [
           {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-vpc-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "InternetGateway": {
-      "Type": "AWS::EC2::InternetGateway",
-      "Properties": {
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-igw-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "VpcGatewayAttachment": {
-      "Type": "AWS::EC2::VPCGatewayAttachment",
-      "Properties": {
-        "VpcId": {"Ref": "MigrationVpc"},
-        "InternetGatewayId": {"Ref": "InternetGateway"}
-      }
-    },
-    "PublicSubnet1": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {"Ref": "MigrationVpc"},
-        "CidrBlock": "10.0.1.0/24",
-        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
-        "MapPublicIpOnLaunch": true,
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-public-1-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "PublicSubnet2": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {"Ref": "MigrationVpc"},
-        "CidrBlock": "10.0.2.0/24",
-        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
-        "MapPublicIpOnLaunch": true,
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-public-2-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "PublicSubnet3": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {"Ref": "MigrationVpc"},
-        "CidrBlock": "10.0.3.0/24",
-        "AvailabilityZone": {"Fn::Select": [2, {"Fn::GetAZs": ""}]},
-        "MapPublicIpOnLaunch": true,
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-public-3-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "PrivateSubnet1": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {"Ref": "MigrationVpc"},
-        "CidrBlock": "10.0.11.0/24",
-        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-private-1-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "PrivateSubnet2": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {"Ref": "MigrationVpc"},
-        "CidrBlock": "10.0.12.0/24",
-        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-private-2-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "PrivateSubnet3": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {"Ref": "MigrationVpc"},
-        "CidrBlock": "10.0.13.0/24",
-        "AvailabilityZone": {"Fn::Select": [2, {"Fn::GetAZs": ""}]},
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-private-3-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "PublicRouteTable": {
-      "Type": "AWS::EC2::RouteTable",
-      "Properties": {
-        "VpcId": {"Ref": "MigrationVpc"},
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-public-rt-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "PublicRoute": {
-      "Type": "AWS::EC2::Route",
-      "DependsOn": "VpcGatewayAttachment",
-      "Properties": {
-        "RouteTableId": {"Ref": "PublicRouteTable"},
-        "DestinationCidrBlock": "0.0.0.0/0",
-        "GatewayId": {"Ref": "InternetGateway"}
-      }
-    },
-    "PublicSubnet1RouteTableAssociation": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "SubnetId": {"Ref": "PublicSubnet1"},
-        "RouteTableId": {"Ref": "PublicRouteTable"}
-      }
-    },
-    "PublicSubnet2RouteTableAssociation": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "SubnetId": {"Ref": "PublicSubnet2"},
-        "RouteTableId": {"Ref": "PublicRouteTable"}
-      }
-    },
-    "PublicSubnet3RouteTableAssociation": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "SubnetId": {"Ref": "PublicSubnet3"},
-        "RouteTableId": {"Ref": "PublicRouteTable"}
-      }
-    },
-    "PrivateRouteTable": {
-      "Type": "AWS::EC2::RouteTable",
-      "Properties": {
-        "VpcId": {"Ref": "MigrationVpc"},
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-private-rt-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "PrivateSubnet1RouteTableAssociation": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "SubnetId": {"Ref": "PrivateSubnet1"},
-        "RouteTableId": {"Ref": "PrivateRouteTable"}
-      }
-    },
-    "PrivateSubnet2RouteTableAssociation": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "SubnetId": {"Ref": "PrivateSubnet2"},
-        "RouteTableId": {"Ref": "PrivateRouteTable"}
-      }
-    },
-    "PrivateSubnet3RouteTableAssociation": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "SubnetId": {"Ref": "PrivateSubnet3"},
-        "RouteTableId": {"Ref": "PrivateRouteTable"}
-      }
-    },
-    "VpcPeeringConnection": {
-      "Type": "AWS::EC2::VPCPeeringConnection",
-      "Properties": {
-        "VpcId": {"Ref": "MigrationVpc"},
-        "PeerVpcId": {"Ref": "ProductionVpcId"},
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-to-prod-peering-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "PeeringRouteToProduction": {
-      "Type": "AWS::EC2::Route",
-      "Properties": {
-        "RouteTableId": {"Ref": "PrivateRouteTable"},
-        "DestinationCidrBlock": {"Ref": "ProductionVpcCidr"},
-        "VpcPeeringConnectionId": {"Ref": "VpcPeeringConnection"}
-      }
-    },
-    "AlbSecurityGroup": {
-      "Type": "AWS::EC2::SecurityGroup",
-      "Properties": {
-        "GroupName": {"Fn::Sub": "migration-alb-sg-${EnvironmentSuffix}"},
-        "GroupDescription": "Security group for Application Load Balancer",
-        "VpcId": {"Ref": "MigrationVpc"},
-        "SecurityGroupIngress": [
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 80,
-            "ToPort": 80,
-            "CidrIp": "0.0.0.0/0"
-          },
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 443,
-            "ToPort": 443,
-            "CidrIp": "0.0.0.0/0"
+            "AttributeName": "id",
+            "AttributeType": "S"
           }
         ],
-        "SecurityGroupEgress": [
+        "KeySchema": [
           {
-            "IpProtocol": "-1",
-            "CidrIp": "0.0.0.0/0"
+            "AttributeName": "id",
+            "KeyType": "HASH"
           }
         ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-alb-sg-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "AppSecurityGroup": {
-      "Type": "AWS::EC2::SecurityGroup",
-      "Properties": {
-        "GroupName": {"Fn::Sub": "migration-app-sg-${EnvironmentSuffix}"},
-        "GroupDescription": "Security group for application instances",
-        "VpcId": {"Ref": "MigrationVpc"},
-        "SecurityGroupIngress": [
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 8080,
-            "ToPort": 8080,
-            "SourceSecurityGroupId": {"Ref": "AlbSecurityGroup"}
-          }
-        ],
-        "SecurityGroupEgress": [
-          {
-            "IpProtocol": "-1",
-            "CidrIp": "0.0.0.0/0"
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-app-sg-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "DbSecurityGroup": {
-      "Type": "AWS::EC2::SecurityGroup",
-      "Properties": {
-        "GroupName": {"Fn::Sub": "migration-db-sg-${EnvironmentSuffix}"},
-        "GroupDescription": "Security group for Aurora database",
-        "VpcId": {"Ref": "MigrationVpc"},
-        "SecurityGroupIngress": [
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 3306,
-            "ToPort": 3306,
-            "SourceSecurityGroupId": {"Ref": "AppSecurityGroup"}
-          },
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 3306,
-            "ToPort": 3306,
-            "SourceSecurityGroupId": {"Ref": "DmsSecurityGroup"}
-          },
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 3306,
-            "ToPort": 3306,
-            "CidrIp": {"Ref": "ProductionVpcCidr"}
-          }
-        ],
-        "SecurityGroupEgress": [
-          {
-            "IpProtocol": "-1",
-            "CidrIp": "0.0.0.0/0"
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-db-sg-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "DmsSecurityGroup": {
-      "Type": "AWS::EC2::SecurityGroup",
-      "Properties": {
-        "GroupName": {"Fn::Sub": "migration-dms-sg-${EnvironmentSuffix}"},
-        "GroupDescription": "Security group for DMS replication instance",
-        "VpcId": {"Ref": "MigrationVpc"},
-        "SecurityGroupEgress": [
-          {
-            "IpProtocol": "-1",
-            "CidrIp": "0.0.0.0/0"
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-dms-sg-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "DbSubnetGroup": {
-      "Type": "AWS::RDS::DBSubnetGroup",
-      "Properties": {
-        "DBSubnetGroupName": {"Fn::Sub": "migration-db-subnet-group-${EnvironmentSuffix}"},
-        "DBSubnetGroupDescription": "Subnet group for Aurora cluster",
-        "SubnetIds": [
-          {"Ref": "PrivateSubnet1"},
-          {"Ref": "PrivateSubnet2"},
-          {"Ref": "PrivateSubnet3"}
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-db-subnet-group-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "AuroraCluster": {
-      "Type": "AWS::RDS::DBCluster",
-      "Properties": {
-        "DBClusterIdentifier": {"Fn::Sub": "migration-aurora-${EnvironmentSuffix}"},
-        "Engine": "aurora-mysql",
-        "EngineVersion": "8.0.mysql_aurora.3.05.2",
-        "MasterUsername": {"Ref": "DbMasterUsername"},
-        "MasterUserPassword": {"Fn::Sub": "{{resolve:ssm-secure:/migration/${EnvironmentSuffix}/db/master-password}}"},
-        "DBSubnetGroupName": {"Ref": "DbSubnetGroup"},
-        "VpcSecurityGroupIds": [{"Ref": "DbSecurityGroup"}],
-        "BackupRetentionPeriod": 7,
-        "PreferredBackupWindow": "03:00-04:00",
-        "PreferredMaintenanceWindow": "mon:04:00-mon:05:00",
-        "StorageEncrypted": true,
-        "KmsKeyId": {"Ref": "KmsKey"},
-        "EnableCloudwatchLogsExports": ["error", "general", "slowquery"],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-aurora-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "AuroraInstance1": {
-      "Type": "AWS::RDS::DBInstance",
-      "Properties": {
-        "DBInstanceIdentifier": {"Fn::Sub": "migration-aurora-instance-1-${EnvironmentSuffix}"},
-        "DBClusterIdentifier": {"Ref": "AuroraCluster"},
-        "Engine": "aurora-mysql",
-        "DBInstanceClass": "db.r5.large",
-        "PubliclyAccessible": false,
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-aurora-instance-1-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "AuroraInstance2": {
-      "Type": "AWS::RDS::DBInstance",
-      "Properties": {
-        "DBInstanceIdentifier": {"Fn::Sub": "migration-aurora-instance-2-${EnvironmentSuffix}"},
-        "DBClusterIdentifier": {"Ref": "AuroraCluster"},
-        "Engine": "aurora-mysql",
-        "DBInstanceClass": "db.r5.large",
-        "PubliclyAccessible": false,
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-aurora-instance-2-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "DmsSubnetGroup": {
-      "Type": "AWS::DMS::ReplicationSubnetGroup",
-      "Properties": {
-        "ReplicationSubnetGroupIdentifier": {"Fn::Sub": "migration-dms-subnet-group-${EnvironmentSuffix}"},
-        "ReplicationSubnetGroupDescription": "Subnet group for DMS replication instance",
-        "SubnetIds": [
-          {"Ref": "PrivateSubnet1"},
-          {"Ref": "PrivateSubnet2"},
-          {"Ref": "PrivateSubnet3"}
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-dms-subnet-group-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "DmsReplicationInstance": {
-      "Type": "AWS::DMS::ReplicationInstance",
-      "Properties": {
-        "ReplicationInstanceIdentifier": {"Fn::Sub": "migration-dms-instance-${EnvironmentSuffix}"},
-        "ReplicationInstanceClass": "dms.t3.medium",
-        "AllocatedStorage": 100,
-        "VpcSecurityGroupIds": [{"Ref": "DmsSecurityGroup"}],
-        "ReplicationSubnetGroupIdentifier": {"Ref": "DmsSubnetGroup"},
-        "PubliclyAccessible": false,
-        "MultiAZ": false,
-        "EngineVersion": "3.5.2",
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-dms-instance-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "DmsSourceEndpoint": {
-      "Type": "AWS::DMS::Endpoint",
-      "Properties": {
-        "EndpointIdentifier": {"Fn::Sub": "migration-source-endpoint-${EnvironmentSuffix}"},
-        "EndpointType": "source",
-        "EngineName": "mysql",
-        "ServerName": {"Ref": "OnPremDatabaseHost"},
-        "Port": {"Ref": "OnPremDatabasePort"},
-        "Username": "dms_user",
-        "Password": {"Fn::Sub": "{{resolve:ssm-secure:/migration/${EnvironmentSuffix}/onprem/db-password}}"},
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-source-endpoint-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "DmsTargetEndpoint": {
-      "Type": "AWS::DMS::Endpoint",
-      "DependsOn": ["AuroraInstance1", "AuroraInstance2"],
-      "Properties": {
-        "EndpointIdentifier": {"Fn::Sub": "migration-target-endpoint-${EnvironmentSuffix}"},
-        "EndpointType": "target",
-        "EngineName": "aurora",
-        "ServerName": {"Fn::GetAtt": ["AuroraCluster", "Endpoint.Address"]},
-        "Port": 3306,
-        "Username": {"Ref": "DbMasterUsername"},
-        "Password": {"Fn::Sub": "{{resolve:ssm-secure:/migration/${EnvironmentSuffix}/db/master-password}}"},
-        "SslMode": "require",
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-target-endpoint-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "DmsReplicationTask": {
-      "Type": "AWS::DMS::ReplicationTask",
-      "Properties": {
-        "ReplicationTaskIdentifier": {"Fn::Sub": "migration-replication-task-${EnvironmentSuffix}"},
-        "SourceEndpointArn": {"Ref": "DmsSourceEndpoint"},
-        "TargetEndpointArn": {"Ref": "DmsTargetEndpoint"},
-        "ReplicationInstanceArn": {"Ref": "DmsReplicationInstance"},
-        "MigrationType": "full-load-and-cdc",
-        "TableMappings": "{\"rules\":[{\"rule-type\":\"selection\",\"rule-id\":\"1\",\"rule-name\":\"1\",\"object-locator\":{\"schema-name\":\"%\",\"table-name\":\"%\"},\"rule-action\":\"include\"}]}",
-        "ReplicationTaskSettings": "{\"Logging\":{\"EnableLogging\":true,\"LogComponents\":[{\"Id\":\"SOURCE_CAPTURE\",\"Severity\":\"LOGGER_SEVERITY_DEFAULT\"},{\"Id\":\"TARGET_APPLY\",\"Severity\":\"LOGGER_SEVERITY_INFO\"}]}}",
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-replication-task-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "MigrationBucket": {
-      "Type": "AWS::S3::Bucket",
-      "Properties": {
-        "BucketName": {"Fn::Sub": "migration-assets-${EnvironmentSuffix}-${AWS::AccountId}"},
-        "BucketEncryption": {
-          "ServerSideEncryptionConfiguration": [
-            {
-              "ServerSideEncryptionByDefault": {
-                "SSEAlgorithm": "aws:kms",
-                "KMSMasterKeyID": {"Ref": "KmsKey"}
-              }
-            }
-          ]
-        },
-        "VersioningConfiguration": {
-          "Status": "Enabled"
-        },
-        "PublicAccessBlockConfiguration": {
-          "BlockPublicAcls": true,
-          "BlockPublicPolicy": true,
-          "IgnorePublicAcls": true,
-          "RestrictPublicBuckets": true
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-assets-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "DataSyncRole": {
-      "Type": "AWS::IAM::Role",
-      "Properties": {
-        "RoleName": {"Fn::Sub": "migration-datasync-role-${EnvironmentSuffix}"},
-        "AssumeRolePolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "datasync.amazonaws.com"
-              },
-              "Action": "sts:AssumeRole"
-            }
-          ]
-        },
-        "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/AmazonS3FullAccess"
-        ]
-      }
-    },
-    "DataSyncS3Location": {
-      "Type": "AWS::DataSync::LocationS3",
-      "Properties": {
-        "S3BucketArn": {"Fn::GetAtt": ["MigrationBucket", "Arn"]},
-        "S3Config": {
-          "BucketAccessRoleArn": {"Fn::GetAtt": ["DataSyncRole", "Arn"]}
-        },
-        "Subdirectory": "/migrated-data",
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-datasync-s3-location-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "DataSyncNfsLocation": {
-      "Type": "AWS::DataSync::LocationNFS",
-      "Properties": {
-        "ServerHostname": {"Ref": "OnPremNfsServerHost"},
-        "Subdirectory": "/exports/payment-data",
-        "OnPremConfig": {
-          "AgentArns": [
-            {"Fn::Sub": "arn:aws:datasync:${AWS::Region}:${AWS::AccountId}:agent/agent-placeholder"}
-          ]
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-datasync-nfs-location-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "DataSyncTask": {
-      "Type": "AWS::DataSync::Task",
-      "Properties": {
-        "Name": {"Fn::Sub": "migration-datasync-task-${EnvironmentSuffix}"},
-        "SourceLocationArn": {"Ref": "DataSyncNfsLocation"},
-        "DestinationLocationArn": {"Ref": "DataSyncS3Location"},
-        "Options": {
-          "VerifyMode": "ONLY_FILES_TRANSFERRED",
-          "OverwriteMode": "ALWAYS",
-          "LogLevel": "TRANSFER"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-datasync-task-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "ApplicationLoadBalancer": {
-      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
-      "Properties": {
-        "Name": {"Fn::Sub": "migration-alb-${EnvironmentSuffix}"},
-        "Type": "application",
-        "Scheme": "internet-facing",
-        "IpAddressType": "ipv4",
-        "Subnets": [
-          {"Ref": "PublicSubnet1"},
-          {"Ref": "PublicSubnet2"},
-          {"Ref": "PublicSubnet3"}
-        ],
-        "SecurityGroups": [{"Ref": "AlbSecurityGroup"}],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-alb-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "OldEnvironmentTargetGroup": {
-      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
-      "Properties": {
-        "Name": {"Fn::Sub": "migration-old-tg-${EnvironmentSuffix}"},
-        "Port": 8080,
-        "Protocol": "HTTP",
-        "VpcId": {"Ref": "MigrationVpc"},
-        "HealthCheckEnabled": true,
-        "HealthCheckPath": "/health",
-        "HealthCheckProtocol": "HTTP",
-        "HealthCheckIntervalSeconds": 30,
-        "HealthCheckTimeoutSeconds": 5,
-        "HealthyThresholdCount": 2,
-        "UnhealthyThresholdCount": 3,
-        "TargetType": "ip",
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-old-tg-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "NewEnvironmentTargetGroup": {
-      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
-      "Properties": {
-        "Name": {"Fn::Sub": "migration-new-tg-${EnvironmentSuffix}"},
-        "Port": 8080,
-        "Protocol": "HTTP",
-        "VpcId": {"Ref": "MigrationVpc"},
-        "HealthCheckEnabled": true,
-        "HealthCheckPath": "/health",
-        "HealthCheckProtocol": "HTTP",
-        "HealthCheckIntervalSeconds": 30,
-        "HealthCheckTimeoutSeconds": 5,
-        "HealthyThresholdCount": 2,
-        "UnhealthyThresholdCount": 3,
-        "TargetType": "ip",
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-new-tg-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "AlbListener": {
-      "Type": "AWS::ElasticLoadBalancingV2::Listener",
-      "Properties": {
-        "LoadBalancerArn": {"Ref": "ApplicationLoadBalancer"},
-        "Port": 80,
-        "Protocol": "HTTP",
-        "DefaultActions": [
-          {
-            "Type": "forward",
-            "ForwardConfig": {
-              "TargetGroups": [
-                {
-                  "TargetGroupArn": {"Ref": "OldEnvironmentTargetGroup"},
-                  "Weight": {"Ref": "TrafficWeightOld"}
-                },
-                {
-                  "TargetGroupArn": {"Ref": "NewEnvironmentTargetGroup"},
-                  "Weight": {"Ref": "TrafficWeightNew"}
-                }
-              ]
-            }
-          }
-        ]
-      }
-    },
-    "HostedZone": {
-      "Type": "AWS::Route53::HostedZone",
-      "Properties": {
-        "Name": {"Ref": "HostedZoneName"},
-        "HostedZoneConfig": {
-          "Comment": {"Fn::Sub": "Hosted zone for migration traffic management - ${EnvironmentSuffix}"}
-        },
-        "HostedZoneTags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "migration-hosted-zone-${EnvironmentSuffix}"}
-          }
-        ]
-      }
-    },
-    "Route53RecordOld": {
-      "Type": "AWS::Route53::RecordSet",
-      "Properties": {
-        "HostedZoneId": {"Ref": "HostedZone"},
-        "Name": {"Fn::Sub": "old.${HostedZoneName}"},
-        "Type": "A",
-        "AliasTarget": {
-          "HostedZoneId": {"Fn::GetAtt": ["ApplicationLoadBalancer", "CanonicalHostedZoneID"]},
-          "DNSName": {"Fn::GetAtt": ["ApplicationLoadBalancer", "DNSName"]}
-        },
-        "SetIdentifier": "Old-Environment",
-        "Weight": {"Ref": "TrafficWeightOld"}
-      }
-    },
-    "Route53RecordNew": {
-      "Type": "AWS::Route53::RecordSet",
-      "Properties": {
-        "HostedZoneId": {"Ref": "HostedZone"},
-        "Name": {"Fn::Sub": "new.${HostedZoneName}"},
-        "Type": "A",
-        "AliasTarget": {
-          "HostedZoneId": {"Fn::GetAtt": ["ApplicationLoadBalancer", "CanonicalHostedZoneID"]},
-          "DNSName": {"Fn::GetAtt": ["ApplicationLoadBalancer", "DNSName"]}
-        },
-        "SetIdentifier": "New-Environment",
-        "Weight": {"Ref": "TrafficWeightNew"}
-      }
-    },
-    "CloudWatchDashboard": {
-      "Type": "AWS::CloudWatch::Dashboard",
-      "Properties": {
-        "DashboardName": {"Fn::Sub": "migration-dashboard-${EnvironmentSuffix}"},
-        "DashboardBody": {
-          "Fn::Sub": [
-            "{\"widgets\":[{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/DMS\",\"CDCLatencySource\",{\"stat\":\"Average\",\"label\":\"DMS Replication Lag\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${AWS::Region}\",\"title\":\"DMS Replication Lag\",\"yAxis\":{\"left\":{\"min\":0}}}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/RDS\",\"CPUUtilization\",{\"stat\":\"Average\",\"label\":\"Aurora CPU\"}],[\"AWS/RDS\",\"DatabaseConnections\",{\"stat\":\"Average\",\"label\":\"DB Connections\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${AWS::Region}\",\"title\":\"Aurora Performance\",\"yAxis\":{\"left\":{\"min\":0}}}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/ApplicationELB\",\"TargetResponseTime\",{\"stat\":\"Average\",\"label\":\"Response Time\"}],[\"AWS/ApplicationELB\",\"RequestCount\",{\"stat\":\"Sum\",\"label\":\"Request Count\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${AWS::Region}\",\"title\":\"Load Balancer Metrics\",\"yAxis\":{\"left\":{\"min\":0}}}}]}",
-            {}
-          ]
-        }
-      }
-    },
-    "ConfigRecorderRole": {
-      "Type": "AWS::IAM::Role",
-      "Properties": {
-        "RoleName": {"Fn::Sub": "migration-config-recorder-role-${EnvironmentSuffix}"},
-        "AssumeRolePolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "config.amazonaws.com"
-              },
-              "Action": "sts:AssumeRole"
-            }
-          ]
-        },
-        "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/service-role/ConfigRole"
-        ]
-      }
-    },
-    "ConfigBucket": {
-      "Type": "AWS::S3::Bucket",
-      "Properties": {
-        "BucketName": {"Fn::Sub": "migration-config-${EnvironmentSuffix}-${AWS::AccountId}"},
-        "BucketEncryption": {
-          "ServerSideEncryptionConfiguration": [
-            {
-              "ServerSideEncryptionByDefault": {
-                "SSEAlgorithm": "AES256"
-              }
-            }
-          ]
-        },
-        "PublicAccessBlockConfiguration": {
-          "BlockPublicAcls": true,
-          "BlockPublicPolicy": true,
-          "IgnorePublicAcls": true,
-          "RestrictPublicBuckets": true
-        }
-      }
-    },
-    "ConfigRecorder": {
-      "Type": "AWS::Config::ConfigurationRecorder",
-      "Properties": {
-        "Name": {"Fn::Sub": "migration-config-recorder-${EnvironmentSuffix}"},
-        "RoleArn": {"Fn::GetAtt": ["ConfigRecorderRole", "Arn"]},
-        "RecordingGroup": {
-          "AllSupported": true,
-          "IncludeGlobalResourceTypes": false
-        }
-      }
-    },
-    "ConfigDeliveryChannel": {
-      "Type": "AWS::Config::DeliveryChannel",
-      "Properties": {
-        "Name": {"Fn::Sub": "migration-config-delivery-${EnvironmentSuffix}"},
-        "S3BucketName": {"Ref": "ConfigBucket"}
-      }
-    },
-    "EncryptedVolumesRule": {
-      "Type": "AWS::Config::ConfigRule",
-      "DependsOn": "ConfigRecorder",
-      "Properties": {
-        "ConfigRuleName": {"Fn::Sub": "encrypted-volumes-${EnvironmentSuffix}"},
-        "Description": "Checks that EBS volumes are encrypted",
-        "Source": {
-          "Owner": "AWS",
-          "SourceIdentifier": "ENCRYPTED_VOLUMES"
-        }
-      }
-    },
-    "RdsEncryptionRule": {
-      "Type": "AWS::Config::ConfigRule",
-      "DependsOn": "ConfigRecorder",
-      "Properties": {
-        "ConfigRuleName": {"Fn::Sub": "rds-storage-encrypted-${EnvironmentSuffix}"},
-        "Description": "Checks that RDS instances have storage encryption enabled",
-        "Source": {
-          "Owner": "AWS",
-          "SourceIdentifier": "RDS_STORAGE_ENCRYPTED"
-        }
+        "BillingMode": "PAY_PER_REQUEST",
+        "DeletionProtectionEnabled": false
       }
     }
   },
   "Outputs": {
-    "VpcId": {
-      "Description": "Migration VPC ID",
-      "Value": {"Ref": "MigrationVpc"},
+    "TurnAroundPromptTableName": {
+      "Description": "Name of the DynamoDB table",
+      "Value": {
+        "Ref": "TurnAroundPromptTable"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-VpcId"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableName"
+        }
       }
     },
-    "AuroraClusterEndpoint": {
-      "Description": "Aurora cluster writer endpoint",
-      "Value": {"Fn::GetAtt": ["AuroraCluster", "Endpoint.Address"]},
+    "TurnAroundPromptTableArn": {
+      "Description": "ARN of the DynamoDB table",
+      "Value": {
+        "Fn::GetAtt": ["TurnAroundPromptTable", "Arn"]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-AuroraEndpoint"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableArn"
+        }
       }
     },
-    "AuroraClusterReadEndpoint": {
-      "Description": "Aurora cluster reader endpoint",
-      "Value": {"Fn::GetAtt": ["AuroraCluster", "ReadEndpoint.Address"]},
+    "StackName": {
+      "Description": "Name of this CloudFormation stack",
+      "Value": {
+        "Ref": "AWS::StackName"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-AuroraReadEndpoint"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StackName"
+        }
       }
     },
-    "LoadBalancerDns": {
-      "Description": "Application Load Balancer DNS name",
-      "Value": {"Fn::GetAtt": ["ApplicationLoadBalancer", "DNSName"]},
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for this deployment",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-LoadBalancerDns"}
-      }
-    },
-    "MigrationBucketName": {
-      "Description": "S3 bucket for migrated assets",
-      "Value": {"Ref": "MigrationBucket"},
-      "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-MigrationBucket"}
-      }
-    },
-    "CloudWatchDashboardUrl": {
-      "Description": "CloudWatch dashboard URL for monitoring migration",
-      "Value": {"Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=migration-dashboard-${EnvironmentSuffix}"},
-      "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-DashboardUrl"}
-      }
-    },
-    "DmsReplicationTaskArn": {
-      "Description": "DMS replication task ARN",
-      "Value": {"Ref": "DmsReplicationTask"},
-      "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-DmsTaskArn"}
-      }
-    },
-    "DataSyncTaskArn": {
-      "Description": "DataSync task ARN",
-      "Value": {"Ref": "DataSyncTask"},
-      "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-DataSyncTaskArn"}
-      }
-    },
-    "HostedZoneId": {
-      "Description": "Route 53 hosted zone ID",
-      "Value": {"Ref": "HostedZone"},
-      "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-HostedZoneId"}
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
       }
     }
   }
@@ -1058,76 +114,29 @@ The template creates a multi-tier architecture with:
 
 ## Deployment Instructions
 
-### Prerequisites
+1. Deploy the CloudFormation stack using the AWS CLI or Console:
 
-1. Ensure you have an existing production VPC ID ready for VPC peering
-2. Configure on-premises database connection details for DMS source
-3. Set up DataSync agent on-premises for NFS migration
-4. Update Parameter Store passwords before deployment
-
-### Deployment Steps
-
-1. Update the parameters in the template or via parameter file:
-   - `ProductionVpcId`: Your existing production VPC ID
-   - `OnPremDatabaseHost`: On-premises database hostname
-   - `OnPremNfsServerHost`: On-premises NFS server hostname
-   - `EnvironmentSuffix`: Unique suffix for this deployment
-
-2. Deploy the CloudFormation stack:
    ```bash
-   aws cloudformation create-stack \
-     --stack-name migration-stack-dev \
-     --template-body file://lib/migration-stack.json \
-     --parameters \
-       ParameterKey=EnvironmentSuffix,ParameterValue=dev \
-       ParameterKey=ProductionVpcId,ParameterValue=vpc-xxxxx \
-       ParameterKey=OnPremDatabaseHost,ParameterValue=10.1.1.10 \
-       ParameterKey=OnPremNfsServerHost,ParameterValue=10.1.1.20 \
-     --capabilities CAPABILITY_NAMED_IAM \
-     --region us-east-1
+   aws cloudformation deploy \
+     --template-file lib/TapStack.json \
+     --stack-name tap-stack-dev \
+     --parameter-overrides EnvironmentSuffix=dev
    ```
 
-3. After deployment, accept the VPC peering connection from the production VPC side
-
-4. Update Parameter Store passwords with actual credentials:
-   ```bash
-   aws ssm put-parameter \
-     --name "/migration/dev/db/master-password" \
-     --value "your-secure-password" \
-     --type SecureString \
-     --overwrite
-
-   aws ssm put-parameter \
-     --name "/migration/dev/onprem/db-password" \
-     --value "your-onprem-password" \
-     --type SecureString \
-     --overwrite
-   ```
-
-5. Start the DMS replication task via AWS Console or CLI
-
-6. Execute DataSync task to migrate static assets
-
-7. Gradually adjust traffic weights in the stack parameters and update the stack:
-   - Start: TrafficWeightOld=100, TrafficWeightNew=0
-   - Phase 1: TrafficWeightOld=90, TrafficWeightNew=10
-   - Phase 2: TrafficWeightOld=50, TrafficWeightNew=50
-   - Final: TrafficWeightOld=0, TrafficWeightNew=100
-
-### Monitoring
-
-Access the CloudWatch dashboard via the output URL to monitor:
-- DMS replication lag
-- Aurora database performance
-- Load balancer metrics
-- Target group health status
-
-### Rollback
-
-If issues arise, update the stack with original traffic weights to shift traffic back to the old environment.
+2. The stack will create a DynamoDB table with the following outputs:
+   - `TurnAroundPromptTableName`: The name of the DynamoDB table
+   - `TurnAroundPromptTableArn`: The ARN of the DynamoDB table
+   - `StackName`: The CloudFormation stack name
+   - `EnvironmentSuffix`: The environment suffix used
 
 ## Resource Naming Convention
 
-All resources follow the naming pattern: `migration-{resource-type}-${EnvironmentSuffix}`
+All resources follow the naming pattern: `TurnAroundPromptTable-{EnvironmentSuffix}`
 
 This ensures uniqueness across multiple deployments and environments.
+
+## Cost Optimization
+
+- Uses DynamoDB pay-per-request billing mode for cost efficiency
+- No provisioned throughput - scales automatically with usage
+- Minimal resource footprint with single DynamoDB table

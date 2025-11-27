@@ -1,51 +1,36 @@
 Hey team,
 
-We have an urgent project to migrate a payment processing system from our on-premises datacenter to AWS. The business critical requirement here is zero downtime during the migration. The legacy monolithic application that currently handles credit card transactions needs to be modernized as part of this move, but we cannot afford any service interruption.
+We need to create the infrastructure for the Turn Around Prompt (TAP) platform - a task assignment system that will help manage and distribute tasks across our team. This is a critical component for improving our workflow efficiency and ensuring tasks are properly assigned and tracked.
 
-The finance team is understandably nervous about this migration given the sensitive nature of payment data and the revenue impact if anything goes wrong. We need a solid rollback strategy and the ability to shift traffic gradually between the old and new environments. The CTO has made it clear that we need continuous data synchronization during the migration window and comprehensive monitoring to catch any issues immediately.
-
-This is a complex migration involving multiple AWS services working together. We need database replication running continuously, load balancing configured for gradual traffic shifting, and proper VPC connectivity between our migration environment and the existing production network. The infrastructure also needs to handle static asset migration from our on-premises NFS storage to S3.
+The TAP platform needs a simple but robust data storage solution that can handle task assignments, status updates, and basic metadata. We want to keep costs low while ensuring high availability and scalability.
 
 ## What we need to build
 
-Create a migration infrastructure using **CloudFormation with JSON** that enables zero-downtime migration of the payment processing system from on-premises to AWS.
+Create a CloudFormation infrastructure using **JSON** that implements the TAP (Turn Around Prompt) stack for task assignment management.
 
 ### Core Requirements
 
-1. **Database Tier**
-   - RDS Aurora MySQL cluster with 2 instances across multiple availability zones for high availability
-   - Enable point-in-time recovery with 7-day retention period
-   - Database must support continuous replication from on-premises source
+1. **Data Storage**
+   - DynamoDB table for storing task assignments and related data
+   - Simple primary key structure with `id` as the hash key
+   - Pay-per-request billing mode for cost optimization
+   - Environment-specific table naming
 
-2. **Data Migration Services**
-   - DMS replication instance configured for continuous data synchronization
-   - DMS replication tasks to keep source and target databases in sync during migration
-   - DataSync locations and tasks configured for migrating static assets from on-premises NFS to S3
+2. **Infrastructure Basics**
+   - Single DynamoDB table as the core data store
+   - Environment-specific resource naming using `EnvironmentSuffix` parameter
+   - Proper CloudFormation outputs for table name and ARN
+   - Stack name and environment suffix outputs for integration
 
-3. **Traffic Management**
-   - Application Load Balancer with target groups supporting blue-green deployment strategy
-   - Route 53 hosted zone with weighted routing policies to enable 0-100% traffic split between environments
-   - Gradual traffic shifting capability for controlled rollover
+3. **Cost Optimization**
+   - Use DynamoDB on-demand (pay-per-request) pricing
+   - Minimal resource footprint - just the DynamoDB table
+   - No provisioned throughput to keep costs low
 
-4. **Network Architecture**
-   - VPC peering connection between migration VPC (10.0.0.0/16) and production VPC (10.1.0.0/16)
-   - Proper subnet configuration across 3 availability zones with public and private subnets
-   - Security groups configured for database, application, and load balancer tiers
-
-5. **Security and Secrets Management**
-   - Store all database passwords and sensitive parameters in Systems Manager Parameter Store
-   - Use KMS encryption for all parameters stored in Parameter Store
-   - No hardcoded credentials anywhere in the infrastructure
-
-6. **Monitoring and Compliance**
-   - CloudWatch dashboard with custom metrics for DMS replication lag
-   - CloudWatch metrics for RDS performance monitoring
-   - AWS Config rules to validate compliance requirements during migration
-
-7. **Optional Enhancements**
-   - AWS Lambda functions for automated traffic shifting based on error rate thresholds
-   - SQS queues for decoupling payment processing components and improving scalability
-   - AWS Backup configuration for automated cross-region backups providing disaster recovery capability
+4. **Operational Requirements**
+   - Deletion protection disabled for development flexibility
+   - Standard DynamoDB table class
+   - Basic table configuration suitable for task management
 
 ### Technical Requirements
 
