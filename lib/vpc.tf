@@ -1,5 +1,10 @@
 # vpc.tf - VPC with private subnets and VPC endpoints
 
+# Generate random suffix for unique resource names
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
 # VPC
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr

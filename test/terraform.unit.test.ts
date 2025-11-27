@@ -397,8 +397,8 @@ describe('Terraform Configuration Unit Tests', () => {
     });
 
     test('RDS security group ingress from Lambda only', () => {
-      expect(rdsContent).toContain('from_port       = 5432');
-      expect(rdsContent).toContain('to_port         = 5432');
+      expect(rdsContent).toContain('from_port                = 5432');
+      expect(rdsContent).toContain('to_port                  = 5432');
     });
 
     test('security group rules use separate resources to avoid circular dependency', () => {

@@ -2,11 +2,11 @@
 
 # DB Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "payment-db-subnet-group-${var.environment_suffix}"
+  name       = "payment-db-subnet-group-${var.environment_suffix}-${substr(random_id.suffix.hex, 0, 8)}"
   subnet_ids = aws_subnet.private[*].id
 
   tags = {
-    Name = "payment-db-subnet-group-${var.environment_suffix}"
+    Name = "payment-db-subnet-group-${var.environment_suffix}-${substr(random_id.suffix.hex, 0, 8)}"
   }
 }
 

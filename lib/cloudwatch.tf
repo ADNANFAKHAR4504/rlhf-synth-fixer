@@ -13,12 +13,12 @@ resource "aws_cloudwatch_log_group" "lambda" {
 
 # CloudWatch Log Group for VPC Flow Logs
 resource "aws_cloudwatch_log_group" "flow_logs" {
-  name              = "/aws/vpc/flow-logs-${var.environment_suffix}"
+  name              = "/aws/vpc/flow-logs-${var.environment_suffix}-${substr(random_id.suffix.hex, 0, 8)}"
   retention_in_days = 90
   kms_key_id        = aws_kms_key.cloudwatch.arn
 
   tags = {
-    Name = "vpc-flow-logs-group-${var.environment_suffix}"
+    Name = "vpc-flow-logs-group-${var.environment_suffix}-${substr(random_id.suffix.hex, 0, 8)}"
   }
 }
 
