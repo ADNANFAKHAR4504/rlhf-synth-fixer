@@ -315,42 +315,44 @@ export class TapStack extends pulumi.ComponentResource {
       {
         name: `abac-policy-${environmentSuffix}`,
         role: microserviceRole.id,
-        policy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Action: ['secretsmanager:GetSecretValue'],
-              Resource: '*',
-              Condition: {
-                StringEquals: {
-                  'aws:ResourceTag/Environment': environmentSuffix,
-                  'aws:PrincipalTag/Environment': environmentSuffix,
+        policy: auditLogGroup.arn.apply((logGroupArn: string) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: ['secretsmanager:GetSecretValue'],
+                Resource: '*',
+                Condition: {
+                  StringEquals: {
+                    'aws:ResourceTag/Environment': environmentSuffix,
+                    'aws:PrincipalTag/Environment': environmentSuffix,
+                  },
                 },
               },
-            },
-            {
-              Effect: 'Allow',
-              Action: ['ssm:GetParameter', 'ssm:GetParameters'],
-              Resource: `arn:aws:ssm:${region}:*:parameter/${environmentSuffix}/*`,
-              Condition: {
-                StringEquals: {
-                  'aws:PrincipalTag/Environment': environmentSuffix,
+              {
+                Effect: 'Allow',
+                Action: ['ssm:GetParameter', 'ssm:GetParameters'],
+                Resource: `arn:aws:ssm:${region}:*:parameter/${environmentSuffix}/*`,
+                Condition: {
+                  StringEquals: {
+                    'aws:PrincipalTag/Environment': environmentSuffix,
+                  },
                 },
               },
-            },
-            {
-              Effect: 'Allow',
-              Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
-              Resource: auditLogGroup.arn,
-              Condition: {
-                StringEquals: {
-                  'aws:PrincipalTag/Environment': environmentSuffix,
+              {
+                Effect: 'Allow',
+                Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+                Resource: logGroupArn,
+                Condition: {
+                  StringEquals: {
+                    'aws:PrincipalTag/Environment': environmentSuffix,
+                  },
                 },
               },
-            },
-          ],
-        }),
+            ],
+          })
+        ),
       },
       { parent: microserviceRole }
     );
