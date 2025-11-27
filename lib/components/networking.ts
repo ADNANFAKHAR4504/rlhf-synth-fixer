@@ -29,9 +29,15 @@ export class NetworkingStack extends pulumi.ComponentResource {
 
     // Import VPC and subnet outputs
     this.vpcId = networkStack.getOutput('vpcId') as pulumi.Output<string>;
-    this.privateSubnetIds = networkStack.getOutput('privateSubnetIds') as pulumi.Output<string[]>;
-    this.publicSubnetIds = networkStack.getOutput('publicSubnetIds') as pulumi.Output<string[]>;
-    this.availabilityZones = networkStack.getOutput('availabilityZones') as pulumi.Output<string[]>;
+    this.privateSubnetIds = networkStack.getOutput(
+      'privateSubnetIds'
+    ) as pulumi.Output<string[]>;
+    this.publicSubnetIds = networkStack.getOutput(
+      'publicSubnetIds'
+    ) as pulumi.Output<string[]>;
+    this.availabilityZones = networkStack.getOutput(
+      'availabilityZones'
+    ) as pulumi.Output<string[]>;
 
     this.registerOutputs({
       vpcId: this.vpcId,

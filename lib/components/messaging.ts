@@ -27,7 +27,7 @@ export class MessagingComponent extends pulumi.ComponentResource {
   ) {
     super('tap:messaging:MessagingComponent', name, {}, opts);
 
-    const { environmentSuffix, environment, kmsKeyId, lambdaFunctionArn, tags } = args;
+    const { environmentSuffix, environment, kmsKeyId, tags } = args;
 
     const dlq = new aws.sqs.Queue(
       `payment-dlq-${environmentSuffix}`,

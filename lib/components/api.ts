@@ -24,7 +24,7 @@ export class APIComponent extends pulumi.ComponentResource {
   ) {
     super('tap:api:APIComponent', name, {}, opts);
 
-    const { environmentSuffix, environment, lambdaFunctionArn, lambdaFunctionName, tags } = args;
+    const { environmentSuffix, environment, tags } = args;
 
     const wafAcl = new aws.wafv2.WebAcl(
       `api-waf-${environmentSuffix}`,
