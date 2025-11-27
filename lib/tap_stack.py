@@ -683,8 +683,8 @@ class TapStack(TerraformStack):
             runtime="python3.11",
             memory_size=1024,
             timeout=30,
-            filename="lambda_placeholder.zip",  # Will be replaced with actual deployment package
-            source_code_hash=Fn.filebase64sha256("lambda_placeholder.zip"),
+            filename="${path.module}/../../../lambda_placeholder.zip",
+            source_code_hash=Fn.filebase64sha256("${path.module}/../../../lambda_placeholder.zip"),
             environment={
                 "variables": {
                     "REGION": primary_region,
@@ -808,8 +808,8 @@ class TapStack(TerraformStack):
             runtime="python3.11",
             memory_size=1024,
             timeout=30,
-            filename="lambda_placeholder.zip",
-            source_code_hash=Fn.filebase64sha256("lambda_placeholder.zip"),
+            filename="${path.module}/../../../lambda_placeholder.zip",
+            source_code_hash=Fn.filebase64sha256("${path.module}/../../../lambda_placeholder.zip"),
             environment={
                 "variables": {
                     "REGION": secondary_region,
