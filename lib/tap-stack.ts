@@ -374,7 +374,8 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const dbPasswordValue = new aws.secretsmanager.SecretVersion(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _dbPasswordValue = new aws.secretsmanager.SecretVersion(
       `ecommerce-db-password-version-${environmentSuffix}`,
       {
         secretId: dbPassword.id,
@@ -390,7 +391,7 @@ export class TapStack extends pulumi.ComponentResource {
         clusterIdentifier: `ecommerce-aurora-${environmentSuffix}`,
         engine: 'aurora-postgresql',
         engineMode: 'provisioned',
-        engineVersion: '17.3',
+        engineVersion: '17.4',
         databaseName: 'ecommerce',
         masterUsername: 'dbadmin',
         masterPassword: dbPasswordString.result,
@@ -423,7 +424,7 @@ export class TapStack extends pulumi.ComponentResource {
         clusterIdentifier: auroraCluster.id,
         instanceClass: 'db.serverless',
         engine: 'aurora-postgresql',
-        engineVersion: '17.3',
+        engineVersion: '17.4',
         publiclyAccessible: false,
         tags: {
           Name: `ecommerce-aurora-instance-1-${environmentSuffix}`,
@@ -441,7 +442,7 @@ export class TapStack extends pulumi.ComponentResource {
         clusterIdentifier: auroraCluster.id,
         instanceClass: 'db.serverless',
         engine: 'aurora-postgresql',
-        engineVersion: '17.3',
+        engineVersion: '17.4',
         publiclyAccessible: false,
         tags: {
           Name: `ecommerce-aurora-instance-2-${environmentSuffix}`,
