@@ -1523,7 +1523,7 @@
             "Id": "SourceSystem1Target",
             "RetryPolicy": {
               "MaximumRetryAttempts": 3,
-              "MaximumEventAge": 3600
+              "MaximumEventAgeInSeconds": 3600
             }
           }
         ]
@@ -1566,7 +1566,7 @@
             "Id": "SourceSystem2Target",
             "RetryPolicy": {
               "MaximumRetryAttempts": 3,
-              "MaximumEventAge": 3600
+              "MaximumEventAgeInSeconds": 3600
             }
           }
         ]
@@ -1609,7 +1609,7 @@
             "Id": "SourceSystem3Target",
             "RetryPolicy": {
               "MaximumRetryAttempts": 3,
-              "MaximumEventAge": 3600
+              "MaximumEventAgeInSeconds": 3600
             }
           }
         ]
