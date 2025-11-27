@@ -255,7 +255,10 @@ export class TapStack extends pulumi.ComponentResource {
             '!A1'
         )}"}`,
       },
-      { parent: this }
+      {
+        parent: this,
+        ignoreChanges: ['secretString'], // Prevent password regeneration on every deployment
+      }
     );
 
     // Aurora Global Database Cluster
@@ -321,7 +324,10 @@ export class TapStack extends pulumi.ComponentResource {
         vpcSecurityGroupIds: [primaryDbSecurityGroup.id],
         skipFinalSnapshot: true,
       },
-      { parent: this }
+      {
+        parent: this,
+        ignoreChanges: ['masterPassword'], // Prevent password updates from triggering cluster modifications
+      }
     );
 
     // Aurora Cluster Instance for primary (required for Global Database)
