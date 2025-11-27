@@ -127,7 +127,7 @@ export class DatabaseComponent extends pulumi.ComponentResource {
         clusterIdentifier: clusterIdentifier,
         engine: 'aurora-postgresql',
         engineMode: 'provisioned',
-        engineVersion: '15.4',
+        engineVersion: '15.3',
         databaseName: 'paymentdb',
         masterUsername: 'paymentadmin',
         masterPassword: dbPassword.result,
@@ -159,7 +159,7 @@ export class DatabaseComponent extends pulumi.ComponentResource {
           clusterIdentifier: this.cluster.id,
           instanceClass: args.instanceClass,
           engine: 'aurora-postgresql',
-          engineVersion: '15.4',
+          engineVersion: '15.3',
           publiclyAccessible: false,
           performanceInsightsEnabled: true,
           tags: {
