@@ -369,8 +369,8 @@ class TapStack(Stack):
                 "long_query_time": "2",
                 "general_log": "0",
                 "max_connections": "10000",
-                "innodb_buffer_pool_size": "{DBInstanceClassMemory*3/4}",
-                "performance_schema": "1"
+                "performance_schema": "1",
+                "log_queries_not_using_indexes": "0"
             }
         )
 
@@ -557,7 +557,8 @@ class TapStack(Stack):
             cache_subnet_group_name=f"tap-{self.environment_suffix}-redis-subnet"
         )
 
-        # Create parameter group
+        # Create parameter group for Redis 7.0
+        # Note: Only use valid Redis 7 parameters
         parameter_group = elasticache.CfnParameterGroup(
             self, "RedisParameterGroup",
             cache_parameter_group_family="redis7",
@@ -565,9 +566,10 @@ class TapStack(Stack):
             properties={
                 "timeout": "300",
                 "tcp-keepalive": "300",
-                "tcp-backlog": "511",
                 "maxmemory-policy": "allkeys-lru",
-                "notify-keyspace-events": "Ex"
+                "notify-keyspace-events": "Ex",
+                "maxmemory-samples": "5",
+                "cluster-enabled": "yes"
             }
         )
 
@@ -751,6 +753,7 @@ class TapStack(Stack):
         )
 
         # Create Auto Scaling Group
+        # Use SSM parameter for AMI to avoid credential issues during synthesis
         asg = autoscaling.AutoScalingGroup(
             self, "TapAutoScalingGroup",
             vpc=self.vpc,
@@ -758,7 +761,9 @@ class TapStack(Stack):
                 subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
             ),
             instance_type=ec2.InstanceType("m5.4xlarge"),
-            machine_image=ec2.MachineImage.latest_amazon_linux2(),
+            machine_image=ec2.MachineImage.latest_amazon_linux2(
+                cached_in_context=True
+            ),
             role=instance_role,
             security_group=self.security_groups['ec2'],
             user_data=user_data,

@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 
 import aws_cdk as cdk
 from aws_cdk import Tags
+
 from lib.tap_stack import TapStack, TapStackProps
 
 app = cdk.App()
@@ -27,8 +28,9 @@ environment_suffix = app.node.try_get_context('environmentSuffix') or 'dev'
 account = os.getenv('CDK_DEFAULT_ACCOUNT')
 
 # Define regions for multi-region deployment
-primary_region = os.getenv('CDK_DEFAULT_REGION') or 'us-east-1'
-secondary_region = os.getenv('CDK_SECONDARY_REGION') or 'us-west-2'
+primary_region = region=os.getenv('CDK_DEFAULT_REGION')
+secondary_region = 'ap-southeast-1'
+third_region = 'us-west-2'
 
 # Metadata for tagging
 repository_name = os.getenv('REPOSITORY', 'unknown')
@@ -45,7 +47,6 @@ Tags.of(app).add('PRNumber', pr_number)
 Tags.of(app).add('Team', team)
 Tags.of(app).add('CreatedAt', created_at)
 
-# Create Primary Region Stack (us-east-1 or CDK_DEFAULT_REGION)
 primary_stack_name = f"TapStack{environment_suffix}Primary"
 primary_props = TapStackProps(
     environment_suffix=environment_suffix,
@@ -59,7 +60,6 @@ primary_stack = TapStack(app, primary_stack_name, props=primary_props)
 Tags.of(primary_stack).add('Region', 'Primary')
 Tags.of(primary_stack).add('RegionName', primary_region)
 
-# Create Secondary Region Stack (us-west-2 or CDK_SECONDARY_REGION)
 secondary_stack_name = f"TapStack{environment_suffix}Secondary"
 secondary_props = TapStackProps(
     environment_suffix=f"{environment_suffix}-secondary",
@@ -72,5 +72,19 @@ secondary_props = TapStackProps(
 secondary_stack = TapStack(app, secondary_stack_name, props=secondary_props)
 Tags.of(secondary_stack).add('Region', 'Secondary')
 Tags.of(secondary_stack).add('RegionName', secondary_region)
+
+
+third_stack_name = f"TapStack{environment_suffix}Third"
+third_props = TapStackProps(
+    environment_suffix=f"{environment_suffix}-third",
+    env=cdk.Environment(
+        account=account,
+        region=third_region
+    )
+)
+
+third_stack = TapStack(app, third_stack_name, props=third_props)
+Tags.of(third_stack).add('Region', 'Third')
+Tags.of(third_stack).add('RegionName', third_region)
 
 app.synth()
