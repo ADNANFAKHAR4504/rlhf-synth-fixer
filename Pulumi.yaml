@@ -1,4 +1,4 @@
 name: TapStack
 runtime: nodejs
 description: Multi-environment infrastructure deployment with comprehensive AWS services
-main: dist/bin/
+main: dist/bin/tap.js
