@@ -1067,6 +1067,49 @@
         ]
       }
     },
+    "DBSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "credit-scoring-db-secret-${EnvironmentSuffix}"
+        },
+        "Description": "Database credentials for Aurora PostgreSQL cluster",
+        "GenerateSecretString": {
+          "SecretStringTemplate": {
+            "Fn::Sub": "{\"username\": \"${DBMasterUsername}\"}"
+          },
+          "GenerateStringKey": "password",
+          "PasswordLength": 16,
+          "ExcludeCharacters": "\"@/\\"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "credit-scoring-db-secret-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "DataClassification",
+            "Value": {
+              "Ref": "DataClassification"
+            }
+          }
+        ]
+      }
+    },
     "AuroraCluster": {
       "Type": "AWS::RDS::DBCluster",
       "DeletionPolicy": "Delete",
@@ -1078,7 +1121,9 @@
         "MasterUsername": {
           "Ref": "DBMasterUsername"
         },
-        "MasterUserPassword": "{{resolve:secretsmanager:credit-scoring-db-secret:SecretString:password}}",
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"
+        },
         "DBSubnetGroupName": {
           "Ref": "DBSubnetGroup"
         },
