@@ -60,33 +60,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
       { parent: this, provider: primaryProvider }
     );
 
-    // CloudWatch Alarm for Database Lag
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _dbLagAlarm = new aws.cloudwatch.MetricAlarm(
-      `db-lag-alarm-${environmentSuffix}`,
-      {
-        name: `db-lag-alarm-${environmentSuffix}`,
-        comparisonOperator: 'GreaterThanThreshold',
-        evaluationPeriods: 2,
-        metricName: 'AuroraGlobalDBReplicationLag',
-        namespace: 'AWS/RDS',
-        period: 60,
-        statistic: 'Average',
-        threshold: 60000, // 60 seconds in milliseconds
-        alarmDescription:
-          'Alert when Aurora Global DB replication lag exceeds 60 seconds',
-        alarmActions: [snsTopic.arn],
-        dimensions: {
-          DBClusterIdentifier: args.secondaryClusterId,
-        },
-        tags: {
-          ...tags,
-          Name: `db-lag-alarm-${environmentSuffix}`,
-          EnvironmentSuffix: environmentSuffix,
-        },
-      },
-      { parent: this, provider: secondaryProvider }
-    );
+    // ...existing code...
 
     // CloudWatch Alarm for Health Check
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
