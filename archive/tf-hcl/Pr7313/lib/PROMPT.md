@@ -1,6 +1,6 @@
 # Application Deployment
 
-> **⚠️ CRITICAL REQUIREMENT: This task MUST be implemented using Terraform with HCL**
+> ** CRITICAL REQUIREMENT: This task MUST be implemented using Terraform with HCL**
 >
 > Platform: **tf**
 > Language: **hcl**
@@ -82,22 +82,22 @@ Production environment in us-east-1 region spanning 3 availability zones for hig
 
 #### AWS Config
 - **CRITICAL**: If creating AWS Config roles, use correct managed policy:
-  - ✅ CORRECT: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
-  - ❌ WRONG: `arn:aws:iam::aws:policy/service-role/ConfigRole`
-  - ❌ WRONG: `arn:aws:iam::aws:policy/AWS_ConfigRole`
+  -  CORRECT: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
+  -  WRONG: `arn:aws:iam::aws:policy/service-role/ConfigRole`
+  -  WRONG: `arn:aws:iam::aws:policy/AWS_ConfigRole`
 - **Alternative**: Use service-linked role `AWSServiceRoleForConfig` (auto-created)
 
 #### Lambda Functions
 - **Node.js 18.x+**: Do NOT use `require('aws-sdk')` - AWS SDK v2 not available
-  - ✅ Use AWS SDK v3: `import { S3Client } from '@aws-sdk/client-s3'`
-  - ✅ Or extract data from event object directly
+  -  Use AWS SDK v3: `import { S3Client } from '@aws-sdk/client-s3'`
+  -  Or extract data from event object directly
 - **Reserved Concurrency**: Avoid setting `reservedConcurrentExecutions` unless required
   - If required, use low values (1-5) to avoid account limit issues
 
 #### CloudWatch Synthetics
 - **CRITICAL**: Use current runtime version
-  - ✅ CORRECT: `synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0`
-  - ❌ WRONG: `SYNTHETICS_NODEJS_PUPPETEER_5_1` (deprecated)
+  -  CORRECT: `synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0`
+  -  WRONG: `SYNTHETICS_NODEJS_PUPPETEER_5_1` (deprecated)
 
 #### RDS Databases
 - **Prefer**: Aurora Serverless v2 (faster provisioning, auto-scaling)
@@ -126,10 +126,10 @@ Production environment in us-east-1 region spanning 3 availability zones for hig
 ### Correct Resource Naming (Terraform)
 ```hcl
 resource "aws_s3_bucket" "data_bucket" {
-  bucket = "data-bucket-${var.environment_suffix}"  # ✅ CORRECT
+  bucket = "data-bucket-${var.environment_suffix}"  #  CORRECT
 }
 
-# ❌ WRONG:
+#  WRONG:
 # bucket = "data-bucket-prod"  # Hardcoded, will fail
 ```
 
@@ -146,11 +146,11 @@ resource "aws_rds_cluster" "aurora" {
     min_capacity = 0.5
   }
 
-  skip_final_snapshot    = true  # ✅ CORRECT for test environments
-  deletion_protection    = false # ✅ CORRECT for test environments
+  skip_final_snapshot    = true  #  CORRECT for test environments
+  deletion_protection    = false #  CORRECT for test environments
 }
 
-# ❌ WRONG:
+#  WRONG:
 # skip_final_snapshot = false  # Will block destruction
 # deletion_protection = true   # Will prevent cleanup
 ```
