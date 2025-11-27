@@ -1,6 +1,6 @@
 # Failure Recovery Automation
 
-> **⚠️ CRITICAL REQUIREMENT: This task MUST be implemented using Pulumi with TypeScript**
+> **️ CRITICAL REQUIREMENT: This task MUST be implemented using Pulumi with TypeScript**
 >
 > Platform: **pulumi**
 > Language: **ts**
