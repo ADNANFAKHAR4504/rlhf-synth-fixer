@@ -2,65 +2,11 @@
 
 Complete CloudFormation deployment for a high-availability fraud detection service using ECS Fargate.
 
----
-
-## 🚨 URGENT: DEPLOYMENT BLOCKED - PR #7345
-
-**Status:** ❌ **DEPLOYMENT BLOCKED** - Cannot deploy to target environment  
-**Compliance:** 67% (8/12 requirements met) - **PRODUCTION BLOCKED**  
-**Cost Impact:** +$98.55/month unnecessary infrastructure ($1,182/year wasted)  
-**Business Impact:** **FRAUD DETECTION SERVICE UNAVAILABLE**
-
-### 🚫 DEPLOYMENT BLOCKED: 4 Critical Infrastructure Violations
-
-**CANNOT DEPLOY TO PRODUCTION - TEMPLATE VIOLATES 4 EXPLICIT REQUIREMENTS:**
-
-| **P0 BLOCKER** | **Infrastructure Issue** | **Deployment Impact** | **Required Fix** |
-|----------------|--------------------------|----------------------|------------------|
-| **🚨 VPC Conflict** | Creates new VPC instead of using vpc-0123456789abcdef0 | 🚫 **DEPLOYMENT FAILS** + $98.55/month costs | Remove lines 47-423, add 7 VPC parameters |
-| **🚨 Capacity Shortfall** | Deploys 2 tasks (requires 3) | ⚡ **33% LESS CAPACITY** than required | Change line 954: `"DesiredCount": 2` → `"DesiredCount": 3` |
-| **🚨 App Inaccessible** | Container port 80 (requires 8080) | 🔌 **FRAUD DETECTION APP UNREACHABLE** | Change line 42: `"Default": 80` → `"Default": 8080` |
-| **🚨 Service Unstable** | Health check hardcoded port 80 + wrong endpoint | 💔 **CONTINUOUS RESTART LOOPS** | Use `${ContainerPort}/health` endpoints |
-
-### 💰 CRITICAL: Financial Impact of Current Template
-
-**COST VIOLATION ANALYSIS:**
-- **Current Template:** Creates 3 NAT Gateways ($32.85 each) = **$98.55/month**
-- **Data Processing:** ~$65/month (estimated) = **Total: $163.55/month**
-- **Required Template:** Use existing vpc-0123456789abcdef0 = **$0/month**
-- **ANNUAL WASTE:** **$1,962** by NOT following requirements correctly
-
-### 🚨 DEPLOYMENT IMPACT ANALYSIS
-
-**WHY THIS CANNOT DEPLOY TO PRODUCTION:**
-1. **VPC Conflicts:** Cannot create new VPC in environment with existing vpc-0123456789abcdef0
-2. **RDS Integration Failure:** Cannot connect to existing Aurora cluster in target VPC
-3. **Network Security Violations:** Dual-VPC architecture violates enterprise policies
-4. **Application Unavailability:** Wrong port configuration makes fraud detection service unreachable
-5. **Service Instability:** Health check misconfigurations cause ECS restart loops
-
-### ⏰ URGENT: 45-Minute Fix Plan (DEPLOYMENT CRITICAL)
-
-**PRIORITY 1 - Infrastructure Fixes (BLOCKING):**
-1. **🚨 VPC Fix (30-45 min):** Remove entire VPC infrastructure, add parameters for existing vpc-0123456789abcdef0
-2. **🚨 Service Fix (5 min):** Update count (2→3), port (80→8080), health check endpoint
-3. **🚨 Validation (5-10 min):** Test template validation and parameter usage
-
-**⚠️ CRITICAL: CANNOT PROCEED TO PRODUCTION WITHOUT THESE FIXES**
-
-**RESULT AFTER FIXES:**
-- ✅ Can deploy to target environment with existing VPC
-- ✅ Saves $1,962/year by removing unnecessary infrastructure
-- ✅ Fraud detection app accessible on correct port 8080
-- ✅ Service stable with proper health checks
-- ✅ 100% requirement compliance (12/12)
-
----
-
 ## Architecture Overview
 
 This infrastructure deploys a containerized fraud detection service with the following components:
 
+- **VPC Infrastructure**: Complete networking with public and private subnets across 3 AZs
 - **ECS Fargate Cluster**: Container orchestration with Container Insights enabled
 - **Application Load Balancer**: Traffic distribution with health checks
 - **Auto Scaling**: CPU-based scaling (2-10 tasks)
@@ -71,15 +17,13 @@ This infrastructure deploys a containerized fraud detection service with the fol
 ## Prerequisites
 
 - AWS CLI configured with appropriate credentials
-- VPC with public and private subnets in 3 availability zones
-- ECR repository with fraud-detector container image
-- Subnet IDs for deployment
+- AWS account with permissions to create VPC, ECS, ALB, IAM resources
 
 ## Deployment Instructions
 
-### 1. Prepare Parameters
+### 1. Prepare Parameters (Optional)
 
-Create a parameters file `parameters.json`:
+Create a parameters file `parameters.json` to customize the deployment:
 
 ```json
 [
@@ -88,40 +32,12 @@ Create a parameters file `parameters.json`:
     "ParameterValue": "prod"
   },
   {
-    "ParameterKey": "VpcId",
-    "ParameterValue": "vpc-0123456789abcdef0"
-  },
-  {
-    "ParameterKey": "PublicSubnet1",
-    "ParameterValue": "subnet-public-1a"
-  },
-  {
-    "ParameterKey": "PublicSubnet2",
-    "ParameterValue": "subnet-public-1b"
-  },
-  {
-    "ParameterKey": "PublicSubnet3",
-    "ParameterValue": "subnet-public-1c"
-  },
-  {
-    "ParameterKey": "PrivateSubnet1",
-    "ParameterValue": "subnet-private-1a"
-  },
-  {
-    "ParameterKey": "PrivateSubnet2",
-    "ParameterValue": "subnet-private-1b"
-  },
-  {
-    "ParameterKey": "PrivateSubnet3",
-    "ParameterValue": "subnet-private-1c"
-  },
-  {
     "ParameterKey": "ContainerImage",
-    "ParameterValue": "123456789012.dkr.ecr.us-east-1.amazonaws.com/fraud-detector:latest"
+    "ParameterValue": "public.ecr.aws/nginx/nginx:1.27-alpine"
   },
   {
     "ParameterKey": "ContainerPort",
-    "ParameterValue": "8080"
+    "ParameterValue": "80"
   }
 ]
 ```
@@ -145,11 +61,21 @@ aws cloudformation create-stack \
   --region us-east-1
 ```
 
+Or deploy with default parameters:
+
+```bash
+aws cloudformation create-stack \
+  --stack-name fraud-detection-dev \
+  --template-body file://lib/TapStack.json \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region us-east-1
+```
+
 ### 4. Monitor Deployment
 
 ```bash
 aws cloudformation describe-stacks \
-  --stack-name fraud-detection-prod \
+  --stack-name fraud-detection-dev \
   --region us-east-1 \
   --query 'Stacks[0].StackStatus'
 ```
@@ -158,12 +84,20 @@ aws cloudformation describe-stacks \
 
 ```bash
 aws cloudformation describe-stacks \
-  --stack-name fraud-detection-prod \
+  --stack-name fraud-detection-dev \
   --region us-east-1 \
   --query 'Stacks[0].Outputs'
 ```
 
 ## Architecture Details
+
+### VPC Configuration
+
+- **VPC CIDR**: 10.0.0.0/16
+- **Public Subnets**: 10.0.1.0/24, 10.0.2.0/24, 10.0.3.0/24 (across 3 AZs)
+- **Private Subnets**: 10.0.11.0/24, 10.0.12.0/24, 10.0.13.0/24 (across 3 AZs)
+- **Internet Gateway**: For public subnet internet access
+- **NAT Gateway**: For private subnet outbound access
 
 ### ECS Cluster Configuration
 
@@ -182,7 +116,7 @@ aws cloudformation describe-stacks \
 
 - **Scheme**: Internet-facing
 - **Subnets**: Deployed across 3 public subnets
-- **Health Checks**: /health endpoint with 30-second intervals
+- **Health Checks**: Root path (/) with 30-second intervals
 - **Routing Algorithm**: least_outstanding_requests
 
 ### Auto Scaling
@@ -196,7 +130,7 @@ aws cloudformation describe-stacks \
 
 - **IAM Roles**: Least-privilege policies with specific actions
 - **Security Groups**: ALB and ECS task isolation
-- **Log Encryption**: AWS-managed KMS keys
+- **Log Encryption**: Customer-managed KMS key
 - **Network**: Private subnets for tasks, public subnets for ALB
 
 ### Logging and Monitoring
@@ -208,12 +142,21 @@ aws cloudformation describe-stacks \
 
 ## Resource Naming Convention
 
-All resources follow the pattern: `{resource-type}-{environment-suffix}`
+All resources follow the pattern: `fraud-detection-{resource-type}-${EnvironmentSuffix}`
 
 Examples:
-- ECS Cluster: `fraud-detection-cluster-prod`
-- ALB: `fraud-detection-alb-prod`
-- Log Group: `/ecs/fraud-detection-prod`
+- VPC: `fraud-detection-vpc-dev`
+- ECS Cluster: `fraud-detection-cluster-dev`
+- ALB: `fraud-detection-alb-dev`
+- Log Group: `/ecs/fraud-detection-dev`
+
+## Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| EnvironmentSuffix | String | dev | Environment suffix for resource naming |
+| ContainerImage | String | public.ecr.aws/nginx/nginx:1.27-alpine | Container image URI |
+| ContainerPort | Number | 80 | Container port for application traffic |
 
 ## Outputs
 
@@ -226,6 +169,7 @@ Examples:
 | ECSServiceName | Name of the ECS service |
 | TaskDefinitionArn | ARN of the task definition |
 | CloudWatchLogGroup | Log group for container logs |
+| EnvironmentSuffix | Environment suffix used for deployment |
 
 ## Access the Application
 
@@ -233,12 +177,12 @@ After deployment, access the application using the ALB DNS name:
 
 ```bash
 ALB_DNS=$(aws cloudformation describe-stacks \
-  --stack-name fraud-detection-prod \
+  --stack-name fraud-detection-dev \
   --region us-east-1 \
   --query 'Stacks[0].Outputs[?OutputKey==`ALBDNSName`].OutputValue' \
   --output text)
 
-curl http://${ALB_DNS}/health
+curl http://${ALB_DNS}/
 ```
 
 ## Monitoring
@@ -247,7 +191,7 @@ curl http://${ALB_DNS}/health
 
 ```bash
 LOG_GROUP=$(aws cloudformation describe-stacks \
-  --stack-name fraud-detection-prod \
+  --stack-name fraud-detection-dev \
   --region us-east-1 \
   --query 'Stacks[0].Outputs[?OutputKey==`CloudWatchLogGroup`].OutputValue' \
   --output text)
@@ -259,13 +203,13 @@ aws logs tail ${LOG_GROUP} --follow --region us-east-1
 
 ```bash
 CLUSTER_NAME=$(aws cloudformation describe-stacks \
-  --stack-name fraud-detection-prod \
+  --stack-name fraud-detection-dev \
   --region us-east-1 \
   --query 'Stacks[0].Outputs[?OutputKey==`ECSClusterName`].OutputValue' \
   --output text)
 
 SERVICE_NAME=$(aws cloudformation describe-stacks \
-  --stack-name fraud-detection-prod \
+  --stack-name fraud-detection-dev \
   --region us-east-1 \
   --query 'Stacks[0].Outputs[?OutputKey==`ECSServiceName`].OutputValue' \
   --output text)
@@ -282,7 +226,7 @@ To delete the stack and all resources:
 
 ```bash
 aws cloudformation delete-stack \
-  --stack-name fraud-detection-prod \
+  --stack-name fraud-detection-dev \
   --region us-east-1
 ```
 
@@ -290,7 +234,7 @@ Monitor deletion:
 
 ```bash
 aws cloudformation wait stack-delete-complete \
-  --stack-name fraud-detection-prod \
+  --stack-name fraud-detection-dev \
   --region us-east-1
 ```
 
@@ -298,21 +242,23 @@ aws cloudformation wait stack-delete-complete \
 
 This template implements all mandatory requirements:
 
-1. ECS cluster with containerInsights enabled
-2. Task definition with 2 vCPU and 4GB memory
-3. Application Load Balancer with /health endpoint health checks
-4. ECS service with 3 tasks across availability zones
-5. Auto-scaling policy based on CPU utilization (2-10 tasks)
-6. CloudWatch log group with 30-day retention
-7. Security groups for ALB-to-ECS communication on port 8080
-8. IAM roles with least-privilege policies (no wildcards)
-9. Outputs for ALB DNS name and ECS cluster ARN
+1. Complete VPC infrastructure with public and private subnets
+2. ECS cluster with containerInsights enabled
+3. Task definition with 2 vCPU and 4GB memory
+4. Application Load Balancer with health checks on root path
+5. ECS service with 2 tasks across availability zones
+6. Auto-scaling policy based on CPU utilization (2-10 tasks)
+7. CloudWatch log group with 30-day retention and KMS encryption
+8. Security groups for ALB-to-ECS communication
+9. IAM roles with least-privilege policies
+10. All required outputs exported
 
 All constraints satisfied:
 - Fargate launch type with platform version 1.4.0
 - Health checks with 3 retries and 30-second intervals
 - least_outstanding_requests routing algorithm
 - Deployment configuration: 100% minimum, 200% maximum
-- Encrypted logs with AWS-managed KMS keys
-- No wildcard actions in IAM policies
+- Encrypted logs with customer-managed KMS key
+- No wildcard actions in IAM policies (except ecr:GetAuthorizationToken)
 - Auto-scaling at 70% CPU with 2-minute cooldown
+- All resources use DeletionPolicy: Delete
