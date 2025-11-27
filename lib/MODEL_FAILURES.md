@@ -361,9 +361,9 @@ Original response mentioned testing checklist but provided no actual test implem
 ```markdown
 ## Testing Checklist
 
-1. ✅ terraform init succeeds
-2. ✅ terraform validate passes
-3. ✅ terraform plan shows expected resources
+1. terraform init succeeds
+2. terraform validate passes
+3. terraform plan shows expected resources
 ...
 ```
 

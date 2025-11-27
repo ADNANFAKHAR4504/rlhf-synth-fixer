@@ -1,18 +1,13 @@
 {
-  "platform": "terraform",
+  "platform": "tf",
   "language": "hcl",
   "complexity": "expert",
   "team": "synth",
   "turn_type": "single",
   "startedAt": "2025-11-27T10:19:00+00:00",
-  "subtask": "Infrastructure Refactoring and Cost Optimization",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "refactoring",
-    "optimization",
-    "cost-reduction",
-    "modules",
-    "state-management",
-    "best-practices"
+    "Cloud Environment Setup"
   ],
   "po_id": "101912797",
   "aws_services": [
@@ -28,5 +23,7 @@
     "NAT Gateway",
     "Internet Gateway"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing"
 }
