@@ -1,210 +1,338 @@
 import fs from 'fs';
 import path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+let template: any;
+
+beforeAll(() => {
+  const templatePath = path.join(__dirname, '../lib/TapStack.json');
+  const templateContent = fs.readFileSync(templatePath, 'utf8');
+  template = JSON.parse(templateContent);
+});
 
 describe('TapStack CloudFormation Template', () => {
-  let template: any;
-
-  beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
-    const templatePath = path.join(__dirname, '../lib/TapStack.json');
-    const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = JSON.parse(templateContent);
-  });
-
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
-  });
-
-  describe('Template Structure', () => {
-    test('should have valid CloudFormation format version', () => {
-      expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
-    });
-
-    test('should have a description', () => {
-      expect(template.Description).toBeDefined();
-      expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
+  describe('Conditions', () => {
+    test('defines key feature toggles for stack behavior', () => {
+      expect(template.Conditions).toBeDefined();
+      expect(Object.keys(template.Conditions)).toEqual(
+        expect.arrayContaining(['HasKeyPair', 'IsProduction', 'EnableMonitoring'])
       );
     });
+  });
 
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
+  describe('Metadata and structure', () => {
+    test('defines the correct template version and description', () => {
+      expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
+      expect(template.Description).toBe(
+        'Enterprise-ready foundational infrastructure for modern application deployment with comprehensive monitoring and security controls'
+      );
       expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
     });
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    test('EnvironmentName enforces lowercase naming convention', () => {
+      const param = template.Parameters.EnvironmentName;
+      expect(param.Default).toBe('production');
+      expect(param.AllowedValues).toEqual([
+        'development',
+        'staging',
+        'production',
+      ]);
+      expect(param.AllowedPattern).toBe('^[a-z0-9][a-z0-9-]*[a-z0-9]$');
     });
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    test('EnvironmentType drives environment sizing choices', () => {
+      const param = template.Parameters.EnvironmentType;
+      expect(param.Type).toBe('String');
+      expect(param.AllowedValues).toEqual([
+        'development',
+        'staging',
+        'production',
+      ]);
+    });
+
+    test('InstanceType parameter restricts supported EC2 types', () => {
+      const param = template.Parameters.InstanceType;
+      expect(param.Default).toBe('t3.micro');
+      expect(param.AllowedValues).toEqual([
+        't3.micro',
+        't3.small',
+        't3.medium',
+        't3.large',
+      ]);
+    });
+
+    test('AllowedSSHIP enforces CIDR formatting', () => {
+      const param = template.Parameters.AllowedSSHIP;
+      expect(param.Default).toBe('10.0.0.0/16');
+      expect(param.AllowedPattern).toContain('([0-9]|[1-9][0-9]');
+      expect(param.ConstraintDescription).toContain('x.x.x.x/x');
+    });
+  });
+
+  describe('Mappings', () => {
+    test('SubnetConfig defines deterministic CIDR blocks', () => {
+      const subnetConfig = template.Mappings.SubnetConfig;
+      expect(subnetConfig.PublicSubnet1.CIDR).toBe('10.0.1.0/24');
+      expect(subnetConfig.PublicSubnet2.CIDR).toBe('10.0.2.0/24');
+    });
+
+    test('EnvironmentConfig provides sizing metadata', () => {
+      const envConfig = template.Mappings.EnvironmentConfig;
+      expect(envConfig.production.InstanceType).toBe('t3.medium');
+      expect(envConfig.production.LogRetention).toBe(30);
+    });
+  });
+
+  describe('Networking resources', () => {
+    test('VPC resource sets DNS features and tags', () => {
+      const vpc = template.Resources.VPC;
+      expect(vpc.Type).toBe('AWS::EC2::VPC');
+      expect(vpc.Properties.CidrBlock).toEqual({ Ref: 'VPCCIDR' });
+      expect(vpc.Properties.EnableDnsHostnames).toBe(true);
+      expect(vpc.Properties.EnableDnsSupport).toBe(true);
+    });
+
+    test('public subnets derive CIDRs from SubnetConfig mapping', () => {
+      const subnet1 = template.Resources.PublicSubnet1;
+      const subnet2 = template.Resources.PublicSubnet2;
+      expect(subnet1.Properties.CidrBlock).toEqual({
+        'Fn::FindInMap': ['SubnetConfig', 'PublicSubnet1', 'CIDR'],
+      });
+      expect(subnet2.Properties.CidrBlock).toEqual({
+        'Fn::FindInMap': ['SubnetConfig', 'PublicSubnet2', 'CIDR'],
+      });
+    });
+
+    test('WebServerSecurityGroup limits SSH to AllowedSSHIP parameter', () => {
+      const sg = template.Resources.WebServerSecurityGroup;
+      const sshRule = sg.Properties.SecurityGroupIngress.find(
+        (rule: any) => rule.FromPort === 22
       );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
+      expect(sshRule.CidrIp).toEqual({ Ref: 'AllowedSSHIP' });
+    });
+  });
+
+  describe('Compute resources', () => {
+    test('WebServerInstance attaches encrypted gp3 storage', () => {
+      const instance = template.Resources.WebServerInstance;
+      const blockDevice = instance.Properties.BlockDeviceMappings[0].Ebs;
+      expect(blockDevice.VolumeType).toBe('gp3');
+      expect(blockDevice.Encrypted).toBe(true);
+      expect(blockDevice.DeleteOnTermination).toBe(true);
+    });
+
+    test('WebServerInstance enforces detailed monitoring flag', () => {
+      const instance = template.Resources.WebServerInstance;
+      expect(instance.Properties.Monitoring).toEqual({
+        'Fn::If': ['EnableMonitoring', true, false],
+      });
+    });
+
+    test('EC2Role provides CloudWatch and S3 access', () => {
+      const role = template.Resources.EC2Role;
+      expect(role.Type).toBe('AWS::IAM::Role');
+      expect(role.Properties.ManagedPolicyArns).toEqual(
+        expect.arrayContaining([
+          'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy',
+          'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
+        ])
+      );
+    });
+
+    test('UserData installs CloudWatch agent and signals stack completion', () => {
+      const instance = template.Resources.WebServerInstance;
+      const userData = instance.Properties.UserData['Fn::Base64']['Fn::Sub'];
+      const script = Array.isArray(userData) ? userData[0] : userData;
+      expect(script).toContain('amazon-cloudwatch-agent.rpm');
+      expect(script).toContain('/opt/aws/bin/cfn-signal');
+    });
+  });
+
+  describe('Storage and logging', () => {
+    test('GeneralPurposeBucket enforces encryption and versioning', () => {
+      const bucket = template.Resources.GeneralPurposeBucket;
+      expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+      expect(
+        bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0]
+          .ServerSideEncryptionByDefault.SSEAlgorithm
+      ).toBe('AES256');
+    });
+
+    test('LoggingBucketPolicy blocks non-SSL access', () => {
+      const policy = template.Resources.LoggingBucketPolicy;
+      const denyStatement = policy.Properties.PolicyDocument.Statement.find(
+        (stmt: any) => stmt.Sid === 'AllowSSLRequestsOnly'
+      );
+      expect(denyStatement.Effect).toBe('Deny');
+      expect(denyStatement.Condition.Bool['aws:SecureTransport']).toBe('false');
+    });
+
+    test('CloudWatch logs stream through Firehose to S3', () => {
+      const subscription = template.Resources.LogsToS3ExportTask;
+      expect(subscription.Properties.DestinationArn).toEqual({
+        'Fn::GetAtt': ['LogsToS3DeliveryStream', 'Arn'],
+      });
+      const role = template.Resources.LogsRole;
+      const statement = role.Properties.Policies[0].PolicyDocument.Statement[0];
+      expect(statement.Action).toEqual(
+        expect.arrayContaining(['firehose:PutRecord', 'firehose:PutRecordBatch'])
+      );
+    });
+
+    test('LoggingBucket lifecycle rules delete and archive logs on schedule', () => {
+      const bucket = template.Resources.LoggingBucket;
+      const rules = bucket.Properties.LifecycleConfiguration.Rules;
+      expect(rules).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ Id: 'DeleteOldLogs', ExpirationInDays: expect.any(Object) }),
+          expect.objectContaining({
+            Id: 'TransitionOldLogs',
+            Transitions: [{ TransitionInDays: 7, StorageClass: 'GLACIER' }],
+          }),
+        ])
       );
     });
   });
 
-  describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+  describe('IAM and access controls', () => {
+    test('EC2InstanceProfile attaches the EC2 role', () => {
+      const profile = template.Resources.EC2InstanceProfile;
+      expect(profile.Properties.Roles).toEqual([{ Ref: 'EC2Role' }]);
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
+    test('Logging bucket policy allows CloudWatch Logs service to write objects', () => {
+      const policy = template.Resources.LoggingBucketPolicy;
+      const logsStatement = policy.Properties.PolicyDocument.Statement.find(
+        (stmt: any) => stmt.Sid === 'AllowCloudWatchLogs'
+      );
+      expect(logsStatement.Principal).toEqual({ Service: 'logs.amazonaws.com' });
+      expect(logsStatement.Action).toEqual(
+        expect.arrayContaining(['s3:GetBucketAcl', 's3:PutObject'])
+      );
     });
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
+    test('Firehose delivery role is permitted to manage S3 uploads', () => {
+      const role = template.Resources.FirehoseDeliveryRole;
+      const statement = role.Properties.Policies[0].PolicyDocument.Statement[0];
+      expect(statement.Action).toEqual(
+        expect.arrayContaining([
+          's3:AbortMultipartUpload',
+          's3:GetBucketLocation',
+          's3:GetObject',
+          's3:ListBucket',
+          's3:PutObject',
+        ])
+      );
+      expect(statement.Resource).toEqual(
+        expect.arrayContaining([
+          { 'Fn::GetAtt': ['LoggingBucket', 'Arn'] },
+          { 'Fn::Sub': '${LoggingBucket.Arn}/*' },
+        ])
+      );
     });
+  });
 
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+  describe('Log destinations and retention', () => {
+    test('ApplicationLogGroup retention uses environment-aware mapping', () => {
+      const logGroup = template.Resources.ApplicationLogGroup;
+      expect(logGroup.Properties.RetentionInDays).toEqual({
+        'Fn::FindInMap': ['EnvironmentConfig', { Ref: 'EnvironmentType' }, 'LogRetention'],
       });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
-    });
-
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
-
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+    test('HTTP log subscription uses LogsRole for permissions', () => {
+      const subscription = template.Resources.LogsToS3ExportTask;
+      expect(subscription.Properties.RoleArn).toEqual({ 'Fn::GetAtt': ['LogsRole', 'Arn'] });
     });
   });
 
   describe('Outputs', () => {
-    test('should have all required outputs', () => {
-      const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
-      ];
+    const requiredOutputs = [
+      'VPCId',
+      'PublicSubnet1Id',
+      'PublicSubnet2Id',
+      'EC2InstanceId',
+      'ElasticIPAddress',
+      'GeneralPurposeBucketName',
+      'LoggingBucketName',
+      'SNSTopicArn',
+    ];
+    const exportNameOverrides: Record<string, string> = {
+      VPCId: '${AWS::StackName}-VPC-ID',
+      PublicSubnet1Id: '${AWS::StackName}-PublicSubnet1-ID',
+      PublicSubnet2Id: '${AWS::StackName}-PublicSubnet2-ID',
+      EC2InstanceId: '${AWS::StackName}-EC2Instance-ID',
+      ElasticIPAddress: '${AWS::StackName}-ElasticIP',
+      GeneralPurposeBucketName: '${AWS::StackName}-GeneralPurposeBucket',
+      LoggingBucketName: '${AWS::StackName}-LoggingBucket',
+      SNSTopicArn: '${AWS::StackName}-SNSTopic-ARN',
+    };
 
-      expectedOutputs.forEach(outputName => {
-        expect(template.Outputs[outputName]).toBeDefined();
+    test.each(requiredOutputs)('%s output exposes stack metadata', outputName => {
+      expect(template.Outputs[outputName]).toBeDefined();
+      expect(template.Outputs[outputName].Export.Name).toEqual({
+        'Fn::Sub': exportNameOverrides[outputName] ?? `\${AWS::StackName}-${outputName}`,
       });
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
-      });
+    test('WebServerURL output references ElasticIP', () => {
+      const output = template.Outputs.WebServerURL;
+      expect(output.Value).toEqual({ 'Fn::Sub': 'http://${ElasticIP}' });
     });
 
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
+    test('bucket outputs expose resource references', () => {
+      expect(template.Outputs.GeneralPurposeBucketName.Value).toEqual({ Ref: 'GeneralPurposeBucket' });
+      expect(template.Outputs.LoggingBucketName.Value).toEqual({ Ref: 'LoggingBucket' });
     });
 
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
+    test('networking outputs resolve to concrete resources', () => {
+      expect(template.Outputs.VPCId.Value).toEqual({ Ref: 'VPC' });
+      expect(template.Outputs.PublicSubnet1Id.Value).toEqual({ Ref: 'PublicSubnet1' });
+      expect(template.Outputs.PublicSubnet2Id.Value).toEqual({ Ref: 'PublicSubnet2' });
+      expect(template.Outputs.ElasticIPAddress.Value).toEqual({ Ref: 'ElasticIP' });
+    });
+  });
+
+  describe('Monitoring and alerting', () => {
+    test('AlarmNotificationTopic subscribes the alert email parameter', () => {
+      const topic = template.Resources.AlarmNotificationTopic;
+      expect(topic.Properties.Subscription).toEqual([
+        {
+          Endpoint: { Ref: 'AlertEmail' },
+          Protocol: 'email',
+        },
+      ]);
     });
 
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
+    test('HighCPUAlarm references EC2 instance and parameterized threshold', () => {
+      const alarm = template.Resources.HighCPUAlarm;
+      expect(alarm.Properties.MetricName).toBe('CPUUtilization');
+      expect(alarm.Properties.Threshold).toEqual({ Ref: 'CPUAlarmThreshold' });
+      expect(alarm.Properties.AlarmActions).toEqual([{ Ref: 'AlarmNotificationTopic' }]);
+      expect(alarm.Properties.Dimensions).toEqual([
+        { Name: 'InstanceId', Value: { Ref: 'WebServerInstance' } },
+      ]);
+    });
+  });
+
+  describe('Log delivery pipeline', () => {
+    test('LogsToS3DeliveryStream writes compressed data into the logging bucket', () => {
+      const stream = template.Resources.LogsToS3DeliveryStream;
+      const destination = stream.Properties.ExtendedS3DestinationConfiguration;
+      expect(destination.BucketARN).toEqual({ 'Fn::GetAtt': ['LoggingBucket', 'Arn'] });
+      expect(destination.CompressionFormat).toBe('GZIP');
+      expect(destination.Prefix).toBe('cloudwatch-logs/');
+      expect(destination.RoleARN).toEqual({ 'Fn::GetAtt': ['FirehoseDeliveryRole', 'Arn'] });
+    });
+
+    test('LogsRole can put records into the Firehose delivery stream', () => {
+      const role = template.Resources.LogsRole;
+      const statement = role.Properties.Policies[0].PolicyDocument.Statement[0];
+      expect(statement.Action).toEqual(
+        expect.arrayContaining(['firehose:PutRecord', 'firehose:PutRecordBatch'])
       );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
-      });
-    });
-  });
-
-  describe('Template Validation', () => {
-    test('should have valid JSON structure', () => {
-      expect(template).toBeDefined();
-      expect(typeof template).toBe('object');
-    });
-
-    test('should not have any undefined or null required sections', () => {
-      expect(template.AWSTemplateFormatVersion).not.toBeNull();
-      expect(template.Description).not.toBeNull();
-      expect(template.Parameters).not.toBeNull();
-      expect(template.Resources).not.toBeNull();
-      expect(template.Outputs).not.toBeNull();
-    });
-
-    test('should have exactly one resource', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
-    });
-
-    test('should have exactly one parameter', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
-    });
-
-    test('should have exactly four outputs', () => {
-      const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
-    });
-  });
-
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
-
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-    });
-
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
-      });
+      expect(statement.Resource).toEqual({ 'Fn::GetAtt': ['LogsToS3DeliveryStream', 'Arn'] });
     });
   });
 });
