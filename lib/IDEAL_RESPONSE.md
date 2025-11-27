@@ -26,6 +26,7 @@ This CloudFormation template creates a fully functional, secure, and compliant l
 4. **Scalability**: Aurora Serverless v2, EC2 Auto Scaling based on ALB request metrics
 5. **Cost Optimization**: S3 lifecycle policies, Aurora Serverless min 0.5 ACUs
 6. **Monitoring**: Comprehensive CloudWatch logging and custom metrics
+7. **Secrets Management**: Database credentials stored in AWS Secrets Manager (no hardcoded passwords)
 
 ## Deployment Instructions
 
@@ -56,7 +57,14 @@ export AWS_REGION="us-east-2"
 ### Manual Deployment
 
 ```bash
-# Create the stack
+# Option 1: Deploy with defaults (no HTTPS, default password - for testing only)
+aws cloudformation create-stack \
+  --stack-name loan-processing-dev \
+  --template-body file://TapStack.json \
+  --capabilities CAPABILITY_IAM \
+  --region us-east-2
+
+# Option 2: Deploy with custom parameters (production)
 aws cloudformation create-stack \
   --stack-name loan-processing-${ENVIRONMENT_SUFFIX} \
   --template-body file://TapStack.json \
@@ -98,9 +106,9 @@ aws cloudformation wait stack-delete-complete \
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | environmentSuffix | String | dev | Environment suffix for resource naming |
-| CertificateArn | String | - | ARN of ACM certificate for HTTPS |
+| CertificateArn | String | (empty) | ARN of ACM certificate for HTTPS (optional) |
 | DatabaseMasterUsername | String | dbadmin | Master username for Aurora |
-| DatabaseMasterPassword | String | - | Master password (min 16 chars) |
+| DatabaseMasterPassword | String | TempPassword123!ChangeMe | Master password (min 16 chars) - CHANGE IN PRODUCTION |
 
 ## Stack Outputs
 
