@@ -47,8 +47,8 @@ export class TapStack extends pulumi.ComponentResource {
     const environmentSuffix = args.environmentSuffix || 'dev';
     const tags = args.tags || {};
 
-    const primaryRegion = 'eu-central-1';
-    const secondaryRegion = 'eu-west-2';
+    const primaryRegion = 'ap-southeast-1';
+    const secondaryRegion = 'ap-southeast-2';
 
     // Create AWS providers for both regions
     const primaryProvider = new aws.Provider(
