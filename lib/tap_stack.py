@@ -1,4 +1,4 @@
-from cdktf import TerraformStack, TerraformOutput, Fn
+from cdktf import TerraformStack, TerraformOutput, Fn, S3Backend
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
@@ -34,13 +34,40 @@ from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import (
     CloudwatchMetricAlarmMetricQueryMetric
 )
 import json
+import os
 
 
 class TapStack(TerraformStack):
-    def __init__(self, scope: Construct, stack_id: str, environment_suffix: str):
+    def __init__(
+        self,
+        scope: Construct,
+        stack_id: str,
+        environment_suffix: str,
+        state_bucket: str = None,
+        state_bucket_region: str = None,
+        aws_region: str = None,
+        default_tags: dict = None,
+        **kwargs
+    ):
         super().__init__(scope, stack_id)
 
-        self.environment_suffix = environment_suffix
+        # Get environment suffix from parameter or environment variable
+        self.environment_suffix = environment_suffix or os.environ.get('ENVIRONMENT_SUFFIX', 'test')
+        state_bucket = state_bucket or os.environ.get('TERRAFORM_STATE_BUCKET')
+        state_bucket_region = state_bucket_region or os.environ.get('TERRAFORM_STATE_BUCKET_REGION', 'us-east-1')
+
+        # Configure S3 backend for remote state (if state_bucket is provided)
+        # Note: DynamoDB table for locking is not included to avoid ResourceNotFoundException
+        # State locking can be added later if needed by setting TERRAFORM_STATE_LOCK_TABLE env var
+        if state_bucket:
+            S3Backend(
+                self,
+                bucket=state_bucket,
+                key=f"tap/{self.environment_suffix}/terraform.tfstate",
+                region=state_bucket_region,
+                encrypt=True
+            )
+            print(f'✅ Configured S3 backend: s3://{state_bucket}/tap/{self.environment_suffix}/terraform.tfstate')
 
         # Define regions and their CIDR blocks
         self.regions = [
