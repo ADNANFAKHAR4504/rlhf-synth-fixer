@@ -26,6 +26,8 @@ from cdktf_cdktf_provider_aws.secretsmanager_secret_version import Secretsmanage
 from cdktf_cdktf_provider_aws.data_aws_caller_identity import DataAwsCallerIdentity
 from cdktf_cdktf_provider_aws.data_aws_region import DataAwsRegion
 import json
+import os
+from pathlib import Path
 
 
 class TapStack(TerraformStack):
@@ -514,6 +516,9 @@ class TapStack(TerraformStack):
 
         # Lambda function code is in lib/lambda/index.py
         # It is packaged separately into lambda_function.zip during deployment
+        # Use absolute path to lambda_function.zip (created in project root by tap.py)
+        project_root = Path(__file__).parent.parent
+        lambda_zip_path = str(project_root / "lambda_function.zip")
 
         # Create Lambda function
         lambda_function = LambdaFunction(
@@ -525,8 +530,8 @@ class TapStack(TerraformStack):
             runtime="python3.11",
             timeout=30,
             memory_size=256,
-            filename="lambda_function.zip",
-            source_code_hash=Fn.filebase64sha256("lambda_function.zip"),
+            filename=lambda_zip_path,
+            source_code_hash=Fn.filebase64sha256(lambda_zip_path),
             environment={
                 "variables": {
                     "BUCKET_NAME": s3_bucket.id,
