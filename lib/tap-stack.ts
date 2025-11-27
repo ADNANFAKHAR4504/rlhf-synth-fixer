@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import * as random from '@pulumi/random';
 
 export interface TapStackProps {
@@ -390,7 +390,7 @@ export class TapStack extends pulumi.ComponentResource {
         clusterIdentifier: `ecommerce-aurora-${environmentSuffix}`,
         engine: 'aurora-postgresql',
         engineMode: 'provisioned',
-        engineVersion: '15.4',
+        engineVersion: '17.3',
         databaseName: 'ecommerce',
         masterUsername: 'dbadmin',
         masterPassword: dbPasswordString.result,
@@ -423,7 +423,7 @@ export class TapStack extends pulumi.ComponentResource {
         clusterIdentifier: auroraCluster.id,
         instanceClass: 'db.serverless',
         engine: 'aurora-postgresql',
-        engineVersion: '15.4',
+        engineVersion: '17.3',
         publiclyAccessible: false,
         tags: {
           Name: `ecommerce-aurora-instance-1-${environmentSuffix}`,
@@ -441,7 +441,7 @@ export class TapStack extends pulumi.ComponentResource {
         clusterIdentifier: auroraCluster.id,
         instanceClass: 'db.serverless',
         engine: 'aurora-postgresql',
-        engineVersion: '15.4',
+        engineVersion: '17.3',
         publiclyAccessible: false,
         tags: {
           Name: `ecommerce-aurora-instance-2-${environmentSuffix}`,
