@@ -93,8 +93,8 @@ describe('TapStack CloudFormation Template - Three-Tier Web Application', () => 
       expect(template.Mappings.AMIMapping).toBeDefined();
       expect(template.Mappings.AMIMapping['us-east-1']).toBeDefined();
       expect(template.Mappings.AMIMapping['us-east-1'].AmazonLinux2).toBeDefined();
-    });
   });
+});
 
   describe('VPC Resources', () => {
     test('should have VPC resource', () => {
@@ -162,8 +162,8 @@ describe('TapStack CloudFormation Template - Three-Tier Web Application', () => 
       expect(subnet1.Properties.AvailabilityZone['Fn::FindInMap'][2]).toBe('AZ1');
       expect(subnet2.Properties.AvailabilityZone['Fn::FindInMap'][2]).toBe('AZ2');
       expect(subnet3.Properties.AvailabilityZone['Fn::FindInMap'][2]).toBe('AZ3');
-    });
   });
+});
 
   describe('Security Groups', () => {
     test('should have ALB Security Group', () => {
@@ -406,12 +406,12 @@ describe('TapStack CloudFormation Template - Three-Tier Web Application', () => 
       expect(template.Resources.DataProcessingFunction).toBeDefined();
       const lambda = template.Resources.DataProcessingFunction;
       expect(lambda.Type).toBe('AWS::Lambda::Function');
-      expect(lambda.Properties.Runtime).toBe('nodejs18.x');
+      expect(lambda.Properties.Runtime).toBe('nodejs22.x');
     });
 
-    test('Lambda Function should use Node.js 18.x runtime', () => {
+    test('Lambda Function should use Node.js 22.x runtime', () => {
       const lambda = template.Resources.DataProcessingFunction;
-      expect(lambda.Properties.Runtime).toBe('nodejs18.x');
+      expect(lambda.Properties.Runtime).toBe('nodejs22.x');
     });
 
     test('Lambda Function should have proper IAM role', () => {
