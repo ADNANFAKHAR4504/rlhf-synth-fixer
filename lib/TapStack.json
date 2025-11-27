@@ -1314,7 +1314,7 @@
     },
     "ApiKey": {
       "Type": "AWS::ApiGateway::ApiKey",
-      "DependsOn": ["ApiDeployment"],
+      "DependsOn": ["ApiStage"],
       "Properties": {
         "Name": {
           "Fn::Sub": "api-key-${EnvironmentSuffix}"
@@ -1355,7 +1355,7 @@
     },
     "UsagePlan": {
       "Type": "AWS::ApiGateway::UsagePlan",
-      "DependsOn": ["ApiDeployment"],
+      "DependsOn": ["ApiStage"],
       "Properties": {
         "UsagePlanName": {
           "Fn::Sub": "usage-plan-${EnvironmentSuffix}"
