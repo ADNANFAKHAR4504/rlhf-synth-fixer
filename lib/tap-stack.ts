@@ -6,9 +6,9 @@
  */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
-import * as aws from '@pulumi/aws';
 
 /**
  * TapStackArgs defines the input arguments for the TapStack Pulumi component.
@@ -80,6 +80,13 @@ export class TapStack extends pulumi.ComponentResource {
       );
     });
 
+    // Create shared security group for VPC endpoints
+    const vpcEndpointSecurityGroup = this.createEndpointSecurityGroup(
+      vpc,
+      environmentSuffix,
+      tags
+    );
+
     // VPC Endpoints for AWS services (no IGW traffic)
     const _s3Endpoint = new aws.ec2.VpcEndpoint(
       `s3-endpoint-${environmentSuffix}`,
@@ -104,9 +111,7 @@ export class TapStack extends pulumi.ComponentResource {
         vpcEndpointType: 'Interface',
         subnetIds: privateSubnets.map(s => s.id),
         privateDnsEnabled: true,
-        securityGroupIds: [
-          this.createEndpointSecurityGroup(vpc, environmentSuffix, tags).id,
-        ],
+        securityGroupIds: [vpcEndpointSecurityGroup.id],
         tags: {
           ...(tags as any),
           Name: `secrets-endpoint-${environmentSuffix}`,
@@ -123,9 +128,7 @@ export class TapStack extends pulumi.ComponentResource {
         vpcEndpointType: 'Interface',
         subnetIds: privateSubnets.map(s => s.id),
         privateDnsEnabled: true,
-        securityGroupIds: [
-          this.createEndpointSecurityGroup(vpc, environmentSuffix, tags).id,
-        ],
+        securityGroupIds: [vpcEndpointSecurityGroup.id],
         tags: {
           ...(tags as any),
           Name: `ec2messages-endpoint-${environmentSuffix}`,
@@ -142,9 +145,7 @@ export class TapStack extends pulumi.ComponentResource {
         vpcEndpointType: 'Interface',
         subnetIds: privateSubnets.map(s => s.id),
         privateDnsEnabled: true,
-        securityGroupIds: [
-          this.createEndpointSecurityGroup(vpc, environmentSuffix, tags).id,
-        ],
+        securityGroupIds: [vpcEndpointSecurityGroup.id],
         tags: {
           ...(tags as any),
           Name: `ssm-endpoint-${environmentSuffix}`,
