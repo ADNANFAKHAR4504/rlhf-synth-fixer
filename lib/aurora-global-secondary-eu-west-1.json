@@ -392,7 +392,7 @@
           "Fn::Sub": "aurora-health-check-schedule-secondary-${EnvironmentSuffix}"
         },
         "Description": "Trigger health check every 30 seconds",
-        "ScheduleExpression": "rate(30 seconds)",
+        "ScheduleExpression": "rate(2 minutes)",
         "State": "ENABLED",
         "Targets": [
           {

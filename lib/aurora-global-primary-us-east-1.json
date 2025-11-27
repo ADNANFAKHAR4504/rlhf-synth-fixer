@@ -34,7 +34,10 @@
     "EnableDeletionProtection": {
       "Type": "String",
       "Default": "false",
-      "AllowedValues": ["true", "false"],
+      "AllowedValues": [
+        "true",
+        "false"
+      ],
       "Description": "Enable deletion protection for production clusters"
     }
   },
@@ -437,7 +440,7 @@
           "Fn::Sub": "aurora-health-check-schedule-${EnvironmentSuffix}"
         },
         "Description": "Trigger health check every 30 seconds",
-        "ScheduleExpression": "rate(30 seconds)",
+        "ScheduleExpression": "rate(2 minutes)",
         "State": "ENABLED",
         "Targets": [
           {
