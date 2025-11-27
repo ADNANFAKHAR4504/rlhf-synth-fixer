@@ -251,9 +251,9 @@ describe('Aurora Global Database CloudFormation Template', () => {
       expect(globalCluster.Properties.StorageEncrypted).toBe(true);
     });
 
-    test('GlobalCluster should use engine version 5.7.mysql_aurora.2.10.1', () => {
+    test('GlobalCluster should use engine version 5.7.mysql_aurora.2.12.5', () => {
       const globalCluster = template.Resources.GlobalCluster;
-      expect(globalCluster.Properties.EngineVersion).toBe('5.7.mysql_aurora.2.10.1');
+      expect(globalCluster.Properties.EngineVersion).toBe('5.7.mysql_aurora.2.12.5');
     });
 
     test('GlobalCluster should have conditional deletion protection', () => {
@@ -277,11 +277,6 @@ describe('Aurora Global Database CloudFormation Template', () => {
       expect(cluster).toBeDefined();
       expect(cluster.Type).toBe('AWS::RDS::DBCluster');
       expect(cluster.Properties.Engine).toBe('aurora-mysql');
-    });
-
-    test('PrimaryCluster should depend on GlobalCluster', () => {
-      const cluster = template.Resources.PrimaryCluster;
-      expect(cluster.DependsOn).toBe('GlobalCluster');
     });
 
     test('PrimaryCluster should reference GlobalCluster', () => {
@@ -493,11 +488,11 @@ describe('Aurora Global Database CloudFormation Template', () => {
       expect(lambda.Properties.Code.ZipFile).toContain('boto3');
     });
 
-    test('should have PrimaryHealthCheckSchedule with 30 second rate', () => {
+    test('should have PrimaryHealthCheckSchedule with 1 minute rate', () => {
       const schedule = template.Resources.PrimaryHealthCheckSchedule;
       expect(schedule).toBeDefined();
       expect(schedule.Type).toBe('AWS::Events::Rule');
-      expect(schedule.Properties.ScheduleExpression).toBe('rate(30 seconds)');
+      expect(schedule.Properties.ScheduleExpression).toBe('rate(1 minute)');
       expect(schedule.Properties.State).toBe('ENABLED');
     });
 
@@ -743,9 +738,9 @@ describe('Aurora Global Database CloudFormation Template', () => {
       expect(resourceCount).toBe(25);
     });
 
-    test('should have exactly 10 parameters', () => {
+    test('should have exactly 8 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(10);
+      expect(parameterCount).toBe(8);
     });
 
     test('should have exactly 12 outputs', () => {

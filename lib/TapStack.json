@@ -37,14 +37,6 @@
       "Type": "List<AWS::EC2::Subnet::Id>",
       "Description": "At least 3 subnet IDs in different AZs for primary region"
     },
-    "SecondaryVPCId": {
-      "Type": "String",
-      "Description": "VPC ID for secondary region (eu-west-1)"
-    },
-    "SecondarySubnetIds": {
-      "Type": "CommaDelimitedList",
-      "Description": "At least 3 subnet IDs in different AZs for secondary region"
-    },
     "HostedZoneId": {
       "Type": "AWS::Route53::HostedZone::Id",
       "Description": "Route 53 Hosted Zone ID for DNS failover"
@@ -278,7 +270,7 @@
           "Fn::Sub": "aurora-global-${EnvironmentSuffix}"
         },
         "Engine": "aurora-mysql",
-        "EngineVersion": "5.7.mysql_aurora.2.10.1",
+        "EngineVersion": "5.7.mysql_aurora.2.12.5",
         "StorageEncrypted": true,
         "DeletionProtection": {
           "Fn::If": [
@@ -291,10 +283,9 @@
     },
     "PrimaryCluster": {
       "Type": "AWS::RDS::DBCluster",
-      "DependsOn": "GlobalCluster",
       "Properties": {
         "Engine": "aurora-mysql",
-        "EngineVersion": "5.7.mysql_aurora.2.10.1",
+        "EngineVersion": "5.7.mysql_aurora.2.12.5",
         "GlobalClusterIdentifier": {"Ref": "GlobalCluster"},
         "DBClusterIdentifier": {
           "Fn::Sub": "aurora-primary-${EnvironmentSuffix}"
@@ -554,8 +545,8 @@
         "Name": {
           "Fn::Sub": "aurora-health-check-schedule-primary-${EnvironmentSuffix}"
         },
-        "Description": "Trigger Aurora health check every 30 seconds",
-        "ScheduleExpression": "rate(30 seconds)",
+        "Description": "Trigger Aurora health check every minute",
+        "ScheduleExpression": "rate(1 minute)",
         "State": "ENABLED",
         "Targets": [
           {
