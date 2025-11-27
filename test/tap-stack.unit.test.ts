@@ -90,14 +90,11 @@ describe('Loan Processing Application CloudFormation Template', () => {
       expect(template.Resources.PrivateSubnet3.Properties.CidrBlock).toBe('10.0.12.0/24');
     });
 
-    test('should have NAT Gateways for private subnet connectivity', () => {
-      expect(template.Resources.NatGateway1).toBeDefined();
-      expect(template.Resources.NatGateway2).toBeDefined();
-      expect(template.Resources.NatGateway3).toBeDefined();
-      
-      expect(template.Resources.NatGateway1EIP).toBeDefined();
-      expect(template.Resources.NatGateway2EIP).toBeDefined();
-      expect(template.Resources.NatGateway3EIP).toBeDefined();
+    test('should have NAT Gateway for private subnet connectivity', () => {
+      expect(template.Resources.NatGateway).toBeDefined();
+      expect(template.Resources.NatGatewayEIP).toBeDefined();
+      expect(template.Resources.NatGateway.Type).toBe('AWS::EC2::NatGateway');
+      expect(template.Resources.NatGatewayEIP.Type).toBe('AWS::EC2::EIP');
     });
 
     test('should have Internet Gateway', () => {
@@ -109,8 +106,10 @@ describe('Loan Processing Application CloudFormation Template', () => {
     test('should have route tables for all subnets', () => {
       expect(template.Resources.PublicRouteTable).toBeDefined();
       expect(template.Resources.PrivateRouteTable1).toBeDefined();
-      expect(template.Resources.PrivateRouteTable2).toBeDefined();
-      expect(template.Resources.PrivateRouteTable3).toBeDefined();
+      // Using single NAT Gateway and route table for all private subnets (cost optimization)
+      expect(template.Resources.PrivateSubnet1RouteTableAssociation).toBeDefined();
+      expect(template.Resources.PrivateSubnet2RouteTableAssociation).toBeDefined();
+      expect(template.Resources.PrivateSubnet3RouteTableAssociation).toBeDefined();
     });
   });
 

@@ -232,3 +232,13 @@ All issues have been resolved in IDEAL_RESPONSE.md, resulting in a production-re
 - Used dynamic references with {{resolve:secretsmanager:...}} 
 - Attached secret to RDS cluster with SecretTargetAttachment
 - Eliminated the W1011 warning completely
+
+### 30. EIP Limit Exceeded
+**Issue**: AWS account reached maximum number of Elastic IPs
+**Error**: "The maximum number of addresses has been reached"
+**Impact**: Stack creation fails when trying to create 3 NAT Gateways
+**Fix**: Reduced from 3 NAT Gateways to 1 shared NAT Gateway:
+- Single NatGateway in PublicSubnet1
+- All private subnets route through the single NAT Gateway
+- Cost optimization: Saves 2 EIP charges and 2 NAT Gateway charges
+- Trade-off: Less high availability but acceptable for dev/test environments

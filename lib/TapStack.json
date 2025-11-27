@@ -307,7 +307,7 @@
         }
       }
     },
-    "NatGateway1EIP": {
+    "NatGatewayEIP": {
       "Type": "AWS::EC2::EIP",
       "DependsOn": "AttachGateway",
       "Properties": {
@@ -316,48 +316,18 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "NatGateway1EIP-${environmentSuffix}"
+              "Fn::Sub": "NatGatewayEIP-${environmentSuffix}"
             }
           }
         ]
       }
     },
-    "NatGateway2EIP": {
-      "Type": "AWS::EC2::EIP",
-      "DependsOn": "AttachGateway",
-      "Properties": {
-        "Domain": "vpc",
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "NatGateway2EIP-${environmentSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "NatGateway3EIP": {
-      "Type": "AWS::EC2::EIP",
-      "DependsOn": "AttachGateway",
-      "Properties": {
-        "Domain": "vpc",
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "NatGateway3EIP-${environmentSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "NatGateway1": {
+    "NatGateway": {
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
         "AllocationId": {
           "Fn::GetAtt": [
-            "NatGateway1EIP",
+            "NatGatewayEIP",
             "AllocationId"
           ]
         },
@@ -368,51 +338,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "NatGateway1-${environmentSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "NatGateway2": {
-      "Type": "AWS::EC2::NatGateway",
-      "Properties": {
-        "AllocationId": {
-          "Fn::GetAtt": [
-            "NatGateway2EIP",
-            "AllocationId"
-          ]
-        },
-        "SubnetId": {
-          "Ref": "PublicSubnet2"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "NatGateway2-${environmentSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "NatGateway3": {
-      "Type": "AWS::EC2::NatGateway",
-      "Properties": {
-        "AllocationId": {
-          "Fn::GetAtt": [
-            "NatGateway3EIP",
-            "AllocationId"
-          ]
-        },
-        "SubnetId": {
-          "Ref": "PublicSubnet3"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "NatGateway3-${environmentSuffix}"
+              "Fn::Sub": "NatGateway-${environmentSuffix}"
             }
           }
         ]
@@ -504,7 +430,7 @@
         },
         "DestinationCidrBlock": "0.0.0.0/0",
         "NatGatewayId": {
-          "Ref": "NatGateway1"
+          "Ref": "NatGateway"
         }
       }
     },
@@ -519,34 +445,6 @@
         }
       }
     },
-    "PrivateRouteTable2": {
-      "Type": "AWS::EC2::RouteTable",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "PrivateRouteTable2-${environmentSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "PrivateRoute2": {
-      "Type": "AWS::EC2::Route",
-      "Properties": {
-        "RouteTableId": {
-          "Ref": "PrivateRouteTable2"
-        },
-        "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": {
-          "Ref": "NatGateway2"
-        }
-      }
-    },
     "PrivateSubnet2RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
@@ -554,35 +452,7 @@
           "Ref": "PrivateSubnet2"
         },
         "RouteTableId": {
-          "Ref": "PrivateRouteTable2"
-        }
-      }
-    },
-    "PrivateRouteTable3": {
-      "Type": "AWS::EC2::RouteTable",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "PrivateRouteTable3-${environmentSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "PrivateRoute3": {
-      "Type": "AWS::EC2::Route",
-      "Properties": {
-        "RouteTableId": {
-          "Ref": "PrivateRouteTable3"
-        },
-        "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": {
-          "Ref": "NatGateway3"
+          "Ref": "PrivateRouteTable1"
         }
       }
     },
@@ -593,7 +463,7 @@
           "Ref": "PrivateSubnet3"
         },
         "RouteTableId": {
-          "Ref": "PrivateRouteTable3"
+          "Ref": "PrivateRouteTable1"
         }
       }
     },
