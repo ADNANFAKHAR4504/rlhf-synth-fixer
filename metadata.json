@@ -3,6 +3,8 @@
   "language": "hcl",
   "complexity": "expert",
   "turn_type": "single",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
   "po_id": "101912750",
   "team": "synth",
   "subtask": "Provisioning of Infrastructure Environments",
