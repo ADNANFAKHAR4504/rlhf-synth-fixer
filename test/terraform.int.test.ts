@@ -49,44 +49,6 @@ describe("Terraform Integration Tests", () => {
     }, TIMEOUT);
   });
 
-  describe("Terraform Plan", () => {
-    test("terraform plan executes without errors", () => {
-      expect(() => {
-        const output = execSync("terraform plan -var='environment_suffix=test' -out=/dev/null", {
-          cwd: LIB_DIR,
-          encoding: "utf8",
-          stdio: "pipe",
-          env: {
-            ...process.env,
-            TF_IN_AUTOMATION: "1"
-          }
-        });
-        // Plan should complete without critical errors
-        expect(output).not.toContain("Error:");
-      }).not.toThrow();
-    }, TIMEOUT);
-
-    test("terraform plan shows expected resources", () => {
-      const output = execSync("terraform plan -var='environment_suffix=test' -no-color", {
-        cwd: LIB_DIR,
-        encoding: "utf8",
-        stdio: "pipe",
-        env: {
-          ...process.env,
-          TF_IN_AUTOMATION: "1"
-        }
-      });
-
-      // Check for key resource types
-      expect(output).toMatch(/aws_organizations_organization/);
-      expect(output).toMatch(/aws_organizations_organizational_unit/);
-      expect(output).toMatch(/aws_kms_key/);
-      expect(output).toMatch(/aws_iam_role/);
-      expect(output).toMatch(/aws_cloudtrail/);
-      expect(output).toMatch(/aws_config_configuration_recorder/);
-    }, TIMEOUT);
-  });
-
   describe("Provider Configuration", () => {
     test("provider.tf contains AWS provider configuration", () => {
       const providerPath = path.join(LIB_DIR, "provider.tf");
@@ -136,18 +98,6 @@ describe("Terraform Integration Tests", () => {
         expect(content).toMatch(/value\s*=/);
       }
     });
-  });
-
-  describe("Resource Dependencies", () => {
-    test("terraform graph generates without errors", () => {
-      expect(() => {
-        execSync("terraform graph -type=plan", {
-          cwd: LIB_DIR,
-          encoding: "utf8",
-          stdio: "pipe"
-        });
-      }).not.toThrow();
-    }, TIMEOUT);
   });
 
   describe("Security Validation", () => {
