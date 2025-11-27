@@ -6,7 +6,7 @@
   "team": "synth",
   "turn_type": "single",
   "startedAt": "2025-11-26T04:08:00Z",
-  "subtask": "HA and Failure Recovery",
+  "subtask": "Failure Recovery Automation",
   "subject_labels": [
     "Failure Recovery and High Availability"
   ],
