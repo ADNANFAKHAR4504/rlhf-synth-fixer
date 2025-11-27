@@ -1,8 +1,0 @@
-config:
-  webapp-infrastructure:environmentSuffix: "dev-001"
-  webapp-infrastructure:environment: "development"
-  webapp-infrastructure:project: "saas-webapp"
-  webapp-infrastructure:costCenter: "engineering"
-  webapp-infrastructure:enableDeletionProtection: false
-  webapp-infrastructure:dbPassword:
-    secure: changeme123
