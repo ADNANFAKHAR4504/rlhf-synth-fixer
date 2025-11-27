@@ -1,0 +1,89 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Security resources including KMS keys and Secrets Manager",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource naming"
+    },
+    "Project": {
+      "Type": "String",
+      "Description": "Project name for tagging"
+    },
+    "CostCenter": {
+      "Type": "String",
+      "Description": "Cost center for tagging"
+    }
+  },
+  "Resources": {
+    "KMSKey": {
+      "Type": "AWS::KMS::Key",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Description": { "Fn::Sub": "KMS key for encryption-${EnvironmentSuffix}" },
+        "EnableKeyRotation": true,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": { "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root" }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow services to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "rds.amazonaws.com",
+                  "backup.amazonaws.com",
+                  "dms.amazonaws.com",
+                  "secretsmanager.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey",
+                "kms:CreateGrant"
+              ],
+              "Resource": "*"
+            }
+          ]
+        },
+        "Tags": [
+          { "Key": "Name", "Value": { "Fn::Sub": "kms-key-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } },
+          { "Key": "Project", "Value": { "Ref": "Project" } },
+          { "Key": "CostCenter", "Value": { "Ref": "CostCenter" } }
+        ]
+      }
+    },
+    "KMSKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": { "Fn::Sub": "alias/payment-system-${EnvironmentSuffix}" },
+        "TargetKeyId": { "Ref": "KMSKey" }
+      }
+    }
+  },
+  "Outputs": {
+    "KMSKeyId": {
+      "Description": "KMS Key ID",
+      "Value": { "Ref": "KMSKey" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-KMSKeyId" }
+      }
+    },
+    "KMSKeyArn": {
+      "Description": "KMS Key ARN",
+      "Value": { "Fn::GetAtt": ["KMSKey", "Arn"] },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-KMSKeyArn" }
+      }
+    }
+  }
+}

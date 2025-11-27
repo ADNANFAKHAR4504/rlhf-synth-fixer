@@ -1,0 +1,38 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-26T06:54:43+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Kinesis",
+    "Lambda",
+    "X-Ray",
+    "CloudWatch",
+    "SNS",
+    "EventBridge"
+  ],
+  "aws_services": [
+    "Kinesis",
+    "Lambda",
+    "X-Ray",
+    "CloudWatch",
+    "SNS",
+    "EventBridge",
+    "KMS",
+    "SQS",
+    "ECR",
+    "IAM"
+  ],
+  "po_id": "101912671",
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "akshat-jain355",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

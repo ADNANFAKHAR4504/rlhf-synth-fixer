@@ -1,0 +1,81 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Security Conformance Pack for multi-account governance - ${environment_suffix}
+
+Resources:
+  S3BucketServerSideEncryptionEnabledRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: s3-bucket-server-side-encryption-enabled-${environment_suffix}
+      Description: Checks that S3 bucket has server-side encryption enabled
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED
+      Scope:
+        ComplianceResourceTypes:
+          - AWS::S3::Bucket
+
+  EncryptedVolumesRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: encrypted-volumes-${environment_suffix}
+      Description: Checks whether EBS volumes are encrypted
+      Source:
+        Owner: AWS
+        SourceIdentifier: ENCRYPTED_VOLUMES
+      Scope:
+        ComplianceResourceTypes:
+          - AWS::EC2::Volume
+
+  RDSStorageEncryptedRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: rds-storage-encrypted-${environment_suffix}
+      Description: Checks that RDS instances have encryption enabled
+      Source:
+        Owner: AWS
+        SourceIdentifier: RDS_STORAGE_ENCRYPTED
+      Scope:
+        ComplianceResourceTypes:
+          - AWS::RDS::DBInstance
+
+  RootAccountMFAEnabledRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: root-account-mfa-enabled-${environment_suffix}
+      Description: Checks whether the root user has MFA enabled
+      Source:
+        Owner: AWS
+        SourceIdentifier: ROOT_ACCOUNT_MFA_ENABLED
+      MaximumExecutionFrequency: TwentyFour_Hours
+
+  IAMPolicyNoStatementsWithAdminAccessRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: iam-policy-no-statements-with-admin-access-${environment_suffix}
+      Description: Checks if any customer-managed IAM policy contains admin access
+      Source:
+        Owner: AWS
+        SourceIdentifier: IAM_POLICY_NO_STATEMENTS_WITH_ADMIN_ACCESS
+      Scope:
+        ComplianceResourceTypes:
+          - AWS::IAM::Policy
+
+  CloudTrailEnabledRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: cloudtrail-enabled-${environment_suffix}
+      Description: Checks whether CloudTrail is enabled
+      Source:
+        Owner: AWS
+        SourceIdentifier: CLOUD_TRAIL_ENABLED
+      MaximumExecutionFrequency: TwentyFour_Hours
+
+  ConfigEnabledRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: config-enabled-${environment_suffix}
+      Description: Checks whether AWS Config is enabled
+      Source:
+        Owner: AWS
+        SourceIdentifier: CONFIG_ENABLED
+      MaximumExecutionFrequency: TwentyFour_Hours
