@@ -4,16 +4,20 @@ import * as path from 'path';
 describe('CloudFormation Multi-Region DR Template Unit Tests', () => {
   let primaryTemplate: any;
   let secondaryTemplate: any;
+  let tapStackTemplate: any;
 
   beforeAll(() => {
     const primaryPath = path.join(__dirname, '..', 'lib', 'primary-stack.json');
     const secondaryPath = path.join(__dirname, '..', 'lib', 'secondary-stack.json');
+    const tapStackPath = path.join(__dirname, '..', 'lib', 'TapStack.json');
     
     const primaryContent = fs.readFileSync(primaryPath, 'utf-8');
     const secondaryContent = fs.readFileSync(secondaryPath, 'utf-8');
+    const tapStackContent = fs.readFileSync(tapStackPath, 'utf-8');
     
     primaryTemplate = JSON.parse(primaryContent);
     secondaryTemplate = JSON.parse(secondaryContent);
+    tapStackTemplate = JSON.parse(tapStackContent);
   });
 
   describe('Template Structure', () => {
@@ -615,6 +619,91 @@ describe('CloudFormation Multi-Region DR Template Unit Tests', () => {
         expect(primaryStr).toContain('${AWS::AccountId}');
         expect(secondaryStr).toContain('${AWS::AccountId}');
       }
+    });
+  });
+
+  describe('TapStack.json Deployment Template', () => {
+    test('TapStack.json should exist and be valid', () => {
+      expect(tapStackTemplate).toBeDefined();
+      expect(tapStackTemplate.AWSTemplateFormatVersion).toBe('2010-09-09');
+    });
+
+    test('TapStack.json should be the primary stack template', () => {
+      expect(tapStackTemplate.Description).toContain('Primary Region');
+      expect(tapStackTemplate.Description).toContain('us-east-1');
+    });
+
+    test('TapStack.json should have all required parameters', () => {
+      expect(tapStackTemplate.Parameters.EnvironmentSuffix).toBeDefined();
+      expect(tapStackTemplate.Parameters.DatabaseUsername).toBeDefined();
+      expect(tapStackTemplate.Parameters.DatabasePassword).toBeDefined();
+      expect(tapStackTemplate.Parameters.NotificationEmail).toBeDefined();
+    });
+
+    test('TapStack.json should have GlobalCluster resource', () => {
+      expect(tapStackTemplate.Resources.GlobalCluster).toBeDefined();
+      expect(tapStackTemplate.Resources.GlobalCluster.Type).toBe('AWS::RDS::GlobalCluster');
+    });
+
+    test('TapStack.json should have Aurora DB Cluster', () => {
+      expect(tapStackTemplate.Resources.AuroraDBCluster).toBeDefined();
+      expect(tapStackTemplate.Resources.AuroraDBCluster.Type).toBe('AWS::RDS::DBCluster');
+    });
+
+    test('TapStack.json should have Lambda function', () => {
+      expect(tapStackTemplate.Resources.PaymentProcessorFunction).toBeDefined();
+      expect(tapStackTemplate.Resources.PaymentProcessorFunction.Type).toBe('AWS::Lambda::Function');
+    });
+
+    test('TapStack.json should have Route 53 hosted zone', () => {
+      expect(tapStackTemplate.Resources.HostedZone).toBeDefined();
+      expect(tapStackTemplate.Resources.HostedZone.Type).toBe('AWS::Route53::HostedZone');
+    });
+
+    test('TapStack.json should have primary health check', () => {
+      expect(tapStackTemplate.Resources.PrimaryHealthCheck).toBeDefined();
+      expect(tapStackTemplate.Resources.PrimaryHealthCheck.Type).toBe('AWS::Route53::HealthCheck');
+    });
+
+    test('TapStack.json should not have circular dependency in security groups', () => {
+      const lambdaSG = tapStackTemplate.Resources.LambdaSecurityGroup;
+      const dbSG = tapStackTemplate.Resources.DatabaseSecurityGroup;
+      
+      // Security groups should not have ingress/egress rules that reference each other
+      expect(lambdaSG.Properties.SecurityGroupIngress).toBeUndefined();
+      expect(dbSG.Properties.SecurityGroupEgress).toBeUndefined();
+      
+      // Separate ingress/egress rules should exist
+      expect(tapStackTemplate.Resources.DatabaseSecurityGroupIngress).toBeDefined();
+      expect(tapStackTemplate.Resources.LambdaSecurityGroupEgressDB).toBeDefined();
+    });
+
+    test('TapStack.json should use valid Aurora engine version', () => {
+      const globalCluster = tapStackTemplate.Resources.GlobalCluster;
+      const dbCluster = tapStackTemplate.Resources.AuroraDBCluster;
+      
+      expect(globalCluster.Properties.EngineVersion).toBe('8.0.mysql_aurora.3.04.0');
+      expect(dbCluster.Properties.EngineVersion).toBe('8.0.mysql_aurora.3.04.0');
+    });
+
+    test('TapStack.json should have all required outputs', () => {
+      expect(tapStackTemplate.Outputs.GlobalClusterIdentifier).toBeDefined();
+      expect(tapStackTemplate.Outputs.PrimaryClusterEndpoint).toBeDefined();
+      expect(tapStackTemplate.Outputs.PrimaryLambdaArn).toBeDefined();
+      expect(tapStackTemplate.Outputs.HostedZoneId).toBeDefined();
+      expect(tapStackTemplate.Outputs.HostedZoneNameServers).toBeDefined();
+      expect(tapStackTemplate.Outputs.PrimarySNSTopicArn).toBeDefined();
+    });
+
+    test('TapStack.json should have DeletionProtection disabled', () => {
+      expect(tapStackTemplate.Resources.GlobalCluster.Properties.DeletionProtection).toBe(false);
+      expect(tapStackTemplate.Resources.AuroraDBCluster.Properties.DeletionProtection).toBe(false);
+    });
+
+    test('TapStack.json should have DeletionPolicy Delete', () => {
+      expect(tapStackTemplate.Resources.AuroraDBCluster.DeletionPolicy).toBe('Delete');
+      expect(tapStackTemplate.Resources.AuroraDBInstance1.DeletionPolicy).toBe('Delete');
+      expect(tapStackTemplate.Resources.AuroraDBInstance2.DeletionPolicy).toBe('Delete');
     });
   });
 });
