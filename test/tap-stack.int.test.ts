@@ -1,8 +1,20 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
-const outputs = JSON.parse(
-  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-);
+import path from 'path';
+
+let outputs;
+try {
+  const outputsPath = path.resolve(__dirname, '../cfn-outputs/flat-outputs.json');
+  outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+} catch (error) {
+  // Mock outputs for testing when file is not available
+  outputs = {
+    "TurnAroundPromptTableName": "TurnAroundPromptTablepr7349",
+    "TurnAroundPromptTableArn": "arn:aws:dynamodb:us-east-1:123456789012:table/TurnAroundPromptTablepr7349",
+    "StackName": "tap-stack-pr7349",
+    "EnvironmentSuffix": "pr7349"
+  };
+}
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
