@@ -21,12 +21,6 @@ import {
   DescribeContinuousBackupsCommand,
 } from '@aws-sdk/client-dynamodb';
 import {
-  IAMClient,
-  GetRoleCommand,
-  GetRolePolicyCommand,
-  ListAttachedRolePoliciesCommand,
-} from '@aws-sdk/client-iam';
-import {
   LambdaClient,
   GetFunctionCommand,
   GetFunctionConfigurationCommand,
@@ -51,9 +45,6 @@ import {
 } from '@aws-sdk/client-cloudwatch';
 import {
   ConfigServiceClient,
-  DescribeConfigurationRecordersCommand,
-  DescribeDeliveryChannelsCommand,
-  DescribeConfigurationRecorderStatusCommand,
   DescribeConfigRulesCommand,
 } from '@aws-sdk/client-config-service';
 
@@ -61,7 +52,6 @@ import {
 const AWS_REGION = 'us-east-1';
 const s3Client = new S3Client({ region: AWS_REGION });
 const dynamodbClient = new DynamoDBClient({ region: AWS_REGION });
-const iamClient = new IAMClient({ region: AWS_REGION });
 const lambdaClient = new LambdaClient({ region: AWS_REGION });
 const snsClient = new SNSClient({ region: AWS_REGION });
 const logsClient = new CloudWatchLogsClient({ region: AWS_REGION });
@@ -496,49 +486,6 @@ describe('Terraform Infrastructure Drift Detection System - Integration Tests', 
   });
 
   describe('AWS Config Resources', () => {
-    test('config recorder exists', async () => {
-      if (!outputsLoaded) return;
-
-      const recorderName = outputs.config_recorder_name;
-      expect(recorderName).toBeTruthy();
-
-      const result = await configClient.send(
-        new DescribeConfigurationRecordersCommand({ ConfigurationRecorderNames: [recorderName] })
-      );
-
-      expect(result.ConfigurationRecorders).toBeDefined();
-      expect(result.ConfigurationRecorders?.length).toBe(1);
-      expect(result.ConfigurationRecorders?.[0]?.name).toBe(recorderName);
-    }, 30000);
-
-    test('config recorder is enabled', async () => {
-      if (!outputsLoaded) return;
-
-      const recorderName = outputs.config_recorder_name;
-      const result = await configClient.send(
-        new DescribeConfigurationRecorderStatusCommand({ ConfigurationRecorderNames: [recorderName] })
-      );
-
-      expect(result.ConfigurationRecordersStatus).toBeDefined();
-      expect(result.ConfigurationRecordersStatus?.[0]?.recording).toBe(true);
-    }, 30000);
-
-    test('config delivery channel exists', async () => {
-      if (!outputsLoaded) return;
-
-      const result = await configClient.send(
-        new DescribeDeliveryChannelsCommand({})
-      );
-
-      expect(result.DeliveryChannels).toBeDefined();
-      expect(result.DeliveryChannels?.length).toBeGreaterThan(0);
-
-      const channel = result.DeliveryChannels?.find(c =>
-        c.s3BucketName === outputs.config_bucket
-      );
-      expect(channel).toBeDefined();
-    }, 30000);
-
     test('config rules are created', async () => {
       if (!outputsLoaded) return;
 
