@@ -19,18 +19,18 @@ try:
     import pandas as pd
     import numpy as np
     PANDAS_AVAILABLE = True
-except ImportError:
+except ImportError:  # pragma: no cover - optional dependency fallback
     PANDAS_AVAILABLE = False
     pd = None
     np = None
 
 # Optional plotly import with fallback for CI environments
-try:
+try:  # pragma: no cover - optional dependency import
     import plotly.graph_objects as go
     import plotly.express as px
     from plotly.subplots import make_subplots
     PLOTLY_AVAILABLE = True
-except ImportError:
+except ImportError:  # pragma: no cover - optional dependency fallback
     PLOTLY_AVAILABLE = False
     go = None
     px = None
@@ -40,7 +40,7 @@ except ImportError:
 try:
     from tabulate import tabulate
     TABULATE_AVAILABLE = True
-except ImportError:
+except ImportError:  # pragma: no cover - optional dependency fallback
     TABULATE_AVAILABLE = False
     tabulate = None
 
