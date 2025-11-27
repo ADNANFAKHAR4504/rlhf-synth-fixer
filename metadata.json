@@ -1,0 +1,28 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-28T02:47:30-08:00",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "po_id": "s7r8s6p6",
+  "aws_services": [
+    "RDS Aurora",
+    "Lambda",
+    "DynamoDB",
+    "Route53",
+    "CloudWatch",
+    "SNS",
+    "S3",
+    "ALB",
+    "VPC",
+    "IAM",
+    "KMS"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10
+}
