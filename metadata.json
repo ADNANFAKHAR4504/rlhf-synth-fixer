@@ -7,7 +7,17 @@
   "team": "synth",
   "startedAt": "2025-11-27T21:59:40+05:30",
   "subtask": "Application Deployment",
-  "subject_labels": ["Web Application Deployment"],
-  "aws_services": [],
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "KMS",
+    "SQS",
+    "SNS",
+    "CloudWatch",
+    "IAM"
+  ],
   "training_quality": 10
 }
