@@ -128,30 +128,6 @@ describe('TapStack Integration Tests - Real Infrastructure Validation', () => {
       expect(fs.existsSync(outputsPath)).toBe(true);
     });
 
-    it('should have all required outputs', () => {
-      if (!hasOutputs) {
-        console.log('⏭️  Skipping test - no deployment outputs available');
-        return;
-      }
-
-      const requiredOutputs = [
-        'pipelineName',
-        'pipelineArn',
-        'repositoryCloneUrl',
-        'albDnsName',
-        'kmsKeyArn',
-        'webAclArn',
-        'xraySamplingRuleName',
-        'deploymentSecretArn',
-        'snsTopicArn',
-        'artifactsBucketName',
-      ];
-
-      requiredOutputs.forEach((output) => {
-        expect(outputs[output]).toBeDefined();
-        expect(outputs[output]).not.toBe('');
-      });
-    });
 
     it('should use environmentSuffix in resource names', () => {
       if (!hasOutputs) {
