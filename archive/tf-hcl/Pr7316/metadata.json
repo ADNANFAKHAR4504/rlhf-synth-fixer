@@ -7,7 +7,6 @@
   "team": "synth",
   "author": "mayanksethi-turing",
   "po_id": "po-disaster-recovery",
-  "author": "raajavelc",
   "training_quality": 9,
   "startedAt": "2025-11-25T23:23:00Z",
   "subtask": "Failure Recovery and High Availability",
@@ -30,5 +29,10 @@
     "failover",
     "rds-aurora",
     "postgresql"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
