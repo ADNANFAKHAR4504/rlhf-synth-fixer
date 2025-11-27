@@ -160,7 +160,12 @@ export class DatabaseStack extends pulumi.ComponentResource {
           EnvironmentSuffix: environmentSuffix,
         },
       },
-      { parent: this, provider: primaryProvider, dependsOn: [primaryCluster] }
+      {
+        parent: this,
+        provider: primaryProvider,
+        dependsOn: [primaryCluster],
+        ignoreChanges: ['tags', 'tagsAll'],
+      }
     );
 
     const primaryInstance2 = new aws.rds.ClusterInstance(
@@ -180,7 +185,12 @@ export class DatabaseStack extends pulumi.ComponentResource {
           EnvironmentSuffix: environmentSuffix,
         },
       },
-      { parent: this, provider: primaryProvider, dependsOn: [primaryCluster] }
+      {
+        parent: this,
+        provider: primaryProvider,
+        dependsOn: [primaryCluster],
+        ignoreChanges: ['tags', 'tagsAll'],
+      }
     );
 
     // Secondary Cluster Parameter Group
@@ -263,6 +273,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
         parent: this,
         provider: secondaryProvider,
         dependsOn: [secondaryCluster],
+        ignoreChanges: ['tags', 'tagsAll'],
       }
     );
 
@@ -288,6 +299,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
         parent: this,
         provider: secondaryProvider,
         dependsOn: [secondaryCluster],
+        ignoreChanges: ['tags', 'tagsAll'],
       }
     );
 
