@@ -20,6 +20,12 @@ output "rds_identifier" {
   value       = aws_db_instance.main.identifier
 }
 
+output "rds_master_user_secret_arn" {
+  description = "ARN of the RDS master user secret"
+  value       = aws_db_instance.main.master_user_secret[0].secret_arn
+  sensitive   = true
+}
+
 # ================================
 # APPLICATION LOAD BALANCER OUTPUTS
 # ================================
@@ -131,4 +137,32 @@ output "iam_role_arn" {
 output "instance_profile_name" {
   description = "Name of the instance profile"
   value       = aws_iam_instance_profile.app_profile.name
+}
+
+# ================================
+# MONITORING OUTPUTS
+# ================================
+
+output "cloudwatch_log_group_name" {
+  description = "Name of the VPC Flow Logs CloudWatch log group"
+  value       = aws_cloudwatch_log_group.vpc_flow_logs.name
+}
+
+output "alb_logs_bucket_name" {
+  description = "Name of the ALB access logs S3 bucket"
+  value       = aws_s3_bucket.alb_logs.bucket
+}
+
+# ================================
+# SECURITY OUTPUTS
+# ================================
+
+output "kms_rds_key_arn" {
+  description = "ARN of the KMS key for RDS encryption"
+  value       = aws_kms_key.rds_encryption.arn
+}
+
+output "kms_s3_key_arn" {
+  description = "ARN of the KMS key for S3 encryption"
+  value       = aws_kms_key.s3_encryption.arn
 }
