@@ -18,8 +18,6 @@ variable "commit_author" {
   default     = "unknown"
 }
 
-
-
 variable "team" {
   description = "Team name for tagging"
   type        = string

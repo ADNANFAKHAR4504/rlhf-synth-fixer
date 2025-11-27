@@ -26,6 +26,8 @@ terraform {
       version = "~> 3.2"
     }
   }
+
+  backend "s3" {}
 }
 
 # ============================================================================
@@ -2620,7 +2622,7 @@ variable "team" {
 ```hcl
 env                       = "dev"
 aws_region                = "us-west-1"
-pr_number                 = "pr7406"
+pr_number                 = "pr7406-mult"
 kinesis_stream_mode       = "PROVISIONED"
 kinesis_shard_count       = 1
 dynamodb_billing_mode     = "PROVISIONED"
@@ -2646,7 +2648,7 @@ enable_vpc_endpoints      = false
 ```hcl
 env                       = "prod"
 aws_region                = "us-west-1"
-pr_number                 = "pr7406"
+pr_number                 = "pr7406-mult"
 kinesis_stream_mode       = "ON_DEMAND"
 dynamodb_billing_mode     = "PAY_PER_REQUEST"
 redis_node_type           = "cache.r7g.large"
@@ -2669,7 +2671,7 @@ enable_vpc_endpoints      = false
 ```hcl
 env                       = "staging"
 aws_region                = "us-west-1"
-pr_number                 = "pr7406"
+pr_number                 = "pr7406-mult"
 kinesis_stream_mode       = "PROVISIONED"
 kinesis_shard_count       = 2
 dynamodb_billing_mode     = "PROVISIONED"
