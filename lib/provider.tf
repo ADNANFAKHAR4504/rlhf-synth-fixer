@@ -49,5 +49,8 @@ provider "aws" {
   }
 }
 
-# Note: Kubernetes and Helm providers are configured in main.tf after EKS cluster creation
-# They require the EKS cluster endpoint and authentication token from data sources
+# Kubernetes and Helm providers
+# These providers are configured to work with EKS after cluster creation
+# The deployment script should handle the two-phase deployment:
+# Phase 1: Create EKS cluster and infrastructure
+# Phase 2: Deploy Kubernetes/Helm resources
