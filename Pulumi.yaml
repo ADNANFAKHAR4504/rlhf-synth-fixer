@@ -1,0 +1,5 @@
+name: database-migration
+runtime:
+  name: nodejs
+description: Pulumi infrastructure for PostgreSQL database migration
+main: bin/tap.ts
