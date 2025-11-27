@@ -1,0 +1,29 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912706",
+  "team": "synth",
+  "startedAt": "2025-11-26T11:54:37+00:00",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "EventBridge",
+    "Lambda",
+    "DynamoDB",
+    "CloudWatch",
+    "IAM",
+    "SQS"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

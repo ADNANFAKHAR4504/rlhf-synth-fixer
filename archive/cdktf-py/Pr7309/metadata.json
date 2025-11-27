@@ -1,0 +1,28 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-26T02:54:00-08:00",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "po_id": "z9t4a6l0",
+  "aws_services": [
+    "DynamoDB",
+    "SNS",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "Lambda"
+  ],
+  "region": "us-east-1",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
