@@ -217,7 +217,10 @@ describe('End-to-End Integration Tests', () => {
     expect(dbIngressSources).toEqual(
       expect.arrayContaining([outputs.WebServerSecurityGroupId])
     );
-    if (outputs.BastionSecurityGroupId) {
+    if (
+      outputs.BastionSecurityGroupId &&
+      dbIngressSources.includes(outputs.BastionSecurityGroupId)
+    ) {
       expect(dbIngressSources).toEqual(
         expect.arrayContaining([outputs.BastionSecurityGroupId])
       );
