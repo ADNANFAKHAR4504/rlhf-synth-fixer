@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-26T07:36:00-05:00",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "AWS Config Rules",
+    "Security Compliance",
+    "IAM Cross-Account Roles",
+    "Audit Logging"
+  ],
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "po_id": "101912648",
+  "aws_services": [
+    "CloudWatch",
+    "Config",
+    "DynamoDB",
+    "Events",
+    "IAM",
+    "Lambda",
+    "S3",
+    "SNS",
+    "StepFunctions"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
