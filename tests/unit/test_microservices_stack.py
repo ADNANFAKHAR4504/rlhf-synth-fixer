@@ -83,7 +83,7 @@ class TestMicroservicesStackResources:
         # Verify EKS cluster
         assert 'aws_eks_cluster' in resources
         cluster_config = list(resources['aws_eks_cluster'].values())[0]
-        assert cluster_config['version'] == '1.28'
+        assert cluster_config['version'] == '1.29'
         assert 'test' in cluster_config['name']
 
     def test_eks_cluster_has_logging_enabled(self):

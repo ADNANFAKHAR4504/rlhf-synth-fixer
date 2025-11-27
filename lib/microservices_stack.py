@@ -301,14 +301,14 @@ class MicroservicesStack(Construct):
         )
 
     def _create_eks_cluster(self):
-        """Create EKS cluster with version 1.28."""
+        """Create EKS cluster with version 1.29 (required for Auto Mode support)."""
         subnet_ids = [s.id for s in self.private_subnets] + [s.id for s in self.public_subnets]
 
         self.eks_cluster = EksCluster(
             self,
             "eks_cluster",
             name=f"eks-payment-cluster-{self.environment_suffix}",
-            version="1.28",
+            version="1.29",
             role_arn=self.cluster_role.arn,
             vpc_config=EksClusterVpcConfig(
                 subnet_ids=subnet_ids,
@@ -691,7 +691,7 @@ class MicroservicesStack(Construct):
             "kube_proxy_addon",
             cluster_name=self.eks_cluster.name,
             addon_name="kube-proxy",
-            addon_version="v1.28.2-eksbuild.2",
+            addon_version="v1.29.0-eksbuild.1",
             resolve_conflicts_on_create="OVERWRITE",
             resolve_conflicts_on_update="OVERWRITE",
             tags={"Name": f"kube-proxy-addon-{self.environment_suffix}"}
