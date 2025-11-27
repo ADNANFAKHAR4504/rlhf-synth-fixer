@@ -7,7 +7,9 @@
   "team": "synth",
   "startedAt": "2025-11-24T02:19:00-05:00",
   "subtask": "Application Deployment",
-  "subject_labels": ["Web Application Deployment"],
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
   "training_quality": 8,
   "aws_services": [
     "VPC",
@@ -33,5 +35,11 @@
     "SNS",
     "Lambda",
     "SSM Parameter Store"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
