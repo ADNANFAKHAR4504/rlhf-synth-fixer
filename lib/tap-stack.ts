@@ -341,6 +341,7 @@ export class TapStack {
 
     const dbPasswordValue = Math.random().toString(36).slice(-16);
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const dbPasswordVersion = new aws.secretsmanager.SecretVersion(
       `${name}-db-password-version`,
       {

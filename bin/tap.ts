@@ -4,7 +4,7 @@ import { TapStack } from '../lib/tap-stack';
 const config = new pulumi.Config();
 const environment = pulumi.getStack();
 
-const stack = new TapStack('multi-env-infra', {
+const stack = new TapStack('TapStack', {
   environmentSuffix: environment,
   tags: {
     Environment: environment,
