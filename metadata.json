@@ -7,6 +7,18 @@
   "team": "synth",
   "startedAt": "2025-11-27T16:33:14+05:30",
   "subtask": "Failure Recovery and High Availability",
-  "subject_labels": ["Failure Recovery Automation"],
-  "aws_services": ["DynamoDB", "Lambda", "S3", "Route 53", "KMS", "CloudWatch", "SNS", "VPC"]
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "DynamoDB",
+    "Lambda",
+    "S3",
+    "Route 53",
+    "KMS",
+    "CloudWatch",
+    "SNS",
+    "VPC"
+  ],
+  "training_quality": 10
 }
