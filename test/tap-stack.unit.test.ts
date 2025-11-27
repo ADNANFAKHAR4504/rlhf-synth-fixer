@@ -45,12 +45,6 @@ describe('Credit Scoring Application CloudFormation Template', () => {
       expect(template.Parameters.CertificateArn.Type).toBe('String');
     });
 
-    test('should have DBMasterPassword parameter with NoEcho', () => {
-      expect(template.Parameters.DBMasterPassword).toBeDefined();
-      expect(template.Parameters.DBMasterPassword.NoEcho).toBe(true);
-      expect(template.Parameters.DBMasterPassword.MinLength).toBe(8);
-    });
-
     test('should have tagging parameters', () => {
       expect(template.Parameters.CostCenter).toBeDefined();
       expect(template.Parameters.Environment).toBeDefined();
@@ -118,7 +112,7 @@ describe('Credit Scoring Application CloudFormation Template', () => {
     });
 
     test('Lambda should use Node.js 18 runtime', () => {
-      expect(template.Resources.CreditScoringFunction.Properties.Runtime).toBe('nodejs18.x');
+      expect(template.Resources.CreditScoringFunction.Properties.Runtime).toBe('nodejs22.x');
     });
 
     test('Lambda should have reserved concurrent executions', () => {

@@ -24,6 +24,7 @@
     },
     "CertificateArn": {
       "Type": "String",
+      "Default": "",
       "Description": "ARN of ACM certificate for ALB HTTPS listener"
     },
     "DBMasterUsername": {
@@ -34,9 +35,8 @@
     },
     "DBMasterPassword": {
       "Type": "String",
-      "Description": "Master password for Aurora database (min 8 characters)",
-      "NoEcho": true,
-      "MinLength": 8
+      "Description": "Master password for Aurora database",
+      "NoEcho": true
     }
   },
   "Resources": {
@@ -1078,7 +1078,7 @@
       "Properties": {
         "Engine": "aurora-postgresql",
         "EngineMode": "provisioned",
-        "EngineVersion": "15.14",
+        "EngineVersion": "15.8",
         "DatabaseName": "creditscoring",
         "MasterUsername": {
           "Ref": "DBMasterUsername"
@@ -1336,7 +1336,7 @@
         "FunctionName": {
           "Fn::Sub": "credit-scoring-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [

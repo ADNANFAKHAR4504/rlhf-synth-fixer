@@ -7,7 +7,22 @@
   "team": "synth",
   "startedAt": "2025-11-27T08:58:27+00:00",
   "subtask": "Serverless Credit Scoring Application",
-  "subject_labels": ["Serverless Architecture", "Web Applications", "Database Management"],
-  "aws_services": ["EC2", "ElasticLoadBalancingV2", "Lambda", "RDS", "KMS", "Logs", "IAM", "S3"],
-  "training_quality": 8
+  "subject_labels": [
+    "Serverless Architecture",
+    "Web Applications",
+    "Database Management"
+  ],
+  "aws_services": [
+    "EC2",
+    "ElasticLoadBalancingV2",
+    "Lambda",
+    "RDS",
+    "KMS",
+    "Logs",
+    "IAM",
+    "S3"
+  ],
+  "training_quality": 8,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342"
 }
