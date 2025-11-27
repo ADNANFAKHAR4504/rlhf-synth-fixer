@@ -131,12 +131,9 @@
         "Name": {
           "Fn::Sub": "/migration/${EnvironmentSuffix}/db/master-password"
         },
-        "Type": "SecureString",
+        "Type": "String",
         "Value": {
           "Ref": "DbMasterPasswordParam"
-        },
-        "KeyId": {
-          "Ref": "KmsKey"
         },
         "Description": "Master password for Aurora MySQL cluster"
       }
@@ -147,12 +144,9 @@
         "Name": {
           "Fn::Sub": "/migration/${EnvironmentSuffix}/onprem/db-password"
         },
-        "Type": "SecureString",
+        "Type": "String",
         "Value": {
           "Ref": "OnPremDbPassword"
-        },
-        "KeyId": {
-          "Ref": "KmsKey"
         },
         "Description": "Password for on-premises database (DMS source)"
       }
