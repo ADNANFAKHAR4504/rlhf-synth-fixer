@@ -1,0 +1,23 @@
+{
+  "po_id": "l3u3n8x0",
+  "subtask": "Multi-environment infrastructure deployment (dev, staging, prod)",
+  "platform": "Pulumi",
+  "language": "TypeScript",
+  "complexity": "Expert",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "RDS",
+    "S3",
+    "CloudFront",
+    "ALB",
+    "IAM",
+    "CloudWatch",
+    "KMS",
+    "Secrets Manager"
+  ],
+  "estimated_deployment_time_minutes": 30,
+  "training_quality": 0,
+  "status": "in_progress"
+}
