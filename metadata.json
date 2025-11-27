@@ -1,9 +1,13 @@
 {
   "po_id": "l3u3n8x0",
-  "subtask": "Multi-environment infrastructure deployment (dev, staging, prod)",
-  "platform": "Pulumi",
-  "language": "TypeScript",
-  "complexity": "Expert",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": ["Multi-Environment Consistency and Replication"],
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "team": "synth",
+  "startedAt": "2025-11-27T21:58:00.000Z",
   "aws_services": [
     "VPC",
     "EC2",
@@ -18,6 +22,6 @@
     "Secrets Manager"
   ],
   "estimated_deployment_time_minutes": 30,
-  "training_quality": 0,
+  "training_quality": 10,
   "status": "in_progress"
 }
