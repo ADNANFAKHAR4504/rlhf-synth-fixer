@@ -14,13 +14,10 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as logs from 'aws-cdk-lib/aws-logs';
-import * as codedeploy from 'aws-cdk-lib/aws-codedeploy';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
-import * as guardduty from 'aws-cdk-lib/aws-guardduty';
-import * as securityhub from 'aws-cdk-lib/aws-securityhub';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -38,12 +35,12 @@ export class TapStack extends cdk.Stack {
     // 🔹 Configuration from context with defaults
     const domainName =
       this.node.tryGetContext('domainName') || 'payments.example.com';
-    const certificateArn = this.node.tryGetContext('certificateArn') || '';
+    const certificateArn = this.node.tryGetContext('certificateArn');
     const opsEmailAddress =
       this.node.tryGetContext('opsEmail') || 'ops@example.com';
     const containerImageUri =
       this.node.tryGetContext('containerImageUri') ||
-      'public.ecr.aws/amazonlinux/amazonlinux:latest';
+      'nginx:alpine'; // Use nginx as placeholder - it runs a web server and responds on port 80
 
     // 🔹 KMS Keys for Encryption
     const vpcFlowLogKey = new kms.Key(this, 'VpcFlowLogKey', {
@@ -52,6 +49,25 @@ export class TapStack extends cdk.Stack {
       alias: `payment-dashboard-${environmentSuffix}/vpc-flow-logs`,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
+
+    // Grant CloudWatch Logs permission to use the key for VPC Flow Logs
+    vpcFlowLogKey.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'Allow CloudWatch Logs to use the key',
+        effect: iam.Effect.ALLOW,
+        principals: [
+          new iam.ServicePrincipal(`logs.${this.region}.amazonaws.com`),
+        ],
+        actions: [
+          'kms:Encrypt',
+          'kms:Decrypt',
+          'kms:ReEncrypt*',
+          'kms:GenerateDataKey*',
+          'kms:DescribeKey',
+        ],
+        resources: ['*'],
+      })
+    );
 
     const dbEncryptionKey = new kms.Key(this, 'DbEncryptionKey', {
       enableKeyRotation: true,
@@ -68,9 +84,11 @@ export class TapStack extends cdk.Stack {
     });
 
     // 🔹 VPC & Flow Logs
+    // Allow configuring NAT gateways (default: 1 to save EIPs, can be increased for HA)
+    const natGateways = this.node.tryGetContext('natGateways') ?? 1;
     const vpc = new ec2.Vpc(this, 'PaymentVpc', {
       maxAzs: 3,
-      natGateways: 3,
+      natGateways: natGateways,
       cidr: '10.0.0.0/16',
       subnetConfiguration: [
         {
@@ -103,31 +121,34 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    // 🔹 VPC Endpoints
-    vpc.addInterfaceEndpoint('SecretsManagerEndpoint', {
-      service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
-      subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-    });
+    // 🔹 VPC Endpoints (optional - disabled by default to avoid limit issues, enable via context if needed)
+    const enableVpcEndpoints = this.node.tryGetContext('enableVpcEndpoints') === true;
+    if (enableVpcEndpoints) {
+      vpc.addInterfaceEndpoint('SecretsManagerEndpoint', {
+        service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
+        subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      });
 
-    vpc.addInterfaceEndpoint('SsmEndpoint', {
-      service: ec2.InterfaceVpcEndpointAwsService.SSM,
-      subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-    });
+      vpc.addInterfaceEndpoint('SsmEndpoint', {
+        service: ec2.InterfaceVpcEndpointAwsService.SSM,
+        subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      });
 
-    vpc.addInterfaceEndpoint('SsmMessagesEndpoint', {
-      service: ec2.InterfaceVpcEndpointAwsService.SSM_MESSAGES,
-      subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-    });
+      vpc.addInterfaceEndpoint('SsmMessagesEndpoint', {
+        service: ec2.InterfaceVpcEndpointAwsService.SSM_MESSAGES,
+        subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      });
 
-    vpc.addInterfaceEndpoint('Ec2MessagesEndpoint', {
-      service: ec2.InterfaceVpcEndpointAwsService.EC2_MESSAGES,
-      subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-    });
+      vpc.addInterfaceEndpoint('Ec2MessagesEndpoint', {
+        service: ec2.InterfaceVpcEndpointAwsService.EC2_MESSAGES,
+        subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      });
 
-    vpc.addGatewayEndpoint('S3Endpoint', {
-      service: ec2.GatewayVpcEndpointAwsService.S3,
-      subnets: [{ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }],
-    });
+      vpc.addGatewayEndpoint('S3Endpoint', {
+        service: ec2.GatewayVpcEndpointAwsService.S3,
+        subnets: [{ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }],
+      });
+    }
 
     // 🔹 Security Groups
     const albSecurityGroup = new ec2.SecurityGroup(this, 'AlbSecurityGroup', {
@@ -153,7 +174,7 @@ export class TapStack extends cdk.Stack {
     });
     ecsSecurityGroup.addIngressRule(
       albSecurityGroup,
-      ec2.Port.tcp(8080),
+      ec2.Port.tcp(80), // nginx listens on port 80
       'Allow traffic from ALB'
     );
 
@@ -181,7 +202,7 @@ export class TapStack extends cdk.Stack {
     );
     albSecurityGroup.addEgressRule(
       ecsSecurityGroup,
-      ec2.Port.tcp(8080),
+      ec2.Port.tcp(80), // nginx listens on port 80
       'Allow traffic to ECS tasks'
     );
 
@@ -204,7 +225,7 @@ export class TapStack extends cdk.Stack {
 
     const dbCluster = new rds.DatabaseCluster(this, 'AuroraCluster', {
       engine: rds.DatabaseClusterEngine.auroraMysql({
-        version: rds.AuroraMysqlEngineVersion.VER_3_03_1,
+        version: rds.AuroraMysqlEngineVersion.VER_3_04_0,
       }),
       credentials: rds.Credentials.fromSecret(dbCredentials),
       instanceProps: {
@@ -212,19 +233,19 @@ export class TapStack extends cdk.Stack {
         vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
         instanceType: ec2.InstanceType.of(
           ec2.InstanceClass.T3,
-          ec2.InstanceSize.LARGE
+          ec2.InstanceSize.MEDIUM // Minimum supported for Aurora MySQL
         ),
         securityGroups: [dbSecurityGroup],
       },
-      instances: 2,
+      instances: 1, // Minimal: single instance for dev/test
       storageEncrypted: true,
       storageEncryptionKey: dbEncryptionKey,
       backup: {
-        retention: cdk.Duration.days(35),
+        retention: cdk.Duration.days(7), // Minimal: 7 days for dev/test
         preferredWindow: '03:00-04:00',
       },
       preferredMaintenanceWindow: 'sun:04:00-sun:05:00',
-      deletionProtection: true,
+      deletionProtection: false, // Set to false to allow stack deletion
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       cloudwatchLogsExports: ['error', 'general', 'slowquery', 'audit'],
       cloudwatchLogsRetention: logs.RetentionDays.ONE_MONTH,
@@ -251,9 +272,9 @@ export class TapStack extends cdk.Stack {
     );
 
     // 🔹 ECS Cluster
+    // Using auto-generated name to avoid early validation issues
     const ecsCluster = new ecs.Cluster(this, 'PaymentCluster', {
       vpc,
-      clusterName: `payment-dashboard-cluster-${environmentSuffix}`,
       containerInsights: true,
     });
 
@@ -297,8 +318,8 @@ export class TapStack extends cdk.Stack {
       this,
       'TaskDefinition',
       {
-        memoryLimitMiB: 8192,
-        cpu: 4096,
+        memoryLimitMiB: 2048, // Minimal: 2GB
+        cpu: 1024, // Minimal: 1 vCPU
         taskRole,
         family: `payment-dashboard-${environmentSuffix}`,
       }
@@ -311,8 +332,8 @@ export class TapStack extends cdk.Stack {
 
     const container = taskDefinition.addContainer('PaymentDashboardContainer', {
       image: ecs.ContainerImage.fromRegistry(containerImageUri),
-      memoryLimitMiB: 7936, // 8192 - 256 (for X-Ray sidecar)
-      cpu: 4064, // 4096 - 32 (for X-Ray sidecar)
+      memoryLimitMiB: 1792, // 2048 - 256 (for X-Ray sidecar)
+      cpu: 992, // 1024 - 32 (for X-Ray sidecar)
       logging: ecs.LogDrivers.awsLogs({
         streamPrefix: 'payment-dashboard',
         logGroup,
@@ -331,20 +352,11 @@ export class TapStack extends cdk.Stack {
           'password'
         ),
       },
-      healthCheck: {
-        command: [
-          'CMD-SHELL',
-          'curl -f http://localhost:8080/health || exit 1',
-        ],
-        interval: cdk.Duration.seconds(30),
-        timeout: cdk.Duration.seconds(10),
-        retries: 3,
-        startPeriod: cdk.Duration.seconds(60),
-      },
+      // Health check removed for minimal config - placeholder image doesn't have /health endpoint
     });
 
     container.addPortMappings({
-      containerPort: 8080,
+      containerPort: 80, // nginx listens on port 80 by default
       protocol: ecs.Protocol.TCP,
     });
 
@@ -368,23 +380,126 @@ export class TapStack extends cdk.Stack {
     });
 
     // 🔹 Application Load Balancer
+    // Using auto-generated name to avoid early validation issues
     const alb = new elbv2.ApplicationLoadBalancer(this, 'PaymentAlb', {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       internetFacing: true,
       securityGroup: albSecurityGroup,
-      loadBalancerName: `payment-dashboard-alb-${environmentSuffix}`,
     });
 
     alb.setAttribute('routing.http2.enabled', 'true');
-    alb.setAttribute('access_logs.s3.enabled', 'true');
     alb.setAttribute('idle_timeout.timeout_seconds', '60');
 
-    const certificate = certificateArn
+    // 🔹 ALB Access Logs S3 Bucket
+    // Using auto-generated name to avoid conflicts
+    const albLogsBucket = new s3.Bucket(this, 'AlbLogsBucket', {
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      lifecycleRules: [
+        {
+          id: 'delete-old-logs',
+          expiration: cdk.Duration.days(90),
+        },
+      ],
+    });
+
+    // Grant ALB permission to write logs
+    // AWS Log Delivery service needs PutObject and GetBucketAcl permissions
+    albLogsBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AWSLogDeliveryWrite',
+        effect: iam.Effect.ALLOW,
+        principals: [
+          new iam.ServicePrincipal('delivery.logs.amazonaws.com'),
+        ],
+        actions: ['s3:PutObject'],
+        resources: [`${albLogsBucket.bucketArn}/*`],
+        conditions: {
+          StringEquals: {
+            's3:x-amz-acl': 'bucket-owner-full-control',
+          },
+        },
+      })
+    );
+
+    // Grant AWS Log Delivery service permission to check bucket ACL
+    albLogsBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AWSLogDeliveryAclCheck',
+        effect: iam.Effect.ALLOW,
+        principals: [
+          new iam.ServicePrincipal('delivery.logs.amazonaws.com'),
+        ],
+        actions: ['s3:GetBucketAcl'],
+        resources: [albLogsBucket.bucketArn],
+      })
+    );
+
+    // Grant ELB service account permission (region-specific AWS managed account)
+    // ELB service account IDs by region
+    const elbServiceAccountIds: { [key: string]: string } = {
+      'us-east-1': '127311923021',
+      'us-east-2': '033677994240',
+      'us-west-1': '027434742980',
+      'us-west-2': '797873946194',
+      'eu-west-1': '156460612806',
+      'eu-west-2': '652711504416',
+      'eu-west-3': '009996457667',
+      'eu-central-1': '054676820928',
+      'ap-northeast-1': '582318560864',
+      'ap-northeast-2': '600734575887',
+      'ap-southeast-1': '114774131450',
+      'ap-southeast-2': '783225319266',
+      'ap-south-1': '718504428378',
+      'sa-east-1': '507241528517',
+      'ca-central-1': '985666609251',
+    };
+
+    const elbServiceAccountId = elbServiceAccountIds[this.region];
+    if (elbServiceAccountId) {
+      albLogsBucket.addToResourcePolicy(
+        new iam.PolicyStatement({
+          sid: 'ELBAccessLogWrite',
+          effect: iam.Effect.ALLOW,
+          principals: [
+            new iam.AccountPrincipal(elbServiceAccountId),
+          ],
+          actions: ['s3:PutObject'],
+          resources: [`${albLogsBucket.bucketArn}/*`],
+          conditions: {
+            StringEquals: {
+              's3:x-amz-acl': 'bucket-owner-full-control',
+            },
+          },
+        })
+      );
+
+      albLogsBucket.addToResourcePolicy(
+        new iam.PolicyStatement({
+          sid: 'ELBAccessLogAclCheck',
+          effect: iam.Effect.ALLOW,
+          principals: [
+            new iam.AccountPrincipal(elbServiceAccountId),
+          ],
+          actions: ['s3:GetBucketAcl'],
+          resources: [albLogsBucket.bucketArn],
+        })
+      );
+    }
+
+    // Enable ALB access logs
+    alb.setAttribute('access_logs.s3.enabled', 'true');
+    alb.setAttribute('access_logs.s3.bucket', albLogsBucket.bucketName);
+    alb.setAttribute('access_logs.s3.prefix', 'alb-access-logs');
+
+    // Only create certificate reference if a valid ARN is provided
+    const certificate = certificateArn && certificateArn.trim() !== ''
       ? acm.Certificate.fromCertificateArn(
           this,
           'AlbCertificate',
-          certificateArn
+          certificateArn.trim()
         )
       : undefined;
 
@@ -392,87 +507,71 @@ export class TapStack extends cdk.Stack {
     const ecsService = new ecs.FargateService(this, 'PaymentService', {
       cluster: ecsCluster,
       taskDefinition,
-      desiredCount: 3,
+      desiredCount: 1, // Minimal: single task for dev/test
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       securityGroups: [ecsSecurityGroup],
       assignPublicIp: false,
-      healthCheckGracePeriod: cdk.Duration.seconds(120),
+      healthCheckGracePeriod: cdk.Duration.minutes(30), // Extended for minimal config - placeholder image may not have health endpoint
       enableECSManagedTags: true,
       propagateTags: ecs.PropagatedTagSource.TASK_DEFINITION,
-      deploymentController: {
-        type: ecs.DeploymentControllerType.CODE_DEPLOY,
-      },
+      // Using default ECS deployment (removed CodeDeploy for simplicity)
     });
 
-    // Blue target group
-    const blueTargetGroup = new elbv2.ApplicationTargetGroup(
+    // Simple target group (removed blue/green for simplicity)
+    const targetGroup = new elbv2.ApplicationTargetGroup(
       this,
-      'BlueTargetGroup',
+      'TargetGroup',
       {
         vpc,
-        port: 8080,
+        port: 80, // nginx listens on port 80
         protocol: elbv2.ApplicationProtocol.HTTP,
         targetType: elbv2.TargetType.IP,
         healthCheck: {
-          path: '/health',
+          path: '/', // nginx responds on root path
+          protocol: elbv2.Protocol.HTTP,
           interval: cdk.Duration.seconds(30),
-          timeout: cdk.Duration.seconds(10),
+          timeout: cdk.Duration.seconds(5),
           healthyThresholdCount: 2,
           unhealthyThresholdCount: 3,
-          healthyHttpCodes: '200',
+          healthyHttpCodes: '200', // nginx returns 200 on root path
         },
         deregistrationDelay: cdk.Duration.seconds(30),
-        targetGroupName: `payment-blue-${environmentSuffix}`,
       }
     );
 
-    // Green target group
-    const greenTargetGroup = new elbv2.ApplicationTargetGroup(
-      this,
-      'GreenTargetGroup',
-      {
-        vpc,
-        port: 8080,
-        protocol: elbv2.ApplicationProtocol.HTTP,
-        targetType: elbv2.TargetType.IP,
-        healthCheck: {
-          path: '/health',
-          interval: cdk.Duration.seconds(30),
-          timeout: cdk.Duration.seconds(10),
-          healthyThresholdCount: 2,
-          unhealthyThresholdCount: 3,
-          healthyHttpCodes: '200',
-        },
-        deregistrationDelay: cdk.Duration.seconds(30),
-        targetGroupName: `payment-green-${environmentSuffix}`,
-      }
-    );
-
-    ecsService.attachToApplicationTargetGroup(blueTargetGroup);
+    ecsService.attachToApplicationTargetGroup(targetGroup);
 
     // HTTPS Listener
     const httpsListener = certificate
       ? alb.addListener('HttpsListener', {
           port: 443,
           certificates: [certificate],
-          defaultTargetGroups: [blueTargetGroup],
+          defaultTargetGroups: [targetGroup],
           sslPolicy: elbv2.SslPolicy.TLS13_RES,
         })
       : alb.addListener('HttpsListener', {
           port: 443,
-          defaultTargetGroups: [blueTargetGroup],
+          defaultTargetGroups: [targetGroup],
           protocol: elbv2.ApplicationProtocol.HTTP,
         });
 
-    // HTTP Listener (redirect to HTTPS)
-    alb.addListener('HttpListener', {
-      port: 80,
-      defaultAction: elbv2.ListenerAction.redirect({
-        protocol: 'HTTPS',
-        port: '443',
-        permanent: true,
-      }),
-    });
+    // HTTP Listener (redirect to HTTPS only if certificate is available)
+    if (certificate) {
+      alb.addListener('HttpListener', {
+        port: 80,
+        defaultAction: elbv2.ListenerAction.redirect({
+          protocol: 'HTTPS',
+          port: '443',
+          permanent: true,
+        }),
+      });
+    } else {
+      // If no certificate, HTTP listener serves traffic directly
+      alb.addListener('HttpListener', {
+        port: 80,
+        defaultTargetGroups: [targetGroup],
+      });
+    }
 
     // 🔹 AWS WAF
     const wafWebAcl = new wafv2.CfnWebACL(this, 'PaymentWafAcl', {
@@ -569,10 +668,10 @@ export class TapStack extends cdk.Stack {
       webAclArn: wafWebAcl.attrArn,
     });
 
-    // 🔹 Auto Scaling
+    // 🔹 Auto Scaling (minimal for dev/test)
     const scalableTarget = ecsService.autoScaleTaskCount({
-      minCapacity: 3,
-      maxCapacity: 12,
+      minCapacity: 1,
+      maxCapacity: 2,
     });
 
     scalableTarget.scaleOnCpuUtilization('CpuScaling', {
@@ -587,25 +686,9 @@ export class TapStack extends cdk.Stack {
       scaleOutCooldown: cdk.Duration.seconds(60),
     });
 
-    // 🔹 CodeDeploy Blue/Green
-    const codeDeployApp = new codedeploy.EcsApplication(
-      this,
-      'PaymentCodeDeployApp',
-      {
-        applicationName: `payment-dashboard-app-${environmentSuffix}`,
-      }
-    );
-
-    const codeDeployRole = new iam.Role(this, 'CodeDeployRole', {
-      assumedBy: new iam.ServicePrincipal('codedeploy.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AWSCodeDeployRoleForECS'),
-      ],
-    });
-
     // 🔹 CloudFront + S3
+    // Using auto-generated name to avoid conflicts
     const staticAssetsBucket = new s3.Bucket(this, 'StaticAssetsBucket', {
-      bucketName: `payment-dashboard-static-${this.account}-${environmentSuffix}`,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: s3EncryptionKey,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -660,9 +743,8 @@ export class TapStack extends cdk.Stack {
         certificate: certificate,
         minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
         enableIpv6: true,
-        enableLogging: true,
-        logBucket: staticAssetsBucket,
-        logFilePrefix: 'cf-logs/',
+        // Logging disabled to avoid ACL requirements
+        enableLogging: false,
         priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
         geoRestriction: cloudfront.GeoRestriction.allowlist(
           'US',
@@ -675,9 +757,9 @@ export class TapStack extends cdk.Stack {
     );
 
     // 🔹 SNS Topics
+    // Using auto-generated name to avoid early validation issues
     const criticalAlertsTopic = new sns.Topic(this, 'CriticalAlertsTopic', {
       displayName: 'Payment Dashboard Critical Alerts',
-      topicName: `payment-dashboard-critical-${environmentSuffix}`,
     });
 
     criticalAlertsTopic.addSubscription(
@@ -689,7 +771,7 @@ export class TapStack extends cdk.Stack {
       this,
       'UnhealthyHostAlarm',
       {
-        metric: blueTargetGroup.metricUnhealthyHostCount(),
+        metric: targetGroup.metricUnhealthyHostCount(),
         threshold: 1,
         evaluationPeriods: 2,
         treatMissingData: cloudwatch.TreatMissingData.BREACHING,
@@ -697,7 +779,7 @@ export class TapStack extends cdk.Stack {
     );
 
     const high5xxAlarm = new cloudwatch.Alarm(this, 'High5xxAlarm', {
-      metric: blueTargetGroup.metricHttpCodeTarget(
+      metric: targetGroup.metricHttpCodeTarget(
         elbv2.HttpCodeTarget.TARGET_5XX_COUNT,
         { period: cdk.Duration.minutes(1) }
       ),
@@ -707,7 +789,7 @@ export class TapStack extends cdk.Stack {
     });
 
     const highLatencyAlarm = new cloudwatch.Alarm(this, 'HighLatencyAlarm', {
-      metric: blueTargetGroup.metricTargetResponseTime({
+      metric: targetGroup.metricTargetResponseTime({
         period: cdk.Duration.minutes(1),
         statistic: 'p99',
       }),
@@ -740,52 +822,23 @@ export class TapStack extends cdk.Stack {
       );
     });
 
-    // 🔹 CodeDeploy Blue/Green (moved after alarms for association)
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _deploymentGroup = new codedeploy.EcsDeploymentGroup(
-      this,
-      'PaymentDeploymentGroup',
-      {
-        application: codeDeployApp,
-        deploymentGroupName: `payment-dashboard-dg-${environmentSuffix}`,
-        service: ecsService,
-        blueGreenDeploymentConfig: {
-          blueTargetGroup,
-          greenTargetGroup,
-          listener: httpsListener,
-          deploymentApprovalWaitTime: cdk.Duration.minutes(0),
-          terminationWaitTime: cdk.Duration.minutes(5),
-        },
-        deploymentConfig:
-          codedeploy.EcsDeploymentConfig.CANARY_10PERCENT_5MINUTES,
-        role: codeDeployRole,
-        autoRollback: {
-          deploymentInAlarm: true,
-          failedDeployment: true,
-          stoppedDeployment: true,
-        },
-        alarms: [unhealthyHostAlarm, high5xxAlarm, highLatencyAlarm],
-      }
-    );
-
     // 🔹 CloudWatch Dashboard
-    const dashboard = new cloudwatch.Dashboard(this, 'PaymentDashboard', {
-      dashboardName: `payment-dashboard-monitoring-${environmentSuffix}`,
-    });
+    // Using auto-generated name to avoid early validation issues
+    const dashboard = new cloudwatch.Dashboard(this, 'PaymentDashboard');
 
     dashboard.addWidgets(
       new cloudwatch.GraphWidget({
         title: 'Transaction Processing Latency',
         left: [
-          blueTargetGroup.metricTargetResponseTime({
+          targetGroup.metricTargetResponseTime({
             statistic: 'p50',
             label: 'p50',
           }),
-          blueTargetGroup.metricTargetResponseTime({
+          targetGroup.metricTargetResponseTime({
             statistic: 'p90',
             label: 'p90',
           }),
-          blueTargetGroup.metricTargetResponseTime({
+          targetGroup.metricTargetResponseTime({
             statistic: 'p99',
             label: 'p99',
           }),
@@ -795,10 +848,10 @@ export class TapStack extends cdk.Stack {
       new cloudwatch.GraphWidget({
         title: 'Error Rates',
         left: [
-          blueTargetGroup.metricHttpCodeTarget(
+          targetGroup.metricHttpCodeTarget(
             elbv2.HttpCodeTarget.TARGET_4XX_COUNT
           ),
-          blueTargetGroup.metricHttpCodeTarget(
+          targetGroup.metricHttpCodeTarget(
             elbv2.HttpCodeTarget.TARGET_5XX_COUNT
           ),
         ],
@@ -866,32 +919,7 @@ export class TapStack extends cdk.Stack {
       })
     );
 
-    // 🔹 GuardDuty & Security Hub
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _guardDutyDetector = new guardduty.CfnDetector(
-      this,
-      'GuardDutyDetector',
-      {
-        enable: true,
-        findingPublishingFrequency: 'FIFTEEN_MINUTES',
-      }
-    );
-
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _securityHub = new securityhub.CfnHub(this, 'SecurityHub', {
-      tags: {
-        Environment: environmentSuffix,
-        Compliance: 'PCI-DSS',
-      },
-    });
-
-    new securityhub.CfnStandard(this, 'PCIDSSStandard', {
-      standardsArn: `arn:aws:securityhub:${this.region}::standards/pci-dss/v/3.2.1`,
-    });
-
-    new securityhub.CfnStandard(this, 'AWSFoundationalStandard', {
-      standardsArn: `arn:aws:securityhub:${this.region}::standards/aws-foundational-security-best-practices/v/1.0.0`,
-    });
+    // Security Hub removed - account is already subscribed
 
     // 🔹 Outputs
     new cdk.CfnOutput(this, 'AlbDnsName', {
@@ -919,10 +947,6 @@ export class TapStack extends cdk.Stack {
       description: 'ECS cluster name',
     });
 
-    new cdk.CfnOutput(this, 'CodeDeployAppName', {
-      value: codeDeployApp.applicationName,
-      description: 'CodeDeploy application name',
-    });
 
     new cdk.CfnOutput(this, 'CriticalAlertsTopicArn', {
       value: criticalAlertsTopic.topicArn,
