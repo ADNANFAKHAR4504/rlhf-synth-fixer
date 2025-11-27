@@ -5,11 +5,28 @@
 ### 1. Lambda Function Path Resolution
 Use absolute paths with `os.path.abspath()` and `os.path.dirname(__file__)` for reliable file location across different execution contexts.
 
+```python
+import os
+
+# Correct path resolution for Lambda function code
+lambda_code_path = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "lambda", "webhook_processor")
+)
+```
+
 ### 2. Simplified CloudWatch Monitoring
 Removed subscription filters in favor of direct CloudWatch Logs with 3-day retention for cost optimization and simplicity.
 
 ### 3. Proper Test Structure
 Parse CDKTF synthesized output as JSON before accessing nested properties.
+
+```python
+import json
+
+# Parse synthesized output
+synth_output = json.loads(app.synth())
+resources = synth_output["resource"]
+```
 
 ## Complete Working Implementation
 
