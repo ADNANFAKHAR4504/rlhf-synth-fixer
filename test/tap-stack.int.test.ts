@@ -98,7 +98,7 @@ describe('TapStack end-to-end integration test', () => {
       expect(defaultRoute?.GatewayId).toMatch(/^igw-/);
     });
 
-    // Double-check that the perimeter is open only on the expected front-door ports.
+    // Double check that the perimeter is open only on the expected front door ports.
     test('web server security group allows HTTP/HTTPS ingress from the internet', async () => {
       const securityGroupId = outputs.SecurityGroupId;
       if (!securityGroupId) {
@@ -380,7 +380,7 @@ describe('TapStack end-to-end integration test', () => {
       expect(group?.retentionInDays).toBeGreaterThan(0);
     });
 
-    // Logging bucket must be lifecycle-managed and still locked down.
+    // Logging bucket must be lifecycle managed and still locked down.
     test('logging bucket retains ingested logs and stays private', async () => {
       const loggingBucket = outputs.LoggingBucketName;
       if (!loggingBucket) {
@@ -409,7 +409,7 @@ describe('TapStack end-to-end integration test', () => {
       expect(firehoseAccess?.BlockPublicPolicy).toBe(true);
     });
 
-    // Spot-check that Firehose is dropping objects under the expected prefix.
+    // Spot check that Firehose is dropping objects under the expected prefix.
     test('Firehose delivers log objects under the configured prefix', async () => {
       const loggingBucket = outputs.LoggingBucketName;
       if (!loggingBucket) {
@@ -537,7 +537,7 @@ describe('TapStack end-to-end integration test', () => {
       );
     });
 
-    // Someone needs to actually receive those alerts—check for an email subscriber.
+    // Someone needs to actually receive those alerts check for an email subscriber.
     test('SNS topic has at least one email subscription for incident notifications', async () => {
       const topicArn = outputs.SNSTopicArn;
       if (!topicArn) {
