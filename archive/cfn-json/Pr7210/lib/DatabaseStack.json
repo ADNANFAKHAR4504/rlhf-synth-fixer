@@ -1,0 +1,315 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Database stack for RDS Aurora MySQL cluster",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource names"
+    },
+    "Environment": {
+      "Type": "String",
+      "Description": "Environment type"
+    },
+    "DBMasterUsername": {
+      "Type": "String",
+      "Description": "Master username for RDS Aurora"
+    },
+    "PrivateSubnet1Id": {
+      "Type": "String",
+      "Description": "Private Subnet 1 ID"
+    },
+    "PrivateSubnet2Id": {
+      "Type": "String",
+      "Description": "Private Subnet 2 ID"
+    },
+    "PrivateSubnet3Id": {
+      "Type": "String",
+      "Description": "Private Subnet 3 ID"
+    },
+    "DatabaseSecurityGroupId": {
+      "Type": "String",
+      "Description": "Security Group ID for database"
+    },
+    "EnableMultiAZ": {
+      "Type": "String",
+      "Description": "Enable Multi-AZ deployment"
+    }
+  },
+  "Conditions": {
+    "IsMultiAZ": {
+      "Fn::Equals": [
+        {
+          "Ref": "EnableMultiAZ"
+        },
+        "true"
+      ]
+    }
+  },
+  "Resources": {
+    "DBMasterSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "rds-master-secret-${EnvironmentSuffix}"
+        },
+        "Description": "RDS Aurora master password",
+        "GenerateSecretString": {
+          "SecretStringTemplate": {
+            "Fn::Sub": "{\"username\": \"${DBMasterUsername}\"}"
+          },
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\",
+          "IncludeSpace": false,
+          "RequireEachIncludedType": true
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "rds-master-secret-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupName": {
+          "Fn::Sub": "db-subnet-group-${EnvironmentSuffix}"
+        },
+        "DBSubnetGroupDescription": "Subnet group for RDS Aurora cluster",
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1Id"
+          },
+          {
+            "Ref": "PrivateSubnet2Id"
+          },
+          {
+            "Ref": "PrivateSubnet3Id"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "db-subnet-group-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DBClusterParameterGroup": {
+      "Type": "AWS::RDS::DBClusterParameterGroup",
+      "Properties": {
+        "Description": "Custom parameter group for Aurora MySQL cluster",
+        "Family": "aurora-mysql8.0",
+        "Parameters": {
+          "max_connections": "1000",
+          "innodb_buffer_pool_size": "{DBInstanceClassMemory*3/4}",
+          "character_set_server": "utf8mb4",
+          "collation_server": "utf8mb4_unicode_ci"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "db-cluster-param-group-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DBCluster": {
+      "Type": "AWS::RDS::DBCluster",
+      "DependsOn": "DBMasterSecret",
+      "Properties": {
+        "DBClusterIdentifier": {
+          "Fn::Sub": "aurora-cluster-${EnvironmentSuffix}"
+        },
+        "Engine": "aurora-mysql",
+        "EngineVersion": "8.0.mysql_aurora.3.04.0",
+        "MasterUsername": {
+          "Ref": "DBMasterUsername"
+        },
+        "MasterUserPassword": {
+          "Fn::Sub": "TempPassword123!${EnvironmentSuffix}"
+        },
+        "DatabaseName": "transactions",
+        "Port": 3306,
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "DatabaseSecurityGroupId"
+          }
+        ],
+        "DBClusterParameterGroupName": {
+          "Ref": "DBClusterParameterGroup"
+        },
+        "BackupRetentionPeriod": 7,
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "mon:04:00-mon:05:00",
+        "EnableCloudwatchLogsExports": [
+          "error",
+          "slowquery",
+          "general"
+        ],
+        "DeletionProtection": false,
+        "StorageEncrypted": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-cluster-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Snapshot",
+      "UpdateReplacePolicy": "Snapshot"
+    },
+    "DBInstance1": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "aurora-instance-1-${EnvironmentSuffix}"
+        },
+        "DBClusterIdentifier": {
+          "Ref": "DBCluster"
+        },
+        "Engine": "aurora-mysql",
+        "DBInstanceClass": "db.t3.medium",
+        "PubliclyAccessible": false,
+        "EnablePerformanceInsights": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-instance-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "DBInstance2": {
+      "Type": "AWS::RDS::DBInstance",
+      "Condition": "IsMultiAZ",
+      "Properties": {
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "aurora-instance-2-${EnvironmentSuffix}"
+        },
+        "DBClusterIdentifier": {
+          "Ref": "DBCluster"
+        },
+        "Engine": "aurora-mysql",
+        "DBInstanceClass": "db.t3.medium",
+        "PubliclyAccessible": false,
+        "EnablePerformanceInsights": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-instance-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "DBSecretAttachment": {
+      "Type": "AWS::SecretsManager::SecretTargetAttachment",
+      "Properties": {
+        "SecretId": {
+          "Ref": "DBMasterSecret"
+        },
+        "TargetId": {
+          "Ref": "DBCluster"
+        },
+        "TargetType": "AWS::RDS::DBCluster"
+      }
+    }
+  },
+  "Outputs": {
+    "DBClusterId": {
+      "Description": "RDS Aurora Cluster ID",
+      "Value": {
+        "Ref": "DBCluster"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBClusterId"
+        }
+      }
+    },
+    "DBClusterEndpoint": {
+      "Description": "RDS Aurora Cluster Endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "DBCluster",
+          "Endpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBClusterEndpoint"
+        }
+      }
+    },
+    "DBClusterPort": {
+      "Description": "RDS Aurora Cluster Port",
+      "Value": {
+        "Fn::GetAtt": [
+          "DBCluster",
+          "Endpoint.Port"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBClusterPort"
+        }
+      }
+    },
+    "DBClusterReadEndpoint": {
+      "Description": "RDS Aurora Cluster Read Endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "DBCluster",
+          "ReadEndpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBClusterReadEndpoint"
+        }
+      }
+    },
+    "DBMasterSecretArn": {
+      "Description": "ARN of the Secrets Manager secret containing database credentials",
+      "Value": {
+        "Ref": "DBMasterSecret"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBMasterSecretArn"
+        }
+      }
+    }
+  }
+}
