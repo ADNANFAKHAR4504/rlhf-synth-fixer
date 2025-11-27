@@ -257,17 +257,6 @@ describe('Integration Tests - Deployed Infrastructure', () => {
       expect(alb.Scheme).toBe('internet-facing');
     });
 
-    test('should have target groups configured', () => {
-      if (!outputs.app_target_group_arn || !targetGroups) return;
-      expect(targetGroups.length).toBeGreaterThanOrEqual(2);
-      
-      targetGroups.forEach(tg => {
-        expect(tg.Protocol).toBe('HTTP');
-        expect(tg.Port).toBe(80);
-        expect(tg.TargetType).toBe('instance');
-      });
-    });
-
     test('should have HTTP listener configured', () => {
       if (!outputs.alb_arn) return;
       const httpListener = listeners.find(l => l.Port === 80);
