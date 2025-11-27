@@ -1,4 +1,4 @@
-name: webapp-infrastructur
+name: TapStack
 runtime:
   name: nodejs
 description: Pulumi infrastructure for TAP
