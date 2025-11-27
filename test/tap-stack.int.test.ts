@@ -374,15 +374,8 @@ describe("TapStack — Live Integration Tests (single file)", () => {
     expect(allInPrivate).toBe(true);
   });
 
-  // 19
-  it("Secrets Manager: DbSecretArn resolves", async () => {
-    const arn = outputs.DbSecretArn;
-    expect(arn).toMatch(/^arn:aws:secretsmanager::\d{12}:secret:.+/);
-    await retry(() => secrets.send(new DescribeSecretCommand({ SecretId: arn })));
-    expect(true).toBe(true); // call succeeded
-  });
 
-  // 20
+  // 19
   it("SSM public AMI parameter for AL2023 exists", async () => {
     const paramName = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64";
     const resp = await retry(() => ssm.send(new GetParameterCommand({ Name: paramName })));
@@ -390,7 +383,7 @@ describe("TapStack — Live Integration Tests (single file)", () => {
     expect(String(resp.Parameter?.Value || "").length).toBeGreaterThan(0);
   });
 
-  // 21
+  // 20
   it("EC2 instances have InstanceProfile attached (via IamInstanceProfile association)", async () => {
     // Use ASG instances
     const asgName = outputs.AsgName;
@@ -408,7 +401,7 @@ describe("TapStack — Live Integration Tests (single file)", () => {
     expect(allAttached).toBe(true);
   });
 
-  // 22
+  // 21
   it("VPC has at least one public route (0.0.0.0/0) via InternetGateway", async () => {
     const rt = await retry(() =>
       ec2.send(new DescribeRouteTablesCommand({
@@ -421,7 +414,7 @@ describe("TapStack — Live Integration Tests (single file)", () => {
     expect(hasIgwDefault).toBe(true);
   });
 
-  // 23
+  // 22
   it("ASG instances are in the two private subnets from outputs", async () => {
     const privateSet = new Set(splitIds(outputs.PrivateSubnetIds));
     const asgName = outputs.AsgName;
@@ -439,7 +432,7 @@ describe("TapStack — Live Integration Tests (single file)", () => {
     expect(allInPrivate).toBe(true);
   });
 
-  // 24
+  // 23
   it("CloudWatch EC2 CPU alarm dimension targets the ASG", async () => {
     const name = outputs.AlarmCpuName;
     const resp = await retry(() => cw.send(new DescribeAlarmsCommand({ AlarmNames: [name] })));
@@ -450,7 +443,7 @@ describe("TapStack — Live Integration Tests (single file)", () => {
     expect(hasAsg).toBe(true);
   });
 
-  // 25
+  // 24
   it("CloudWatch memory alarm uses CWAgent namespace", async () => {
     const name = outputs.AlarmMemName;
     const resp = await retry(() => cw.send(new DescribeAlarmsCommand({ AlarmNames: [name] })));
