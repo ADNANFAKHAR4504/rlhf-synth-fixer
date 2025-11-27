@@ -5,7 +5,6 @@ name = "pypi"
 
 [packages]
 aws-cdk-aws-lambda-python-alpha = "*"
-cdktf = "0.21.0"
 pulumi_random = "*"
 pulumi = "*"
 pulumi-aws = "*"
@@ -28,6 +27,7 @@ numpy = "*"
 openai = "*"
 pandas = "*"
 openpyxl = "*"
+cdktf = "==0.21.0"
 
 [dev-packages]
 boto3 = "*"
