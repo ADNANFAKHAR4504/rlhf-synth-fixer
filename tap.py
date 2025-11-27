@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 import sys
 import os
-import subprocess
-from pathlib import Path
 from datetime import datetime, timezone
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -34,33 +32,6 @@ default_tags = {
         "CreatedAt": created_at,
     }
 }
-
-# Package Lambda function before synthesis
-print("📦 Packaging Lambda function...")
-script_dir = Path(__file__).parent
-lambda_source_dir = script_dir / "lib" / "lambda"
-lambda_zip_path = script_dir / "lambda_function.zip"
-package_script = script_dir / "scripts" / "package_lambda.py"
-
-# Remove old zip if exists
-if lambda_zip_path.exists():
-    lambda_zip_path.unlink()
-    print(f"🗑️  Removed old Lambda package: {lambda_zip_path}")
-
-# Run the packaging script
-result = subprocess.run(
-    [sys.executable, str(package_script), str(lambda_source_dir), str(lambda_zip_path)],
-    check=True,
-    capture_output=True,
-    text=True
-)
-print(result.stdout)
-
-if not lambda_zip_path.exists():
-    print(f"❌ Failed to create Lambda package: {lambda_zip_path}")
-    sys.exit(1)
-
-print(f"✅ Lambda function packaged successfully: {lambda_zip_path}")
 
 app = App()
 

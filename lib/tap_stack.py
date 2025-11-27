@@ -518,10 +518,10 @@ class TapStack(TerraformStack):
         )
 
         # Lambda function code is in lib/lambda/index.py
-        # It is packaged separately into lambda_function.zip during deployment
-        # Use absolute path to lambda_function.zip (created in project root by tap.py)
-        project_root = Path(__file__).parent.parent
-        lambda_zip_path = str(project_root / "lambda_function.zip")
+        # It is pre-packaged into lib/lambda_function.zip
+        # Use absolute path to lambda_function.zip in lib directory
+        lib_dir = Path(__file__).parent
+        lambda_zip_path = str(lib_dir / "lambda_function.zip")
 
         # Create Lambda function
         lambda_function = LambdaFunction(
