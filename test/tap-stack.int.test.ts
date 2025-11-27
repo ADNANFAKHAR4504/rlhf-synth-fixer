@@ -58,6 +58,7 @@ const sns = new SNSClient({ region });
 const firehose = new FirehoseClient({ region });
 const iam = new IAMClient({ region });
 const ssm = new SSMClient({ region });
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const extractEnvironmentName = (): string => {
   const bucket = outputs.GeneralPurposeBucketName;
@@ -434,48 +435,71 @@ describe('TapStack end-to-end integration test', () => {
   });
 
   describe('CloudWatch Metrics -> Alarms -> SNS Topic -> Incident Responders', () => {
+    const fetchCustomMetricsWithRetries = async (
+      namespace: string,
+      maxAttempts = 5,
+      delayMs = 20000
+    ) => {
+      let lastResults;
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        const endTime = new Date();
+        const startTime = new Date(endTime.getTime() - 60 * 60 * 1000);
+        const { MetricDataResults } = await cloudwatch.send(
+          new GetMetricDataCommand({
+            StartTime: startTime,
+            EndTime: endTime,
+            MetricDataQueries: [
+              {
+                Id: 'mem',
+                MetricStat: {
+                  Metric: {
+                    Namespace: namespace,
+                    MetricName: 'MEM_USED',
+                  },
+                  Period: 60,
+                  Stat: 'Average',
+                },
+                ReturnData: true,
+              },
+              {
+                Id: 'disk',
+                MetricStat: {
+                  Metric: {
+                    Namespace: namespace,
+                    MetricName: 'DISK_USED',
+                  },
+                  Period: 60,
+                  Stat: 'Average',
+                },
+                ReturnData: true,
+              },
+            ],
+          })
+        );
+        lastResults = MetricDataResults;
+
+        const hasData =
+          MetricDataResults?.every(result => (result.Values?.length ?? 0) > 0) ?? false;
+        if (hasData) {
+          return MetricDataResults;
+        }
+
+        if (attempt < maxAttempts) {
+          await sleep(delayMs);
+        }
+      }
+
+      throw new Error(
+        'Custom CloudWatch agent metrics MEM_USED/DISK_USED did not emit data after multiple polling attempts.'
+      );
+    };
+
     // Custom metrics should be alive and feeding dashboards/alarms.
     test('custom application metrics stream into CloudWatch', async () => {
       const namespace = `${environmentName}/Application`;
-      const endTime = new Date();
-      const startTime = new Date(endTime.getTime() - 15 * 60 * 1000);
-
-      const { MetricDataResults } = await cloudwatch.send(
-        new GetMetricDataCommand({
-          StartTime: startTime,
-          EndTime: endTime,
-          MetricDataQueries: [
-            {
-              Id: 'mem',
-              MetricStat: {
-                Metric: {
-                  Namespace: namespace,
-                  MetricName: 'MEM_USED',
-                },
-                Period: 60,
-                Stat: 'Average',
-              },
-              ReturnData: true,
-            },
-            {
-              Id: 'disk',
-              MetricStat: {
-                Metric: {
-                  Namespace: namespace,
-                  MetricName: 'DISK_USED',
-                },
-                Period: 60,
-                Stat: 'Average',
-              },
-              ReturnData: true,
-            },
-          ],
-        })
-      );
-
-      expect(
-        MetricDataResults?.every(result => (result.Values?.length ?? 0) > 0)
-      ).toBe(true);
+      const MetricDataResults = await fetchCustomMetricsWithRetries(namespace);
+      expect(MetricDataResults?.length).toBeGreaterThan(0);
     });
 
     // Flip an alarm through ALARM -> OK to prove the responder channel is live.

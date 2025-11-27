@@ -11,11 +11,14 @@
     "Cloud Environment Setup"
   ],
   "aws_services": [
-    "S3 Bucket",
     "CloudFormation",
-    "Lambda",
-    "EventBridge",
+    "VPC",
+    "EC2",
+    "IAM",
+    "S3 Bucket",
+    "CloudWatch Alarm",
     "CloudWatch LogGroup",
-    "VPC"
+    "SNS Topic",
+    "Kinesis Firehose"
   ]
 }
