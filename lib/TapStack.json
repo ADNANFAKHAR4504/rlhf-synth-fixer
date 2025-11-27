@@ -586,10 +586,6 @@
     "GlobalTableCustomResource": {
       "Type": "Custom::DynamoDBGlobalTable",
       "DeletionPolicy": "Delete",
-      "DependsOn": [
-        "TradeTable",
-        "GlobalTableCustomResourceFunction"
-      ],
       "Properties": {
         "ServiceToken": {
           "Fn::GetAtt": [
@@ -1370,11 +1366,6 @@
     "TradeProcessingStateMachine": {
       "Type": "AWS::StepFunctions::StateMachine",
       "DeletionPolicy": "Delete",
-      "DependsOn": [
-        "TradeValidatorFunction",
-        "MetadataEnricherFunction",
-        "ComplianceRecorderFunction"
-      ],
       "Properties": {
         "StateMachineName": {
           "Fn::Sub": "trade-processing-workflow-${EnvironmentSuffix}"
