@@ -1,0 +1,209 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Monitoring stack for CloudWatch alarms and rollback triggers",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource names"
+    },
+    "DBClusterId": {
+      "Type": "String",
+      "Description": "RDS Aurora cluster ID"
+    },
+    "ValidatorLambdaName": {
+      "Type": "String",
+      "Description": "Name of validator Lambda function"
+    },
+    "MigrationLambdaName": {
+      "Type": "String",
+      "Description": "Name of migration Lambda function"
+    }
+  },
+  "Conditions": {
+    "HasValidatorLambda": {
+      "Fn::Not": [{"Fn::Equals": [{"Ref": "ValidatorLambdaName"}, "NotCreated"]}]
+    },
+    "HasMigrationLambda": {
+      "Fn::Not": [{"Fn::Equals": [{"Ref": "MigrationLambdaName"}, "NotCreated"]}]
+    }
+  },
+  "Resources": {
+    "AlarmSNSTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {"Fn::Sub": "cfn-alarms-${EnvironmentSuffix}"},
+        "DisplayName": "CloudFormation Rollback Alarms",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "cfn-alarms-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "RDSConnectionCountAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {"Fn::Sub": "rds-connection-count-${EnvironmentSuffix}"},
+        "AlarmDescription": "Trigger rollback if RDS connection count exceeds threshold",
+        "MetricName": "DatabaseConnections",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Average",
+        "Period": 60,
+        "EvaluationPeriods": 2,
+        "Threshold": 800,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBClusterIdentifier",
+            "Value": {"Ref": "DBClusterId"}
+          }
+        ],
+        "AlarmActions": [
+          {"Ref": "AlarmSNSTopic"}
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "RDSCPUUtilizationAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {"Fn::Sub": "rds-cpu-utilization-${EnvironmentSuffix}"},
+        "AlarmDescription": "Trigger rollback if RDS CPU utilization is too high",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 85,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBClusterIdentifier",
+            "Value": {"Ref": "DBClusterId"}
+          }
+        ],
+        "AlarmActions": [
+          {"Ref": "AlarmSNSTopic"}
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "ValidatorLambdaErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Condition": "HasValidatorLambda",
+      "Properties": {
+        "AlarmName": {"Fn::Sub": "validator-lambda-errors-${EnvironmentSuffix}"},
+        "AlarmDescription": "Trigger rollback if validator Lambda error rate is too high",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 60,
+        "EvaluationPeriods": 2,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {"Ref": "ValidatorLambdaName"}
+          }
+        ],
+        "AlarmActions": [
+          {"Ref": "AlarmSNSTopic"}
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "ValidatorLambdaThrottleAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Condition": "HasValidatorLambda",
+      "Properties": {
+        "AlarmName": {"Fn::Sub": "validator-lambda-throttles-${EnvironmentSuffix}"},
+        "AlarmDescription": "Alert when validator Lambda is being throttled",
+        "MetricName": "Throttles",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 60,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {"Ref": "ValidatorLambdaName"}
+          }
+        ],
+        "AlarmActions": [
+          {"Ref": "AlarmSNSTopic"}
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "MigrationLambdaErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Condition": "HasMigrationLambda",
+      "Properties": {
+        "AlarmName": {"Fn::Sub": "migration-lambda-errors-${EnvironmentSuffix}"},
+        "AlarmDescription": "Trigger rollback if migration Lambda fails",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 60,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {"Ref": "MigrationLambdaName"}
+          }
+        ],
+        "AlarmActions": [
+          {"Ref": "AlarmSNSTopic"}
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "DashboardDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": {"Fn::Sub": "transaction-processing-${EnvironmentSuffix}"},
+        "DashboardBody": {
+          "Fn::Sub": [
+            "{\"widgets\":[{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/RDS\",\"DatabaseConnections\",{\"stat\":\"Average\",\"label\":\"DB Connections\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${AWS::Region}\",\"title\":\"RDS Connections\"}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/Lambda\",\"Errors\",{\"stat\":\"Sum\",\"label\":\"Lambda Errors\"}]],\"period\":300,\"stat\":\"Sum\",\"region\":\"${AWS::Region}\",\"title\":\"Lambda Errors\"}}]}",
+            {}
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "AlarmSNSTopicArn": {
+      "Description": "ARN of SNS topic for CloudWatch alarms",
+      "Value": {"Ref": "AlarmSNSTopic"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-AlarmSNSTopicArn"}
+      }
+    },
+    "RDSConnectionCountAlarmName": {
+      "Description": "Name of RDS connection count alarm",
+      "Value": {"Ref": "RDSConnectionCountAlarm"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-RDSConnectionCountAlarmName"}
+      }
+    },
+    "ValidatorLambdaErrorAlarmName": {
+      "Description": "Name of validator Lambda error alarm",
+      "Value": {
+        "Fn::If": [
+          "HasValidatorLambda",
+          {"Ref": "ValidatorLambdaErrorAlarm"},
+          "NotCreated"
+        ]
+      },
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-ValidatorLambdaErrorAlarmName"}
+      }
+    }
+  }
+}
