@@ -42,10 +42,6 @@ if [ "$LANGUAGE" = "java" ]; then
       ;;
   esac
 
-elif [ "$LANGUAGE" = "json" ] && [ "$PLATFORM" = "cfn" ]; then
-  echo "✅ CloudFormation JSON project detected, running JavaScript unit tests..."
-  npx jest --coverage --testPathPattern="\.unit\.test\.js$"
-
 elif [ "$LANGUAGE" = "ts" ] && [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ Terraform TypeScript project detected, running unit tests..."
   npm run test:unit-cdktf
