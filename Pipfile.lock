@@ -153,12 +153,12 @@
         },
         "cdktf-cdktf-provider-aws": {
             "hashes": [
-                "sha256:46b88fd2e81739a6143b0bb0c140a9d84589a757a3aa7c752998aa47766c89fb",
-                "sha256:87f652501c428f1af8753c9dd13df2904a6b070983ad844c37572f2d9618b146"
+                "sha256:364099840e90bb68ec8a95009525a291c744aa6c800cd3a51192b8188939742a",
+                "sha256:e0f817fbd076e7229fcc5b44d9d64e0dcc33a35a9515ba96035ccffc6755b241"
             ],
             "index": "pypi",
             "markers": "python_version ~= '3.9'",
-            "version": "==21.20.0"
+            "version": "==21.19.0"
         },
         "cdktf-cdktf-provider-random": {
             "hashes": [
