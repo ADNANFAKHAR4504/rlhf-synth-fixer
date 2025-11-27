@@ -3,8 +3,8 @@
  *
  * Defines EventBridge rules for pipeline state change notifications.
  */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface EventBridgeStackArgs {
   environmentSuffix: string;
@@ -15,6 +15,7 @@ export interface EventBridgeStackArgs {
 
 export class EventBridgeStack extends pulumi.ComponentResource {
   public readonly pipelineRule: aws.cloudwatch.EventRule;
+  public readonly pipelineTarget: aws.cloudwatch.EventTarget;
 
   constructor(
     name: string,
@@ -47,7 +48,7 @@ export class EventBridgeStack extends pulumi.ComponentResource {
     );
 
     // EventBridge target (SNS topic)
-    new aws.cloudwatch.EventTarget(
+    this.pipelineTarget = new aws.cloudwatch.EventTarget(
       `pipeline-sns-target-${environmentSuffix}`,
       {
         rule: this.pipelineRule.name,

@@ -10,8 +10,8 @@
  * - Block public access
  * - Bucket policy for CodePipeline access
  */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface S3StackArgs {
   environmentSuffix: string;
@@ -23,6 +23,8 @@ export interface S3StackArgs {
 export class S3Stack extends pulumi.ComponentResource {
   public readonly artifactsBucket: aws.s3.Bucket;
   public readonly artifactsBucketArn: pulumi.Output<string>;
+  public readonly bucketPublicAccessBlock: aws.s3.BucketPublicAccessBlock;
+  public readonly bucketPolicy: aws.s3.BucketPolicy;
 
   constructor(
     name: string,
@@ -76,7 +78,7 @@ export class S3Stack extends pulumi.ComponentResource {
     this.artifactsBucketArn = this.artifactsBucket.arn;
 
     // Block public access
-    new aws.s3.BucketPublicAccessBlock(
+    this.bucketPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(
       `cicd-artifacts-block-public-${environmentSuffix}`,
       {
         bucket: this.artifactsBucket.id,
@@ -91,7 +93,7 @@ export class S3Stack extends pulumi.ComponentResource {
     // Bucket policy for CodePipeline access
     const current = aws.getCallerIdentity({});
 
-    new aws.s3.BucketPolicy(
+    this.bucketPolicy = new aws.s3.BucketPolicy(
       `cicd-artifacts-policy-${environmentSuffix}`,
       {
         bucket: this.artifactsBucket.id,
