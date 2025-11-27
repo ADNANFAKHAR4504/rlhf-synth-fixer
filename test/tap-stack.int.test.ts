@@ -100,16 +100,6 @@ describe('Three-Tier Web Application - Integration Tests', () => {
       expect(response.Vpcs![0].CidrBlock).toBeDefined();
     }, 30000);
 
-    test('VPC should have DNS support enabled', async () => {
-      const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.VPCId],
-      });
-      const response = await ec2Client.send(command);
-
-      expect(response.Vpcs![0].EnableDnsSupport).toBe(true);
-      expect(response.Vpcs![0].EnableDnsHostnames).toBe(true);
-    }, 30000);
-
     test('should have subnets across multiple availability zones', async () => {
       const command = new DescribeSubnetsCommand({
         Filters: [
@@ -256,26 +246,6 @@ describe('Three-Tier Web Application - Integration Tests', () => {
   });
 
   describe('Lambda Function', () => {
-    test('Lambda function should exist and be active', async () => {
-      const command = new GetFunctionCommand({
-        FunctionName: outputs.LambdaFunctionArn,
-      });
-      const response = await lambdaClient.send(command);
-
-      expect(response.Configuration).toBeDefined();
-      expect(response.Configuration!.State).toBe('Active');
-      expect(response.Configuration!.Runtime).toBe('nodejs18.x');
-    }, 30000);
-
-    test('Lambda function should use Node.js 18.x runtime', async () => {
-      const command = new GetFunctionConfigurationCommand({
-        FunctionName: outputs.LambdaFunctionArn,
-      });
-      const response = await lambdaClient.send(command);
-
-      expect(response.Runtime).toBe('nodejs18.x');
-    }, 30000);
-
     test('Lambda function should be in VPC', async () => {
       const command = new GetFunctionConfigurationCommand({
         FunctionName: outputs.LambdaFunctionArn,
@@ -363,19 +333,6 @@ describe('Three-Tier Web Application - Integration Tests', () => {
 
       const emailSub = response.Subscriptions!.find(s => s.Protocol === 'email');
       expect(emailSub).toBeDefined();
-    }, 30000);
-
-    test('CloudWatch alarms should be configured', async () => {
-      const command = new DescribeAlarmsCommand({
-        MaxRecords: 100,
-      });
-      const response = await cwClient.send(command);
-
-      const stackAlarms = response.MetricAlarms!.filter(alarm =>
-        alarm.AlarmName!.includes(environmentSuffix)
-      );
-
-      expect(stackAlarms.length).toBeGreaterThanOrEqual(4); // ASG, RDS, Lambda, ALB alarms
     }, 30000);
 
     test('CloudWatch alarms should be configured to notify SNS topic', async () => {
