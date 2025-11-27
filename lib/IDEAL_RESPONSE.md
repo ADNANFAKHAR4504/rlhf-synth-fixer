@@ -215,18 +215,18 @@ After deployment, the following outputs are available:
 
 ## Compliance with Requirements
 
-✅ DynamoDB Global Tables with automatic replication
-✅ Lambda functions with 3GB memory and 15-minute timeout
-✅ Step Functions state machines with error handling
-✅ EventBridge rules for cross-region event routing
-✅ KMS keys with automatic rotation
-✅ SNS topics for alerting
-✅ API Gateway REST APIs (partial: no custom domains/Route 53)
-✅ CloudWatch dashboards aggregating metrics
-✅ DynamoDB streams triggering Lambda functions
-✅ S3 buckets with versioning (replication config not complete)
-✅ CloudWatch alarms for transaction failures > 0.1%
-✅ IAM roles with least-privilege (no wildcard actions)
+ DynamoDB Global Tables with automatic replication
+ Lambda functions with 3GB memory and 15-minute timeout
+ Step Functions state machines with error handling
+ EventBridge rules for cross-region event routing
+ KMS keys with automatic rotation
+ SNS topics for alerting
+ API Gateway REST APIs (partial: no custom domains/Route 53)
+ CloudWatch dashboards aggregating metrics
+ DynamoDB streams triggering Lambda functions
+ S3 buckets with versioning (replication config not complete)
+ CloudWatch alarms for transaction failures > 0.1%
+ IAM roles with least-privilege (no wildcard actions)
 
 ## Conclusion
 
