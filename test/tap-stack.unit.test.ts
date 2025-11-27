@@ -318,13 +318,18 @@ describe('TapStack Unit Tests', () => {
     test('Database security group allows MySQL from ECS', () => {
       const securityGroups = template.findResources('AWS::EC2::SecurityGroup');
       const dbSecurityGroup = Object.values(securityGroups).find(
-        (sg: any) => sg.Properties?.GroupDescription === 'Security group for Aurora database'
+        (sg: any) =>
+          sg.Properties?.GroupDescription ===
+          'Security group for Aurora database'
       );
       expect(dbSecurityGroup).toBeDefined();
       // Security group ingress rules are created via separate resources in CDK
-      const ingressRules = template.findResources('AWS::EC2::SecurityGroupIngress');
-      const mysqlRule = Object.values(ingressRules).find((rule: any) =>
-        rule.Properties?.FromPort === 3306 && rule.Properties?.ToPort === 3306
+      const ingressRules = template.findResources(
+        'AWS::EC2::SecurityGroupIngress'
+      );
+      const mysqlRule = Object.values(ingressRules).find(
+        (rule: any) =>
+          rule.Properties?.FromPort === 3306 && rule.Properties?.ToPort === 3306
       );
       expect(mysqlRule).toBeDefined();
     });
@@ -405,7 +410,9 @@ describe('TapStack Unit Tests', () => {
       template.hasResourceProperties('AWS::SecretsManager::Secret', {
         Description: 'Aurora MySQL admin credentials',
         GenerateSecretString: {
-          SecretStringTemplate: Match.stringLikeRegexp('.*"username":\\s*"admin".*'),
+          SecretStringTemplate: Match.stringLikeRegexp(
+            '.*"username":\\s*"admin".*'
+          ),
           GenerateStringKey: 'password',
           PasswordLength: 32,
         },
@@ -414,7 +421,9 @@ describe('TapStack Unit Tests', () => {
 
     test('Creates secret rotation schedule', () => {
       template.resourceCountIs('AWS::SecretsManager::RotationSchedule', 1);
-      const rotationSchedules = template.findResources('AWS::SecretsManager::RotationSchedule');
+      const rotationSchedules = template.findResources(
+        'AWS::SecretsManager::RotationSchedule'
+      );
       const schedule = Object.values(rotationSchedules)[0];
       expect(schedule).toBeDefined();
       // Rotation rules might be in different format or use HostedRotationLambda
@@ -683,58 +692,73 @@ describe('TapStack Unit Tests', () => {
 
     test('Creates Application Load Balancer', () => {
       template.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 1);
-      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
-        Type: 'application',
-        Scheme: 'internet-facing',
-      });
+      template.hasResourceProperties(
+        'AWS::ElasticLoadBalancingV2::LoadBalancer',
+        {
+          Type: 'application',
+          Scheme: 'internet-facing',
+        }
+      );
     });
 
     test('ALB has HTTP/2 enabled', () => {
-      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
-        LoadBalancerAttributes: Match.arrayWith([
-          {
-            Key: 'routing.http2.enabled',
-            Value: 'true',
-          },
-        ]),
-      });
+      template.hasResourceProperties(
+        'AWS::ElasticLoadBalancingV2::LoadBalancer',
+        {
+          LoadBalancerAttributes: Match.arrayWith([
+            {
+              Key: 'routing.http2.enabled',
+              Value: 'true',
+            },
+          ]),
+        }
+      );
     });
 
     test('ALB has idle timeout configured', () => {
-      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
-        LoadBalancerAttributes: Match.arrayWith([
-          {
-            Key: 'idle_timeout.timeout_seconds',
-            Value: '60',
-          },
-        ]),
-      });
+      template.hasResourceProperties(
+        'AWS::ElasticLoadBalancingV2::LoadBalancer',
+        {
+          LoadBalancerAttributes: Match.arrayWith([
+            {
+              Key: 'idle_timeout.timeout_seconds',
+              Value: '60',
+            },
+          ]),
+        }
+      );
     });
 
     test('ALB has access logs enabled', () => {
-      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
-        LoadBalancerAttributes: Match.arrayWith([
-          {
-            Key: 'access_logs.s3.enabled',
-            Value: 'true',
-          },
-        ]),
-      });
+      template.hasResourceProperties(
+        'AWS::ElasticLoadBalancingV2::LoadBalancer',
+        {
+          LoadBalancerAttributes: Match.arrayWith([
+            {
+              Key: 'access_logs.s3.enabled',
+              Value: 'true',
+            },
+          ]),
+        }
+      );
     });
 
     test('Creates target group', () => {
-      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
-        Port: 80,
-        Protocol: 'HTTP',
-        TargetType: 'ip',
-        HealthCheckProtocol: 'HTTP',
-        HealthCheckPath: '/',
-        HealthyThresholdCount: 2,
-        UnhealthyThresholdCount: 3,
-        Matcher: {
-          HttpCode: '200',
-        },
-      });
+      template.hasResourceProperties(
+        'AWS::ElasticLoadBalancingV2::TargetGroup',
+        {
+          Port: 80,
+          Protocol: 'HTTP',
+          TargetType: 'ip',
+          HealthCheckProtocol: 'HTTP',
+          HealthCheckPath: '/',
+          HealthyThresholdCount: 2,
+          UnhealthyThresholdCount: 3,
+          Matcher: {
+            HttpCode: '200',
+          },
+        }
+      );
     });
 
     test('Creates HTTPS listener without certificate', () => {
@@ -759,7 +783,8 @@ describe('TapStack Unit Tests', () => {
     test('Creates HTTPS listener with certificate when provided', () => {
       const app2 = new cdk.App({
         context: {
-          certificateArn: 'arn:aws:acm:us-east-1:123456789012:certificate/test-cert',
+          certificateArn:
+            'arn:aws:acm:us-east-1:123456789012:certificate/test-cert',
         },
       });
       const stack2 = new TapStack(app2, 'TestTapStackCert', {
@@ -776,7 +801,8 @@ describe('TapStack Unit Tests', () => {
         Protocol: 'HTTPS',
         Certificates: Match.arrayWith([
           {
-            CertificateArn: 'arn:aws:acm:us-east-1:123456789012:certificate/test-cert',
+            CertificateArn:
+              'arn:aws:acm:us-east-1:123456789012:certificate/test-cert',
           },
         ]),
       });
@@ -785,7 +811,8 @@ describe('TapStack Unit Tests', () => {
     test('Creates HTTP to HTTPS redirect when certificate provided', () => {
       const app2 = new cdk.App({
         context: {
-          certificateArn: 'arn:aws:acm:us-east-1:123456789012:certificate/test-cert',
+          certificateArn:
+            'arn:aws:acm:us-east-1:123456789012:certificate/test-cert',
         },
       });
       const stack2 = new TapStack(app2, 'TestTapStackCertRedirect', {
@@ -855,10 +882,15 @@ describe('TapStack Unit Tests', () => {
       const bucketPolicies = template.findResources('AWS::S3::BucketPolicy');
       expect(Object.keys(bucketPolicies).length).toBeGreaterThan(0);
       // Find the policy that has AWSLogDeliveryWrite statement
-      const albLogsPolicy = Object.values(bucketPolicies).find((policy: any) => {
-        const statements = policy.Properties?.PolicyDocument?.Statement;
-        return Array.isArray(statements) && statements.some((s: any) => s.Sid === 'AWSLogDeliveryWrite');
-      });
+      const albLogsPolicy = Object.values(bucketPolicies).find(
+        (policy: any) => {
+          const statements = policy.Properties?.PolicyDocument?.Statement;
+          return (
+            Array.isArray(statements) &&
+            statements.some((s: any) => s.Sid === 'AWSLogDeliveryWrite')
+          );
+        }
+      );
       expect(albLogsPolicy).toBeDefined();
     });
   });
@@ -965,38 +997,47 @@ describe('TapStack Unit Tests', () => {
     });
 
     test('Creates scalable target', () => {
-      template.hasResourceProperties('AWS::ApplicationAutoScaling::ScalableTarget', {
-        MinCapacity: 1,
-        MaxCapacity: 2,
-        ServiceNamespace: 'ecs',
-        ScalableDimension: 'ecs:service:DesiredCount',
-      });
+      template.hasResourceProperties(
+        'AWS::ApplicationAutoScaling::ScalableTarget',
+        {
+          MinCapacity: 1,
+          MaxCapacity: 2,
+          ServiceNamespace: 'ecs',
+          ScalableDimension: 'ecs:service:DesiredCount',
+        }
+      );
     });
 
     test('Creates CPU scaling policy', () => {
-      template.hasResourceProperties('AWS::ApplicationAutoScaling::ScalingPolicy', {
-        PolicyType: 'TargetTrackingScaling',
-        TargetTrackingScalingPolicyConfiguration: {
-          PredefinedMetricSpecification: {
-            PredefinedMetricType: 'ECSServiceAverageCPUUtilization',
+      template.hasResourceProperties(
+        'AWS::ApplicationAutoScaling::ScalingPolicy',
+        {
+          PolicyType: 'TargetTrackingScaling',
+          TargetTrackingScalingPolicyConfiguration: {
+            PredefinedMetricSpecification: {
+              PredefinedMetricType: 'ECSServiceAverageCPUUtilization',
+            },
+            TargetValue: 70,
+            ScaleInCooldown: 300,
+            ScaleOutCooldown: 60,
           },
-          TargetValue: 70,
-          ScaleInCooldown: 300,
-          ScaleOutCooldown: 60,
-        },
-      });
+        }
+      );
     });
 
     test('Creates memory scaling policy', () => {
-      template.hasResourceProperties('AWS::ApplicationAutoScaling::ScalingPolicy', {
-        PolicyType: 'TargetTrackingScaling',
-        TargetTrackingScalingPolicyConfiguration: {
-          PredefinedMetricSpecification: {
-            PredefinedMetricType: 'ECSServiceAverageMemoryUtilization',
+      template.hasResourceProperties(
+        'AWS::ApplicationAutoScaling::ScalingPolicy',
+        {
+          PolicyType: 'TargetTrackingScaling',
+          TargetTrackingScalingPolicyConfiguration: {
+            PredefinedMetricSpecification: {
+              PredefinedMetricType: 'ECSServiceAverageMemoryUtilization',
+            },
+            TargetValue: 80,
           },
-          TargetValue: 80,
-        },
-      });
+        }
+      );
     });
   });
 
@@ -1041,7 +1082,15 @@ describe('TapStack Unit Tests', () => {
             Match.objectLike({
               PathPattern: '/api/*',
               ViewerProtocolPolicy: 'https-only',
-              AllowedMethods: Match.arrayWith(['GET', 'HEAD', 'OPTIONS', 'PUT', 'PATCH', 'POST', 'DELETE']),
+              AllowedMethods: Match.arrayWith([
+                'GET',
+                'HEAD',
+                'OPTIONS',
+                'PUT',
+                'PATCH',
+                'POST',
+                'DELETE',
+              ]),
             }),
           ]),
         },
@@ -1064,7 +1113,8 @@ describe('TapStack Unit Tests', () => {
     test('CloudFront uses custom domain when certificate provided', () => {
       const app2 = new cdk.App({
         context: {
-          certificateArn: 'arn:aws:acm:us-east-1:123456789012:certificate/test-cert',
+          certificateArn:
+            'arn:aws:acm:us-east-1:123456789012:certificate/test-cert',
           domainName: 'payments.example.com',
         },
       });
@@ -1114,12 +1164,17 @@ describe('TapStack Unit Tests', () => {
 
     test('Static assets bucket has KMS encryption', () => {
       const buckets = template.findResources('AWS::S3::Bucket');
-      const staticBucket = Object.values(buckets).find((bucket: any) =>
-        bucket.Properties.VersioningConfiguration?.Status === 'Enabled'
+      const staticBucket = Object.values(buckets).find(
+        (bucket: any) =>
+          bucket.Properties.VersioningConfiguration?.Status === 'Enabled'
       );
       expect(staticBucket).toBeDefined();
       expect(staticBucket?.Properties.BucketEncryption).toBeDefined();
-      expect(staticBucket?.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+      expect(
+        staticBucket?.Properties.BucketEncryption
+          .ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault
+          .SSEAlgorithm
+      ).toBe('aws:kms');
     });
 
     test('Static assets bucket has lifecycle rule', () => {
@@ -1139,11 +1194,14 @@ describe('TapStack Unit Tests', () => {
     });
 
     test('Creates Origin Access Identity', () => {
-      template.hasResourceProperties('AWS::CloudFront::CloudFrontOriginAccessIdentity', {
-        CloudFrontOriginAccessIdentityConfig: {
-          Comment: 'Payment Dashboard OAI',
-        },
-      });
+      template.hasResourceProperties(
+        'AWS::CloudFront::CloudFrontOriginAccessIdentity',
+        {
+          CloudFrontOriginAccessIdentityConfig: {
+            Comment: 'Payment Dashboard OAI',
+          },
+        }
+      );
     });
   });
 

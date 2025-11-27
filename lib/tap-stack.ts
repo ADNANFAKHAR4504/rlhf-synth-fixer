@@ -39,8 +39,7 @@ export class TapStack extends cdk.Stack {
     const opsEmailAddress =
       this.node.tryGetContext('opsEmail') || 'ops@example.com';
     const containerImageUri =
-      this.node.tryGetContext('containerImageUri') ||
-      'nginx:alpine'; // Use nginx as placeholder - it runs a web server and responds on port 80
+      this.node.tryGetContext('containerImageUri') || 'nginx:alpine'; // Use nginx as placeholder - it runs a web server and responds on port 80
 
     // 🔹 KMS Keys for Encryption
     const vpcFlowLogKey = new kms.Key(this, 'VpcFlowLogKey', {
@@ -122,7 +121,8 @@ export class TapStack extends cdk.Stack {
     });
 
     // 🔹 VPC Endpoints (optional - disabled by default to avoid limit issues, enable via context if needed)
-    const enableVpcEndpoints = this.node.tryGetContext('enableVpcEndpoints') === true;
+    const enableVpcEndpoints =
+      this.node.tryGetContext('enableVpcEndpoints') === true;
     if (enableVpcEndpoints) {
       vpc.addInterfaceEndpoint('SecretsManagerEndpoint', {
         service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
@@ -411,9 +411,7 @@ export class TapStack extends cdk.Stack {
       new iam.PolicyStatement({
         sid: 'AWSLogDeliveryWrite',
         effect: iam.Effect.ALLOW,
-        principals: [
-          new iam.ServicePrincipal('delivery.logs.amazonaws.com'),
-        ],
+        principals: [new iam.ServicePrincipal('delivery.logs.amazonaws.com')],
         actions: ['s3:PutObject'],
         resources: [`${albLogsBucket.bucketArn}/*`],
         conditions: {
@@ -429,9 +427,7 @@ export class TapStack extends cdk.Stack {
       new iam.PolicyStatement({
         sid: 'AWSLogDeliveryAclCheck',
         effect: iam.Effect.ALLOW,
-        principals: [
-          new iam.ServicePrincipal('delivery.logs.amazonaws.com'),
-        ],
+        principals: [new iam.ServicePrincipal('delivery.logs.amazonaws.com')],
         actions: ['s3:GetBucketAcl'],
         resources: [albLogsBucket.bucketArn],
       })
@@ -463,9 +459,7 @@ export class TapStack extends cdk.Stack {
         new iam.PolicyStatement({
           sid: 'ELBAccessLogWrite',
           effect: iam.Effect.ALLOW,
-          principals: [
-            new iam.AccountPrincipal(elbServiceAccountId),
-          ],
+          principals: [new iam.AccountPrincipal(elbServiceAccountId)],
           actions: ['s3:PutObject'],
           resources: [`${albLogsBucket.bucketArn}/*`],
           conditions: {
@@ -480,9 +474,7 @@ export class TapStack extends cdk.Stack {
         new iam.PolicyStatement({
           sid: 'ELBAccessLogAclCheck',
           effect: iam.Effect.ALLOW,
-          principals: [
-            new iam.AccountPrincipal(elbServiceAccountId),
-          ],
+          principals: [new iam.AccountPrincipal(elbServiceAccountId)],
           actions: ['s3:GetBucketAcl'],
           resources: [albLogsBucket.bucketArn],
         })
@@ -495,13 +487,14 @@ export class TapStack extends cdk.Stack {
     alb.setAttribute('access_logs.s3.prefix', 'alb-access-logs');
 
     // Only create certificate reference if a valid ARN is provided
-    const certificate = certificateArn && certificateArn.trim() !== ''
-      ? acm.Certificate.fromCertificateArn(
-          this,
-          'AlbCertificate',
-          certificateArn.trim()
-        )
-      : undefined;
+    const certificate =
+      certificateArn && certificateArn.trim() !== ''
+        ? acm.Certificate.fromCertificateArn(
+            this,
+            'AlbCertificate',
+            certificateArn.trim()
+          )
+        : undefined;
 
     // 🔹 ECS Service
     const ecsService = new ecs.FargateService(this, 'PaymentService', {
@@ -518,42 +511,40 @@ export class TapStack extends cdk.Stack {
     });
 
     // Simple target group (removed blue/green for simplicity)
-    const targetGroup = new elbv2.ApplicationTargetGroup(
-      this,
-      'TargetGroup',
-      {
-        vpc,
-        port: 80, // nginx listens on port 80
-        protocol: elbv2.ApplicationProtocol.HTTP,
-        targetType: elbv2.TargetType.IP,
-        healthCheck: {
-          path: '/', // nginx responds on root path
-          protocol: elbv2.Protocol.HTTP,
-          interval: cdk.Duration.seconds(30),
-          timeout: cdk.Duration.seconds(5),
-          healthyThresholdCount: 2,
-          unhealthyThresholdCount: 3,
-          healthyHttpCodes: '200', // nginx returns 200 on root path
-        },
-        deregistrationDelay: cdk.Duration.seconds(30),
-      }
-    );
+    const targetGroup = new elbv2.ApplicationTargetGroup(this, 'TargetGroup', {
+      vpc,
+      port: 80, // nginx listens on port 80
+      protocol: elbv2.ApplicationProtocol.HTTP,
+      targetType: elbv2.TargetType.IP,
+      healthCheck: {
+        path: '/', // nginx responds on root path
+        protocol: elbv2.Protocol.HTTP,
+        interval: cdk.Duration.seconds(30),
+        timeout: cdk.Duration.seconds(5),
+        healthyThresholdCount: 2,
+        unhealthyThresholdCount: 3,
+        healthyHttpCodes: '200', // nginx returns 200 on root path
+      },
+      deregistrationDelay: cdk.Duration.seconds(30),
+    });
 
     ecsService.attachToApplicationTargetGroup(targetGroup);
 
     // HTTPS Listener
-    const httpsListener = certificate
-      ? alb.addListener('HttpsListener', {
-          port: 443,
-          certificates: [certificate],
-          defaultTargetGroups: [targetGroup],
-          sslPolicy: elbv2.SslPolicy.TLS13_RES,
-        })
-      : alb.addListener('HttpsListener', {
-          port: 443,
-          defaultTargetGroups: [targetGroup],
-          protocol: elbv2.ApplicationProtocol.HTTP,
-        });
+    if (certificate) {
+      alb.addListener('HttpsListener', {
+        port: 443,
+        certificates: [certificate],
+        defaultTargetGroups: [targetGroup],
+        sslPolicy: elbv2.SslPolicy.TLS13_RES,
+      });
+    } else {
+      alb.addListener('HttpsListener', {
+        port: 443,
+        defaultTargetGroups: [targetGroup],
+        protocol: elbv2.ApplicationProtocol.HTTP,
+      });
+    }
 
     // HTTP Listener (redirect to HTTPS only if certificate is available)
     if (certificate) {
@@ -946,7 +937,6 @@ export class TapStack extends cdk.Stack {
       value: ecsCluster.clusterName,
       description: 'ECS cluster name',
     });
-
 
     new cdk.CfnOutput(this, 'CriticalAlertsTopicArn', {
       value: criticalAlertsTopic.topicArn,
