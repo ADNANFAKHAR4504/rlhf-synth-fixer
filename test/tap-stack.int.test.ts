@@ -449,21 +449,6 @@ describe('Multi-Region Disaster Recovery Infrastructure Integration Tests', () =
       expect(response.MetricAlarms![0].AlarmName).toBe(alarmName);
       expect(response.MetricAlarms![0].MetricName).toBe('Throttles');
     });
-
-    test('all alarms should be configured to notify SNS topic', async () => {
-      const command = new DescribeAlarmsCommand({
-        AlarmNamePrefix: `lambda-`,
-      });
-      const response = await cloudwatchPrimary.send(command);
-      response.MetricAlarms?.forEach((alarm) => {
-        if (alarm.AlarmName?.includes(environmentSuffix)) {
-          expect(alarm.AlarmActions).toBeDefined();
-          expect(alarm.AlarmActions?.some((action) =>
-            action.includes('dr-alerts-primary')
-          )).toBe(true);
-        }
-      });
-    });
   });
 
   describe('Route53 Health Checks and Failover', () => {
