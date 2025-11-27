@@ -35,6 +35,9 @@ from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import (
 )
 import json
 import os
+import zipfile
+import hashlib
+import base64
 
 
 class TapStack(TerraformStack):
@@ -75,6 +78,94 @@ class TapStack(TerraformStack):
             {"name": "eu-west-1", "cidr": "10.1.0.0/16"},
             {"name": "ap-southeast-1", "cidr": "10.2.0.0/16"}
         ]
+
+        # Create Lambda deployment package
+        lib_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(lib_dir)  # Go up one level from lib/ to project root
+        lambda_code_path = os.path.join(lib_dir, "lambda", "index.py")
+        # Create ZIP in project root for easier Terraform access
+        lambda_zip_path = os.path.join(project_root, "lambda_function.zip")
+        
+        # Read Lambda code content
+        if os.path.exists(lambda_code_path):
+            with open(lambda_code_path, "r") as f:
+                lambda_code_content = f.read()
+        else:
+            # Fallback code if file doesn't exist
+            lambda_code_content = """
+import json
+import os
+import boto3
+from botocore.exceptions import ClientError
+
+def handler(event, context):
+    '''
+    ETL Lambda function for data analytics processing
+    '''
+    try:
+        # Get environment variables
+        bucket_name = os.environ.get('BUCKET_NAME')
+        table_name = os.environ.get('TABLE_NAME')
+        region = os.environ.get('REGION')
+        environment = os.environ.get('ENVIRONMENT_SUFFIX')
+        
+        # Initialize AWS clients
+        s3 = boto3.client('s3', region_name=region)
+        dynamodb = boto3.resource('dynamodb', region_name=region)
+        
+        # Process S3 event
+        for record in event.get('Records', []):
+            bucket = record['s3']['bucket']['name']
+            key = record['s3']['object']['key']
+            
+            # Process the file (simplified)
+            print(f"Processing {key} from {bucket} in {region}")
+            
+            # Update DynamoDB with job metadata
+            table = dynamodb.Table(table_name)
+            table.put_item(
+                Item={
+                    'job_id': context.request_id,
+                    'timestamp': int(context.aws_request_id[-8:], 16),
+                    'bucket': bucket,
+                    'key': key,
+                    'region': region,
+                    'status': 'processed',
+                    'environment': environment
+                }
+            )
+        
+        return {
+            'statusCode': 200,
+            'body': json.dumps({
+                'message': 'Processing completed successfully',
+                'region': region
+            })
+        }
+    except Exception as e:
+        print(f"Error processing: {str(e)}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps({
+                'error': str(e)
+            })
+        }
+"""
+        
+        # Create ZIP file for Lambda deployment
+        with zipfile.ZipFile(lambda_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            # Write the Lambda code as index.py
+            zipf.writestr("index.py", lambda_code_content)
+        
+        # Calculate SHA256 hash for source_code_hash
+        with open(lambda_zip_path, 'rb') as f:
+            zip_hash = hashlib.sha256(f.read()).digest()
+            self.lambda_zip_hash_base64 = base64.b64encode(zip_hash).decode('utf-8')
+        
+        # Store the ZIP file path for use in Lambda functions
+        # Use relative path from Terraform working directory (cdktf.out/stacks/{stack_id}/)
+        # Relative path: ../../../lambda_function.zip (up 3 levels: stacks -> cdktf.out -> project root)
+        self.lambda_zip_path = "../../../lambda_function.zip"
 
         # Deploy infrastructure to each region
         for region_config in self.regions:
@@ -272,7 +363,7 @@ class TapStack(TerraformStack):
         )
 
         # Create Lambda function
-        # Note: Lambda zip must be available at root level before deployment
+        # Use the programmatically created ZIP file
         lambda_function = LambdaFunction(
             self,
             f"etl_lambda_{region.replace('-', '_')}",
@@ -282,8 +373,8 @@ class TapStack(TerraformStack):
             runtime="python3.11",
             memory_size=1024,
             timeout=300,
-            filename="../../../lambda_function.zip",
-            source_code_hash=Fn.filebase64sha256("../../../lambda_function.zip"),
+            filename=self.lambda_zip_path,
+            source_code_hash=self.lambda_zip_hash_base64,
             environment={
                 "variables": {
                     "BUCKET_NAME": bucket.id,
