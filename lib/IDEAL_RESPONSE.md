@@ -86,8 +86,15 @@ terraform {
     }
   }
 
-  # Using local backend for self-sufficient deployment
-  # In production, migrate to S3 backend with proper state management
+  backend "s3" {}
+}
+
+
+# Generate a random suffix to avoid resource naming conflicts
+resource "random_string" "suffix" {
+  length  = 8
+  special = false
+  upper   = false
 }
 
 # Primary region provider
@@ -662,7 +669,7 @@ resource "aws_db_parameter_group" "primary" {
 # Cluster parameter group for Aurora PostgreSQL - Secondary
 resource "aws_rds_cluster_parameter_group" "secondary" {
   provider    = aws.secondary
-  name        = "aurora-postgresql-cluster-secondary-${var.environment_suffix}"
+  name        = "aurora-postgresql-cluster-secondary-${var.environment_suffix}-${random_string.suffix.result}"
   family      = "aurora-postgresql14"
   description = "Cluster parameter group for Aurora PostgreSQL secondary region"
 
@@ -689,7 +696,7 @@ resource "aws_rds_cluster_parameter_group" "secondary" {
   tags = merge(
     var.common_tags,
     {
-      Name = "aurora-cluster-params-secondary-${var.environment_suffix}"
+      Name = "aurora-cluster-params-secondary-${var.environment_suffix}-${random_string.suffix.result}"
     }
   )
 }
@@ -697,7 +704,7 @@ resource "aws_rds_cluster_parameter_group" "secondary" {
 # DB parameter group for Aurora PostgreSQL instances - Secondary
 resource "aws_db_parameter_group" "secondary" {
   provider    = aws.secondary
-  name        = "aurora-postgresql-instance-secondary-${var.environment_suffix}"
+  name        = "aurora-postgresql-instance-secondary-${var.environment_suffix}-${random_string.suffix.result}"
   family      = "aurora-postgresql14"
   description = "Instance parameter group for Aurora PostgreSQL secondary region"
 
@@ -719,7 +726,7 @@ resource "aws_db_parameter_group" "secondary" {
   tags = merge(
     var.common_tags,
     {
-      Name = "aurora-instance-params-secondary-${var.environment_suffix}"
+      Name = "aurora-instance-params-secondary-${var.environment_suffix}-${random_string.suffix.result}"
     }
   )
 }
