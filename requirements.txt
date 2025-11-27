@@ -1,8 +1,0 @@
-# Testing dependencies
-pytest==7.4.3
-pytest-cov==4.1.0
-boto3==1.35.0
-requests==2.31.0
-
-# Terraform testing
-python-terraform==0.10.1
