@@ -17,14 +17,14 @@ resource "random_id" "suffix" {
 
 # KMS key for EKS node EBS encryption
 resource "aws_kms_key" "main" {
-  description             = "KMS key for ${var.cluster_name}-${var.pr_number} EBS encryption"
+  description             = "KMS key for ${var.cluster_name}-${var.pr_number}-tester EBS encryption"
   deletion_window_in_days = var.environment_suffix == "prod" ? 30 : 7
   enable_key_rotation     = true
 
   tags = merge(
     var.common_tags,
     {
-      Name      = "${var.cluster_name}-${var.pr_number}-kms-key"
+      Name      = "${var.cluster_name}-${var.pr_number}-tester-kms-key"
       PRNumber  = var.pr_number
       ManagedBy = "Terraform"
     }
@@ -33,7 +33,7 @@ resource "aws_kms_key" "main" {
 
 # KMS key alias
 resource "aws_kms_alias" "main" {
-  name          = "alias/${var.cluster_name}-${var.pr_number}-${random_id.suffix.hex}"
+  name          = "alias/${var.cluster_name}-${var.pr_number}-tester-${random_id.suffix.hex}"
   target_key_id = aws_kms_key.main.key_id
 }
 
@@ -221,7 +221,7 @@ resource "aws_vpc" "main" {
   tags = merge(
     var.common_tags,
     {
-      Name     = "${var.cluster_name}-vpc-${var.pr_number}"
+      Name     = "${var.cluster_name}-vpc-${var.pr_number}-tester"
       PRNumber = var.pr_number
     }
   )
@@ -234,7 +234,7 @@ resource "aws_internet_gateway" "main" {
   tags = merge(
     var.common_tags,
     {
-      Name     = "${var.cluster_name}-igw-${var.pr_number}"
+      Name     = "${var.cluster_name}-igw-${var.pr_number}-tester"
       PRNumber = var.pr_number
     }
   )
@@ -248,7 +248,7 @@ resource "aws_eip" "nat" {
   tags = merge(
     var.common_tags,
     {
-      Name     = "${var.cluster_name}-nat-eip-${count.index + 1}-${var.pr_number}"
+      Name     = "${var.cluster_name}-nat-eip-${count.index + 1}-${var.pr_number}-tester"
       PRNumber = var.pr_number
     }
   )
@@ -268,7 +268,7 @@ resource "aws_subnet" "public" {
   tags = merge(
     var.common_tags,
     {
-      Name                                        = "${var.cluster_name}-public-subnet-${count.index + 1}-${var.pr_number}"
+      Name                                        = "${var.cluster_name}-public-subnet-${count.index + 1}-${var.pr_number}-tester"
       PRNumber                                    = var.pr_number
       "kubernetes.io/role/elb"                    = "1"
       "kubernetes.io/cluster/${var.cluster_name}" = "shared"
@@ -287,7 +287,7 @@ resource "aws_subnet" "private" {
   tags = merge(
     var.common_tags,
     {
-      Name                                        = "${var.cluster_name}-private-subnet-${count.index + 1}-${var.pr_number}"
+      Name                                        = "${var.cluster_name}-private-subnet-${count.index + 1}-${var.pr_number}-tester"
       PRNumber                                    = var.pr_number
       "kubernetes.io/role/internal-elb"           = "1"
       "kubernetes.io/cluster/${var.cluster_name}" = "shared"
@@ -305,7 +305,7 @@ resource "aws_nat_gateway" "main" {
   tags = merge(
     var.common_tags,
     {
-      Name     = "${var.cluster_name}-nat-${count.index + 1}-${var.pr_number}"
+      Name     = "${var.cluster_name}-nat-${count.index + 1}-${var.pr_number}-tester"
       PRNumber = var.pr_number
     }
   )
@@ -325,7 +325,7 @@ resource "aws_route_table" "public" {
   tags = merge(
     var.common_tags,
     {
-      Name     = "${var.cluster_name}-public-rt-${var.pr_number}"
+      Name     = "${var.cluster_name}-public-rt-${var.pr_number}-tester"
       PRNumber = var.pr_number
     }
   )
@@ -344,7 +344,7 @@ resource "aws_route_table" "private" {
   tags = merge(
     var.common_tags,
     {
-      Name     = "${var.cluster_name}-private-rt-${count.index + 1}-${var.pr_number}"
+      Name     = "${var.cluster_name}-private-rt-${count.index + 1}-${var.pr_number}-tester"
       PRNumber = var.pr_number
     }
   )
@@ -368,7 +368,7 @@ resource "aws_route_table_association" "private" {
 
 # EKS Cluster IAM Role
 resource "aws_iam_role" "eks_cluster" {
-  name = "${var.cluster_name}-cluster-role-${var.pr_number}-${random_id.suffix.hex}"
+  name = "${var.cluster_name}-cluster-role-${var.pr_number}-tester-${random_id.suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -384,7 +384,7 @@ resource "aws_iam_role" "eks_cluster" {
   tags = merge(
     var.common_tags,
     {
-      Name     = "${var.cluster_name}-cluster-role-${var.pr_number}-${random_id.suffix.hex}"
+      Name     = "${var.cluster_name}-cluster-role-${var.pr_number}-tester-${random_id.suffix.hex}"
       PRNumber = var.pr_number
     }
   )
@@ -402,7 +402,7 @@ resource "aws_iam_role_policy_attachment" "eks_vpc_resource_controller" {
 
 # Security Group for EKS Cluster
 resource "aws_security_group" "eks_cluster" {
-  name_prefix = "${var.cluster_name}-cluster-${var.pr_number}-"
+  name_prefix = "${var.cluster_name}-cluster-${var.pr_number}-tester-"
   description = "Security group for EKS cluster control plane"
   vpc_id      = aws_vpc.main.id
 
@@ -416,7 +416,7 @@ resource "aws_security_group" "eks_cluster" {
   tags = merge(
     var.common_tags,
     {
-      Name     = "${var.cluster_name}-cluster-sg-${var.pr_number}"
+      Name     = "${var.cluster_name}-cluster-sg-${var.pr_number}-tester"
       PRNumber = var.pr_number
     }
   )
@@ -424,7 +424,7 @@ resource "aws_security_group" "eks_cluster" {
 
 # Security Group for Node Groups
 resource "aws_security_group" "eks_nodes" {
-  name_prefix = "${var.cluster_name}-nodes-${var.pr_number}-"
+  name_prefix = "${var.cluster_name}-nodes-${var.pr_number}-tester-"
   description = "Security group for EKS worker nodes"
   vpc_id      = aws_vpc.main.id
 
@@ -438,7 +438,7 @@ resource "aws_security_group" "eks_nodes" {
   tags = merge(
     var.common_tags,
     {
-      Name     = "${var.cluster_name}-nodes-sg-${var.pr_number}"
+      Name     = "${var.cluster_name}-nodes-sg-${var.pr_number}-tester"
       PRNumber = var.pr_number
     }
   )
@@ -479,7 +479,7 @@ resource "aws_security_group_rule" "nodes_to_cluster" {
 
 # EKS Cluster
 resource "aws_eks_cluster" "main" {
-  name     = "${var.cluster_name}-${var.pr_number}"
+  name     = "${var.cluster_name}-${var.pr_number}-tester"
   role_arn = aws_iam_role.eks_cluster.arn
   version  = var.kubernetes_version
 
@@ -508,7 +508,7 @@ resource "aws_eks_cluster" "main" {
   tags = merge(
     var.common_tags,
     {
-      Name     = "${var.cluster_name}-${var.pr_number}"
+      Name     = "${var.cluster_name}-${var.pr_number}-tester"
       PRNumber = var.pr_number
     }
   )
@@ -527,7 +527,7 @@ resource "aws_iam_openid_connect_provider" "eks" {
   tags = merge(
     var.common_tags,
     {
-      Name     = "${var.cluster_name}-oidc-provider-${var.pr_number}"
+      Name     = "${var.cluster_name}-oidc-provider-${var.pr_number}-tester"
       PRNumber = var.pr_number
     }
   )
@@ -535,7 +535,7 @@ resource "aws_iam_openid_connect_provider" "eks" {
 
 # IAM Role for Node Groups
 resource "aws_iam_role" "eks_nodes" {
-  name = "${var.cluster_name}-node-role-${var.pr_number}-${random_id.suffix.hex}"
+  name = "${var.cluster_name}-node-role-${var.pr_number}-tester-${random_id.suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -551,7 +551,7 @@ resource "aws_iam_role" "eks_nodes" {
   tags = merge(
     var.common_tags,
     {
-      Name     = "${var.cluster_name}-node-role-${var.pr_number}-${random_id.suffix.hex}"
+      Name     = "${var.cluster_name}-node-role-${var.pr_number}-tester-${random_id.suffix.hex}"
       PRNumber = var.pr_number
     }
   )
@@ -575,7 +575,7 @@ resource "aws_iam_role_policy_attachment" "eks_container_registry_policy" {
 # Additional inline policy for EC2 operations required during node group creation
 # This is needed for launch template operations and instance/volume descriptions
 resource "aws_iam_role_policy" "eks_nodes_ec2" {
-  name = "${var.cluster_name}-node-ec2-policy-${var.pr_number}"
+  name = "${var.cluster_name}-node-ec2-policy-${var.pr_number}-tester"
   role = aws_iam_role.eks_nodes.id
 
   policy = jsonencode({
@@ -607,7 +607,7 @@ resource "aws_iam_role_policy" "eks_nodes_ec2" {
 # Critical Node Group (Bottlerocket)
 resource "aws_eks_node_group" "critical" {
   cluster_name    = aws_eks_cluster.main.name
-  node_group_name = "${var.cluster_name}-critical-${var.pr_number}"
+  node_group_name = "${var.cluster_name}-critical-${var.pr_number}-tester"
   node_role_arn   = aws_iam_role.eks_nodes.arn
   subnet_ids      = aws_subnet.private[*].id
 
@@ -660,7 +660,7 @@ resource "aws_eks_node_group" "critical" {
   tags = merge(
     var.common_tags,
     {
-      Name     = "${var.cluster_name}-critical-nodegroup-${var.pr_number}"
+      Name     = "${var.cluster_name}-critical-nodegroup-${var.pr_number}-tester"
       PRNumber = var.pr_number
     }
   )
@@ -668,7 +668,7 @@ resource "aws_eks_node_group" "critical" {
 
 # Launch template for critical node group with encrypted EBS
 resource "aws_launch_template" "critical" {
-  name_prefix = "${var.cluster_name}-critical-${var.pr_number}-"
+  name_prefix = "${var.cluster_name}-critical-${var.pr_number}-tester-"
 
   block_device_mappings {
     device_name = "/dev/xvda"
@@ -700,7 +700,7 @@ resource "aws_launch_template" "critical" {
   tags = merge(
     var.common_tags,
     {
-      Name     = "${var.cluster_name}-critical-lt-${var.pr_number}"
+      Name     = "${var.cluster_name}-critical-lt-${var.pr_number}-tester"
       PRNumber = var.pr_number
     }
   )
@@ -709,7 +709,7 @@ resource "aws_launch_template" "critical" {
 # General Node Group (Bottlerocket, Mixed Instances)
 resource "aws_eks_node_group" "general" {
   cluster_name    = aws_eks_cluster.main.name
-  node_group_name = "${var.cluster_name}-general-${var.pr_number}"
+  node_group_name = "${var.cluster_name}-general-${var.pr_number}-tester"
   node_role_arn   = aws_iam_role.eks_nodes.arn
   subnet_ids      = aws_subnet.private[*].id
 
@@ -757,7 +757,7 @@ resource "aws_eks_node_group" "general" {
   tags = merge(
     var.common_tags,
     {
-      Name     = "${var.cluster_name}-general-nodegroup-${var.pr_number}"
+      Name     = "${var.cluster_name}-general-nodegroup-${var.pr_number}-tester"
       PRNumber = var.pr_number
     }
   )
@@ -765,7 +765,7 @@ resource "aws_eks_node_group" "general" {
 
 # Launch template for general node group with encrypted EBS
 resource "aws_launch_template" "general" {
-  name_prefix = "${var.cluster_name}-general-${var.pr_number}-"
+  name_prefix = "${var.cluster_name}-general-${var.pr_number}-tester-"
 
   block_device_mappings {
     device_name = "/dev/xvda"
@@ -797,7 +797,7 @@ resource "aws_launch_template" "general" {
   tags = merge(
     var.common_tags,
     {
-      Name     = "${var.cluster_name}-general-lt-${var.pr_number}"
+      Name     = "${var.cluster_name}-general-lt-${var.pr_number}-tester"
       PRNumber = var.pr_number
     }
   )
@@ -869,7 +869,7 @@ resource "aws_eks_addon" "kube_proxy" {
 
 # IAM Role for Cluster Autoscaler
 resource "aws_iam_role" "cluster_autoscaler" {
-  name = "${var.cluster_name}-cluster-autoscaler-${var.pr_number}"
+  name = "${var.cluster_name}-cluster-autoscaler-${var.pr_number}-tester"
 
   lifecycle {
     create_before_destroy = true
@@ -899,7 +899,7 @@ resource "aws_iam_role" "cluster_autoscaler" {
   tags = merge(
     var.common_tags,
     {
-      Name     = "${var.cluster_name}-cluster-autoscaler-role-${var.pr_number}"
+      Name     = "${var.cluster_name}-cluster-autoscaler-role-${var.pr_number}-tester"
       PRNumber = var.pr_number
     }
   )
@@ -907,7 +907,7 @@ resource "aws_iam_role" "cluster_autoscaler" {
 
 # IAM Policy for Cluster Autoscaler
 resource "aws_iam_policy" "cluster_autoscaler" {
-  name        = "${var.cluster_name}-cluster-autoscaler-policy-${var.pr_number}-${random_id.suffix.hex}"
+  name        = "${var.cluster_name}-cluster-autoscaler-policy-${var.pr_number}-tester-${random_id.suffix.hex}"
   description = "Policy for EKS Cluster Autoscaler"
 
   policy = jsonencode({

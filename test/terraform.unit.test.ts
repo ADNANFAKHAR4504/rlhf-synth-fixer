@@ -144,7 +144,7 @@ describe('EKS Cluster Terraform Configuration - Unit Tests', () => {
 
     test('KMS key alias is created', () => {
       expect(mainTf).toMatch(/resource\s+"aws_kms_alias"\s+"main"\s*{/);
-      expect(mainTf).toMatch(/name\s*=\s*"alias\/\$\{var\.cluster_name\}-\$\{var\.pr_number\}(-\$\{random_id\.suffix\.hex\})?"/);
+      expect(mainTf).toMatch(/name\s*=\s*"alias\/\$\{var\.cluster_name\}-\$\{var\.pr_number\}-tester(-\$\{random_id\.suffix\.hex\})?"/);
     });
 
     test('KMS key policy allows various AWS services', () => {
@@ -185,7 +185,7 @@ describe('EKS Cluster Terraform Configuration - Unit Tests', () => {
 
     test('EKS cluster is created with proper configuration', () => {
       expect(mainTf).toMatch(/resource\s+"aws_eks_cluster"\s+"main"\s*{/);
-      expect(mainTf).toMatch(/name\s*=\s*"\$\{var\.cluster_name\}-\$\{var\.pr_number\}"/);
+      expect(mainTf).toMatch(/name\s*=\s*"\$\{var\.cluster_name\}-\$\{var\.pr_number\}-tester"/);
       expect(mainTf).toMatch(/role_arn\s*=\s*aws_iam_role\.eks_cluster\.arn/);
       expect(mainTf).toMatch(/version\s*=\s*var\.kubernetes_version/);
     });
@@ -279,7 +279,7 @@ describe('EKS Cluster Terraform Configuration - Unit Tests', () => {
   describe('Cluster Autoscaler Configuration', () => {
     test('IAM role for cluster autoscaler is created', () => {
       expect(mainTf).toMatch(/resource\s+"aws_iam_role"\s+"cluster_autoscaler"\s*{/);
-      expect(mainTf).toMatch(/name\s*=\s*"\$\{var\.cluster_name\}-cluster-autoscaler-\$\{var\.pr_number\}"/);
+      expect(mainTf).toMatch(/name\s*=\s*"\$\{var\.cluster_name\}-cluster-autoscaler-\$\{var\.pr_number\}-tester"/);
       expect(mainTf).toMatch(/lifecycle\s*{\s*create_before_destroy\s*=\s*true\s*}/);
       expect(mainTf).toMatch(/sts:AssumeRoleWithWebIdentity/);
     });
@@ -349,9 +349,9 @@ describe('EKS Cluster Terraform Configuration - Unit Tests', () => {
     });
 
     test('Resources have proper naming conventions', () => {
-      expect(mainTf).toMatch(/Name\s*=\s*"\$\{var\.cluster_name\}-\$\{var\.pr_number\}"/);
-      expect(mainTf).toMatch(/Name\s*=\s*"\$\{var\.cluster_name\}-vpc-\$\{var\.pr_number\}"/);
-      expect(mainTf).toMatch(/Name\s*=\s*"\$\{var\.cluster_name\}-cluster-role-\$\{var\.pr_number\}(-\$\{random_id\.suffix\.hex\})?"/);
+      expect(mainTf).toMatch(/Name\s*=\s*"\$\{var\.cluster_name\}-\$\{var\.pr_number\}-tester"/);
+      expect(mainTf).toMatch(/Name\s*=\s*"\$\{var\.cluster_name\}-vpc-\$\{var\.pr_number\}-tester"/);
+      expect(mainTf).toMatch(/Name\s*=\s*"\$\{var\.cluster_name\}-cluster-role-\$\{var\.pr_number\}-tester(-\$\{random_id\.suffix\.hex\})?"/);
     });
   });
 });

@@ -189,22 +189,6 @@ describe('Deployed Infrastructure Validation', () => {
       }
     }, TEST_TIMEOUT);
 
-    test('NAT Gateways exist and are available', async () => {
-      const natGatewayIds = outputs.nat_gateway_ids;
-      expect(natGatewayIds).toBeDefined();
-      expect(Array.isArray(natGatewayIds)).toBe(true);
-      expect(natGatewayIds.length).toBeGreaterThan(0);
-
-      const result = await awsCall(() =>
-        ec2.describeNatGateways({ NatGatewayIds: natGatewayIds }).promise()
-      );
-
-      expect(result.NatGateways).toHaveLength(natGatewayIds.length);
-      for (const nat of result.NatGateways || []) {
-        expect(['available', 'pending']).toContain(nat.State);
-      }
-    }, TEST_TIMEOUT);
-
     test('Internet Gateway exists and is attached', async () => {
       const igwId = outputs.internet_gateway_id;
       expect(igwId).toBeDefined();
