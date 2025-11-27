@@ -37,8 +37,8 @@ export class VpcStack extends pulumi.ComponentResource {
     const tags = args.tags || {};
 
     // Determine VPC CIDR block based on region or use provided value
-    // Default: primary region (us-west-1) = 10.0.0.0/16, secondary (eu-west-1) = 10.1.0.0/16
-    const vpcCidr = args.vpcCidr || (region === 'us-west-1' ? '10.0.0.0/16' : '10.1.0.0/16');
+    // Default: primary region (eu-central-1) = 10.0.0.0/16, secondary (eu-west-2) = 10.1.0.0/16
+    const vpcCidr = args.vpcCidr || (region === 'eu-central-1' ? '10.0.0.0/16' : '10.1.0.0/16');
     const cidrPrefix = vpcCidr.split('.')[1]; // Extract second octet (0 or 1)
 
     // Get availability zones for the region

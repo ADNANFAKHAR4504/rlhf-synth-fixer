@@ -54,8 +54,8 @@ pulumi.runtime.setMocks({
   call: (args: pulumi.runtime.MockCallArgs) => {
     if (args.token === 'aws:index/getAvailabilityZones:getAvailabilityZones') {
       return {
-        names: ['us-west-1a', 'us-west-1b', 'us-west-1c'],
-        zoneIds: ['usw1-az1', 'usw1-az2', 'usw1-az3'],
+        names: ['eu-central-1a', 'eu-central-1b', 'eu-central-1c'],
+        zoneIds: ['euc1-az1', 'euc1-az2', 'euc1-az3'],
       };
     }
     return {};
@@ -74,7 +74,7 @@ describe('VpcStack', () => {
 
   it('should create VPC with correct CIDR block', async () => {
     const stack = new VpcStack('test-vpc', {
-      region: 'us-west-1',
+      region: 'eu-central-1',
       environmentSuffix: 'test',
       tags: { Environment: 'test' },
     });
@@ -88,7 +88,7 @@ describe('VpcStack', () => {
 
   it('should create 3 public subnets', async () => {
     const stack = new VpcStack('test-vpc', {
-      region: 'us-west-1',
+      region: 'eu-central-1',
       environmentSuffix: 'test',
     });
 
@@ -98,7 +98,7 @@ describe('VpcStack', () => {
 
   it('should create 3 private subnets', async () => {
     const stack = new VpcStack('test-vpc', {
-      region: 'us-west-1',
+      region: 'eu-central-1',
       environmentSuffix: 'test',
     });
 
@@ -108,7 +108,7 @@ describe('VpcStack', () => {
 
   it('should create Internet Gateway', () => {
     const stack = new VpcStack('test-vpc', {
-      region: 'us-west-1',
+      region: 'eu-central-1',
       environmentSuffix: 'test',
     });
 
@@ -117,7 +117,7 @@ describe('VpcStack', () => {
 
   it('should create NAT Gateways', () => {
     const stack = new VpcStack('test-vpc', {
-      region: 'us-west-1',
+      region: 'eu-central-1',
       environmentSuffix: 'test',
     });
 
@@ -126,7 +126,7 @@ describe('VpcStack', () => {
 
   it('should create security group', () => {
     const stack = new VpcStack('test-vpc', {
-      region: 'us-west-1',
+      region: 'eu-central-1',
       environmentSuffix: 'test',
     });
 
@@ -135,7 +135,7 @@ describe('VpcStack', () => {
 
   it('should use default environment suffix if not provided', () => {
     const stack = new VpcStack('test-vpc', {
-      region: 'us-west-1',
+      region: 'eu-central-1',
     });
 
     expect(stack.vpc).toBeDefined();
@@ -154,7 +154,7 @@ describe('AuroraStack', () => {
 
   it('should create Aurora cluster with correct configuration', async () => {
     const stack = new AuroraStack('test-aurora', {
-      region: 'us-west-1',
+      region: 'eu-central-1',
       vpcId: pulumi.output('vpc-123'),
       privateSubnetIds: [
         pulumi.output('subnet-1'),
@@ -172,7 +172,7 @@ describe('AuroraStack', () => {
 
   it('should expose cluster endpoints', async () => {
     const stack = new AuroraStack('test-aurora', {
-      region: 'us-west-1',
+      region: 'eu-central-1',
       vpcId: pulumi.output('vpc-123'),
       privateSubnetIds: [pulumi.output('subnet-1')],
       securityGroupId: pulumi.output('sg-123'),
@@ -188,7 +188,7 @@ describe('AuroraStack', () => {
 
   it('should use default environment suffix if not provided', () => {
     const stack = new AuroraStack('test-aurora', {
-      region: 'us-west-1',
+      region: 'eu-central-1',
       vpcId: pulumi.output('vpc-123'),
       privateSubnetIds: [pulumi.output('subnet-1')],
       securityGroupId: pulumi.output('sg-123'),
@@ -210,7 +210,7 @@ describe('DynamoDBStack', () => {
 
   it('should create DynamoDB table with global replication', async () => {
     const stack = new DynamoDBStack('test-dynamodb', {
-      regions: ['us-west-1', 'eu-west-1'],
+      regions: ['eu-central-1', 'eu-west-2'],
       environmentSuffix: 'test',
       tags: { Environment: 'test' },
     });
@@ -222,7 +222,7 @@ describe('DynamoDBStack', () => {
 
   it('should expose table name and ARN', async () => {
     const stack = new DynamoDBStack('test-dynamodb', {
-      regions: ['us-west-1', 'eu-west-1'],
+      regions: ['eu-central-1', 'eu-west-2'],
       environmentSuffix: 'test',
     });
 
@@ -235,7 +235,7 @@ describe('DynamoDBStack', () => {
 
   it('should use default environment suffix if not provided', () => {
     const stack = new DynamoDBStack('test-dynamodb', {
-      regions: ['us-west-1'],
+      regions: ['eu-central-1'],
     });
 
     expect(stack.table).toBeDefined();
@@ -254,7 +254,7 @@ describe('LambdaStack', () => {
 
   it('should create Lambda function with correct configuration', async () => {
     const stack = new LambdaStack('test-lambda', {
-      region: 'us-west-1',
+      region: 'eu-central-1',
       vpcId: pulumi.output('vpc-123'),
       privateSubnetIds: [pulumi.output('subnet-1')],
       securityGroupId: pulumi.output('sg-123'),
@@ -270,7 +270,7 @@ describe('LambdaStack', () => {
 
   it('should expose function ARN and name', async () => {
     const stack = new LambdaStack('test-lambda', {
-      region: 'us-west-1',
+      region: 'eu-central-1',
       vpcId: pulumi.output('vpc-123'),
       privateSubnetIds: [pulumi.output('subnet-1')],
       securityGroupId: pulumi.output('sg-123'),
@@ -288,7 +288,7 @@ describe('LambdaStack', () => {
 
   it('should use default environment suffix if not provided', () => {
     const stack = new LambdaStack('test-lambda', {
-      region: 'us-west-1',
+      region: 'eu-central-1',
       vpcId: pulumi.output('vpc-123'),
       privateSubnetIds: [pulumi.output('subnet-1')],
       securityGroupId: pulumi.output('sg-123'),
@@ -312,8 +312,8 @@ describe('EventBridgeStack', () => {
 
   it('should create EventBridge rule and target', async () => {
     const stack = new EventBridgeStack('test-eventbridge', {
-      region: 'us-west-1',
-      lambdaFunctionArn: pulumi.output('arn:aws:lambda:us-west-1:123456789012:function:test'),
+      region: 'eu-central-1',
+      lambdaFunctionArn: pulumi.output('arn:aws:lambda:eu-central-1:123456789012:function:test'),
       lambdaFunctionName: pulumi.output('test-function'),
       environmentSuffix: 'test',
     });
@@ -325,8 +325,8 @@ describe('EventBridgeStack', () => {
 
   it('should expose rule ARN', async () => {
     const stack = new EventBridgeStack('test-eventbridge', {
-      region: 'us-west-1',
-      lambdaFunctionArn: pulumi.output('arn:aws:lambda:us-west-1:123456789012:function:test'),
+      region: 'eu-central-1',
+      lambdaFunctionArn: pulumi.output('arn:aws:lambda:eu-central-1:123456789012:function:test'),
       lambdaFunctionName: pulumi.output('test-function'),
       environmentSuffix: 'test',
     });
@@ -337,8 +337,8 @@ describe('EventBridgeStack', () => {
 
   it('should use default environment suffix if not provided', () => {
     const stack = new EventBridgeStack('test-eventbridge', {
-      region: 'us-west-1',
-      lambdaFunctionArn: pulumi.output('arn:aws:lambda:us-west-1:123456789012:function:test'),
+      region: 'eu-central-1',
+      lambdaFunctionArn: pulumi.output('arn:aws:lambda:eu-central-1:123456789012:function:test'),
       lambdaFunctionName: pulumi.output('test-function'),
     });
 
@@ -358,7 +358,7 @@ describe('MonitoringStack', () => {
 
   it('should create SNS topic and CloudWatch alarms', async () => {
     const stack = new MonitoringStack('test-monitoring', {
-      region: 'us-west-1',
+      region: 'eu-central-1',
       lambdaFunctionName: pulumi.output('test-function'),
       auroraClusterId: pulumi.output('test-cluster'),
       environmentSuffix: 'test',
@@ -371,7 +371,7 @@ describe('MonitoringStack', () => {
 
   it('should expose SNS topic ARN', async () => {
     const stack = new MonitoringStack('test-monitoring', {
-      region: 'us-west-1',
+      region: 'eu-central-1',
       lambdaFunctionName: pulumi.output('test-function'),
       auroraClusterId: pulumi.output('test-cluster'),
       environmentSuffix: 'test',
@@ -383,7 +383,7 @@ describe('MonitoringStack', () => {
 
   it('should use default environment suffix if not provided', () => {
     const stack = new MonitoringStack('test-monitoring', {
-      region: 'us-west-1',
+      region: 'eu-central-1',
       lambdaFunctionName: pulumi.output('test-function'),
       auroraClusterId: pulumi.output('test-cluster'),
     });
@@ -404,8 +404,8 @@ describe('Route53Stack', () => {
 
   it('should create hosted zone with health checks', async () => {
     const stack = new Route53Stack('test-route53', {
-      primaryRegion: 'us-west-1',
-      secondaryRegion: 'eu-west-1',
+      primaryRegion: 'eu-central-1',
+      secondaryRegion: 'eu-west-2',
       primaryEndpoint: pulumi.output('primary.endpoint.com'),
       secondaryEndpoint: pulumi.output('secondary.endpoint.com'),
       environmentSuffix: 'test',
@@ -418,8 +418,8 @@ describe('Route53Stack', () => {
 
   it('should expose zone ID and name servers', async () => {
     const stack = new Route53Stack('test-route53', {
-      primaryRegion: 'us-west-1',
-      secondaryRegion: 'eu-west-1',
+      primaryRegion: 'eu-central-1',
+      secondaryRegion: 'eu-west-2',
       primaryEndpoint: pulumi.output('primary.endpoint.com'),
       secondaryEndpoint: pulumi.output('secondary.endpoint.com'),
       environmentSuffix: 'test',
@@ -437,8 +437,8 @@ describe('Route53Stack', () => {
 
   it('should use default environment suffix if not provided', () => {
     const stack = new Route53Stack('test-route53', {
-      primaryRegion: 'us-west-1',
-      secondaryRegion: 'eu-west-1',
+      primaryRegion: 'eu-central-1',
+      secondaryRegion: 'eu-west-2',
       primaryEndpoint: pulumi.output('primary.endpoint.com'),
       secondaryEndpoint: pulumi.output('secondary.endpoint.com'),
     });
@@ -537,13 +537,13 @@ describe('TapStack', () => {
 
 describe('Infrastructure Configuration', () => {
   it('should use correct primary region', () => {
-    const primaryRegion = 'us-west-1';
-    expect(primaryRegion).toBe('us-west-1');
+    const primaryRegion = 'eu-central-1';
+    expect(primaryRegion).toBe('eu-central-1');
   });
 
   it('should use correct secondary region', () => {
-    const secondaryRegion = 'eu-west-1';
-    expect(secondaryRegion).toBe('eu-west-1');
+    const secondaryRegion = 'eu-west-2';
+    expect(secondaryRegion).toBe('eu-west-2');
   });
 
   it('should define non-overlapping VPC CIDR blocks', () => {
@@ -602,8 +602,8 @@ describe('Aurora Configuration', () => {
   });
 
   it('should use correct engine version', () => {
-    const engineVersion = '15.4';
-    expect(engineVersion).toBe('15.4');
+    const engineVersion = '15.3';
+    expect(engineVersion).toBe('15.3');
   });
 
   it('should use correct scaling configuration', () => {
@@ -701,7 +701,7 @@ describe('Security Configuration', () => {
 
 describe('Multi-Region Configuration', () => {
   it('should deploy to two regions', () => {
-    const regions = ['us-west-1', 'eu-west-1'];
+    const regions = ['eu-central-1', 'eu-west-2'];
     expect(regions).toHaveLength(2);
   });
 
