@@ -4,8 +4,8 @@
  * ALBs in both regions and Lambda@Edge for intelligent routing.
  * Lambda@Edge functions must be created in us-east-1.
  */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface ComputeStackArgs {
   environmentSuffix: string;
@@ -107,17 +107,14 @@ export class ComputeStack extends pulumi.ComponentResource {
       { parent: this, provider: primaryProvider }
     );
 
-    // Primary ALB Listener
+    // Primary ALB Listener (HTTP for testing)
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const _primaryListener = new aws.lb.Listener(
       `primary-listener-${environmentSuffix}`,
       {
         loadBalancerArn: primaryAlb.arn,
-        port: 443,
-        protocol: 'HTTPS',
-        certificateArn: pulumi.output(
-          'arn:aws:acm:us-east-1:123456789012:certificate/example'
-        ), // Replace with actual ACM cert
+        port: 80,
+        protocol: 'HTTP',
         defaultActions: [
           {
             type: 'forward',
@@ -173,17 +170,14 @@ export class ComputeStack extends pulumi.ComponentResource {
       { parent: this, provider: secondaryProvider }
     );
 
-    // Secondary ALB Listener
+    // Secondary ALB Listener (HTTP for testing)
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const _secondaryListener = new aws.lb.Listener(
       `secondary-listener-${environmentSuffix}`,
       {
         loadBalancerArn: secondaryAlb.arn,
-        port: 443,
-        protocol: 'HTTPS',
-        certificateArn: pulumi.output(
-          'arn:aws:acm:us-west-2:123456789012:certificate/example'
-        ), // Replace with actual ACM cert
+        port: 80,
+        protocol: 'HTTP',
         defaultActions: [
           {
             type: 'forward',
