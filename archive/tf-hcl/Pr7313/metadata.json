@@ -4,7 +4,7 @@
   "complexity": "expert",
   "turn_type": "single",
   "team": "synth-2",
-  "author": "raaj1021",
+  "author": "mayanksethi-turing",
   "startedAt": "2025-01-26T00:00:00-08:00",
   "subtask": "Application Deployment",
   "subject_labels": [
@@ -32,5 +32,10 @@
     "Security Groups"
   ],
   "region": "us-east-1",
-  "training_quality": 9
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
