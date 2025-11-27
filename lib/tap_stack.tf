@@ -583,7 +583,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "assets" {
     }
 
     transition {
-      days          = local.current_config.s3_archive_days + 120  # Must be 90+ days after GLACIER
+      days          = local.current_config.s3_archive_days + 120 # Must be 90+ days after GLACIER
       storage_class = "DEEP_ARCHIVE"
     }
 

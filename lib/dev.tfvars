@@ -9,7 +9,7 @@ team               = "fintech-team"
 
 # Database Configuration
 db_engine            = "postgres"
-db_engine_version     = "15.10"
+db_engine_version    = "15.10"
 db_instance_class    = "db.t3.micro"
 db_allocated_storage = 20
 
