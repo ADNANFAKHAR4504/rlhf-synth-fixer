@@ -7,12 +7,16 @@
   "team": "synth",
   "startedAt": "2025-11-27T10:19:38.366358Z",
   "subtask": "Security, Compliance, and Governance",
-  "subject_labels": [],
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
   "aws_services": [
     "IAM",
     "KMS",
     "Secrets Manager",
     "Lambda"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342"
 }
