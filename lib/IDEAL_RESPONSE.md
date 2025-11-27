@@ -1391,7 +1391,7 @@ This CloudFormation template deploys a complete serverless credit scoring web ap
             }
           ]
         },
-        "ReservedConcurrentExecutions": 100,
+        "ReservedConcurrentExecutions": 10,
         "Timeout": 30,
         "MemorySize": 512,
         "Tags": [

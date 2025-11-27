@@ -1417,7 +1417,7 @@
             }
           ]
         },
-        "ReservedConcurrentExecutions": 100,
+        "ReservedConcurrentExecutions": 10,
         "Timeout": 30,
         "MemorySize": 512,
         "Tags": [

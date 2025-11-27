@@ -214,7 +214,7 @@ All 7 constraints are met:
 4. ✅ **Resource tagging**: CostCenter, Environment, DataClassification on all resources
 5. ✅ **RDS encryption**: StorageEncrypted=true with automated patching
 6. ✅ **ALB TLS**: TLS 1.2 minimum with ACM certificate
-7. ✅ **Lambda concurrency**: ReservedConcurrentExecutions=100
+7. ✅ **Lambda concurrency**: ReservedConcurrentExecutions=10
 
 ## Cleanup
 

@@ -116,7 +116,7 @@ describe('Credit Scoring Application CloudFormation Template', () => {
     });
 
     test('Lambda should have reserved concurrent executions', () => {
-      expect(template.Resources.CreditScoringFunction.Properties.ReservedConcurrentExecutions).toBe(100);
+      expect(template.Resources.CreditScoringFunction.Properties.ReservedConcurrentExecutions).toBe(10);
     });
 
     test('should have Lambda execution role', () => {
