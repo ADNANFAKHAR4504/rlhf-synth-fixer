@@ -543,6 +543,7 @@ describe('Integration Tests for Security Configuration Management Stack', () => 
     test('should allow EC2 to PUT and GET objects from S3 bucket using instance role', async () => {
       const testKey = `ec2-s3-test-${Date.now()}.txt`;
       const testContent = 'EC2 to S3 integration test content';
+      const tempFile = `/tmp/${testKey}`;
 
       // ACTION: EC2 uses AWS CLI to upload to S3 via its IAM role
       const putCommand = await ssmClient.send(
@@ -551,9 +552,11 @@ describe('Integration Tests for Security Configuration Management Stack', () => 
           InstanceIds: [ec2InstanceId],
           Parameters: {
             commands: [
-              `echo "${testContent}" | aws s3 cp - s3://${s3BucketName}/${testKey}`,
-              `aws s3 cp s3://${s3BucketName}/${testKey} -`,
-              `aws s3 rm s3://${s3BucketName}/${testKey}`,
+              `echo "${testContent}" > ${tempFile}`,
+              `aws s3 cp ${tempFile} s3://${s3BucketName}/${testKey} --region ${region}`,
+              `aws s3 cp s3://${s3BucketName}/${testKey} - --region ${region}`,
+              `aws s3 rm s3://${s3BucketName}/${testKey} --region ${region}`,
+              `rm -f ${tempFile}`,
             ],
           },
         })
