@@ -58,7 +58,6 @@ const sns = new SNSClient({ region });
 const firehose = new FirehoseClient({ region });
 const iam = new IAMClient({ region });
 const ssm = new SSMClient({ region });
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const extractEnvironmentName = (): string => {
   const bucket = outputs.GeneralPurposeBucketName;
@@ -197,45 +196,6 @@ describe('TapStack end-to-end integration test', () => {
           .PublicAccessBlockConfiguration;
       expect(generalAccess?.BlockPublicAcls).toBe(true);
       expect(generalAccess?.RestrictPublicBuckets).toBe(true);
-    });
-
-    // Perform a mini write/read/delete drill to prove the EC2→S3 lane works.
-    test('application bucket accepts write/read/delete workload data', async () => {
-      const bucketName = outputs.GeneralPurposeBucketName;
-      if (!bucketName) {
-        throw new Error('Missing GeneralPurposeBucketName output');
-      }
-
-      const objectKey = `integration-tests/${Date.now()}-${Math.random()
-        .toString(36)
-        .slice(2)}.txt`;
-      const payload = `tap-stack-integration-${new Date().toISOString()}`;
-
-      await s3.send(
-        new PutObjectCommand({
-          Bucket: bucketName,
-          Key: objectKey,
-          Body: payload,
-        })
-      );
-
-      try {
-        const getResult = await s3.send(
-          new GetObjectCommand({
-            Bucket: bucketName,
-            Key: objectKey,
-          })
-        );
-        const body = await getResult.Body?.transformToString?.();
-        expect(body).toBe(payload);
-      } finally {
-        await s3.send(
-          new DeleteObjectCommand({
-            Bucket: bucketName,
-            Key: objectKey,
-          })
-        );
-      }
     });
 
     test('application bucket accepts write/read/delete workload data', async () => {
