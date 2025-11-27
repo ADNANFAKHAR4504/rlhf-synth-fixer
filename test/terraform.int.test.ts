@@ -2,6 +2,7 @@ import {
   DescribeNatGatewaysCommand,
   DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
+  DescribeVpcAttributeCommand,
   DescribeVpcsCommand,
   EC2Client
 } from "@aws-sdk/client-ec2";
@@ -182,8 +183,24 @@ describe("Multi-Environment Payment Platform Infrastructure - Integration Tests"
 
       const vpc = response.Vpcs![0];
       expect(vpc.State).toBe("available");
-      expect(vpc.EnableDnsHostnames).toBe(true);
-      expect(vpc.EnableDnsSupport).toBe(true);
+
+      // Check VPC DNS attributes using DescribeVpcAttributeCommand
+      const dnsHostnamesCommand = new DescribeVpcAttributeCommand({
+        VpcId: vpc.VpcId!,
+        Attribute: 'enableDnsHostnames'
+      });
+      const dnsSupportCommand = new DescribeVpcAttributeCommand({
+        VpcId: vpc.VpcId!,
+        Attribute: 'enableDnsSupport'
+      });
+
+      const [dnsHostnamesResponse, dnsSupportResponse] = await Promise.all([
+        ec2Client.send(dnsHostnamesCommand),
+        ec2Client.send(dnsSupportCommand)
+      ]);
+
+      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
+      expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
 
       if (summary.vpc_cidr) {
         expect(isValidCidr(summary.vpc_cidr)).toBe(true);
