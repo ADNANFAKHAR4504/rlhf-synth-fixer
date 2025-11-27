@@ -319,7 +319,7 @@ class TapStack(TerraformStack):
             cluster_identifier=f"migration-aurora-{environment_suffix}",
             engine="aurora-postgresql",
             engine_mode="provisioned",
-            engine_version="15.4",
+            engine_version="15.3",
             database_name="migrationdb",
             master_username="dbadmin",
             master_password="ChangeMe123456!",  # In production, use Secrets Manager
