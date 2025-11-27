@@ -16,7 +16,6 @@ Create a serverless cryptocurrency price alert processing system using **CloudFo
    - Lambda function named 'PriceWebhookProcessor' with 1GB memory
    - Receives real-time price updates from cryptocurrency exchanges
    - Must handle high concurrent invocations during market volatility
-   - Reserved concurrent executions: 100
 
 2. **Alert Storage**
    - DynamoDB table named 'CryptoAlerts' with on-demand billing
@@ -27,7 +26,6 @@ Create a serverless cryptocurrency price alert processing system using **CloudFo
 3. **Alert Matching Logic**
    - Lambda function named 'AlertMatcher' with 2GB memory
    - Compares incoming prices against user thresholds in DynamoDB
-   - Reserved concurrent executions: 50
    - Triggered automatically every 60 seconds by EventBridge
 
 4. **Scheduled Trigger**

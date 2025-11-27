@@ -345,7 +345,6 @@
         "Architectures": [
           "arm64"
         ],
-        "ReservedConcurrentExecutions": 100,
         "Environment": {
           "Variables": {
             "DYNAMODB_TABLE": {
@@ -392,7 +391,6 @@
         "Architectures": [
           "arm64"
         ],
-        "ReservedConcurrentExecutions": 50,
         "Environment": {
           "Variables": {
             "DYNAMODB_TABLE": {
