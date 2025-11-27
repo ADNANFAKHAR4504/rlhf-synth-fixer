@@ -1,8 +1,8 @@
 encryptionsalt: v1:3wufh9/I94k=:v1:HC1jdsJZX4IEDWJI:IXQHbDZ68nBgAd8oXQXPJaZf1+MDcg==
 config:
   aws:region: us-east-1
-  multi-region-dr:environmentSuffix: synthi3k9m2t1
-  multi-region-dr:environment: production
-  multi-region-dr:hostedZoneName: dr-synthi3k9m2t1.example.com
-  multi-region-dr:dbPassword:
+  TapStack:environmentSuffix: synthi3k9m2t1
+  TapStack:environment: production
+  TapStack:hostedZoneName: dr-synthi3k9m2t1.example.com
+  TapStack:dbPassword:
     secure: v1:YA8TIniUqrCIDhsw:7gLMNsWgEzc1Gczdgd9FDeuIUECYl+l4Aqog/xG5zte3/w==

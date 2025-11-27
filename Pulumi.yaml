@@ -1,4 +1,4 @@
-name: multi-region-dr
+name: TapStack
 runtime: nodejs
 description: Multi-region disaster recovery infrastructure for payment processing
 
