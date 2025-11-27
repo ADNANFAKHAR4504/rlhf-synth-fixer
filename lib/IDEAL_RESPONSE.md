@@ -1979,7 +1979,7 @@ This CloudFormation template deploys a complete serverless credit scoring web ap
 
 ## Architecture Highlights
 
-- **3 Availability Zones**: High availability across us-east-1a, us-east-1b, us-east-1c
+- **3 Availability Zones**: High availability across us-east-2a, us-east-2b, us-east-2c
 - **65 AWS Resources**: Complete infrastructure with networking, compute, database, security
 - **Encryption**: KMS customer-managed key with automatic rotation enabled
 - **Compliance**: 365-day log retention, 30-day database backups

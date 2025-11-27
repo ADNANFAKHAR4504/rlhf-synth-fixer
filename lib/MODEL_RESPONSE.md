@@ -127,7 +127,7 @@ The template provides these outputs for integration:
 
 ### Prerequisites
 1. AWS CLI configured
-2. ACM certificate in us-east-1
+2. ACM certificate in us-east-2
 3. Appropriate IAM permissions
 
 ### Deploy Command

@@ -10,7 +10,7 @@ Performance is critical since we're processing real-time credit decisions. We al
 
 ## What we need to build
 
-Create a serverless credit scoring application infrastructure using **CloudFormation with JSON** for production deployment in us-east-1.
+Create a serverless credit scoring application infrastructure using **CloudFormation with JSON** for production deployment in us-east-2.
 
 ### Core Requirements
 
@@ -66,7 +66,7 @@ Create a serverless credit scoring application infrastructure using **CloudForma
 - Use **KMS** for encryption key management with rotation enabled
 - Use **IAM** for least-privilege access control
 - Use **ACM** for TLS certificate management
-- Deploy to **us-east-1** region
+- Deploy to **us-east-2** region
 - Resource names must include **environmentSuffix** parameter for uniqueness
 - Follow naming convention: `{resource-type}-${environmentSuffix}`
 
