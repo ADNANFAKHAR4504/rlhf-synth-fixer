@@ -102,19 +102,36 @@ All of the following MUST pass:
    3. ✅ **Fetches latest main branch**
    4. ✅ **Checks if branch is behind main**
    5. ✅ **Rebases branch on main if behind** (gets latest changes)
-   6. ✅ **Force-pushes rebased branch** (with lease for safety)
-   7. ✅ Cleans up on any failure
+   6. ✅ **Automatically resolves merge conflicts** (if possible)
+   7. ✅ **Force-pushes rebased branch** (with lease for safety)
+   8. ✅ Cleans up on any failure
+
+   **Automatic Conflict Resolution**:
+   When rebase detects conflicts, the script:
+   1. Lists all conflicted files
+   2. Attempts automatic resolution using `git checkout --ours`
+   3. Accepts main's version for each conflict (safe strategy)
+   4. Tracks resolved vs unresolved conflicts
+   5. If ALL conflicts auto-resolved → continues rebase
+   6. If ANY conflicts remain → aborts and exits with instructions
+
+   **Resolution Strategy**:
+   - **Accepts main's version**: Safe because main is the source of truth
+   - **Rationale**: PR branch should incorporate main's changes, not override them
+   - **Typical conflicts**: CI/CD scripts, helper files, validation updates
+   - **Result**: Branch gets latest changes without losing PR's actual work
 
    **Why this is critical**:
    - Ensures fixes are applied on top of latest code
    - Prevents merge conflicts later
    - Gets latest CI/CD changes, scripts, validations
    - Ensures consistency across all PRs
+   - Automatically resolves common conflicts (scripts, configs)
 
    **Failure scenarios**:
    - Uncommitted changes: Aborts with error (commit first)
-   - Rebase conflicts: Aborts rebase, removes worktree, exits with error
-   - Manual resolution needed if conflicts occur
+   - Complex conflicts: Cannot auto-resolve, provides manual steps, exits
+   - Rebase --continue fails: Aborts rebase, removes worktree, exits
 
 5. **Fetch CI/CD job status and create checklist**:
    ```bash
@@ -1068,26 +1085,84 @@ git worktree prune
 1. Agent fetches latest main
 2. Checks if branch is behind
 3. Rebases branch on main (if behind)
-4. Force-pushes with `--force-with-lease`
+4. **Automatically resolves conflicts** (if possible)
+5. Force-pushes with `--force-with-lease`
 
-**Manual sync** (if needed):
+**Automatic Conflict Resolution**:
+
+The script automatically resolves conflicts by:
+```bash
+# For each conflicted file
+git checkout --ours <file>  # Accept main's version
+git add <file>
+```
+
+**Strategy**: Accept main's version (safe for CI/CD scripts, helpers)
+
+**Example Output**:
+```
+❌ Rebase failed - conflicts detected
+
+📋 Conflicted files:
+.claude/scripts/validate-metadata.sh
+.claude/scripts/cicd-job-checker.sh
+
+🔧 Attempting automatic conflict resolution...
+Resolving: .claude/scripts/validate-metadata.sh
+  ✅ Auto-resolved (accepted main's version)
+Resolving: .claude/scripts/cicd-job-checker.sh
+  ✅ Auto-resolved (accepted main's version)
+
+Resolution summary:
+  ✅ Auto-resolved: 2
+  ⚠️ Unresolved: 0
+
+✅ All conflicts auto-resolved, continuing rebase...
+✅ Rebase completed successfully
+```
+
+**When auto-resolution fails**:
+
+If conflicts are in PR's actual work (lib/, test/), auto-resolution may fail:
+```
+❌ Cannot auto-resolve all conflicts. Manual intervention required.
+
+Manual resolution steps:
+1. cd worktree/synth-{task_id}
+2. Resolve conflicts in files listed above
+3. git add <resolved-files>
+4. git rebase --continue
+5. git push origin {branch_name} --force-with-lease
+```
+
+**Manual conflict resolution**:
 ```bash
 cd worktree/synth-{task_id}
-git fetch origin main
-git rebase origin/main
+
+# See conflicted files
+git status
+
+# For each file, choose resolution:
+# Option 1: Accept main's version
+git checkout --ours <file>
+
+# Option 2: Accept branch's version
+git checkout --theirs <file>
+
+# Option 3: Edit file manually to merge changes
+vim <file>  # Remove conflict markers
+
+# Mark as resolved
+git add <file>
+
+# Continue rebase
+git rebase --continue
+
+# Push rebased branch
 git push origin {branch_name} --force-with-lease
 ```
 
-**Rebase conflict resolution**:
-```bash
-# If rebase fails with conflicts
-git status  # See conflicted files
-# Fix conflicts manually
-git add <resolved-files>
-git rebase --continue
-```
-
-**Prevention**: setup-worktree.sh does this automatically before any fixes
+**Prevention**: setup-worktree.sh attempts this automatically before any fixes
 
 ### 3. PR Was Force-Pushed During Fix
 
