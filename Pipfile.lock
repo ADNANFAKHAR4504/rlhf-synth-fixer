@@ -1155,11 +1155,11 @@
         },
         "pulumi": {
             "hashes": [
-                "sha256:b70897fbe474ecc217c9f7d62e90a96d24fa1a67f7719d90edd4e3533603d180"
+                "sha256:636dc9771c57cd5313473ab2689cce503396b0acb8fbf90b1fee7fdefa312160"
             ],
             "index": "pypi",
             "markers": "python_version >= '3.10'",
-            "version": "==3.208.0"
+            "version": "==3.209.0"
         },
         "pulumi-aws": {
             "hashes": [
@@ -1214,11 +1214,11 @@
         },
         "pydantic": {
             "hashes": [
-                "sha256:0f8cb9555000a4b5b617f66bfd2566264c4984b27589d3b845685983e8ea85ac",
-                "sha256:92d3d202a745d46f9be6df459ac5a064fdaa3c1c4cd8adcfa332ccf3c05f871e"
+                "sha256:4d351024c75c0f085a9febbb665ce8c0c6ec5d30e903bdb6394b7ede26aebb49",
+                "sha256:e561593fccf61e8a20fc46dfc2dfe075b8be7d0188df33f221ad1f0139180f9d"
             ],
             "markers": "python_version >= '3.9'",
-            "version": "==2.12.4"
+            "version": "==2.12.5"
         },
         "pydantic-core": {
             "hashes": [
@@ -3032,11 +3032,11 @@
         },
         "pydantic": {
             "hashes": [
-                "sha256:0f8cb9555000a4b5b617f66bfd2566264c4984b27589d3b845685983e8ea85ac",
-                "sha256:92d3d202a745d46f9be6df459ac5a064fdaa3c1c4cd8adcfa332ccf3c05f871e"
+                "sha256:4d351024c75c0f085a9febbb665ce8c0c6ec5d30e903bdb6394b7ede26aebb49",
+                "sha256:e561593fccf61e8a20fc46dfc2dfe075b8be7d0188df33f221ad1f0139180f9d"
             ],
             "markers": "python_version >= '3.9'",
-            "version": "==2.12.4"
+            "version": "==2.12.5"
         },
         "pydantic-core": {
             "hashes": [
