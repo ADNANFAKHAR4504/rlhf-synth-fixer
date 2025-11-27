@@ -74,7 +74,7 @@ resource "aws_eks_node_group" "system" {
       Name                                                                      = "eks-system-nodegroup-${var.environment_suffix}"
       Environment                                                               = var.environment
       NodeGroup                                                                 = "system"
-      "k8s.io/cluster-autoscaler/${var.cluster_name}-${var.environment_suffix}" = var.enable_cluster_autoscaler ? "owned" : ""
+      "k8s.io/cluster-autoscaler/${local.cluster_name_unique}" = var.enable_cluster_autoscaler ? "owned" : ""
       "k8s.io/cluster-autoscaler/enabled"                                       = var.enable_cluster_autoscaler ? "true" : "false"
     }
   )
@@ -123,7 +123,7 @@ resource "aws_eks_node_group" "application" {
       Name                                                                      = "eks-application-nodegroup-${var.environment_suffix}"
       Environment                                                               = var.environment
       NodeGroup                                                                 = "application"
-      "k8s.io/cluster-autoscaler/${var.cluster_name}-${var.environment_suffix}" = var.enable_cluster_autoscaler ? "owned" : ""
+      "k8s.io/cluster-autoscaler/${local.cluster_name_unique}" = var.enable_cluster_autoscaler ? "owned" : ""
       "k8s.io/cluster-autoscaler/enabled"                                       = var.enable_cluster_autoscaler ? "true" : "false"
     }
   )
@@ -173,7 +173,7 @@ resource "aws_eks_node_group" "spot" {
       Name                                                                      = "eks-spot-nodegroup-${var.environment_suffix}"
       Environment                                                               = var.environment
       NodeGroup                                                                 = "spot"
-      "k8s.io/cluster-autoscaler/${var.cluster_name}-${var.environment_suffix}" = var.enable_cluster_autoscaler ? "owned" : ""
+      "k8s.io/cluster-autoscaler/${local.cluster_name_unique}" = var.enable_cluster_autoscaler ? "owned" : ""
       "k8s.io/cluster-autoscaler/enabled"                                       = var.enable_cluster_autoscaler ? "true" : "false"
     }
   )

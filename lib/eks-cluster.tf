@@ -1,3 +1,8 @@
+# Local variables for unique naming
+locals {
+  cluster_name_unique = "${var.cluster_name}-${var.environment_suffix}-${formatdate("YYMMDDhhmm", timestamp())}"
+}
+
 # IAM role for EKS cluster
 resource "aws_iam_role" "eks_cluster" {
   name_prefix = "eks-cluster-role-${var.environment_suffix}-"
@@ -52,7 +57,7 @@ resource "aws_cloudwatch_log_group" "eks_cluster" {
 
 # EKS Cluster
 resource "aws_eks_cluster" "main" {
-  name     = "${var.cluster_name}-${var.environment_suffix}"
+  name     = local.cluster_name_unique
   role_arn = aws_iam_role.eks_cluster.arn
   version  = var.cluster_version
 
@@ -91,10 +96,14 @@ resource "aws_eks_cluster" "main" {
   tags = merge(
     var.tags,
     {
-      Name        = "${var.cluster_name}-${var.environment_suffix}"
+      Name        = local.cluster_name_unique
       Environment = var.environment
     }
   )
+
+  lifecycle {
+    ignore_changes = [name]
+  }
 }
 
 # OIDC Provider for IRSA
@@ -538,7 +547,7 @@ resource "aws_iam_policy" "cluster_autoscaler" {
         Resource = "*"
         Condition = {
           StringEquals = {
-            "aws:ResourceTag/k8s.io/cluster-autoscaler/${var.cluster_name}-${var.environment_suffix}" = "owned"
+            "aws:ResourceTag/k8s.io/cluster-autoscaler/${local.cluster_name_unique}" = "owned"
           }
         }
       }

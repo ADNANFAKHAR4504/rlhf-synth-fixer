@@ -3,7 +3,7 @@ data "aws_caller_identity" "current" {}
 
 # KMS key for EKS cluster encryption
 resource "aws_kms_key" "eks" {
-  description             = "KMS key for EKS cluster ${var.cluster_name}-${var.environment_suffix} encryption"
+  description             = "KMS key for EKS cluster ${local.cluster_name_unique} encryption"
   deletion_window_in_days = var.kms_key_deletion_window
   enable_key_rotation     = true
 
@@ -32,7 +32,7 @@ resource "aws_vpc" "main" {
     {
       Name                                                                  = "eks-vpc-${var.environment_suffix}"
       Environment                                                           = var.environment
-      "kubernetes.io/cluster/${var.cluster_name}-${var.environment_suffix}" = "shared"
+      "kubernetes.io/cluster/${local.cluster_name_unique}" = "shared"
     }
   )
 }
@@ -65,7 +65,7 @@ resource "aws_subnet" "system_private" {
       Environment                                                           = var.environment
       Type                                                                  = "private"
       NodeGroup                                                             = "system"
-      "kubernetes.io/cluster/${var.cluster_name}-${var.environment_suffix}" = "shared"
+      "kubernetes.io/cluster/${local.cluster_name_unique}" = "shared"
       "kubernetes.io/role/internal-elb"                                     = "1"
     }
   )
@@ -86,7 +86,7 @@ resource "aws_subnet" "application_private" {
       Environment                                                           = var.environment
       Type                                                                  = "private"
       NodeGroup                                                             = "application"
-      "kubernetes.io/cluster/${var.cluster_name}-${var.environment_suffix}" = "shared"
+      "kubernetes.io/cluster/${local.cluster_name_unique}" = "shared"
       "kubernetes.io/role/internal-elb"                                     = "1"
     }
   )
@@ -107,7 +107,7 @@ resource "aws_subnet" "spot_private" {
       Environment                                                           = var.environment
       Type                                                                  = "private"
       NodeGroup                                                             = "spot"
-      "kubernetes.io/cluster/${var.cluster_name}-${var.environment_suffix}" = "shared"
+      "kubernetes.io/cluster/${local.cluster_name_unique}" = "shared"
       "kubernetes.io/role/internal-elb"                                     = "1"
     }
   )
@@ -128,7 +128,7 @@ resource "aws_subnet" "public" {
       Name                                                                  = "eks-public-${var.availability_zones[count.index]}-${var.environment_suffix}"
       Environment                                                           = var.environment
       Type                                                                  = "public"
-      "kubernetes.io/cluster/${var.cluster_name}-${var.environment_suffix}" = "shared"
+      "kubernetes.io/cluster/${local.cluster_name_unique}" = "shared"
       "kubernetes.io/role/elb"                                              = "1"
     }
   )
