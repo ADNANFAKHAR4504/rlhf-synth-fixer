@@ -73,14 +73,14 @@ const loadOutputs = () => {
       
       // Check if it's a placeholder file
       if (outputs._comment && outputs._comment.includes('Placeholder')) {
-        console.warn('⚠️  Placeholder outputs detected. Deploy the stack first to run integration tests.');
+        console.warn('WARNING: Placeholder outputs detected. Deploy the stack first to run integration tests.');
         outputsLoaded = false;
       } else {
         outputsLoaded = true;
-        console.log('✅ Loaded deployment outputs:', Object.keys(outputs).length, 'outputs found');
+        console.log('SUCCESS: Loaded deployment outputs:', Object.keys(outputs).length, 'outputs found');
       }
     } else {
-      console.warn('⚠️  cfn-outputs/flat-outputs.json not found. Deploy the stack first.');
+      console.warn('WARNING: cfn-outputs/flat-outputs.json not found. Deploy the stack first.');
     }
   } catch (error) {
     console.warn('Failed to load outputs:', error);

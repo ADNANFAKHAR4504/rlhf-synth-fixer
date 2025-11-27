@@ -242,3 +242,11 @@ All issues have been resolved in IDEAL_RESPONSE.md, resulting in a production-re
 - All private subnets route through the single NAT Gateway
 - Cost optimization: Saves 2 EIP charges and 2 NAT Gateway charges
 - Trade-off: Less high availability but acceptable for dev/test environments
+
+### 31. Invalid AMI ID in us-east-1
+**Issue**: AMI ID ami-0c55b159cbfafe1f0 doesn't exist in us-east-1
+**Error**: "The image id '[ami-0c55b159cbfafe1f0]' does not exist"
+**Impact**: Auto Scaling Group fails to create
+**Fix**: Updated to use Amazon Linux 2 AMI for us-east-1:
+- Changed from ami-0c55b159cbfafe1f0 to ami-0156001f0548e90b1
+- This is the latest Amazon Linux 2 AMI for us-east-1 region

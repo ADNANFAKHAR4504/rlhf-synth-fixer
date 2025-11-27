@@ -941,7 +941,7 @@
           "Fn::Sub": "LoanProcessingLT-${environmentSuffix}"
         },
         "LaunchTemplateData": {
-          "ImageId": "ami-0c55b159cbfafe1f0",
+          "ImageId": "ami-0156001f0548e90b1",
           "InstanceType": "t3.small",
           "IamInstanceProfile": {
             "Arn": {
