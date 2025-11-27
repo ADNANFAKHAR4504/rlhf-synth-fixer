@@ -8,11 +8,6 @@ import {
   DescribeVpcsCommand,
   DescribeSubnetsCommand,
   DescribeSecurityGroupsCommand,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-  DescribeTargetHealthCommand,
-  DescribeAutoScalingGroupsCommand,
-  DescribeLaunchTemplatesCommand,
 } from '@aws-sdk/client-ec2';
 import {
   RDSClient,
@@ -21,11 +16,14 @@ import {
 } from '@aws-sdk/client-rds';
 import {
   ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand as ELBDescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand as ELBDescribeTargetGroupsCommand,
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
   DescribeListenersCommand,
-  DescribeRulesCommand,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
+  AutoScalingClient,
+  DescribeAutoScalingGroupsCommand,
+} from '@aws-sdk/client-auto-scaling';
 
 type TfOutputValue<T> = {
   sensitive: boolean;
@@ -61,7 +59,16 @@ function readStructuredOutputs(): StructuredOutputs {
       // Handle outputs that may have .value property or be direct values
       const outputs: StructuredOutputs = {};
       for (const [key, value] of Object.entries(rawOutputs)) {
-        outputs[key as keyof StructuredOutputs] = (value as any)?.value ?? value;
+        if (value && typeof value === 'object' && 'value' in value) {
+          outputs[key as keyof StructuredOutputs] = value as TfOutputValue<any>;
+        } else {
+          // Wrap direct values in TfOutputValue structure
+          outputs[key as keyof StructuredOutputs] = {
+            sensitive: false,
+            type: typeof value,
+            value: value,
+          } as TfOutputValue<any>;
+        }
       }
       return outputs;
     }
@@ -149,7 +156,8 @@ const outputs: any = {};
 for (const [key, value] of Object.entries(rawOutputs)) {
   const outputValue = (value as any)?.value ?? value;
   if (typeof outputValue === 'string' && (key.includes('subnet') || key.includes('_ids'))) {
-    outputs[key] = parseJsonArray(outputValue);
+    const parsed = parseJsonArray(outputValue);
+    outputs[key] = parsed.filter((id): id is string => typeof id === 'string' && id.length > 0);
   } else {
     outputs[key] = outputValue;
   }
@@ -159,6 +167,7 @@ for (const [key, value] of Object.entries(rawOutputs)) {
 const ec2Client = new EC2Client({ region });
 const rdsClient = new RDSClient({ region });
 const elbClient = new ElasticLoadBalancingV2Client({ region });
+const autoScalingClient = new AutoScalingClient({ region });
 
 describe('Financial Services Infrastructure - Integration Tests', () => {
   describe('Deployment Outputs Validation', () => {
@@ -219,7 +228,9 @@ describe('Financial Services Infrastructure - Integration Tests', () => {
     }, 90000);
 
     test('should have subnets across multiple availability zones', async () => {
-      const allSubnetIds = [...outputs.private_subnet_ids, ...outputs.public_subnet_ids];
+      const allSubnetIds = [...outputs.private_subnet_ids, ...outputs.public_subnet_ids].filter(
+        (id): id is string => typeof id === 'string' && id.length > 0
+      );
       const response = await retry(async () => {
         return await ec2Client.send(
           new DescribeSubnetsCommand({ SubnetIds: allSubnetIds })
@@ -255,7 +266,9 @@ describe('Financial Services Infrastructure - Integration Tests', () => {
     }, 90000);
 
     test('all subnets should be in the same VPC', async () => {
-      const allSubnetIds = [...outputs.private_subnet_ids, ...outputs.public_subnet_ids];
+      const allSubnetIds = [...outputs.private_subnet_ids, ...outputs.public_subnet_ids].filter(
+        (id): id is string => typeof id === 'string' && id.length > 0
+      );
       const response = await retry(async () => {
         return await ec2Client.send(
           new DescribeSubnetsCommand({ SubnetIds: allSubnetIds })
@@ -272,7 +285,7 @@ describe('Financial Services Infrastructure - Integration Tests', () => {
     test('ALB should exist and be active', async () => {
       const response = await retry(async () => {
         return await elbClient.send(
-          new ELBDescribeLoadBalancersCommand({
+          new DescribeLoadBalancersCommand({
             LoadBalancerArns: [outputs.alb_arn],
           })
         );
@@ -288,7 +301,7 @@ describe('Financial Services Infrastructure - Integration Tests', () => {
     test('ALB should be in multiple availability zones', async () => {
       const response = await retry(async () => {
         return await elbClient.send(
-          new ELBDescribeLoadBalancersCommand({
+          new DescribeLoadBalancersCommand({
             LoadBalancerArns: [outputs.alb_arn],
           })
         );
@@ -302,7 +315,7 @@ describe('Financial Services Infrastructure - Integration Tests', () => {
     test('ALB should be in public subnets', async () => {
       const response = await retry(async () => {
         return await elbClient.send(
-          new ELBDescribeLoadBalancersCommand({
+          new DescribeLoadBalancersCommand({
             LoadBalancerArns: [outputs.alb_arn],
           })
         );
@@ -319,7 +332,7 @@ describe('Financial Services Infrastructure - Integration Tests', () => {
     test('ALB should have target group with health checks configured', async () => {
       const response = await retry(async () => {
         return await elbClient.send(
-          new ELBDescribeLoadBalancersCommand({
+          new DescribeLoadBalancersCommand({
             LoadBalancerArns: [outputs.alb_arn],
           })
         );
@@ -331,7 +344,7 @@ describe('Financial Services Infrastructure - Integration Tests', () => {
       // Get target groups for this ALB
       const targetGroupsResponse = await retry(async () => {
         return await elbClient.send(
-          new ELBDescribeTargetGroupsCommand({
+          new DescribeTargetGroupsCommand({
             LoadBalancerArn: outputs.alb_arn,
           })
         );
@@ -375,7 +388,7 @@ describe('Financial Services Infrastructure - Integration Tests', () => {
       }
 
       const response = await retry(async () => {
-        return await ec2Client.send(
+        return await autoScalingClient.send(
           new DescribeAutoScalingGroupsCommand({
             AutoScalingGroupNames: [outputs.autoscaling_group_name],
           })
@@ -396,7 +409,7 @@ describe('Financial Services Infrastructure - Integration Tests', () => {
       }
 
       const response = await retry(async () => {
-        return await ec2Client.send(
+        return await autoScalingClient.send(
           new DescribeAutoScalingGroupsCommand({
             AutoScalingGroupNames: [outputs.autoscaling_group_name],
           })
@@ -419,7 +432,7 @@ describe('Financial Services Infrastructure - Integration Tests', () => {
       }
 
       const response = await retry(async () => {
-        return await ec2Client.send(
+        return await autoScalingClient.send(
           new DescribeAutoScalingGroupsCommand({
             AutoScalingGroupNames: [outputs.autoscaling_group_name],
           })
@@ -439,7 +452,7 @@ describe('Financial Services Infrastructure - Integration Tests', () => {
       }
 
       const response = await retry(async () => {
-        return await ec2Client.send(
+        return await autoScalingClient.send(
           new DescribeAutoScalingGroupsCommand({
             AutoScalingGroupNames: [outputs.autoscaling_group_name],
           })
@@ -650,7 +663,7 @@ describe('Financial Services Infrastructure - Integration Tests', () => {
       // Verify ALB is in the VPC
       const albResponse = await retry(async () => {
         return await elbClient.send(
-          new ELBDescribeLoadBalancersCommand({
+          new DescribeLoadBalancersCommand({
             LoadBalancerArns: [outputs.alb_arn],
           })
         );
@@ -700,7 +713,7 @@ describe('Financial Services Infrastructure - Integration Tests', () => {
       // Verify ALB spans multiple AZs
       const albResponse = await retry(async () => {
         return await elbClient.send(
-          new ELBDescribeLoadBalancersCommand({
+          new DescribeLoadBalancersCommand({
             LoadBalancerArns: [outputs.alb_arn],
           })
         );
