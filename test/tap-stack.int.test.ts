@@ -86,6 +86,7 @@ try {
 }
 
 const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
+const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'y4m0t5q8';
 
 // Initialize AWS SDK clients
 const codepipelineClient = new CodePipelineClient({ region: AWS_REGION });
@@ -160,13 +161,13 @@ describe('TapStack Integration Tests - Real Infrastructure Validation', () => {
 
       // Verify environmentSuffix is present in key resources
       if (outputs.pipelineName) {
-        expect(outputs.pipelineName).toContain('y4m0t5q8');
+        expect(outputs.pipelineName).toContain(ENVIRONMENT_SUFFIX);
       }
       if (outputs.repositoryName || outputs.repositoryCloneUrl) {
-        expect(outputs.repositoryName || outputs.repositoryCloneUrl).toContain('y4m0t5q8');
+        expect(outputs.repositoryName || outputs.repositoryCloneUrl).toContain(ENVIRONMENT_SUFFIX);
       }
       if (outputs.clusterName) {
-        expect(outputs.clusterName).toContain('y4m0t5q8');
+        expect(outputs.clusterName).toContain(ENVIRONMENT_SUFFIX);
       }
     });
   });
@@ -247,7 +248,7 @@ describe('TapStack Integration Tests - Real Infrastructure Validation', () => {
 
         const response = await wafClient.send(command);
         expect(response.WebACL).toBeDefined();
-        expect(response.WebACL?.Name).toContain('y4m0t5q8');
+        expect(response.WebACL?.Name).toContain(ENVIRONMENT_SUFFIX);
       } catch (error: any) {
         console.warn(`⚠️  WAF Web ACL not found: ${error.message}`);
         expect(error.name).toBe('WAFNonexistentItemException');
@@ -482,7 +483,7 @@ describe('TapStack Integration Tests - Real Infrastructure Validation', () => {
 
         const secretData = JSON.parse(response.SecretString!);
         expect(secretData.ecsCluster).toBeDefined();
-        expect(secretData.environment).toBe('y4m0t5q8');
+        expect(secretData.environment).toBe(ENVIRONMENT_SUFFIX);
       } catch (error: any) {
         console.warn(`⚠️  Deployment secret not found or not accessible: ${error.message}`);
         expect(error.name).toBe('ResourceNotFoundException');
@@ -504,7 +505,7 @@ describe('TapStack Integration Tests - Real Infrastructure Validation', () => {
 
         const response = await codecommitClient.send(command);
         expect(response.repositoryMetadata).toBeDefined();
-        expect(response.repositoryMetadata?.repositoryName).toContain('y4m0t5q8');
+        expect(response.repositoryMetadata?.repositoryName).toContain(ENVIRONMENT_SUFFIX);
       } catch (error: any) {
         console.warn(`⚠️  CodeCommit repository not found: ${error.message}`);
         expect(error.name).toBe('RepositoryDoesNotExistException');
@@ -580,7 +581,7 @@ describe('TapStack Integration Tests - Real Infrastructure Validation', () => {
 
         const response = await logsClient.send(command);
         const logGroup = response.logGroups?.find(lg =>
-          lg.logGroupName?.includes('y4m0t5q8')
+          lg.logGroupName?.includes(ENVIRONMENT_SUFFIX)
         );
 
         expect(logGroup).toBeDefined();
@@ -602,7 +603,7 @@ describe('TapStack Integration Tests - Real Infrastructure Validation', () => {
 
         const response = await logsClient.send(command);
         const logGroup = response.logGroups?.find(lg =>
-          lg.logGroupName?.includes('y4m0t5q8')
+          lg.logGroupName?.includes(ENVIRONMENT_SUFFIX)
         );
 
         expect(logGroup).toBeDefined();
@@ -624,7 +625,7 @@ describe('TapStack Integration Tests - Real Infrastructure Validation', () => {
 
         const response = await logsClient.send(command);
         const logGroup = response.logGroups?.find(lg =>
-          lg.logGroupName?.includes('y4m0t5q8')
+          lg.logGroupName?.includes(ENVIRONMENT_SUFFIX)
         );
 
         expect(logGroup?.retentionInDays).toBe(30);
@@ -646,13 +647,13 @@ describe('TapStack Integration Tests - Real Infrastructure Validation', () => {
 
         const response = await logsClient.send(command);
         const logGroup = response.logGroups?.find(lg =>
-          lg.logGroupName?.includes('y4m0t5q8')
+          lg.logGroupName?.includes(ENVIRONMENT_SUFFIX)
         );
 
         if (logGroup) {
           expect(logGroup.kmsKeyId).toBeDefined();
         } else {
-          console.warn('⚠️  Log group with y4m0t5q8 suffix not found');
+          console.warn(`⚠️  Log group with ${ENVIRONMENT_SUFFIX} suffix not found`);
         }
       } catch (error: any) {
         console.warn(`⚠️  CloudWatch Logs not accessible: ${error.message}`);
@@ -668,7 +669,7 @@ describe('TapStack Integration Tests - Real Infrastructure Validation', () => {
       }
 
       try {
-        const projectName = `cicd-build-y4m0t5q8`;
+        const projectName = `cicd-build-${ENVIRONMENT_SUFFIX}`;
         const command = new BatchGetProjectsCommand({
           names: [projectName],
         });
@@ -688,7 +689,7 @@ describe('TapStack Integration Tests - Real Infrastructure Validation', () => {
       }
 
       try {
-        const projectName = `cicd-test-y4m0t5q8`;
+        const projectName = `cicd-test-${ENVIRONMENT_SUFFIX}`;
         const command = new BatchGetProjectsCommand({
           names: [projectName],
         });
@@ -708,7 +709,7 @@ describe('TapStack Integration Tests - Real Infrastructure Validation', () => {
       }
 
       try {
-        const projectName = `cicd-security-y4m0t5q8`;
+        const projectName = `cicd-security-${ENVIRONMENT_SUFFIX}`;
         const command = new BatchGetProjectsCommand({
           names: [projectName],
         });
@@ -801,7 +802,7 @@ describe('TapStack Integration Tests - Real Infrastructure Validation', () => {
       }
 
       expect(outputs.albDnsName).toContain('.elb.amazonaws.com');
-      expect(outputs.albDnsName).toContain('y4m0t5q8');
+      expect(outputs.albDnsName).toContain(ENVIRONMENT_SUFFIX);
     });
 
     it('should have target group configured', async () => {
@@ -1028,7 +1029,7 @@ describe('TapStack Integration Tests - Real Infrastructure Validation', () => {
 
         const response = await eventbridgeClient.send(command);
         const rule = response.Rules?.find(r =>
-          r.Name?.includes('y4m0t5q8')
+          r.Name?.includes(ENVIRONMENT_SUFFIX)
         );
 
         expect(rule).toBeDefined();
@@ -1050,13 +1051,13 @@ describe('TapStack Integration Tests - Real Infrastructure Validation', () => {
 
         const response = await eventbridgeClient.send(command);
         const rule = response.Rules?.find(r =>
-          r.Name?.includes('y4m0t5q8')
+          r.Name?.includes(ENVIRONMENT_SUFFIX)
         );
 
         if (rule) {
           expect(rule.EventPattern).toContain('codepipeline');
         } else {
-          console.warn('⚠️  EventBridge rule with y4m0t5q8 suffix not found');
+          console.warn(`⚠️  EventBridge rule with ${ENVIRONMENT_SUFFIX} suffix not found`);
         }
       } catch (error: any) {
         console.warn(`⚠️  EventBridge rules not accessible: ${error.message}`);
@@ -1102,7 +1103,7 @@ describe('TapStack Integration Tests - Real Infrastructure Validation', () => {
         return;
       }
 
-      const suffix = 'y4m0t5q8';
+      const suffix = ENVIRONMENT_SUFFIX;
       const outputsWithSuffix = [
         outputs.pipelineName,
         outputs.clusterName,
