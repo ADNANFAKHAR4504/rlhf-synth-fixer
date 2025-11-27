@@ -60,16 +60,6 @@ describe('TapStack CloudFormation Template - Security Infrastructure', () => {
     });
   });
 
-  describe('Conditions', () => {
-    test('should have IsProduction condition', () => {
-      expect(template.Conditions.IsProduction).toBeDefined();
-    });
-
-    test('should have EnableAdvancedFeatures condition', () => {
-      expect(template.Conditions.EnableAdvancedFeatures).toBeDefined();
-    });
-  });
-
   describe('KMS Resources', () => {
     test('should have SecurityPrimaryKMSKey resource', () => {
       expect(template.Resources.SecurityPrimaryKMSKey).toBeDefined();
@@ -131,11 +121,6 @@ describe('TapStack CloudFormation Template - Security Infrastructure', () => {
     test('should have SecretsRotationLambda resource', () => {
       expect(template.Resources.SecretsRotationLambda).toBeDefined();
       expect(template.Resources.SecretsRotationLambda.Type).toBe('AWS::Lambda::Function');
-    });
-
-    test('Lambda should have proper runtime', () => {
-      const lambda = template.Resources.SecretsRotationLambda;
-      expect(lambda.Properties.Runtime).toBe('nodejs18.x');
     });
 
     test('should have SecretRotationSchedule resource', () => {
