@@ -17,13 +17,6 @@
       "Default": "admin",
       "Description": "Master username for Aurora cluster"
     },
-    "MasterUserPassword": {
-      "Type": "String",
-      "NoEcho": true,
-      "Default": "TempPassword123!",
-      "Description": "Master password for Aurora cluster",
-      "MinLength": 8
-    },
     "EnableDeletionProtection": {
       "Type": "String",
       "Default": "false",
@@ -285,7 +278,6 @@
     },
     "PrimaryDBCluster": {
       "Type": "AWS::RDS::DBCluster",
-      "DependsOn": "GlobalCluster",
       "Properties": {
         "DBClusterIdentifier": {
           "Fn::Sub": "aurora-primary-cluster-${EnvironmentSuffix}"
@@ -299,7 +291,7 @@
           "Ref": "MasterUsername"
         },
         "MasterUserPassword": {
-          "Ref": "MasterUserPassword"
+          "Fn::Sub": "{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}"
         },
         "DatabaseName": {
           "Ref": "DatabaseName"
@@ -326,7 +318,6 @@
           "slowquery",
           "error"
         ],
-        "BacktrackWindow": 86400,
         "DeletionProtection": {
           "Ref": "EnableDeletionProtection"
         },
@@ -567,6 +558,62 @@
           "Fn::GetAtt": [
             "HealthCheckScheduleRule",
             "Arn"
+          ]
+        }
+      }
+    },
+    "DBPasswordSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 16,
+          "ExcludeCharacters": "\"@/\\' "
+        },
+        "Name": {
+          "Fn::Sub": "aurora-db-password-${EnvironmentSuffix}"
+        }
+      }
+    },
+    "DBAccessRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "rds.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Path": "/"
+      }
+    },
+    "DBPasswordSecretAccessPolicy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": "AllowRDSAccessToDBPasswordSecret",
+        "Roles": [
+          {
+            "Ref": "DBAccessRole"
+          }
+        ],
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "secretsmanager:GetSecretValue"
+              ],
+              "Resource": {
+                "Ref": "DBPasswordSecret"
+              }
+            }
           ]
         }
       }
