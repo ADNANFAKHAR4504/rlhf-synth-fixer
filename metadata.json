@@ -1,0 +1,11 @@
+{
+  "po_id": "f1s1t7p1",
+  "subtask": "Deploy Serverless Transaction Processing API",
+  "platform": "CDKTF",
+  "language": "Python",
+  "complexity": "medium",
+  "region": "us-east-1",
+  "description": "Create a serverless API using Lambda functions (ZIP packages), S3 for file storage, and API Gateway for HTTP endpoints. Handles transaction file uploads and processing.",
+  "training_quality": 0,
+  "status": "in_progress"
+}
