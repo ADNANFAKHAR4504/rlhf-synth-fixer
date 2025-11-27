@@ -28,6 +28,11 @@
     "RollbackLambda",
     "MigrationStateMachine",
     "LogsDeliveryRole"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
 }
-
