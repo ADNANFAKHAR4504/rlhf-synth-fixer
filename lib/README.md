@@ -162,6 +162,8 @@ All resources are tagged with:
 - **IAM**: Access management
 - **NAT Gateway**: Outbound connectivity for private subnets
 
+<!-- Trigger deployment after resource cleanup -->
+
 ## Mandatory Requirements Implemented
 
 All mandatory requirements from the specification are implemented:
