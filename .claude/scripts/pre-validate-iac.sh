@@ -120,14 +120,10 @@ case "$PLATFORM" in
     fi
     ;;
   cfn)
-    # Check CloudFormation templates for environmentSuffix usage
+    # Check CloudFormation templates
     if [ -d "lib" ]; then
-      # Check if template contains any Fn::Sub with EnvironmentSuffix usage
-      HAS_ENV_SUFFIX=$(grep -r "EnvironmentSuffix" lib/ --include="*.yaml" --include="*.yml" --include="*.json" 2>/dev/null | grep -E "Fn::Sub.*EnvironmentSuffix|Ref.*EnvironmentSuffix" || true)
-      
-      if [ -n "$HAS_ENV_SUFFIX" ]; then
-        echo -e "${GREEN}✅ CloudFormation template uses environmentSuffix parameter${NC}"
-      else
+      NO_SUFFIX=$(grep -rniE "Name.*:" lib/ --include="*.yaml" --include="*.yml" --include="*.json" 2>/dev/null | grep -v "Ref.*ENVIRONMENT_SUFFIX" | grep -v "environmentSuffix" || true)
+      if [ -n "$NO_SUFFIX" ]; then
         echo "⚠️  WARNING: CloudFormation resources without environmentSuffix detected"
         ((WARNING_COUNT++))
       fi
