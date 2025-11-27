@@ -32,8 +32,14 @@ from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import CloudwatchMetricAla
 from cdktf_cdktf_provider_aws.ssm_parameter import SsmParameter
 from cdktf_cdktf_provider_aws.data_aws_caller_identity import DataAwsCallerIdentity
 from cdktf_cdktf_provider_aws.data_aws_region import DataAwsRegion
+from cdktf_cdktf_provider_aws.kms_key import KmsKey
+from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
 import json
 import os
+import zipfile
+import tempfile
+import hashlib
+import base64
 
 
 class TapStack(TerraformStack):
@@ -428,6 +434,50 @@ class TapStack(TerraformStack):
             provider=secondary_provider
         )
 
+        # ==================== KMS KEYS FOR ENCRYPTION ====================
+
+        # KMS key for primary region (Aurora encryption)
+        primary_kms_key = KmsKey(
+            self,
+            "primary_kms_key",
+            description=f"KMS key for Aurora encryption in primary region - {environment_suffix}",
+            deletion_window_in_days=7,
+            enable_key_rotation=True,
+            tags={
+                "Name": f"payment-kms-primary-{environment_suffix}"
+            },
+            provider=primary_provider
+        )
+
+        KmsAlias(
+            self,
+            "primary_kms_alias",
+            name=f"alias/payment-aurora-primary-{environment_suffix}",
+            target_key_id=primary_kms_key.key_id,
+            provider=primary_provider
+        )
+
+        # KMS key for secondary region (Aurora encryption)
+        secondary_kms_key = KmsKey(
+            self,
+            "secondary_kms_key",
+            description=f"KMS key for Aurora encryption in secondary region - {environment_suffix}",
+            deletion_window_in_days=7,
+            enable_key_rotation=True,
+            tags={
+                "Name": f"payment-kms-secondary-{environment_suffix}"
+            },
+            provider=secondary_provider
+        )
+
+        KmsAlias(
+            self,
+            "secondary_kms_alias",
+            name=f"alias/payment-aurora-secondary-{environment_suffix}",
+            target_key_id=secondary_kms_key.key_id,
+            provider=secondary_provider
+        )
+
         # ==================== AURORA GLOBAL DATABASE ====================
 
         # Security group for RDS in primary region
@@ -553,6 +603,7 @@ class TapStack(TerraformStack):
             # Note: backtrack_window is not supported for Aurora Global Databases
             # Use point-in-time recovery and cross-region backups for rollback capability
             storage_encrypted=True,
+            kms_key_id=primary_kms_key.arn,
             enabled_cloudwatch_logs_exports=["audit", "error", "general", "slowquery"],
             tags={
                 "Name": f"payment-cluster-primary-{environment_suffix}",
@@ -579,6 +630,7 @@ class TapStack(TerraformStack):
         )
 
         # Secondary Aurora cluster (read replica)
+        # Note: For encrypted cross-region replica, kms_key_id must be explicitly specified
         secondary_cluster = RdsCluster(
             self,
             "secondary_cluster",
@@ -590,6 +642,7 @@ class TapStack(TerraformStack):
             global_cluster_identifier=global_cluster.id,
             skip_final_snapshot=True,
             storage_encrypted=True,
+            kms_key_id=secondary_kms_key.arn,  # Required for encrypted cross-region replica
             enabled_cloudwatch_logs_exports=["audit", "error", "general", "slowquery"],
             tags={
                 "Name": f"payment-cluster-secondary-{environment_suffix}"
@@ -919,25 +972,29 @@ class TapStack(TerraformStack):
             provider=secondary_provider
         )
 
-        # Lambda function code (inline for simplicity)
-        lambda_code = """
+        # Create Lambda deployment package using Python's zipfile
+        # Read the existing Lambda code
+        lambda_code_path = os.path.join(os.path.dirname(__file__), "lambda", "payment_processor.py")
+        
+        # Read Lambda code content
+        if os.path.exists(lambda_code_path):
+            with open(lambda_code_path, "r") as f:
+                lambda_code_content = f.read()
+        else:
+            # Fallback code if file doesn't exist
+            lambda_code_content = """
 import json
 import os
+import boto3
+from botocore.exceptions import ClientError
 
 def handler(event, context):
-    '''
-    Payment processing Lambda function
-    '''
     try:
-        # Get environment variables
         db_endpoint = os.environ.get('DB_ENDPOINT')
         dynamodb_table = os.environ.get('DYNAMODB_TABLE')
         region = os.environ.get('AWS_REGION')
-
-        # Process payment (simplified)
         payment_id = event.get('payment_id', 'unknown')
         amount = event.get('amount', 0)
-
         return {
             'statusCode': 200,
             'body': json.dumps({
@@ -951,11 +1008,22 @@ def handler(event, context):
     except Exception as e:
         return {
             'statusCode': 500,
-            'body': json.dumps({
-                'error': str(e)
-            })
+            'body': json.dumps({'error': str(e)})
         }
 """
+        
+        # Create ZIP file for Lambda deployment
+        lambda_zip_path = os.path.join(os.path.dirname(__file__), "lambda_function.zip")
+        
+        # Create the ZIP file
+        with zipfile.ZipFile(lambda_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            # Write the Lambda code as index.py
+            zipf.writestr("index.py", lambda_code_content)
+        
+        # Calculate SHA256 hash for source_code_hash
+        with open(lambda_zip_path, 'rb') as f:
+            zip_hash = hashlib.sha256(f.read()).digest()
+            zip_hash_base64 = base64.b64encode(zip_hash).decode('utf-8')
 
         # Primary Lambda function
         primary_lambda = LambdaFunction(
@@ -982,8 +1050,8 @@ def handler(event, context):
                 ],
                 "security_group_ids": [primary_lambda_sg.id]
             },
-            filename="lambda_function.zip",  # Placeholder - would be actual deployment package
-            source_code_hash="placeholder",
+            filename=lambda_zip_path,
+            source_code_hash=zip_hash_base64,
             tags={
                 "Name": f"payment-processor-primary-{environment_suffix}"
             },
@@ -1015,8 +1083,8 @@ def handler(event, context):
                 ],
                 "security_group_ids": [secondary_lambda_sg.id]
             },
-            filename="lambda_function.zip",  # Placeholder - would be actual deployment package
-            source_code_hash="placeholder",
+            filename=lambda_zip_path,
+            source_code_hash=zip_hash_base64,
             tags={
                 "Name": f"payment-processor-secondary-{environment_suffix}"
             },
