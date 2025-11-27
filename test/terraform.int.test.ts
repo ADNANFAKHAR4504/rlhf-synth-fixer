@@ -588,11 +588,15 @@ describe('Kubernetes Deployment Validation', () => {
   });
 
   test('Hello-world namespace exists', async () => {
-    const namespaceName = String(outputs.hello_world_namespace || 'hello-world');
+    const namespaceName = outputs.hello_world_namespace || 'hello-world';
     expect(namespaceName).toBeDefined();
     expect(namespaceName).toBe('hello-world');
     expect(typeof namespaceName).toBe('string');
-    expect(namespaceName.length).toBeGreaterThan(0);
+
+    // Ensure we have a valid string before API call
+    if (!namespaceName || typeof namespaceName !== 'string') {
+      throw new Error(`Invalid namespaceName: ${namespaceName} (type: ${typeof namespaceName})`);
+    }
 
     const namespace = await coreApi.readNamespace(namespaceName);
     expect(namespace.body).toBeDefined();
@@ -600,12 +604,20 @@ describe('Kubernetes Deployment Validation', () => {
   }, TEST_TIMEOUT);
 
   test('Hello-world deployment exists and has correct configuration', async () => {
-    const deploymentName = String(outputs.hello_world_deployment_name || 'hello-world');
-    const namespaceName = String(outputs.hello_world_namespace || 'hello-world');
+    const deploymentName = outputs.hello_world_deployment_name || 'hello-world';
+    const namespaceName = outputs.hello_world_namespace || 'hello-world';
     expect(deploymentName).toBeDefined();
     expect(deploymentName).toBe('hello-world');
     expect(namespaceName).toBeDefined();
     expect(namespaceName).toBe('hello-world');
+
+    // Ensure we have valid strings before API call
+    if (!deploymentName || typeof deploymentName !== 'string') {
+      throw new Error(`Invalid deploymentName: ${deploymentName}`);
+    }
+    if (!namespaceName || typeof namespaceName !== 'string') {
+      throw new Error(`Invalid namespaceName: ${namespaceName}`);
+    }
 
     const deployment = await appsApi.readNamespacedDeployment(
       deploymentName,
@@ -626,8 +638,13 @@ describe('Kubernetes Deployment Validation', () => {
   }, TEST_TIMEOUT);
 
   test('Hello-world deployment has running pods', async () => {
-    const deploymentName = String(outputs.hello_world_deployment_name || 'hello-world');
-    const namespaceName = String(outputs.hello_world_namespace || 'hello-world');
+    const deploymentName = outputs.hello_world_deployment_name || 'hello-world';
+    const namespaceName = outputs.hello_world_namespace || 'hello-world';
+
+    // Ensure we have valid strings before API call
+    if (!deploymentName || typeof deploymentName !== 'string' || !namespaceName || typeof namespaceName !== 'string') {
+      throw new Error(`Invalid parameters: deploymentName=${deploymentName}, namespaceName=${namespaceName}`);
+    }
 
     // Wait a bit for pods to be ready
     await new Promise(resolve => setTimeout(resolve, 10000));
@@ -643,12 +660,17 @@ describe('Kubernetes Deployment Validation', () => {
   }, TEST_TIMEOUT * 2);
 
   test('Hello-world service exists and has correct configuration', async () => {
-    const serviceName = String(outputs.hello_world_service_name || 'hello-world');
-    const namespaceName = String(outputs.hello_world_service_namespace || outputs.hello_world_namespace || 'hello-world');
+    const serviceName = outputs.hello_world_service_name || 'hello-world';
+    const namespaceName = outputs.hello_world_service_namespace || outputs.hello_world_namespace || 'hello-world';
     expect(serviceName).toBeDefined();
     expect(serviceName).toBe('hello-world');
     expect(namespaceName).toBeDefined();
     expect(namespaceName).toBe('hello-world');
+
+    // Ensure we have valid strings before API call
+    if (!serviceName || typeof serviceName !== 'string' || !namespaceName || typeof namespaceName !== 'string') {
+      throw new Error(`Invalid parameters: serviceName=${serviceName}, namespaceName=${namespaceName}`);
+    }
 
     const service = await coreApi.readNamespacedService(
       serviceName,
@@ -667,7 +689,12 @@ describe('Kubernetes Deployment Validation', () => {
   }, TEST_TIMEOUT);
 
   test('Hello-world pods are using the correct image', async () => {
-    const namespaceName = String(outputs.hello_world_namespace || 'hello-world');
+    const namespaceName = outputs.hello_world_namespace || 'hello-world';
+
+    // Ensure we have a valid string before API call
+    if (!namespaceName || typeof namespaceName !== 'string') {
+      throw new Error(`Invalid namespaceName: ${namespaceName}`);
+    }
 
     const podList = await coreApi.listNamespacedPod(namespaceName);
 
