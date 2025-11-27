@@ -1,0 +1,22 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "c7x4s9x0",
+  "team": "synth",
+  "startedAt": "2025-11-27T16:32:02+05:30",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "DynamoDB",
+    "S3",
+    "Lambda",
+    "IAM",
+    "CloudWatch",
+    "SNS"
+  ],
+  "training_quality": 10
+}
