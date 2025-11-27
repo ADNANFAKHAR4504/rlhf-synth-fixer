@@ -42,8 +42,6 @@ export class EcsStack extends pulumi.ComponentResource {
       environmentSuffix,
       vpcId,
       publicSubnetIds,
-      privateSubnetIds: _privateSubnetIds,
-      kmsKeyArn: _kmsKeyArn,
       tags,
     } = args;
 

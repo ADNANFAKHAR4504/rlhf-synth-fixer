@@ -25,7 +25,7 @@ export class CloudWatchStack extends pulumi.ComponentResource {
   ) {
     super('tap:cloudwatch:CloudWatchStack', name, args, opts);
 
-    const { environmentSuffix, kmsKeyId, tags } = args;
+    const { environmentSuffix, tags } = args;
 
     // CodePipeline log group
     this.pipelineLogGroup = new aws.cloudwatch.LogGroup(
