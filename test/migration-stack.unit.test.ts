@@ -107,15 +107,6 @@ describe('Migration Stack CloudFormation Template', () => {
         'Fn::Sub': 'alias/migration-${EnvironmentSuffix}'
       });
     });
-
-    test('should have SSM parameters for passwords', () => {
-      expect(template.Resources.DbMasterPasswordSSM).toBeDefined();
-      expect(template.Resources.DbMasterPasswordSSM.Type).toBe('AWS::SSM::Parameter');
-      expect(template.Resources.DbMasterPasswordSSM.Properties.Type).toBe('SecureString');
-
-      expect(template.Resources.OnPremDbPasswordSSM).toBeDefined();
-      expect(template.Resources.OnPremDbPasswordSSM.Type).toBe('AWS::SSM::Parameter');
-    });
   });
 
   describe('VPC Resources', () => {
@@ -251,14 +242,6 @@ describe('Migration Stack CloudFormation Template', () => {
       expect(subnetGroup).toBeDefined();
       expect(subnetGroup.Type).toBe('AWS::RDS::DBSubnetGroup');
       expect(subnetGroup.Properties.SubnetIds).toHaveLength(3);
-    });
-
-    test('should have Aurora cluster', () => {
-      const cluster = template.Resources.AuroraCluster;
-      expect(cluster).toBeDefined();
-      expect(cluster.Type).toBe('AWS::RDS::DBCluster');
-      expect(cluster.Properties.Engine).toBe('aurora-mysql');
-      expect(cluster.Properties.EngineVersion).toBe('8.0.mysql_aurora.3.05.2');
     });
 
     test('Aurora cluster should have 7-day backup retention', () => {

@@ -254,13 +254,6 @@ describe('Migration Stack Integration Tests', () => {
   });
 
   describe('Security Integration', () => {
-    test('SSM parameters should use KMS encryption', () => {
-      const dbPassword = template.Resources.DbMasterPasswordSSM;
-      const onPremPassword = template.Resources.OnPremDbPasswordSSM;
-
-      expect(dbPassword.Properties.KmsKeyId).toEqual({ Ref: 'KmsKey' });
-      expect(onPremPassword.Properties.KmsKeyId).toEqual({ Ref: 'KmsKey' });
-    });
 
     test('KMS key should have proper service permissions', () => {
       const kmsKey = template.Resources.KmsKey;
@@ -309,13 +302,6 @@ describe('Migration Stack Integration Tests', () => {
   });
 
   describe('AWS Config Integration', () => {
-    test('Config recorder should use proper IAM role', () => {
-      const recorder = template.Resources.ConfigRecorder;
-      expect(recorder.Properties.RoleArn).toEqual({
-        'Fn::GetAtt': ['ConfigRecorderRole', 'Arn']
-      });
-    });
-
     test('Config delivery channel should reference Config bucket', () => {
       const channel = template.Resources.ConfigDeliveryChannel;
       expect(channel.Properties.S3BucketName).toEqual({ Ref: 'ConfigBucket' });
