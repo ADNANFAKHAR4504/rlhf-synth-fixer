@@ -47,8 +47,8 @@ export class TapStack extends pulumi.ComponentResource {
     const environmentSuffix = args.environmentSuffix || 'dev';
     const tags = args.tags || {};
 
-    const primaryRegion = 'us-east-1';
-    const secondaryRegion = 'us-west-2';
+    const primaryRegion = 'us-west-1';
+    const secondaryRegion = 'eu-west-1';
 
     // Create AWS providers for both regions
     const primaryProvider = new aws.Provider(
@@ -252,7 +252,7 @@ export class TapStack extends pulumi.ComponentResource {
         autoAccept: false,
         tags: {
           ...tags,
-          Name: `${name}-vpc-peering-${environmentSuffix}-as`,
+          Name: `${name}-vpc-peering-${environmentSuffix}-e7`,
           Purpose: 'multi-region-dr',
         },
       },
@@ -267,7 +267,7 @@ export class TapStack extends pulumi.ComponentResource {
         autoAccept: true,
         tags: {
           ...tags,
-          Name: `${name}-vpc-peering-accepter-${environmentSuffix}-as`,
+          Name: `${name}-vpc-peering-accepter-${environmentSuffix}-e7`,
         },
       },
       { parent: this, provider: secondaryProvider }

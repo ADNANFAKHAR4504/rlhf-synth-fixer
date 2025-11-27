@@ -37,8 +37,8 @@ export class VpcStack extends pulumi.ComponentResource {
     const tags = args.tags || {};
 
     // Determine VPC CIDR block based on region or use provided value
-    // Default: primary region (us-east-1) = 10.0.0.0/16, secondary (us-west-2) = 10.1.0.0/16
-    const vpcCidr = args.vpcCidr || (region.includes('east') ? '10.0.0.0/16' : '10.1.0.0/16');
+    // Default: primary region (us-west-1) = 10.0.0.0/16, secondary (eu-west-1) = 10.1.0.0/16
+    const vpcCidr = args.vpcCidr || (region === 'us-west-1' ? '10.0.0.0/16' : '10.1.0.0/16');
     const cidrPrefix = vpcCidr.split('.')[1]; // Extract second octet (0 or 1)
 
     // Get availability zones for the region
@@ -56,7 +56,7 @@ export class VpcStack extends pulumi.ComponentResource {
         enableDnsSupport: true,
         tags: {
           ...tags,
-          Name: `${name}-vpc-${envSuffix}-as`,
+          Name: `${name}-vpc-${envSuffix}-e7`,
           Region: region,
           Purpose: 'multi-region-dr',
         },
@@ -73,7 +73,7 @@ export class VpcStack extends pulumi.ComponentResource {
         vpcId: this.vpc.id,
         tags: {
           ...tags,
-          Name: `${name}-igw-${envSuffix}-as`,
+          Name: `${name}-igw-${envSuffix}-e7`,
           Region: region,
         },
       },
@@ -93,7 +93,7 @@ export class VpcStack extends pulumi.ComponentResource {
           mapPublicIpOnLaunch: true,
           tags: {
             ...tags,
-            Name: `${name}-public-subnet-${i}-${envSuffix}-as`,
+            Name: `${name}-public-subnet-${i}-${envSuffix}-e7`,
             Region: region,
             Type: 'public',
           },
@@ -111,7 +111,7 @@ export class VpcStack extends pulumi.ComponentResource {
         vpcId: this.vpc.id,
         tags: {
           ...tags,
-          Name: `${name}-public-rt-${envSuffix}-as`,
+          Name: `${name}-public-rt-${envSuffix}-e7`,
           Region: region,
         },
       },
@@ -150,7 +150,7 @@ export class VpcStack extends pulumi.ComponentResource {
           domain: 'vpc',
           tags: {
             ...tags,
-            Name: `${name}-nat-eip-${i}-${envSuffix}-as`,
+            Name: `${name}-nat-eip-${i}-${envSuffix}-e7`,
             Region: region,
           },
         },
@@ -164,7 +164,7 @@ export class VpcStack extends pulumi.ComponentResource {
           allocationId: eip.id,
           tags: {
             ...tags,
-            Name: `${name}-nat-gw-${i}-${envSuffix}-as`,
+            Name: `${name}-nat-gw-${i}-${envSuffix}-e7`,
             Region: region,
           },
         },
@@ -185,7 +185,7 @@ export class VpcStack extends pulumi.ComponentResource {
           availabilityZone: azs.then(azs => azs.names[i]),
           tags: {
             ...tags,
-            Name: `${name}-private-subnet-${i}-${envSuffix}-as`,
+            Name: `${name}-private-subnet-${i}-${envSuffix}-e7`,
             Region: region,
             Type: 'private',
           },
@@ -202,7 +202,7 @@ export class VpcStack extends pulumi.ComponentResource {
           vpcId: this.vpc.id,
           tags: {
             ...tags,
-            Name: `${name}-private-rt-${i}-${envSuffix}-as`,
+            Name: `${name}-private-rt-${i}-${envSuffix}-e7`,
             Region: region,
           },
         },
@@ -264,7 +264,7 @@ export class VpcStack extends pulumi.ComponentResource {
         ],
         tags: {
           ...tags,
-          Name: `${name}-sg-${envSuffix}-as`,
+          Name: `${name}-sg-${envSuffix}-e7`,
           Region: region,
         },
       },

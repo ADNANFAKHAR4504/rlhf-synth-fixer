@@ -34,11 +34,11 @@ export class MonitoringStack extends pulumi.ComponentResource {
     this.snsTopic = new aws.sns.Topic(
       `${name}-alerts`,
       {
-        name: `${name}-alerts-${envSuffix}-as`,
+        name: `${name}-alerts-${envSuffix}-e7`,
         displayName: 'DR Infrastructure Alerts',
         tags: {
           ...tags,
-          Name: `${name}-sns-topic-${envSuffix}-as`,
+          Name: `${name}-sns-topic-${envSuffix}-e7`,
           Region: region,
         },
       },
@@ -60,7 +60,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
     this.lambdaErrorAlarm = new aws.cloudwatch.MetricAlarm(
       `${name}-lambda-errors`,
       {
-        name: `${name}-lambda-errors-${envSuffix}-as`,
+        name: `${name}-lambda-errors-${envSuffix}-e7`,
         comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 1,
         metricName: 'Errors',
@@ -85,7 +85,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
     new aws.cloudwatch.MetricAlarm(
       `${name}-lambda-duration`,
       {
-        name: `${name}-lambda-duration-${envSuffix}-as`,
+        name: `${name}-lambda-duration-${envSuffix}-e7`,
         comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 2,
         metricName: 'Duration',
@@ -110,7 +110,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
     new aws.cloudwatch.MetricAlarm(
       `${name}-aurora-cpu`,
       {
-        name: `${name}-aurora-cpu-${envSuffix}-as`,
+        name: `${name}-aurora-cpu-${envSuffix}-e7`,
         comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 2,
         metricName: 'CPUUtilization',
@@ -135,7 +135,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
     new aws.cloudwatch.MetricAlarm(
       `${name}-aurora-connections`,
       {
-        name: `${name}-aurora-connections-${envSuffix}-as`,
+        name: `${name}-aurora-connections-${envSuffix}-e7`,
         comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 1,
         metricName: 'DatabaseConnections',

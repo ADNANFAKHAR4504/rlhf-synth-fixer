@@ -41,7 +41,7 @@ export class AuroraStack extends pulumi.ComponentResource {
         subnetIds: args.privateSubnetIds,
         tags: {
           ...tags,
-          Name: `${name}-subnet-group-${envSuffix}-as`,
+          Name: `${name}-subnet-group-${envSuffix}-e7`,
           Region: region,
         },
       },
@@ -79,7 +79,7 @@ export class AuroraStack extends pulumi.ComponentResource {
         },
         tags: {
           ...tags,
-          Name: `${name}-aurora-cluster-${envSuffix}-as`,
+          Name: `${name}-aurora-cluster-${envSuffix}-e7`,
           Region: region,
           Purpose: 'multi-region-dr',
         },
@@ -91,7 +91,7 @@ export class AuroraStack extends pulumi.ComponentResource {
     this.clusterInstance = new aws.rds.ClusterInstance(
       `${name}-cluster-instance`,
       {
-        identifier: `${name}-instance-${envSuffix}-as`,
+        identifier: `${name}-instance-${envSuffix}-e7`,
         clusterIdentifier: this.cluster.id,
         instanceClass: 'db.serverless',
         engine: 'aurora-postgresql',
@@ -99,7 +99,7 @@ export class AuroraStack extends pulumi.ComponentResource {
         publiclyAccessible: false,
         tags: {
           ...tags,
-          Name: `${name}-aurora-instance-${envSuffix}-as`,
+          Name: `${name}-aurora-instance-${envSuffix}-e7`,
           Region: region,
         },
       },

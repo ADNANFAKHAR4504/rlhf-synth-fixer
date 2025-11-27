@@ -31,7 +31,7 @@ export class DynamoDBStack extends pulumi.ComponentResource {
     this.table = new aws.dynamodb.Table(
       `${name}-table`,
       {
-        name: `${name}-dr-table-${envSuffix}-as`,
+        name: `${name}-dr-table-${envSuffix}-e7`,
         billingMode: 'PAY_PER_REQUEST',
         hashKey: 'id',
         rangeKey: 'timestamp',
@@ -56,7 +56,7 @@ export class DynamoDBStack extends pulumi.ComponentResource {
         })),
         tags: {
           ...tags,
-          Name: `${name}-dynamodb-table-${envSuffix}-as`,
+          Name: `${name}-dynamodb-table-${envSuffix}-e7`,
           Purpose: 'multi-region-dr',
         },
       },
