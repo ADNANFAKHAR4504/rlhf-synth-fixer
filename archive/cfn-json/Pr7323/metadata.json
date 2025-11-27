@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "j7w9z6y6",
+  "team": "synth",
+  "startedAt": "2025-11-26T04:13:17+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "CodePipeline",
+    "CodeBuild",
+    "CodeCommit",
+    "CodeDeploy",
+    "ECR",
+    "S3",
+    "IAM",
+    "CloudWatch Events",
+    "SNS",
+    "CloudWatch Synthetics"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

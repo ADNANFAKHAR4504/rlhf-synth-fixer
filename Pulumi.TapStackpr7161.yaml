@@ -1,7 +1,0 @@
-config:
-  payment-processing-infrastructure:vpcCidr: "10.3.0.0/16"
-  payment-processing-infrastructure:region: "us-east-1"
-  payment-processing-infrastructure:dbInstanceClass: "db.t3.medium"
-  payment-processing-infrastructure:scalingCpuThreshold: "70"
-  payment-processing-infrastructure:availabilityZoneCount: "2"
-  aws:region: "us-east-1"
