@@ -5,6 +5,7 @@
   "language": "json",
   "complexity": "expert",
   "turn_type": "single",
+  "startedAt": "2025-11-27T17:56:27.882936",
   "team": "synth",
   "region": "us-east-1",
   "training_quality": 8,
