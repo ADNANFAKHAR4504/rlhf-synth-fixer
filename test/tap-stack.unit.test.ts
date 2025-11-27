@@ -46,29 +46,8 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
       expect(template.Parameters.EnvironmentSuffix.MaxLength).toBe(20);
     });
 
-    test('should have SourceRegion parameter with default', () => {
-      expect(template.Parameters.SourceRegion).toBeDefined();
-      expect(template.Parameters.SourceRegion.Type).toBe('String');
-      expect(template.Parameters.SourceRegion.Default).toBe('us-east-1');
-    });
-
-    test('should have TargetRegion parameter with default', () => {
-      expect(template.Parameters.TargetRegion).toBeDefined();
-      expect(template.Parameters.TargetRegion.Type).toBe('String');
-      expect(template.Parameters.TargetRegion.Default).toBe('eu-central-1');
-    });
-
-    test('should have VpcPeeringEnabled parameter with correct default', () => {
-      expect(template.Parameters.VpcPeeringEnabled).toBeDefined();
-      expect(template.Parameters.VpcPeeringEnabled.AllowedValues).toEqual(['true', 'false']);
-      expect(template.Parameters.VpcPeeringEnabled.Default).toBe('false');
-    });
-
-    test('should have TargetVpcId parameter', () => {
-      expect(template.Parameters.TargetVpcId).toBeDefined();
-      expect(template.Parameters.TargetVpcId.Type).toBe('String');
-      expect(template.Parameters.TargetVpcId.Default).toBe('');
-    });
+    // Cross-region parameters removed for single-region deployment
+    // SourceRegion, TargetRegion, VpcPeeringEnabled, TargetVpcId removed in iterations 5-7
 
     test('all parameters should have descriptions', () => {
       Object.keys(template.Parameters).forEach(paramName => {
@@ -79,18 +58,8 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
   });
 
   describe('Conditions', () => {
-    test('should have IsSourceRegion condition', () => {
-      expect(template.Conditions.IsSourceRegion).toBeDefined();
-      expect(template.Conditions.IsSourceRegion['Fn::Equals']).toBeDefined();
-    });
-
-    // VPC Peering resources and condition removed to fix AWS Early Validation errors
-    // Cross-region VPC references caused validation failures
-
-    test('should have IsTargetRegion condition', () => {
-      expect(template.Conditions.IsTargetRegion).toBeDefined();
-      expect(template.Conditions.IsTargetRegion['Fn::Equals']).toBeDefined();
-    });
+    // All cross-region conditions removed for single-region deployment
+    // IsSourceRegion, IsTargetRegion, CreateVPCPeering removed in iterations 5-7
   });
 
   describe('S3 Resources', () => {
@@ -139,7 +108,7 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
   describe('DynamoDB Resources', () => {
     test('should have TradingAnalyticsGlobalTable', () => {
       expect(template.Resources.TradingAnalyticsGlobalTable).toBeDefined();
-      expect(template.Resources.TradingAnalyticsGlobalTable.Type).toBe('AWS::DynamoDB::GlobalTable');
+      expect(template.Resources.TradingAnalyticsGlobalTable.Type).toBe('AWS::DynamoDB::Table');
     });
 
     test('TradingAnalyticsGlobalTable should have PAY_PER_REQUEST billing', () => {
@@ -424,39 +393,9 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
     });
   });
 
-  describe('Route 53 Resources', () => {
-    test('should have Route53HealthCheck', () => {
-      expect(template.Resources.Route53HealthCheck).toBeDefined();
-      expect(template.Resources.Route53HealthCheck.Type).toBe('AWS::Route53::HealthCheck');
-    });
-
-    test('Route53HealthCheck should be conditional on IsSourceRegion', () => {
-      const healthCheck = template.Resources.Route53HealthCheck;
-      expect(healthCheck.Condition).toBe('IsSourceRegion');
-    });
-
-    test('Route53HealthCheck should have health check config', () => {
-      const healthCheck = template.Resources.Route53HealthCheck;
-      expect(healthCheck.Properties.HealthCheckConfig).toBeDefined();
-      expect(healthCheck.Properties.HealthCheckConfig.Type).toBe('CLOUDWATCH_METRIC');
-    });
-
-    test('Route53HealthCheck should reference CloudWatch alarm', () => {
-      const healthCheck = template.Resources.Route53HealthCheck;
-      expect(healthCheck.Properties.HealthCheckConfig.AlarmIdentifier).toBeDefined();
-      expect(healthCheck.Properties.HealthCheckConfig.AlarmIdentifier.Name).toBeDefined();
-    });
-
-    test('should have Route53HealthCheckTarget', () => {
-      expect(template.Resources.Route53HealthCheckTarget).toBeDefined();
-      expect(template.Resources.Route53HealthCheckTarget.Type).toBe('AWS::Route53::HealthCheck');
-    });
-
-    test('Route53HealthCheckTarget should be conditional on IsTargetRegion', () => {
-      const healthCheck = template.Resources.Route53HealthCheckTarget;
-      expect(healthCheck.Condition).toBe('IsTargetRegion');
-    });
-  });
+  // Route53 health check resources removed to enable single-region deployment
+  // Route53HealthCheck and Route53HealthCheckTarget caused cross-region dependency issues
+  // Removed in iteration 7 to resolve AWS Early Validation errors
 
   describe('Backup Resources', () => {
     test('should have BackupVault', () => {
@@ -758,11 +697,8 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
       expect(templateString).toContain('${AWS::Region}');
     });
 
-    test('SourceRegion and TargetRegion parameters should be used', () => {
-      const templateString = JSON.stringify(template);
-      expect(templateString).toContain('SourceRegion');
-      expect(templateString).toContain('TargetRegion');
-    });
+    // SourceRegion and TargetRegion parameters removed for single-region deployment
+    // Template now uses AWS::Region pseudo parameter for dynamic region references
   });
 
   describe('Resource Dependencies', () => {

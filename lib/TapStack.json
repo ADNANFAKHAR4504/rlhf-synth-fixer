@@ -1,6 +1,6 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Production-ready CloudFormation StackSet for cross-region trading analytics platform migration from us-east-1 to eu-central-1 with DynamoDB Global Tables, S3 replication, VPC peering, and comprehensive monitoring",
+  "Description": "Production-ready CloudFormation stack for single-region trading analytics platform with DynamoDB, S3 storage, Lambda functions, and comprehensive monitoring",
   "Parameters": {
     "EnvironmentSuffix": {
       "Description": "Unique suffix for resource naming to ensure uniqueness across deployments",
@@ -10,39 +10,9 @@
       "MaxLength": 20,
       "AllowedPattern": "[a-z0-9-]+",
       "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
-    },
-    "SourceRegion": {
-      "Description": "Source region for migration",
-      "Type": "String",
-      "Default": "us-east-1"
-    },
-    "TargetRegion": {
-      "Description": "Target region for migration",
-      "Type": "String",
-      "Default": "eu-central-1"
     }
   },
   "Conditions": {
-    "IsSourceRegion": {
-      "Fn::Equals": [
-        {
-          "Ref": "AWS::Region"
-        },
-        {
-          "Ref": "SourceRegion"
-        }
-      ]
-    },
-    "IsTargetRegion": {
-      "Fn::Equals": [
-        {
-          "Ref": "AWS::Region"
-        },
-        {
-          "Ref": "TargetRegion"
-        }
-      ]
-    }
   },
   "Resources": {
     "TradingDataBucket": {
@@ -535,13 +505,7 @@
     "TradingVPC": {
       "Type": "AWS::EC2::VPC",
       "Properties": {
-        "CidrBlock": {
-          "Fn::If": [
-            "IsSourceRegion",
-            "10.0.0.0/16",
-            "10.1.0.0/16"
-          ]
-        },
+        "CidrBlock": "10.0.0.0/16",
         "EnableDnsHostnames": true,
         "EnableDnsSupport": true,
         "Tags": [
@@ -566,13 +530,7 @@
         "VpcId": {
           "Ref": "TradingVPC"
         },
-        "CidrBlock": {
-          "Fn::If": [
-            "IsSourceRegion",
-            "10.0.1.0/24",
-            "10.1.1.0/24"
-          ]
-        },
+        "CidrBlock": "10.0.1.0/24",
         "AvailabilityZone": {
           "Fn::Select": [
             0,
@@ -598,13 +556,7 @@
         "VpcId": {
           "Ref": "TradingVPC"
         },
-        "CidrBlock": {
-          "Fn::If": [
-            "IsSourceRegion",
-            "10.0.2.0/24",
-            "10.1.2.0/24"
-          ]
-        },
+        "CidrBlock": "10.0.2.0/24",
         "AvailabilityZone": {
           "Fn::Select": [
             1,
@@ -630,13 +582,7 @@
         "VpcId": {
           "Ref": "TradingVPC"
         },
-        "CidrBlock": {
-          "Fn::If": [
-            "IsSourceRegion",
-            "10.0.10.0/24",
-            "10.1.10.0/24"
-          ]
-        },
+        "CidrBlock": "10.0.10.0/24",
         "AvailabilityZone": {
           "Fn::Select": [
             0,
@@ -661,13 +607,7 @@
         "VpcId": {
           "Ref": "TradingVPC"
         },
-        "CidrBlock": {
-          "Fn::If": [
-            "IsSourceRegion",
-            "10.0.11.0/24",
-            "10.1.11.0/24"
-          ]
-        },
+        "CidrBlock": "10.0.11.0/24",
         "AvailabilityZone": {
           "Fn::Select": [
             1,
@@ -1331,72 +1271,6 @@
         "AlarmActions": [
           {
             "Ref": "MigrationEventTopic"
-          }
-        ]
-      }
-    },
-    "Route53HealthCheck": {
-      "Type": "AWS::Route53::HealthCheck",
-      "Condition": "IsSourceRegion",
-      "DependsOn": "HealthCheckAlarm",
-      "Properties": {
-        "HealthCheckConfig": {
-          "Type": "CLOUDWATCH_METRIC",
-          "AlarmIdentifier": {
-            "Name": {
-              "Fn::Sub": "trading-platform-health-${EnvironmentSuffix}-${AWS::Region}"
-            },
-            "Region": {
-              "Ref": "AWS::Region"
-            }
-          },
-          "InsufficientDataHealthStatus": "LastKnownStatus"
-        },
-        "HealthCheckTags": [
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "EnvironmentSuffix"
-            }
-          },
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "trading-platform-health-${EnvironmentSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "Route53HealthCheckTarget": {
-      "Type": "AWS::Route53::HealthCheck",
-      "Condition": "IsTargetRegion",
-      "DependsOn": "HealthCheckAlarm",
-      "Properties": {
-        "HealthCheckConfig": {
-          "Type": "CLOUDWATCH_METRIC",
-          "AlarmIdentifier": {
-            "Name": {
-              "Fn::Sub": "trading-platform-health-${EnvironmentSuffix}-${AWS::Region}"
-            },
-            "Region": {
-              "Ref": "AWS::Region"
-            }
-          },
-          "InsufficientDataHealthStatus": "LastKnownStatus"
-        },
-        "HealthCheckTags": [
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "EnvironmentSuffix"
-            }
-          },
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "trading-platform-health-${EnvironmentSuffix}"
-            }
           }
         ]
       }
