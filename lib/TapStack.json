@@ -5,7 +5,7 @@
     "EnvironmentSuffix": {
       "Type": "String",
       "Default": "dev",
-      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)"
+      "Description": "Environment suffix for resource naming (e.g., dev, qa, prod)"
     }
   },
   "Resources": {
@@ -345,6 +345,7 @@
         "Architectures": [
           "arm64"
         ],
+        "ReservedConcurrentExecutions": 100,
         "Environment": {
           "Variables": {
             "DYNAMODB_TABLE": {
@@ -391,6 +392,7 @@
         "Architectures": [
           "arm64"
         ],
+        "ReservedConcurrentExecutions": 50,
         "Environment": {
           "Variables": {
             "DYNAMODB_TABLE": {
@@ -496,7 +498,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "EventBridge-AlertMatcher-Role-${EnvironmentSuffix}"
+          "Fn::Sub": "AlertMatcher-EventBridge-Role-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
