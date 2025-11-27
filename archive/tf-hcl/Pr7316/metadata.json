@@ -6,7 +6,7 @@
   "turn_type": "single",
   "team": "synth",
   "author": "mayanksethi-turing",
-  "po_id": "po-disaster-recovery",
+  "po_id": "l6p3z2w4",
   "training_quality": 9,
   "startedAt": "2025-11-25T23:23:00Z",
   "subtask": "Failure Recovery and High Availability",
@@ -23,12 +23,7 @@
     "VPC"
   ],
   "subject_labels": [
-    "disaster-recovery",
-    "multi-region",
-    "database",
-    "failover",
-    "rds-aurora",
-    "postgresql"
+    "Failure Recovery"
   ],
   "coverage": {
     "lines": 100,
