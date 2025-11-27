@@ -1,12 +1,12 @@
 // Integration tests for deployed CloudFormation stack
 // These tests validate the actual deployed resources in AWS
 
-const {
+import {
   CloudFormationClient,
   DescribeStacksCommand,
   DescribeStackResourcesCommand
-} = require('@aws-sdk/client-cloudformation');
-const {
+} from '@aws-sdk/client-cloudformation';
+import {
   EC2Client,
   DescribeVpcsCommand,
   DescribeSubnetsCommand,
@@ -15,15 +15,15 @@ const {
   DescribeRouteTablesCommand,
   DescribeNetworkAclsCommand,
   DescribeFlowLogsCommand
-} = require('@aws-sdk/client-ec2');
-const {
+} from '@aws-sdk/client-ec2';
+import {
   IAMClient,
   GetRoleCommand
-} = require('@aws-sdk/client-iam');
-const {
+} from '@aws-sdk/client-iam';
+import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand
-} = require('@aws-sdk/client-cloudwatch-logs');
+} from '@aws-sdk/client-cloudwatch-logs';
 
 const region = process.env.AWS_REGION || 'us-east-1';
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'synth101912761pr';
@@ -35,27 +35,27 @@ const iamClient = new IAMClient({ region });
 const logsClient = new CloudWatchLogsClient({ region });
 
 describe('CloudFormation Stack Integration Tests', () => {
-  let stackOutputs = {};
-  let stackResources = {};
+  let stackOutputs: Record<string, string> = {};
+  let stackResources: Record<string, string> = {};
 
   beforeAll(async () => {
     try {
       const stackResponse = await cfnClient.send(
         new DescribeStacksCommand({ StackName: stackName })
       );
-      const stack = stackResponse.Stacks[0];
+      const stack = stackResponse.Stacks![0];
 
       if (stack.Outputs) {
         stack.Outputs.forEach(output => {
-          stackOutputs[output.OutputKey] = output.OutputValue;
+          stackOutputs[output.OutputKey!] = output.OutputValue!;
         });
       }
 
       const resourcesResponse = await cfnClient.send(
         new DescribeStackResourcesCommand({ StackName: stackName })
       );
-      resourcesResponse.StackResources.forEach(resource => {
-        stackResources[resource.LogicalResourceId] = resource.PhysicalResourceId;
+      resourcesResponse.StackResources!.forEach(resource => {
+        stackResources[resource.LogicalResourceId!] = resource.PhysicalResourceId!;
       });
     } catch (error) {
       console.error('Failed to fetch stack information:', error);
@@ -68,7 +68,7 @@ describe('CloudFormation Stack Integration Tests', () => {
       const response = await cfnClient.send(
         new DescribeStacksCommand({ StackName: stackName })
       );
-      const stack = response.Stacks[0];
+      const stack = response.Stacks![0];
       expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(stack.StackStatus);
     });
 
@@ -103,8 +103,8 @@ describe('CloudFormation Stack Integration Tests', () => {
         new DescribeVpcsCommand({ VpcIds: [vpcId] })
       );
 
-      expect(response.Vpcs.length).toBe(1);
-      const vpc = response.Vpcs[0];
+      expect(response.Vpcs!.length).toBe(1);
+      const vpc = response.Vpcs![0];
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
     });
 
@@ -114,10 +114,10 @@ describe('CloudFormation Stack Integration Tests', () => {
         new DescribeVpcsCommand({ VpcIds: [vpcId] })
       );
 
-      const vpc = response.Vpcs[0];
+      const vpc = response.Vpcs![0];
       expect(vpc.Ipv6CidrBlockAssociationSet).toBeDefined();
-      expect(vpc.Ipv6CidrBlockAssociationSet.length).toBeGreaterThan(0);
-      expect(vpc.Ipv6CidrBlockAssociationSet[0].Ipv6CidrBlockState.State).toBe('associated');
+      expect(vpc.Ipv6CidrBlockAssociationSet!.length).toBeGreaterThan(0);
+      expect(vpc.Ipv6CidrBlockAssociationSet![0].Ipv6CidrBlockState!.State).toBe('associated');
     });
   });
 
@@ -133,7 +133,7 @@ describe('CloudFormation Stack Integration Tests', () => {
         new DescribeSubnetsCommand({ SubnetIds: subnetIds })
       );
 
-      expect(response.Subnets.length).toBe(3);
+      expect(response.Subnets!.length).toBe(3);
     });
 
     test('all private subnets should exist', async () => {
@@ -147,7 +147,7 @@ describe('CloudFormation Stack Integration Tests', () => {
         new DescribeSubnetsCommand({ SubnetIds: subnetIds })
       );
 
-      expect(response.Subnets.length).toBe(3);
+      expect(response.Subnets!.length).toBe(3);
     });
   });
 
@@ -163,8 +163,8 @@ describe('CloudFormation Stack Integration Tests', () => {
         new DescribeNatGatewaysCommand({ NatGatewayIds: natGatewayIds })
       );
 
-      expect(response.NatGateways.length).toBe(3);
-      response.NatGateways.forEach(nat => {
+      expect(response.NatGateways!.length).toBe(3);
+      response.NatGateways!.forEach(nat => {
         expect(nat.State).toBe('available');
       });
     });

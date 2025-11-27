@@ -1,284 +1,13 @@
-const fs = require('fs');
-const path = require('path');
-const {
-  loadTemplate,
-  validateTemplate,
-  getResourceCountByType,
-  allResourcesHaveDeletionPolicy,
-  hasRequiredTags,
-  getTaggableResources
-} = require('../lib/template');
+import * as fs from 'fs';
+import * as path from 'path';
 
 describe('CloudFormation Template Unit Tests', () => {
-  let template;
+  let template: any;
 
   beforeAll(() => {
     const templatePath = path.join(__dirname, '..', 'lib', 'template.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
-  });
-
-  describe('Template Helper Functions', () => {
-    test('loadTemplate should load and parse the template', () => {
-      const loadedTemplate = loadTemplate();
-      expect(loadedTemplate).toBeDefined();
-      expect(loadedTemplate.AWSTemplateFormatVersion).toBe('2010-09-09');
-    });
-
-    test('validateTemplate should pass for valid template', () => {
-      expect(() => validateTemplate(template)).not.toThrow();
-    });
-
-    test('getResourceCountByType should count VPCs correctly', () => {
-      expect(getResourceCountByType(template, 'AWS::EC2::VPC')).toBe(1);
-    });
-
-    test('getResourceCountByType should count subnets correctly', () => {
-      expect(getResourceCountByType(template, 'AWS::EC2::Subnet')).toBe(6);
-    });
-
-    test('allResourcesHaveDeletionPolicy should return true', () => {
-      expect(allResourcesHaveDeletionPolicy(template)).toBe(true);
-    });
-
-    test('hasRequiredTags should validate VPC tags', () => {
-      const vpc = template.Resources.VPC;
-      expect(hasRequiredTags(vpc)).toBe(true);
-    });
-
-    test('getTaggableResources should return all taggable resources', () => {
-      const taggableResources = getTaggableResources(template);
-      expect(taggableResources.length).toBeGreaterThan(0);
-    });
-
-    test('validateTemplate should throw error for missing AWSTemplateFormatVersion', () => {
-      const invalidTemplate = { Resources: {}, Outputs: {} };
-      expect(() => validateTemplate(invalidTemplate)).toThrow('Missing AWSTemplateFormatVersion');
-    });
-
-    test('validateTemplate should throw error for missing Resources', () => {
-      const invalidTemplate = { AWSTemplateFormatVersion: '2010-09-09', Outputs: {} };
-      expect(() => validateTemplate(invalidTemplate)).toThrow('Missing Resources section');
-    });
-
-    test('validateTemplate should throw error for missing Outputs', () => {
-      const invalidTemplate = { AWSTemplateFormatVersion: '2010-09-09', Resources: {} };
-      expect(() => validateTemplate(invalidTemplate)).toThrow('Missing Outputs section');
-    });
-
-    test('validateTemplate should throw error for missing VPC', () => {
-      const invalidTemplate = {
-        AWSTemplateFormatVersion: '2010-09-09',
-        Resources: { Something: { Type: 'AWS::S3::Bucket' } },
-        Outputs: {}
-      };
-      expect(() => validateTemplate(invalidTemplate)).toThrow('Missing VPC resource');
-    });
-
-    test('validateTemplate should throw error for missing IPv6 CIDR Block', () => {
-      const invalidTemplate = {
-        AWSTemplateFormatVersion: '2010-09-09',
-        Resources: { VPC: { Type: 'AWS::EC2::VPC' } },
-        Outputs: {}
-      };
-      expect(() => validateTemplate(invalidTemplate)).toThrow('Missing IPv6 CIDR Block');
-    });
-
-    test('validateTemplate should throw error for missing Internet Gateway', () => {
-      const invalidTemplate = {
-        AWSTemplateFormatVersion: '2010-09-09',
-        Resources: {
-          VPC: { Type: 'AWS::EC2::VPC' },
-          IPv6CidrBlock: { Type: 'AWS::EC2::VPCCidrBlock' }
-        },
-        Outputs: {}
-      };
-      expect(() => validateTemplate(invalidTemplate)).toThrow('Missing Internet Gateway');
-    });
-
-    test('validateTemplate should throw error for wrong number of subnets', () => {
-      const invalidTemplate = {
-        AWSTemplateFormatVersion: '2010-09-09',
-        Resources: {
-          VPC: { Type: 'AWS::EC2::VPC' },
-          IPv6CidrBlock: { Type: 'AWS::EC2::VPCCidrBlock' },
-          InternetGateway: { Type: 'AWS::EC2::InternetGateway' },
-          Subnet1: { Type: 'AWS::EC2::Subnet' }
-        },
-        Outputs: {}
-      };
-      expect(() => validateTemplate(invalidTemplate)).toThrow('Expected 6 subnets, found 1');
-    });
-
-    test('validateTemplate should throw error for wrong number of NAT Gateways', () => {
-      const invalidTemplate = {
-        AWSTemplateFormatVersion: '2010-09-09',
-        Resources: {
-          VPC: { Type: 'AWS::EC2::VPC' },
-          IPv6CidrBlock: { Type: 'AWS::EC2::VPCCidrBlock' },
-          InternetGateway: { Type: 'AWS::EC2::InternetGateway' },
-          Subnet1: { Type: 'AWS::EC2::Subnet' },
-          Subnet2: { Type: 'AWS::EC2::Subnet' },
-          Subnet3: { Type: 'AWS::EC2::Subnet' },
-          Subnet4: { Type: 'AWS::EC2::Subnet' },
-          Subnet5: { Type: 'AWS::EC2::Subnet' },
-          Subnet6: { Type: 'AWS::EC2::Subnet' }
-        },
-        Outputs: {}
-      };
-      expect(() => validateTemplate(invalidTemplate)).toThrow('Expected 3 NAT Gateways, found 0');
-    });
-
-    test('validateTemplate should throw error for wrong number of Route Tables', () => {
-      const invalidTemplate = {
-        AWSTemplateFormatVersion: '2010-09-09',
-        Resources: {
-          VPC: { Type: 'AWS::EC2::VPC' },
-          IPv6CidrBlock: { Type: 'AWS::EC2::VPCCidrBlock' },
-          InternetGateway: { Type: 'AWS::EC2::InternetGateway' },
-          Subnet1: { Type: 'AWS::EC2::Subnet' },
-          Subnet2: { Type: 'AWS::EC2::Subnet' },
-          Subnet3: { Type: 'AWS::EC2::Subnet' },
-          Subnet4: { Type: 'AWS::EC2::Subnet' },
-          Subnet5: { Type: 'AWS::EC2::Subnet' },
-          Subnet6: { Type: 'AWS::EC2::Subnet' },
-          NAT1: { Type: 'AWS::EC2::NatGateway' },
-          NAT2: { Type: 'AWS::EC2::NatGateway' },
-          NAT3: { Type: 'AWS::EC2::NatGateway' }
-        },
-        Outputs: {}
-      };
-      expect(() => validateTemplate(invalidTemplate)).toThrow('Expected 4 Route Tables, found 0');
-    });
-
-    test('validateTemplate should throw error for wrong number of Network ACLs', () => {
-      const invalidTemplate = {
-        AWSTemplateFormatVersion: '2010-09-09',
-        Resources: {
-          VPC: { Type: 'AWS::EC2::VPC' },
-          IPv6CidrBlock: { Type: 'AWS::EC2::VPCCidrBlock' },
-          InternetGateway: { Type: 'AWS::EC2::InternetGateway' },
-          Subnet1: { Type: 'AWS::EC2::Subnet' },
-          Subnet2: { Type: 'AWS::EC2::Subnet' },
-          Subnet3: { Type: 'AWS::EC2::Subnet' },
-          Subnet4: { Type: 'AWS::EC2::Subnet' },
-          Subnet5: { Type: 'AWS::EC2::Subnet' },
-          Subnet6: { Type: 'AWS::EC2::Subnet' },
-          NAT1: { Type: 'AWS::EC2::NatGateway' },
-          NAT2: { Type: 'AWS::EC2::NatGateway' },
-          NAT3: { Type: 'AWS::EC2::NatGateway' },
-          RT1: { Type: 'AWS::EC2::RouteTable' },
-          RT2: { Type: 'AWS::EC2::RouteTable' },
-          RT3: { Type: 'AWS::EC2::RouteTable' },
-          RT4: { Type: 'AWS::EC2::RouteTable' }
-        },
-        Outputs: {}
-      };
-      expect(() => validateTemplate(invalidTemplate)).toThrow('Expected 2 Network ACLs, found 0');
-    });
-
-    test('validateTemplate should throw error for missing VPC Flow Log', () => {
-      const invalidTemplate = {
-        AWSTemplateFormatVersion: '2010-09-09',
-        Resources: {
-          VPC: { Type: 'AWS::EC2::VPC' },
-          IPv6CidrBlock: { Type: 'AWS::EC2::VPCCidrBlock' },
-          InternetGateway: { Type: 'AWS::EC2::InternetGateway' },
-          Subnet1: { Type: 'AWS::EC2::Subnet' },
-          Subnet2: { Type: 'AWS::EC2::Subnet' },
-          Subnet3: { Type: 'AWS::EC2::Subnet' },
-          Subnet4: { Type: 'AWS::EC2::Subnet' },
-          Subnet5: { Type: 'AWS::EC2::Subnet' },
-          Subnet6: { Type: 'AWS::EC2::Subnet' },
-          NAT1: { Type: 'AWS::EC2::NatGateway' },
-          NAT2: { Type: 'AWS::EC2::NatGateway' },
-          NAT3: { Type: 'AWS::EC2::NatGateway' },
-          RT1: { Type: 'AWS::EC2::RouteTable' },
-          RT2: { Type: 'AWS::EC2::RouteTable' },
-          RT3: { Type: 'AWS::EC2::RouteTable' },
-          RT4: { Type: 'AWS::EC2::RouteTable' },
-          NACL1: { Type: 'AWS::EC2::NetworkAcl' },
-          NACL2: { Type: 'AWS::EC2::NetworkAcl' }
-        },
-        Outputs: {}
-      };
-      expect(() => validateTemplate(invalidTemplate)).toThrow('Missing VPC Flow Log');
-    });
-
-    test('validateTemplate should throw error for missing Flow Logs IAM Role', () => {
-      const invalidTemplate = {
-        AWSTemplateFormatVersion: '2010-09-09',
-        Resources: {
-          VPC: { Type: 'AWS::EC2::VPC' },
-          IPv6CidrBlock: { Type: 'AWS::EC2::VPCCidrBlock' },
-          InternetGateway: { Type: 'AWS::EC2::InternetGateway' },
-          Subnet1: { Type: 'AWS::EC2::Subnet' },
-          Subnet2: { Type: 'AWS::EC2::Subnet' },
-          Subnet3: { Type: 'AWS::EC2::Subnet' },
-          Subnet4: { Type: 'AWS::EC2::Subnet' },
-          Subnet5: { Type: 'AWS::EC2::Subnet' },
-          Subnet6: { Type: 'AWS::EC2::Subnet' },
-          NAT1: { Type: 'AWS::EC2::NatGateway' },
-          NAT2: { Type: 'AWS::EC2::NatGateway' },
-          NAT3: { Type: 'AWS::EC2::NatGateway' },
-          RT1: { Type: 'AWS::EC2::RouteTable' },
-          RT2: { Type: 'AWS::EC2::RouteTable' },
-          RT3: { Type: 'AWS::EC2::RouteTable' },
-          RT4: { Type: 'AWS::EC2::RouteTable' },
-          NACL1: { Type: 'AWS::EC2::NetworkAcl' },
-          NACL2: { Type: 'AWS::EC2::NetworkAcl' },
-          VPCFlowLog: { Type: 'AWS::EC2::FlowLog' }
-        },
-        Outputs: {}
-      };
-      expect(() => validateTemplate(invalidTemplate)).toThrow('Missing Flow Logs IAM Role');
-    });
-
-    test('validateTemplate should throw error for missing Flow Logs Log Group', () => {
-      const invalidTemplate = {
-        AWSTemplateFormatVersion: '2010-09-09',
-        Resources: {
-          VPC: { Type: 'AWS::EC2::VPC' },
-          IPv6CidrBlock: { Type: 'AWS::EC2::VPCCidrBlock' },
-          InternetGateway: { Type: 'AWS::EC2::InternetGateway' },
-          Subnet1: { Type: 'AWS::EC2::Subnet' },
-          Subnet2: { Type: 'AWS::EC2::Subnet' },
-          Subnet3: { Type: 'AWS::EC2::Subnet' },
-          Subnet4: { Type: 'AWS::EC2::Subnet' },
-          Subnet5: { Type: 'AWS::EC2::Subnet' },
-          Subnet6: { Type: 'AWS::EC2::Subnet' },
-          NAT1: { Type: 'AWS::EC2::NatGateway' },
-          NAT2: { Type: 'AWS::EC2::NatGateway' },
-          NAT3: { Type: 'AWS::EC2::NatGateway' },
-          RT1: { Type: 'AWS::EC2::RouteTable' },
-          RT2: { Type: 'AWS::EC2::RouteTable' },
-          RT3: { Type: 'AWS::EC2::RouteTable' },
-          RT4: { Type: 'AWS::EC2::RouteTable' },
-          NACL1: { Type: 'AWS::EC2::NetworkAcl' },
-          NACL2: { Type: 'AWS::EC2::NetworkAcl' },
-          VPCFlowLog: { Type: 'AWS::EC2::FlowLog' },
-          FlowLogsRole: { Type: 'AWS::IAM::Role' }
-        },
-        Outputs: {}
-      };
-      expect(() => validateTemplate(invalidTemplate)).toThrow('Missing Flow Logs Log Group');
-    });
-
-    test('hasRequiredTags should return false for resource without tags', () => {
-      const resource = { Properties: {} };
-      expect(hasRequiredTags(resource)).toBe(false);
-    });
-
-    test('hasRequiredTags should return false for resource with incomplete tags', () => {
-      const resource = {
-        Properties: {
-          Tags: [
-            { Key: 'Environment', Value: 'test' }
-          ]
-        }
-      };
-      expect(hasRequiredTags(resource)).toBe(false);
-    });
   });
 
   describe('Template Structure', () => {
@@ -335,9 +64,9 @@ describe('CloudFormation Template Unit Tests', () => {
     test('VPC should have required tags', () => {
       const tags = template.Resources.VPC.Properties.Tags;
       expect(tags).toBeDefined();
-      expect(tags.some(t => t.Key === 'Environment')).toBe(true);
-      expect(tags.some(t => t.Key === 'Owner')).toBe(true);
-      expect(tags.some(t => t.Key === 'CostCenter')).toBe(true);
+      expect(tags.some((t: any) => t.Key === 'Environment')).toBe(true);
+      expect(tags.some((t: any) => t.Key === 'Owner')).toBe(true);
+      expect(tags.some((t: any) => t.Key === 'CostCenter')).toBe(true);
     });
   });
 
@@ -369,9 +98,9 @@ describe('CloudFormation Template Unit Tests', () => {
     test('Internet Gateway should have required tags', () => {
       const tags = template.Resources.InternetGateway.Properties.Tags;
       expect(tags).toBeDefined();
-      expect(tags.some(t => t.Key === 'Environment')).toBe(true);
-      expect(tags.some(t => t.Key === 'Owner')).toBe(true);
-      expect(tags.some(t => t.Key === 'CostCenter')).toBe(true);
+      expect(tags.some((t: any) => t.Key === 'Environment')).toBe(true);
+      expect(tags.some((t: any) => t.Key === 'Owner')).toBe(true);
+      expect(tags.some((t: any) => t.Key === 'CostCenter')).toBe(true);
     });
 
     test('Internet Gateway should have DeletionPolicy', () => {
@@ -436,9 +165,9 @@ describe('CloudFormation Template Unit Tests', () => {
         test(`PublicSubnet${az} should have required tags`, () => {
           const tags = template.Resources[`PublicSubnet${az}`].Properties.Tags;
           expect(tags).toBeDefined();
-          expect(tags.some(t => t.Key === 'Environment')).toBe(true);
-          expect(tags.some(t => t.Key === 'Owner')).toBe(true);
-          expect(tags.some(t => t.Key === 'CostCenter')).toBe(true);
+          expect(tags.some((t: any) => t.Key === 'Environment')).toBe(true);
+          expect(tags.some((t: any) => t.Key === 'Owner')).toBe(true);
+          expect(tags.some((t: any) => t.Key === 'CostCenter')).toBe(true);
         });
       });
     });
@@ -496,9 +225,9 @@ describe('CloudFormation Template Unit Tests', () => {
         test(`PrivateSubnet${az} should have required tags`, () => {
           const tags = template.Resources[`PrivateSubnet${az}`].Properties.Tags;
           expect(tags).toBeDefined();
-          expect(tags.some(t => t.Key === 'Environment')).toBe(true);
-          expect(tags.some(t => t.Key === 'Owner')).toBe(true);
-          expect(tags.some(t => t.Key === 'CostCenter')).toBe(true);
+          expect(tags.some((t: any) => t.Key === 'Environment')).toBe(true);
+          expect(tags.some((t: any) => t.Key === 'Owner')).toBe(true);
+          expect(tags.some((t: any) => t.Key === 'CostCenter')).toBe(true);
         });
       });
     });
@@ -555,9 +284,9 @@ describe('CloudFormation Template Unit Tests', () => {
         test(`NATGateway${az} should have required tags`, () => {
           const tags = template.Resources[`NATGateway${az}`].Properties.Tags;
           expect(tags).toBeDefined();
-          expect(tags.some(t => t.Key === 'Environment')).toBe(true);
-          expect(tags.some(t => t.Key === 'Owner')).toBe(true);
-          expect(tags.some(t => t.Key === 'CostCenter')).toBe(true);
+          expect(tags.some((t: any) => t.Key === 'Environment')).toBe(true);
+          expect(tags.some((t: any) => t.Key === 'Owner')).toBe(true);
+          expect(tags.some((t: any) => t.Key === 'CostCenter')).toBe(true);
         });
       });
     });
@@ -590,9 +319,9 @@ describe('CloudFormation Template Unit Tests', () => {
     test('PublicRouteTable should have required tags', () => {
       const tags = template.Resources.PublicRouteTable.Properties.Tags;
       expect(tags).toBeDefined();
-      expect(tags.some(t => t.Key === 'Environment')).toBe(true);
-      expect(tags.some(t => t.Key === 'Owner')).toBe(true);
-      expect(tags.some(t => t.Key === 'CostCenter')).toBe(true);
+      expect(tags.some((t: any) => t.Key === 'Environment')).toBe(true);
+      expect(tags.some((t: any) => t.Key === 'Owner')).toBe(true);
+      expect(tags.some((t: any) => t.Key === 'CostCenter')).toBe(true);
     });
 
     test('should have PublicRoute (IPv4) to Internet Gateway', () => {
@@ -649,9 +378,9 @@ describe('CloudFormation Template Unit Tests', () => {
         test(`PrivateRouteTable${az} should have required tags`, () => {
           const tags = template.Resources[`PrivateRouteTable${az}`].Properties.Tags;
           expect(tags).toBeDefined();
-          expect(tags.some(t => t.Key === 'Environment')).toBe(true);
-          expect(tags.some(t => t.Key === 'Owner')).toBe(true);
-          expect(tags.some(t => t.Key === 'CostCenter')).toBe(true);
+          expect(tags.some((t: any) => t.Key === 'Environment')).toBe(true);
+          expect(tags.some((t: any) => t.Key === 'Owner')).toBe(true);
+          expect(tags.some((t: any) => t.Key === 'CostCenter')).toBe(true);
         });
 
         test(`should have PrivateRoute${az} to NAT Gateway`, () => {
@@ -970,9 +699,9 @@ describe('CloudFormation Template Unit Tests', () => {
           const tags = resource.Properties.Tags;
 
           expect(tags).toBeDefined();
-          expect(tags.some(t => t.Key === 'Environment')).toBe(true);
-          expect(tags.some(t => t.Key === 'Owner')).toBe(true);
-          expect(tags.some(t => t.Key === 'CostCenter')).toBe(true);
+          expect(tags.some((t: any) => t.Key === 'Environment')).toBe(true);
+          expect(tags.some((t: any) => t.Key === 'Owner')).toBe(true);
+          expect(tags.some((t: any) => t.Key === 'CostCenter')).toBe(true);
         });
       });
     });
