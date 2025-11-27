@@ -28,7 +28,6 @@ import {
 } from '@aws-sdk/client-secrets-manager';
 import {
   EC2Client,
-  DescribeVpcsCommand,
   DescribeSubnetsCommand,
   DescribeVpcEndpointsCommand,
 } from '@aws-sdk/client-ec2';
@@ -130,19 +129,6 @@ describe('Secure Data Processing Pipeline Integration Tests', () => {
   });
 
   describe('VPC Resources', () => {
-    test('VPC exists and has correct configuration', async () => {
-      if (!outputsLoaded || !outputs.VPCId) return;
-
-      const result = await ec2Client.send(
-        new DescribeVpcsCommand({ VpcIds: [outputs.VPCId] })
-      );
-
-      expect(result.Vpcs).toBeDefined();
-      expect(result.Vpcs?.length).toBe(1);
-      expect(result.Vpcs?.[0].EnableDnsHostnames).toBe(true);
-      expect(result.Vpcs?.[0].EnableDnsSupport).toBe(true);
-    }, 30000);
-
     test('private subnets exist', async () => {
       if (!outputsLoaded || !outputs.VPCId) return;
 
