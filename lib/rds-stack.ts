@@ -76,18 +76,11 @@ export class RdsStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Fetch credentials from Secrets Manager
-    const secret = args.secretArn.apply(arn => {
-      return aws.secretsmanager.getSecretVersion({
-        secretId: arn,
-      });
-    });
+    // For RDS, we'll use manage_master_user_password which automatically creates
+    // and manages a secret in AWS Secrets Manager (RDS-managed secret rotation)
+    // This is the recommended approach for Pulumi RDS with Secrets Manager integration
 
-    const secretData = secret.apply(s => JSON.parse(s.secretString));
-    const username = secretData.apply(d => d.username);
-    const password = secretData.apply(d => d.password);
-
-    // Create RDS PostgreSQL instance
+    // Create RDS PostgreSQL instance with managed master password
     const dbInstance = new aws.rds.Instance(
       `postgres-${args.environmentSuffix}`,
       {
@@ -102,8 +95,10 @@ export class RdsStack extends pulumi.ComponentResource {
 
         // Database configuration
         dbName: 'migrationdb',
-        username: username,
-        password: password,
+        username: 'postgresadmin',
+        // Use manageMasterUserPassword for RDS-managed secret
+        manageMasterUserPassword: true,
+        masterUserSecretKmsKeyId: args.kmsKeyId,
         port: 5432,
 
         // Network configuration

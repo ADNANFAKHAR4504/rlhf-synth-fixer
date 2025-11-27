@@ -1,4 +1,4 @@
-name: database-migration
+name: TapStack
 runtime:
   name: nodejs
 description: Pulumi infrastructure for PostgreSQL database migration

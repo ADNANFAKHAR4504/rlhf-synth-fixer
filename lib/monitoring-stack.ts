@@ -61,7 +61,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
         dimensions: {
           ReplicationTaskIdentifier: args.dmsReplicationTaskArn.apply(arn => {
             // Extract task identifier from ARN
-            return arn.split(':').pop() || '';
+            return (arn || 'task-identifier').split(':').pop() || '';
           }),
         },
 
@@ -92,7 +92,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
 
         dimensions: {
           ReplicationTaskIdentifier: args.dmsReplicationTaskArn.apply(arn => {
-            return arn.split(':').pop() || '';
+            return (arn || 'task-identifier').split(':').pop() || '';
           }),
         },
 
