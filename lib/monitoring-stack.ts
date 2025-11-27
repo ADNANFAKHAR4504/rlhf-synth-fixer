@@ -240,10 +240,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
         eventBusName: eventBus.name,
         arn: secondaryEventBus.arn,
         roleArn: eventBridgeRole.arn,
-        retryPolicy: {
-          maximumRetryAttempts: 3,
-          maximumEventAgeInSeconds: 3600, // 1 hour
-        },
+        // Note: Retry policy is not supported for Event bus targets
         deadLetterConfig: {
           arn: dlqQueue.arn,
         },
