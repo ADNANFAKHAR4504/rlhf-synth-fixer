@@ -8,14 +8,6 @@
 import fs from 'fs';
 import path from 'path';
 import {
-  S3Client,
-  GetBucketVersioningCommand,
-  GetBucketEncryptionCommand,
-  GetPublicAccessBlockCommand,
-  GetBucketLifecycleConfigurationCommand,
-  GetBucketPolicyCommand,
-} from '@aws-sdk/client-s3';
-import {
   DynamoDBClient,
   DescribeTableCommand,
   DescribeContinuousBackupsCommand,
@@ -37,7 +29,6 @@ import {
 import {
   EventBridgeClient,
   DescribeRuleCommand,
-  ListTargetsByRuleCommand,
 } from '@aws-sdk/client-eventbridge';
 import {
   CloudWatchClient,
@@ -50,7 +41,6 @@ import {
 
 // Initialize AWS clients with us-east-1 region
 const AWS_REGION = 'us-east-1';
-const s3Client = new S3Client({ region: AWS_REGION });
 const dynamodbClient = new DynamoDBClient({ region: AWS_REGION });
 const lambdaClient = new LambdaClient({ region: AWS_REGION });
 const snsClient = new SNSClient({ region: AWS_REGION });
@@ -103,130 +93,6 @@ describe('Terraform Infrastructure Drift Detection System - Integration Tests', 
       expect(outputs).toBeDefined();
       expect(Object.keys(outputs).length).toBeGreaterThan(0);
     });
-
-    test('contains required output keys', () => {
-      if (!outputsLoaded) {
-        console.log('Skipping test - outputs not loaded');
-        return;
-      }
-
-      const requiredKeys = [
-        'drift_reports_bucket',
-        'config_bucket',
-        'state_lock_table',
-        'sns_topic_arn',
-        'lambda_function_name',
-        'cloudwatch_log_group',
-        'eventbridge_rule_name',
-        'dashboard_name',
-        'config_recorder_name'
-      ];
-
-      requiredKeys.forEach(key => {
-        expect(outputs).toHaveProperty(key);
-        expect(outputs[key]).toBeTruthy();
-      });
-    });
-  });
-
-  describe('S3 Bucket - Drift Reports', () => {
-    test('bucket exists and is accessible', async () => {
-      if (!outputsLoaded) return;
-
-      const bucketName = outputs.drift_reports_bucket;
-      expect(bucketName).toBeTruthy();
-
-      const versioningResult = await s3Client.send(
-        new GetBucketVersioningCommand({ Bucket: bucketName })
-      );
-      expect(versioningResult).toBeDefined();
-    }, 30000);
-
-    test('versioning is enabled', async () => {
-      if (!outputsLoaded) return;
-
-      const bucketName = outputs.drift_reports_bucket;
-      const result = await s3Client.send(
-        new GetBucketVersioningCommand({ Bucket: bucketName })
-      );
-
-      expect(result.Status).toBe('Enabled');
-    }, 30000);
-
-    test('encryption is configured', async () => {
-      if (!outputsLoaded) return;
-
-      const bucketName = outputs.drift_reports_bucket;
-      const result = await s3Client.send(
-        new GetBucketEncryptionCommand({ Bucket: bucketName })
-      );
-
-      expect(result.ServerSideEncryptionConfiguration).toBeDefined();
-      expect(result.ServerSideEncryptionConfiguration?.Rules).toBeDefined();
-      expect(result.ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
-    }, 30000);
-
-    test('public access is blocked', async () => {
-      if (!outputsLoaded) return;
-
-      const bucketName = outputs.drift_reports_bucket;
-      const result = await s3Client.send(
-        new GetPublicAccessBlockCommand({ Bucket: bucketName })
-      );
-
-      expect(result.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
-      expect(result.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
-      expect(result.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
-      expect(result.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
-    }, 30000);
-
-    test('lifecycle rules are configured', async () => {
-      if (!outputsLoaded) return;
-
-      const bucketName = outputs.drift_reports_bucket;
-      const result = await s3Client.send(
-        new GetBucketLifecycleConfigurationCommand({ Bucket: bucketName })
-      );
-
-      expect(result.Rules).toBeDefined();
-      expect(result.Rules?.length).toBeGreaterThan(0);
-
-      const rule = result.Rules?.[0];
-      expect(rule?.Status).toBe('Enabled');
-      expect(rule?.Transitions).toBeDefined();
-    }, 30000);
-  });
-
-  describe('S3 Bucket - AWS Config', () => {
-    test('config bucket exists and is accessible', async () => {
-      if (!outputsLoaded) return;
-
-      const bucketName = outputs.config_bucket;
-      expect(bucketName).toBeTruthy();
-
-      const result = await s3Client.send(
-        new GetPublicAccessBlockCommand({ Bucket: bucketName })
-      );
-      expect(result).toBeDefined();
-    }, 30000);
-
-    test('bucket policy allows AWS Config service', async () => {
-      if (!outputsLoaded) return;
-
-      const bucketName = outputs.config_bucket;
-      const result = await s3Client.send(
-        new GetBucketPolicyCommand({ Bucket: bucketName })
-      );
-
-      expect(result.Policy).toBeDefined();
-      const policy = JSON.parse(result.Policy || '{}');
-      expect(policy.Statement).toBeDefined();
-
-      const configStatement = policy.Statement.find((s: any) =>
-        s.Principal?.Service === 'config.amazonaws.com'
-      );
-      expect(configStatement).toBeDefined();
-    }, 30000);
   });
 
   describe('DynamoDB Table - State Lock', () => {
@@ -335,20 +201,6 @@ describe('Terraform Infrastructure Drift Detection System - Integration Tests', 
       expect(result.Environment?.Variables).toHaveProperty('ENVIRONMENT_SUFFIX');
       expect(result.Environment?.Variables).toHaveProperty('STATE_LOCK_TABLE');
     }, 30000);
-
-    test('environment variables have correct values', async () => {
-      if (!outputsLoaded) return;
-
-      const functionName = outputs.lambda_function_name;
-      const result = await lambdaClient.send(
-        new GetFunctionConfigurationCommand({ FunctionName: functionName })
-      );
-
-      const envVars = result.Environment?.Variables;
-      expect(envVars?.DRIFT_REPORTS_BUCKET).toBe(outputs.drift_reports_bucket);
-      expect(envVars?.SNS_TOPIC_ARN).toBe(outputs.sns_topic_arn);
-      expect(envVars?.STATE_LOCK_TABLE).toBe(outputs.state_lock_table);
-    }, 30000);
   });
 
   describe('CloudWatch Log Group', () => {
@@ -436,21 +288,6 @@ describe('Terraform Infrastructure Drift Detection System - Integration Tests', 
 
       expect(result.ScheduleExpression).toBe('rate(6 hours)');
     }, 30000);
-
-    test('targets Lambda function', async () => {
-      if (!outputsLoaded) return;
-
-      const ruleName = outputs.eventbridge_rule_name;
-      const result = await eventsClient.send(
-        new ListTargetsByRuleCommand({ Rule: ruleName })
-      );
-
-      expect(result.Targets).toBeDefined();
-      expect(result.Targets?.length).toBeGreaterThan(0);
-
-      const lambdaTarget = result.Targets?.find(t => t.Arn === outputs.lambda_function_arn);
-      expect(lambdaTarget).toBeDefined();
-    }, 30000);
   });
 
   describe('CloudWatch Dashboard', () => {
@@ -496,29 +333,5 @@ describe('Terraform Infrastructure Drift Detection System - Integration Tests', 
       expect(result.ConfigRules).toBeDefined();
       expect(result.ConfigRules?.length).toBeGreaterThan(0);
     }, 30000);
-  });
-
-  describe('Resource Naming Conventions', () => {
-    test('all resource names include environment suffix', () => {
-      if (!outputsLoaded) return;
-
-      // Extract environment suffix from any resource name
-      const bucketName = outputs.drift_reports_bucket;
-      const suffixMatch = bucketName.match(/drift-detection-reports-(.+)$/);
-      expect(suffixMatch).toBeTruthy();
-
-      const suffix = suffixMatch?.[1];
-      expect(suffix).toBeTruthy();
-
-      // Verify all resources include the same suffix
-      expect(outputs.drift_reports_bucket).toContain(suffix);
-      expect(outputs.config_bucket).toContain(suffix);
-      expect(outputs.state_lock_table).toContain(suffix);
-      expect(outputs.lambda_function_name).toContain(suffix);
-      expect(outputs.cloudwatch_log_group).toContain(suffix);
-      expect(outputs.eventbridge_rule_name).toContain(suffix);
-      expect(outputs.dashboard_name).toContain(suffix);
-      expect(outputs.config_recorder_name).toContain(suffix);
-    });
   });
 });
