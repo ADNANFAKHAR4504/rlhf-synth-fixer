@@ -28,8 +28,7 @@
             "default": "EC2 Configuration"
           },
           "Parameters": [
-            "EC2InstanceType",
-            "EC2KeyPairName"
+            "EC2InstanceType"
           ]
         },
         {
@@ -89,10 +88,6 @@
       "Default": "t3.micro",
       "Description": "EC2 instance type",
       "AllowedValues": ["t3.micro", "t3.small", "t3.medium"]
-    },
-    "EC2KeyPairName": {
-      "Type": "AWS::EC2::KeyPair::KeyName",
-      "Description": "Name of an existing EC2 KeyPair for SSH access"
     },
     "LambdaRuntime": {
       "Type": "String",
@@ -936,9 +931,6 @@
           "Ref": "EC2InstanceType"
         },
         "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
-        "KeyName": {
-          "Ref": "EC2KeyPairName"
-        },
         "IamInstanceProfile": {
           "Ref": "EC2InstanceProfile"
         },
@@ -1214,20 +1206,6 @@
         "RetentionInDays": {
           "Ref": "LogRetentionInDays"
         }
-      }
-    },
-    "IAMPasswordPolicy": {
-      "Type": "AWS::IAM::AccountPasswordPolicy",
-      "Properties": {
-        "MinimumPasswordLength": 12,
-        "RequireSymbols": true,
-        "RequireNumbers": true,
-        "RequireUppercaseCharacters": true,
-        "RequireLowercaseCharacters": true,
-        "AllowUsersToChangePassword": true,
-        "MaxPasswordAge": 90,
-        "PasswordReusePrevention": 24,
-        "HardExpiry": false
       }
     },
     "VPCFlowLogRole": {

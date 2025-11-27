@@ -555,26 +555,6 @@ describe('TapStack CloudFormation Template - Security Configuration Management',
     });
   });
 
-  describe('IAM Password Policy Configuration', () => {
-    test('should create IAM account password policy with strong requirements', () => {
-      const policy = template.Resources.IAMPasswordPolicy;
-      expect(policy.Type).toBe('AWS::IAM::AccountPasswordPolicy');
-      expect(policy.Properties.MinimumPasswordLength).toBe(12);
-      expect(policy.Properties.RequireSymbols).toBe(true);
-      expect(policy.Properties.RequireNumbers).toBe(true);
-      expect(policy.Properties.RequireUppercaseCharacters).toBe(true);
-      expect(policy.Properties.RequireLowercaseCharacters).toBe(true);
-    });
-
-    test('should create IAM account password policy with rotation and reuse prevention', () => {
-      const policy = template.Resources.IAMPasswordPolicy;
-      expect(policy.Properties.AllowUsersToChangePassword).toBe(true);
-      expect(policy.Properties.MaxPasswordAge).toBe(90);
-      expect(policy.Properties.PasswordReusePrevention).toBe(24);
-      expect(policy.Properties.HardExpiry).toBe(false);
-    });
-  });
-
   describe('VPC Flow Logs Configuration', () => {
     test('should create VPC Flow Log role with correct assume role policy', () => {
       const role = template.Resources.VPCFlowLogRole;

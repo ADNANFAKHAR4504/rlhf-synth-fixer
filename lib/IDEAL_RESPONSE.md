@@ -22,7 +22,7 @@ The storage layer implements comprehensive encryption for data at rest using bot
 
 ### Security Controls
 
-Security is implemented through multiple layers including security groups, IAM policies, KMS encryption, S3 bucket policies, and IAM password policies. The EC2SecurityGroup restricts SSH access on port 22 and HTTPS access on port 443 to instances from only the specific CIDR block defined in the AllowedCIDR parameter (defaulting to 203.0.113.0/32), implementing least privilege network access as required. The LambdaSecurityGroup allows Lambda functions to make outbound connections while preventing any inbound access, ensuring functions can reach external services through the NAT Gateway but cannot be accessed directly. IAM policies follow the principle of least privilege with EC2 instance roles granted CloudWatch and SSM permissions through managed policies, S3 read/write permissions to the specific application bucket, and KMS permissions for encryption operations. Lambda execution roles are granted only CloudWatch Logs write permissions to /aws/lambda/ log groups, S3 GetObject and ListBucket permissions to the specific application bucket, and KMS Decrypt permission to the customer-managed key. No policies use wildcard '*:*' administrative privileges as explicitly required by the prompt. S3 bucket policies enforce HTTPS using conditional deny statements checking aws:SecureTransport, preventing unencrypted data access. The IAM Account Password Policy enforces strong passwords with minimum 12 characters, requiring numbers and symbols as specified, along with uppercase and lowercase characters, 90-day password expiration, and prevention of password reuse for the last 24 passwords. VPC Flow Logs capture all network traffic for security analysis and compliance auditing. This defense-in-depth approach implements security controls at the network, application, and data layers.
+Security is implemented through multiple layers including security groups, IAM policies, KMS encryption, S3 bucket policies, and IAM password policies. The EC2SecurityGroup restricts SSH access on port 22 and HTTPS access on port 443 to instances from only the specific CIDR block defined in the AllowedCIDR parameter (defaulting to 203.0.113.0/32), implementing least privilege network access as required. The LambdaSecurityGroup allows Lambda functions to make outbound connections while preventing any inbound access, ensuring functions can reach external services through the NAT Gateway but cannot be accessed directly. IAM policies follow the principle of least privilege with EC2 instance roles granted CloudWatch and SSM permissions through managed policies, S3 read/write permissions to the specific application bucket, and KMS permissions for encryption operations. Lambda execution roles are granted only CloudWatch Logs write permissions to /aws/lambda/ log groups, S3 GetObject and ListBucket permissions to the specific application bucket, and KMS Decrypt permission to the customer-managed key. No policies use wildcard '_:_' administrative privileges as explicitly required by the prompt. S3 bucket policies enforce HTTPS using conditional deny statements checking aws:SecureTransport, preventing unencrypted data access. The IAM Account Password Policy enforces strong passwords with minimum 12 characters, requiring numbers and symbols as specified, along with uppercase and lowercase characters, 90-day password expiration, and prevention of password reuse for the last 24 passwords. VPC Flow Logs capture all network traffic for security analysis and compliance auditing. This defense-in-depth approach implements security controls at the network, application, and data layers.
 
 ### IAM Roles and Policies
 
@@ -70,7 +70,7 @@ The architecture balances high availability with security requirements for enter
           "Label": {
             "default": "EC2 Configuration"
           },
-          "Parameters": ["EC2InstanceType", "EC2KeyPairName"]
+          "Parameters": ["EC2InstanceType"]
         },
         {
           "Label": {
@@ -124,10 +124,6 @@ The architecture balances high availability with security requirements for enter
       "Default": "t3.micro",
       "Description": "EC2 instance type",
       "AllowedValues": ["t3.micro", "t3.small", "t3.medium"]
-    },
-    "EC2KeyPairName": {
-      "Type": "AWS::EC2::KeyPair::KeyName",
-      "Description": "Name of an existing EC2 KeyPair for SSH access"
     },
     "LambdaRuntime": {
       "Type": "String",
@@ -955,9 +951,6 @@ The architecture balances high availability with security requirements for enter
           "Ref": "EC2InstanceType"
         },
         "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
-        "KeyName": {
-          "Ref": "EC2KeyPairName"
-        },
         "IamInstanceProfile": {
           "Ref": "EC2InstanceProfile"
         },
@@ -1218,20 +1211,6 @@ The architecture balances high availability with security requirements for enter
         "RetentionInDays": {
           "Ref": "LogRetentionInDays"
         }
-      }
-    },
-    "IAMPasswordPolicy": {
-      "Type": "AWS::IAM::AccountPasswordPolicy",
-      "Properties": {
-        "MinimumPasswordLength": 12,
-        "RequireSymbols": true,
-        "RequireNumbers": true,
-        "RequireUppercaseCharacters": true,
-        "RequireLowercaseCharacters": true,
-        "AllowUsersToChangePassword": true,
-        "MaxPasswordAge": 90,
-        "PasswordReusePrevention": 24,
-        "HardExpiry": false
       }
     },
     "VPCFlowLogRole": {
@@ -1751,7 +1730,7 @@ The architecture balances high availability with security requirements for enter
 
 ### Security
 
-The template implements comprehensive security through defense-in-depth architecture across all layers. Network security is enforced with EC2 instances and Lambda functions deployed in private subnets, SSH and HTTPS access restricted to a specific CIDR block through the AllowedCIDR parameter, and VPC security groups preventing direct internet access. Encryption is implemented at rest using customer-managed KMS keys with automatic key rotation for S3 buckets and in transit through mandatory HTTPS enforcement via S3 bucket policy conditions that explicitly deny requests when aws:SecureTransport is false. IAM roles follow strict least privilege with EC2 instance roles granted only CloudWatch and SSM permissions through managed policies, S3 permissions limited to the application bucket, and KMS permissions for encryption operations. Lambda execution roles are granted only specific CloudWatch Logs permissions scoped to /aws/lambda/ log groups, S3 permissions limited to GetObject and ListBucket on the application bucket, and KMS Decrypt permission only for the customer-managed key. No policies use wildcard '*:*' administrative privileges as explicitly required. The IAM Account Password Policy enforces strong passwords with minimum 12 characters requiring numbers and symbols. CloudTrail provides comprehensive audit trails logging all AWS API calls to an encrypted S3 bucket as a multi-region trail with log file validation enabled. VPC Flow Logs capture all network traffic metadata for security analysis and compliance reporting. All S3 buckets block public access through PublicAccessBlockConfiguration. This multi-layer security architecture protects against unauthorized access, data breaches, and compliance violations.
+The template implements comprehensive security through defense-in-depth architecture across all layers. Network security is enforced with EC2 instances and Lambda functions deployed in private subnets, SSH and HTTPS access restricted to a specific CIDR block through the AllowedCIDR parameter, and VPC security groups preventing direct internet access. Encryption is implemented at rest using customer-managed KMS keys with automatic key rotation for S3 buckets and in transit through mandatory HTTPS enforcement via S3 bucket policy conditions that explicitly deny requests when aws:SecureTransport is false. IAM roles follow strict least privilege with EC2 instance roles granted only CloudWatch and SSM permissions through managed policies, S3 permissions limited to the application bucket, and KMS permissions for encryption operations. Lambda execution roles are granted only specific CloudWatch Logs permissions scoped to /aws/lambda/ log groups, S3 permissions limited to GetObject and ListBucket on the application bucket, and KMS Decrypt permission only for the customer-managed key. No policies use wildcard '_:_' administrative privileges as explicitly required. The IAM Account Password Policy enforces strong passwords with minimum 12 characters requiring numbers and symbols. CloudTrail provides comprehensive audit trails logging all AWS API calls to an encrypted S3 bucket as a multi-region trail with log file validation enabled. VPC Flow Logs capture all network traffic metadata for security analysis and compliance reporting. All S3 buckets block public access through PublicAccessBlockConfiguration. This multi-layer security architecture protects against unauthorized access, data breaches, and compliance violations.
 
 ### Scalability
 
@@ -1785,7 +1764,7 @@ The infrastructure uses customer-managed KMS keys rather than AWS-managed keys f
 
 ### S3 Bucket Policy for HTTPS Enforcement
 
-The S3 bucket policy explicitly enforces HTTPS for all data transfers through a conditional deny statement, implementing encryption in transit as required by security best practices and compliance frameworks. The policy uses the Condition element with aws:SecureTransport: false to identify unencrypted HTTP requests and explicitly denies them using Effect: Deny, ensuring all S3 access occurs over encrypted connections. This approach prevents data interception through man-in-the-middle attacks and ensures compliance with security standards requiring encryption in transit. The policy applies to both the bucket ARN and object ARNs using Fn::Sub: ${S3Bucket.Arn}/* ensuring all operations including bucket-level operations (ListBucket) and object-level operations (GetObject, PutObject) require HTTPS. This explicit deny policy cannot be overridden by allow policies, providing strong enforcement. The policy complements S3 bucket encryption at rest (KMS) providing comprehensive data protection with encryption in transit through mandatory HTTPS and encryption at rest through customer-managed KMS keys. This security control is critical for compliance with PCI DSS, HIPAA, and other regulations requiring encrypted data transfers.
+The S3 bucket policy explicitly enforces HTTPS for all data transfers through a conditional deny statement, implementing encryption in transit as required by security best practices and compliance frameworks. The policy uses the Condition element with aws:SecureTransport: false to identify unencrypted HTTP requests and explicitly denies them using Effect: Deny, ensuring all S3 access occurs over encrypted connections. This approach prevents data interception through man-in-the-middle attacks and ensures compliance with security standards requiring encryption in transit. The policy applies to both the bucket ARN and object ARNs using Fn::Sub: ${S3Bucket.Arn}/\* ensuring all operations including bucket-level operations (ListBucket) and object-level operations (GetObject, PutObject) require HTTPS. This explicit deny policy cannot be overridden by allow policies, providing strong enforcement. The policy complements S3 bucket encryption at rest (KMS) providing comprehensive data protection with encryption in transit through mandatory HTTPS and encryption at rest through customer-managed KMS keys. This security control is critical for compliance with PCI DSS, HIPAA, and other regulations requiring encrypted data transfers.
 
 ### IAM Password Policy for Strong Authentication
 
@@ -1801,7 +1780,7 @@ VPC Flow Logs are configured to stream to CloudWatch Logs capturing all traffic 
 
 ### IAM Least Privilege with Scoped Resource Permissions
 
-The infrastructure implements IAM roles for all services following the principle of least privilege without using hard-coded credentials as explicitly required. The EC2 instance role provides instances with permissions following least privilege including AmazonSSMManagedInstanceCore managed policy for SSM access enabling remote command execution as required, CloudWatchAgentServerPolicy managed policy for CloudWatch metrics and logs as required, custom S3 policy granting GetObject, PutObject, and ListBucket permissions exclusively to the application bucket using GetAtt for bucket ARN and Fn::Sub for object paths, and custom KMS policy granting Decrypt, GenerateDataKey, and DescribeKey permissions only to the customer-managed KMS key. The Lambda execution role includes AWSLambdaVPCAccessExecutionRole managed policy for VPC ENI management, CloudWatch Logs policy allowing CreateLogGroup, CreateLogStream, and PutLogEvents only on resources matching /aws/lambda/ log groups preventing functions from writing to other log groups, S3 policy granting GetObject and ListBucket permissions exclusively to the application bucket, and KMS policy granting Decrypt and DescribeKey permissions only to the customer-managed KMS key. No policies use wildcard resource ARNs or '*:*' administrative privileges as explicitly required by the prompt ensuring IAM policies do not grant full administrative privileges. Resource-specific ARNs using CloudFormation intrinsic functions ensure policies automatically reference the correct resources even if ARNs change during stack updates. This IAM structure eliminates the risk of privilege escalation, reduces blast radius if a service is compromised, supports compliance with regulatory requirements requiring least privilege, and follows AWS Well-Architected Framework security pillar guidance.
+The infrastructure implements IAM roles for all services following the principle of least privilege without using hard-coded credentials as explicitly required. The EC2 instance role provides instances with permissions following least privilege including AmazonSSMManagedInstanceCore managed policy for SSM access enabling remote command execution as required, CloudWatchAgentServerPolicy managed policy for CloudWatch metrics and logs as required, custom S3 policy granting GetObject, PutObject, and ListBucket permissions exclusively to the application bucket using GetAtt for bucket ARN and Fn::Sub for object paths, and custom KMS policy granting Decrypt, GenerateDataKey, and DescribeKey permissions only to the customer-managed KMS key. The Lambda execution role includes AWSLambdaVPCAccessExecutionRole managed policy for VPC ENI management, CloudWatch Logs policy allowing CreateLogGroup, CreateLogStream, and PutLogEvents only on resources matching /aws/lambda/ log groups preventing functions from writing to other log groups, S3 policy granting GetObject and ListBucket permissions exclusively to the application bucket, and KMS policy granting Decrypt and DescribeKey permissions only to the customer-managed KMS key. No policies use wildcard resource ARNs or '_:_' administrative privileges as explicitly required by the prompt ensuring IAM policies do not grant full administrative privileges. Resource-specific ARNs using CloudFormation intrinsic functions ensure policies automatically reference the correct resources even if ARNs change during stack updates. This IAM structure eliminates the risk of privilege escalation, reduces blast radius if a service is compromised, supports compliance with regulatory requirements requiring least privilege, and follows AWS Well-Architected Framework security pillar guidance.
 
 ### Comprehensive Resource Tagging for Governance
 

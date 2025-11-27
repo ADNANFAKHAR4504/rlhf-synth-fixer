@@ -45,8 +45,7 @@ When tasked with creating a security configuration management solution with VPC 
           "default": "EC2 Configuration"
         },
         "Parameters": [
-          "EC2InstanceType",
-          "EC2KeyPairName"
+          "EC2InstanceType"
         ]
       },
       {
