@@ -84,28 +84,8 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
       expect(template.Conditions.IsSourceRegion['Fn::Equals']).toBeDefined();
     });
 
-    test('should have CreateVPCPeering condition', () => {
-      expect(template.Conditions.CreateVPCPeering).toBeDefined();
-      expect(template.Conditions.CreateVPCPeering['Fn::And']).toBeDefined();
-    });
-
-    test('CreateVPCPeering should check EnableCrossRegionFeatures, VpcPeeringEnabled, IsSourceRegion, and TargetVpcId not empty', () => {
-      const condition = template.Conditions.CreateVPCPeering['Fn::And'];
-      expect(condition).toHaveLength(4);
-      // Check first condition: EnableCrossRegionFeatures == true
-      expect(condition[0]['Fn::Equals'][0]['Ref']).toBe('EnableCrossRegionFeatures');
-      expect(condition[0]['Fn::Equals'][1]).toBe('true');
-      // Check second condition: VpcPeeringEnabled == true
-      expect(condition[1]['Fn::Equals'][0]['Ref']).toBe('VpcPeeringEnabled');
-      expect(condition[1]['Fn::Equals'][1]).toBe('true');
-      // Check third condition: AWS::Region == SourceRegion
-      expect(condition[2]['Fn::Equals'][0]['Ref']).toBe('AWS::Region');
-      expect(condition[2]['Fn::Equals'][1]['Ref']).toBe('SourceRegion');
-      // Check fourth condition: TargetVpcId != ""
-      expect(condition[3]['Fn::Not']).toBeDefined();
-      expect(condition[3]['Fn::Not'][0]['Fn::Equals'][0]['Ref']).toBe('TargetVpcId');
-      expect(condition[3]['Fn::Not'][0]['Fn::Equals'][1]).toBe('');
-    });
+    // VPC Peering resources and condition removed to fix AWS Early Validation errors
+    // Cross-region VPC references caused validation failures
 
     test('should have IsTargetRegion condition', () => {
       expect(template.Conditions.IsTargetRegion).toBeDefined();
@@ -382,11 +362,7 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
       expect(template.Resources.LambdaSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
     });
 
-    test('should have VPCPeeringConnection with condition', () => {
-      expect(template.Resources.VPCPeeringConnection).toBeDefined();
-      expect(template.Resources.VPCPeeringConnection.Type).toBe('AWS::EC2::VPCPeeringConnection');
-      expect(template.Resources.VPCPeeringConnection.Condition).toBe('CreateVPCPeering');
-    });
+    // VPCPeeringConnection removed (cross-region references)
   });
 
   describe('SNS Resources', () => {
@@ -751,9 +727,8 @@ describe('TapStack CloudFormation Template - Cross-Region Migration', () => {
     test('no resources should have Retain deletion policy (except Global Tables and VPC Peering)', () => {
       // Global Tables require Retain policy to prevent 24-hour cooldown issues
       // when replicas are added/removed. This is a necessary exception.
-      // VPC Peering connections should also have Retain policy to prevent accidental
-      // deletion which would break cross-region connectivity.
-      const allowedRetainResources = ['TradingAnalyticsGlobalTable', 'VPCPeeringConnection'];
+      // Only Global Table is allowed to have Retain policy
+      const allowedRetainResources = ['TradingAnalyticsGlobalTable'];
 
       Object.keys(template.Resources).forEach(resourceName => {
         const resource = template.Resources[resourceName];

@@ -20,31 +20,6 @@
       "Description": "Target region for migration",
       "Type": "String",
       "Default": "eu-central-1"
-    },
-    "VpcPeeringEnabled": {
-      "Description": "Enable VPC peering between regions",
-      "Type": "String",
-      "AllowedValues": [
-        "true",
-        "false"
-      ],
-      "Default": "false"
-    },
-    "TargetVpcId": {
-      "Description": "Target VPC ID for VPC peering (required only if VpcPeeringEnabled is true)",
-      "Type": "String",
-      "Default": "",
-      "AllowedPattern": "^$|^vpc-[0-9a-f]{8,17}$",
-      "ConstraintDescription": "Must be a valid VPC ID (vpc-xxxxxxxx) or empty string"
-    },
-    "EnableCrossRegionFeatures": {
-      "Description": "Enable cross-region features (S3 replication, VPC peering). Set to false for initial single-region deployment, then true after both regions are deployed.",
-      "Type": "String",
-      "AllowedValues": [
-        "true",
-        "false"
-      ],
-      "Default": "false"
     }
   },
   "Conditions": {
@@ -65,48 +40,6 @@
         },
         {
           "Ref": "TargetRegion"
-        }
-      ]
-    },
-    "CreateVPCPeering": {
-      "Fn::And": [
-        {
-          "Fn::Equals": [
-            {
-              "Ref": "EnableCrossRegionFeatures"
-            },
-            "true"
-          ]
-        },
-        {
-          "Fn::Equals": [
-            {
-              "Ref": "VpcPeeringEnabled"
-            },
-            "true"
-          ]
-        },
-        {
-          "Fn::Equals": [
-            {
-              "Ref": "AWS::Region"
-            },
-            {
-              "Ref": "SourceRegion"
-            }
-          ]
-        },
-        {
-          "Fn::Not": [
-            {
-              "Fn::Equals": [
-                {
-                  "Ref": "TargetVpcId"
-                },
-                ""
-              ]
-            }
-          ]
         }
       ]
     }
@@ -890,43 +823,6 @@
             }
           }
         ]
-      }
-    },
-    "VPCPeeringConnection": {
-      "Type": "AWS::EC2::VPCPeeringConnection",
-      "Condition": "CreateVPCPeering",
-      "DeletionPolicy": "Retain",
-      "UpdateReplacePolicy": "Retain",
-      "Properties": {
-        "VpcId": {
-          "Ref": "TradingVPC"
-        },
-        "PeerVpcId": {
-          "Ref": "TargetVpcId"
-        },
-        "PeerRegion": {
-          "Ref": "TargetRegion"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "vpc-peering-${EnvironmentSuffix}"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "EnvironmentSuffix"
-            }
-          }
-        ]
-      },
-      "Metadata": {
-        "AWS::CloudFormation::Designer": {
-          "id": "VPCPeeringConnection"
-        },
-        "Note": "VPC peering connection is only created when VpcPeeringEnabled=true, in source region, and TargetVpcId is provided. Early validation may fail if target VPC doesn't exist yet - deploy target region stack first."
       }
     },
     "MonitoringDashboard": {
