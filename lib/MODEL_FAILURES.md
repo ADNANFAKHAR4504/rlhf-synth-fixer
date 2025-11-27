@@ -381,3 +381,42 @@ Use parameter or derive from environment suffix:
   - Missing awareness of resource creation ordering requirements
 
 The fixes applied teach critical skills for multi-region disaster recovery architectures, including proper security group configuration, global database setup, and DNS failover configuration. These are production-blocking issues that must be understood for real-world AWS deployments.
+
+---
+
+## Additional Issues Fixed
+
+### 9. Incorrect Test Framework Choice
+
+**Impact Level**: Medium
+
+**Issue**:
+Tests were originally written in Python (pytest) instead of TypeScript (Jest) as required by the IaC workflow skill guidelines for CloudFormation JSON projects.
+
+**Original Implementation**:
+- `test/test_cfn_stack_unit.py` - Python unit tests using pytest
+- `test/test_cfn_stack_integration.py` - Python integration tests
+
+**IDEAL_RESPONSE Fix**:
+Converted all tests to TypeScript with Jest:
+- `test/cfn-dr-stack.unit.test.ts` - 80+ TypeScript unit tests
+- `test/cfn-dr-stack.int.test.ts` - 60+ TypeScript integration tests
+
+**Root Cause**: The skill documentation clearly states that CloudFormation templates (regardless of language) should use TypeScript/Jest for testing to maintain consistency across IaC projects.
+
+**AWS Documentation Reference**: [Jest Testing Framework](https://jestjs.io/docs/getting-started)
+
+**Benefits of TypeScript Tests**:
+1. **Type Safety**: AWS SDK v3 types provide compile-time validation
+2. **Consistency**: All IaC projects use same testing framework
+3. **Better IDE Support**: IntelliSense and autocompletion
+4. **Modern Async/Await**: Cleaner test code with async/await
+5. **Better Error Messages**: TypeScript compilation errors are clearer
+
+**Test Coverage**:
+- Unit tests: 80 tests covering template structure, parameters, resources, outputs, security
+- Integration tests: 60+ tests covering deployed infrastructure in both regions
+- All tests passing with proper AWS SDK v3 integration
+
+---
+

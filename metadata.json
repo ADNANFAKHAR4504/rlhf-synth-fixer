@@ -4,6 +4,7 @@
   "complexity": "expert",
   "turn_type": "single",
   "team": "synth",
+  "author": "mayanksethi-turing",
   "startedAt": "2025-11-26T10:30:00-08:00",
   "subtask": "Failure Recovery and High Availability",
   "subject_labels": [
@@ -18,7 +19,9 @@
     "SNS",
     "IAM",
     "VPC",
-    "RDS"
+    "RDS",
+    "CloudWatch Logs",
+    "EC2"
   ],
   "region": "us-east-1",
   "training_quality": 10
