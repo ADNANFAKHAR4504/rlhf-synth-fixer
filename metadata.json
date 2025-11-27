@@ -4,16 +4,18 @@
   "platform": "cfn",
   "language": "json",
   "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
   "region": "us-east-1",
-  "environment_suffix": "synth101912761pr",
   "training_quality": 8,
   "author": "iamarpit-turing",
   "reviewer": "adnan-turing",
-  "tags": {
-    "Environment": "test",
-    "Owner": "iac-synth-trainer",
-    "CostCenter": "training"
-  },
+  "subject_labels": [
+    "VPC",
+    "Dual-Stack",
+    "Networking",
+    "Security"
+  ],
   "aws_services": [
     "EC2",
     "VPC",
