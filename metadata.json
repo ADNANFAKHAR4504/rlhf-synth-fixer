@@ -6,10 +6,9 @@
   "po_id": "101912798",
   "team": "synth",
   "startedAt": "2025-11-27T10:18:44+00:00",
-  "subtask": "IaC Program Optimization",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "IaC Diagnosis/Edits",
-    "IaC Optimization"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "VPC",
@@ -24,5 +23,7 @@
     "SNS",
     "IAM"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing"
 }

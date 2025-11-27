@@ -494,7 +494,6 @@
 
     "AutoScalingGroup": {
       "Type": "AWS::AutoScaling::AutoScalingGroup",
-      "DependsOn": "ALBTargetGroup",
       "Properties": {
         "AutoScalingGroupName": { "Fn::Sub": "asg-${EnvironmentSuffix}" },
         "LaunchTemplate": {
