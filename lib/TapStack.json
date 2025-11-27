@@ -1266,8 +1266,7 @@
       "Properties": {
         "RestApiId": {
           "Ref": "RestApi"
-        },
-        "StageName": "prod"
+        }
       }
     },
     "ApiStage": {
