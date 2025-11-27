@@ -636,6 +636,7 @@ jobs:
     # For all other subject labels: Require int-tests to succeed
     if: |
       always() && !cancelled() &&
+      github.event_name == 'pull_request' &&
       (needs.analysis.result == 'success' || needs.analysis.result == 'skipped') &&
       (needs.cicd-pipeline-optimization.result == 'success' || needs.cicd-pipeline-optimization.result == 'skipped') &&
       (
