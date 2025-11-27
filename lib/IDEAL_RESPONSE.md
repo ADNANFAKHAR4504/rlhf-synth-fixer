@@ -133,22 +133,7 @@ resource "aws_kms_alias" "rds_encryption" {
   target_key_id = aws_kms_key.rds_encryption.key_id
 }
 
-# KMS key for S3 encryption
-resource "aws_kms_key" "s3_encryption" {
-  description             = "KMS key for S3 encryption in ${var.environment_suffix} environment"
-  deletion_window_in_days = var.environment_suffix == "prod" ? 30 : 7
-  enable_key_rotation     = true
 
-  tags = merge(local.common_tags, {
-    Name    = "${local.name_prefix}-s3-kms-key"
-    Service = "S3"
-  })
-}
-
-resource "aws_kms_alias" "s3_encryption" {
-  name          = "alias/${local.name_prefix}-s3-encryption"
-  target_key_id = aws_kms_key.s3_encryption.key_id
-}
 
 # ================================
 # AWS SECRETS MANAGER
@@ -174,7 +159,7 @@ resource "aws_secretsmanager_secret" "db_password" {
 }
 
 resource "aws_secretsmanager_secret_version" "db_password" {
-  secret_id     = aws_secretsmanager_secret.db_password.id
+  secret_id = aws_secretsmanager_secret.db_password.id
   secret_string = jsonencode({
     username = "dbadmin"
     password = random_password.db_password.result
@@ -478,9 +463,9 @@ resource "aws_db_instance" "main" {
   max_allocated_storage = var.db_allocated_storage * 2
 
   # Database settings
-  db_name  = "paymentdb"
-  username = "dbadmin"
-  manage_master_user_password = true
+  db_name                       = "paymentdb"
+  username                      = "dbadmin"
+  manage_master_user_password   = true
   master_user_secret_kms_key_id = aws_kms_key.rds_encryption.arn
 
   # Network configuration
@@ -588,10 +573,7 @@ resource "aws_s3_bucket" "assets" {
   })
 }
 
-# Random ID for bucket naming
-resource "random_id" "bucket_suffix" {
-  byte_length = 4
-}
+
 
 # S3 Bucket Versioning
 resource "aws_s3_bucket_versioning" "assets" {
