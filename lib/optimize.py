@@ -537,9 +537,15 @@ class PaymentPlatformOptimizer:
 
         try:
             # Get ASG details
-            asg_info = self.autoscaling_client.describe_auto_scaling_groups(
+            asg_response = self.autoscaling_client.describe_auto_scaling_groups(
                 AutoScalingGroupNames=[asg_name]
-            )['AutoScalingGroups'][0]
+            )['AutoScalingGroups']
+
+            if not asg_response:
+                logger.warning(f"ASG {asg_name} not found")
+                return {'error': f'ASG {asg_name} not found'}
+
+            asg_info = asg_response[0]
 
             # Get launch template details
             instance_type = 't3.small'  # Default
