@@ -4,7 +4,7 @@ from cdktf_cdktf_provider_aws.provider import AwsProvider, AwsProviderConfig
 from cdktf_cdktf_provider_aws.vpc import Vpc
 from cdktf_cdktf_provider_aws.subnet import Subnet
 from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
-from cdktf_cdktf_provider_aws.route_table import RouteTable
+from cdktf_cdktf_provider_aws.route_table import RouteTable, RouteTableRoute
 from cdktf_cdktf_provider_aws.route_table_association import RouteTableAssociation
 from cdktf_cdktf_provider_aws.nat_gateway import NatGateway
 from cdktf_cdktf_provider_aws.eip import Eip
@@ -177,10 +177,12 @@ class TapStack(TerraformStack):
             self,
             "primary_public_rt",
             vpc_id=primary_vpc.id,
-            route=[{
-                "cidr_block": "0.0.0.0/0",
-                "gateway_id": primary_igw.id
-            }],
+            route=[
+                RouteTableRoute(
+                    cidr_block="0.0.0.0/0",
+                    gateway_id=primary_igw.id
+                )
+            ],
             tags={
                 "Name": f"payment-public-rt-primary-{environment_suffix}"
             },
@@ -223,10 +225,12 @@ class TapStack(TerraformStack):
             self,
             "primary_private_rt",
             vpc_id=primary_vpc.id,
-            route=[{
-                "cidr_block": "0.0.0.0/0",
-                "nat_gateway_id": primary_nat.id
-            }],
+            route=[
+                RouteTableRoute(
+                    cidr_block="0.0.0.0/0",
+                    nat_gateway_id=primary_nat.id
+                )
+            ],
             tags={
                 "Name": f"payment-private-rt-primary-{environment_suffix}"
             },
@@ -340,10 +344,12 @@ class TapStack(TerraformStack):
             self,
             "secondary_public_rt",
             vpc_id=secondary_vpc.id,
-            route=[{
-                "cidr_block": "0.0.0.0/0",
-                "gateway_id": secondary_igw.id
-            }],
+            route=[
+                RouteTableRoute(
+                    cidr_block="0.0.0.0/0",
+                    gateway_id=secondary_igw.id
+                )
+            ],
             tags={
                 "Name": f"payment-public-rt-secondary-{environment_suffix}"
             },
@@ -386,10 +392,12 @@ class TapStack(TerraformStack):
             self,
             "secondary_private_rt",
             vpc_id=secondary_vpc.id,
-            route=[{
-                "cidr_block": "0.0.0.0/0",
-                "nat_gateway_id": secondary_nat.id
-            }],
+            route=[
+                RouteTableRoute(
+                    cidr_block="0.0.0.0/0",
+                    nat_gateway_id=secondary_nat.id
+                )
+            ],
             tags={
                 "Name": f"payment-private-rt-secondary-{environment_suffix}"
             },
@@ -542,7 +550,8 @@ class TapStack(TerraformStack):
             skip_final_snapshot=True,
             backup_retention_period=7,
             preferred_backup_window="03:00-04:00",
-            backtrack_window=259200,  # 72 hours in seconds
+            # Note: backtrack_window is not supported for Aurora Global Databases
+            # Use point-in-time recovery and cross-region backups for rollback capability
             storage_encrypted=True,
             enabled_cloudwatch_logs_exports=["audit", "error", "general", "slowquery"],
             tags={

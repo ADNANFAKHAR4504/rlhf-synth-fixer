@@ -23,6 +23,67 @@ This implementation provides a production-ready multi-region disaster recovery a
 **Issue**: Constructor parameter named 'id' shadows Python built-in
 **Fix**: Renamed to 'stack_id' to avoid shadowing built-in 'id' function
 
+### 4. Aurora Global Database Backtrack Limitation
+**Issue**: `backtrack_window` is not supported for Aurora Global Databases
+**Error**: `InvalidParameterCombination: Backtrack is not supported for global databases`
+**Fix**: Removed `backtrack_window` parameter from Aurora clusters. Use point-in-time recovery (7-day backup retention) and cross-region backups for rollback capability instead.
+
+### 5. RouteTable Route Configuration
+**Issue**: RouteTable routes used dictionary syntax instead of RouteTableRoute class
+**Error**: `Error: creating route: one of cidr_block, ipv6_cidr_block, destination_prefix_list_id must be specified`
+**Fix**: Updated all RouteTable configurations to use `RouteTableRoute` class:
+```python
+from cdktf_cdktf_provider_aws.route_table import RouteTable, RouteTableRoute
+
+RouteTable(
+    self,
+    "primary_public_rt",
+    vpc_id=primary_vpc.id,
+    route=[
+        RouteTableRoute(
+            cidr_block="0.0.0.0/0",
+            gateway_id=primary_igw.id
+        )
+    ],
+    ...
+)
+```
+
+### 6. DMS Replication Instance Engine Version
+**Issue**: Invalid DMS engine version specified (`3.5.2` doesn't exist)
+**Error**: `No replication engine found with version: 3.5.2`
+**Fix**: Removed explicit `engine_version` parameter to use AWS default/latest version. Set `auto_minor_version_upgrade=True` for automatic updates.
+
+### 7. Route53 Hosted Zone Reserved Domain
+**Issue**: `example.com` is reserved by AWS and cannot be used for hosted zones
+**Error**: `InvalidDomainName: migration-pr7312.example.com is reserved by AWS!`
+**Fix**: Made Route53 domain configurable via `ROUTE53_DOMAIN` environment variable, defaulting to `migration-{environment_suffix}.internal`:
+```python
+route53_domain = os.environ.get('ROUTE53_DOMAIN', f"migration-{environment_suffix}.internal")
+hosted_zone = Route53Zone(
+    self,
+    "migration_hosted_zone",
+    name=route53_domain,
+    ...
+)
+```
+
+### 8. Security Group Duplicate Ingress Rules
+**Issue**: Duplicate ingress rules with same port/protocol/CIDR in Aurora security group
+**Error**: `The same permission must not appear multiple times`
+**Fix**: Consolidated duplicate rules into a single ingress rule:
+```python
+ingress=[
+    SecurityGroupIngress(
+        description="PostgreSQL from VPC and DMS",
+        from_port=5432,
+        to_port=5432,
+        protocol="tcp",
+        cidr_blocks=["10.0.0.0/16"]
+    )
+]
+```
+
 ## Key Implementation Files
 
 ### lib/tap_stack.py (CORRECTED)
@@ -34,7 +95,7 @@ from cdktf_cdktf_provider_aws.provider import AwsProvider, AwsProviderConfig
 from cdktf_cdktf_provider_aws.vpc import Vpc
 from cdktf_cdktf_provider_aws.subnet import Subnet
 from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
-from cdktf_cdktf_provider_aws.route_table import RouteTable
+from cdktf_cdktf_provider_aws.route_table import RouteTable, RouteTableRoute
 from cdktf_cdktf_provider_aws.route_table_association import RouteTableAssociation
 from cdktf_cdktf_provider_aws.nat_gateway import NatGateway
 from cdktf_cdktf_provider_aws.eip import Eip
@@ -393,7 +454,7 @@ aws lambda list-functions --region us-west-2 --query "Functions[?contains(Functi
 - **Private subnets**: Lambda functions run in private subnets
 - **NAT Gateways**: Single NAT Gateway per region for cost optimization
 - **Security Groups**: Properly configured for RDS and Lambda access
-- **Global Database**: Aurora Global Database with automated backtracking (72 hours)
+- **Global Database**: Aurora Global Database with point-in-time recovery (7-day retention) and cross-region backups (Note: backtrack is not supported for global databases)
 - **Automated Failover**: Route 53 health checks enable automatic DNS failover
 - **Cross-region Backup**: AWS Backup with daily snapshots copied to secondary region
 - **Event Replication**: EventBridge rules capture and replicate critical events
@@ -438,6 +499,11 @@ aws lambda list-functions --region us-west-2 --query "Functions[?contains(Functi
 4. **Type Safety**: Proper typing for all constructor parameters
 5. **Flexibility**: Parameters can be passed explicitly or read from environment variables
 6. **Documentation**: Clear inline comments for all fixes applied
+7. **Aurora Global Database**: Removed unsupported backtrack feature, using PITR and backups instead
+8. **RouteTable Configuration**: Fixed to use RouteTableRoute class for proper route definitions
+9. **DMS Configuration**: Removed invalid engine version, using AWS defaults
+10. **Route53 Domain**: Made domain configurable to avoid reserved domain conflicts
+11. **Security Groups**: Fixed duplicate ingress rules to prevent deployment errors
 
 ## Testing
 

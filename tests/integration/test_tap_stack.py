@@ -365,7 +365,12 @@ class TestTapStackIntegration(unittest.TestCase):
         hosted_zone = response['HostedZone']
         
         self.assertIsNotNone(hosted_zone)
-        self.assertIn(self.environment_suffix, hosted_zone['Name'])
+        # Zone name should contain environment suffix (e.g., payment-{suffix}.internal)
+        zone_name = hosted_zone['Name'].rstrip('.')  # Remove trailing dot
+        self.assertIn(self.environment_suffix, zone_name)
+        
+        # Verify it's not using reserved example.com domain
+        self.assertNotIn('example.com', zone_name.lower())
 
     @mark.it("Route 53 health checks are configured")
     def test_route53_health_checks(self):
@@ -382,16 +387,35 @@ class TestTapStackIntegration(unittest.TestCase):
         # Should have at least 2 health checks (primary and secondary)
         self.assertGreaterEqual(len(health_checks), 2)
         
-        # Verify health checks are configured correctly
+        # Find primary and secondary health checks by name pattern
+        primary_hc = None
+        secondary_hc = None
         for hc in health_checks:
-            self.assertIn(hc['HealthCheckConfig']['Type'], ['HTTPS', 'HTTP'])
-            self.assertEqual(hc['HealthCheckConfig']['RequestInterval'], 30)
-            self.assertEqual(hc['HealthCheckConfig']['FailureThreshold'], 3)
+            hc_name = hc.get('HealthCheckConfig', {}).get('FullyQualifiedDomainName', '')
+            if f'primary-{self.environment_suffix}' in hc_name:
+                primary_hc = hc
+            elif f'secondary-{self.environment_suffix}' in hc_name:
+                secondary_hc = hc
+        
+        # Verify both health checks exist
+        self.assertIsNotNone(primary_hc, "Primary health check not found")
+        self.assertIsNotNone(secondary_hc, "Secondary health check not found")
+        
+        # Verify health checks are configured correctly
+        for hc in [primary_hc, secondary_hc]:
+            config = hc['HealthCheckConfig']
+            self.assertIn(config['Type'], ['HTTPS', 'HTTP'])
+            self.assertEqual(config['RequestInterval'], 30)
+            self.assertEqual(config['FailureThreshold'], 3)
+            if config['Type'] == 'HTTPS':
+                self.assertEqual(config['Port'], 443)
+                self.assertEqual(config['ResourcePath'], '/health')
 
     @mark.it("Route 53 failover records are configured")
     def test_route53_failover_records(self):
         """Test Route 53 failover routing records."""
         zone_id = self.outputs.get('route53_zone_id')
+        api_endpoint = self.outputs.get('api_endpoint')
         
         if not zone_id:
             self.skipTest("Route 53 zone ID not found in outputs")
@@ -401,29 +425,88 @@ class TestTapStackIntegration(unittest.TestCase):
         records = response['ResourceRecordSets']
         
         # Find A records with failover routing
-        failover_records = [
-            r for r in records
-            if r['Type'] == 'A' and 'Failover' in str(r.get('SetIdentifier', ''))
-        ]
+        # Route53 records with failover routing have SetIdentifier and Failover in the routing policy
+        failover_records = []
+        for r in records:
+            if r['Type'] == 'A' and r.get('SetIdentifier'):
+                # Check if it has failover routing policy (can be in Failover field or SetIdentifier)
+                set_id = r.get('SetIdentifier', '').lower()
+                if 'primary' in set_id or 'secondary' in set_id:
+                    failover_records.append(r)
         
-        self.assertGreaterEqual(len(failover_records), 2)  # Primary and secondary
+        self.assertGreaterEqual(len(failover_records), 2, "Should have at least 2 failover records")
+        
+        # Verify primary and secondary records exist by SetIdentifier
+        primary_record = None
+        secondary_record = None
+        for r in failover_records:
+            set_id = r.get('SetIdentifier', '').lower()
+            if 'primary' in set_id:
+                primary_record = r
+            elif 'secondary' in set_id:
+                secondary_record = r
+        
+        self.assertIsNotNone(primary_record, "Primary failover record not found")
+        self.assertIsNotNone(secondary_record, "Secondary failover record not found")
+        
+        # Verify records point to api.{domain}
+        if api_endpoint:
+            # api_endpoint format: api.payment-{suffix}.internal
+            for r in [primary_record, secondary_record]:
+                record_name = r['Name'].rstrip('.')  # Remove trailing dot
+                self.assertIn('api.', record_name.lower())
+                self.assertIn(self.environment_suffix, record_name)
+                # Verify record has health check associated (if present in response)
+                if 'HealthCheckId' in r:
+                    self.assertIsNotNone(r['HealthCheckId'])
 
     @mark.it("EventBridge rules are created in both regions")
     def test_eventbridge_rules(self):
         """Test EventBridge rules in both regions."""
         # Check primary region rules
         response = self.eventbridge_primary.list_rules(
-            NamePrefix=f'payment-{self.environment_suffix}'
+            NamePrefix=f'payment-events-{self.environment_suffix}'
         )
         primary_rules = response['Rules']
         self.assertGreaterEqual(len(primary_rules), 1)
         
+        # Verify primary rule exists
+        primary_rule_name = f"payment-events-primary-{self.environment_suffix}"
+        primary_rule = next((r for r in primary_rules if r['Name'] == primary_rule_name), None)
+        self.assertIsNotNone(primary_rule, f"Primary EventBridge rule '{primary_rule_name}' not found")
+        self.assertEqual(primary_rule['State'], 'ENABLED')
+        
         # Check secondary region rules
         response = self.eventbridge_secondary.list_rules(
-            NamePrefix=f'payment-{self.environment_suffix}'
+            NamePrefix=f'payment-events-{self.environment_suffix}'
         )
         secondary_rules = response['Rules']
         self.assertGreaterEqual(len(secondary_rules), 1)
+        
+        # Verify secondary rule exists
+        secondary_rule_name = f"payment-events-secondary-{self.environment_suffix}"
+        secondary_rule = next((r for r in secondary_rules if r['Name'] == secondary_rule_name), None)
+        self.assertIsNotNone(secondary_rule, f"Secondary EventBridge rule '{secondary_rule_name}' not found")
+        self.assertEqual(secondary_rule['State'], 'ENABLED')
+
+    @mark.it("EventBridge event buses are created in both regions")
+    def test_eventbridge_event_buses(self):
+        """Test EventBridge custom event buses in both regions."""
+        # Check primary region event bus
+        primary_bus_name = f"payment-event-bus-primary-{self.environment_suffix}"
+        try:
+            response = self.eventbridge_primary.describe_event_bus(Name=primary_bus_name)
+            self.assertEqual(response['Name'], primary_bus_name)
+        except ClientError as e:
+            self.fail(f"Primary EventBridge event bus not found: {e}")
+        
+        # Check secondary region event bus
+        secondary_bus_name = f"payment-event-bus-secondary-{self.environment_suffix}"
+        try:
+            response = self.eventbridge_secondary.describe_event_bus(Name=secondary_bus_name)
+            self.assertEqual(response['Name'], secondary_bus_name)
+        except ClientError as e:
+            self.fail(f"Secondary EventBridge event bus not found: {e}")
 
     @mark.it("AWS Backup vaults are created in both regions")
     def test_backup_vaults(self):
@@ -496,23 +579,33 @@ class TestTapStackIntegration(unittest.TestCase):
     @mark.it("CloudWatch alarms are configured for replication lag")
     def test_cloudwatch_alarms(self):
         """Test CloudWatch alarm configuration."""
-        # Check for replication lag alarms
-        alarm_name_prefix = f"payment-replication-lag-{self.environment_suffix}"
-        
+        # Check for replication lag alarms in primary region
+        primary_alarm_name = f"payment-replication-lag-primary-{self.environment_suffix}"
         response = self.cloudwatch_primary.describe_alarms(
-            AlarmNamePrefix=alarm_name_prefix
+            AlarmNames=[primary_alarm_name]
         )
-        alarms = response['MetricAlarms']
+        primary_alarms = response['MetricAlarms']
         
-        # Should have alarms for replication lag
-        self.assertGreaterEqual(len(alarms), 1)
+        self.assertGreaterEqual(len(primary_alarms), 1, "Primary replication lag alarm not found")
+        primary_alarm = primary_alarms[0]
+        self.assertEqual(primary_alarm['MetricName'], 'AuroraGlobalDBReplicationLag')
+        self.assertEqual(primary_alarm['Namespace'], 'AWS/RDS')
+        self.assertEqual(primary_alarm['ComparisonOperator'], 'GreaterThanThreshold')
+        self.assertEqual(primary_alarm['Threshold'], 60000)  # 60 seconds in milliseconds
         
-        # Verify alarm configuration
-        for alarm in alarms:
-            self.assertEqual(alarm['MetricName'], 'AuroraGlobalDBReplicationLag')
-            self.assertEqual(alarm['Namespace'], 'AWS/RDS')
-            self.assertEqual(alarm['ComparisonOperator'], 'GreaterThanThreshold')
-            self.assertEqual(alarm['Threshold'], 60000)  # 60 seconds
+        # Check for replication lag alarms in secondary region
+        secondary_alarm_name = f"payment-replication-lag-secondary-{self.environment_suffix}"
+        response = self.cloudwatch_secondary.describe_alarms(
+            AlarmNames=[secondary_alarm_name]
+        )
+        secondary_alarms = response['MetricAlarms']
+        
+        self.assertGreaterEqual(len(secondary_alarms), 1, "Secondary replication lag alarm not found")
+        secondary_alarm = secondary_alarms[0]
+        self.assertEqual(secondary_alarm['MetricName'], 'AuroraGlobalDBReplicationLag')
+        self.assertEqual(secondary_alarm['Namespace'], 'AWS/RDS')
+        self.assertEqual(secondary_alarm['ComparisonOperator'], 'GreaterThanThreshold')
+        self.assertEqual(secondary_alarm['Threshold'], 60000)  # 60 seconds in milliseconds
 
     @mark.it("SSM parameters are created for database endpoints")
     def test_ssm_parameters(self):
@@ -561,6 +654,35 @@ class TestTapStackIntegration(unittest.TestCase):
             self.assertTrue(lambda_principal)
         except ClientError as e:
             self.fail(f"Primary Lambda role not found: {e}")
+        
+        # Check secondary Lambda role
+        try:
+            response = self.iam.get_role(RoleName=secondary_role_name)
+            role = response['Role']
+            self.assertIsNotNone(role)
+        except ClientError as e:
+            self.fail(f"Secondary Lambda role not found: {e}")
+        
+        # Check DR automation role
+        dr_role_name = f"payment-dr-automation-role-{self.environment_suffix}"
+        try:
+            response = self.iam.get_role(RoleName=dr_role_name)
+            role = response['Role']
+            self.assertIsNotNone(role)
+            
+            # Verify assume role policy allows Lambda and EventBridge
+            assume_policy = json.loads(role['AssumeRolePolicyDocument'])
+            statements = assume_policy['Statement']
+            services = set()
+            for stmt in statements:
+                service = stmt.get('Principal', {}).get('Service')
+                if service:
+                    services.add(service)
+            
+            self.assertIn('lambda.amazonaws.com', services)
+            self.assertIn('events.amazonaws.com', services)
+        except ClientError as e:
+            self.fail(f"DR automation role not found: {e}")
 
     @mark.it("resources are properly tagged")
     def test_resource_tagging(self):
@@ -603,6 +725,17 @@ class TestTapStackIntegration(unittest.TestCase):
             self.assertIn(output_name, self.outputs, f"Output {output_name} missing")
             self.assertIsNotNone(self.outputs[output_name], f"Output {output_name} is None")
             self.assertNotEqual(self.outputs[output_name], '', f"Output {output_name} is empty")
+        
+        # Verify api_endpoint format (should be api.{domain})
+        api_endpoint = self.outputs.get('api_endpoint', '')
+        if api_endpoint:
+            self.assertTrue(api_endpoint.startswith('api.'), 
+                          f"API endpoint should start with 'api.': {api_endpoint}")
+            self.assertIn(self.environment_suffix, api_endpoint,
+                        f"API endpoint should contain environment suffix: {api_endpoint}")
+            # Should not use reserved example.com domain
+            self.assertNotIn('example.com', api_endpoint.lower(),
+                           f"API endpoint should not use reserved example.com domain: {api_endpoint}")
 
     @mark.it("resource naming consistency")
     def test_resource_naming_consistency(self):

@@ -173,13 +173,254 @@ The IDEAL_RESPONSE includes a comprehensive `tap.py` that:
 
 ---
 
+### 5. Aurora Global Database Backtrack Not Supported
+
+**Impact Level**: Critical
+
+**MODEL_RESPONSE Issue**:
+```python
+backtrack_window=259200,  # 72 hours in seconds
+```
+
+The MODEL_RESPONSE attempts to enable backtrack on an Aurora Global Database cluster, but backtrack is not supported for global databases.
+
+**Error**:
+```
+InvalidParameterCombination: Backtrack is not supported for global databases.
+```
+
+**IDEAL_RESPONSE Fix**:
+```python
+# Note: backtrack_window is not supported for Aurora Global Databases
+# Use point-in-time recovery and cross-region backups for rollback capability
+# Removed backtrack_window parameter
+backup_retention_period=7,  # Enables PITR
+preferred_backup_window="03:00-04:00",
+```
+
+**Root Cause**: The model didn't verify AWS service limitations for Aurora Global Databases. Backtrack is only available for regional Aurora clusters, not global databases.
+
+**AWS Documentation Reference**:
+- Aurora Backtrack: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/AuroraMySQL.Managing.Backtrack.html
+- Aurora Global Database Limitations: Backtrack is not available for global database clusters
+
+**Cost/Security/Performance Impact**:
+- **Deployment Blocker**: Prevents cluster creation (exit code 1)
+- **Feature Limitation**: Must use alternative rollback mechanisms (PITR, snapshots)
+- **Training Quality Impact**: High - demonstrates need to verify service-specific limitations
+
+---
+
+### 6. RouteTable Route Configuration Syntax Error
+
+**Impact Level**: Critical
+
+**MODEL_RESPONSE Issue**:
+```python
+RouteTable(
+    self,
+    "primary_public_rt",
+    vpc_id=primary_vpc.id,
+    route=[{
+        "cidr_block": "0.0.0.0/0",
+        "gateway_id": primary_igw.id
+    }],
+    ...
+)
+```
+
+The MODEL_RESPONSE uses dictionary syntax for routes, but CDKTF requires the `RouteTableRoute` class.
+
+**Error**:
+```
+Error: creating route: one of `cidr_block, ipv6_cidr_block, destination_prefix_list_id` must be specified
+Error: Missing Resource Identity After Create
+```
+
+**IDEAL_RESPONSE Fix**:
+```python
+from cdktf_cdktf_provider_aws.route_table import RouteTable, RouteTableRoute
+
+RouteTable(
+    self,
+    "primary_public_rt",
+    vpc_id=primary_vpc.id,
+    route=[
+        RouteTableRoute(
+            cidr_block="0.0.0.0/0",
+            gateway_id=primary_igw.id
+        )
+    ],
+    ...
+)
+```
+
+**Root Cause**: The model used dictionary syntax instead of the proper CDKTF class for route definitions. This is a common mistake when transitioning from Terraform HCL to CDKTF.
+
+**AWS Documentation Reference**:
+- CDKTF RouteTableRoute: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/route_table#route
+
+**Cost/Security/Performance Impact**:
+- **Deployment Blocker**: Prevents route table creation (exit code 1)
+- **Network Connectivity**: Without proper routes, resources cannot access internet or other networks
+- **Training Quality Impact**: High - demonstrates need to use CDKTF classes instead of raw dictionaries
+
+---
+
+### 7. DMS Replication Instance Invalid Engine Version
+
+**Impact Level**: Critical
+
+**MODEL_RESPONSE Issue**:
+```python
+dms_instance = DmsReplicationInstance(
+    ...
+    engine_version="3.5.2",
+    ...
+)
+```
+
+The MODEL_RESPONSE specifies an invalid DMS engine version that doesn't exist.
+
+**Error**:
+```
+No replication engine found with version: 3.5.2
+```
+
+**IDEAL_RESPONSE Fix**:
+```python
+# Note: engine_version is optional and defaults to the latest version
+# Removing explicit engine_version to use AWS default
+dms_instance = DmsReplicationInstance(
+    ...
+    # engine_version removed - uses AWS default
+    auto_minor_version_upgrade=True,  # Changed to True for automatic updates
+    ...
+)
+```
+
+**Root Cause**: The model specified a non-existent DMS engine version. DMS doesn't use version numbers like "3.5.2" - it uses AWS-managed versions that are automatically updated.
+
+**AWS Documentation Reference**:
+- DMS Replication Instance: https://docs.aws.amazon.com/dms/latest/userguide/CHAP_ReplicationInstance.html
+
+**Cost/Security/Performance Impact**:
+- **Deployment Blocker**: Prevents DMS instance creation (exit code 1)
+- **Training Quality Impact**: High - demonstrates need to verify valid parameter values
+
+---
+
+### 8. Route53 Hosted Zone Reserved Domain
+
+**Impact Level**: Critical
+
+**MODEL_RESPONSE Issue**:
+```python
+hosted_zone = Route53Zone(
+    self,
+    "migration_hosted_zone",
+    name=f"migration-{environment_suffix}.example.com",
+    ...
+)
+```
+
+The MODEL_RESPONSE uses `example.com`, which is reserved by AWS and cannot be used for hosted zones.
+
+**Error**:
+```
+InvalidDomainName: migration-pr7312.example.com is reserved by AWS!
+```
+
+**IDEAL_RESPONSE Fix**:
+```python
+# Use a non-reserved domain name (example.com is reserved by AWS)
+# Use a domain that can be configured via environment variable or use a test domain
+route53_domain = os.environ.get('ROUTE53_DOMAIN', f"migration-{environment_suffix}.internal")
+hosted_zone = Route53Zone(
+    self,
+    "migration_hosted_zone",
+    name=route53_domain,
+    ...
+)
+```
+
+**Root Cause**: The model used a reserved domain name without checking AWS restrictions. `example.com` and `example.net` are reserved by AWS for documentation purposes.
+
+**AWS Documentation Reference**:
+- Route53 Reserved Domains: https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/domain-register-reserved.html
+
+**Cost/Security/Performance Impact**:
+- **Deployment Blocker**: Prevents hosted zone creation (exit code 1)
+- **Training Quality Impact**: High - demonstrates need to avoid reserved domain names
+
+---
+
+### 9. Security Group Duplicate Ingress Rules
+
+**Impact Level**: Critical
+
+**MODEL_RESPONSE Issue**:
+```python
+ingress=[
+    SecurityGroupIngress(
+        description="PostgreSQL from DMS",
+        from_port=5432,
+        to_port=5432,
+        protocol="tcp",
+        cidr_blocks=[migration_vpc.cidr_block]  # "10.0.0.0/16"
+    ),
+    SecurityGroupIngress(
+        description="PostgreSQL from VPC",
+        from_port=5432,
+        to_port=5432,
+        protocol="tcp",
+        cidr_blocks=["10.0.0.0/16"]  # Duplicate!
+    )
+]
+```
+
+The MODEL_RESPONSE has duplicate ingress rules with the same port, protocol, and CIDR block.
+
+**Error**:
+```
+The same permission must not appear multiple times
+```
+
+**IDEAL_RESPONSE Fix**:
+```python
+ingress=[
+    SecurityGroupIngress(
+        description="PostgreSQL from VPC and DMS",
+        from_port=5432,
+        to_port=5432,
+        protocol="tcp",
+        cidr_blocks=["10.0.0.0/16"]
+    )
+]
+```
+
+**Root Cause**: The model created two rules that were functionally identical (same CIDR block, port, and protocol), which AWS security groups don't allow.
+
+**AWS Documentation Reference**:
+- EC2 Security Group Rules: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/security-group-rules.html
+
+**Cost/Security/Performance Impact**:
+- **Deployment Blocker**: Prevents security group creation (exit code 1)
+- **Training Quality Impact**: Medium - demonstrates need to avoid duplicate rules
+
+---
+
 ## Summary
 
-- Total failures: **4 Critical/High**, **0 Medium**, **1 Low**
+- Total failures: **9 Critical/High**, **0 Medium**, **1 Low**
 - Primary knowledge gaps:
   1. **API Consistency**: Mismatch between function signatures and their usage across files
   2. **Production Readiness**: Missing critical features for CI/CD and team collaboration (state backend)
   3. **Python Best Practices**: Shadowing built-ins, not following naming conventions
+  4. **AWS Service Limitations**: Not verifying service-specific constraints (Aurora backtrack, Route53 reserved domains)
+  5. **CDKTF Syntax**: Using dictionary syntax instead of proper CDKTF classes (RouteTableRoute)
+  6. **Parameter Validation**: Not verifying valid parameter values (DMS engine versions)
+  7. **Resource Configuration**: Creating duplicate or conflicting resource configurations (security group rules)
 
 ### Training Value Justification
 
@@ -202,6 +443,10 @@ This task provides **high training value** (8/10) because:
 3. **Python naming conventions**: Avoid shadowing built-ins, use descriptive parameter names
 4. **Multi-file consistency checks**: Validate that generated files work together correctly
 5. **CI/CD requirements**: Consider automated deployment workflows when generating infrastructure code
+6. **AWS service limitations**: Verify service-specific constraints and feature availability (e.g., Aurora backtrack for global databases)
+7. **CDKTF class usage**: Use proper CDKTF classes instead of raw dictionaries (e.g., RouteTableRoute)
+8. **Parameter validation**: Verify valid parameter values before using them (e.g., DMS engine versions)
+9. **Resource deduplication**: Check for duplicate or conflicting resource configurations before deployment
 
 ### Positive Aspects (What Worked Well)
 
@@ -224,9 +469,14 @@ The model demonstrated excellent knowledge of AWS services and their configurati
 
 ### Severity Distribution
 
-- **Critical (Deployment Blockers)**: 2 failures
+- **Critical (Deployment Blockers)**: 7 failures
   - Missing constructor parameters (prevents synthesis)
   - Missing S3 backend (prevents production deployment)
+  - Aurora Global Database backtrack (prevents cluster creation)
+  - RouteTable route configuration (prevents route table creation)
+  - DMS invalid engine version (prevents replication instance creation)
+  - Route53 reserved domain (prevents hosted zone creation)
+  - Security group duplicate rules (prevents security group creation)
 
 - **High (Production Readiness)**: 2 failures
   - Simplified tap.py (lacks CI/CD features)
@@ -242,18 +492,24 @@ The model demonstrated excellent knowledge of AWS services and their configurati
 - S3 backend configuration: 10 minutes
 - Parameter name fix: 2 minutes
 - Enhanced tap.py: 15 minutes
+- Aurora backtrack removal: 2 minutes
+- RouteTable route configuration: 10 minutes (4 route tables)
+- DMS engine version fix: 2 minutes
+- Route53 domain fix: 5 minutes
+- Security group duplicate rules: 3 minutes
 
-**Total**: ~30 minutes of manual fixes required
+**Total**: ~54 minutes of manual fixes required
 
 ### Impact on Training Quality Score
 
-**Score: 8.0/10**
+**Score: 7.5/10**
 
 **Rationale**:
 - **Strong Foundation** (+4): Excellent AWS service knowledge, comprehensive multi-region DR architecture
 - **Critical Programming Errors** (-1): Constructor parameter mismatch is a fundamental programming failure
 - **Missing Production Features** (-0.5): No state backend configuration
 - **Inconsistency Across Files** (-0.5): tap.py and tap_stack.py don't work together as generated
+- **AWS Service Limitations** (-0.5): Multiple deployment blockers due to not verifying service constraints (Aurora backtrack, Route53 domains, DMS versions)
 - **High Training Value** (+0): These are exactly the types of failures that improve model performance
 
-The relatively high score (8.0) reflects that the AWS infrastructure knowledge is solid, and the failures are fixable programming/integration issues rather than fundamental misunderstandings of the requirements. However, the critical nature of the constructor failure prevents immediate use without manual intervention.
+The score (7.5) reflects that the AWS infrastructure knowledge is solid, but there are multiple deployment blockers that prevent immediate use. The failures are fixable programming/integration issues rather than fundamental misunderstandings of the requirements, but the number of critical issues (7 deployment blockers) indicates a need for better validation of AWS service constraints and CDKTF syntax.
