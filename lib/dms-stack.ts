@@ -124,7 +124,9 @@ export class DmsStack extends pulumi.ComponentResource {
         endpointType: 'target',
         engineName: 'postgres',
 
-        serverName: args.rdsEndpoint.apply(ep => (ep || 'localhost:5432').split(':')[0]),
+        serverName: args.rdsEndpoint.apply(
+          ep => (ep || 'localhost:5432').split(':')[0]
+        ),
         port: args.rdsPort,
         databaseName: 'migrationdb',
         username: dbUsername,

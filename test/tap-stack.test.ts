@@ -22,7 +22,8 @@ pulumi.runtime.setMocks({
     }
     if (
       args.token === 'aws:secretsmanager/getSecretVersion:getSecretVersion' ||
-      args.token === 'aws:secretsmanager/getSecretVersionOutput:getSecretVersionOutput'
+      args.token ===
+        'aws:secretsmanager/getSecretVersionOutput:getSecretVersionOutput'
     ) {
       return {
         arn: 'arn:aws:secretsmanager:us-east-2:123456789012:secret:mock-secret',
@@ -45,15 +46,12 @@ describe('Database Migration Stack Tests', () => {
 
   describe('TapStack', () => {
     it('should create stack with required properties', async () => {
-      const stack = new tapStack.TapStack(
-        'test-stack',
-        {
-          environmentSuffix: 'test-001',
-          migrationPhase: 'dev',
-          costCenter: 'test-team',
-          complianceScope: 'PCI-DSS',
-        }
-      );
+      const stack = new tapStack.TapStack('test-stack', {
+        environmentSuffix: 'test-001',
+        migrationPhase: 'dev',
+        costCenter: 'test-team',
+        complianceScope: 'PCI-DSS',
+      });
 
       expect(stack).toBeDefined();
       expect(stack.vpcId).toBeDefined();
@@ -63,15 +61,12 @@ describe('Database Migration Stack Tests', () => {
 
     it('should include environment suffix in resource names', async () => {
       const environmentSuffix = 'test-123';
-      const stack = new tapStack.TapStack(
-        'test-stack',
-        {
-          environmentSuffix,
-          migrationPhase: 'dev',
-          costCenter: 'test-team',
-          complianceScope: 'PCI-DSS',
-        }
-      );
+      const stack = new tapStack.TapStack('test-stack', {
+        environmentSuffix,
+        migrationPhase: 'dev',
+        costCenter: 'test-team',
+        complianceScope: 'PCI-DSS',
+      });
 
       // Verify outputs are defined
       // Note: In mocked environment, outputs are mock values
@@ -82,15 +77,12 @@ describe('Database Migration Stack Tests', () => {
     });
 
     it('should export all required outputs', async () => {
-      const stack = new tapStack.TapStack(
-        'test-stack',
-        {
-          environmentSuffix: 'test-001',
-          migrationPhase: 'dev',
-          costCenter: 'test-team',
-          complianceScope: 'PCI-DSS',
-        }
-      );
+      const stack = new tapStack.TapStack('test-stack', {
+        environmentSuffix: 'test-001',
+        migrationPhase: 'dev',
+        costCenter: 'test-team',
+        complianceScope: 'PCI-DSS',
+      });
 
       expect(stack.vpcId).toBeDefined();
       expect(stack.rdsEndpoint).toBeDefined();
@@ -110,16 +102,13 @@ describe('Database Migration Stack Tests', () => {
         ComplianceScope: 'PCI-DSS',
       };
 
-      const stack = new tapStack.TapStack(
-        'test-stack',
-        {
-          environmentSuffix: 'test-001',
-          migrationPhase: 'dev',
-          costCenter: 'test-team',
-          complianceScope: 'PCI-DSS',
-          tags,
-        }
-      );
+      const stack = new tapStack.TapStack('test-stack', {
+        environmentSuffix: 'test-001',
+        migrationPhase: 'dev',
+        costCenter: 'test-team',
+        complianceScope: 'PCI-DSS',
+        tags,
+      });
 
       expect(stack).toBeDefined();
     });
