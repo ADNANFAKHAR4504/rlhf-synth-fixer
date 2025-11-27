@@ -257,8 +257,8 @@ export class StorageStack extends pulumi.ComponentResource {
     // Outputs
     this.primaryBucketName = primaryBucket.id;
     this.secondaryBucketName = secondaryBucket.id;
-    this.primaryKmsKeyId = primaryKmsKey.id;
-    this.secondaryKmsKeyId = secondaryKmsKey.id;
+    this.primaryKmsKeyId = primaryKmsKey.arn;
+    this.secondaryKmsKeyId = secondaryKmsKey.arn;
 
     this.registerOutputs({
       primaryBucketName: this.primaryBucketName,
