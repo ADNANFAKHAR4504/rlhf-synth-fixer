@@ -7,6 +7,8 @@
   "region": "us-east-1",
   "environment_suffix": "synth101912761pr",
   "training_quality": 8,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
   "tags": {
     "Environment": "test",
     "Owner": "iac-synth-trainer",
