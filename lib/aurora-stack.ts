@@ -62,7 +62,7 @@ export class AuroraStack extends pulumi.ComponentResource {
       {
         engine: 'aurora-postgresql',
         engineMode: 'provisioned',
-        engineVersion: '15.3',
+        engineVersion: '17.4',
         databaseName: 'drapp',
         masterUsername: 'dbadmin',
         masterPassword: masterPasswordString,
@@ -95,7 +95,7 @@ export class AuroraStack extends pulumi.ComponentResource {
         clusterIdentifier: this.cluster.id,
         instanceClass: 'db.serverless',
         engine: 'aurora-postgresql',
-        engineVersion: '15.3',
+        engineVersion: '17.4',
         publiclyAccessible: false,
         tags: {
           ...tags,

@@ -602,8 +602,8 @@ describe('Aurora Configuration', () => {
   });
 
   it('should use correct engine version', () => {
-    const engineVersion = '15.3';
-    expect(engineVersion).toBe('15.3');
+    const engineVersion = '17.4';
+    expect(engineVersion).toBe('17.4');
   });
 
   it('should use correct scaling configuration', () => {
