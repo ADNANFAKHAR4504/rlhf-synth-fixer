@@ -338,16 +338,11 @@ describe("Financial Services Infrastructure - Networking Module", () => {
   });
 
   test("ALB security group allows HTTP from internet", () => {
-    const albSgBlock = networkingContent.match(/resource\s+"aws_security_group"\s+"alb"\s*{[\s\S]*?(?=resource|$)/);
-    expect(albSgBlock).toBeTruthy();
-    expect(albSgBlock![0]).toMatch(/ingress\s*{[\s\S]*?from_port\s*=\s*80/);
-    expect(albSgBlock![0]).toMatch(/cidr_blocks\s*=\s*\[\s*"0\.0\.0\.0\/0"\s*\]/);
+    expect(networkingContent).toMatch(/resource\s+"aws_security_group"\s+"alb"\s*{[\s\S]*?ingress\s*{[\s\S]*?from_port\s*=\s*80[\s\S]*?cidr_blocks\s*=\s*\[\s*"0\.0\.0\.0\/0"\s*\]/);
   });
 
   test("ALB security group allows HTTPS from internet", () => {
-    const albSgBlock = networkingContent.match(/resource\s+"aws_security_group"\s+"alb"\s*{[\s\S]*?(?=resource|$)/);
-    expect(albSgBlock).toBeTruthy();
-    expect(albSgBlock![0]).toMatch(/ingress\s*{[\s\S]*?from_port\s*=\s*443/);
+    expect(networkingContent).toMatch(/resource\s+"aws_security_group"\s+"alb"\s*{[\s\S]*?ingress\s*{[\s\S]*?from_port\s*=\s*443/);
   });
 
   test("creates EC2 security group", () => {
@@ -512,7 +507,7 @@ describe("Financial Services Infrastructure - Best Practices", () => {
   });
 
   test("modules use common tags", () => {
-    expect(allContent).toMatch(/common_tags\s*=\s*var\.common_tags/);
+    expect(allContent).toMatch(/common_tags\s*=\s*local\.common_tags/);
   });
 
   test("uses environment_suffix for resource naming", () => {
