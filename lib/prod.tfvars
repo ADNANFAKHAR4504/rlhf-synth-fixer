@@ -1,6 +1,6 @@
 env                       = "prod"
 aws_region                = "us-west-1"
-pr_number                 = "pr7390"
+pr_number                 = "pr7405"
 kinesis_stream_mode       = "ON_DEMAND"
 dynamodb_billing_mode     = "PAY_PER_REQUEST"
 redis_node_type           = "cache.r7g.large"

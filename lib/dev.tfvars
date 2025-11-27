@@ -1,6 +1,6 @@
 env                       = "dev"
 aws_region                = "us-west-1"
-pr_number                 = "pr7390"
+pr_number                 = "pr7405"
 kinesis_stream_mode       = "PROVISIONED"
 kinesis_shard_count       = 1
 dynamodb_billing_mode     = "PROVISIONED"
