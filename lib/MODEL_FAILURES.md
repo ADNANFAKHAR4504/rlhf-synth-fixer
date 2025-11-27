@@ -1,0 +1,6 @@
+- Imports pandas/plotly/psycopg2 with no fallbacks; script crashes when optional deps are absent.
+- Treats CloudWatch `QueueLength` as query queue time; Redshift does not expose queue duration via that metric, so issue 3 is misreported.
+- Flags clusters as non-Multi-AZ using a `MultiAZ` attribute Redshift clusters do not have, yielding false HIGH issues.
+- Links concurrency scaling to the presence of `ClusterNamespaceArn`, which is unrelated to the feature.
+- Queries `svv_table_info` columns `size_mb` and `visible_rows` that do not exist, so table optimization fails.
+- Checks `stl_query.disk_mb`, a non-existent column, so disk-spill detection errors instead of populating issue 17.
