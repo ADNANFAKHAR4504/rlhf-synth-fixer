@@ -18,7 +18,7 @@ if [ "$PLATFORM" = "cdk" ]; then
 
 elif [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ CDKTF project detected, running CDKTF get and synth..."
-  
+
   # --- FIX: remove legacy terraform.tfstate for clean runs ---
   if [ -f "terraform.tfstate" ]; then
     echo "⚠️ Found legacy terraform.tfstate. Removing for clean CI run..."
@@ -51,7 +51,26 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   esac
   # Go modules are prepared during build; avoid extra operations here
 
+  # Package Lambda function if lib/lambda directory exists
+  if [ -d "lib/lambda" ]; then
+    echo "📦 Packaging Lambda function..."
+    python scripts/package_lambda.py lib/lambda lambda_function.zip
+    echo "✅ Lambda function packaged successfully"
+  fi
+
   npm run cdktf:synth
+
+  # Copy Lambda function ZIP to CDKTF output directory after synth
+  if [ -f "lambda_function.zip" ]; then
+    echo "📦 Copying Lambda function to CDKTF output directories..."
+    # Copy to all stack directories (handles multiple stacks if any)
+    for stack_dir in cdktf.out/stacks/*/; do
+      if [ -d "$stack_dir" ]; then
+        cp lambda_function.zip "$stack_dir"
+        echo "  ✅ Copied to $stack_dir"
+      fi
+    done
+  fi
 
 else
   echo "ℹ️ Not a CDK project, skipping CDK synth"
