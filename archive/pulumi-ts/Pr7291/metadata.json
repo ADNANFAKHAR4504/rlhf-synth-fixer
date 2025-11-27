@@ -1,0 +1,32 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-25T22:45:00-08:00",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "po_id": "z8s7d2n2",
+  "aws_services": [
+    "VPC",
+    "Aurora Global Database",
+    "Lambda",
+    "Application Load Balancer",
+    "Global Accelerator",
+    "Route 53",
+    "Secrets Manager",
+    "CloudWatch",
+    "AWS Config"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
