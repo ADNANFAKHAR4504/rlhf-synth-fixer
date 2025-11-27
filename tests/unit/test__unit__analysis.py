@@ -2222,6 +2222,173 @@ class TestAWSBackupAuditor:
         assert len(cost_findings) == 0
 
     # =========================================================================
+    # TRAINING QUALITY ASSESSMENT TESTS
+    # =========================================================================
+
+    def test_assess_training_quality_with_critical_findings(self):
+        """Test training quality assessment with critical findings (Category A)"""
+        auditor = AWSBackupAuditor()
+        
+        # Add multiple critical findings (should get +2 bonus)
+        auditor.findings = [
+            Finding(
+                check_id='AWS-BACKUP-001',
+                check_name='Unprotected Resources',
+                severity=Severity.CRITICAL,
+                status=ComplianceStatus.NON_COMPLIANT,
+                resource_id='i-123',
+                resource_type='EC2',
+                resource_tags={},
+                details='Critical security issue',
+                recommendation='Fix immediately'
+            ),
+            Finding(
+                check_id='AWS-BACKUP-002',
+                check_name='Missing Production Coverage',
+                severity=Severity.CRITICAL,
+                status=ComplianceStatus.NON_COMPLIANT,
+                resource_id='i-456',
+                resource_type='RDS',
+                resource_tags={},
+                details='Another critical issue',
+                recommendation='Fix immediately'
+            )
+        ]
+        
+        # Add backup vault with encryption for complexity bonus
+        auditor.backup_vaults = {
+            'vault1': {'encryption_key': 'arn:aws:kms:...'}
+        }
+        
+        result = auditor._assess_training_quality()
+        
+        assert result['training_quality'] == 10  # 8 base + 2 model_failures + 2 complexity (capped at 10)
+        assert result['base_score'] == 8
+        assert result['model_failures_adjustment'] == 2
+        assert result['complexity_adjustment'] == 2
+        assert 'Good training value' in result['justification']
+        assert result['findings_breakdown']['critical'] == 2
+
+    def test_assess_training_quality_with_minimal_findings(self):
+        """Test training quality assessment with minimal findings (Category D)"""
+        auditor = AWSBackupAuditor()
+        
+        # Add only a few minor findings
+        auditor.findings = [
+            Finding(
+                check_id='AWS-BACKUP-009',
+                check_name='Missing Notifications',
+                severity=Severity.LOW,
+                status=ComplianceStatus.NON_COMPLIANT,
+                resource_id='vault1',
+                resource_type='BackupVault',
+                resource_tags={},
+                details='Minor issue',
+                recommendation='Configure notifications'
+            )
+        ]
+        
+        # No encrypted vaults
+        auditor.backup_vaults = {}
+        
+        result = auditor._assess_training_quality()
+        
+        assert result['training_quality'] == 5  # 8 base - 3 (Category D penalty)
+        assert result['base_score'] == 8
+        assert result['model_failures_adjustment'] == -3
+        assert result['complexity_adjustment'] == 0
+        assert 'Poor training value' in result['justification']
+        assert result['findings_breakdown']['low'] == 1
+
+    def test_assess_training_quality_with_high_findings(self):
+        """Test training quality assessment with high severity findings"""
+        auditor = AWSBackupAuditor()
+        
+        # Add multiple high findings
+        auditor.findings = [
+            Finding(
+                check_id='AWS-BACKUP-004',
+                check_name='No Vault Immutability',
+                severity=Severity.HIGH,
+                status=ComplianceStatus.NON_COMPLIANT,
+                resource_id='vault1',
+                resource_type='BackupVault',
+                resource_tags={},
+                details='High severity issue',
+                recommendation='Enable vault lock'
+            ),
+            Finding(
+                check_id='AWS-BACKUP-005',
+                check_name='No Cross-Region DR',
+                severity=Severity.HIGH,
+                status=ComplianceStatus.NON_COMPLIANT,
+                resource_id='plan1',
+                resource_type='BackupPlan',
+                resource_tags={},
+                details='Another high issue',
+                recommendation='Configure cross-region backup'
+            ),
+            Finding(
+                check_id='AWS-BACKUP-006',
+                check_name='Unencrypted Vault',
+                severity=Severity.HIGH,
+                status=ComplianceStatus.NON_COMPLIANT,
+                resource_id='vault2',
+                resource_type='BackupVault',
+                resource_tags={},
+                details='Third high issue',
+                recommendation='Enable encryption'
+            )
+        ]
+        
+        result = auditor._assess_training_quality()
+        
+        assert result['training_quality'] == 9  # 8 base + 1 (3+ high findings = Category A)
+        assert result['base_score'] == 8
+        assert result['model_failures_adjustment'] == 1
+        assert result['complexity_adjustment'] == 0
+        assert 'Good training value' in result['justification']
+        assert result['findings_breakdown']['high'] == 3
+
+    @patch('analyse.AWSBackupAuditor._get_account_id')
+    def test_generate_audit_summary_includes_training_quality(self, mock_get_account_id):
+        """Test that audit summary includes training quality assessment"""
+        mock_get_account_id.return_value = '123456789012'
+        
+        auditor = AWSBackupAuditor()
+        
+        # Add some findings
+        auditor.findings = [
+            Finding(
+                check_id='AWS-BACKUP-001',
+                check_name='Test Finding',
+                severity=Severity.MEDIUM,
+                status=ComplianceStatus.NON_COMPLIANT,
+                resource_id='resource1',
+                resource_type='EC2',
+                resource_tags={},
+                details='Test details',
+                recommendation='Test recommendation'
+            )
+        ]
+        
+        summary = auditor._generate_audit_summary()
+        
+        # Verify training quality assessment is included
+        assert 'training_quality_assessment' in summary
+        training = summary['training_quality_assessment']
+        
+        assert 'training_quality' in training
+        assert 'base_score' in training
+        assert 'model_failures_adjustment' in training
+        assert 'complexity_adjustment' in training
+        assert 'justification' in training
+        assert 'findings_breakdown' in training
+        
+        assert isinstance(training['training_quality'], int)
+        assert 0 <= training['training_quality'] <= 10
+
+    # =========================================================================
     # MAIN FUNCTION TESTS
     # =========================================================================
 

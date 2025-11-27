@@ -796,6 +796,9 @@ class AWSBackupAuditor:
 
     def _generate_audit_summary(self) -> Dict[str, Any]:
         """Generate comprehensive audit summary"""
+        # Assess training quality
+        training_assessment = self._assess_training_quality()
+        
         summary = {
             'audit_metadata': {
                 'timestamp': datetime.now(timezone.utc).isoformat(),
@@ -817,6 +820,7 @@ class AWSBackupAuditor:
                 'total_recovery_points': sum(len(points) for points in self.recovery_points.values()),
                 'protected_resources': len(self._get_protected_resources())
             },
+            'training_quality_assessment': training_assessment,
             'findings': [self._serialize_finding(f) for f in self.findings],
             'recovery_analysis': self._generate_recovery_analysis()
         }
@@ -891,6 +895,77 @@ class AWSBackupAuditor:
             'DynamoDB': 0.5  # 30 minutes
         }
         return rto_estimates.get(resource_type, 1.0)
+
+    def _assess_training_quality(self) -> Dict[str, Any]:
+        """
+        Assess training quality based on compliance findings and infrastructure complexity.
+        Uses IAC training quality guidelines with 0-10 scale.
+        """
+        # Base score starts at 8 (meets threshold)
+        base_score = 8
+        
+        # Count findings by severity for MODEL_FAILURES assessment
+        critical_findings = len([f for f in self.findings if f.severity == Severity.CRITICAL])
+        high_findings = len([f for f in self.findings if f.severity == Severity.HIGH])
+        medium_findings = len([f for f in self.findings if f.severity == Severity.MEDIUM])
+        low_findings = len([f for f in self.findings if f.severity == Severity.LOW])
+        
+        # MODEL_FAILURES adjustment (Category A: Significant improvements)
+        model_failures_adjustment = 0
+        if critical_findings >= 2:  # Multiple critical security/architecture issues
+            model_failures_adjustment = 2  # Category A: +2 points
+        elif critical_findings == 1:
+            model_failures_adjustment = 1  # Category A: +1 point
+        elif high_findings >= 3:
+            model_failures_adjustment = 1  # Category A: +1 point for multiple high issues
+        elif medium_findings + low_findings >= 6:
+            model_failures_adjustment = -1  # Category C: Only minor fixes needed
+        elif medium_findings + low_findings < 4:
+            model_failures_adjustment = -3  # Category D: Minimal changes needed
+        
+        # Complexity assessment
+        complexity_adjustment = 0
+        service_count = len(set([
+            'backup', 'ec2', 'rds', 'efs', 'dynamodb', 'kms', 'sns'
+        ]))
+        
+        if service_count >= 3:
+            complexity_adjustment += 1  # Multiple services
+        
+        # Security best practices (encryption, IAM, compliance checks)
+        if len(self.backup_vaults) > 0 and any(vault.get('encryption_key') for vault in self.backup_vaults.values()):
+            complexity_adjustment += 1  # Security practices
+        
+        # Cap complexity bonus at +2
+        complexity_adjustment = min(complexity_adjustment, 2)
+        
+        # Calculate final score
+        final_score = base_score + model_failures_adjustment + complexity_adjustment
+        final_score = max(0, min(final_score, 10))  # Ensure 0-10 range
+        
+        # Determine training value justification
+        if final_score >= 8:
+            justification = "Good training value - meets threshold with solid backup compliance findings"
+        elif final_score >= 6:
+            justification = "Fair training value - some compliance gaps identified"
+        elif final_score >= 4:
+            justification = "Poor training value - minimal compliance issues found"
+        else:
+            justification = "Insufficient training value - critical issues or model already competent"
+        
+        return {
+            'training_quality': final_score,
+            'base_score': base_score,
+            'model_failures_adjustment': model_failures_adjustment,
+            'complexity_adjustment': complexity_adjustment,
+            'justification': justification,
+            'findings_breakdown': {
+                'critical': critical_findings,
+                'high': high_findings,
+                'medium': medium_findings,
+                'low': low_findings
+            }
+        }
 
     def _save_json_report(self, audit_results: Dict):
         """Save detailed JSON report"""
@@ -991,6 +1066,25 @@ class AWSBackupAuditor:
         print(f"Backup Vaults: {infra['backup_vaults']}")
         print(f"Total Recovery Points: {infra['total_recovery_points']}")
         print(f"Protected Resources: {infra['protected_resources']}")
+
+        # Print training quality assessment
+        print("\n" + "-"*80)
+        print("TRAINING QUALITY ASSESSMENT")
+        print("-"*80)
+        
+        training = audit_results['training_quality_assessment']
+        print(f"\nFinal Training Quality Score: {training['training_quality']}/10")
+        print(f"Base Score: {training['base_score']}")
+        print(f"MODEL_FAILURES Adjustment: {training['model_failures_adjustment']:+d}")
+        print(f"Complexity Adjustment: {training['complexity_adjustment']:+d}")
+        print(f"Justification: {training['justification']}")
+        
+        breakdown = training['findings_breakdown']
+        print(f"\nFindings Breakdown:")
+        print(f"  Critical: {breakdown['critical']}")
+        print(f"  High: {breakdown['high']}")
+        print(f"  Medium: {breakdown['medium']}")
+        print(f"  Low: {breakdown['low']}")
 
         # Print findings table
         if self.findings:
