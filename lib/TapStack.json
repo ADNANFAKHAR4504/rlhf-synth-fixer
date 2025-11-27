@@ -4,31 +4,17 @@
   "Parameters": {
     "EnvironmentSuffix": {
       "Type": "String",
-      "Description": "Unique suffix for resource naming to avoid conflicts",
-      "MinLength": 3,
-      "MaxLength": 20,
-      "AllowedPattern": "[a-z0-9-]+",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-z0-9-]+$",
       "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
-    },
-    "DatabaseUsername": {
-      "Type": "String",
-      "Description": "Master username for Aurora database",
-      "Default": "admin",
-      "MinLength": 1,
-      "MaxLength": 16,
-      "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
-    },
-    "DatabasePassword": {
-      "Type": "String",
-      "Description": "Master password for Aurora database",
-      "NoEcho": true,
-      "MinLength": 8,
-      "MaxLength": 41
     },
     "NotificationEmail": {
       "Type": "String",
+      "Default": "devops@example.com",
       "Description": "Email address for SNS failover notifications",
-      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+      "ConstraintDescription": "Must be a valid email address"
     }
   },
   "Metadata": {
@@ -44,15 +30,6 @@
         },
         {
           "Label": {
-            "default": "Database Configuration"
-          },
-          "Parameters": [
-            "DatabaseUsername",
-            "DatabasePassword"
-          ]
-        },
-        {
-          "Label": {
             "default": "Notification Configuration"
           },
           "Parameters": [
@@ -63,12 +40,6 @@
       "ParameterLabels": {
         "EnvironmentSuffix": {
           "default": "Environment Suffix"
-        },
-        "DatabaseUsername": {
-          "default": "Database Username"
-        },
-        "DatabasePassword": {
-          "default": "Database Password"
         },
         "NotificationEmail": {
           "default": "Notification Email"
@@ -87,7 +58,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "payment-dr-vpc-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "payment-dr-vpc-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Environment",
@@ -99,13 +72,24 @@
     "PrivateSubnet1": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.0.1.0/24",
-        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "payment-dr-private-subnet-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "payment-dr-private-subnet-1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -113,13 +97,24 @@
     "PrivateSubnet2": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.0.2.0/24",
-        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "payment-dr-private-subnet-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "payment-dr-private-subnet-2-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -127,13 +122,24 @@
     "PrivateSubnet3": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.0.3.0/24",
-        "AvailabilityZone": {"Fn::Select": [2, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "payment-dr-private-subnet-3-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "payment-dr-private-subnet-3-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -141,17 +147,27 @@
     "DBSubnetGroup": {
       "Type": "AWS::RDS::DBSubnetGroup",
       "Properties": {
-        "DBSubnetGroupName": {"Fn::Sub": "payment-dr-dbsubnet-${EnvironmentSuffix}"},
+        "DBSubnetGroupName": {
+          "Fn::Sub": "payment-dr-dbsubnet-${EnvironmentSuffix}"
+        },
         "DBSubnetGroupDescription": "Subnet group for Aurora Global Database across 3 AZs",
         "SubnetIds": [
-          {"Ref": "PrivateSubnet1"},
-          {"Ref": "PrivateSubnet2"},
-          {"Ref": "PrivateSubnet3"}
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          },
+          {
+            "Ref": "PrivateSubnet3"
+          }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "payment-dr-dbsubnet-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "payment-dr-dbsubnet-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -160,11 +176,15 @@
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupDescription": "Security group for Lambda functions",
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "payment-dr-lambda-sg-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "payment-dr-lambda-sg-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -173,11 +193,15 @@
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupDescription": "Security group for Aurora database - only allows Lambda access",
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "payment-dr-db-sg-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "payment-dr-db-sg-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -185,37 +209,64 @@
     "DatabaseSecurityGroupIngress": {
       "Type": "AWS::EC2::SecurityGroupIngress",
       "Properties": {
-        "GroupId": {"Ref": "DatabaseSecurityGroup"},
+        "GroupId": {
+          "Ref": "DatabaseSecurityGroup"
+        },
         "IpProtocol": "tcp",
         "FromPort": 3306,
         "ToPort": 3306,
-        "SourceSecurityGroupId": {"Ref": "LambdaSecurityGroup"}
+        "SourceSecurityGroupId": {
+          "Ref": "LambdaSecurityGroup"
+        }
       }
     },
     "LambdaSecurityGroupEgressDB": {
       "Type": "AWS::EC2::SecurityGroupEgress",
       "Properties": {
-        "GroupId": {"Ref": "LambdaSecurityGroup"},
+        "GroupId": {
+          "Ref": "LambdaSecurityGroup"
+        },
         "IpProtocol": "tcp",
         "FromPort": 3306,
         "ToPort": 3306,
-        "DestinationSecurityGroupId": {"Ref": "DatabaseSecurityGroup"}
+        "DestinationSecurityGroupId": {
+          "Ref": "DatabaseSecurityGroup"
+        }
       }
     },
     "LambdaSecurityGroupEgressHTTPS": {
       "Type": "AWS::EC2::SecurityGroupEgress",
       "Properties": {
-        "GroupId": {"Ref": "LambdaSecurityGroup"},
+        "GroupId": {
+          "Ref": "LambdaSecurityGroup"
+        },
         "IpProtocol": "tcp",
         "FromPort": 443,
         "ToPort": 443,
         "CidrIp": "0.0.0.0/0"
       }
     },
+    "DatabaseSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "payment-dr-db-secret-${EnvironmentSuffix}"
+        },
+        "Description": "RDS Aurora master credentials for payment DR solution",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\":\"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\'"
+        }
+      }
+    },
     "GlobalCluster": {
       "Type": "AWS::RDS::GlobalCluster",
       "Properties": {
-        "GlobalClusterIdentifier": {"Fn::Sub": "payment-dr-global-${EnvironmentSuffix}"},
+        "GlobalClusterIdentifier": {
+          "Fn::Sub": "payment-dr-global-${EnvironmentSuffix}"
+        },
         "Engine": "aurora-mysql",
         "EngineVersion": "8.0.mysql_aurora.3.04.0",
         "DeletionProtection": false,
@@ -227,56 +278,95 @@
       "DeletionPolicy": "Delete",
       "DependsOn": "GlobalCluster",
       "Properties": {
-        "DBClusterIdentifier": {"Fn::Sub": "payment-dr-cluster-${EnvironmentSuffix}"},
+        "DBClusterIdentifier": {
+          "Fn::Sub": "payment-dr-cluster-${EnvironmentSuffix}"
+        },
         "Engine": "aurora-mysql",
         "EngineVersion": "8.0.mysql_aurora.3.04.0",
-        "MasterUsername": {"Ref": "DatabaseUsername"},
-        "MasterUserPassword": {"Ref": "DatabasePassword"},
+        "MasterUsername": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}"
+        },
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}"
+        },
         "BackupRetentionPeriod": 7,
         "PreferredBackupWindow": "03:00-04:00",
         "PreferredMaintenanceWindow": "mon:04:00-mon:05:00",
         "StorageEncrypted": true,
-        "EnableCloudwatchLogsExports": ["error", "general", "slowquery", "audit"],
-        "DBSubnetGroupName": {"Ref": "DBSubnetGroup"},
-        "VpcSecurityGroupIds": [{"Ref": "DatabaseSecurityGroup"}],
+        "EnableCloudwatchLogsExports": [
+          "error",
+          "general",
+          "slowquery",
+          "audit"
+        ],
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "DatabaseSecurityGroup"
+          }
+        ],
         "DeletionProtection": false,
-        "GlobalClusterIdentifier": {"Fn::Sub": "payment-dr-global-${EnvironmentSuffix}"}
+        "GlobalClusterIdentifier": {
+          "Fn::Sub": "payment-dr-global-${EnvironmentSuffix}"
+        }
       }
     },
     "AuroraDBInstance1": {
       "Type": "AWS::RDS::DBInstance",
       "DeletionPolicy": "Delete",
       "Properties": {
-        "DBInstanceIdentifier": {"Fn::Sub": "payment-dr-instance-1-${EnvironmentSuffix}"},
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "payment-dr-instance-1-${EnvironmentSuffix}"
+        },
         "DBInstanceClass": "db.r5.large",
         "Engine": "aurora-mysql",
-        "DBClusterIdentifier": {"Ref": "AuroraDBCluster"},
+        "DBClusterIdentifier": {
+          "Ref": "AuroraDBCluster"
+        },
         "PubliclyAccessible": false,
         "EnablePerformanceInsights": true,
         "PerformanceInsightsRetentionPeriod": 7,
         "MonitoringInterval": 60,
-        "MonitoringRoleArn": {"Fn::GetAtt": ["RDSMonitoringRole", "Arn"]}
+        "MonitoringRoleArn": {
+          "Fn::GetAtt": [
+            "RDSMonitoringRole",
+            "Arn"
+          ]
+        }
       }
     },
     "AuroraDBInstance2": {
       "Type": "AWS::RDS::DBInstance",
       "DeletionPolicy": "Delete",
       "Properties": {
-        "DBInstanceIdentifier": {"Fn::Sub": "payment-dr-instance-2-${EnvironmentSuffix}"},
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "payment-dr-instance-2-${EnvironmentSuffix}"
+        },
         "DBInstanceClass": "db.r5.large",
         "Engine": "aurora-mysql",
-        "DBClusterIdentifier": {"Ref": "AuroraDBCluster"},
+        "DBClusterIdentifier": {
+          "Ref": "AuroraDBCluster"
+        },
         "PubliclyAccessible": false,
         "EnablePerformanceInsights": true,
         "PerformanceInsightsRetentionPeriod": 7,
         "MonitoringInterval": 60,
-        "MonitoringRoleArn": {"Fn::GetAtt": ["RDSMonitoringRole", "Arn"]}
+        "MonitoringRoleArn": {
+          "Fn::GetAtt": [
+            "RDSMonitoringRole",
+            "Arn"
+          ]
+        }
       }
     },
     "RDSMonitoringRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {"Fn::Sub": "payment-dr-rds-monitoring-${EnvironmentSuffix}"},
+        "RoleName": {
+          "Fn::Sub": "payment-dr-rds-monitoring-${EnvironmentSuffix}"
+        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -297,7 +387,9 @@
     "LambdaExecutionRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {"Fn::Sub": "payment-processor-primary-role-${EnvironmentSuffix}"},
+        "RoleName": {
+          "Fn::Sub": "payment-processor-primary-role-${EnvironmentSuffix}"
+        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -325,7 +417,9 @@
                     "rds-data:ExecuteStatement",
                     "rds-data:BatchExecuteStatement"
                   ],
-                  "Resource": {"Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:payment-dr-cluster-${EnvironmentSuffix}"}
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:payment-dr-cluster-${EnvironmentSuffix}"
+                  }
                 }
               ]
             }
@@ -342,7 +436,9 @@
                     "logs:CreateLogStream",
                     "logs:PutLogEvents"
                   ],
-                  "Resource": {"Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/payment-processor-primary-${EnvironmentSuffix}:*"}
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/payment-processor-primary-${EnvironmentSuffix}:*"
+                  }
                 }
               ]
             }
@@ -354,24 +450,43 @@
       "Type": "AWS::Lambda::Function",
       "DependsOn": "PaymentProcessorLogGroup",
       "Properties": {
-        "FunctionName": {"Fn::Sub": "payment-processor-primary-${EnvironmentSuffix}"},
+        "FunctionName": {
+          "Fn::Sub": "payment-processor-primary-${EnvironmentSuffix}"
+        },
         "Runtime": "python3.11",
         "Handler": "index.lambda_handler",
-        "Role": {"Fn::GetAtt": ["LambdaExecutionRole", "Arn"]},
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
         "MemorySize": 1024,
         "Timeout": 30,
         "ReservedConcurrentExecutions": 100,
         "VpcConfig": {
-          "SecurityGroupIds": [{"Ref": "LambdaSecurityGroup"}],
+          "SecurityGroupIds": [
+            {
+              "Ref": "LambdaSecurityGroup"
+            }
+          ],
           "SubnetIds": [
-            {"Ref": "PrivateSubnet1"},
-            {"Ref": "PrivateSubnet2"},
-            {"Ref": "PrivateSubnet3"}
+            {
+              "Ref": "PrivateSubnet1"
+            },
+            {
+              "Ref": "PrivateSubnet2"
+            },
+            {
+              "Ref": "PrivateSubnet3"
+            }
           ]
         },
         "Environment": {
           "Variables": {
-            "DB_CLUSTER_ARN": {"Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:payment-dr-cluster-${EnvironmentSuffix}"},
+            "DB_CLUSTER_ARN": {
+              "Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:payment-dr-cluster-${EnvironmentSuffix}"
+            },
             "DB_NAME": "payments",
             "REGION": "us-east-1"
           }
@@ -384,14 +499,18 @@
     "PaymentProcessorLogGroup": {
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
-        "LogGroupName": {"Fn::Sub": "/aws/lambda/payment-processor-primary-${EnvironmentSuffix}"},
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/payment-processor-primary-${EnvironmentSuffix}"
+        },
         "RetentionInDays": 7
       }
     },
     "ReplicationLagAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "payment-dr-replication-lag-${EnvironmentSuffix}"},
+        "AlarmName": {
+          "Fn::Sub": "payment-dr-replication-lag-${EnvironmentSuffix}"
+        },
         "AlarmDescription": "Alert when Aurora Global Database replication lag exceeds 1 second",
         "MetricName": "AuroraGlobalDBReplicationLag",
         "Namespace": "AWS/RDS",
@@ -403,17 +522,25 @@
         "Dimensions": [
           {
             "Name": "DBClusterIdentifier",
-            "Value": {"Ref": "AuroraDBCluster"}
+            "Value": {
+              "Ref": "AuroraDBCluster"
+            }
           }
         ],
-        "AlarmActions": [{"Ref": "FailoverNotificationTopic"}],
+        "AlarmActions": [
+          {
+            "Ref": "FailoverNotificationTopic"
+          }
+        ],
         "TreatMissingData": "notBreaching"
       }
     },
     "DatabaseCPUAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "payment-dr-primary-cpu-${EnvironmentSuffix}"},
+        "AlarmName": {
+          "Fn::Sub": "payment-dr-primary-cpu-${EnvironmentSuffix}"
+        },
         "AlarmDescription": "Alert when primary Aurora cluster CPU exceeds 80%",
         "MetricName": "CPUUtilization",
         "Namespace": "AWS/RDS",
@@ -425,16 +552,24 @@
         "Dimensions": [
           {
             "Name": "DBClusterIdentifier",
-            "Value": {"Ref": "AuroraDBCluster"}
+            "Value": {
+              "Ref": "AuroraDBCluster"
+            }
           }
         ],
-        "AlarmActions": [{"Ref": "FailoverNotificationTopic"}]
+        "AlarmActions": [
+          {
+            "Ref": "FailoverNotificationTopic"
+          }
+        ]
       }
     },
     "LambdaErrorAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "payment-dr-primary-lambda-errors-${EnvironmentSuffix}"},
+        "AlarmName": {
+          "Fn::Sub": "payment-dr-primary-lambda-errors-${EnvironmentSuffix}"
+        },
         "AlarmDescription": "Alert when Lambda function has errors",
         "MetricName": "Errors",
         "Namespace": "AWS/Lambda",
@@ -446,16 +581,24 @@
         "Dimensions": [
           {
             "Name": "FunctionName",
-            "Value": {"Ref": "PaymentProcessorFunction"}
+            "Value": {
+              "Ref": "PaymentProcessorFunction"
+            }
           }
         ],
-        "AlarmActions": [{"Ref": "FailoverNotificationTopic"}]
+        "AlarmActions": [
+          {
+            "Ref": "FailoverNotificationTopic"
+          }
+        ]
       }
     },
     "LambdaThrottleAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "payment-dr-primary-lambda-throttles-${EnvironmentSuffix}"},
+        "AlarmName": {
+          "Fn::Sub": "payment-dr-primary-lambda-throttles-${EnvironmentSuffix}"
+        },
         "AlarmDescription": "Alert when Lambda function is throttled",
         "MetricName": "Throttles",
         "Namespace": "AWS/Lambda",
@@ -467,22 +610,32 @@
         "Dimensions": [
           {
             "Name": "FunctionName",
-            "Value": {"Ref": "PaymentProcessorFunction"}
+            "Value": {
+              "Ref": "PaymentProcessorFunction"
+            }
           }
         ],
-        "AlarmActions": [{"Ref": "FailoverNotificationTopic"}]
+        "AlarmActions": [
+          {
+            "Ref": "FailoverNotificationTopic"
+          }
+        ]
       }
     },
     "FailoverNotificationTopic": {
       "Type": "AWS::SNS::Topic",
       "Properties": {
-        "TopicName": {"Fn::Sub": "payment-dr-failover-primary-${EnvironmentSuffix}"},
+        "TopicName": {
+          "Fn::Sub": "payment-dr-failover-primary-${EnvironmentSuffix}"
+        },
         "DisplayName": "Payment DR Failover Notifications - Primary",
         "KmsMasterKeyId": "alias/aws/sns",
         "Subscription": [
           {
             "Protocol": "email",
-            "Endpoint": {"Ref": "NotificationEmail"}
+            "Endpoint": {
+              "Ref": "NotificationEmail"
+            }
           }
         ]
       }
@@ -490,13 +643,17 @@
     "HostedZone": {
       "Type": "AWS::Route53::HostedZone",
       "Properties": {
-        "Name": {"Fn::Sub": "payment-dr-${EnvironmentSuffix}.test-domain.internal"},
+        "Name": {
+          "Fn::Sub": "payment-dr-${EnvironmentSuffix}.test-domain.internal"
+        },
         "HostedZoneConfig": {
           "Comment": "Private hosted zone for multi-region DR failover"
         },
         "VPCs": [
           {
-            "VPCId": {"Ref": "VPC"},
+            "VPCId": {
+              "Ref": "VPC"
+            },
             "VPCRegion": "us-east-1"
           }
         ]
@@ -505,7 +662,9 @@
     "PrimaryHealthAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "payment-dr-primary-health-${EnvironmentSuffix}"},
+        "AlarmName": {
+          "Fn::Sub": "payment-dr-primary-health-${EnvironmentSuffix}"
+        },
         "AlarmDescription": "Primary region health check alarm",
         "MetricName": "CPUUtilization",
         "Namespace": "AWS/RDS",
@@ -517,10 +676,16 @@
         "Dimensions": [
           {
             "Name": "DBClusterIdentifier",
-            "Value": {"Ref": "AuroraDBCluster"}
+            "Value": {
+              "Ref": "AuroraDBCluster"
+            }
           }
         ],
-        "AlarmActions": [{"Ref": "FailoverNotificationTopic"}]
+        "AlarmActions": [
+          {
+            "Ref": "FailoverNotificationTopic"
+          }
+        ]
       }
     },
     "PrimaryHealthCheck": {
@@ -530,7 +695,9 @@
         "HealthCheckConfig": {
           "Type": "CLOUDWATCH_METRIC",
           "AlarmIdentifier": {
-            "Name": {"Fn::Sub": "payment-dr-primary-health-${EnvironmentSuffix}"},
+            "Name": {
+              "Fn::Sub": "payment-dr-primary-health-${EnvironmentSuffix}"
+            },
             "Region": "us-east-1"
           },
           "InsufficientDataHealthStatus": "Healthy"
@@ -538,7 +705,9 @@
         "HealthCheckTags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "payment-dr-primary-health-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "payment-dr-primary-health-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -546,74 +715,135 @@
     "PrimaryDNSRecord": {
       "Type": "AWS::Route53::RecordSet",
       "Properties": {
-        "HostedZoneId": {"Ref": "HostedZone"},
-        "Name": {"Fn::Sub": "api.payment-dr-${EnvironmentSuffix}.test-domain.internal"},
+        "HostedZoneId": {
+          "Ref": "HostedZone"
+        },
+        "Name": {
+          "Fn::Sub": "api.payment-dr-${EnvironmentSuffix}.test-domain.internal"
+        },
         "Type": "CNAME",
         "TTL": "60",
-        "ResourceRecords": [{"Fn::GetAtt": ["AuroraDBCluster", "Endpoint.Address"]}],
+        "ResourceRecords": [
+          {
+            "Fn::GetAtt": [
+              "AuroraDBCluster",
+              "Endpoint.Address"
+            ]
+          }
+        ],
         "SetIdentifier": "primary",
         "Failover": "PRIMARY",
-        "HealthCheckId": {"Ref": "PrimaryHealthCheck"}
+        "HealthCheckId": {
+          "Ref": "PrimaryHealthCheck"
+        }
       }
     }
   },
   "Outputs": {
     "VPCId": {
       "Description": "VPC ID",
-      "Value": {"Ref": "VPC"},
+      "Value": {
+        "Ref": "VPC"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "payment-dr-vpc-${EnvironmentSuffix}"}
+        "Name": {
+          "Fn::Sub": "payment-dr-vpc-${EnvironmentSuffix}"
+        }
       }
     },
     "GlobalClusterIdentifier": {
       "Description": "Aurora Global Cluster Identifier",
-      "Value": {"Fn::Sub": "payment-dr-global-${EnvironmentSuffix}"},
+      "Value": {
+        "Fn::Sub": "payment-dr-global-${EnvironmentSuffix}"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "payment-dr-global-cluster-${EnvironmentSuffix}"}
+        "Name": {
+          "Fn::Sub": "payment-dr-global-cluster-${EnvironmentSuffix}"
+        }
       }
     },
     "PrimaryClusterEndpoint": {
       "Description": "Primary Aurora cluster endpoint",
-      "Value": {"Fn::GetAtt": ["AuroraDBCluster", "Endpoint.Address"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "AuroraDBCluster",
+          "Endpoint.Address"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "payment-dr-primary-endpoint-${EnvironmentSuffix}"}
+        "Name": {
+          "Fn::Sub": "payment-dr-primary-endpoint-${EnvironmentSuffix}"
+        }
       }
     },
     "PrimaryClusterReadEndpoint": {
       "Description": "Primary Aurora cluster read endpoint",
-      "Value": {"Fn::GetAtt": ["AuroraDBCluster", "ReadEndpoint.Address"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "AuroraDBCluster",
+          "ReadEndpoint.Address"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "payment-dr-primary-read-endpoint-${EnvironmentSuffix}"}
+        "Name": {
+          "Fn::Sub": "payment-dr-primary-read-endpoint-${EnvironmentSuffix}"
+        }
       }
     },
     "PrimaryLambdaArn": {
       "Description": "Primary Lambda function ARN",
-      "Value": {"Fn::GetAtt": ["PaymentProcessorFunction", "Arn"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "PaymentProcessorFunction",
+          "Arn"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "payment-dr-primary-lambda-${EnvironmentSuffix}"}
+        "Name": {
+          "Fn::Sub": "payment-dr-primary-lambda-${EnvironmentSuffix}"
+        }
       }
     },
     "HostedZoneId": {
       "Description": "Route 53 Hosted Zone ID",
-      "Value": {"Ref": "HostedZone"},
+      "Value": {
+        "Ref": "HostedZone"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "payment-dr-hosted-zone-${EnvironmentSuffix}"}
+        "Name": {
+          "Fn::Sub": "payment-dr-hosted-zone-${EnvironmentSuffix}"
+        }
       }
     },
     "HostedZoneNameServers": {
       "Description": "Route 53 Hosted Zone Name Servers",
-      "Value": {"Fn::Join": [",", {"Fn::GetAtt": ["HostedZone", "NameServers"]}]},
+      "Value": {
+        "Fn::Join": [
+          ",",
+          {
+            "Fn::GetAtt": [
+              "HostedZone",
+              "NameServers"
+            ]
+          }
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "payment-dr-nameservers-${EnvironmentSuffix}"}
+        "Name": {
+          "Fn::Sub": "payment-dr-nameservers-${EnvironmentSuffix}"
+        }
       }
     },
     "PrimarySNSTopicArn": {
       "Description": "Primary SNS topic ARN for notifications",
-      "Value": {"Ref": "FailoverNotificationTopic"},
+      "Value": {
+        "Ref": "FailoverNotificationTopic"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "payment-dr-primary-sns-${EnvironmentSuffix}"}
+        "Name": {
+          "Fn::Sub": "payment-dr-primary-sns-${EnvironmentSuffix}"
+        }
       }
     }
   }
 }
-

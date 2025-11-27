@@ -4,31 +4,17 @@
   "Parameters": {
     "EnvironmentSuffix": {
       "Type": "String",
-      "Description": "Unique suffix for resource naming to avoid conflicts",
-      "MinLength": 3,
-      "MaxLength": 20,
-      "AllowedPattern": "[a-z0-9-]+",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-z0-9-]+$",
       "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
-    },
-    "DatabaseUsername": {
-      "Type": "String",
-      "Description": "Master username for Aurora database",
-      "Default": "admin",
-      "MinLength": 1,
-      "MaxLength": 16,
-      "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
-    },
-    "DatabasePassword": {
-      "Type": "String",
-      "Description": "Master password for Aurora database",
-      "NoEcho": true,
-      "MinLength": 8,
-      "MaxLength": 41
     },
     "NotificationEmail": {
       "Type": "String",
+      "Default": "devops@example.com",
       "Description": "Email address for SNS failover notifications",
-      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+      "ConstraintDescription": "Must be a valid email address"
     }
   },
   "Resources": {
@@ -174,8 +160,12 @@
         "Engine": "aurora-mysql",
         "EngineVersion": "8.0.mysql_aurora.3.04.0",
         "DBClusterIdentifier": {"Fn::Sub": "payment-dr-cluster-${EnvironmentSuffix}"},
-        "MasterUsername": {"Ref": "DatabaseUsername"},
-        "MasterUserPassword": {"Ref": "DatabasePassword"},
+        "MasterUsername": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}"
+        },
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}"
+        },
         "DBSubnetGroupName": {"Ref": "DBSubnetGroup"},
         "VpcSecurityGroupIds": [{"Ref": "DatabaseSecurityGroup"}],
         "BackupRetentionPeriod": 7,
@@ -223,6 +213,21 @@
             "Value": {"Fn::Sub": "payment-dr-instance-2-${EnvironmentSuffix}"}
           }
         ]
+      }
+    },
+    "DatabaseSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "payment-dr-db-secret-${EnvironmentSuffix}"
+        },
+        "Description": "RDS Aurora master credentials for payment DR solution",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\":\"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\'"
+        }
       }
     },
     "GlobalCluster": {

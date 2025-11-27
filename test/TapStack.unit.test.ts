@@ -61,24 +61,22 @@ describe('CloudFormation Multi-Region DR Template Unit Tests', () => {
     test('both templates should have EnvironmentSuffix parameter', () => {
       expect(primaryTemplate.Parameters.EnvironmentSuffix).toBeDefined();
       expect(primaryTemplate.Parameters.EnvironmentSuffix.Type).toBe('String');
-      expect(primaryTemplate.Parameters.EnvironmentSuffix.MinLength).toBe(3);
-      expect(primaryTemplate.Parameters.EnvironmentSuffix.MaxLength).toBe(20);
-      expect(primaryTemplate.Parameters.EnvironmentSuffix.AllowedPattern).toBe('[a-z0-9-]+');
+      expect(primaryTemplate.Parameters.EnvironmentSuffix.Default).toBe('dev');
 
       expect(secondaryTemplate.Parameters.EnvironmentSuffix).toBeDefined();
       expect(secondaryTemplate.Parameters.EnvironmentSuffix.Type).toBe('String');
     });
 
-    test('primary template should have DatabaseUsername parameter', () => {
-      expect(primaryTemplate.Parameters.DatabaseUsername).toBeDefined();
-      expect(primaryTemplate.Parameters.DatabaseUsername.Type).toBe('String');
-      expect(primaryTemplate.Parameters.DatabaseUsername.Default).toBe('admin');
+    test('primary template should use Secrets Manager for database credentials', () => {
+      expect(primaryTemplate.Resources.DatabaseSecret).toBeDefined();
+      expect(primaryTemplate.Resources.DatabaseSecret.Type).toBe('AWS::SecretsManager::Secret');
+      expect(primaryTemplate.Resources.DatabaseSecret.Properties.GenerateSecretString).toBeDefined();
+      expect(primaryTemplate.Resources.DatabaseSecret.Properties.GenerateSecretString.SecretStringTemplate).toContain('admin');
     });
 
-    test('primary template should have DatabasePassword with NoEcho', () => {
-      expect(primaryTemplate.Parameters.DatabasePassword).toBeDefined();
-      expect(primaryTemplate.Parameters.DatabasePassword.NoEcho).toBe(true);
-      expect(primaryTemplate.Parameters.DatabasePassword.MinLength).toBe(8);
+    test('primary template should NOT have database credential parameters', () => {
+      expect(primaryTemplate.Parameters.DatabaseUsername).toBeUndefined();
+      expect(primaryTemplate.Parameters.DatabasePassword).toBeUndefined();
     });
 
     test('both templates should have NotificationEmail parameter', () => {
@@ -633,11 +631,18 @@ describe('CloudFormation Multi-Region DR Template Unit Tests', () => {
       expect(tapStackTemplate.Description).toContain('us-east-1');
     });
 
-    test('TapStack.json should have all required parameters', () => {
+    test('TapStack.json should have required parameters (using Secrets Manager for DB)', () => {
       expect(tapStackTemplate.Parameters.EnvironmentSuffix).toBeDefined();
-      expect(tapStackTemplate.Parameters.DatabaseUsername).toBeDefined();
-      expect(tapStackTemplate.Parameters.DatabasePassword).toBeDefined();
       expect(tapStackTemplate.Parameters.NotificationEmail).toBeDefined();
+      // Database credentials now managed by Secrets Manager
+      expect(tapStackTemplate.Parameters.DatabaseUsername).toBeUndefined();
+      expect(tapStackTemplate.Parameters.DatabasePassword).toBeUndefined();
+    });
+
+    test('TapStack.json should have Secrets Manager secret for database credentials', () => {
+      expect(tapStackTemplate.Resources.DatabaseSecret).toBeDefined();
+      expect(tapStackTemplate.Resources.DatabaseSecret.Type).toBe('AWS::SecretsManager::Secret');
+      expect(tapStackTemplate.Resources.DatabaseSecret.Properties.GenerateSecretString).toBeDefined();
     });
 
     test('TapStack.json should have GlobalCluster resource', () => {

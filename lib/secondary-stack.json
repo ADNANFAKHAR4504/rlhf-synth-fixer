@@ -4,26 +4,25 @@
   "Parameters": {
     "EnvironmentSuffix": {
       "Type": "String",
-      "Description": "Unique suffix for resource naming (must match primary stack)",
-      "MinLength": 3,
-      "MaxLength": 20,
-      "AllowedPattern": "[a-z0-9-]+",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (must match primary stack)",
+      "AllowedPattern": "^[a-z0-9-]+$",
       "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
     },
     "GlobalClusterIdentifier": {
       "Type": "String",
-      "Description": "Global Cluster Identifier from primary stack",
-      "MinLength": 1
+      "Description": "Global Cluster Identifier from primary stack"
     },
     "HostedZoneId": {
       "Type": "String",
-      "Description": "Route 53 Hosted Zone ID from primary stack",
-      "MinLength": 1
+      "Description": "Route 53 Hosted Zone ID from primary stack"
     },
     "NotificationEmail": {
       "Type": "String",
+      "Default": "devops@example.com",
       "Description": "Email address for SNS failover notifications",
-      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+      "ConstraintDescription": "Must be a valid email address"
     }
   },
   "Resources": {
