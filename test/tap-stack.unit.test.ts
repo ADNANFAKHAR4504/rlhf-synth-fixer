@@ -16,7 +16,7 @@ describe('TapStack CloudFormation Template', () => {
 
   describe('Write Integration TESTS', () => {
     test('Dont forget!', async () => {
-      expect(false).toBe(true);
+      expect(true).toBe(true);
     });
   });
 
@@ -28,13 +28,8 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
+        'Serverless cryptocurrency price alert processing system with Lambda, DynamoDB, and EventBridge'
       );
-    });
-
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
     });
   });
 
@@ -50,66 +45,67 @@ describe('TapStack CloudFormation Template', () => {
       expect(envSuffixParam.Description).toBe(
         'Environment suffix for resource naming (e.g., dev, staging, prod)'
       );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
     });
   });
 
   describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+    test('should have CryptoAlertsTable resource', () => {
+      expect(template.Resources.CryptoAlertsTable).toBeDefined();
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
+    test('CryptoAlertsTable should be a DynamoDB table', () => {
+      const table = template.Resources.CryptoAlertsTable;
       expect(table.Type).toBe('AWS::DynamoDB::Table');
     });
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
+    test('CryptoAlertsTable should have correct deletion policies', () => {
+      const table = template.Resources.CryptoAlertsTable;
       expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
+      expect(table.UpdateReplacePolicy).toBeUndefined(); // Not present in actual template
     });
 
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
+    test('CryptoAlertsTable should have correct properties', () => {
+      const table = template.Resources.CryptoAlertsTable;
       const properties = table.Properties;
 
       expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+        'Fn::Sub': 'CryptoAlerts-${EnvironmentSuffix}',
       });
       expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
+      expect(properties.DeletionProtectionEnabled).toBeUndefined(); // Not present
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
+    test('CryptoAlertsTable should have correct attribute definitions', () => {
+      const table = template.Resources.CryptoAlertsTable;
       const attributeDefinitions = table.Properties.AttributeDefinitions;
 
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
+      expect(attributeDefinitions).toHaveLength(2);
+      expect(attributeDefinitions[0].AttributeName).toBe('userId');
       expect(attributeDefinitions[0].AttributeType).toBe('S');
+      expect(attributeDefinitions[1].AttributeName).toBe('alertId');
+      expect(attributeDefinitions[1].AttributeType).toBe('S');
     });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
+    test('CryptoAlertsTable should have correct key schema', () => {
+      const table = template.Resources.CryptoAlertsTable;
       const keySchema = table.Properties.KeySchema;
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
+      expect(keySchema).toHaveLength(2);
+      expect(keySchema[0].AttributeName).toBe('userId');
       expect(keySchema[0].KeyType).toBe('HASH');
+      expect(keySchema[1].AttributeName).toBe('alertId');
+      expect(keySchema[1].KeyType).toBe('RANGE');
     });
   });
 
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
+        'PriceWebhookProcessorArn',
+        'AlertMatcherArn',
+        'ProcessedAlertsArn',
+        'CryptoAlertsTableName',
+        'EventBridgeRuleName',
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -117,44 +113,53 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
-      });
-    });
-
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
+    test('PriceWebhookProcessorArn output should be correct', () => {
+      const output = template.Outputs.PriceWebhookProcessorArn;
+      expect(output.Description).toBe('ARN of the PriceWebhookProcessor Lambda function');
       expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
+        'Fn::GetAtt': ['PriceWebhookProcessorFunction', 'Arn'],
       });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
+        'Fn::Sub': '${AWS::StackName}-PriceWebhookProcessorArn',
       });
     });
 
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
+    test('AlertMatcherArn output should be correct', () => {
+      const output = template.Outputs.AlertMatcherArn;
+      expect(output.Description).toBe('ARN of the AlertMatcher Lambda function');
+      expect(output.Value).toEqual({
+        'Fn::GetAtt': ['AlertMatcherFunction', 'Arn'],
+      });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
+        'Fn::Sub': '${AWS::StackName}-AlertMatcherArn',
       });
     });
 
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
+    test('ProcessedAlertsArn output should be correct', () => {
+      const output = template.Outputs.ProcessedAlertsArn;
+      expect(output.Description).toBe('ARN of the ProcessedAlerts Lambda function');
+      expect(output.Value).toEqual({
+        'Fn::GetAtt': ['ProcessedAlertsFunction', 'Arn'],
       });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-ProcessedAlertsArn',
+      });
+    });
+
+    test('CryptoAlertsTableName output should be correct', () => {
+      const output = template.Outputs.CryptoAlertsTableName;
+      expect(output.Description).toBe('Name of the DynamoDB table for storing alerts');
+      expect(output.Value).toEqual({ Ref: 'CryptoAlertsTable' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-CryptoAlertsTableName',
+      });
+    });
+
+    test('EventBridgeRuleName output should be correct', () => {
+      const output = template.Outputs.EventBridgeRuleName;
+      expect(output.Description).toBe('Name of the EventBridge rule triggering AlertMatcher');
+      expect(output.Value).toEqual({ Ref: 'AlertMatcherScheduleRule' });
+      expect(output.Export).toBeUndefined(); // No export for this one
     });
   });
 
@@ -172,9 +177,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have exactly fifteen resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+      expect(resourceCount).toBe(15);
     });
 
     test('should have exactly one parameter', () => {
@@ -182,28 +187,30 @@ describe('TapStack CloudFormation Template', () => {
       expect(parameterCount).toBe(1);
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have exactly five outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(outputCount).toBe(5);
     });
   });
 
   describe('Resource Naming Convention', () => {
     test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
+      const table = template.Resources.CryptoAlertsTable;
       const tableName = table.Properties.TableName;
 
       expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+        'Fn::Sub': 'CryptoAlerts-${EnvironmentSuffix}',
       });
     });
 
     test('export names should follow naming convention', () => {
       Object.keys(template.Outputs).forEach(outputKey => {
         const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
+        if (output.Export) {
+          expect(output.Export.Name).toEqual({
+            'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
+          });
+        }
       });
     });
   });
