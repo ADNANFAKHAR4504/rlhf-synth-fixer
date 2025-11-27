@@ -506,9 +506,27 @@ describe('Integration with AWS Services', () => {
     expect(region).toBe('us-east-1');
   });
 
-  it('should support environment-specific configurations', () => {
-    const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-    expect(environmentSuffix).toBeDefined();
+  it('should support environment-specific configurations', async () => {
+    // Test with custom ENVIRONMENT_SUFFIX
+    const originalEnv = process.env.ENVIRONMENT_SUFFIX;
+    process.env.ENVIRONMENT_SUFFIX = 'prod';
+
+    const stackWithEnv = new TapStack('test-stack-with-env', {
+      tags: {
+        Project: 'EnvTest',
+      },
+    });
+
+    // Verify stack was created
+    const vpcId = await stackWithEnv.vpcId;
+    expect(vpcId).toBeDefined();
+
+    // Restore original value
+    if (originalEnv !== undefined) {
+      process.env.ENVIRONMENT_SUFFIX = originalEnv;
+    } else {
+      delete process.env.ENVIRONMENT_SUFFIX;
+    }
   });
 
   it('should allow custom tags via stack arguments', () => {
@@ -517,6 +535,36 @@ describe('Integration with AWS Services', () => {
       Owner: 'TestTeam',
     };
     expect(customTags.Project).toBe('Test');
+  });
+
+  it('should work without custom tags', async () => {
+    // Test the case where no tags are provided (covers the || {} branch)
+    const stackWithoutTags = new TapStack('test-stack-no-tags', {});
+
+    // Verify stack was created successfully
+    const vpcId = await stackWithoutTags.vpcId;
+    expect(vpcId).toBeDefined();
+  });
+
+  it('should use default environment suffix when not set', async () => {
+    // Test with ENVIRONMENT_SUFFIX not set (covers the || 'dev' branch)
+    const originalEnv = process.env.ENVIRONMENT_SUFFIX;
+    delete process.env.ENVIRONMENT_SUFFIX;
+
+    const stackWithDefaultEnv = new TapStack('test-stack-default-env', {
+      tags: {
+        Project: 'DefaultEnvTest',
+      },
+    });
+
+    // Verify stack was created
+    const vpcId = await stackWithDefaultEnv.vpcId;
+    expect(vpcId).toBeDefined();
+
+    // Restore original value
+    if (originalEnv !== undefined) {
+      process.env.ENVIRONMENT_SUFFIX = originalEnv;
+    }
   });
 });
 
