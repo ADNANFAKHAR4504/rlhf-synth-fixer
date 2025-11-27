@@ -704,54 +704,14 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // ALB Listener (HTTP - redirect to HTTPS)
-    const _httpListener = new aws.lb.Listener(
+    // ALB Listener (HTTP)
+    // In test environment, using HTTP directly instead of HTTPS
+    const httpListener = new aws.lb.Listener(
       `ecommerce-http-listener-${environmentSuffix}`,
       {
         loadBalancerArn: alb.arn,
         port: 80,
         protocol: 'HTTP',
-        defaultActions: [
-          {
-            type: 'redirect',
-            redirect: {
-              protocol: 'HTTPS',
-              port: '443',
-              statusCode: 'HTTP_301',
-            },
-          },
-        ],
-      },
-      { parent: this }
-    );
-
-    // For demonstration, we'll create a self-signed certificate
-    // In production, use ACM certificate with domain validation
-    const certificate = new aws.acm.Certificate(
-      `ecommerce-cert-${environmentSuffix}`,
-      {
-        domainName: `ecommerce-${environmentSuffix}.example.com`,
-        validationMethod: 'DNS',
-        subjectAlternativeNames: [
-          `*.ecommerce-${environmentSuffix}.example.com`,
-        ],
-        tags: {
-          Name: `ecommerce-cert-${environmentSuffix}`,
-          Environment: environmentSuffix,
-        },
-      },
-      { parent: this }
-    );
-
-    // ALB Listener (HTTPS)
-    const httpsListener = new aws.lb.Listener(
-      `ecommerce-https-listener-${environmentSuffix}`,
-      {
-        loadBalancerArn: alb.arn,
-        port: 443,
-        protocol: 'HTTPS',
-        sslPolicy: 'ELBSecurityPolicy-TLS-1-2-2017-01',
-        certificateArn: certificate.arn,
         defaultActions: [
           {
             type: 'forward',
@@ -761,6 +721,45 @@ export class TapStack extends pulumi.ComponentResource {
       },
       { parent: this }
     );
+
+    // For demonstration, we'll create a self-signed certificate
+    // In production, use ACM certificate with domain validation
+    // NOTE: Commented out for test environment - ACM certificates require DNS validation
+    // const certificate = new aws.acm.Certificate(
+    //   `ecommerce-cert-${environmentSuffix}`,
+    //   {
+    //     domainName: `ecommerce-${environmentSuffix}.example.com`,
+    //     validationMethod: 'DNS',
+    //     subjectAlternativeNames: [
+    //       `*.ecommerce-${environmentSuffix}.example.com`,
+    //     ],
+    //     tags: {
+    //       Name: `ecommerce-cert-${environmentSuffix}`,
+    //       Environment: environmentSuffix,
+    //     },
+    //   },
+    //   { parent: this }
+    // );
+
+    // ALB Listener (HTTPS)
+    // NOTE: Commented out for test environment - requires validated certificate
+    // const httpsListener = new aws.lb.Listener(
+    //   `ecommerce-https-listener-${environmentSuffix}`,
+    //   {
+    //     loadBalancerArn: alb.arn,
+    //     port: 443,
+    //     protocol: 'HTTPS',
+    //     sslPolicy: 'ELBSecurityPolicy-TLS-1-2-2017-01',
+    //     certificateArn: certificate.arn,
+    //     defaultActions: [
+    //       {
+    //         type: 'forward',
+    //         targetGroupArn: targetGroup.arn,
+    //       },
+    //     ],
+    //   },
+    //   { parent: this }
+    // );
 
     // ECS Task Definition
     const taskDefinition = new aws.ecs.TaskDefinition(
@@ -876,7 +875,7 @@ export class TapStack extends pulumi.ComponentResource {
           Environment: environmentSuffix,
         },
       },
-      { parent: this, dependsOn: [httpsListener, _httpListener] }
+      { parent: this, dependsOn: [httpListener] }
     );
 
     // Auto Scaling Target
@@ -1210,3 +1209,4 @@ def finish_secret(service_client, arn, token):
     });
   }
 }
+
