@@ -629,23 +629,11 @@ exports.handler = async (event) => {
       { parent: this }
     );
 
-    // 3. ACM Certificate for mTLS (self-signed for demo, use ACM Private CA in production)
-    // Note: ACM certificates require DNS validation or email validation
-    // For zero-trust mTLS, this would typically be ACM Private CA with client certificates
-    const certificate = new aws.acm.Certificate(
-      `mtls-certificate-${environmentSuffix}`,
-      {
-        domainName: `*.microservices.${environmentSuffix}.local`,
-        validationMethod: 'DNS',
-        tags: {
-          ...(tags as any),
-          Name: `mtls-certificate-${environmentSuffix}`,
-        },
-      },
-      { parent: this }
-    );
+    // Note: ACM certificates require real FQDNs with DNS validation
+    // For internal mTLS with .local domains, use ACM Private CA or self-signed certificates
+    // For this demo, we'll use TCP without TLS on the NLB
 
-    // 3. Network Load Balancer for internal mTLS
+    // 3. Network Load Balancer for internal communication
     const nlb = new aws.lb.LoadBalancer(
       `nlb-internal-${environmentSuffix}`,
       {
@@ -666,14 +654,14 @@ exports.handler = async (event) => {
       `nlb-tg-${environmentSuffix}`,
       {
         name: `nlb-tg-${environmentSuffix}`,
-        port: 443,
-        protocol: 'TLS',
+        port: 8080,
+        protocol: 'TCP',
         vpcId: vpc.id,
         targetType: 'instance',
         healthCheck: {
           enabled: true,
           protocol: 'TCP',
-          port: '443',
+          port: '8080',
           interval: 30,
           healthyThreshold: 3,
           unhealthyThreshold: 3,
@@ -690,10 +678,8 @@ exports.handler = async (event) => {
       `nlb-listener-${environmentSuffix}`,
       {
         loadBalancerArn: nlb.arn,
-        port: 443,
-        protocol: 'TLS',
-        certificateArn: certificate.arn,
-        sslPolicy: 'ELBSecurityPolicy-TLS13-1-2-2021-06',
+        port: 8080,
+        protocol: 'TCP',
         defaultActions: [
           {
             type: 'forward',
