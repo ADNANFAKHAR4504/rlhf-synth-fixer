@@ -599,13 +599,6 @@ resource "aws_iam_role_policy" "eks_nodes_ec2" {
     ]
   })
 
-  tags = merge(
-    var.common_tags,
-    {
-      Name     = "${var.cluster_name}-node-ec2-policy-${var.pr_number}"
-      PRNumber = var.pr_number
-    }
-  )
 }
 
 # Critical Node Group (Bottlerocket)
