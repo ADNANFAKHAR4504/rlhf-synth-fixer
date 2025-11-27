@@ -83,7 +83,8 @@ describe('Credit Scoring CloudFormation Integration', () => {
       'AWS::S3::Bucket',
       'AWS::S3::BucketPolicy',
       'AWS::ElasticLoadBalancingV2::TargetGroup',
-      'AWS::ElasticLoadBalancingV2::Listener'
+      'AWS::ElasticLoadBalancingV2::Listener',
+      'AWS::SecretsManager::Secret'
     ];
 
     Object.values(template.Resources).forEach((resource: any) => {
