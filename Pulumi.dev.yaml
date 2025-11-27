@@ -1,4 +1,0 @@
-encryptionsalt: v1:84NgzvT1cOY=:v1:BpOxDeg9euAbf9o0:bgItsGJcTY+yFCciC+2+bacr4qDtAA==
-config:
-  pulumi-cicd-pipeline:githubToken:
-    secure: v1:4qbGGs4zmi1gQuXS:i7OJEJv0B3pVoGdS4G8mbgpsSDI+QeJdA5DVDXfD9UApfbQOL+ny2X78yQjJDE1Dlp3QfwbQ
