@@ -1,9 +1,11 @@
 {
   "po_id": "101912726",
-  "platform": "Terraform",
-  "language": "HCL",
+  "platform": "tf",
+  "language": "hcl",
   "complexity": "expert",
   "team": "synth",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
   "turn_type": "single",
   "startedAt": "2025-11-26T17:51:33+00:00",
   "subtask": "ECS Fargate Optimization",
