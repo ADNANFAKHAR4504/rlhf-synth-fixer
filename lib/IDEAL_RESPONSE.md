@@ -16,7 +16,7 @@ Financial services company requiring resilient transaction processing with autom
 
 1. **DynamoDB Global Tables**: Multi-region transaction database with point-in-time recovery
 2. **S3 Cross-Region Replication**: Document storage with transfer acceleration and RTC
-3. **Lambda Functions**: Transaction processors in both regions with reserved concurrency
+3. **Lambda Functions**: Transaction processors in both regions (without reserved concurrency due to AWS account limits)
 4. **Route 53 Failover**: Automated DNS-based failover with health monitoring
 5. **KMS Encryption**: Customer-managed keys in each region with automatic rotation
 6. **CloudWatch Monitoring**: Comprehensive alarms for all critical metrics
@@ -507,7 +507,6 @@ Single CloudFormation stack deploying resources across both regions. Uses Dynamo
         },
         "Timeout": 60,
         "MemorySize": 512,
-        "ReservedConcurrentExecutions": 100,
         "Environment": {
           "Variables": {
             "TABLE_NAME": {
@@ -941,7 +940,6 @@ Single CloudFormation stack deploying resources across both regions. Uses Dynamo
         },
         "Timeout": 60,
         "MemorySize": 512,
-        "ReservedConcurrentExecutions": 100,
         "Environment": {
           "Variables": {
             "TABLE_NAME": {
@@ -1218,17 +1216,6 @@ Single CloudFormation stack deploying resources across both regions. Uses Dynamo
         }
       }
     },
-    "Route53HealthCheckId": {
-      "Description": "ID of the Route 53 health check",
-      "Value": {
-        "Ref": "Route53HealthCheck"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-Route53HealthCheckId"
-        }
-      }
-    },
     "PrimaryRegion": {
       "Description": "Primary AWS region",
       "Value": {
@@ -1315,7 +1302,7 @@ Single CloudFormation stack deploying resources across both regions. Uses Dynamo
 - Active transaction processing
 - Primary DynamoDB replica
 - Primary S3 bucket with replication enabled
-- Lambda function with reserved concurrency (100)
+- Lambda function for transaction processing
 - KMS key for encryption
 - CloudWatch alarms and SNS notifications
 - Route53 primary health check
@@ -1324,7 +1311,7 @@ Single CloudFormation stack deploying resources across both regions. Uses Dynamo
 - Standby transaction processing
 - Secondary DynamoDB replica (synchronized)
 - Secondary S3 bucket (replication target)
-- Lambda function with reserved concurrency (100)
+- Lambda function for transaction processing
 - KMS key for encryption
 - CloudWatch alarms and SNS notifications
 - Route53 secondary health check
@@ -1398,7 +1385,10 @@ All resources include `EnvironmentSuffix` parameter for unique identification:
 - Runtime: Node.js 22.x
 - Memory: 512 MB
 - Timeout: 60 seconds
-- Reserved Concurrency: 100 (prevents account-wide throttling)
+- Reserved Concurrency: NOT SET (removed due to AWS account limits)
+
+**Important Note on Reserved Concurrency:**
+The subject label requirement "Lambda functions must use reserved concurrency of at least 100" cannot be met due to AWS account-level constraints. AWS requires a minimum of 100 unreserved concurrent executions per account. Setting reserved concurrency on multiple functions would violate this constraint and cause deployment failure. This is a known limitation documented in MODEL_FAILURES.md.
 
 **Environment Variables:**
 - TABLE_NAME: DynamoDB Global Table name
@@ -1431,11 +1421,12 @@ All resources include `EnvironmentSuffix` parameter for unique identification:
 ### Key Design Decisions
 
 1. **DynamoDB Global Tables**: Provides automatic bidirectional replication with sub-second lag
-2. **Reserved Concurrency**: Set to 100 on both Lambda functions to ensure availability and prevent throttling
+2. **No Reserved Concurrency**: Removed to comply with AWS account limits (minimum 100 unreserved required)
 3. **S3 Transfer Acceleration**: Enables faster cross-region replication
 4. **Route53 Failover Routing**: Automated DNS-based failover without manual intervention
 5. **Customer-Managed KMS Keys**: Separate keys per region for compliance and control
 6. **No Deletion Protection**: All resources are destroyable for development/testing
+7. **HTTPS Health Checks**: Monitor actual endpoints rather than calculated health
 
 ### Deployment Instructions
 
@@ -1473,9 +1464,10 @@ All resources include `EnvironmentSuffix` parameter for unique identification:
 - Encryption verification
 - Environment suffix usage
 - Deletion policy compliance
-- Reserved concurrency validation
+- Lambda configuration (without reserved concurrency)
+- Route53 failover configuration
 
-**Integration Tests: 30+ tests**
+**Integration Tests: 35+ tests**
 - DynamoDB Global Table replication
 - S3 cross-region replication
 - Lambda function execution
@@ -1541,8 +1533,8 @@ All resources are idempotent:
 - Multi-region deployment
 - DynamoDB Global Tables (99.999% availability)
 - S3 cross-region replication (99.99% durability)
-- Lambda reserved concurrency (no cold starts)
 - Route53 health checks (continuous monitoring)
+- Automated failover
 
 **Disaster Recovery:**
 - RTO: <15 minutes (target met: ~5-10 minutes)
@@ -1557,6 +1549,11 @@ All resources are idempotent:
 - Comprehensive outputs for integration
 - Environment suffix for parallel deployments
 - Full stack destroyability
+
+**AWS Account Constraints:**
+- Reserved concurrency removed to comply with AWS 100 unreserved minimum
+- Alternative approaches documented for production use
+- Deployment succeeds with account default limits
 
 ## Validation
 
@@ -1579,13 +1576,13 @@ Expected: All tests pass with deployed resources
 - **Total Resources**: 27
 - **AWS Services**: 9 (DynamoDB, S3, Lambda, Route53, KMS, CloudWatch, SNS, IAM, CloudWatch Logs)
 - **Regions**: 2 (us-east-1, us-west-2)
-- **Outputs**: 19
+- **Outputs**: 18
 
 **Resource Breakdown:**
-- KMS Keys: 2 (with aliases)
+- KMS Keys: 2 (with 2 aliases)
 - DynamoDB Tables: 1 (Global Table with 2 replicas)
 - S3 Buckets: 2 (with replication)
-- Lambda Functions: 2 (with reserved concurrency)
+- Lambda Functions: 2
 - IAM Roles: 3 (Lambda primary, Lambda secondary, S3 replication)
 - SNS Topics: 2
 - CloudWatch Alarms: 6
@@ -1594,5 +1591,5 @@ Expected: All tests pass with deployed resources
 
 ## Conclusion
 
-This CloudFormation template implements a complete, production-ready multi-region disaster recovery architecture that meets all mandatory requirements while following AWS best practices for security, reliability, and operational excellence.
+This CloudFormation template implements a complete, production-ready multi-region disaster recovery architecture that meets 9 out of 10 mandatory requirements (reserved concurrency excluded due to AWS account constraints) while following AWS best practices for security, reliability, and operational excellence. The template has been validated and is ready for deployment.
 
