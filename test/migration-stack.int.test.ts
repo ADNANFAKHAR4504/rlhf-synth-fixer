@@ -2,28 +2,20 @@ import fs from 'fs';
 import path from 'path';
 
 // Integration tests for Migration Stack
-// Note: These tests validate template outputs and structure for integration readiness
-// Full end-to-end testing requires deployment with real on-premises infrastructure
+// These tests validate the template structure and requirements compliance
+// For full end-to-end testing, deploy with real infrastructure
 
 describe('Migration Stack Integration Tests', () => {
   let template: any;
-  let outputs: any;
 
   beforeAll(() => {
     const templatePath = path.join(__dirname, '../lib/migration-stack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
-
-    // In a real deployment, this would come from cfn-outputs/flat-outputs.json
-    // For this test, we validate that all necessary outputs exist
-    outputs = {};
-    Object.keys(template.Outputs).forEach((key) => {
-      outputs[key] = `mock-${key}-value`;
-    });
   });
 
   describe('Deployment Outputs Validation', () => {
-    test('should have all required outputs for integration testing', () => {
+    test('should have all required outputs for migration infrastructure', () => {
       const requiredOutputs = [
         'VpcId',
         'AuroraClusterEndpoint',
@@ -39,6 +31,7 @@ describe('Migration Stack Integration Tests', () => {
       requiredOutputs.forEach(outputKey => {
         expect(template.Outputs[outputKey]).toBeDefined();
         expect(template.Outputs[outputKey].Value).toBeDefined();
+        expect(template.Outputs[outputKey].Description).toBeDefined();
       });
     });
 
@@ -126,7 +119,9 @@ describe('Migration Stack Integration Tests', () => {
       const endpoint = template.Resources.DmsSourceEndpoint;
       expect(endpoint.Properties.ServerName).toEqual({ Ref: 'OnPremDatabaseHost' });
       expect(endpoint.Properties.Port).toEqual({ Ref: 'OnPremDatabasePort' });
-      expect(endpoint.Properties.Password).toEqual({ Ref: 'OnPremDbPassword' });
+      expect(endpoint.Properties.Password).toEqual({
+        'Fn::Sub': '{{resolve:ssm-secure:/migration/${EnvironmentSuffix}/onprem/db-password}}'
+      });
     });
 
     test('DMS target endpoint should reference Aurora cluster', () => {
@@ -135,6 +130,9 @@ describe('Migration Stack Integration Tests', () => {
         'Fn::GetAtt': ['AuroraCluster', 'Endpoint.Address']
       });
       expect(endpoint.Properties.Username).toEqual({ Ref: 'DbMasterUsername' });
+      expect(endpoint.Properties.Password).toEqual({
+        'Fn::Sub': '{{resolve:ssm-secure:/migration/${EnvironmentSuffix}/db/master-password}}'
+      });
     });
 
     test('DMS replication task should link source and target endpoints', () => {
@@ -313,6 +311,77 @@ describe('Migration Stack Integration Tests', () => {
 
       expect(encryptedVolumesRule.DependsOn).toBe('ConfigRecorder');
       expect(rdsEncryptionRule.DependsOn).toBe('ConfigRecorder');
+    });
+  });
+
+  describe('Requirements Compliance Validation', () => {
+    test('should implement all 13 required AWS services', () => {
+      const requiredServices = [
+        'AWS::RDS::DBCluster',      // RDS Aurora MySQL
+        'AWS::DMS::ReplicationInstance', // DMS
+        'AWS::ElasticLoadBalancingV2::LoadBalancer', // ALB
+        'AWS::Route53::HostedZone', // Route 53
+        'AWS::DataSync::Task',      // DataSync
+        'AWS::SSM::Parameter',      // Systems Manager
+        'AWS::KMS::Key',           // KMS
+        'AWS::CloudWatch::Dashboard', // CloudWatch
+        'AWS::Config::ConfigurationRecorder', // AWS Config
+        'AWS::EC2::VPC',           // VPC
+        'AWS::S3::Bucket',         // S3 (for DataSync)
+        'AWS::EC2::SecurityGroup', // Security Groups
+        'AWS::IAM::Role'           // IAM Roles
+      ];
+
+      const resourceTypes = Object.values(template.Resources).map((resource: any) => resource.Type);
+      const uniqueResourceTypes = [...new Set(resourceTypes)];
+
+      requiredServices.forEach(service => {
+        expect(uniqueResourceTypes).toContain(service);
+      });
+
+      // Verify we have exactly 13 unique service types
+      const matchingServices = requiredServices.filter(service =>
+        uniqueResourceTypes.includes(service)
+      );
+      expect(matchingServices).toHaveLength(13);
+    });
+
+    test('should validate zero-downtime migration capabilities', () => {
+      // Check for DMS continuous replication
+      const dmsTask = template.Resources.DmsReplicationTask;
+      expect(dmsTask.Properties.MigrationType).toBe('full-load-and-cdc');
+
+      // Check for Route 53 weighted routing
+      const oldRecord = template.Resources.Route53RecordOld;
+      const newRecord = template.Resources.Route53RecordNew;
+      expect(oldRecord.Properties.SetIdentifier).toBe('Old-Environment');
+      expect(newRecord.Properties.SetIdentifier).toBe('New-Environment');
+      expect(oldRecord.Properties.Weight).toEqual({ Ref: 'TrafficWeightOld' });
+      expect(newRecord.Properties.Weight).toEqual({ Ref: 'TrafficWeightNew' });
+
+      // Check for ALB with weighted target groups
+      const albListener = template.Resources.AlbListener;
+      expect(albListener.Properties.DefaultActions[0].Type).toBe('forward');
+      expect(albListener.Properties.DefaultActions[0].ForwardConfig.TargetGroups).toHaveLength(2);
+    });
+
+    test('should validate security requirements', () => {
+      // Check KMS encryption on Aurora cluster
+      const auroraCluster = template.Resources.AuroraCluster;
+      expect(auroraCluster.Properties.StorageEncrypted).toBe(true);
+      expect(auroraCluster.Properties.KmsKeyId).toEqual({ Ref: 'KmsKey' });
+
+      // Check SecureString SSM parameters
+      const dbPasswordSSM = template.Resources.DbMasterPasswordSSM;
+      const onPremPasswordSSM = template.Resources.OnPremDbPasswordSSM;
+      expect(dbPasswordSSM.Properties.Type).toBe('SecureString');
+      expect(onPremPasswordSSM.Properties.Type).toBe('SecureString');
+
+      // Check no hardcoded passwords in parameters
+      const dbPasswordParam = template.Parameters.DbMasterPasswordParam;
+      const onPremPasswordParam = template.Parameters.OnPremDbPassword;
+      expect(dbPasswordParam.Default).toBeUndefined();
+      expect(onPremPasswordParam.Default).toBeUndefined();
     });
   });
 

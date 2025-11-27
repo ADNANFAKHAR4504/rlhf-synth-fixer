@@ -64,13 +64,11 @@
     "OnPremDbPassword": {
       "Type": "String",
       "Description": "Password for on-premises database (DMS source)",
-      "Default": "ChangeMe-OnPremPassword",
       "NoEcho": true
     },
     "DbMasterPasswordParam": {
       "Type": "String",
       "Description": "Master password for Aurora database",
-      "Default": "ChangeMe-AuroraPassword",
       "NoEcho": true
     }
   },
@@ -133,9 +131,12 @@
         "Name": {
           "Fn::Sub": "/migration/${EnvironmentSuffix}/db/master-password"
         },
-        "Type": "String",
+        "Type": "SecureString",
         "Value": {
           "Ref": "DbMasterPasswordParam"
+        },
+        "KeyId": {
+          "Ref": "KmsKey"
         },
         "Description": "Master password for Aurora MySQL cluster"
       }
@@ -146,9 +147,12 @@
         "Name": {
           "Fn::Sub": "/migration/${EnvironmentSuffix}/onprem/db-password"
         },
-        "Type": "String",
+        "Type": "SecureString",
         "Value": {
           "Ref": "OnPremDbPassword"
+        },
+        "KeyId": {
+          "Ref": "KmsKey"
         },
         "Description": "Password for on-premises database (DMS source)"
       }
@@ -835,7 +839,7 @@
         },
         "Username": "dms_user",
         "Password": {
-          "Ref": "OnPremDbPassword"
+          "Fn::Sub": "{{resolve:ssm-secure:/migration/${EnvironmentSuffix}/onprem/db-password}}"
         },
         "Tags": [
           {
@@ -870,7 +874,7 @@
           "Ref": "DbMasterUsername"
         },
         "Password": {
-          "Ref": "DbMasterPasswordParam"
+          "Fn::Sub": "{{resolve:ssm-secure:/migration/${EnvironmentSuffix}/db/master-password}}"
         },
         "SslMode": "require",
         "Tags": [
