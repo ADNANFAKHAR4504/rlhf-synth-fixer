@@ -179,17 +179,7 @@ class TapStack(TerraformStack):
             vpc_id=primary_vpc.id,
             route=[{
                 "cidr_block": "0.0.0.0/0",
-                "gateway_id": primary_igw.id,
-                "carrier_gateway_id": "",
-                "destination_prefix_list_id": "",
-                "egress_only_gateway_id": "",
-                "ipv6_cidr_block": "",
-                "local_gateway_id": "",
-                "nat_gateway_id": "",
-                "network_interface_id": "",
-                "transit_gateway_id": "",
-                "vpc_endpoint_id": "",
-                "vpc_peering_connection_id": ""
+                "gateway_id": primary_igw.id
             }],
             tags={
                 "Name": f"payment-public-rt-primary-{environment_suffix}"
@@ -235,17 +225,7 @@ class TapStack(TerraformStack):
             vpc_id=primary_vpc.id,
             route=[{
                 "cidr_block": "0.0.0.0/0",
-                "nat_gateway_id": primary_nat.id,
-                "carrier_gateway_id": "",
-                "destination_prefix_list_id": "",
-                "egress_only_gateway_id": "",
-                "gateway_id": "",
-                "ipv6_cidr_block": "",
-                "local_gateway_id": "",
-                "network_interface_id": "",
-                "transit_gateway_id": "",
-                "vpc_endpoint_id": "",
-                "vpc_peering_connection_id": ""
+                "nat_gateway_id": primary_nat.id
             }],
             tags={
                 "Name": f"payment-private-rt-primary-{environment_suffix}"
@@ -362,17 +342,7 @@ class TapStack(TerraformStack):
             vpc_id=secondary_vpc.id,
             route=[{
                 "cidr_block": "0.0.0.0/0",
-                "gateway_id": secondary_igw.id,
-                "carrier_gateway_id": "",
-                "destination_prefix_list_id": "",
-                "egress_only_gateway_id": "",
-                "ipv6_cidr_block": "",
-                "local_gateway_id": "",
-                "nat_gateway_id": "",
-                "network_interface_id": "",
-                "transit_gateway_id": "",
-                "vpc_endpoint_id": "",
-                "vpc_peering_connection_id": ""
+                "gateway_id": secondary_igw.id
             }],
             tags={
                 "Name": f"payment-public-rt-secondary-{environment_suffix}"
@@ -418,17 +388,7 @@ class TapStack(TerraformStack):
             vpc_id=secondary_vpc.id,
             route=[{
                 "cidr_block": "0.0.0.0/0",
-                "nat_gateway_id": secondary_nat.id,
-                "carrier_gateway_id": "",
-                "destination_prefix_list_id": "",
-                "egress_only_gateway_id": "",
-                "gateway_id": "",
-                "ipv6_cidr_block": "",
-                "local_gateway_id": "",
-                "network_interface_id": "",
-                "transit_gateway_id": "",
-                "vpc_endpoint_id": "",
-                "vpc_peering_connection_id": ""
+                "nat_gateway_id": secondary_nat.id
             }],
             tags={
                 "Name": f"payment-private-rt-secondary-{environment_suffix}"
@@ -553,12 +513,14 @@ class TapStack(TerraformStack):
         )
 
         # Aurora Global Database
+        # Use a valid Aurora MySQL engine version that supports global clusters
+        # Aurora MySQL 8.0.mysql_aurora.3.04.0 and later support global clusters
         global_cluster = RdsGlobalCluster(
             self,
             "global_cluster",
             global_cluster_identifier=f"payment-global-cluster-{environment_suffix}",
             engine="aurora-mysql",
-            engine_version="8.0.mysql_aurora.3.05.2",
+            engine_version="8.0.mysql_aurora.3.04.0",
             database_name="payments",
             storage_encrypted=True,
             provider=primary_provider
@@ -570,7 +532,7 @@ class TapStack(TerraformStack):
             "primary_cluster",
             cluster_identifier=f"payment-cluster-primary-{environment_suffix}",
             engine="aurora-mysql",
-            engine_version="8.0.mysql_aurora.3.05.2",
+            engine_version="8.0.mysql_aurora.3.04.0",
             database_name="payments",
             master_username="admin",
             master_password="ChangeMe123456!",  # In production, use Secrets Manager
@@ -599,7 +561,7 @@ class TapStack(TerraformStack):
             cluster_identifier=primary_cluster.id,
             instance_class="db.r5.large",
             engine="aurora-mysql",
-            engine_version="8.0.mysql_aurora.3.05.2",
+            engine_version="8.0.mysql_aurora.3.04.0",
             publicly_accessible=False,
             tags={
                 "Name": f"payment-instance-primary-{environment_suffix}"
@@ -613,7 +575,7 @@ class TapStack(TerraformStack):
             "secondary_cluster",
             cluster_identifier=f"payment-cluster-secondary-{environment_suffix}",
             engine="aurora-mysql",
-            engine_version="8.0.mysql_aurora.3.05.2",
+            engine_version="8.0.mysql_aurora.3.04.0",
             db_subnet_group_name=secondary_db_subnet_group.name,
             vpc_security_group_ids=[secondary_rds_sg.id],
             global_cluster_identifier=global_cluster.id,
@@ -635,7 +597,7 @@ class TapStack(TerraformStack):
             cluster_identifier=secondary_cluster.id,
             instance_class="db.r5.large",
             engine="aurora-mysql",
-            engine_version="8.0.mysql_aurora.3.05.2",
+            engine_version="8.0.mysql_aurora.3.04.0",
             publicly_accessible=False,
             tags={
                 "Name": f"payment-instance-secondary-{environment_suffix}"
@@ -1138,24 +1100,29 @@ def handler(event, context):
         # ==================== ROUTE 53 ====================
 
         # Route 53 hosted zone
+        # Use a non-reserved domain name (example.com is reserved by AWS)
+        # Use a domain that can be configured via environment variable or use a test domain
+        route53_domain = os.environ.get('ROUTE53_DOMAIN', f"payment-{environment_suffix}.internal")
         hosted_zone = Route53Zone(
             self,
             "hosted_zone",
-            name=f"payment-{environment_suffix}.example.com",
+            name=route53_domain,
             comment="Hosted zone for payment processing DR",
             tags={
-                "Name": f"payment-{environment_suffix}.example.com"
+                "Name": route53_domain
             },
             provider=primary_provider
         )
 
         # Health check for primary region
+        # Extract domain from route53_domain (e.g., "payment-pr7325.internal" -> "internal")
+        domain_suffix = route53_domain.split('.', 1)[1] if '.' in route53_domain else 'internal'
         primary_health_check = Route53HealthCheck(
             self,
             "primary_health_check",
             type="HTTPS",
             resource_path="/health",
-            fqdn=f"primary-{environment_suffix}.example.com",
+            fqdn=f"primary-{environment_suffix}.{domain_suffix}",
             port=443,
             request_interval=30,
             failure_threshold=3,
@@ -1171,7 +1138,7 @@ def handler(event, context):
             "secondary_health_check",
             type="HTTPS",
             resource_path="/health",
-            fqdn=f"secondary-{environment_suffix}.example.com",
+            fqdn=f"secondary-{environment_suffix}.{domain_suffix}",
             port=443,
             request_interval=30,
             failure_threshold=3,
@@ -1186,7 +1153,7 @@ def handler(event, context):
             self,
             "route53_primary",
             zone_id=hosted_zone.zone_id,
-            name=f"api.payment-{environment_suffix}.example.com",
+            name=f"api.{route53_domain}",
             type="A",
             set_identifier="primary",
             failover_routing_policy=Route53RecordFailoverRoutingPolicy(
@@ -1203,7 +1170,7 @@ def handler(event, context):
             self,
             "route53_secondary",
             zone_id=hosted_zone.zone_id,
-            name=f"api.payment-{environment_suffix}.example.com",
+            name=f"api.{route53_domain}",
             type="A",
             set_identifier="secondary",
             failover_routing_policy=Route53RecordFailoverRoutingPolicy(
@@ -1604,7 +1571,7 @@ def handler(event, context):
         TerraformOutput(
             self,
             "api_endpoint",
-            value=f"api.payment-{environment_suffix}.example.com",
+            value=f"api.{route53_domain}",
             description="API endpoint with failover routing"
         )
 
