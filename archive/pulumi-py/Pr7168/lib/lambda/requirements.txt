@@ -1,0 +1,17 @@
+# Lambda function dependencies for TAP Financial Transaction Processing
+# These dependencies are used by both transaction_processor.py and priority_processor.py
+
+# AWS SDK for Python
+boto3>=1.34.0
+
+# JSON schema validation for transaction data
+jsonschema>=4.20.0
+
+# Decimal number handling for financial calculations
+# Note: decimal is part of Python standard library, no installation needed
+
+# AWS X-Ray SDK for distributed tracing
+aws-xray-sdk>=2.12.0
+
+# Additional utilities
+python-dateutil>=2.8.2

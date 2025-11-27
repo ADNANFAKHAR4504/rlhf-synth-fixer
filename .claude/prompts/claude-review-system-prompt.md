@@ -4,10 +4,21 @@ CRITICAL: You MUST post a GitHub comment on this pull request when your review i
 
 **MANDATORY**: Before proceeding with any review, you MUST thoroughly validate metadata.json and report ALL issues in your PR comment.
 
-**CRITICAL**: If ANY critical metadata issues are found (missing required fields, invalid values, type mismatches), you MUST:
+**CRITICAL**: If ANY critical metadata issues are found (missing required fields, invalid values, type mismatches, invalid subject_labels), you MUST:
 1. Post a PR comment with detailed validation results and fix instructions
 2. Exit with code 1 to fail the job
 3. Do NOT continue with code review until metadata is fixed
+
+**USE THE VALIDATION SCRIPT**: You MUST run the official validation script first:
+```bash
+bash .claude/scripts/validate-metadata.sh metadata.json
+```
+
+If this script exits with code 1 (validation failed), you MUST:
+1. Capture the validation errors
+2. Post them in your PR comment with detailed fix instructions
+3. Exit with code 1 immediately
+4. Do NOT proceed with any code review
 
 ## 0.1: Read and Validate metadata.json Structure
 
@@ -103,15 +114,18 @@ if [ "$IS_CICD" == "false" ]; then
 fi
 ```
 
-## 0.3: Validate Subtask Against Reference File
+## 0.3: Validate Subtask and Subject Labels Against Reference File
 
-**CRITICAL**: Validate subtask and subject_labels against `.claude/docs/references/iac-subtasks-subject-labels.json`
+**CRITICAL - BLOCKING**: Validate subtask and subject_labels against `.claude/docs/references/iac-subtasks-subject-labels.json`
+
+**THIS VALIDATION IS MANDATORY AND MUST FAIL THE PR IF INVALID**
 
 ```bash
 # Read reference file
-REFERENCE_FILE=\".claude/docs/references/iac-subtasks-subject-labels.json\"
-if [ ! -f \"$REFERENCE_FILE\" ]; then
-  echo \"⚠️ WARNING: Reference file not found: $REFERENCE_FILE\"
+REFERENCE_FILE=".claude/docs/references/iac-subtasks-subject-labels.json"
+if [ ! -f "$REFERENCE_FILE" ]; then
+  echo "❌ CRITICAL: Reference file not found: $REFERENCE_FILE"
+  METADATA_ERRORS=1
 else
   # Extract subtask from metadata.json
   METADATA_SUBTASK=$(jq -r '.subtask // empty' metadata.json)
@@ -120,38 +134,59 @@ else
   METADATA_SUBJECT_LABELS=$(jq -r '.subject_labels // []' metadata.json)
   
   # Validate subtask exists in reference
-  SUBTASK_EXISTS=$(jq -r --arg subtask \"$METADATA_SUBTASK\" \"
+  SUBTASK_EXISTS=$(jq -r --arg subtask "$METADATA_SUBTASK" '
     .iac_subtasks_and_subject_labels[] | 
-    select(.subtask == \\$subtask) | .subtask
-  \" \"$REFERENCE_FILE\")
+    select(.subtask == $subtask) | .subtask
+  ' "$REFERENCE_FILE")
   
-  if [ -z \"$SUBTASK_EXISTS\" ]; then
-    echo \"❌ CRITICAL: Invalid subtask: $METADATA_SUBTASK\"
-    echo \"Valid subtasks from reference:\"
-    jq -r '.iac_subtasks_and_subject_labels[].subtask' \"$REFERENCE_FILE\"
+  if [ -z "$SUBTASK_EXISTS" ]; then
+    echo "❌ CRITICAL: Invalid subtask: $METADATA_SUBTASK"
+    echo "Valid subtasks from reference:"
+    jq -r '.iac_subtasks_and_subject_labels[].subtask' "$REFERENCE_FILE"
     METADATA_ERRORS=1
   fi
   
-  # Validate subject_labels match subtask
-  if [ -n \"$SUBTASK_EXISTS\" ]; then
-    VALID_LABELS=$(jq -r --arg subtask \"$METADATA_SUBTASK\" \"
+  # CRITICAL: Validate EVERY subject_label matches the subtask
+  if [ -n "$SUBTASK_EXISTS" ]; then
+    VALID_LABELS=$(jq -r --arg subtask "$METADATA_SUBTASK" '
       .iac_subtasks_and_subject_labels[] | 
-      select(.subtask == \\$subtask) | 
+      select(.subtask == $subtask) | 
       .subject_labels[]
-    \" \"$REFERENCE_FILE\")
+    ' "$REFERENCE_FILE")
     
-    # Check each subject_label
-    echo \"$METADATA_SUBJECT_LABELS\" | jq -r '.[]' | while read -r label; do
-      if ! echo \"$VALID_LABELS\" | grep -q \"^$label$\"; then
-        echo \"❌ CRITICAL: Invalid subject_label '$label' for subtask '$METADATA_SUBTASK'\"
-        echo \"Valid labels for this subtask:\"
-        echo \"$VALID_LABELS\"
-        METADATA_ERRORS=1
+    # Store invalid labels for reporting
+    INVALID_LABELS=()
+    
+    # Check each subject_label - MUST match exactly
+    while IFS= read -r label; do
+      if [ -n "$label" ]; then
+        LABEL_VALID=false
+        while IFS= read -r valid_label; do
+          if [ "$label" = "$valid_label" ]; then
+            LABEL_VALID=true
+            break
+          fi
+        done <<< "$VALID_LABELS"
+        
+        if [ "$LABEL_VALID" = false ]; then
+          INVALID_LABELS+=("$label")
+          echo "❌ CRITICAL: Invalid subject_label '$label' for subtask '$METADATA_SUBTASK'"
+          METADATA_ERRORS=1
+        fi
       fi
-    done
+    done <<< "$(echo "$METADATA_SUBJECT_LABELS" | jq -r '.[]')"
+    
+    # If any invalid labels found, show all valid options
+    if [ ${#INVALID_LABELS[@]} -gt 0 ]; then
+      echo "Valid subject_labels for subtask '$METADATA_SUBTASK':"
+      echo "$VALID_LABELS"
+    fi
   fi
 fi
 ```
+
+**IMPORTANT**: The subject_labels validation is now enforced in `.claude/scripts/validate-metadata.sh`. 
+You MUST run this script and if it fails, you MUST fail the PR review.
 
 ## 0.4: Validate Field Types
 
@@ -203,9 +238,12 @@ The following metadata issues **MUST be fixed** before this PR can be merged:
    - **Fix**: Update the subtask field to one of the valid values from `.claude/docs/references/iac-subtasks-subject-labels.json`
    - **Example**: `"subtask": "Provisioning of Infrastructure Environments"`
 
-3. **Invalid Subject Label**: \"{invalid_label}\" is not valid for subtask \"{subtask}\". Valid labels: {list}
+3. **Invalid Subject Label**: \"{invalid_label}\" is not valid for subtask \"{subtask}\"
    - **Fix**: Update subject_labels array to only include valid labels for the subtask
+   - **Valid labels for this subtask**: {list all valid labels from reference file}
    - **Example**: `"subject_labels": ["Cloud Environment Setup"]`
+   - **Reference**: See `.claude/docs/references/iac-subtasks-subject-labels.json` for complete mapping
+   - **THIS IS A BLOCKING ERROR**: PR cannot be merged with invalid subject_labels
 
 4. **Type Mismatch**: {field_name} should be {expected_type} but got {actual_type}
    - **Fix**: Ensure the field is the correct type (array vs string, etc.)
@@ -231,14 +269,24 @@ The following metadata issues **MUST be fixed** before this PR can be merged:
 - {warning_message}
 ```
 
-**CRITICAL**: After completing ALL validation steps (0.1 through 0.4), if ANY critical issues were found:
+**CRITICAL - MANDATORY EXIT CONDITION**: After completing ALL validation steps (0.1 through 0.4), if ANY critical issues were found:
 
 1. **First**: Post the PR comment with the validation results and detailed fix instructions (as shown above)
 2. **Then**: Execute `exit 1` to fail the job immediately
 3. **Do NOT proceed** with code review until metadata is fixed
 4. The job will fail and the PR cannot be merged until metadata issues are resolved
 
+**BLOCKING ERRORS - MUST FAIL PR**:
+- Missing required fields (platform, language, complexity, turn_type, po_id, team, startedAt, subtask, subject_labels)
+- Invalid field values (platform, language, complexity, turn_type not in allowed list)
+- Invalid subtask (not in reference file)
+- **Invalid subject_labels (any label not matching the subtask's allowed labels in reference file)**
+- Type mismatches (subject_labels or aws_services not arrays)
+- Missing aws_services for standard IaC tasks
+
 **Important**: You must track METADATA_ERRORS across all validation bash blocks. If any validation step set METADATA_ERRORS=1 or reported CRITICAL errors, you MUST post the PR comment and exit with code 1 before proceeding to any code review.
+
+**VALIDATION SCRIPT ENFORCEMENT**: If `.claude/scripts/validate-metadata.sh metadata.json` exits with code 1, you MUST fail the PR review. This script now validates subject_labels values against the reference file.
 
 ## 0.6: Validate Root Directory Files
 

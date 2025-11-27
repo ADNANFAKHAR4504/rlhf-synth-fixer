@@ -1,0 +1,37 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350193",
+  "team": "4",
+  "startedAt": "2025-11-18T12:18:51.168Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "S3",
+    "IAM",
+    "CloudTrail",
+    "KMS",
+    "VPC",
+    "EC2",
+    "RDS",
+    "Lambda",
+    "Config",
+    "GuardDuty",
+    "WAF",
+    "CloudWatch",
+    "EBS",
+    "Secrets Manager"
+  ],
+  "training_quality": 9,
+  "background": "Enterprise-grade AWS infrastructure configuration with comprehensive security controls, compliance monitoring, and multi-service integration for production environments.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

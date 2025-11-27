@@ -1,0 +1,121 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Monitoring nested stack with CloudWatch Alarms for RDS (CPU > 80%) and Lambda (errors > 10/min) with SNS notifications",
+  "Parameters": {
+    "Environment": {"Type": "String", "Description": "Environment name"},
+    "EnvironmentSuffix": {"Type": "String", "Description": "Unique suffix for resource naming"},
+    "ProjectName": {"Type": "String", "Description": "Project name for tagging"},
+    "CostCenter": {"Type": "String", "Description": "Cost center for billing"},
+    "AlertEmail": {"Type": "String", "Description": "Email address for CloudWatch alerts"},
+    "DBClusterId": {"Type": "String", "Description": "RDS Cluster ID to monitor"},
+    "LambdaFunctionName": {"Type": "String", "Description": "Lambda Function Name to monitor"}
+  },
+  "Resources": {
+    "SNSTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {"Fn::Sub": "alerts-${Environment}-${EnvironmentSuffix}"},
+        "DisplayName": {"Fn::Sub": "CloudWatch Alerts for ${Environment} environment"},
+        "Subscription": [
+          {"Endpoint": {"Ref": "AlertEmail"}, "Protocol": "email"}
+        ],
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "alerts-topic-${Environment}-${EnvironmentSuffix}"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Project", "Value": {"Ref": "ProjectName"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "RDSCPUAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {"Fn::Sub": "rds-cpu-high-${Environment}-${EnvironmentSuffix}"},
+        "AlarmDescription": "Alert when RDS CPU utilization exceeds 80%",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [{"Name": "DBClusterIdentifier", "Value": {"Ref": "DBClusterId"}}],
+        "AlarmActions": [{"Ref": "SNSTopic"}],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "RDSConnectionsAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {"Fn::Sub": "rds-connections-high-${Environment}-${EnvironmentSuffix}"},
+        "AlarmDescription": "Alert when RDS database connections are high",
+        "MetricName": "DatabaseConnections",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 100,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [{"Name": "DBClusterIdentifier", "Value": {"Ref": "DBClusterId"}}],
+        "AlarmActions": [{"Ref": "SNSTopic"}],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "LambdaErrorsAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {"Fn::Sub": "lambda-errors-high-${Environment}-${EnvironmentSuffix}"},
+        "AlarmDescription": "Alert when Lambda errors exceed 10 per minute",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 60,
+        "EvaluationPeriods": 1,
+        "Threshold": 10,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [{"Name": "FunctionName", "Value": {"Ref": "LambdaFunctionName"}}],
+        "AlarmActions": [{"Ref": "SNSTopic"}],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "LambdaThrottlesAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {"Fn::Sub": "lambda-throttles-${Environment}-${EnvironmentSuffix}"},
+        "AlarmDescription": "Alert when Lambda function is throttled",
+        "MetricName": "Throttles",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 60,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [{"Name": "FunctionName", "Value": {"Ref": "LambdaFunctionName"}}],
+        "AlarmActions": [{"Ref": "SNSTopic"}],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "LambdaDurationAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {"Fn::Sub": "lambda-duration-high-${Environment}-${EnvironmentSuffix}"},
+        "AlarmDescription": "Alert when Lambda execution duration approaches timeout",
+        "MetricName": "Duration",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 250000,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [{"Name": "FunctionName", "Value": {"Ref": "LambdaFunctionName"}}],
+        "AlarmActions": [{"Ref": "SNSTopic"}],
+        "TreatMissingData": "notBreaching"
+      }
+    }
+  },
+  "Outputs": {
+    "SNSTopicArn": {"Description": "SNS Topic ARN for CloudWatch alerts", "Value": {"Ref": "SNSTopic"}},
+    "SNSTopicName": {"Description": "SNS Topic Name", "Value": {"Fn::GetAtt": ["SNSTopic", "TopicName"]}}
+  }
+}

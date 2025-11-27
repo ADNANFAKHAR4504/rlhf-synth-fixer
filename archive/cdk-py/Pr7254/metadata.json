@@ -1,0 +1,31 @@
+{
+  "task_id": "n9p6s8g8",
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-25T12:11:45.000Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "Transit Gateway",
+    "Route53 Resolver",
+    "S3",
+    "IAM",
+    "CloudWatch",
+    "CloudFormation"
+  ],
+  "po_id": "n9p6s8g8",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

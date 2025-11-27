@@ -1,0 +1,29 @@
+{
+  "task_id": "b1a4f6",
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "b1a4f6",
+  "team": "synth",
+  "startedAt": "2025-11-24T13:37:00Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "WAFv2",
+    "CloudFront",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "OAC"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
