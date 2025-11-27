@@ -6,22 +6,8 @@
   "po_id": "101912777",
   "team": "synth",
   "subtask": "Application Deployment",
-  "problem": "Create a CloudFormation template to deploy a serverless crypto price alert system. MANDATORY REQUIREMENTS (Must complete): 1. Create a Lambda function 'PriceWebhookProcessor' with 1GB memory to receive price updates from exchanges (CORE: Lambda). 2. Create a DynamoDB table 'CryptoAlerts' with partition key 'userId' and sort key 'alertId' for storing user alerts (CORE: DynamoDB). 3. Create a Lambda function 'AlertMatcher' with 2GB memory that compares prices against user thresholds. 4. Create an EventBridge rule that triggers AlertMatcher every 60 seconds. 5. Configure Lambda destinations to route successful alerts to a 'ProcessedAlerts' Lambda function. 6. Set reserved concurrent executions: PriceWebhookProcessor=100, AlertMatcher=50. 7. Create IAM execution roles with DynamoDB read/write and CloudWatch Logs permissions only. 8. Add CloudFormation outputs for all three Lambda function ARNs. OPTIONAL ENHANCEMENTS (If time permits):  Add SNS topic for sending notifications to users (OPTIONAL: SNS) - enables multi-channel alerts.  Implement SQS FIFO queue between webhook and processor (OPTIONAL: SQS) - guarantees order preservation.  Add API Gateway REST API for manual price updates (OPTIONAL: API Gateway) - allows testing without webhooks. Expected output: A complete CloudFormation JSON template that deploys the serverless alert system with all Lambda functions, DynamoDB table, EventBridge rule, and proper IAM configurations ready for production use.",
-  "background": "A fintech startup needs to process cryptocurrency price alerts in real-time. The system must handle spikes during market volatility when thousands of users set price alerts simultaneously. The architecture needs to be cost-effective during quiet periods but scale instantly when crypto markets become volatile.",
-  "environment": "\"Serverless cryptocurrency alert processing system deployed in us-east-1. Architecture uses Lambda functions with Graviton2 processors for webhook processing and alert matching, DynamoDB for storing user alerts and price thresholds, EventBridge for scheduled price checks every minute. No VPC required as all services are AWS-managed. CloudFormation JSON template deployment via AWS CLI or Console. System scales from 0 to thousands of concurrent executions based on crypto market volatility. CloudWatch Logs for debugging with 3-day retention.\"",
-  "constraints": [
-    "Lambda functions must use ARM-based Graviton2 processors for cost optimization",
-    "DynamoDB tables must use on-demand billing with point-in-time recovery enabled",
-    "All Lambda functions must have reserved concurrent executions set to prevent throttling",
-    "Use Lambda destinations instead of DLQ for failed invocations",
-    "CloudWatch Logs retention must be exactly 3 days to minimize costs",
-    "Lambda functions must use environment variables for configuration, not hardcoded values",
-    "EventBridge rules must use rate expressions, not cron expressions",
-    "All IAM policies must follow least privilege with no wildcard actions",
-    "Lambda timeout must not exceed 5 minutes for any function",
-    "Use CloudFormation Outputs to expose all Lambda function ARNs"
-  ],
   "subject_labels": [
+    "Web Application Deployment",
     "Serverless Infrastructure (Functions as Code)"
   ],
   "aws_services": [
@@ -33,5 +19,6 @@
   ],
   "startedAt": "2025-11-27T08:50:12+00:00",
   "training_quality": 10,
-  "notes": ""
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342"
 }
