@@ -18,7 +18,7 @@ if [ "$PLATFORM" = "cdk" ]; then
 
 elif [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ CDKTF project detected, running CDKTF get and synth..."
-
+  
   # --- FIX: remove legacy terraform.tfstate for clean runs ---
   if [ -f "terraform.tfstate" ]; then
     echo "⚠️ Found legacy terraform.tfstate. Removing for clean CI run..."
