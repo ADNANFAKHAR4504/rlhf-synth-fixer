@@ -1,0 +1,32 @@
+2025-11-27 08:29:17,135 - INFO - Found credentials in environment variables.
+2025-11-27 08:29:17,211 - INFO - Starting EventBridge analysis in us-east-1
+2025-11-27 08:29:17,457 - INFO - Analysis complete
+
+================================================================================
+EventBridge Analysis Report
+================================================================================
+| Metric             |   Value |
+|--------------------|---------|
+| Rules Audited      |       4 |
+| Buses Audited      |       2 |
+| Total Daily Events |       0 |
+| Failed Invocations |       5 |
+| Loss Risk Count    |       3 |
+| DLQ Coverage Gap   |       3 |
+
+Event Buses
+| Bus           |   Rule Count |   Issues | Archive   |
+|---------------|--------------|----------|-----------|
+| prod-payments |            4 |        6 | no        |
+| analytics-bus |          120 |        6 | no        |
+
+Rules
+| Rule                                |   Daily Invocations | Failure Rate   | Issues                                                                                                    |
+|-------------------------------------|---------------------|----------------|-----------------------------------------------------------------------------------------------------------|
+| prod-payments/broad-capture         |                  25 | 0.0%           | missing_tags, no_input_transformation, overly_broad_pattern                                               |
+| prod-payments/critical-payment-rule |                  50 | 100.0%         | high_failure_rate, inefficient_retry_policy, missing_tags, no_dlq, no_input_transformation, single_target |
+| prod-payments/fifo-rule             |                  15 | 0.0%           | missing_tags, no_dlq, no_input_transformation, sqs_fifo_no_group_id                                       |
+| analytics-bus/disabled-old-rule     |                  20 | 0.0%           | disabled_rule, missing_tags, no_input_transformation                                                      |
+
+================================================================================
+
