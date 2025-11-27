@@ -115,11 +115,11 @@ resource "aws_eks_addon" "coredns" {
 }
 
 resource "aws_eks_addon" "ebs_csi_driver" {
-  cluster_name                = aws_eks_cluster.main.name
-  addon_name                  = "aws-ebs-csi-driver"
-  addon_version               = var.ebs_csi_driver_version
+  cluster_name             = aws_eks_cluster.main.name
+  addon_name               = "aws-ebs-csi-driver"
+  addon_version            = var.ebs_csi_driver_version
   # Only set service account role if provided (not empty string)
-  service_account_role_arn    = var.ebs_csi_driver_role_arn != "" ? var.ebs_csi_driver_role_arn : null
+  service_account_role_arn = var.ebs_csi_driver_role_arn != "" ? var.ebs_csi_driver_role_arn : null
   resolve_conflicts_on_update = "PRESERVE"
 
   tags = merge(var.tags, {

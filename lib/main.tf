@@ -100,17 +100,17 @@ resource "aws_iam_role_policy_attachment" "eks_ssm_policy" {
 module "eks" {
   source = "./modules/eks"
 
-  environment_suffix      = var.environment_suffix
-  eks_version             = var.eks_version
-  cluster_role_arn        = aws_iam_role.eks_cluster.arn
-  vpc_id                  = module.vpc.vpc_id
-  vpc_cidr                = module.vpc.vpc_cidr
-  private_subnet_ids      = module.vpc.private_subnet_ids
-  public_subnet_ids       = module.vpc.public_subnet_ids
-  vpc_cni_version         = var.vpc_cni_version
-  kube_proxy_version      = var.kube_proxy_version
-  coredns_version         = var.coredns_version
-  ebs_csi_driver_version  = var.ebs_csi_driver_version
+  environment_suffix     = var.environment_suffix
+  eks_version            = var.eks_version
+  cluster_role_arn       = aws_iam_role.eks_cluster.arn
+  vpc_id                 = module.vpc.vpc_id
+  vpc_cidr               = module.vpc.vpc_cidr
+  private_subnet_ids     = module.vpc.private_subnet_ids
+  public_subnet_ids      = module.vpc.public_subnet_ids
+  vpc_cni_version        = var.vpc_cni_version
+  kube_proxy_version     = var.kube_proxy_version
+  coredns_version        = var.coredns_version
+  ebs_csi_driver_version = var.ebs_csi_driver_version
   # Don't set EBS CSI role yet - addon will be created without it
   ebs_csi_driver_role_arn = ""
   tags                    = local.common_tags
@@ -176,16 +176,16 @@ data "aws_eks_cluster_auth" "cluster" {
 }
 
 provider "kubernetes" {
-  host                   = data.aws_eks_cluster.cluster.endpoint
-  cluster_ca_certificate = base64decode(data.aws_eks_cluster.cluster.certificate_authority[0].data)
-  token                  = data.aws_eks_cluster_auth.cluster.token
+  host                   = try(data.aws_eks_cluster.cluster.endpoint, "")
+  cluster_ca_certificate = try(base64decode(data.aws_eks_cluster.cluster.certificate_authority[0].data), "")
+  token                  = try(data.aws_eks_cluster_auth.cluster.token, "")
 }
 
 provider "helm" {
   kubernetes {
-    host                   = data.aws_eks_cluster.cluster.endpoint
-    cluster_ca_certificate = base64decode(data.aws_eks_cluster.cluster.certificate_authority[0].data)
-    token                  = data.aws_eks_cluster_auth.cluster.token
+    host                   = try(data.aws_eks_cluster.cluster.endpoint, "")
+    cluster_ca_certificate = try(base64decode(data.aws_eks_cluster.cluster.certificate_authority[0].data), "")
+    token                  = try(data.aws_eks_cluster_auth.cluster.token, "")
   }
 }
 
