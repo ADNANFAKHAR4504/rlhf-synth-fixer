@@ -11,6 +11,12 @@ from cdktf import Testing
 from lib.main import PaymentProcessingStack
 
 
+def parse_synth(stack):
+    """Helper function to parse Testing.synth() output which returns JSON string"""
+    synth_json = Testing.synth(stack)
+    return json.loads(synth_json)
+
+
 class TestPaymentProcessingStack:
     """Test suite for PaymentProcessingStack"""
 
@@ -44,7 +50,7 @@ class TestPaymentProcessingStack:
         """Test VPC is created with correct configuration"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         # Verify VPC resource exists
         assert any('aws_vpc' in key for key in synth.keys())
@@ -53,7 +59,7 @@ class TestPaymentProcessingStack:
         """Test public and private subnets are created"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         # Verify subnet resources exist
         subnet_keys = [key for key in synth.keys() if 'aws_subnet' in key]
@@ -63,7 +69,7 @@ class TestPaymentProcessingStack:
         """Test Lambda and RDS security groups are created"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         # Verify security group resources exist
         sg_keys = [key for key in synth.keys() if 'aws_security_group' in key]
@@ -73,7 +79,7 @@ class TestPaymentProcessingStack:
         """Test RDS instance is created"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         # Verify RDS instance exists
         assert any('aws_db_instance' in key for key in synth.keys())
@@ -82,7 +88,7 @@ class TestPaymentProcessingStack:
         """Test Secrets Manager secret is created for database password"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         # Verify Secrets Manager resources exist
         secret_keys = [key for key in synth.keys() if 'aws_secretsmanager_secret' in key]
@@ -92,7 +98,7 @@ class TestPaymentProcessingStack:
         """Test Lambda function is created with correct configuration"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         # Verify Lambda function exists
         assert any('aws_lambda_function' in key for key in synth.keys())
@@ -101,7 +107,7 @@ class TestPaymentProcessingStack:
         """Test Lambda IAM role and policies are created"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         # Verify IAM role exists
         assert any('aws_iam_role' in key for key in synth.keys())
@@ -110,7 +116,7 @@ class TestPaymentProcessingStack:
         """Test KMS key is created for CloudWatch Logs encryption"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         # Verify KMS key exists
         assert any('aws_kms_key' in key for key in synth.keys())
@@ -119,7 +125,7 @@ class TestPaymentProcessingStack:
         """Test CloudWatch log group is created with KMS encryption"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         # Verify log group exists
         assert any('aws_cloudwatch_log_group' in key for key in synth.keys())
@@ -129,7 +135,7 @@ class TestPaymentProcessingStack:
         os.environ['ENVIRONMENT'] = 'dev'
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         # Verify NAT Gateway does NOT exist
         nat_keys = [key for key in synth.keys() if 'aws_nat_gateway' in key]
@@ -140,7 +146,7 @@ class TestPaymentProcessingStack:
         os.environ['ENVIRONMENT'] = 'prod'
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-prod-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         # Verify NAT Gateway exists
         nat_keys = [key for key in synth.keys() if 'aws_nat_gateway' in key]
@@ -150,7 +156,7 @@ class TestPaymentProcessingStack:
         """Test availability zones are validated using data source"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         # Verify AZ data source exists
         assert any('data.aws_availability_zones' in key for key in synth.keys())
@@ -159,7 +165,7 @@ class TestPaymentProcessingStack:
         """Test comprehensive stack outputs are created"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         # Verify outputs exist
         outputs = synth.get('output', {})
@@ -169,7 +175,7 @@ class TestPaymentProcessingStack:
         """Test VPC ID output exists"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         outputs = synth.get('output', {})
         assert 'vpc_id' in outputs
@@ -178,7 +184,7 @@ class TestPaymentProcessingStack:
         """Test Lambda function outputs exist"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         outputs = synth.get('output', {})
         assert 'lambda_function_name' in outputs
@@ -188,7 +194,7 @@ class TestPaymentProcessingStack:
         """Test database outputs exist"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         outputs = synth.get('output', {})
         assert 'db_endpoint' in outputs
@@ -200,7 +206,7 @@ class TestPaymentProcessingStack:
         os.environ['ENVIRONMENT'] = 'staging'
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-staging-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         outputs = synth.get('output', {})
         assert 'environment' in outputs
@@ -209,7 +215,7 @@ class TestPaymentProcessingStack:
         """Test region output exists"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         outputs = synth.get('output', {})
         assert 'region' in outputs
@@ -218,7 +224,7 @@ class TestPaymentProcessingStack:
         """Test security group outputs exist"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         outputs = synth.get('output', {})
         assert 'lambda_security_group_id' in outputs
@@ -228,7 +234,7 @@ class TestPaymentProcessingStack:
         """Test that S3 backend is NOT configured (using local state)"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         # Verify no S3 backend configuration
         terraform_config = synth.get('terraform', {})
@@ -238,7 +244,7 @@ class TestPaymentProcessingStack:
         """Test Lambda is configured with VPC subnets and security groups"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         # Find Lambda function resource
         lambda_resources = [v for k, v in synth.items() if 'aws_lambda_function' in k]
@@ -276,7 +282,7 @@ class TestPaymentProcessingStack:
         """Test Internet Gateway is created"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         # Verify IGW exists
         assert any('aws_internet_gateway' in key for key in synth.keys())
@@ -285,7 +291,7 @@ class TestPaymentProcessingStack:
         """Test public and private route tables are created"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         # Verify route tables exist
         rt_keys = [key for key in synth.keys() if 'aws_route_table' in key]
@@ -295,7 +301,7 @@ class TestPaymentProcessingStack:
         """Test RDS subnet group is created"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         # Verify DB subnet group exists
         assert any('aws_db_subnet_group' in key for key in synth.keys())
@@ -304,7 +310,7 @@ class TestPaymentProcessingStack:
         """Test IAM policy attachments exist for Lambda role"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         # Verify IAM policy attachments exist
         policy_keys = [key for key in synth.keys() if 'aws_iam_role_policy_attachment' in key]
@@ -314,7 +320,7 @@ class TestPaymentProcessingStack:
         """Test KMS alias is created for log encryption key"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         # Verify KMS alias exists
         assert any('aws_kms_alias' in key for key in synth.keys())
@@ -331,7 +337,7 @@ class TestPaymentProcessingStack:
         """Test required data sources are configured"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         # Verify data sources exist
         data_keys = [key for key in synth.keys() if key.startswith('data.')]
@@ -341,7 +347,7 @@ class TestPaymentProcessingStack:
         """Test complete infrastructure can be synthesized without errors"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         # Verify synthesized output has required sections
         assert 'resource' in synth or any('aws_' in key for key in synth.keys())
@@ -363,7 +369,7 @@ class TestPaymentProcessingStack:
         os.environ['ENVIRONMENT'] = 'prod'
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-prod-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         # Verify EIP exists
         eip_keys = [key for key in synth.keys() if 'aws_eip' in key]
@@ -373,7 +379,7 @@ class TestPaymentProcessingStack:
         """Test route table associations are created"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         # Verify route table associations exist
         rta_keys = [key for key in synth.keys() if 'aws_route_table_association' in key]
@@ -392,7 +398,7 @@ class TestPaymentProcessingStack:
         """Test caller identity data source is configured"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         # Verify caller identity data source exists
         assert any('data.aws_caller_identity' in key for key in synth.keys())
@@ -401,7 +407,7 @@ class TestPaymentProcessingStack:
         """Test region data source is configured"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        synth = Testing.synth(stack)
+        synth = parse_synth(stack)
 
         # Verify region data source exists
         assert any('data.aws_region' in key for key in synth.keys())
@@ -412,17 +418,17 @@ class TestLambdaFunction:
 
     def test_lambda_source_exists(self):
         """Test Lambda source file exists"""
-        lambda_path = "/Users/mayanksethi/Desktop/projects/turing/iac-test-automations/worktree/synth-e4k2d5l6-v2/lib/lambda/payment_webhook.py"
+        lambda_path = os.path.join(os.getcwd(), "lib", "lambda", "payment_webhook.py")
         assert os.path.exists(lambda_path)
 
     def test_lambda_zip_exists(self):
         """Test Lambda deployment package (.zip) exists"""
-        zip_path = "/Users/mayanksethi/Desktop/projects/turing/iac-test-automations/worktree/synth-e4k2d5l6-v2/lib/lambda/payment_webhook.zip"
+        zip_path = os.path.join(os.getcwd(), "lib", "lambda", "payment_webhook.zip")
         assert os.path.exists(zip_path)
 
     def test_lambda_zip_is_valid(self):
         """Test Lambda .zip file is not empty"""
-        zip_path = "/Users/mayanksethi/Desktop/projects/turing/iac-test-automations/worktree/synth-e4k2d5l6-v2/lib/lambda/payment_webhook.zip"
+        zip_path = os.path.join(os.getcwd(), "lib", "lambda", "payment_webhook.zip")
         assert os.path.getsize(zip_path) > 0
 
 
@@ -431,27 +437,27 @@ class TestDocumentation:
 
     def test_prompt_exists(self):
         """Test PROMPT.md exists in lib/ directory"""
-        prompt_path = "/Users/mayanksethi/Desktop/projects/turing/iac-test-automations/worktree/synth-e4k2d5l6-v2/lib/PROMPT.md"
+        prompt_path = os.path.join(os.getcwd(), "lib", "PROMPT.md")
         assert os.path.exists(prompt_path)
 
     def test_model_response_exists(self):
         """Test MODEL_RESPONSE.md exists"""
-        model_response_path = "/Users/mayanksethi/Desktop/projects/turing/iac-test-automations/worktree/synth-e4k2d5l6-v2/lib/MODEL_RESPONSE.md"
+        model_response_path = os.path.join(os.getcwd(), "lib", "MODEL_RESPONSE.md")
         assert os.path.exists(model_response_path)
 
     def test_ideal_response_exists(self):
         """Test IDEAL_RESPONSE.md exists"""
-        ideal_response_path = "/Users/mayanksethi/Desktop/projects/turing/iac-test-automations/worktree/synth-e4k2d5l6-v2/lib/IDEAL_RESPONSE.md"
+        ideal_response_path = os.path.join(os.getcwd(), "lib", "IDEAL_RESPONSE.md")
         assert os.path.exists(ideal_response_path)
 
     def test_model_failures_exists(self):
         """Test MODEL_FAILURES.md exists"""
-        model_failures_path = "/Users/mayanksethi/Desktop/projects/turing/iac-test-automations/worktree/synth-e4k2d5l6-v2/lib/MODEL_FAILURES.md"
+        model_failures_path = os.path.join(os.getcwd(), "lib", "MODEL_FAILURES.md")
         assert os.path.exists(model_failures_path)
 
     def test_ideal_response_not_empty(self):
         """Test IDEAL_RESPONSE.md is not empty (previous issue)"""
-        ideal_response_path = "/Users/mayanksethi/Desktop/projects/turing/iac-test-automations/worktree/synth-e4k2d5l6-v2/lib/IDEAL_RESPONSE.md"
+        ideal_response_path = os.path.join(os.getcwd(), "lib", "IDEAL_RESPONSE.md")
         with open(ideal_response_path, 'r') as f:
             content = f.read()
         assert len(content) > 100  # Should have substantial content
