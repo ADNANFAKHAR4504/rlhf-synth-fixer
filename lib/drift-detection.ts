@@ -1,12 +1,13 @@
 import * as automation from '@pulumi/pulumi/automation';
 import * as path from 'path';
+import * as fs from 'fs';
 
 interface DriftReport {
   environment: string;
   differences: {
     parameter: string;
-    stagingValue: any;
-    prodValue: any;
+    stagingValue: unknown;
+    prodValue: unknown;
     isControlled: boolean;
   }[];
   timestamp: string;
@@ -25,7 +26,9 @@ async function getStackOutputs(
   return await stack.outputs();
 }
 
-async function getStackConfig(stackName: string): Promise<Record<string, any>> {
+async function getStackConfig(
+  stackName: string
+): Promise<Record<string, { value: unknown }>> {
   const workDir = path.join(__dirname, '..');
 
   const stack = await automation.LocalWorkspace.createOrSelectStack({
@@ -45,8 +48,8 @@ async function detectDrift(): Promise<DriftReport> {
   const prodConfig = await getStackConfig('prod');
 
   // Get outputs (for future use in drift detection)
-  const _stagingOutputs = await getStackOutputs('staging');
-  const _prodOutputs = await getStackOutputs('prod');
+  await getStackOutputs('staging');
+  await getStackOutputs('prod');
 
   const differences: DriftReport['differences'] = [];
 
@@ -130,7 +133,6 @@ async function main() {
     }
 
     // Save report to file
-    const fs = require('fs');
     fs.writeFileSync(
       'drift-report.json',
       JSON.stringify(report, null, 2),
@@ -147,4 +149,5 @@ if (require.main === module) {
   main();
 }
 
-export { detectDrift, DriftReport };
+export { detectDrift };
+export type { DriftReport };
