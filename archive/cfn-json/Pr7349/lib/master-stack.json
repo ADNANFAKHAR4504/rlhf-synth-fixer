@@ -1,0 +1,744 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Master stack for blue-green payment processing infrastructure",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource naming"
+    },
+    "Project": {
+      "Type": "String",
+      "Description": "Project name for tagging"
+    },
+    "CostCenter": {
+      "Type": "String",
+      "Description": "Cost center for tagging"
+    },
+    "VpcCidr": {
+      "Type": "String",
+      "Description": "VPC CIDR block"
+    },
+    "DatabaseMasterUsername": {
+      "Type": "String",
+      "Description": "Database master username",
+      "NoEcho": true
+    },
+    "ECSTaskImage": {
+      "Type": "String",
+      "Description": "Docker image for payment processing application"
+    },
+    "HostedZoneId": {
+      "Type": "String",
+      "Description": "Route 53 hosted zone ID"
+    },
+    "DomainName": {
+      "Type": "String",
+      "Description": "Domain name for the application"
+    }
+  },
+  "Resources": {
+    "SecurityStack": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": "https://s3.amazonaws.com/your-bucket/security-stack.json",
+        "Parameters": {
+          "EnvironmentSuffix": {
+            "Ref": "EnvironmentSuffix"
+          },
+          "Project": {
+            "Ref": "Project"
+          },
+          "CostCenter": {
+            "Ref": "CostCenter"
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "NetworkStack": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": "https://s3.amazonaws.com/your-bucket/network-stack.json",
+        "Parameters": {
+          "EnvironmentSuffix": {
+            "Ref": "EnvironmentSuffix"
+          },
+          "VpcCidr": {
+            "Ref": "VpcCidr"
+          },
+          "Project": {
+            "Ref": "Project"
+          },
+          "CostCenter": {
+            "Ref": "CostCenter"
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "DatabaseStack": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": "https://s3.amazonaws.com/your-bucket/database-stack.json",
+        "Parameters": {
+          "EnvironmentSuffix": {
+            "Ref": "EnvironmentSuffix"
+          },
+          "PrivateSubnet1": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.PrivateSubnet1"
+            ]
+          },
+          "PrivateSubnet2": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.PrivateSubnet2"
+            ]
+          },
+          "PrivateSubnet3": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.PrivateSubnet3"
+            ]
+          },
+          "DatabaseSecurityGroup": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.DatabaseSecurityGroup"
+            ]
+          },
+          "KMSKeyId": {
+            "Fn::GetAtt": [
+              "SecurityStack",
+              "Outputs.KMSKeyId"
+            ]
+          },
+          "DatabaseMasterUsername": {
+            "Ref": "DatabaseMasterUsername"
+          },
+          "Project": {
+            "Ref": "Project"
+          },
+          "CostCenter": {
+            "Ref": "CostCenter"
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "DMSStack": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": "https://s3.amazonaws.com/your-bucket/dms-stack.json",
+        "Parameters": {
+          "EnvironmentSuffix": {
+            "Ref": "EnvironmentSuffix"
+          },
+          "PrivateSubnet1": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.PrivateSubnet1"
+            ]
+          },
+          "PrivateSubnet2": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.PrivateSubnet2"
+            ]
+          },
+          "DMSSecurityGroup": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.DMSSecurityGroup"
+            ]
+          },
+          "BlueDBEndpointAddress": {
+            "Fn::GetAtt": [
+              "DatabaseStack",
+              "Outputs.BlueDBEndpoint"
+            ]
+          },
+          "GreenDBEndpointAddress": {
+            "Fn::GetAtt": [
+              "DatabaseStack",
+              "Outputs.GreenDBEndpoint"
+            ]
+          },
+          "BlueDBSecretArn": {
+            "Fn::GetAtt": [
+              "DatabaseStack",
+              "Outputs.BlueDBSecretArn"
+            ]
+          },
+          "GreenDBSecretArn": {
+            "Fn::GetAtt": [
+              "DatabaseStack",
+              "Outputs.GreenDBSecretArn"
+            ]
+          },
+          "Project": {
+            "Ref": "Project"
+          },
+          "CostCenter": {
+            "Ref": "CostCenter"
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "ECSStack": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": "https://s3.amazonaws.com/your-bucket/ecs-stack.json",
+        "Parameters": {
+          "EnvironmentSuffix": {
+            "Ref": "EnvironmentSuffix"
+          },
+          "PrivateSubnet1": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.PrivateSubnet1"
+            ]
+          },
+          "PrivateSubnet2": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.PrivateSubnet2"
+            ]
+          },
+          "PrivateSubnet3": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.PrivateSubnet3"
+            ]
+          },
+          "ECSSecurityGroup": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.ECSSecurityGroup"
+            ]
+          },
+          "ECSTaskImage": {
+            "Ref": "ECSTaskImage"
+          },
+          "BlueDBEndpoint": {
+            "Fn::GetAtt": [
+              "DatabaseStack",
+              "Outputs.BlueDBEndpoint"
+            ]
+          },
+          "GreenDBEndpoint": {
+            "Fn::GetAtt": [
+              "DatabaseStack",
+              "Outputs.GreenDBEndpoint"
+            ]
+          },
+          "BlueDBSecretArn": {
+            "Fn::GetAtt": [
+              "DatabaseStack",
+              "Outputs.BlueDBSecretArn"
+            ]
+          },
+          "GreenDBSecretArn": {
+            "Fn::GetAtt": [
+              "DatabaseStack",
+              "Outputs.GreenDBSecretArn"
+            ]
+          },
+          "BlueTargetGroup": {
+            "Fn::GetAtt": [
+              "ALBStack",
+              "Outputs.BlueTargetGroup"
+            ]
+          },
+          "GreenTargetGroup": {
+            "Fn::GetAtt": [
+              "ALBStack",
+              "Outputs.GreenTargetGroup"
+            ]
+          },
+          "Project": {
+            "Ref": "Project"
+          },
+          "CostCenter": {
+            "Ref": "CostCenter"
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "ALBStack": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": "https://s3.amazonaws.com/your-bucket/alb-stack.json",
+        "Parameters": {
+          "EnvironmentSuffix": {
+            "Ref": "EnvironmentSuffix"
+          },
+          "VpcId": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.VpcId"
+            ]
+          },
+          "PublicSubnet1": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.PublicSubnet1"
+            ]
+          },
+          "PublicSubnet2": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.PublicSubnet2"
+            ]
+          },
+          "PublicSubnet3": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.PublicSubnet3"
+            ]
+          },
+          "ALBSecurityGroup": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.ALBSecurityGroup"
+            ]
+          },
+          "Project": {
+            "Ref": "Project"
+          },
+          "CostCenter": {
+            "Ref": "CostCenter"
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "Route53Stack": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": "https://s3.amazonaws.com/your-bucket/route53-stack.json",
+        "Parameters": {
+          "HostedZoneId": {
+            "Ref": "HostedZoneId"
+          },
+          "DomainName": {
+            "Ref": "DomainName"
+          },
+          "ALBDNSName": {
+            "Fn::GetAtt": [
+              "ALBStack",
+              "Outputs.ALBDNSName"
+            ]
+          },
+          "ALBHostedZoneId": {
+            "Fn::GetAtt": [
+              "ALBStack",
+              "Outputs.ALBHostedZoneId"
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "MonitoringStack": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": "https://s3.amazonaws.com/your-bucket/monitoring-stack.json",
+        "Parameters": {
+          "EnvironmentSuffix": {
+            "Ref": "EnvironmentSuffix"
+          },
+          "ALBTargetGroup": {
+            "Fn::GetAtt": [
+              "ALBStack",
+              "Outputs.BlueTargetGroup"
+            ]
+          },
+          "DMSReplicationTask": {
+            "Fn::GetAtt": [
+              "DMSStack",
+              "Outputs.ReplicationTaskArn"
+            ]
+          },
+          "Project": {
+            "Ref": "Project"
+          },
+          "CostCenter": {
+            "Ref": "CostCenter"
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "AutomationStack": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": "https://s3.amazonaws.com/your-bucket/automation-stack.json",
+        "Parameters": {
+          "EnvironmentSuffix": {
+            "Ref": "EnvironmentSuffix"
+          },
+          "BlueTargetGroup": {
+            "Fn::GetAtt": [
+              "ALBStack",
+              "Outputs.BlueTargetGroup"
+            ]
+          },
+          "GreenTargetGroup": {
+            "Fn::GetAtt": [
+              "ALBStack",
+              "Outputs.GreenTargetGroup"
+            ]
+          },
+          "ALBListenerArn": {
+            "Fn::GetAtt": [
+              "ALBStack",
+              "Outputs.ListenerArn"
+            ]
+          },
+          "BlueHealthAlarm": {
+            "Fn::GetAtt": [
+              "MonitoringStack",
+              "Outputs.BlueHealthAlarm"
+            ]
+          },
+          "GreenHealthAlarm": {
+            "Fn::GetAtt": [
+              "MonitoringStack",
+              "Outputs.GreenHealthAlarm"
+            ]
+          },
+          "Project": {
+            "Ref": "Project"
+          },
+          "CostCenter": {
+            "Ref": "CostCenter"
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "BackupStack": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": "https://s3.amazonaws.com/your-bucket/backup-stack.json",
+        "Parameters": {
+          "EnvironmentSuffix": {
+            "Ref": "EnvironmentSuffix"
+          },
+          "BlueDBCluster": {
+            "Fn::GetAtt": [
+              "DatabaseStack",
+              "Outputs.BlueDBClusterId"
+            ]
+          },
+          "GreenDBCluster": {
+            "Fn::GetAtt": [
+              "DatabaseStack",
+              "Outputs.GreenDBClusterId"
+            ]
+          },
+          "KMSKeyId": {
+            "Fn::GetAtt": [
+              "SecurityStack",
+              "Outputs.KMSKeyId"
+            ]
+          },
+          "Project": {
+            "Ref": "Project"
+          },
+          "CostCenter": {
+            "Ref": "CostCenter"
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "SSMParameterStack": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": "https://s3.amazonaws.com/your-bucket/ssm-parameter-stack.json",
+        "Parameters": {
+          "EnvironmentSuffix": {
+            "Ref": "EnvironmentSuffix"
+          },
+          "BlueDBEndpoint": {
+            "Fn::GetAtt": [
+              "DatabaseStack",
+              "Outputs.BlueDBEndpoint"
+            ]
+          },
+          "GreenDBEndpoint": {
+            "Fn::GetAtt": [
+              "DatabaseStack",
+              "Outputs.GreenDBEndpoint"
+            ]
+          },
+          "ALBDNSName": {
+            "Fn::GetAtt": [
+              "ALBStack",
+              "Outputs.ALBDNSName"
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "VpcId": {
+      "Description": "VPC ID",
+      "Value": {
+        "Fn::GetAtt": [
+          "NetworkStack",
+          "Outputs.VpcId"
+        ]
+      }
+    },
+    "BlueDBEndpoint": {
+      "Description": "Blue environment database endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "DatabaseStack",
+          "Outputs.BlueDBEndpoint"
+        ]
+      }
+    },
+    "GreenDBEndpoint": {
+      "Description": "Green environment database endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "DatabaseStack",
+          "Outputs.GreenDBEndpoint"
+        ]
+      }
+    },
+    "ALBDNSName": {
+      "Description": "Application Load Balancer DNS name",
+      "Value": {
+        "Fn::GetAtt": [
+          "ALBStack",
+          "Outputs.ALBDNSName"
+        ]
+      }
+    },
+    "ApplicationURL": {
+      "Description": "Application URL",
+      "Value": {
+        "Fn::Sub": "https://${DomainName}"
+      }
+    }
+  }
+}

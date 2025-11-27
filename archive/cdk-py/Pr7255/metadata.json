@@ -1,0 +1,41 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-25T14:54:00Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Diagnosis/Edits",
+    "IaC Optimization"
+  ],
+  "po_id": "t7f6u8y8",
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "API Gateway",
+    "S3",
+    "CloudWatch",
+    "EC2",
+    "VPC",
+    "NAT Gateway",
+    "WAF",
+    "Shield",
+    "GuardDuty",
+    "SNS",
+    "SQS",
+    "Secrets Manager",
+    "Cost Explorer",
+    "EventBridge",
+    "Systems Manager"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
