@@ -5,6 +5,7 @@ import {
 } from '@aws-sdk/client-kms';
 import {
   AppsV1Api,
+  BatchV1Api,
   CoreV1Api,
   KubeConfig
 } from '@kubernetes/client-node';
@@ -24,7 +25,7 @@ const kmsClient = new KMSClient({ region: AWS_REGION });
 const iam = new AWS.IAM({ region: AWS_REGION });
 
 // Kubernetes client setup helper
-async function getK8sClients(): Promise<{ coreApi: CoreV1Api; appsApi: AppsV1Api }> {
+async function getK8sClients(): Promise<{ coreApi: CoreV1Api; appsApi: AppsV1Api; batchApi: BatchV1Api }> {
   const kc = new KubeConfig();
 
   // Get cluster details from outputs
@@ -72,7 +73,8 @@ async function getK8sClients(): Promise<{ coreApi: CoreV1Api; appsApi: AppsV1Api
 
   return {
     coreApi: kc.makeApiClient(CoreV1Api),
-    appsApi: kc.makeApiClient(AppsV1Api)
+    appsApi: kc.makeApiClient(AppsV1Api),
+    batchApi: kc.makeApiClient(BatchV1Api)
   };
 }
 
@@ -340,6 +342,102 @@ describe('Deployed Infrastructure Validation', () => {
     }, TEST_TIMEOUT);
   });
 
+  describe('Node-to-Node Communication', () => {
+    let coreApi: CoreV1Api;
+    let batchApi: BatchV1Api;
+
+    beforeAll(async () => {
+      const clients = await getK8sClients();
+      coreApi = clients.coreApi;
+      batchApi = clients.batchApi;
+    });
+
+    // Helper function to check connectivity from a source node to a target IP:Port
+    async function checkPortReachable(sourceNodeName: string, targetIp: string, port: number): Promise<boolean> {
+      const jobName = `conn-check-${Math.floor(Math.random() * 100000)}`;
+      const namespace = 'default';
+
+      const jobManifest = {
+        apiVersion: 'batch/v1',
+        kind: 'Job',
+        metadata: {
+          name: jobName,
+          namespace: namespace
+        },
+        spec: {
+          ttlSecondsAfterFinished: 60,
+          backoffLimit: 1,
+          template: {
+            spec: {
+              nodeName: sourceNodeName,
+              hostNetwork: true,
+              containers: [{
+                name: 'check',
+                image: 'busybox',
+                command: ['nc', '-z', '-w', '5', targetIp, port.toString()]
+              }],
+              restartPolicy: 'Never'
+            }
+          }
+        }
+      };
+
+      try {
+        await batchApi.createNamespacedJob({ namespace, body: jobManifest });
+
+        // Wait for Job completion
+        for (let i = 0; i < 30; i++) { // Wait up to 60 seconds
+          await new Promise(r => setTimeout(r, 2000));
+          const job = await batchApi.readNamespacedJob({ name: jobName, namespace });
+
+          if (job.status?.succeeded && job.status.succeeded > 0) {
+            return true;
+          }
+          if (job.status?.failed && job.status.failed > 0) {
+            return false;
+          }
+        }
+        return false; // Timeout
+      } catch (error) {
+        console.error(`Error in checkPortReachable: ${error}`);
+        return false;
+      } finally {
+        try {
+          await batchApi.deleteNamespacedJob({ name: jobName, namespace, propagationPolicy: 'Background' });
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+      }
+    }
+
+    test('Nodes can communicate with each other on port 10250 (Kubelet)', async () => {
+      // 1. Get Nodes
+      const nodesResult = await coreApi.listNode();
+      const nodes = nodesResult.items;
+
+      if (nodes.length < 2) {
+        console.warn('Skipping node-to-node test: Less than 2 nodes found');
+        return;
+      }
+
+      // 2. Pick two different nodes
+      const node1 = nodes[0];
+      const node2 = nodes[1];
+
+      const node1Name = node1.metadata?.name;
+      const node2IP = node2.status?.addresses?.find(a => a.type === 'InternalIP')?.address;
+
+      expect(node1Name).toBeDefined();
+      expect(node2IP).toBeDefined();
+
+      console.log(`Testing connectivity from Node ${node1Name} to Node ${node2.metadata?.name} (${node2IP}:10250)`);
+
+      // 3. Verify connectivity
+      const isReachable = await checkPortReachable(node1Name!, node2IP!, 10250);
+      expect(isReachable).toBe(true);
+    }, TEST_TIMEOUT * 2);
+  });
+
   describe('Security Groups', () => {
     test('Cluster security group exists and has correct rules', async () => {
       const clusterSgId = outputs.cluster_security_group_id;
@@ -593,14 +691,14 @@ describe('Kubernetes Deployment Validation', () => {
 
   test('Hello-world namespace exists', async () => {
     const namespaceName = outputs.hello_world_namespace || 'hello-world';
-    
+
     if (!namespaceName || typeof namespaceName !== 'string') {
       throw new Error(`Invalid namespaceName: ${namespaceName}`);
     }
 
     // Returns V1Namespace directly
     const namespace = await coreApi.readNamespace({ name: namespaceName });
-    
+
     // REMOVED .body
     expect(namespace).toBeDefined();
     expect(namespace.metadata?.name).toBe(namespaceName);
