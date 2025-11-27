@@ -10,8 +10,8 @@
  * - Security groups for ALB and ECS tasks
  * - CloudWatch Logs for ECS tasks
  */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface EcsStackArgs {
   environmentSuffix: string;
@@ -38,12 +38,7 @@ export class EcsStack extends pulumi.ComponentResource {
   ) {
     super('tap:ecs:EcsStack', name, args, opts);
 
-    const {
-      environmentSuffix,
-      vpcId,
-      publicSubnetIds,
-      tags,
-    } = args;
+    const { environmentSuffix, vpcId, publicSubnetIds, tags } = args;
 
     // Create ECS cluster
     this.cluster = new aws.ecs.Cluster(
