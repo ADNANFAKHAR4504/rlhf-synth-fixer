@@ -59,13 +59,13 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Primary region (us-east-1) VPC
     const primaryVpc = new aws.ec2.Vpc(
-      'primary-vpc',
+      'primary-vpc-v1',
       {
         cidrBlock: '10.0.0.0/16',
         enableDnsHostnames: true,
         enableDnsSupport: true,
         tags: {
-          Name: `primary-vpc-${environmentSuffix}`,
+          Name: `primary-vpc-v1-${environmentSuffix}`,
           Environment: environmentSuffix,
           Region: 'us-east-1',
           CostCenter: 'trading',
@@ -76,11 +76,11 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Internet Gateway for primary VPC (FIXED: Required for public subnets)
     const primaryIgw = new aws.ec2.InternetGateway(
-      'primary-igw',
+      'primary-igw-v1',
       {
         vpcId: primaryVpc.id,
         tags: {
-          Name: `primary-igw-${environmentSuffix}`,
+          Name: `primary-igw-v1-${environmentSuffix}`,
         },
       },
       { parent: this }
@@ -89,14 +89,14 @@ export class TapStack extends pulumi.ComponentResource {
     // Primary region subnets (3 AZs) - NOW PUBLIC for ALB (FIXED)
     const primarySubnets = [0, 1, 2].map(i => {
       return new aws.ec2.Subnet(
-        `primary-subnet-${i}`,
+        `primary-subnet-v1-${i}`,
         {
           vpcId: primaryVpc.id,
           cidrBlock: `10.0.${i}.0/24`,
           availabilityZone: `us-east-1${['a', 'b', 'c'][i]}`,
           mapPublicIpOnLaunch: true, // FIXED: Make subnets public
           tags: {
-            Name: `primary-subnet-${i}-${environmentSuffix}`,
+            Name: `primary-subnet-v1-${i}-${environmentSuffix}`,
             Environment: environmentSuffix,
           },
         },
@@ -106,7 +106,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Route table for primary public subnets (FIXED)
     const primaryRouteTable = new aws.ec2.RouteTable(
-      'primary-route-table',
+      'primary-route-table-v1',
       {
         vpcId: primaryVpc.id,
         routes: [
@@ -116,7 +116,7 @@ export class TapStack extends pulumi.ComponentResource {
           },
         ],
         tags: {
-          Name: `primary-route-table-${environmentSuffix}`,
+          Name: `primary-route-table-v1-${environmentSuffix}`,
         },
       },
       { parent: this }
@@ -125,7 +125,7 @@ export class TapStack extends pulumi.ComponentResource {
     // Associate route table with primary subnets (FIXED)
     primarySubnets.forEach((subnet, i) => {
       new aws.ec2.RouteTableAssociation(
-        `primary-rta-${i}`,
+        `primary-rta-v1-${i}`,
         {
           subnetId: subnet.id,
           routeTableId: primaryRouteTable.id,
@@ -136,7 +136,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Secondary region (eu-west-1) provider
     const euProvider = new aws.Provider(
-      'eu-provider',
+      'eu-provider-v1',
       {
         region: 'eu-west-1',
       },
@@ -145,13 +145,13 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Secondary region VPC
     const secondaryVpc = new aws.ec2.Vpc(
-      'secondary-vpc',
+      'secondary-vpc-v1',
       {
         cidrBlock: '10.1.0.0/16',
         enableDnsHostnames: true,
         enableDnsSupport: true,
         tags: {
-          Name: `secondary-vpc-${environmentSuffix}`,
+          Name: `secondary-vpc-v1-${environmentSuffix}`,
           Environment: environmentSuffix,
           Region: 'eu-west-1',
           CostCenter: 'trading',
@@ -162,11 +162,11 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Internet Gateway for secondary VPC (FIXED)
     const secondaryIgw = new aws.ec2.InternetGateway(
-      'secondary-igw',
+      'secondary-igw-v1',
       {
         vpcId: secondaryVpc.id,
         tags: {
-          Name: `secondary-igw-${environmentSuffix}`,
+          Name: `secondary-igw-v1-${environmentSuffix}`,
         },
       },
       { provider: euProvider, parent: this }
@@ -175,14 +175,14 @@ export class TapStack extends pulumi.ComponentResource {
     // Secondary region subnets (3 AZs) - NOW PUBLIC (FIXED)
     const secondarySubnets = [0, 1, 2].map(i => {
       return new aws.ec2.Subnet(
-        `secondary-subnet-${i}`,
+        `secondary-subnet-v1-${i}`,
         {
           vpcId: secondaryVpc.id,
           cidrBlock: `10.1.${i}.0/24`,
           availabilityZone: `eu-west-1${['a', 'b', 'c'][i]}`,
           mapPublicIpOnLaunch: true, // FIXED: Make subnets public
           tags: {
-            Name: `secondary-subnet-${i}-${environmentSuffix}`,
+            Name: `secondary-subnet-v1-${i}-${environmentSuffix}`,
             Environment: environmentSuffix,
           },
         },
@@ -192,7 +192,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Route table for secondary public subnets (FIXED)
     const secondaryRouteTable = new aws.ec2.RouteTable(
-      'secondary-route-table',
+      'secondary-route-table-v1',
       {
         vpcId: secondaryVpc.id,
         routes: [
@@ -202,7 +202,7 @@ export class TapStack extends pulumi.ComponentResource {
           },
         ],
         tags: {
-          Name: `secondary-route-table-${environmentSuffix}`,
+          Name: `secondary-route-table-v1-${environmentSuffix}`,
         },
       },
       { provider: euProvider, parent: this }
@@ -211,7 +211,7 @@ export class TapStack extends pulumi.ComponentResource {
     // Associate route table with secondary subnets (FIXED)
     secondarySubnets.forEach((subnet, i) => {
       new aws.ec2.RouteTableAssociation(
-        `secondary-rta-${i}`,
+        `secondary-rta-v1-${i}`,
         {
           subnetId: subnet.id,
           routeTableId: secondaryRouteTable.id,
@@ -222,14 +222,14 @@ export class TapStack extends pulumi.ComponentResource {
 
     // VPC Peering connection
     const _peeringConnection = new aws.ec2.VpcPeeringConnection(
-      'vpc-peering',
+      'vpc-peering-v1',
       {
         vpcId: primaryVpc.id,
         peerVpcId: secondaryVpc.id,
         peerRegion: 'eu-west-1',
         autoAccept: false,
         tags: {
-          Name: `vpc-peering-${environmentSuffix}`,
+          Name: `vpc-peering-v1-${environmentSuffix}`,
         },
       },
       { parent: this }
@@ -237,16 +237,16 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Generate secure password from Secrets Manager (FIXED)
     const dbMasterPassword = new aws.secretsmanager.Secret(
-      'db-master-password',
+      'db-master-password-v1',
       {
-        name: `trading-db-master-password-${environmentSuffix}`,
+        name: `trading-db-master-password-v1-${environmentSuffix}`,
         description: 'Master password for Aurora Global Database',
       },
       { parent: this }
     );
 
     const dbMasterPasswordVersion = new aws.secretsmanager.SecretVersion(
-      'db-master-password-version',
+      'db-master-password-version-v1',
       {
         secretId: dbMasterPassword.id,
         secretString: pulumi.interpolate`{"password":"${pulumi.output(
@@ -263,9 +263,9 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Aurora Global Database Cluster
     const globalCluster = new aws.rds.GlobalCluster(
-      'global-cluster',
+      'global-cluster-v1',
       {
-        globalClusterIdentifier: `trading-global-${environmentSuffix}`,
+        globalClusterIdentifier: `trading-global-v1-${environmentSuffix}`,
         engine: 'aurora-postgresql',
         engineVersion: '14.6',
         databaseName: 'trading',
@@ -275,11 +275,11 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Primary Aurora Cluster Subnet Group
     const primaryDbSubnetGroup = new aws.rds.SubnetGroup(
-      'primary-db-subnet',
+      'primary-db-subnet-v1',
       {
         subnetIds: primarySubnets.map(s => s.id),
         tags: {
-          Name: `primary-db-subnet-${environmentSuffix}`,
+          Name: `primary-db-subnet-v1-${environmentSuffix}`,
         },
       },
       { parent: this }
@@ -287,7 +287,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Primary Aurora Cluster Security Group (FIXED: Added environmentSuffix to tag)
     const primaryDbSecurityGroup = new aws.ec2.SecurityGroup(
-      'primary-db-sg',
+      'primary-db-sg-v1',
       {
         vpcId: primaryVpc.id,
         description: 'Security group for primary Aurora cluster',
@@ -300,7 +300,7 @@ export class TapStack extends pulumi.ComponentResource {
           },
         ],
         tags: {
-          Name: `primary-db-sg-${environmentSuffix}`, // FIXED: Added environmentSuffix
+          Name: `primary-db-sg-v1-${environmentSuffix}`, // FIXED: Added environmentSuffix
         },
       },
       { parent: this }
@@ -308,9 +308,9 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Primary Aurora Cluster (FIXED: Using Secrets Manager)
     const primaryCluster = new aws.rds.Cluster(
-      'primary-cluster',
+      'primary-cluster-v1',
       {
-        clusterIdentifier: `trading-primary-${environmentSuffix}`,
+        clusterIdentifier: `trading-primary-v1-${environmentSuffix}`,
         engine: 'aurora-postgresql',
         engineVersion: '14.6',
         databaseName: 'trading',
@@ -332,7 +332,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Aurora Cluster Instance for primary (required for Global Database)
     const primaryClusterInstance = new aws.rds.ClusterInstance(
-      'primary-cluster-instance',
+      'primary-cluster-instance-v1',
       {
         clusterIdentifier: primaryCluster.id,
         instanceClass: 'db.r5.large', // Global databases require memory-optimized instances
@@ -344,11 +344,11 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Secondary Aurora Cluster Subnet Group
     const secondaryDbSubnetGroup = new aws.rds.SubnetGroup(
-      'secondary-db-subnet',
+      'secondary-db-subnet-v1',
       {
         subnetIds: secondarySubnets.map(s => s.id),
         tags: {
-          Name: `secondary-db-subnet-${environmentSuffix}`,
+          Name: `secondary-db-subnet-v1-${environmentSuffix}`,
         },
       },
       { provider: euProvider, parent: this }
@@ -356,7 +356,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Secondary Aurora Cluster Security Group
     const secondaryDbSecurityGroup = new aws.ec2.SecurityGroup(
-      'secondary-db-sg',
+      'secondary-db-sg-v1',
       {
         vpcId: secondaryVpc.id,
         description: 'Security group for secondary Aurora cluster',
@@ -369,7 +369,7 @@ export class TapStack extends pulumi.ComponentResource {
           },
         ],
         tags: {
-          Name: `secondary-db-sg-${environmentSuffix}`,
+          Name: `secondary-db-sg-v1-${environmentSuffix}`,
         },
       },
       { provider: euProvider, parent: this }
@@ -378,9 +378,9 @@ export class TapStack extends pulumi.ComponentResource {
     // FIXED: Wait for primary cluster to be fully available before creating secondary
     // This uses primaryClusterInstance completion as proxy for "available" state
     const secondaryCluster = new aws.rds.Cluster(
-      'secondary-cluster',
+      'secondary-cluster-v1',
       {
-        clusterIdentifier: `trading-secondary-${environmentSuffix}`,
+        clusterIdentifier: `trading-secondary-v1-${environmentSuffix}`,
         engine: 'aurora-postgresql',
         engineVersion: '14.6',
         globalClusterIdentifier: globalCluster.id,
@@ -397,7 +397,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Aurora Cluster Instance for secondary
     const _secondaryClusterInstance = new aws.rds.ClusterInstance(
-      'secondary-cluster-instance',
+      'secondary-cluster-instance-v1',
       {
         clusterIdentifier: secondaryCluster.id,
         instanceClass: 'db.r5.large', // Global databases require memory-optimized instances
@@ -409,7 +409,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Lambda Execution Role
     const lambdaRole = new aws.iam.Role(
-      'lambda-role',
+      'lambda-role-v1',
       {
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
@@ -432,7 +432,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Lambda function in primary region
     const _primaryLambda = new aws.lambda.Function(
-      'primary-lambda',
+      'primary-lambda-v1',
       {
         runtime: aws.lambda.Runtime.NodeJS18dX,
         role: lambdaRole.arn,
@@ -454,7 +454,7 @@ export class TapStack extends pulumi.ComponentResource {
           },
         },
         tags: {
-          Name: `primary-lambda-${environmentSuffix}`,
+          Name: `primary-lambda-v1-${environmentSuffix}`,
         },
       },
       { parent: this }
@@ -462,7 +462,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Lambda function in secondary region
     const _secondaryLambda = new aws.lambda.Function(
-      'secondary-lambda',
+      'secondary-lambda-v1',
       {
         runtime: aws.lambda.Runtime.NodeJS18dX,
         role: lambdaRole.arn,
@@ -484,7 +484,7 @@ export class TapStack extends pulumi.ComponentResource {
           },
         },
         tags: {
-          Name: `secondary-lambda-${environmentSuffix}`,
+          Name: `secondary-lambda-v1-${environmentSuffix}`,
         },
       },
       { provider: euProvider, parent: this }
@@ -504,7 +504,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // EC2 instances for ALB targets in primary region (FIXED: Dynamic AMI)
     const primaryInstance = new aws.ec2.Instance(
-      'primary-instance',
+      'primary-instance-v1',
       {
         instanceType: 't3.micro',
         ami: primaryAmi.then(ami => ami.id), // FIXED: Dynamic AMI lookup
@@ -513,7 +513,7 @@ export class TapStack extends pulumi.ComponentResource {
           encrypted: false, // Disable EBS encryption to avoid KMS key issues
         },
         tags: {
-          Name: `primary-instance-${environmentSuffix}`,
+          Name: `primary-instance-v1-${environmentSuffix}`,
         },
       },
       { parent: this }
@@ -521,7 +521,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Primary ALB Security Group
     const primaryAlbSg = new aws.ec2.SecurityGroup(
-      'primary-alb-sg',
+      'primary-alb-sg-v1',
       {
         vpcId: primaryVpc.id,
         ingress: [
@@ -546,14 +546,14 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Primary Application Load Balancer (FIXED: Now uses public subnets)
     const primaryAlb = new aws.lb.LoadBalancer(
-      'primary-alb',
+      'primary-alb-v1',
       {
         internal: false,
         loadBalancerType: 'application',
         securityGroups: [primaryAlbSg.id],
         subnets: primarySubnets.map(s => s.id), // FIXED: Now public subnets with IGW
         tags: {
-          Name: `primary-alb-${environmentSuffix}`,
+          Name: `primary-alb-v1-${environmentSuffix}`,
         },
       },
       { parent: this }
@@ -561,7 +561,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Primary Target Group
     const primaryTargetGroup = new aws.lb.TargetGroup(
-      'primary-tg',
+      'primary-tg-v1',
       {
         port: 80,
         protocol: 'HTTP',
@@ -574,7 +574,7 @@ export class TapStack extends pulumi.ComponentResource {
           unhealthyThreshold: 2,
         },
         tags: {
-          Name: `primary-tg-${environmentSuffix}`,
+          Name: `primary-tg-v1-${environmentSuffix}`,
         },
       },
       { parent: this }
@@ -582,7 +582,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Attach instance to target group
     const _primaryAttachment = new aws.lb.TargetGroupAttachment(
-      'primary-attachment',
+      'primary-attachment-v1',
       {
         targetGroupArn: primaryTargetGroup.arn,
         targetId: primaryInstance.id,
@@ -592,7 +592,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Primary ALB Listener
     const _primaryListener = new aws.lb.Listener(
-      'primary-listener',
+      'primary-listener-v1',
       {
         loadBalancerArn: primaryAlb.arn,
         port: 80,
@@ -611,7 +611,7 @@ export class TapStack extends pulumi.ComponentResource {
     // The secondary ALB will be created without backend instances for now
 
     const secondaryAlbSg = new aws.ec2.SecurityGroup(
-      'secondary-alb-sg',
+      'secondary-alb-sg-v1',
       {
         vpcId: secondaryVpc.id,
         ingress: [
@@ -636,21 +636,21 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Secondary ALB (FIXED: Now uses public subnets)
     const secondaryAlb = new aws.lb.LoadBalancer(
-      'secondary-alb',
+      'secondary-alb-v1',
       {
         internal: false,
         loadBalancerType: 'application',
         securityGroups: [secondaryAlbSg.id],
         subnets: secondarySubnets.map(s => s.id), // FIXED: Now public subnets
         tags: {
-          Name: `secondary-alb-${environmentSuffix}`,
+          Name: `secondary-alb-v1-${environmentSuffix}`,
         },
       },
       { provider: euProvider, parent: this }
     );
 
     const secondaryTargetGroup = new aws.lb.TargetGroup(
-      'secondary-tg',
+      'secondary-tg-v1',
       {
         port: 80,
         protocol: 'HTTP',
@@ -663,7 +663,7 @@ export class TapStack extends pulumi.ComponentResource {
           unhealthyThreshold: 2,
         },
         tags: {
-          Name: `secondary-tg-${environmentSuffix}`,
+          Name: `secondary-tg-v1-${environmentSuffix}`,
         },
       },
       { provider: euProvider, parent: this }
@@ -673,7 +673,7 @@ export class TapStack extends pulumi.ComponentResource {
     // The target group exists but has no registered targets
 
     const _secondaryListener = new aws.lb.Listener(
-      'secondary-listener',
+      'secondary-listener-v1',
       {
         loadBalancerArn: secondaryAlb.arn,
         port: 80,
@@ -690,9 +690,9 @@ export class TapStack extends pulumi.ComponentResource {
 
     // AWS Global Accelerator
     const accelerator = new aws.globalaccelerator.Accelerator(
-      'accelerator',
+      'accelerator-v1',
       {
-        name: `trading-accelerator-${environmentSuffix}`,
+        name: `trading-accelerator-v1-${environmentSuffix}`,
         ipAddressType: 'IPV4',
         enabled: true,
         attributes: {
@@ -703,7 +703,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     const listener = new aws.globalaccelerator.Listener(
-      'listener',
+      'listener-v1',
       {
         acceleratorArn: accelerator.id,
         protocol: 'TCP',
@@ -718,7 +718,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     const _primaryEndpointGroup = new aws.globalaccelerator.EndpointGroup(
-      'primary-endpoint',
+      'primary-endpoint-v1',
       {
         listenerArn: listener.id,
         endpointGroupRegion: 'us-east-1',
@@ -736,7 +736,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     const _secondaryEndpointGroup = new aws.globalaccelerator.EndpointGroup(
-      'secondary-endpoint',
+      'secondary-endpoint-v1',
       {
         listenerArn: listener.id,
         endpointGroupRegion: 'eu-west-1',
@@ -755,16 +755,16 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Secrets Manager in primary region
     const primarySecret = new aws.secretsmanager.Secret(
-      'primary-secret',
+      'primary-secret-v1',
       {
-        name: `trading-db-credentials-${environmentSuffix}-primary`,
+        name: `trading-db-credentials-v1-${environmentSuffix}-primary`,
         description: 'Database credentials for primary region',
       },
       { parent: this }
     );
 
     const _primarySecretVersion = new aws.secretsmanager.SecretVersion(
-      'primary-secret-version',
+      'primary-secret-version-v1',
       {
         secretId: primarySecret.id,
         secretString: JSON.stringify({
@@ -777,16 +777,16 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Secrets Manager in secondary region
     const secondarySecret = new aws.secretsmanager.Secret(
-      'secondary-secret',
+      'secondary-secret-v1',
       {
-        name: `trading-db-credentials-${environmentSuffix}-secondary`,
+        name: `trading-db-credentials-v1-${environmentSuffix}-secondary`,
         description: 'Database credentials for secondary region',
       },
       { provider: euProvider, parent: this }
     );
 
     const _secondarySecretVersion = new aws.secretsmanager.SecretVersion(
-      'secondary-secret-version',
+      'secondary-secret-version-v1',
       {
         secretId: secondarySecret.id,
         secretString: JSON.stringify({
@@ -799,9 +799,9 @@ export class TapStack extends pulumi.ComponentResource {
 
     // CloudWatch Dashboard
     const _dashboard = new aws.cloudwatch.Dashboard(
-      'dashboard',
+      'dashboard-v1',
       {
-        dashboardName: `trading-dashboard-${environmentSuffix}`,
+        dashboardName: `trading-dashboard-v1-${environmentSuffix}`,
         dashboardBody: JSON.stringify({
           widgets: [
             {
