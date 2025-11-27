@@ -1,0 +1,34 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912731",
+  "team": "synth",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "startedAt": "2025-11-26T17:56:27.882936",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "infrastructure-drift",
+    "terraform-state",
+    "compliance",
+    "monitoring"
+  ],
+  "aws_services": [
+    "S3",
+    "DynamoDB",
+    "Config",
+    "Lambda",
+    "EventBridge",
+    "SNS",
+    "IAM",
+    "CloudWatch"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

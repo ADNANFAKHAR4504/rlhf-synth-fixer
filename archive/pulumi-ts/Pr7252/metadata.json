@@ -1,0 +1,31 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "l1o5f4j4",
+  "team": "synth",
+  "startedAt": "2025-11-25T00:00:00.000Z",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "Security, Compliance, and Governance",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "S3",
+    "KMS",
+    "IAM",
+    "CodePipeline",
+    "CodeBuild",
+    "CloudWatch",
+    "SNS",
+    "EventBridge"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

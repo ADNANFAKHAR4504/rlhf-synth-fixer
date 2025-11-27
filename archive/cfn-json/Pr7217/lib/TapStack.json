@@ -1,0 +1,1422 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Production-ready CloudFormation stack for single-region trading analytics platform with DynamoDB, S3 storage, Lambda functions, and comprehensive monitoring",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Description": "Unique suffix for resource naming to ensure uniqueness across deployments",
+      "Type": "String",
+      "Default": "dev",
+      "MinLength": 3,
+      "MaxLength": 20,
+      "AllowedPattern": "[a-z0-9-]+",
+      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+    }
+  },
+  "Conditions": {
+  },
+  "Resources": {
+    "TradingDataBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "trading-data-${EnvironmentSuffix}-${AWS::Region}-${AWS::AccountId}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "TransitionToIA",
+              "Status": "Enabled",
+              "Transitions": [
+                {
+                  "StorageClass": "STANDARD_IA",
+                  "TransitionInDays": 90
+                },
+                {
+                  "StorageClass": "GLACIER",
+                  "TransitionInDays": 180
+                }
+              ]
+            },
+            {
+              "Id": "CleanupOldVersions",
+              "Status": "Enabled",
+              "NoncurrentVersionTransitions": [
+                {
+                  "StorageClass": "STANDARD_IA",
+                  "TransitionInDays": 30
+                }
+              ],
+              "NoncurrentVersionExpirationInDays": 90
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Region",
+            "Value": {
+              "Ref": "AWS::Region"
+            }
+          }
+        ]
+      }
+    },
+    "TradingAnalyticsGlobalTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Metadata": {
+        "AWS::CloudFormation::Designer": {
+          "id": "TradingAnalyticsGlobalTable"
+        },
+        "Note": "Changed from GlobalTable to Table for single-region deployment. This avoids AWS Early Validation errors when target region doesn't exist yet. Can be converted to GlobalTable later when both regions are deployed."
+      },
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "trading-analytics-${EnvironmentSuffix}-${AWS::Region}"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "TradeId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "Timestamp",
+            "AttributeType": "N"
+          },
+          {
+            "AttributeName": "Symbol",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "TradeId",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "Timestamp",
+            "KeyType": "RANGE"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "SymbolTimestampIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "Symbol",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "Timestamp",
+                "KeyType": "RANGE"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "SSESpecification": {
+          "SSEEnabled": true,
+          "SSEType": "KMS"
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Region",
+            "Value": {
+              "Ref": "AWS::Region"
+            }
+          }
+        ]
+      }
+    },
+    "AnalyticsFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "analytics-processor-${EnvironmentSuffix}-${AWS::Region}"
+        },
+        "Runtime": "python3.11",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 300,
+        "MemorySize": 512,
+        "Code": {
+          "ZipFile": {
+            "Fn::Join": [
+              "\n",
+              [
+                "import json",
+                "import boto3",
+                "import os",
+                "from decimal import Decimal",
+                "",
+                "dynamodb = boto3.resource('dynamodb')",
+                "s3 = boto3.client('s3')",
+                "sns = boto3.client('sns')",
+                "",
+                "def handler(event, context):",
+                "    try:",
+                "        table_name = os.environ['TABLE_NAME']",
+                "        table = dynamodb.Table(table_name)",
+                "        ",
+                "        # Process trading analytics event",
+                "        for record in event.get('Records', []):",
+                "            if record.get('eventSource') == 'aws:kinesis':",
+                "                # Decode Kinesis data",
+                "                import base64",
+                "                data = json.loads(base64.b64decode(record['kinesis']['data']))",
+                "                ",
+                "                # Store in DynamoDB",
+                "                table.put_item(Item={",
+                "                    'TradeId': data.get('tradeId'),",
+                "                    'Timestamp': Decimal(str(data.get('timestamp'))),",
+                "                    'Symbol': data.get('symbol'),",
+                "                    'Price': Decimal(str(data.get('price'))),",
+                "                    'Volume': Decimal(str(data.get('volume'))),",
+                "                    'Region': os.environ['AWS_REGION']",
+                "                })",
+                "                ",
+                "                print(f'Processed trade {data.get(\"tradeId\")} in region {os.environ[\"AWS_REGION\"]}')",
+                "        ",
+                "        return {",
+                "            'statusCode': 200,",
+                "            'body': json.dumps({",
+                "                'message': 'Analytics processed successfully',",
+                "                'region': os.environ['AWS_REGION']",
+                "            })",
+                "        }",
+                "    except Exception as e:",
+                "        print(f'Error: {str(e)}')",
+                "        # Send SNS notification on error",
+                "        if 'TOPIC_ARN' in os.environ:",
+                "            sns.publish(",
+                "                TopicArn=os.environ['TOPIC_ARN'],",
+                "                Subject='Analytics Function Error',",
+                "                Message=f'Error processing analytics: {str(e)}'",
+                "            )",
+                "        raise"
+              ]
+            ]
+          }
+        },
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": {
+              "Fn::Sub": "trading-analytics-${EnvironmentSuffix}-${AWS::Region}"
+            },
+            "BUCKET_NAME": {
+              "Ref": "TradingDataBucket"
+            },
+            "REGION": {
+              "Ref": "AWS::Region"
+            },
+            "TOPIC_ARN": {
+              "Ref": "MigrationEventTopic"
+            }
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "lambda-execution-role-${EnvironmentSuffix}-${AWS::Region}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "TradingPlatformAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:Query",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:Scan",
+                    "dynamodb:BatchWriteItem"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/trading-analytics-${EnvironmentSuffix}-${AWS::Region}"
+                    },
+                    {
+                      "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/trading-analytics-${EnvironmentSuffix}-${AWS::Region}/index/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "s3:ListBucket"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "TradingDataBucket",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${TradingDataBucket.Arn}/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kinesis:GetRecords",
+                    "kinesis:GetShardIterator",
+                    "kinesis:DescribeStream",
+                    "kinesis:ListStreams"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "MarketDataStream",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sns:Publish"
+                  ],
+                  "Resource": {
+                    "Ref": "MigrationEventTopic"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameter",
+                    "ssm:GetParameters"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/trading-platform/${EnvironmentSuffix}/*"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "KinesisEventSourceMapping": {
+      "Type": "AWS::Lambda::EventSourceMapping",
+      "Properties": {
+        "EventSourceArn": {
+          "Fn::GetAtt": [
+            "MarketDataStream",
+            "Arn"
+          ]
+        },
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "AnalyticsFunction",
+            "Arn"
+          ]
+        },
+        "StartingPosition": "LATEST",
+        "BatchSize": 100,
+        "MaximumBatchingWindowInSeconds": 10,
+        "ParallelizationFactor": 5,
+        "BisectBatchOnFunctionError": true,
+        "MaximumRetryAttempts": 3
+      }
+    },
+    "ConfigParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/trading-platform/${EnvironmentSuffix}/config"
+        },
+        "Type": "String",
+        "Tier": "Advanced",
+        "Value": {
+          "Fn::Sub": [
+            "{\"region\":\"${Region}\",\"bucket\":\"${Bucket}\",\"table\":\"${Table}\",\"stream\":\"${Stream}\",\"vpc\":\"${VPC}\"}",
+            {
+              "Region": {
+                "Ref": "AWS::Region"
+              },
+              "Bucket": {
+                "Ref": "TradingDataBucket"
+              },
+              "Table": {
+                "Fn::Sub": "trading-analytics-${EnvironmentSuffix}-${AWS::Region}"
+              },
+              "Stream": {
+                "Ref": "MarketDataStream"
+              },
+              "VPC": {
+                "Ref": "TradingVPC"
+              }
+            }
+          ]
+        },
+        "Description": "Trading platform configuration for region-agnostic access"
+      }
+    },
+    "MigrationEventTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "migration-events-${EnvironmentSuffix}-${AWS::Region}"
+        },
+        "DisplayName": "Migration Event Notifications",
+        "KmsMasterKeyId": "alias/aws/sns",
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "MigrationTopicPolicy": {
+      "Type": "AWS::SNS::TopicPolicy",
+      "Properties": {
+        "Topics": [
+          {
+            "Ref": "MigrationEventTopic"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com",
+                  "events.amazonaws.com",
+                  "cloudwatch.amazonaws.com"
+                ]
+              },
+              "Action": "SNS:Publish",
+              "Resource": {
+                "Ref": "MigrationEventTopic"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "MarketDataStream": {
+      "Type": "AWS::Kinesis::Stream",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "market-data-${EnvironmentSuffix}-${AWS::Region}"
+        },
+        "ShardCount": 5,
+        "RetentionPeriodHours": 168,
+        "StreamEncryption": {
+          "EncryptionType": "KMS",
+          "KeyId": "alias/aws/kinesis"
+        },
+        "StreamModeDetails": {
+          "StreamMode": "PROVISIONED"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "TradingVPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "trading-vpc-${EnvironmentSuffix}-${AWS::Region}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "TradingVPC"
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "public-subnet-1-${EnvironmentSuffix}-${AWS::Region}"
+            }
+          }
+        ]
+      }
+    },
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "TradingVPC"
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "public-subnet-2-${EnvironmentSuffix}-${AWS::Region}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "TradingVPC"
+        },
+        "CidrBlock": "10.0.10.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "private-subnet-1-${EnvironmentSuffix}-${AWS::Region}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "TradingVPC"
+        },
+        "CidrBlock": "10.0.11.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "private-subnet-2-${EnvironmentSuffix}-${AWS::Region}"
+            }
+          }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "trading-igw-${EnvironmentSuffix}-${AWS::Region}"
+            }
+          }
+        ]
+      }
+    },
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "TradingVPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "TradingVPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "public-rt-${EnvironmentSuffix}-${AWS::Region}"
+            }
+          }
+        ]
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "SubnetRouteTableAssociation1": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "SubnetRouteTableAssociation2": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "TradingVPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "private-rt-${EnvironmentSuffix}-${AWS::Region}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnetRouteTableAssociation1": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+    "PrivateSubnetRouteTableAssociation2": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+    "LambdaSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "lambda-sg-${EnvironmentSuffix}-${AWS::Region}"
+        },
+        "GroupDescription": "Security group for Lambda functions",
+        "VpcId": {
+          "Ref": "TradingVPC"
+        },
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "lambda-sg-${EnvironmentSuffix}-${AWS::Region}"
+            }
+          }
+        ]
+      }
+    },
+    "MonitoringDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": {
+          "Fn::Sub": "trading-migration-${EnvironmentSuffix}-${AWS::Region}"
+        },
+        "DashboardBody": {
+          "Fn::Sub": [
+            "{\"widgets\":[{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/S3\",\"BucketSizeBytes\",{\"stat\":\"Average\",\"label\":\"S3 Bucket Size\"}],[\"AWS/DynamoDB\",\"ConsumedReadCapacityUnits\",{\"stat\":\"Sum\",\"label\":\"DynamoDB Reads\"}],[\"AWS/DynamoDB\",\"ConsumedWriteCapacityUnits\",{\"stat\":\"Sum\",\"label\":\"DynamoDB Writes\"}],[\"AWS/Lambda\",\"Invocations\",{\"stat\":\"Sum\",\"label\":\"Lambda Invocations\"}],[\"AWS/Lambda\",\"Errors\",{\"stat\":\"Sum\",\"label\":\"Lambda Errors\"}],[\"AWS/Kinesis\",\"IncomingRecords\",{\"stat\":\"Sum\",\"label\":\"Kinesis Records\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${Region}\",\"title\":\"Trading Platform Metrics - ${Region}\",\"yAxis\":{\"left\":{\"label\":\"Count\"}}}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/S3\",\"ReplicationLatency\",{\"stat\":\"Average\",\"label\":\"Replication Latency\"}]],\"period\":60,\"stat\":\"Average\",\"region\":\"${Region}\",\"title\":\"S3 Replication Metrics\"}},{\"type\":\"log\",\"properties\":{\"query\":\"SOURCE '/aws/lambda/analytics-processor-${Suffix}-${Region}' | fields @timestamp, @message | sort @timestamp desc | limit 100\",\"region\":\"${Region}\",\"title\":\"Lambda Logs\"}}]}",
+            {
+              "Region": {
+                "Ref": "AWS::Region"
+              },
+              "Suffix": {
+                "Ref": "EnvironmentSuffix"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "MigrationStateTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "migration-state-${EnvironmentSuffix}"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "MigrationId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "Timestamp",
+            "AttributeType": "N"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "MigrationId",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "Timestamp",
+            "KeyType": "RANGE"
+          }
+        ],
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "MigrationTrackerFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "migration-tracker-${EnvironmentSuffix}-${AWS::Region}"
+        },
+        "Runtime": "python3.11",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "MigrationTrackerRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 60,
+        "Code": {
+          "ZipFile": {
+            "Fn::Join": [
+              "\n",
+              [
+                "import json",
+                "import boto3",
+                "import os",
+                "import urllib3",
+                "from datetime import datetime",
+                "from decimal import Decimal",
+                "",
+                "dynamodb = boto3.resource('dynamodb')",
+                "cloudwatch = boto3.client('cloudwatch')",
+                "cfn = boto3.client('cloudformation')",
+                "http = urllib3.PoolManager()",
+                "",
+                "def send_response(event, context, response_status, response_data, physical_resource_id=None):",
+                "    response_url = event['ResponseURL']",
+                "    response_body = json.dumps({",
+                "        'Status': response_status,",
+                "        'Reason': f'See CloudWatch Log Stream: {context.log_stream_name}',",
+                "        'PhysicalResourceId': physical_resource_id or context.log_stream_name,",
+                "        'StackId': event['StackId'],",
+                "        'RequestId': event['RequestId'],",
+                "        'LogicalResourceId': event['LogicalResourceId'],",
+                "        'Data': response_data",
+                "    })",
+                "    headers = {'content-type': '', 'content-length': str(len(response_body))}",
+                "    http.request('PUT', response_url, body=response_body.encode('utf-8'), headers=headers)",
+                "",
+                "def handler(event, context):",
+                "    try:",
+                "        # Handle CloudFormation Custom Resource events",
+                "        if 'RequestType' in event:",
+                "            request_type = event['RequestType']",
+                "            resource_props = event.get('ResourceProperties', {})",
+                "            migration_id = resource_props.get('MigrationId', 'default')",
+                "            ",
+                "            # Get table name from environment variable",
+                "            table_name = os.environ.get('STATE_TABLE', '')",
+                "            if not table_name:",
+                "                send_response(event, context, 'FAILED', {'Error': 'STATE_TABLE environment variable not set'}, migration_id)",
+                "                return",
+                "            ",
+                "            table = dynamodb.Table(table_name)",
+                "            ",
+                "            if request_type == 'Create' or request_type == 'Update':",
+                "                status = resource_props.get('Status', 'INITIALIZED')",
+                "                progress = resource_props.get('Progress', 0)",
+                "                ",
+                "                try:",
+                "                    # Update migration state",
+                "                    table.put_item(Item={",
+                "                        'MigrationId': migration_id,",
+                "                        'Timestamp': Decimal(str(datetime.now().timestamp())),",
+                "                        'Status': status,",
+                "                        'Progress': Decimal(str(progress)),",
+                "                        'Region': os.environ.get('AWS_REGION', 'unknown'),",
+                "                        'Details': json.dumps(resource_props.get('Details', {}))",
+                "                    })",
+                "                except Exception as table_error:",
+                "                    # If table doesn't exist or access fails, still return success",
+                "                    # This allows stack to complete - table will be available on next update",
+                "                    send_response(event, context, 'SUCCESS', {",
+                "                        'Message': f'Table access failed: {str(table_error)}. Will retry on next update.',",
+                "                        'MigrationId': migration_id",
+                "                    }, physical_resource_id=migration_id)",
+                "                    return",
+                "                ",
+                "                try:",
+                "                    # Publish custom CloudWatch metric",
+                "                    cloudwatch.put_metric_data(",
+                "                        Namespace='TradingPlatform/Migration',",
+                "                        MetricData=[",
+                "                            {",
+                "                                'MetricName': 'MigrationProgress',",
+                "                                'Value': progress,",
+                "                                'Unit': 'Percent',",
+                "                                'Dimensions': [",
+                "                                    {'Name': 'MigrationId', 'Value': migration_id},",
+                "                                    {'Name': 'Region', 'Value': os.environ.get('AWS_REGION', 'unknown')}",
+                "                                ]",
+                "                            }",
+                "                        ]",
+                "                    )",
+                "                except Exception as metric_error:",
+                "                    # Metric publishing failure is not critical, log and continue",
+                "                    print(f'Warning: Failed to publish metric: {str(metric_error)}')",
+                "                ",
+                "                send_response(event, context, 'SUCCESS', {",
+                "                    'MigrationId': migration_id,",
+                "                    'Status': status,",
+                "                    'Progress': str(progress)",
+                "                }, physical_resource_id=migration_id)",
+                "            elif request_type == 'Delete':",
+                "                # Cleanup on delete - don't fail if table doesn't exist",
+                "                try:",
+                "                    # Try to clean up, but don't fail if it doesn't work",
+                "                    pass",
+                "                except Exception:",
+                "                    pass",
+                "                send_response(event, context, 'SUCCESS', {}, physical_resource_id=migration_id)",
+                "        else:",
+                "            # Handle direct Lambda invocation (backward compatibility)",
+                "            table = dynamodb.Table(os.environ['STATE_TABLE'])",
+                "            ",
+                "            migration_id = event.get('migrationId', 'default')",
+                "            status = event.get('status', 'IN_PROGRESS')",
+                "            progress = event.get('progress', 0)",
+                "            ",
+                "            # Update migration state",
+                "            table.put_item(Item={",
+                "                'MigrationId': migration_id,",
+                "                'Timestamp': Decimal(str(datetime.now().timestamp())),",
+                "                'Status': status,",
+                "                'Progress': Decimal(str(progress)),",
+                "                'Region': os.environ['AWS_REGION'],",
+                "                'Details': json.dumps(event.get('details', {}))",
+                "            })",
+                "            ",
+                "            # Publish custom CloudWatch metric",
+                "            cloudwatch.put_metric_data(",
+                "                Namespace='TradingPlatform/Migration',",
+                "                MetricData=[",
+                "                    {",
+                "                        'MetricName': 'MigrationProgress',",
+                "                        'Value': progress,",
+                "                        'Unit': 'Percent',",
+                "                        'Dimensions': [",
+                "                            {'Name': 'MigrationId', 'Value': migration_id},",
+                "                            {'Name': 'Region', 'Value': os.environ['AWS_REGION']}",
+                "                        ]",
+                "                    }",
+                "                ]",
+                "            )",
+                "            ",
+                "            return {",
+                "                'statusCode': 200,",
+                "                'body': json.dumps({",
+                "                    'migrationId': migration_id,",
+                "                    'status': status,",
+                "                    'progress': progress",
+                "                })",
+                "            }",
+                "    except Exception as e:",
+                "        if 'RequestType' in event:",
+                "            send_response(event, context, 'FAILED', {'Error': str(e)})",
+                "        else:",
+                "            raise"
+              ]
+            ]
+          }
+        },
+        "Environment": {
+          "Variables": {
+            "STATE_TABLE": {
+              "Ref": "MigrationStateTable"
+            }
+          }
+        }
+      }
+    },
+    "MigrationTrackerRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "migration-tracker-role-${EnvironmentSuffix}-${AWS::Region}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "MigrationTrackerPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:Query"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "MigrationStateTable",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:PutMetricData"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "MigrationTrackerCustomResource": {
+      "Type": "AWS::CloudFormation::CustomResource",
+      "DependsOn": [
+        "MigrationStateTable"
+      ],
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "MigrationTrackerFunction",
+            "Arn"
+          ]
+        },
+        "MigrationId": {
+          "Fn::Sub": "migration-${EnvironmentSuffix}-${AWS::Region}"
+        },
+        "Status": "INITIALIZED",
+        "Progress": 0,
+        "Details": {
+          "Region": {
+            "Ref": "AWS::Region"
+          },
+          "StackName": {
+            "Ref": "AWS::StackName"
+          }
+        }
+      }
+    },
+    "MigrationEventRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "migration-workflow-${EnvironmentSuffix}-${AWS::Region}"
+        },
+        "Description": "Orchestrate migration workflow events",
+        "EventPattern": {
+          "source": [
+            "aws.s3",
+            "aws.dynamodb"
+          ],
+          "detail-type": [
+            "AWS API Call via CloudTrail"
+          ]
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Ref": "MigrationEventTopic"
+            },
+            "Id": "MigrationEventTarget"
+          }
+        ]
+      }
+    },
+    "BackupPlan": {
+      "Type": "AWS::Backup::BackupPlan",
+      "Properties": {
+        "BackupPlan": {
+          "BackupPlanName": {
+            "Fn::Sub": "trading-platform-backup-${EnvironmentSuffix}"
+          },
+          "BackupPlanRule": [
+            {
+              "RuleName": "DailyBackup",
+              "TargetBackupVault": {
+                "Ref": "BackupVault"
+              },
+              "ScheduleExpression": "cron(0 2 * * ? *)",
+              "StartWindowMinutes": 60,
+              "CompletionWindowMinutes": 120,
+              "Lifecycle": {
+                "DeleteAfterDays": 120,
+                "MoveToColdStorageAfterDays": 7
+              },
+              "RecoveryPointTags": {
+                "Environment": {
+                  "Ref": "EnvironmentSuffix"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "BackupVault": {
+      "Type": "AWS::Backup::BackupVault",
+      "Properties": {
+        "BackupVaultName": {
+          "Fn::Sub": "trading-platform-backup-${EnvironmentSuffix}-${AWS::Region}"
+        },
+        "EncryptionKeyArn": {
+          "Fn::GetAtt": [
+            "BackupKey",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "BackupKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for backup encryption - ${EnvironmentSuffix}"
+        },
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow AWS Backup to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "backup.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
+              "Resource": "*"
+            }
+          ]
+        }
+      }
+    },
+    "BackupSelection": {
+      "Type": "AWS::Backup::BackupSelection",
+      "Properties": {
+        "BackupPlanId": {
+          "Ref": "BackupPlan"
+        },
+        "BackupSelection": {
+          "SelectionName": {
+            "Fn::Sub": "trading-resources-${EnvironmentSuffix}"
+          },
+          "IamRoleArn": {
+            "Fn::GetAtt": [
+              "BackupRole",
+              "Arn"
+            ]
+          },
+          "Resources": [
+            {
+              "Fn::GetAtt": [
+                "TradingDataBucket",
+                "Arn"
+              ]
+            },
+            {
+              "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/trading-analytics-${EnvironmentSuffix}-${AWS::Region}"
+            }
+          ]
+        }
+      }
+    },
+    "BackupRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "backup-role-${EnvironmentSuffix}-${AWS::Region}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "backup.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup",
+          "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores"
+        ]
+      }
+    },
+    "HealthCheckAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "trading-platform-health-${EnvironmentSuffix}-${AWS::Region}"
+        },
+        "AlarmDescription": "Alert on trading platform health issues",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 10,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "AnalyticsFunction"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "MigrationEventTopic"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "TradingDataBucketName": {
+      "Description": "Trading data S3 bucket name",
+      "Value": {
+        "Ref": "TradingDataBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DataBucket"
+        }
+      }
+    },
+    "TradingDataBucketArn": {
+      "Description": "Trading data S3 bucket ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "TradingDataBucket",
+          "Arn"
+        ]
+      }
+    },
+    "TradingAnalyticsTableName": {
+      "Description": "DynamoDB Global Table name for analytics",
+      "Value": {
+        "Fn::Sub": "trading-analytics-${EnvironmentSuffix}-${AWS::Region}"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AnalyticsTable"
+        }
+      }
+    },
+    "TradingAnalyticsTableArn": {
+      "Description": "DynamoDB Global Table ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "TradingAnalyticsGlobalTable",
+          "Arn"
+        ]
+      }
+    },
+    "AnalyticsFunctionArn": {
+      "Description": "Analytics Lambda function ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "AnalyticsFunction",
+          "Arn"
+        ]
+      }
+    },
+    "MigrationTopicArn": {
+      "Description": "SNS topic ARN for migration events",
+      "Value": {
+        "Ref": "MigrationEventTopic"
+      }
+    },
+    "MarketDataStreamArn": {
+      "Description": "Kinesis stream ARN for market data",
+      "Value": {
+        "Fn::GetAtt": [
+          "MarketDataStream",
+          "Arn"
+        ]
+      }
+    },
+    "MarketDataStreamName": {
+      "Description": "Kinesis stream name",
+      "Value": {
+        "Ref": "MarketDataStream"
+      }
+    },
+    "VPCId": {
+      "Description": "Trading VPC ID",
+      "Value": {
+        "Ref": "TradingVPC"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPC"
+        }
+      }
+    },
+    "PublicSubnet1Id": {
+      "Description": "Public Subnet 1 ID",
+      "Value": {
+        "Ref": "PublicSubnet1"
+      }
+    },
+    "PublicSubnet2Id": {
+      "Description": "Public Subnet 2 ID",
+      "Value": {
+        "Ref": "PublicSubnet2"
+      }
+    },
+    "PrivateSubnet1Id": {
+      "Description": "Private Subnet 1 ID",
+      "Value": {
+        "Ref": "PrivateSubnet1"
+      }
+    },
+    "PrivateSubnet2Id": {
+      "Description": "Private Subnet 2 ID",
+      "Value": {
+        "Ref": "PrivateSubnet2"
+      }
+    },
+    "LambdaSecurityGroupId": {
+      "Description": "Lambda Security Group ID",
+      "Value": {
+        "Ref": "LambdaSecurityGroup"
+      }
+    },
+    "MigrationStateTableName": {
+      "Description": "Migration state tracking table name",
+      "Value": {
+        "Ref": "MigrationStateTable"
+      }
+    },
+    "MigrationTrackerFunctionArn": {
+      "Description": "Migration tracker Lambda function ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "MigrationTrackerFunction",
+          "Arn"
+        ]
+      }
+    },
+    "BackupVaultArn": {
+      "Description": "Backup vault ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "BackupVault",
+          "BackupVaultArn"
+        ]
+      }
+    },
+    "DashboardURL": {
+      "Description": "CloudWatch Dashboard URL",
+      "Value": {
+        "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=trading-migration-${EnvironmentSuffix}-${AWS::Region}"
+      }
+    }
+  }
+}

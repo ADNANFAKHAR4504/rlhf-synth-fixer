@@ -1,0 +1,38 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349093",
+  "team": "3",
+  "startedAt": "2025-11-24T09:46:15.148Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "aws_services": [
+    "LogsKmsKey",
+    "LogsKmsAlias",
+    "OrchestratorLogGroup",
+    "MetricFilterErrors",
+    "MetricFilterThrottles",
+    "AlarmErrors",
+    "AlarmThrottles",
+    "LambdaExecutionRole",
+    "StepFunctionsRole",
+    "OrchestratorRole",
+    "TemplateDiffLambda",
+    "PreChecksLambda",
+    "ApplyChangeLambda",
+    "PostChecksLambda",
+    "RollbackLambda",
+    "MigrationStateMachine",
+    "LogsDeliveryRole"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
+}
