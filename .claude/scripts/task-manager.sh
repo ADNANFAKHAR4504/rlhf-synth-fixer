@@ -125,8 +125,50 @@ parse_csv() {
     ' "$CSV_FILE"
 }
 
-# Backup
-backup() { cp -f "$CSV_FILE" "$BACKUP_FILE" && log_info "Backup created"; }
+# Backup with validation and rotation (keeps last 3 backups)
+backup() {
+    # Rotate existing backups (keep last 3)
+    if [ -f "${BACKUP_FILE}.2" ]; then
+        mv -f "${BACKUP_FILE}.2" "${BACKUP_FILE}.3" 2>/dev/null || true
+    fi
+    if [ -f "${BACKUP_FILE}.1" ]; then
+        mv -f "${BACKUP_FILE}.1" "${BACKUP_FILE}.2" 2>/dev/null || true
+    fi
+    if [ -f "$BACKUP_FILE" ]; then
+        mv -f "$BACKUP_FILE" "${BACKUP_FILE}.1" 2>/dev/null || true
+    fi
+
+    # Create new backup atomically using temp file
+    local temp_backup
+    temp_backup=$(mktemp)
+
+    cp -f "$CSV_FILE" "$temp_backup" || {
+        log_error "Backup creation failed"
+        rm -f "$temp_backup"
+        return 1
+    }
+
+    # Validate backup integrity (row count check)
+    local csv_rows backup_rows
+    csv_rows=$(wc -l < "$CSV_FILE" | tr -d ' ')
+    backup_rows=$(wc -l < "$temp_backup" | tr -d ' ')
+
+    if [ "$csv_rows" -ne "$backup_rows" ]; then
+        log_error "Backup validation failed: CSV=$csv_rows rows, backup=$backup_rows rows"
+        rm -f "$temp_backup"
+        return 1
+    fi
+
+    # Move validated backup into place (atomic)
+    mv "$temp_backup" "$BACKUP_FILE" || {
+        log_error "Failed to move backup into place"
+        rm -f "$temp_backup"
+        return 1
+    }
+
+    log_info "Backup created and validated ($backup_rows rows)"
+    return 0
+}
 
 # Validate row count
 validate() {
@@ -350,6 +392,13 @@ select_and_update() {
 
     # Ensure lock is released on exit
     trap "release_lock" EXIT INT TERM
+
+    # Defensive backup before any operation
+    backup || {
+        log_error "Pre-selection backup failed"
+        release_lock
+        exit 1
+    }
 
     # Critical section - select and update atomically
     task_json=$(select_task) || exit_code=$?

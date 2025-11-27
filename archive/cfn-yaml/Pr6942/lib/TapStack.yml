@@ -1,0 +1,1897 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Production-grade automated EMR-based data processing pipeline for financial transaction fraud detection - Region-agnostic deployment'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Environment Configuration
+        Parameters:
+          - Environment
+          - ProjectName
+      - Label:
+          default: Network Configuration
+        Parameters:
+          - VpcCidr
+          - PublicSubnet1Cidr
+          - PublicSubnet2Cidr
+          - PrivateSubnet1Cidr
+          - PrivateSubnet2Cidr
+      - Label:
+          default: EMR Configuration
+        Parameters:
+          - EMRReleaseLabel
+          - MasterInstanceType
+          - CoreInstanceType
+          - TaskInstanceType
+          - TaskNodeMinCapacity
+          - TaskNodeMaxCapacity
+          - YARNScaleOutThreshold
+          - YARNScaleInThreshold
+      - Label:
+          default: Data Lifecycle Configuration
+        Parameters:
+          - DataRetentionDays
+          - GlacierTransitionDays
+          - LogRetentionDays
+      - Label:
+          default: Notification Configuration
+        Parameters:
+          - NotificationEmail
+          - MaxRetryAttempts
+
+Parameters:
+  Environment:
+    Type: String
+    Default: 'production'
+    AllowedValues:
+      - development
+      - staging
+      - production
+    Description: Environment name for resource tagging
+
+  ProjectName:
+    Type: String
+    Default: 'emr-pipeline'
+    Description: Project name prefix for all resources
+    MinLength: 3
+    MaxLength: 20
+    AllowedPattern: '^[a-z][a-z0-9-]*$'
+  
+  VpcCidr:
+    Type: String
+    Default: '10.0.0.0/16'
+    Description: CIDR block for VPC
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])/[0-9]+$'
+  
+  PublicSubnet1Cidr:
+    Type: String
+    Default: '10.0.0.0/24'
+    Description: CIDR block for public subnet 1
+  
+  PublicSubnet2Cidr:
+    Type: String
+    Default: '10.0.1.0/24'
+    Description: CIDR block for public subnet 2
+  
+  PrivateSubnet1Cidr:
+    Type: String
+    Default: '10.0.10.0/24'
+    Description: CIDR block for private subnet 1
+  
+  PrivateSubnet2Cidr:
+    Type: String
+    Default: '10.0.11.0/24'
+    Description: CIDR block for private subnet 2
+
+  EMRReleaseLabel:
+    Type: String
+    Default: 'emr-6.9.0'
+    Description: EMR release version (must be 6.9.0 or later)
+    AllowedPattern: '^emr-6\.(9|[1-9][0-9])\.[0-9]+$'
+
+  MasterInstanceType:
+    Type: String
+    Default: 'm5.xlarge'
+    Description: Instance type for EMR master node
+    AllowedValues:
+      - m5.xlarge
+      - m5.2xlarge
+      - m5.4xlarge
+
+  CoreInstanceType:
+    Type: String
+    Default: 'm4.xlarge'
+    Description: Instance type for EMR core nodes
+    AllowedValues:
+      - m4.xlarge
+      - m4.2xlarge
+      - m4.4xlarge
+
+  TaskInstanceType:
+    Type: String
+    Default: 'm4.xlarge'
+    Description: Instance type for EMR task nodes
+    AllowedValues:
+      - m4.xlarge
+      - m4.2xlarge
+      - m4.4xlarge
+
+  TaskNodeMinCapacity:
+    Type: Number
+    Default: 1
+    MinValue: 0
+    MaxValue: 10
+    Description: Minimum number of task nodes
+
+  TaskNodeMaxCapacity:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    MaxValue: 100
+    Description: Maximum number of task nodes
+
+  YARNScaleOutThreshold:
+    Type: Number
+    Default: 25
+    MinValue: 10
+    MaxValue: 50
+    Description: YARN memory percentage threshold for scaling out
+
+  YARNScaleInThreshold:
+    Type: Number
+    Default: 75
+    MinValue: 50
+    MaxValue: 90
+    Description: YARN memory percentage threshold for scaling in
+
+  DataRetentionDays:
+    Type: Number
+    Default: 2555
+    MinValue: 365
+    MaxValue: 3650
+    Description: Data retention period in days (7 years = 2555 days)
+
+  GlacierTransitionDays:
+    Type: Number
+    Default: 90
+    MinValue: 30
+    MaxValue: 365
+    Description: Days before transitioning data to Glacier
+
+  LogRetentionDays:
+    Type: Number
+    Default: 30
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+    Description: CloudWatch log retention period
+
+  NotificationEmail:
+    Type: String
+    Default: 'alerts@example.com'
+    Description: Email address for job notifications
+    AllowedPattern: '^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+
+  MaxRetryAttempts:
+    Type: Number
+    Default: 5
+    MinValue: 1
+    MaxValue: 10
+    Description: Maximum retry attempts for Step Functions
+
+Conditions:
+  IsProduction: !Equals [!Ref Environment, 'production']
+  CreateTaskNodes: !Not [!Equals [!Ref TaskNodeMinCapacity, 0]]
+
+Resources:
+  # ==================== NETWORKING RESOURCES ====================
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-vpc'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # Internet Gateway for public subnets
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-igw'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Public Subnets for NAT Gateways
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Ref PublicSubnet1Cidr
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-public-subnet-1'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Ref PublicSubnet2Cidr
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-public-subnet-2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # Private Subnets for EMR
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Ref PrivateSubnet1Cidr
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-private-subnet-1'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Ref PrivateSubnet2Cidr
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-private-subnet-2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # Elastic IPs for NAT Gateways
+  NATGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-nat-eip-1'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  NATGateway2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-nat-eip-2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # NAT Gateways
+  NATGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-nat-1'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  NATGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-nat-2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # Route Tables
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-public-rt'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-private-rt-1'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  PrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway1
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-private-rt-2'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  PrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway2
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable2
+
+  # VPC Flow logs
+  VPCFlowLogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: CloudWatchLogPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'logs:DescribeLogGroups'
+                  - 'logs:DescribeLogStreams'
+                Resource: '*'
+      Tags:
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  VPCFlowLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: !Ref LogRetentionDays
+
+  VPCFlowLog:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      ResourceType: VPC
+      ResourceId: !Ref VPC
+      TrafficType: ALL
+      LogDestinationType: cloud-watch-logs
+      LogGroupName: !Ref VPCFlowLogGroup
+      DeliverLogsPermissionArn: !GetAtt VPCFlowLogRole.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-flow-log'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # VPC Endpoints for AWS services
+  S3VPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      RouteTableIds:
+        - !Ref PrivateRouteTable1
+        - !Ref PrivateRouteTable2
+      VpcEndpointType: Gateway
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action:
+              - 's3:*'
+            Resource: '*'
+
+  DynamoDBVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.dynamodb'
+      RouteTableIds:
+        - !Ref PrivateRouteTable1
+        - !Ref PrivateRouteTable2
+      VpcEndpointType: Gateway
+
+  # Security Groups
+  EMRMasterSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for EMR master node
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-emr-master-sg'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  EMRSlaveSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for EMR slave nodes
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-emr-slave-sg'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  EMRServiceAccessSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for EMR service access
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-emr-service-sg'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # Security group ingress rules for EMR communication
+  EMRMasterIngressFromSlave:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EMRMasterSecurityGroup
+      IpProtocol: -1
+      SourceSecurityGroupId: !Ref EMRSlaveSecurityGroup
+
+  EMRMasterIngressFromMaster:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EMRMasterSecurityGroup
+      IpProtocol: -1
+      SourceSecurityGroupId: !Ref EMRMasterSecurityGroup
+
+  EMRMasterIngressFromService:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EMRMasterSecurityGroup
+      IpProtocol: tcp
+      FromPort: 8443
+      ToPort: 8443
+      SourceSecurityGroupId: !Ref EMRServiceAccessSecurityGroup
+
+  EMRSlaveIngressFromMaster:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EMRSlaveSecurityGroup
+      IpProtocol: -1
+      SourceSecurityGroupId: !Ref EMRMasterSecurityGroup
+
+  EMRSlaveIngressFromSlave:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EMRSlaveSecurityGroup
+      IpProtocol: -1
+      SourceSecurityGroupId: !Ref EMRSlaveSecurityGroup
+
+  EMRSlaveIngressFromService:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EMRSlaveSecurityGroup
+      IpProtocol: tcp
+      FromPort: 8443
+      ToPort: 8443
+      SourceSecurityGroupId: !Ref EMRServiceAccessSecurityGroup
+
+  EMRServiceIngressFromMaster:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EMRServiceAccessSecurityGroup
+      IpProtocol: tcp
+      FromPort: 9443
+      ToPort: 9443
+      SourceSecurityGroupId: !Ref EMRMasterSecurityGroup
+
+  # ==================== KMS ENCRYPTION KEY ====================
+  KMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub 'KMS key for ${ProjectName} EMR cluster and S3 encryption'
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow EMR services to use the key
+            Effect: Allow
+            Principal:
+              Service:
+                - elasticmapreduce.amazonaws.com
+                - ec2.amazonaws.com
+                - s3.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:Encrypt'
+              - 'kms:GenerateDataKey'
+              - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+              - 'kms:ListGrants'
+              - 'kms:RevokeGrant'
+            Resource: '*'
+          - Sid: Allow CloudWatch Logs to use the key
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+              - 'kms:DescribeKey'
+            Resource: '*'
+      Tags:
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  KMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${ProjectName}-${Environment}-kms'
+      TargetKeyId: !Ref KMSKey
+
+  # ==================== GLUE DATA CATALOG ====================
+  GlueDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: !Sub '${ProjectName}_${Environment}_database'
+        Description: !Sub 'Glue database for ${ProjectName} EMR processing'
+
+  # ==================== S3 BUCKETS ====================
+  RawDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-${Environment}-raw-${AWS::AccountId}-${AWS::Region}'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !Ref KMSKey
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToGlacier
+            Status: Enabled
+            Transitions:
+              - StorageClass: GLACIER
+                TransitionInDays: !Ref GlacierTransitionDays
+            ExpirationInDays: !Ref DataRetentionDays
+          - Id: DeleteIncompleteMultipartUpload
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: 's3:ObjectCreated:*'
+            Function: !GetAtt S3EventProcessorFunction.Arn
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: transactions/
+                  - Name: suffix
+                    Value: .parquet
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+        - Key: DataClassification
+          Value: 'Sensitive'
+
+  ProcessedDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-${Environment}-processed-${AWS::AccountId}-${AWS::Region}'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !Ref KMSKey
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToGlacier
+            Status: Enabled
+            Transitions:
+              - StorageClass: GLACIER
+                TransitionInDays: !Ref GlacierTransitionDays
+            ExpirationInDays: !Ref DataRetentionDays
+          - Id: DeleteIncompleteMultipartUpload
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+        - Key: DataClassification
+          Value: 'Sensitive'
+
+  EMRLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-${Environment}-emr-logs-${AWS::AccountId}-${AWS::Region}'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !Ref KMSKey
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  ScriptsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-${Environment}-scripts-${AWS::AccountId}-${AWS::Region}'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !Ref KMSKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # ==================== IAM ROLES ====================
+  EMRServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: elasticmapreduce.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonElasticMapReduceRole'
+      Policies:
+        - PolicyName: KMSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'kms:CreateGrant'
+                  - 'kms:Decrypt'
+                  - 'kms:Encrypt'
+                  - 'kms:GenerateDataKey'
+                  - 'kms:DescribeKey'
+                Resource: !GetAtt KMSKey.Arn
+              - Effect: Allow
+                Action:
+                  - 'ec2:CreateNetworkInterface'
+                  - 'ec2:DescribeNetworkInterfaces'
+                  - 'ec2:DeleteNetworkInterface'
+                  - 'ec2:DescribeSecurityGroups'
+                  - 'ec2:DescribeSubnets'
+                  - 'ec2:DescribeVpcs'
+                  - 'ec2:CreateTags'
+                  - 'ec2:DescribeRouteTables'
+                Resource: '*'
+      Tags:
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  EMRInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EMRInstanceRole
+
+  EMRInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonElasticMapReduceforEC2Role'
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                  - 's3:DeleteObject'
+                  - 's3:ListBucket'
+                  - 's3:GetBucketLocation'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${ProjectName}-${Environment}-*'
+                  - !Sub 'arn:aws:s3:::${ProjectName}-${Environment}-*/*'
+                  - 'arn:aws:s3:::aws-logs-*'
+                  - 'arn:aws:s3:::aws-logs-*/*'
+        - PolicyName: KMSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:Encrypt'
+                  - 'kms:GenerateDataKey'
+                  - 'kms:DescribeKey'
+                Resource: !GetAtt KMSKey.Arn
+        - PolicyName: GlueAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'glue:GetDatabase'
+                  - 'glue:GetTable'
+                  - 'glue:GetTables'
+                  - 'glue:CreateTable'
+                  - 'glue:UpdateTable'
+                  - 'glue:DeleteTable'
+                  - 'glue:GetPartition'
+                  - 'glue:GetPartitions'
+                  - 'glue:CreatePartition'
+                  - 'glue:UpdatePartition'
+                  - 'glue:DeletePartition'
+                Resource: '*'
+      Tags:
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  EMRAutoScalingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - elasticmapreduce.amazonaws.com
+                - application-autoscaling.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonElasticMapReduceforAutoScalingRole'
+      Tags:
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole'
+      Policies:
+        - PolicyName: LambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+              - Effect: Allow
+                Action:
+                  - 'elasticmapreduce:DescribeCluster'
+                  - 'elasticmapreduce:DescribeStep'
+                  - 'elasticmapreduce:ListSteps'
+                  - 'elasticmapreduce:AddJobFlowSteps'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'cloudwatch:PutMetricData'
+                  - 'cloudwatch:GetMetricStatistics'
+                  - 'cloudwatch:ListMetrics'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'sns:Publish'
+                Resource: !Ref SNSTopic
+              - Effect: Allow
+                Action:
+                  - 'states:StartExecution'
+                Resource: !Sub 'arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:${ProjectName}-${Environment}-pipeline'
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                  - 's3:GetBucketLocation'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${ProjectName}-${Environment}-raw-${AWS::AccountId}-${AWS::Region}'
+                  - !Sub 'arn:aws:s3:::${ProjectName}-${Environment}-raw-${AWS::AccountId}-${AWS::Region}/*'
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:GenerateDataKey'
+                Resource: !GetAtt KMSKey.Arn
+      Tags:
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  StepFunctionsExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: StepFunctionsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'elasticmapreduce:AddJobFlowSteps'
+                  - 'elasticmapreduce:DescribeCluster'
+                  - 'elasticmapreduce:DescribeStep'
+                  - 'elasticmapreduce:ListSteps'
+                  - 'elasticmapreduce:CancelSteps'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'lambda:InvokeFunction'
+                Resource:
+                  - !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${ProjectName}-${Environment}-*'
+              - Effect: Allow
+                Action:
+                  - 'sns:Publish'
+                Resource: !Ref SNSTopic
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogDelivery'
+                  - 'logs:GetLogDelivery'
+                  - 'logs:UpdateLogDelivery'
+                  - 'logs:DeleteLogDelivery'
+                  - 'logs:ListLogDeliveries'
+                  - 'logs:PutResourcePolicy'
+                  - 'logs:DescribeResourcePolicies'
+                  - 'logs:DescribeLogGroups'
+                Resource: '*'
+      Tags:
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # ==================== SNS TOPIC ====================
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${ProjectName}-${Environment}-notifications'
+      DisplayName: EMR Pipeline Notifications
+      KmsMasterKeyId: !Ref KMSKey
+      Subscription:
+        - Endpoint: !Ref NotificationEmail
+          Protocol: email
+      Tags:
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # ==================== LAMBDA FUNCTIONS ====================
+  JobMonitoringFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-${Environment}-job-monitoring'
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      Environment:
+        Variables:
+          SNS_TOPIC_ARN: !Ref SNSTopic
+          ENVIRONMENT: !Ref Environment
+          PROJECT_NAME: !Ref ProjectName
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime
+          import logging
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          emr = boto3.client('elasticmapreduce')
+          sns = boto3.client('sns')
+          cloudwatch = boto3.client('cloudwatch')
+
+          def lambda_handler(event, context):
+              cluster_id = event.get('ClusterId')
+              step_id = event.get('StepId', None)
+              project_name = os.environ['PROJECT_NAME']
+              environment = os.environ['ENVIRONMENT']
+              
+              try:
+                  if step_id:
+                      response = emr.describe_step(
+                          ClusterId=cluster_id,
+                          StepId=step_id
+                      )
+                      step_state = response['Step']['Status']['State']
+                      step_name = response['Step']['Name']
+                      
+                      # Send custom metrics
+                      cloudwatch.put_metric_data(
+                          Namespace=f'{project_name}/{environment}/EMRPipeline',
+                          MetricData=[
+                              {
+                                  'MetricName': 'StepStatus',
+                                  'Value': 1 if step_state == 'COMPLETED' else 0,
+                                  'Unit': 'None',
+                                  'Timestamp': datetime.now(),
+                                  'Dimensions': [
+                                      {'Name': 'ClusterId', 'Value': cluster_id},
+                                      {'Name': 'StepName', 'Value': step_name}
+                                  ]
+                              }
+                          ]
+                      )
+                      
+                      if step_state in ['FAILED', 'CANCELLED']:
+                          message = {
+                              'ClusterId': cluster_id,
+                              'StepId': step_id,
+                              'StepName': step_name,
+                              'Status': step_state,
+                              'Timestamp': datetime.now().isoformat(),
+                              'Environment': environment
+                          }
+                          
+                          sns.publish(
+                              TopicArn=os.environ['SNS_TOPIC_ARN'],
+                              Subject=f'[{environment}] EMR Step Failed: {step_name}',
+                              Message=json.dumps(message, indent=2)
+                          )
+                          
+                          logger.error(f"Step {step_id} failed on cluster {cluster_id}")
+                          return {
+                              'statusCode': 200,
+                              'body': json.dumps({'status': 'failed', 'details': message})
+                          }
+                      
+                      return {
+                          'statusCode': 200,
+                          'body': json.dumps({
+                              'status': step_state.lower(),
+                              'clusterId': cluster_id,
+                              'stepId': step_id
+                          })
+                      }
+                  else:
+                      response = emr.describe_cluster(ClusterId=cluster_id)
+                      cluster_state = response['Cluster']['Status']['State']
+                      
+                      # Send cluster status metric
+                      cloudwatch.put_metric_data(
+                          Namespace=f'{project_name}/{environment}/EMRPipeline',
+                          MetricData=[
+                              {
+                                  'MetricName': 'ClusterStatus',
+                                  'Value': 1 if cluster_state in ['WAITING', 'RUNNING'] else 0,
+                                  'Unit': 'None',
+                                  'Timestamp': datetime.now(),
+                                  'Dimensions': [
+                                      {'Name': 'ClusterId', 'Value': cluster_id}
+                                  ]
+                              }
+                          ]
+                      )
+                      
+                      return {
+                          'statusCode': 200,
+                          'body': json.dumps({
+                              'status': cluster_state.lower(),
+                              'clusterId': cluster_id
+                          })
+                      }
+                      
+              except Exception as e:
+                  logger.error(f"Error monitoring job: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': str(e)})
+                  }
+      Tags:
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  MetricsCollectorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-${Environment}-metrics-collector'
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      Environment:
+        Variables:
+          PROJECT_NAME: !Ref ProjectName
+          ENVIRONMENT: !Ref Environment
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime
+          import logging
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          cloudwatch = boto3.client('cloudwatch')
+          s3 = boto3.client('s3')
+
+          def lambda_handler(event, context):
+              start_time = event.get('StartTime')
+              end_time = datetime.now().isoformat()
+              data_volume = event.get('DataVolume', 0)
+              cluster_id = event.get('ClusterId')
+              project_name = os.environ['PROJECT_NAME']
+              environment = os.environ['ENVIRONMENT']
+              
+              metrics_data = []
+              
+              if start_time:
+                  try:
+                      start_dt = datetime.fromisoformat(start_time)
+                      end_dt = datetime.fromisoformat(end_time)
+                      duration_seconds = (end_dt - start_dt).total_seconds()
+                      
+                      metrics_data.extend([
+                          {
+                              'MetricName': 'JobDuration',
+                              'Value': duration_seconds,
+                              'Unit': 'Seconds',
+                              'Timestamp': datetime.now(),
+                              'Dimensions': [
+                                  {'Name': 'ClusterId', 'Value': cluster_id or 'unknown'},
+                                  {'Name': 'Environment', 'Value': environment}
+                              ]
+                          },
+                          {
+                              'MetricName': 'DataVolumeProcessed',
+                              'Value': data_volume,
+                              'Unit': 'Bytes',
+                              'Timestamp': datetime.now(),
+                              'Dimensions': [
+                                  {'Name': 'ClusterId', 'Value': cluster_id or 'unknown'},
+                                  {'Name': 'Environment', 'Value': environment}
+                              ]
+                          }
+                      ])
+                      
+                      if data_volume > 0 and duration_seconds > 0:
+                          throughput = data_volume / duration_seconds
+                          metrics_data.append({
+                              'MetricName': 'ProcessingThroughput',
+                              'Value': throughput,
+                              'Unit': 'Bytes/Second',
+                              'Timestamp': datetime.now(),
+                              'Dimensions': [
+                                  {'Name': 'ClusterId', 'Value': cluster_id or 'unknown'},
+                                  {'Name': 'Environment', 'Value': environment}
+                              ]
+                          })
+                      
+                      # Send metrics
+                      cloudwatch.put_metric_data(
+                          Namespace=f'{project_name}/{environment}/EMRPipeline',
+                          MetricData=metrics_data
+                      )
+                      
+                      logger.info(f"Sent {len(metrics_data)} metrics to CloudWatch")
+                      
+                  except Exception as e:
+                      logger.error(f"Error calculating metrics: {str(e)}")
+                      return {
+                          'statusCode': 500,
+                          'body': json.dumps({'error': str(e)})
+                      }
+              
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps({
+                      'metrics_sent': True,
+                      'metrics_count': len(metrics_data),
+                      'end_time': end_time
+                  })
+              }
+      Tags:
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  S3EventProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-${Environment}-s3-event-processor'
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      Environment:
+        Variables:
+          STATE_MACHINE_ARN: !Sub 'arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:${ProjectName}-${Environment}-pipeline'
+          ENVIRONMENT: !Ref Environment
+          PROJECT_NAME: !Ref ProjectName
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime
+          import logging
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          sfn = boto3.client('stepfunctions')
+
+          def lambda_handler(event, context):
+              state_machine_arn = os.environ['STATE_MACHINE_ARN']
+              environment = os.environ['ENVIRONMENT']
+              
+              for record in event['Records']:
+                  bucket = record['s3']['bucket']['name']
+                  key = record['s3']['object']['key']
+                  size = record['s3']['object']['size']
+                  event_time = record['eventTime']
+                  
+                  # Prevent recursive triggers
+                  if 'processed/' in key or 'logs/' in key:
+                      logger.info(f"Skipping already processed or log file: {key}")
+                      continue
+                  
+                  input_data = {
+                      'Bucket': bucket,
+                      'Key': key,
+                      'Size': size,
+                      'Timestamp': event_time,
+                      'StartTime': datetime.now().isoformat(),
+                      'ProcessingType': 'realtime',
+                      'DataVolume': size,
+                      'Environment': environment
+                  }
+                  
+                  try:
+                      execution_name = f"s3-{datetime.now().strftime('%Y%m%d%H%M%S')}-{key.replace('/', '-')[:50]}"
+                      
+                      response = sfn.start_execution(
+                          stateMachineArn=state_machine_arn,
+                          name=execution_name,
+                          input=json.dumps(input_data)
+                      )
+                      logger.info(f"Started execution: {response['executionArn']}")
+                  except sfn.exceptions.ExecutionAlreadyExists:
+                      logger.warning(f"Execution already exists for {key}")
+                  except Exception as e:
+                      logger.error(f"Error starting execution: {str(e)}")
+                      raise
+              
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps('Processing started')
+              }
+      Tags:
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  S3EventPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt S3EventProcessorFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub 'arn:aws:s3:::${ProjectName}-${Environment}-raw-${AWS::AccountId}-${AWS::Region}'
+
+  # ==================== CLOUDWATCH LOG GROUPS ====================
+  EMRLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/emr/${ProjectName}-${Environment}'
+      RetentionInDays: !Ref LogRetentionDays
+
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ProjectName}-${Environment}'
+      RetentionInDays: !Ref LogRetentionDays
+
+  StepFunctionsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/stepfunctions/${ProjectName}-${Environment}'
+      RetentionInDays: !Ref LogRetentionDays
+
+  EMRSecurityConfiguration:
+    Type: AWS::EMR::SecurityConfiguration
+    Properties:
+      SecurityConfiguration: !Join
+        - ''
+        - - '{"EncryptionConfiguration":{"EnableInTransitEncryption":false,"EnableAtRestEncryption":true,"AtRestEncryptionConfiguration":{"S3EncryptionConfiguration":{"EncryptionMode":"SSE-KMS","AwsKmsKey":"'
+          - !GetAtt KMSKey.Arn
+          - '"},"LocalDiskEncryptionConfiguration":{"EncryptionKeyProviderType":"AwsKms","AwsKmsKey":"'
+          - !GetAtt KMSKey.Arn
+          - '"}}}}'
+
+  # ==================== EMR CLUSTER ====================
+  EMRCluster:
+    Type: AWS::EMR::Cluster
+    DependsOn:
+      - NATGateway1
+      - NATGateway2
+      - PrivateRoute1
+      - PrivateRoute2
+    Properties:
+      Name: !Sub '${ProjectName}-${Environment}-emr-cluster'
+      ReleaseLabel: !Ref EMRReleaseLabel
+      Applications:
+        - Name: Spark
+        - Name: Hive
+        - Name: Ganglia
+      ServiceRole: !GetAtt EMRServiceRole.Arn
+      JobFlowRole: !Ref EMRInstanceProfile
+      AutoScalingRole: !GetAtt EMRAutoScalingRole.Arn
+      VisibleToAllUsers: true
+      LogUri: !Sub 's3://${EMRLogsBucket}/logs/'
+      Instances:
+        Ec2SubnetId: !Ref PrivateSubnet1
+        MasterInstanceGroup:
+          InstanceCount: 1
+          InstanceType: !Ref MasterInstanceType
+          Market: ON_DEMAND
+          Name: MasterNode
+        CoreInstanceGroup:
+          InstanceCount: 2
+          InstanceType: !Ref CoreInstanceType
+          Market: ON_DEMAND
+          Name: CoreNodes
+          AutoScalingPolicy:
+            Constraints:
+              MinCapacity: 2
+              MaxCapacity: 10
+            Rules:
+              - Name: CoreScaleOut
+                Action:
+                  SimpleScalingPolicyConfiguration:
+                    AdjustmentType: CHANGE_IN_CAPACITY
+                    ScalingAdjustment: 2
+                    CoolDown: 300
+                Trigger:
+                  CloudWatchAlarmDefinition:
+                    ComparisonOperator: LESS_THAN
+                    EvaluationPeriods: 1
+                    MetricName: YARNMemoryAvailablePercentage
+                    Namespace: AWS/ElasticMapReduce
+                    Period: 300
+                    Statistic: AVERAGE
+                    Threshold: !Ref YARNScaleOutThreshold
+                    Unit: PERCENT
+              - Name: CoreScaleIn
+                Action:
+                  SimpleScalingPolicyConfiguration:
+                    AdjustmentType: CHANGE_IN_CAPACITY
+                    ScalingAdjustment: -1
+                    CoolDown: 300
+                Trigger:
+                  CloudWatchAlarmDefinition:
+                    ComparisonOperator: GREATER_THAN
+                    EvaluationPeriods: 1
+                    MetricName: YARNMemoryAvailablePercentage
+                    Namespace: AWS/ElasticMapReduce
+                    Period: 300
+                    Statistic: AVERAGE
+                    Threshold: !Ref YARNScaleInThreshold
+                    Unit: PERCENT
+        EmrManagedMasterSecurityGroup: !Ref EMRMasterSecurityGroup
+        EmrManagedSlaveSecurityGroup: !Ref EMRSlaveSecurityGroup
+        ServiceAccessSecurityGroup: !Ref EMRServiceAccessSecurityGroup
+        KeepJobFlowAliveWhenNoSteps: true
+        TerminationProtected: !If [IsProduction, true, false]
+      Configurations:
+        - Classification: spark
+          ConfigurationProperties:
+            spark.dynamicAllocation.enabled: 'true'
+            spark.shuffle.service.enabled: 'true'
+            spark.sql.adaptive.enabled: 'true'
+            spark.sql.adaptive.coalescePartitions.enabled: 'true'
+            spark.serializer: 'org.apache.spark.serializer.KryoSerializer'
+            spark.kryoserializer.buffer.max: '1024m'
+        - Classification: spark-defaults
+          ConfigurationProperties:
+            spark.history.fs.logDirectory: !Sub 's3://${EMRLogsBucket}/spark-logs/'
+            spark.eventLog.enabled: 'true'
+            spark.eventLog.dir: !Sub 's3://${EMRLogsBucket}/spark-events/'
+        - Classification: hive-site
+          ConfigurationProperties:
+            hive.metastore.client.factory.class: 'com.amazonaws.glue.catalog.metastore.AWSGlueDataCatalogHiveClientFactory'
+            hive.metastore.glue.catalogid: !Ref AWS::AccountId
+            hive.exec.compress.output: 'true'
+            hive.exec.compress.intermediate: 'true'
+        - Classification: emrfs-site
+          ConfigurationProperties:
+            fs.s3.serverSideEncryption.kms.keyId: !GetAtt KMSKey.Arn
+        - Classification: yarn-site
+          ConfigurationProperties:
+            yarn.nodemanager.vmem-check-enabled: 'false'
+            yarn.nodemanager.pmem-check-enabled: 'false'
+      SecurityConfiguration: !Ref EMRSecurityConfiguration
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Name
+          Value: !Sub '${ProjectName}-${Environment}-emr-cluster'
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+        - Key: DataClassification
+          Value: 'Sensitive'
+
+  # Task Instance Group 
+  TaskInstanceGroup:
+    Type: AWS::EMR::InstanceGroupConfig
+    Condition: CreateTaskNodes
+    Properties:
+      JobFlowId: !Ref EMRCluster
+      InstanceRole: TASK
+      InstanceCount: !Ref TaskNodeMinCapacity
+      InstanceType: !Ref TaskInstanceType
+      Market: ON_DEMAND
+      Name: TaskNodes
+      AutoScalingPolicy:
+        Constraints:
+          MinCapacity: !Ref TaskNodeMinCapacity
+          MaxCapacity: !Ref TaskNodeMaxCapacity
+        Rules:
+          - Name: TaskScaleOut
+            Action:
+              SimpleScalingPolicyConfiguration:
+                AdjustmentType: CHANGE_IN_CAPACITY
+                ScalingAdjustment: 1
+                CoolDown: 300
+            Trigger:
+              CloudWatchAlarmDefinition:
+                ComparisonOperator: LESS_THAN
+                EvaluationPeriods: 1
+                MetricName: YARNMemoryAvailablePercentage
+                Namespace: AWS/ElasticMapReduce
+                Period: 300
+                Statistic: AVERAGE
+                Threshold: !Ref YARNScaleOutThreshold
+                Unit: PERCENT
+          - Name: TaskScaleIn
+            Action:
+              SimpleScalingPolicyConfiguration:
+                AdjustmentType: CHANGE_IN_CAPACITY
+                ScalingAdjustment: -1
+                CoolDown: 300
+            Trigger:
+              CloudWatchAlarmDefinition:
+                ComparisonOperator: GREATER_THAN
+                EvaluationPeriods: 2
+                MetricName: YARNMemoryAvailablePercentage
+                Namespace: AWS/ElasticMapReduce
+                Period: 300
+                Statistic: AVERAGE
+                Threshold: !Ref YARNScaleInThreshold
+                Unit: PERCENT
+
+  # ==================== STEP FUNCTIONS STATE MACHINE ====================
+  StateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub '${ProjectName}-${Environment}-pipeline'
+      RoleArn: !GetAtt StepFunctionsExecutionRole.Arn
+      LoggingConfiguration:
+        Level: ALL
+        IncludeExecutionData: true
+        Destinations:
+          - CloudWatchLogsLogGroup:
+              LogGroupArn: !GetAtt StepFunctionsLogGroup.Arn
+      DefinitionString: !Sub |
+        {
+          "Comment": "EMR Data Processing Pipeline with Error Handling and Retry Logic",
+          "StartAt": "CheckClusterStatus",
+          "States": {
+            "CheckClusterStatus": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${JobMonitoringFunction.Arn}",
+                "Payload": {
+                  "ClusterId": "${EMRCluster}"
+                }
+              },
+              "ResultPath": "$.ClusterStatus",
+              "Next": "IsClusterReady"
+            },
+            "IsClusterReady": {
+              "Type": "Choice",
+              "Choices": [{
+                "Variable": "$.ClusterStatus.Payload.body",
+                "StringMatches": "*waiting*",
+                "Next": "SubmitSparkJob"
+              }, {
+                "Variable": "$.ClusterStatus.Payload.body",
+                "StringMatches": "*running*",
+                "Next": "SubmitSparkJob"
+              }],
+              "Default": "WaitForCluster"
+            },
+            "WaitForCluster": {
+              "Type": "Wait",
+              "Seconds": 30,
+              "Next": "CheckClusterStatus"
+            },
+            "SubmitSparkJob": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::elasticmapreduce:addStep.sync",
+              "Parameters": {
+                "ClusterId": "${EMRCluster}",
+                "Step": {
+                  "Name": "ProcessTransactionLogs",
+                  "ActionOnFailure": "CONTINUE",
+                  "HadoopJarStep": {
+                    "Jar": "command-runner.jar",
+                    "Args": [
+                      "spark-submit",
+                      "--deploy-mode", "cluster",
+                      "--master", "yarn",
+                      "--conf", "spark.yarn.submit.waitAppCompletion=true",
+                      "--conf", "spark.sql.adaptive.enabled=true",
+                      "--conf", "spark.sql.adaptive.coalescePartitions.enabled=true",
+                      "--conf", "spark.dynamicAllocation.enabled=true",
+                      "--conf", "spark.shuffle.service.enabled=true",
+                      "--conf", "spark.serializer=org.apache.spark.serializer.KryoSerializer",
+                      "--conf", "spark.kryoserializer.buffer.max=1024m",
+                      "s3://${ScriptsBucket}/scripts/fraud-detection.py",
+                      "--input", "s3://${RawDataBucket}/transactions/",
+                      "--output", "s3://${ProcessedDataBucket}/results/",
+                      "--date", "$.Timestamp"
+                    ]
+                  }
+                }
+              },
+              "ResultPath": "$.StepData",
+              "Retry": [{
+                "ErrorEquals": ["States.ALL"],
+                "IntervalSeconds": 2,
+                "MaxAttempts": ${MaxRetryAttempts},
+                "BackoffRate": 2.0
+              }],
+              "Catch": [{
+                "ErrorEquals": ["States.ALL"],
+                "Next": "NotifyFailure"
+              }],
+              "Next": "MonitorJob"
+            },
+            "MonitorJob": {
+              "Type": "Task",
+              "Resource": "${JobMonitoringFunction.Arn}",
+              "Parameters": {
+                "ClusterId": "${EMRCluster}",
+                "StepId.$": "$.StepData.StepId"
+              },
+              "ResultPath": "$.MonitoringResult",
+              "Next": "CollectMetrics"
+            },
+            "CollectMetrics": {
+              "Type": "Task",
+              "Resource": "${MetricsCollectorFunction.Arn}",
+              "Parameters": {
+                "StartTime.$": "$.StartTime",
+                "DataVolume.$": "$.Size",
+                "ClusterId": "${EMRCluster}"
+              },
+              "ResultPath": "$.MetricsResult",
+              "Next": "NotifySuccess"
+            },
+            "NotifySuccess": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::sns:publish",
+              "Parameters": {
+                "TopicArn": "${SNSTopic}",
+                "Subject": "[${Environment}] EMR Pipeline Completed Successfully",
+                "Message.$": "$.MetricsResult"
+              },
+              "End": true
+            },
+            "NotifyFailure": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::sns:publish",
+              "Parameters": {
+                "TopicArn": "${SNSTopic}",
+                "Subject": "[${Environment}] EMR Pipeline Failed",
+                "Message.$": "$"
+              },
+              "Next": "FailState"
+            },
+            "FailState": {
+              "Type": "Fail",
+              "Cause": "Pipeline execution failed",
+              "Error": "PipelineError"
+            }
+          }
+        }
+      Tags:
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # ==================== EVENTBRIDGE RULES ====================
+  DailyScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${ProjectName}-${Environment}-daily-schedule'
+      Description: Trigger EMR pipeline daily at 2 AM UTC
+      ScheduleExpression: 'cron(0 2 * * ? *)'
+      State: ENABLED
+      Targets:
+        - Id: DailyPipelineTrigger
+          Arn: !GetAtt StateMachine.Arn
+          RoleArn: !GetAtt EventBridgeRole.Arn
+          Input: !Sub |
+            {
+              "ProcessingType": "scheduled",
+              "StartTime": "${!datetime}",
+              "InputPath": "s3://${RawDataBucket}/daily/",
+              "DataVolume": 5497558138880,
+              "Environment": "${Environment}"
+            }
+
+  EventBridgeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: StartStepFunction
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'states:StartExecution'
+                Resource: !GetAtt StateMachine.Arn
+      Tags:
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
+  # ==================== CLOUDWATCH ALARMS ====================
+  EMRClusterHealthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${Environment}-emr-cluster-health'
+      AlarmDescription: Alert when EMR cluster is unhealthy
+      MetricName: IsIdle
+      Namespace: AWS/ElasticMapReduce
+      Dimensions:
+        - Name: JobFlowId
+          Value: !Ref EMRCluster
+      Statistic: Average
+      Period: 3600  # 1 hour
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: breaching
+      AlarmActions:
+        - !Ref SNSTopic
+
+  DataProcessingVolumeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${Environment}-low-data-volume'
+      AlarmDescription: Alert when processed data volume is unusually low
+      MetricName: DataVolumeProcessed
+      Namespace: !Sub '${ProjectName}/${Environment}/EMRPipeline'
+      Statistic: Sum
+      Period: 86400  # 24 hours
+      EvaluationPeriods: 1
+      Threshold: 1099511627776  # 1TB in bytes
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions:
+        - !Ref SNSTopic
+
+  HighYARNMemoryUtilizationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${Environment}-high-yarn-memory'
+      AlarmDescription: Alert when YARN memory utilization is consistently high
+      MetricName: YARNMemoryAvailablePercentage
+      Namespace: AWS/ElasticMapReduce
+      Dimensions:
+        - Name: JobFlowId
+          Value: !Ref EMRCluster
+      Statistic: Average
+      Period: 600  # 10 minutes
+      EvaluationPeriods: 3
+      Threshold: 10  # Less than 10% available
+      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+        - !Ref SNSTopic
+
+  # ==================== CLOUDWATCH DASHBOARD ====================
+  MonitoringDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub '${ProjectName}-${Environment}-emr-dashboard'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "AWS/ElasticMapReduce", "YARNMemoryAvailablePercentage", { "stat": "Average", "label": "YARN Memory Available %" } ],
+                  [ ".", "AppsRunning", { "stat": "Sum", "label": "Apps Running" } ],
+                  [ ".", "AppsPending", { "stat": "Sum", "label": "Apps Pending" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "EMR Cluster Metrics",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "${ProjectName}/${Environment}/EMRPipeline", "JobDuration", { "stat": "Average" } ],
+                  [ ".", "DataVolumeProcessed", { "stat": "Sum" } ],
+                  [ ".", "ProcessingThroughput", { "stat": "Average" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Pipeline Performance Metrics",
+                "period": 300
+              }
+            }
+          ]
+        }
+
+# ==================== OUTPUTS ====================
+Outputs:
+  VPCId:
+    Description: VPC ID for the EMR infrastructure
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-vpc-id'
+
+  EMRClusterId:
+    Description: EMR Cluster ID
+    Value: !Ref EMRCluster
+    Export:
+      Name: !Sub '${AWS::StackName}-emr-cluster-id'
+
+  EMRClusterMasterPublicDNS:
+    Description: Master node public DNS (if applicable)
+    Value: !GetAtt EMRCluster.MasterPublicDNS
+    Export:
+      Name: !Sub '${AWS::StackName}-master-dns'
+
+  RawDataBucketName:
+    Description: S3 bucket for raw data input
+    Value: !Ref RawDataBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-raw-bucket'
+
+  ProcessedDataBucketName:
+    Description: S3 bucket for processed data output
+    Value: !Ref ProcessedDataBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-processed-bucket'
+
+  EMRLogsBucketName:
+    Description: S3 bucket for EMR logs
+    Value: !Ref EMRLogsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-logs-bucket'
+
+  ScriptsBucketName:
+    Description: S3 bucket for Spark scripts
+    Value: !Ref ScriptsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-scripts-bucket'
+
+  StateMachineArn:
+    Description: Step Functions State Machine ARN
+    Value: !Ref StateMachine
+    Export:
+      Name: !Sub '${AWS::StackName}-state-machine-arn'
+
+  StateMachineExecutionUrl:
+    Description: URL to view State Machine executions
+    Value: !Sub 'https://console.aws.amazon.com/states/home?region=${AWS::Region}#/statemachines/view/${StateMachine}'
+
+  SNSTopicArn:
+    Description: SNS Topic for pipeline notifications
+    Value: !Ref SNSTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-sns-topic'
+
+  KMSKeyId:
+    Description: KMS Key ID for encryption
+    Value: !Ref KMSKey
+    Export:
+      Name: !Sub '${AWS::StackName}-kms-key-id'
+
+  KMSKeyArn:
+    Description: KMS Key ARN for encryption
+    Value: !GetAtt KMSKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-kms-key-arn'
+
+  GlueDatabaseName:
+    Description: AWS Glue database name
+    Value: !Ref GlueDatabase
+    Export:
+      Name: !Sub '${AWS::StackName}-glue-database'
+
+  DashboardURL:
+    Description: CloudWatch Dashboard URL
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${ProjectName}-${Environment}-emr-dashboard'
+
+  ProjectName:
+    Description: Project name used for resource naming
+    Value: !Ref ProjectName
+    Export:
+      Name: !Sub '${AWS::StackName}-project-name'
+
+  Environment:
+    Description: Environment name (development, staging, production)
+    Value: !Ref Environment
+    Export:
+      Name: !Sub '${AWS::StackName}-environment'

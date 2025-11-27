@@ -1,0 +1,4 @@
+name: payment-processing-infrastructure
+runtime: nodejs
+description: Multi-environment payment processing infrastructure with Pulumi TypeScript
+main: lib/index.ts

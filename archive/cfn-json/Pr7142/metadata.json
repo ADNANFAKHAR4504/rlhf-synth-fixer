@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912619",
+  "team": "synth",
+  "startedAt": "2025-11-24T06:20:00Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Disaster Recovery",
+    "Multi-Region",
+    "High Availability"
+  ],
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "Route53",
+    "SecretsManager",
+    "CloudWatch",
+    "SNS",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

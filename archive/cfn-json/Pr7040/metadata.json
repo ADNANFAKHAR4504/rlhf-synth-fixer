@@ -1,0 +1,41 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912602",
+  "team": "synth",
+  "startedAt": "2025-11-21T01:33:00-05:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "VPC",
+    "Application Load Balancer",
+    "Auto Scaling",
+    "RDS Aurora",
+    "CloudFront",
+    "AWS WAF",
+    "Secrets Manager"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ELB",
+    "Auto Scaling",
+    "RDS",
+    "CloudFront",
+    "S3",
+    "WAF",
+    "Secrets Manager",
+    "Lambda",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

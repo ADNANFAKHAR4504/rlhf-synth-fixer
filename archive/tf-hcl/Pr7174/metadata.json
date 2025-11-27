@@ -1,0 +1,32 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912642",
+  "team": "synth",
+  "startedAt": "2025-11-24T07:48:50.847797",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Compliance",
+    "Monitoring"
+  ],
+  "aws_services": [
+    "AWS::Config::ConfigurationRecorder",
+    "AWS::Config::DeliveryChannel",
+    "AWS::Lambda::Function",
+    "AWS::S3::Bucket",
+    "AWS::SNS::Topic",
+    "AWS::IAM::Role",
+    "AWS::Events::Rule",
+    "AWS::CloudWatch::Logs"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

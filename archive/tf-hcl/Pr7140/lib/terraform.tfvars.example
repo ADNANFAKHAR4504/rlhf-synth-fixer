@@ -1,0 +1,28 @@
+# Example Terraform variables file
+# Copy to terraform.tfvars and customize
+
+environment_suffix = "test-12345"
+
+primary_region = "us-east-1"
+dr_region      = "us-west-2"
+
+primary_vpc_cidr = "10.0.0.0/16"
+dr_vpc_cidr      = "10.1.0.0/16"
+
+db_master_username = "dbadmin"
+db_master_password = "ChangeMe123456!"
+
+ecs_task_cpu    = "256"
+ecs_task_memory = "512"
+
+container_image = "nginx:latest"
+
+health_check_interval      = 30
+replication_lag_threshold = 30
+
+common_tags = {
+  Environment = "production"
+  Application = "payment-processing"
+  CostCenter  = "finance-ops"
+  ManagedBy   = "terraform"
+}

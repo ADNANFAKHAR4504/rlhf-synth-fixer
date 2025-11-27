@@ -1,0 +1,65 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "CloudFormation Macro for automatic tag injection - must be deployed before using in templates",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Suffix for resource names",
+      "Default": "shared"
+    }
+  },
+  "Resources": {
+    "MacroExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {"Fn::Sub": "analytics-macro-execution-${EnvironmentSuffix}"},
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ]
+      }
+    },
+    "TagMacroFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {"Fn::Sub": "analytics-tag-macro-${EnvironmentSuffix}"},
+        "Runtime": "python3.9",
+        "Handler": "index.lambda_handler",
+        "Role": {"Fn::GetAtt": ["MacroExecutionRole", "Arn"]},
+        "Code": {
+          "ZipFile": "import json\n\ndef lambda_handler(event, context):\n    \"\"\"\n    CloudFormation Macro to automatically inject environment tags based on account ID.\n    \"\"\"\n    print(f'Macro Event: {json.dumps(event)}')\n    \n    account_environment_map = {\n        '111111111111': 'production',\n        '222222222222': 'staging',\n        '333333333333': 'development'\n    }\n    \n    try:\n        fragment = event['fragment']\n        request_id = event['requestId']\n        account_id = event['accountId']\n        region = event['region']\n        \n        environment_type = account_environment_map.get(account_id, 'unknown')\n        \n        print(f'Processing template for account {account_id} (environment: {environment_type})')\n        \n        standard_tags = [\n            {'Key': 'Environment', 'Value': environment_type},\n            {'Key': 'AccountId', 'Value': account_id},\n            {'Key': 'Region', 'Value': region},\n            {'Key': 'ManagedBy', 'Value': 'CloudFormation'},\n            {'Key': 'CostCenter', 'Value': f'analytics-{environment_type}'},\n            {'Key': 'AutoTagged', 'Value': 'true'}\n        ]\n        \n        if 'Resources' in fragment:\n            for resource_name, resource_properties in fragment['Resources'].items():\n                resource_type = resource_properties.get('Type', '')\n                \n                taggable_resources = [\n                    'AWS::S3::Bucket', 'AWS::Lambda::Function', 'AWS::DynamoDB::Table',\n                    'AWS::IAM::Role', 'AWS::EC2::VPC', 'AWS::EC2::Subnet',\n                    'AWS::EC2::SecurityGroup', 'AWS::SNS::Topic',\n                    'AWS::CloudFormation::Stack', 'AWS::ServiceCatalog::Portfolio'\n                ]\n                \n                if any(taggable_type in resource_type for taggable_type in taggable_resources):\n                    if 'Properties' not in resource_properties:\n                        resource_properties['Properties'] = {}\n                    if 'Tags' not in resource_properties['Properties']:\n                        resource_properties['Properties']['Tags'] = []\n                    \n                    existing_tags = resource_properties['Properties']['Tags']\n                    existing_tag_keys = [tag.get('Key') for tag in existing_tags]\n                    \n                    for tag in standard_tags:\n                        if tag['Key'] not in existing_tag_keys:\n                            existing_tags.append(tag)\n                    \n                    print(f'Injected tags for resource: {resource_name} ({resource_type})')\n        \n        return {\n            'requestId': request_id,\n            'status': 'success',\n            'fragment': fragment\n        }\n        \n    except Exception as e:\n        error_message = f'Error processing macro: {str(e)}'\n        print(error_message)\n        return {\n            'requestId': event.get('requestId', 'unknown'),\n            'status': 'failure',\n            'errorMessage': error_message\n        }\n"
+        },
+        "Timeout": 60
+      }
+    },
+    "TagMacro": {
+      "Type": "AWS::CloudFormation::Macro",
+      "Properties": {
+        "Name": "EnvironmentTagInjector",
+        "Description": "Automatically injects environment-specific tags based on AWS account ID",
+        "FunctionName": {"Fn::GetAtt": ["TagMacroFunction", "Arn"]}
+      }
+    }
+  },
+  "Outputs": {
+    "MacroName": {
+      "Description": "Name of the CloudFormation Macro",
+      "Value": {"Ref": "TagMacro"}
+    },
+    "MacroFunctionArn": {
+      "Description": "ARN of the macro Lambda function",
+      "Value": {"Fn::GetAtt": ["TagMacroFunction", "Arn"]}
+    }
+  }
+}

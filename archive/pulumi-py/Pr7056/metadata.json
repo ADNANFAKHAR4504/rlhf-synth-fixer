@@ -1,0 +1,35 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-21T11:11:54+00:00",
+  "po_id": "101912530",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "A financial services startup needs to establish a secure cloud foundation for their new trading platform. The infrastructure must comply with PCI DSS requirements for network segmentation and provide isolated environments for different application tiers. The platform will host sensitive customer data and requires strict network boundaries between public-facing services and internal databases.",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Subnet",
+    "InternetGateway",
+    "NatGateway",
+    "RouteTable",
+    "NetworkAcl",
+    "EIP",
+    "S3",
+    "IAM",
+    "VPCFlowLogs"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

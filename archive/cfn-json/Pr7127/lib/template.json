@@ -1,0 +1,275 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Master CloudFormation template for multi-environment data analytics platform with StackSets support",
+  "Parameters": {
+    "EnvironmentType": {
+      "Type": "String",
+      "Description": "Environment type for conditional resource configuration",
+      "AllowedValues": ["development", "staging", "production"],
+      "Default": "development"
+    },
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Suffix to append to all resource names for uniqueness (e.g., dev, stage, prod)",
+      "MinLength": 3,
+      "MaxLength": 10,
+      "AllowedPattern": "[a-z0-9]+",
+      "ConstraintDescription": "Must contain only lowercase letters and numbers"
+    },
+    "VPCTemplateURL": {
+      "Type": "String",
+      "Description": "S3 URL for VPC nested stack template"
+    },
+    "SecurityTemplateURL": {
+      "Type": "String",
+      "Description": "S3 URL for security nested stack template"
+    },
+    "ApplicationTemplateURL": {
+      "Type": "String",
+      "Description": "S3 URL for application nested stack template"
+    },
+    "AccountId": {
+      "Type": "String",
+      "Description": "AWS Account ID for environment-specific tagging",
+      "AllowedPattern": "[0-9]{12}",
+      "ConstraintDescription": "Must be a valid 12-digit AWS account ID"
+    }
+  },
+  "Conditions": {
+    "IsProduction": {
+      "Fn::Equals": [{"Ref": "EnvironmentType"}, "production"]
+    },
+    "IsStaging": {
+      "Fn::Equals": [{"Ref": "EnvironmentType"}, "staging"]
+    },
+    "NeedNATGateways": {
+      "Fn::Or": [
+        {"Condition": "IsProduction"},
+        {"Condition": "IsStaging"}
+      ]
+    }
+  },
+  "Resources": {
+    "VPCStack": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": {"Ref": "VPCTemplateURL"},
+        "Parameters": {
+          "EnvironmentType": {"Ref": "EnvironmentType"},
+          "EnvironmentSuffix": {"Ref": "EnvironmentSuffix"},
+          "CreateNATGateways": {
+            "Fn::If": ["NeedNATGateways", "true", "false"]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentType"}
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          },
+          {
+            "Key": "AccountId",
+            "Value": {"Ref": "AccountId"}
+          }
+        ],
+        "TimeoutInMinutes": 30
+      }
+    },
+    "SecurityStack": {
+      "Type": "AWS::CloudFormation::Stack",
+      "DependsOn": "VPCStack",
+      "Properties": {
+        "TemplateURL": {"Ref": "SecurityTemplateURL"},
+        "Parameters": {
+          "EnvironmentType": {"Ref": "EnvironmentType"},
+          "EnvironmentSuffix": {"Ref": "EnvironmentSuffix"}
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentType"}
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          },
+          {
+            "Key": "AccountId",
+            "Value": {"Ref": "AccountId"}
+          }
+        ],
+        "TimeoutInMinutes": 15
+      }
+    },
+    "ApplicationStack": {
+      "Type": "AWS::CloudFormation::Stack",
+      "Properties": {
+        "TemplateURL": {"Ref": "ApplicationTemplateURL"},
+        "Parameters": {
+          "EnvironmentType": {"Ref": "EnvironmentType"},
+          "EnvironmentSuffix": {"Ref": "EnvironmentSuffix"},
+          "VPCId": {"Fn::GetAtt": ["VPCStack", "Outputs.VPCId"]},
+          "PrivateSubnet1": {"Fn::GetAtt": ["VPCStack", "Outputs.PrivateSubnet1"]},
+          "PrivateSubnet2": {"Fn::GetAtt": ["VPCStack", "Outputs.PrivateSubnet2"]},
+          "PrivateSubnet3": {"Fn::GetAtt": ["VPCStack", "Outputs.PrivateSubnet3"]},
+          "LambdaExecutionRoleArn": {"Fn::GetAtt": ["SecurityStack", "Outputs.LambdaExecutionRoleArn"]},
+          "CustomResourceRoleArn": {"Fn::GetAtt": ["SecurityStack", "Outputs.CustomResourceRoleArn"]}
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentType"}
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          },
+          {
+            "Key": "AccountId",
+            "Value": {"Ref": "AccountId"}
+          }
+        ],
+        "TimeoutInMinutes": 45
+      }
+    },
+    "ServiceCatalogPortfolio": {
+      "Type": "AWS::ServiceCatalog::Portfolio",
+      "Properties": {
+        "DisplayName": {
+          "Fn::Sub": "Analytics-Platform-${EnvironmentSuffix}"
+        },
+        "Description": "Self-service portfolio for test instance provisioning",
+        "ProviderName": "Platform Engineering Team",
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentType"}
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "DriftDetectionSNSTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "cloudformation-drift-${EnvironmentSuffix}"
+        },
+        "DisplayName": "CloudFormation Drift Detection Notifications",
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentType"}
+          }
+        ]
+      }
+    },
+    "ConfigRuleDriftDetection": {
+      "Type": "AWS::Config::ConfigRule",
+      "Properties": {
+        "ConfigRuleName": {
+          "Fn::Sub": "cloudformation-drift-detection-${EnvironmentSuffix}"
+        },
+        "Description": "Monitors CloudFormation stacks for configuration drift",
+        "Source": {
+          "Owner": "AWS",
+          "SourceIdentifier": "CLOUDFORMATION_STACK_DRIFT_DETECTION_CHECK"
+        },
+        "Scope": {
+          "ComplianceResourceTypes": [
+            "AWS::CloudFormation::Stack"
+          ]
+        }
+      }
+    },
+    "ConfigRuleEventRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "config-drift-alert-${EnvironmentSuffix}"
+        },
+        "Description": "Trigger SNS notification on Config rule compliance changes",
+        "EventPattern": {
+          "source": ["aws.config"],
+          "detail-type": ["Config Rules Compliance Change"],
+          "detail": {
+            "configRuleName": [{"Ref": "ConfigRuleDriftDetection"}],
+            "newEvaluationResult": {
+              "complianceType": ["NON_COMPLIANT"]
+            }
+          }
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {"Ref": "DriftDetectionSNSTopic"},
+            "Id": "DriftNotificationTarget"
+          }
+        ]
+      }
+    },
+    "SNSTopicPolicy": {
+      "Type": "AWS::SNS::TopicPolicy",
+      "Properties": {
+        "Topics": [{"Ref": "DriftDetectionSNSTopic"}],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AllowEventBridgePublish",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Action": "sns:Publish",
+              "Resource": {"Ref": "DriftDetectionSNSTopic"}
+            }
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "VPCStackId": {
+      "Description": "VPC nested stack ID",
+      "Value": {"Ref": "VPCStack"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-VPCStackId"}
+      }
+    },
+    "SecurityStackId": {
+      "Description": "Security nested stack ID",
+      "Value": {"Ref": "SecurityStack"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-SecurityStackId"}
+      }
+    },
+    "ApplicationStackId": {
+      "Description": "Application nested stack ID",
+      "Value": {"Ref": "ApplicationStack"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-ApplicationStackId"}
+      }
+    },
+    "ServiceCatalogPortfolioId": {
+      "Description": "Service Catalog Portfolio ID for self-service provisioning",
+      "Value": {"Ref": "ServiceCatalogPortfolio"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-PortfolioId"}
+      }
+    },
+    "DriftDetectionTopicArn": {
+      "Description": "SNS Topic ARN for drift detection notifications",
+      "Value": {"Ref": "DriftDetectionSNSTopic"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-DriftTopicArn"}
+      }
+    }
+  }
+}

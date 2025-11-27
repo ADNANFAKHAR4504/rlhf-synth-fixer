@@ -1,0 +1,46 @@
+{
+  "task_id": "u7g8k7",
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "u7g8k7",
+  "team": "synth",
+  "startedAt": "2025-11-24T00:00:00Z",
+  "subtask": "Failure Recovery and High Availability",
+  "difficulty": "expert",
+  "category": "Failure Recovery and High Availability",
+  "subcategory": "Failure Recovery Automation",
+  "description": "Create a CDKTF Python program to deploy a multi-region disaster recovery infrastructure for a healthcare platform. MANDATORY REQUIREMENTS (Must complete): 1. Set up DynamoDB global tables across us-east-1 and us-west-2 with patient_records and audit_logs tables (CORE: DynamoDB) 2. Create Lambda functions in both regions for API endpoints with 3GB memory and 30-second timeout (CORE: Lambda) 3. Configure S3 buckets with cross-region replication for medical documents 4. Implement Route 53 hosted zone with weighted routing policy (70% primary, 30% secondary) 5. Create health check alarms that trigger failover when 3 consecutive checks fail 6. Set up KMS customer-managed keys in both regions with key rotation enabled 7. Configure CloudWatch dashboards showing replication lag and failover metrics 8. Implement IAM roles with cross-region assume permissions for Lambda 9. Enable point-in-time recovery on all DynamoDB tables 10. Set up topics in both regions for failover notifications 11. Configure VPC peering between regions for secure communication 12. Tag all resources with Environment=Production and DisasterRecovery=Enabled OPTIONAL ENHANCEMENTS (If time permits): • Add AWS Backup for automated backup scheduling (OPTIONAL: AWS Backup) - provides centralized backup management • Implement EventBridge rules for automated failover orchestration (OPTIONAL: EventBridge) - enables event-driven recovery • Add for configuration sync (OPTIONAL: ) - simplifies cross-region management Expected output: A CDKTF Python application with separate stacks for each region that deploys the complete disaster recovery infrastructure. The solution should demonstrate automatic failover capabilities with Route 53 health checks switching traffic between regions based on availability.",
+  "scenario": "A healthcare SaaS platform needs to implement a multi-region disaster recovery solution to meet HIPAA compliance requirements for data availability. The platform processes patient records and must maintain 99.99% uptime with automatic failover capabilities between regions.",
+  "architecture_description": "Multi-region AWS infrastructure spanning us-east-1 (primary) and us-west-2 (secondary) for healthcare SaaS disaster recovery. Core services include DynamoDB global tables for patient data, Lambda functions for API processing, and S3 with cross-region replication for document storage. Route 53 manages DNS failover with health checks. Each region has its own VPC with 3 availability zones, private subnets for compute resources, and VPC peering for cross-region connectivity. Requires Python 3.9+, CDKTF 0.20+, and AWS CDK 2.x installed. KMS customer-managed keys in both regions for HIPAA-compliant encryption.",
+  "constraints": [
+    "Primary region must be us-east-1 with failover to us-west-2",
+    "RTO (Recovery Time Objective) must be under 5 minutes",
+    "RPO (Recovery Point Objective) must be under 1 minute",
+    "All data must be encrypted at rest using AWS KMS with customer-managed keys",
+    "Route 53 health checks must trigger automatic DNS failover",
+    "DynamoDB global tables must have point-in-time recovery enabled"
+  ],
+  "aws_services": [
+    "DynamoDB",
+    "Lambda",
+    "S3",
+    "Route 53",
+    "KMS",
+    "CloudWatch",
+    "IAM",
+    "SNS",
+    "VPC"
+  ],
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

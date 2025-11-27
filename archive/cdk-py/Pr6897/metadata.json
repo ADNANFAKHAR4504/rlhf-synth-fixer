@@ -1,0 +1,37 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-19T13:47:40.130667Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
+  ],
+  "po_id": "f5l0f3",
+  "aws_services": [
+    "VPC",
+    "ECS",
+    "ECR",
+    "RDS",
+    "ELB",
+    "CloudWatch",
+    "KMS",
+    "Secrets Manager",
+    "Cloud Map",
+    "CodeDeploy",
+    "IAM",
+    "SNS"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
