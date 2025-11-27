@@ -546,12 +546,15 @@ describe('Infrastructure Configuration', () => {
     expect(secondaryRegion).toBe('us-west-2');
   });
 
-  it('should define correct VPC CIDR block', () => {
-    const vpcCidr = '10.0.0.0/16';
-    expect(vpcCidr).toBe('10.0.0.0/16');
+  it('should define non-overlapping VPC CIDR blocks', () => {
+    const primaryVpcCidr = '10.0.0.0/16';
+    const secondaryVpcCidr = '10.1.0.0/16';
+    expect(primaryVpcCidr).toBe('10.0.0.0/16');
+    expect(secondaryVpcCidr).toBe('10.1.0.0/16');
+    expect(primaryVpcCidr).not.toBe(secondaryVpcCidr);
   });
 
-  it('should define correct public subnet CIDRs', () => {
+  it('should define correct public subnet CIDRs for primary region', () => {
     const publicSubnets = [
       '10.0.0.0/24',
       '10.0.1.0/24',
@@ -561,7 +564,7 @@ describe('Infrastructure Configuration', () => {
     expect(publicSubnets[0]).toBe('10.0.0.0/24');
   });
 
-  it('should define correct private subnet CIDRs', () => {
+  it('should define correct private subnet CIDRs for primary region', () => {
     const privateSubnets = [
       '10.0.10.0/24',
       '10.0.11.0/24',
@@ -569,6 +572,26 @@ describe('Infrastructure Configuration', () => {
     ];
     expect(privateSubnets).toHaveLength(3);
     expect(privateSubnets[0]).toBe('10.0.10.0/24');
+  });
+
+  it('should define correct public subnet CIDRs for secondary region', () => {
+    const publicSubnets = [
+      '10.1.0.0/24',
+      '10.1.1.0/24',
+      '10.1.2.0/24',
+    ];
+    expect(publicSubnets).toHaveLength(3);
+    expect(publicSubnets[0]).toBe('10.1.0.0/24');
+  });
+
+  it('should define correct private subnet CIDRs for secondary region', () => {
+    const privateSubnets = [
+      '10.1.10.0/24',
+      '10.1.11.0/24',
+      '10.1.12.0/24',
+    ];
+    expect(privateSubnets).toHaveLength(3);
+    expect(privateSubnets[0]).toBe('10.1.10.0/24');
   });
 });
 

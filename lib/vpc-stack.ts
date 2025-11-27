@@ -11,6 +11,7 @@ export interface VpcStackArgs {
   region: string;
   environmentSuffix?: string;
   tags?: pulumi.Input<{ [key: string]: string }>;
+  vpcCidr?: string;
 }
 
 export class VpcStack extends pulumi.ComponentResource {
@@ -35,6 +36,11 @@ export class VpcStack extends pulumi.ComponentResource {
     const envSuffix = args.environmentSuffix || 'dev';
     const tags = args.tags || {};
 
+    // Determine VPC CIDR block based on region or use provided value
+    // Default: primary region (us-east-1) = 10.0.0.0/16, secondary (us-west-2) = 10.1.0.0/16
+    const vpcCidr = args.vpcCidr || (region.includes('east') ? '10.0.0.0/16' : '10.1.0.0/16');
+    const cidrPrefix = vpcCidr.split('.')[1]; // Extract second octet (0 or 1)
+
     // Get availability zones for the region
     const azs = aws.getAvailabilityZones(
       { state: 'available' },
@@ -45,7 +51,7 @@ export class VpcStack extends pulumi.ComponentResource {
     this.vpc = new aws.ec2.Vpc(
       `${name}-vpc`,
       {
-        cidrBlock: '10.0.0.0/16',
+        cidrBlock: vpcCidr,
         enableDnsHostnames: true,
         enableDnsSupport: true,
         tags: {
@@ -82,7 +88,7 @@ export class VpcStack extends pulumi.ComponentResource {
         `${name}-public-subnet-${i}`,
         {
           vpcId: this.vpc.id,
-          cidrBlock: `10.0.${i}.0/24`,
+          cidrBlock: `10.${cidrPrefix}.${i}.0/24`,
           availabilityZone: azs.then(azs => azs.names[i]),
           mapPublicIpOnLaunch: true,
           tags: {
@@ -175,7 +181,7 @@ export class VpcStack extends pulumi.ComponentResource {
         `${name}-private-subnet-${i}`,
         {
           vpcId: this.vpc.id,
-          cidrBlock: `10.0.${10 + i}.0/24`,
+          cidrBlock: `10.${cidrPrefix}.${10 + i}.0/24`,
           availabilityZone: azs.then(azs => azs.names[i]),
           tags: {
             ...tags,
@@ -236,7 +242,7 @@ export class VpcStack extends pulumi.ComponentResource {
             protocol: 'tcp',
             fromPort: 5432,
             toPort: 5432,
-            cidrBlocks: ['10.0.0.0/16'],
+            cidrBlocks: [vpcCidr],
             description: 'PostgreSQL access within VPC',
           },
           {
