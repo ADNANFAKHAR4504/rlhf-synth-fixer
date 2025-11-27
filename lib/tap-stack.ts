@@ -73,6 +73,7 @@ export class TapStack extends pulumi.ComponentResource {
         secondarySubnetIds: networkStack.secondaryPrivateSubnetIds,
         primarySecurityGroupId: networkStack.primaryDbSecurityGroupId,
         secondarySecurityGroupId: networkStack.secondaryDbSecurityGroupId,
+        secondaryKmsKeyId: storageStack.secondaryKmsKeyId,
         tags,
       },
       { parent: this }

@@ -18,6 +18,7 @@ export interface DatabaseStackArgs {
   secondarySubnetIds: pulumi.Output<string[]>;
   primarySecurityGroupId: pulumi.Output<string>;
   secondarySecurityGroupId: pulumi.Output<string>;
+  secondaryKmsKeyId: pulumi.Output<string>;
   tags?: pulumi.Input<{ [key: string]: string }>;
 }
 
@@ -229,6 +230,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
         preferredBackupWindow: '03:00-04:00',
         enabledCloudwatchLogsExports: ['postgresql'],
         storageEncrypted: true,
+        kmsKeyId: args.secondaryKmsKeyId,
         skipFinalSnapshot: true,
         tags: {
           ...tags,

@@ -3,8 +3,8 @@
  *
  * S3 buckets with cross-region replication and RTC enabled.
  */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface StorageStackArgs {
   environmentSuffix: string;
@@ -16,6 +16,8 @@ export interface StorageStackArgs {
 export class StorageStack extends pulumi.ComponentResource {
   public readonly primaryBucketName: pulumi.Output<string>;
   public readonly secondaryBucketName: pulumi.Output<string>;
+  public readonly primaryKmsKeyId: pulumi.Output<string>;
+  public readonly secondaryKmsKeyId: pulumi.Output<string>;
 
   constructor(
     name: string,
@@ -255,10 +257,14 @@ export class StorageStack extends pulumi.ComponentResource {
     // Outputs
     this.primaryBucketName = primaryBucket.id;
     this.secondaryBucketName = secondaryBucket.id;
+    this.primaryKmsKeyId = primaryKmsKey.id;
+    this.secondaryKmsKeyId = secondaryKmsKey.id;
 
     this.registerOutputs({
       primaryBucketName: this.primaryBucketName,
       secondaryBucketName: this.secondaryBucketName,
+      primaryKmsKeyId: this.primaryKmsKeyId,
+      secondaryKmsKeyId: this.secondaryKmsKeyId,
     });
   }
 }
