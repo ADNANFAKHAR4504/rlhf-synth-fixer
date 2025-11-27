@@ -1,0 +1,14 @@
+{
+  "platform": "CloudFormation",
+  "language": "JSON",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "c5a9b2f0",
+  "team": "synth",
+  "startedAt": "2025-11-27T16:30:50.000Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": []
+}
