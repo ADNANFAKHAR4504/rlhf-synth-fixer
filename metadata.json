@@ -6,9 +6,9 @@
   "po_id": "j7w9z6y6",
   "team": "synth",
   "startedAt": "2025-11-26T04:13:17+05:30",
-  "subtask": "CI/CD Pipeline Integration",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "CI/CD Pipeline"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "CodePipeline",
