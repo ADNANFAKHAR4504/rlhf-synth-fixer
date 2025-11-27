@@ -311,14 +311,14 @@ describe('TapStack Unit Tests', () => {
       const primaryVpcId = await pulumi.output(stack.primaryVpcId).promise();
 
       expect(primaryVpcId).toBeDefined();
-      expect(primaryVpcId).toContain('vpc-primary-vpc-id');
+      expect(primaryVpcId).toContain('vpc-primary-vpc-v1-id');
     });
 
     it('should create secondary VPC with correct configuration', async () => {
       const secondaryVpcId = await pulumi.output(stack.secondaryVpcId).promise();
 
       expect(secondaryVpcId).toBeDefined();
-      expect(secondaryVpcId).toContain('vpc-secondary-vpc-id');
+      expect(secondaryVpcId).toContain('vpc-secondary-vpc-v1-id');
     });
 
     it('should create primary VPC with DNS support and hostnames enabled', async () => {
@@ -417,12 +417,12 @@ describe('TapStack Unit Tests', () => {
 
     it('should create primary Aurora cluster with postgresql engine', async () => {
       const primaryClusterId = await pulumi.output(stack.primaryClusterId).promise();
-      expect(primaryClusterId).toContain('cluster-primary-cluster-id');
+      expect(primaryClusterId).toContain('cluster-primary-cluster-v1-id');
     });
 
     it('should create secondary Aurora cluster with postgresql engine', async () => {
       const secondaryClusterId = await pulumi.output(stack.secondaryClusterId).promise();
-      expect(secondaryClusterId).toContain('cluster-secondary-cluster-id');
+      expect(secondaryClusterId).toContain('cluster-secondary-cluster-v1-id');
     });
 
     it('should create primary cluster instance with db.r5.large instance class', async () => {
