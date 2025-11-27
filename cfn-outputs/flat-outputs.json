@@ -1,0 +1,52 @@
+{
+  "audit_logs_table_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "dr-audit-logs-synth-y6m5a6d6"
+  },
+  "patient_records_table_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "dr-patient-records-synth-y6m5a6d6"
+  },
+  "primary_bucket_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "dr-healthcare-primary-synth-y6m5a6d6"
+  },
+  "primary_kms_key_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "91263fb4-bd46-40dc-8294-a883b7a6bb94"
+  },
+  "primary_lambda_function_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "dr-health-check-primary-synth-y6m5a6d6"
+  },
+  "primary_sns_topic_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:sns:us-east-1:342597974367:dr-alerts-primary-synth-y6m5a6d6"
+  },
+  "secondary_bucket_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "dr-healthcare-secondary-synth-y6m5a6d6"
+  },
+  "secondary_kms_key_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "f01100d2-58b7-490a-8088-4828931c1432"
+  },
+  "secondary_lambda_function_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "dr-health-check-secondary-synth-y6m5a6d6"
+  },
+  "secondary_sns_topic_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:sns:us-west-2:342597974367:dr-alerts-secondary-synth-y6m5a6d6"
+  }
+}
