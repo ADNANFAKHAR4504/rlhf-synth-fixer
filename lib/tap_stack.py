@@ -105,6 +105,8 @@ def handler(event, context):
         currency = event.get('currency', 'USD')
 
         # Process transaction
+        # AWS_REGION is automatically available in Lambda context
+        region = os.environ.get('AWS_REGION', 'unknown')
         table = dynamodb.Table(table_name)
         table.put_item(
             Item={
@@ -112,7 +114,7 @@ def handler(event, context):
                 'amount': amount,
                 'currency': currency,
                 'status': 'processed',
-                'region': os.environ.get('AWS_REGION', 'unknown')
+                'region': region
             }
         )
 
@@ -372,7 +374,6 @@ def handler(event, context):
             environment=LambdaFunctionEnvironment(
                 variables={
                     "DYNAMODB_TABLE_NAME": self.dynamodb_table.name,
-                    "AWS_REGION": self.aws_region,
                     "ENVIRONMENT_SUFFIX": self.environment_suffix
                 }
             ),

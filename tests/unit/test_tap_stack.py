@@ -42,26 +42,56 @@ class TestTapStack:
         assert stack.aws_region == "us-east-1"
         assert stack.regions == ["us-east-1", "eu-west-1", "ap-southeast-1"]
 
-    def test_lambda_function_created(self, stack):
+    def test_lambda_function_created(self, stack, app):
         """Test Lambda function is created with correct configuration"""
         assert stack.lambda_function is not None
-        assert stack.lambda_function.memory_size == 3072
-        assert stack.lambda_function.timeout == 900
-        assert stack.lambda_function.reserved_concurrent_executions == 2
-        assert stack.lambda_function.runtime == "python3.12"
 
-    def test_dynamodb_table_created(self, stack):
+        # Synthesize and check the configuration in the output
+        synth = Testing.synth(stack)
+        resources = json.loads(synth)
+
+        # Find the Lambda function resource
+        lambda_resources = [r for r in resources.get("resource", {}).get("aws_lambda_function", {}).values()]
+        assert len(lambda_resources) > 0
+
+        lambda_config = lambda_resources[0]
+        assert lambda_config["memory_size"] == 3072
+        assert lambda_config["timeout"] == 900
+        assert lambda_config["reserved_concurrent_executions"] == 2
+        assert lambda_config["runtime"] == "python3.12"
+
+    def test_dynamodb_table_created(self, stack, app):
         """Test DynamoDB table is created with correct configuration"""
         assert stack.dynamodb_table is not None
-        assert stack.dynamodb_table.billing_mode == "PAY_PER_REQUEST"
-        assert stack.dynamodb_table.stream_enabled is True
-        assert stack.dynamodb_table.stream_view_type == "NEW_AND_OLD_IMAGES"
 
-    def test_kms_key_created(self, stack):
+        # Synthesize and check the configuration in the output
+        synth = Testing.synth(stack)
+        resources = json.loads(synth)
+
+        # Find the DynamoDB table resource
+        dynamodb_resources = [r for r in resources.get("resource", {}).get("aws_dynamodb_table", {}).values()]
+        assert len(dynamodb_resources) > 0
+
+        dynamodb_config = dynamodb_resources[0]
+        assert dynamodb_config["billing_mode"] == "PAY_PER_REQUEST"
+        assert dynamodb_config["stream_enabled"] is True
+        assert dynamodb_config["stream_view_type"] == "NEW_AND_OLD_IMAGES"
+
+    def test_kms_key_created(self, stack, app):
         """Test KMS key is created with automatic rotation"""
         assert stack.kms_key is not None
-        assert stack.kms_key.enable_key_rotation is True
-        assert stack.kms_key.deletion_window_in_days == 7
+
+        # Synthesize and check the configuration in the output
+        synth = Testing.synth(stack)
+        resources = json.loads(synth)
+
+        # Find the KMS key resource
+        kms_resources = [r for r in resources.get("resource", {}).get("aws_kms_key", {}).values()]
+        assert len(kms_resources) > 0
+
+        kms_config = kms_resources[0]
+        assert kms_config["enable_key_rotation"] is True
+        assert kms_config["deletion_window_in_days"] == 7
 
     def test_iam_roles_created(self, stack):
         """Test IAM roles are created"""
@@ -84,10 +114,20 @@ class TestTapStack:
         """Test API Gateway is created"""
         assert stack.api is not None
 
-    def test_cloudwatch_alarm_created(self, stack):
+    def test_cloudwatch_alarm_created(self, stack, app):
         """Test CloudWatch alarm is created"""
         assert stack.failure_alarm is not None
-        assert stack.failure_alarm.threshold == 1.0
+
+        # Synthesize and check the configuration in the output
+        synth = Testing.synth(stack)
+        resources = json.loads(synth)
+
+        # Find the CloudWatch alarm resource
+        alarm_resources = [r for r in resources.get("resource", {}).get("aws_cloudwatch_metric_alarm", {}).values()]
+        assert len(alarm_resources) > 0
+
+        alarm_config = alarm_resources[0]
+        assert alarm_config["threshold"] == 1.0
 
     def test_cloudwatch_dashboard_created(self, stack):
         """Test CloudWatch dashboard is created"""
@@ -127,14 +167,21 @@ class TestTapStack:
         """Test Lambda has required environment variables"""
         assert stack.lambda_function.environment is not None
 
-    def test_step_functions_definition(self, stack):
+    def test_step_functions_definition(self, stack, app):
         """Test Step Functions state machine has valid definition"""
         assert stack.state_machine is not None
-        # State machine definition should be a JSON string
-        assert isinstance(stack.state_machine.definition, str)
 
+        # Synthesize and check the configuration in the output
+        synth = Testing.synth(stack)
+        resources = json.loads(synth)
+
+        # Find the Step Functions state machine resource
+        sfn_resources = [r for r in resources.get("resource", {}).get("aws_sfn_state_machine", {}).values()]
+        assert len(sfn_resources) > 0
+
+        sfn_config = sfn_resources[0]
         # Parse definition and verify structure
-        definition = json.loads(stack.state_machine.definition)
+        definition = json.loads(sfn_config["definition"])
         assert "StartAt" in definition
         assert "States" in definition
         assert "ValidatePayment" in definition["States"]
@@ -147,23 +194,54 @@ class TestTapStack:
         # API should be regional
         assert stack.api_stage is not None
 
-    def test_cloudwatch_alarm_threshold(self, stack):
+    def test_cloudwatch_alarm_threshold(self, stack, app):
         """Test CloudWatch alarm has correct threshold for 0.1%"""
-        assert stack.failure_alarm.threshold == 1.0
-        assert stack.failure_alarm.comparison_operator == "GreaterThanThreshold"
+        assert stack.failure_alarm is not None
 
-    def test_cloudwatch_dashboard_widgets(self, stack):
+        # Synthesize and check the configuration in the output
+        synth = Testing.synth(stack)
+        resources = json.loads(synth)
+
+        # Find the CloudWatch alarm resource
+        alarm_resources = [r for r in resources.get("resource", {}).get("aws_cloudwatch_metric_alarm", {}).values()]
+        assert len(alarm_resources) > 0
+
+        alarm_config = alarm_resources[0]
+        assert alarm_config["threshold"] == 1.0
+        assert alarm_config["comparison_operator"] == "GreaterThanThreshold"
+
+    def test_cloudwatch_dashboard_widgets(self, stack, app):
         """Test CloudWatch dashboard has required widgets"""
         assert stack.dashboard is not None
+
+        # Synthesize and check the configuration in the output
+        synth = Testing.synth(stack)
+        resources = json.loads(synth)
+
+        # Find the CloudWatch dashboard resource
+        dashboard_resources = [r for r in resources.get("resource", {}).get("aws_cloudwatch_dashboard", {}).values()]
+        assert len(dashboard_resources) > 0
+
+        dashboard_config = dashboard_resources[0]
         # Dashboard body should be a JSON string
-        dashboard_body = json.loads(stack.dashboard.dashboard_body)
+        dashboard_body = json.loads(dashboard_config["dashboard_body"])
         assert "widgets" in dashboard_body
         assert len(dashboard_body["widgets"]) >= 3  # Lambda, DynamoDB, API Gateway
 
-    def test_kms_key_policy(self, stack):
+    def test_kms_key_policy(self, stack, app):
         """Test KMS key has correct policy"""
-        assert stack.kms_key.policy is not None
-        policy = json.loads(stack.kms_key.policy)
+        assert stack.kms_key is not None
+
+        # Synthesize and check the configuration in the output
+        synth = Testing.synth(stack)
+        resources = json.loads(synth)
+
+        # Find the KMS key resource
+        kms_resources = [r for r in resources.get("resource", {}).get("aws_kms_key", {}).values()]
+        assert len(kms_resources) > 0
+
+        kms_config = kms_resources[0]
+        policy = json.loads(kms_config["policy"])
         assert "Statement" in policy
         # Should have statements for IAM permissions and service access
         assert len(policy["Statement"]) >= 2
@@ -213,13 +291,32 @@ class TestTapStack:
         # Replicas are configured for eu-west-1 and ap-southeast-1
         assert stack.dynamodb_table is not None
 
-    def test_resource_naming_convention(self, stack):
+    def test_resource_naming_convention(self, stack, app):
         """Test all resources follow naming convention with environment suffix"""
         # All resources should include environment_suffix in their names
-        assert "test" in stack.lambda_function.function_name
-        assert "test" in stack.dynamodb_table.name
-        assert "test" in stack.sns_topic.name
-        assert "test" in stack.state_machine.name
+        # Synthesize and check the configuration in the output
+        synth = Testing.synth(stack)
+        resources = json.loads(synth)
+
+        # Check Lambda function name
+        lambda_resources = [r for r in resources.get("resource", {}).get("aws_lambda_function", {}).values()]
+        assert len(lambda_resources) > 0
+        assert "test" in lambda_resources[0]["function_name"]
+
+        # Check DynamoDB table name
+        dynamodb_resources = [r for r in resources.get("resource", {}).get("aws_dynamodb_table", {}).values()]
+        assert len(dynamodb_resources) > 0
+        assert "test" in dynamodb_resources[0]["name"]
+
+        # Check SNS topic name
+        sns_resources = [r for r in resources.get("resource", {}).get("aws_sns_topic", {}).values()]
+        assert len(sns_resources) > 0
+        assert "test" in sns_resources[0]["name"]
+
+        # Check state machine name
+        sfn_resources = [r for r in resources.get("resource", {}).get("aws_sfn_state_machine", {}).values()]
+        assert len(sfn_resources) > 0
+        assert "test" in sfn_resources[0]["name"]
 
     def test_no_retain_policies(self, app, stack):
         """Test no resources have retain policies"""
