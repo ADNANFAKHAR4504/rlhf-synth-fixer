@@ -9,7 +9,7 @@
   "startedAt": "2025-11-26T06:41:23+00:00",
   "subtask": "Security, Compliance, and Governance",
   "subject_labels": [
-    "Security, Compliance, and Governance"
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "VPC",
@@ -24,5 +24,6 @@
     "Lambda",
     "KMS"
   ],
-  "training_quality": 9
+  "author": "mayanksethi-turing",
+  "training_quality": 10
 }
