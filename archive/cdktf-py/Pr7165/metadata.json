@@ -1,0 +1,35 @@
+{
+  "task_id": "c4l8k0",
+  "po_id": "c4l8k0",
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-24T08:30:03.000Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "CloudWatch Logs",
+    "CloudWatch Alarms",
+    "CloudWatch Composite Alarms",
+    "CloudWatch Dashboard",
+    "CloudWatch Metric Filters",
+    "CloudWatch Synthetics",
+    "KMS",
+    "Lambda",
+    "X-Ray",
+    "SNS",
+    "IAM",
+    "S3"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

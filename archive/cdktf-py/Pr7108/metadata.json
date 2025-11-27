@@ -1,0 +1,38 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "f8v9z0",
+  "team": "synth",
+  "startedAt": "2025-11-24T11:35:00-08:00",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "S3",
+    "DynamoDB",
+    "Lambda",
+    "API Gateway",
+    "Step Functions",
+    "SNS",
+    "SQS",
+    "IAM",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "CloudWatch Alarms"
+  ],
+  "training_quality_score": 7.0,
+  "qa_status": "BLOCKED_DEPLOYMENT",
+  "issues_fixed": 6,
+  "critical_fixes": 3,
+  "completedAt": "2025-11-24T03:45:00-08:00",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

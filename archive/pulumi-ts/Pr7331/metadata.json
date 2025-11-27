@@ -1,0 +1,40 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-26T00:00:00Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "po_id": "y2b8w3f7",
+  "project_name": "TapStack",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "Aurora",
+    "ELB",
+    "ALB",
+    "Auto Scaling",
+    "S3",
+    "Secrets Manager",
+    "KMS",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "IAM",
+    "ACM",
+    "Target Groups"
+  ],
+  "region": "us-east-1",
+  "author": "mayanksethi-turing",
+  "reviewer": "chriscrsov",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

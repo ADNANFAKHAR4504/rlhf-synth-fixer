@@ -1,0 +1,35 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-25T12:12:39+05:30",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "po_id": "w4x4y1o7",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "RDS",
+    "ALB",
+    "CloudFront",
+    "ECR",
+    "WAF",
+    "KMS",
+    "IAM",
+    "Secrets Manager",
+    "SSM",
+    "CloudWatch"
+  ],
+  "author": "mayanksethi-turing",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,416 @@
+Starting ElastiCache analysis...
+Found 14 clusters in page
+Checking cluster: underutilized-cache
+Included cluster: underutilized-cache
+Checking cluster: over-provisioned-cache
+Included cluster: over-provisioned-cache
+Checking cluster: prod-no-failover-redis
+Included cluster: prod-no-failover-redis
+Checking cluster: single-az-prod
+Included cluster: single-az-prod
+Checking cluster: sensitive-unencrypted
+Included cluster: sensitive-unencrypted
+Checking cluster: old-redis-version
+Included cluster: old-redis-version
+Checking cluster: no-auth-redis
+Included cluster: no-auth-redis
+Checking cluster: inadequate-backup
+Included cluster: inadequate-backup
+Checking cluster: connection-exhaustion
+Included cluster: connection-exhaustion
+Checking cluster: inefficient-nodes
+Included cluster: inefficient-nodes
+Checking cluster: memory-pressure
+Included cluster: memory-pressure
+Checking cluster: no-vpc-cluster
+Included cluster: no-vpc-cluster
+Checking cluster: reserved-opportunity
+Included cluster: reserved-opportunity
+Checking cluster: long-retention-cluster
+Included cluster: long-retention-cluster
+Found 14 clusters to analyze
+Analyzing cluster: underutilized-cache
+
+================================================================================
+Cluster: underutilized-cache
+Performance Score: 15/100
+Engine: redis 6.2
+Node Type: cache.t3.medium x 1
+Current Monthly Cost: $48.96
+Potential Rightsizing Savings: $14.69
+
+Issues Found (5):
+  - [HIGH] Low cache hit ratio (33.3%) with high evictions (1111/hour)
+  - [MEDIUM] Low resource utilization: CPU 0.0%, Network 0.0%
+  - [HIGH] Redis cluster lacks AUTH token
+  - [HIGH] Backup retention only 0 days
+  - [MEDIUM] No CloudWatch alarms configured
+Analyzing cluster: over-provisioned-cache
+
+================================================================================
+Cluster: over-provisioned-cache
+Performance Score: 40/100
+Engine: redis 6.2
+Node Type: cache.m5.4xlarge x 1
+Current Monthly Cost: $489.60
+Potential Rightsizing Savings: $146.88
+
+Issues Found (4):
+  - [MEDIUM] Low resource utilization: CPU 15.0%, Network 0.0%
+  - [HIGH] Redis cluster lacks AUTH token
+  - [HIGH] Backup retention only 0 days
+  - [MEDIUM] No CloudWatch alarms configured
+Analyzing cluster: prod-no-failover-redis
+
+================================================================================
+Cluster: prod-no-failover-redis
+Performance Score: 10/100
+Engine: redis 6.2
+Node Type: cache.t3.medium x 1
+Current Monthly Cost: $48.96
+Potential Rightsizing Savings: $14.69
+
+Issues Found (6):
+  - [MEDIUM] Low resource utilization: CPU 0.0%, Network 0.0%
+  - [HIGH] Production Redis cluster lacks automatic failover
+  - [HIGH] Production cluster deployed in single AZ
+  - [HIGH] Redis cluster lacks AUTH token
+  - [HIGH] Backup retention only 0 days
+Analyzing cluster: single-az-prod
+
+================================================================================
+Cluster: single-az-prod
+Performance Score: 10/100
+Engine: redis 6.2
+Node Type: cache.t3.medium x 1
+Current Monthly Cost: $48.96
+Potential Rightsizing Savings: $14.69
+
+Issues Found (6):
+  - [MEDIUM] Low resource utilization: CPU 0.0%, Network 0.0%
+  - [HIGH] Production Redis cluster lacks automatic failover
+  - [HIGH] Production cluster deployed in single AZ
+  - [HIGH] Redis cluster lacks AUTH token
+  - [HIGH] Backup retention only 0 days
+Analyzing cluster: sensitive-unencrypted
+
+================================================================================
+Cluster: sensitive-unencrypted
+Performance Score: 20/100
+Engine: redis 6.2
+Node Type: cache.t3.medium x 1
+Current Monthly Cost: $48.96
+Potential Rightsizing Savings: $14.69
+
+Issues Found (5):
+  - [MEDIUM] Low resource utilization: CPU 0.0%, Network 0.0%
+  - [CRITICAL] Sensitive data cluster lacks encryption
+  - [HIGH] Redis cluster lacks AUTH token
+  - [HIGH] Backup retention only 0 days
+  - [MEDIUM] No CloudWatch alarms configured
+Analyzing cluster: old-redis-version
+
+================================================================================
+Cluster: old-redis-version
+Performance Score: 30/100
+Engine: redis 5.0.6
+Node Type: cache.t3.medium x 1
+Current Monthly Cost: $48.96
+Potential Rightsizing Savings: $14.69
+
+Issues Found (5):
+  - [MEDIUM] Low resource utilization: CPU 0.0%, Network 0.0%
+  - [MEDIUM] Old redis version 5.0.6 in use
+  - [HIGH] Redis cluster lacks AUTH token
+  - [HIGH] Backup retention only 0 days
+  - [MEDIUM] No CloudWatch alarms configured
+Analyzing cluster: no-auth-redis
+
+================================================================================
+Cluster: no-auth-redis
+Performance Score: 40/100
+Engine: redis 6.2
+Node Type: cache.t3.medium x 1
+Current Monthly Cost: $48.96
+Potential Rightsizing Savings: $14.69
+
+Issues Found (4):
+  - [MEDIUM] Low resource utilization: CPU 0.0%, Network 0.0%
+  - [HIGH] Redis cluster lacks AUTH token
+  - [HIGH] Backup retention only 0 days
+  - [MEDIUM] No CloudWatch alarms configured
+Analyzing cluster: inadequate-backup
+
+================================================================================
+Cluster: inadequate-backup
+Performance Score: 40/100
+Engine: redis 6.2
+Node Type: cache.t3.medium x 1
+Current Monthly Cost: $48.96
+Potential Rightsizing Savings: $14.69
+
+Issues Found (4):
+  - [MEDIUM] Low resource utilization: CPU 0.0%, Network 0.0%
+  - [HIGH] Redis cluster lacks AUTH token
+  - [HIGH] Backup retention only 0 days
+  - [MEDIUM] No CloudWatch alarms configured
+Analyzing cluster: connection-exhaustion
+
+================================================================================
+Cluster: connection-exhaustion
+Performance Score: 25/100
+Engine: redis 6.2
+Node Type: cache.t3.medium x 1
+Current Monthly Cost: $48.96
+Potential Rightsizing Savings: $14.69
+
+Issues Found (5):
+  - [MEDIUM] Low resource utilization: CPU 0.0%, Network 0.0%
+  - [HIGH] Redis cluster lacks AUTH token
+  - [HIGH] Backup retention only 0 days
+  - [HIGH] High connection usage: 92.3% of capacity
+  - [MEDIUM] No CloudWatch alarms configured
+Analyzing cluster: inefficient-nodes
+
+================================================================================
+Cluster: inefficient-nodes
+Performance Score: 30/100
+Engine: redis 6.2
+Node Type: cache.t2.medium x 1
+Current Monthly Cost: $48.96
+Potential Rightsizing Savings: $22.03
+
+Issues Found (5):
+  - [MEDIUM] Low resource utilization: CPU 0.0%, Network 0.0%
+  - [HIGH] Redis cluster lacks AUTH token
+  - [HIGH] Backup retention only 0 days
+  - [MEDIUM] Using previous generation node type: cache.t2.medium
+  - [MEDIUM] No CloudWatch alarms configured
+Analyzing cluster: memory-pressure
+
+================================================================================
+Cluster: memory-pressure
+Performance Score: 20/100
+Engine: redis 6.2
+Node Type: cache.t3.medium x 1
+Current Monthly Cost: $48.96
+Potential Rightsizing Savings: $14.69
+
+Issues Found (5):
+  - [MEDIUM] Low resource utilization: CPU 0.0%, Network 0.0%
+  - [HIGH] Redis cluster lacks AUTH token
+  - [HIGH] Backup retention only 0 days
+  - [HIGH] High memory usage (95.0%) with evictions
+  - [MEDIUM] No CloudWatch alarms configured
+Analyzing cluster: no-vpc-cluster
+
+================================================================================
+Cluster: no-vpc-cluster
+Performance Score: 20/100
+Engine: redis 6.2
+Node Type: cache.t3.medium x 1
+Current Monthly Cost: $48.96
+Potential Rightsizing Savings: $14.69
+
+Issues Found (5):
+  - [MEDIUM] Low resource utilization: CPU 0.0%, Network 0.0%
+  - [HIGH] Redis cluster lacks AUTH token
+  - [HIGH] Backup retention only 0 days
+  - [MEDIUM] No CloudWatch alarms configured
+  - [CRITICAL] Cluster not deployed in VPC
+Analyzing cluster: reserved-opportunity
+
+================================================================================
+Cluster: reserved-opportunity
+Performance Score: 40/100
+Engine: redis 6.2
+Node Type: cache.t3.medium x 1
+Current Monthly Cost: $48.96
+Potential Rightsizing Savings: $14.69
+
+Issues Found (4):
+  - [MEDIUM] Low resource utilization: CPU 0.0%, Network 0.0%
+  - [HIGH] Redis cluster lacks AUTH token
+  - [HIGH] Backup retention only 0 days
+  - [MEDIUM] No CloudWatch alarms configured
+Analyzing cluster: long-retention-cluster
+
+================================================================================
+Cluster: long-retention-cluster
+Performance Score: 40/100
+Engine: redis 6.2
+Node Type: cache.t3.medium x 1
+Current Monthly Cost: $48.96
+Potential Rightsizing Savings: $14.69
+
+Issues Found (4):
+  - [MEDIUM] Low resource utilization: CPU 0.0%, Network 0.0%
+  - [HIGH] Redis cluster lacks AUTH token
+  - [HIGH] Backup retention only 0 days
+  - [MEDIUM] No CloudWatch alarms configured
+
+Generated aws_audit_results.json
+Generated cache_performance_dashboard.html
+Generated cluster_rightsizing_plan.csv
+
+========================================================================================================================
+                                      ELASTICACHE INFRASTRUCTURE ANALYSIS SUMMARY                                       
+========================================================================================================================
+Analysis Timestamp: 2025-11-24 20:48:50
+Region: us-east-1
+========================================================================================================================
+
+📊 ANALYSIS SUMMARY
+------------------------------------------------------------------------------------------------------------------------
++---------------------------+-----------+
+| Metric                    | Value     |
++===========================+===========+
+| Total Clusters            | 14        |
++---------------------------+-----------+
+| Redis Clusters            | 14        |
++---------------------------+-----------+
+| Memcached Clusters        | 0         |
++---------------------------+-----------+
+| Clusters at Risk          | 14        |
++---------------------------+-----------+
+| Average Performance Score | 27.1/100  |
++---------------------------+-----------+
+| Total Monthly Cost        | $1,126.08 |
++---------------------------+-----------+
+| Potential Monthly Savings | $345.19   |
++---------------------------+-----------+
+| Average Cache Hit Rate    | 2.4%      |
++---------------------------+-----------+
+
+🔍 CLUSTER DETAILS
+------------------------------------------------------------------------------------------------------------------------
++------------------------+----------+------------------+---------+------------+---------+------------+--------------+-----------+----------+
+| Cluster ID             | Engine   | Node Config      | Score   | Hit Rate   | CPU %   | Memory %   | Cost/Month   | Savings   | Issues   |
++========================+==========+==================+=========+============+=========+============+==============+===========+==========+
+| prod-no-failover-redis | redis    | cache.t3.medium  | 🔴 10    | 0.0%       | 0.0%    | 0.0%       | $49          | $15       | 0C/4H    |
+|                        | 6.2      | x1               |         |            |         |            |              |           |          |
++------------------------+----------+------------------+---------+------------+---------+------------+--------------+-----------+----------+
+| single-az-prod         | redis    | cache.t3.medium  | 🔴 10    | 0.0%       | 0.0%    | 0.0%       | $49          | $15       | 0C/4H    |
+|                        | 6.2      | x1               |         |            |         |            |              |           |          |
++------------------------+----------+------------------+---------+------------+---------+------------+--------------+-----------+----------+
+| underutilized-cache    | redis    | cache.t3.medium  | 🔴 15    | 33.3%      | 0.0%    | 0.0%       | $49          | $15       | 0C/3H    |
+|                        | 6.2      | x1               |         |            |         |            |              |           |          |
++------------------------+----------+------------------+---------+------------+---------+------------+--------------+-----------+----------+
+| sensitive-unencrypted  | redis    | cache.t3.medium  | 🔴 20    | 0.0%       | 0.0%    | 0.0%       | $49          | $15       | 1C/2H    |
+|                        | 6.2      | x1               |         |            |         |            |              |           |          |
++------------------------+----------+------------------+---------+------------+---------+------------+--------------+-----------+----------+
+| memory-pressure        | redis    | cache.t3.medium  | 🔴 20    | 0.0%       | 0.0%    | 95.0%      | $49          | $15       | 0C/3H    |
+|                        | 6.2      | x1               |         |            |         |            |              |           |          |
++------------------------+----------+------------------+---------+------------+---------+------------+--------------+-----------+----------+
+| no-vpc-cluster         | redis    | cache.t3.medium  | 🔴 20    | 0.0%       | 0.0%    | 0.0%       | $49          | $15       | 1C/2H    |
+|                        | 6.2      | x1               |         |            |         |            |              |           |          |
++------------------------+----------+------------------+---------+------------+---------+------------+--------------+-----------+----------+
+| connection-exhaustion  | redis    | cache.t3.medium  | 🔴 25    | 0.0%       | 0.0%    | 0.0%       | $49          | $15       | 0C/3H    |
+|                        | 6.2      | x1               |         |            |         |            |              |           |          |
++------------------------+----------+------------------+---------+------------+---------+------------+--------------+-----------+----------+
+| old-redis-version      | redis    | cache.t3.medium  | 🔴 30    | 0.0%       | 0.0%    | 0.0%       | $49          | $15       | 0C/2H    |
+|                        | 5.0.6    | x1               |         |            |         |            |              |           |          |
++------------------------+----------+------------------+---------+------------+---------+------------+--------------+-----------+----------+
+| inefficient-nodes      | redis    | cache.t2.medium  | 🔴 30    | 0.0%       | 0.0%    | 0.0%       | $49          | $22       | 0C/2H    |
+|                        | 6.2      | x1               |         |            |         |            |              |           |          |
++------------------------+----------+------------------+---------+------------+---------+------------+--------------+-----------+----------+
+| over-provisioned-cache | redis    | cache.m5.4xlarge | 🔴 40    | 0.0%       | 15.0%   | 0.0%       | $490         | $147      | 0C/2H    |
+|                        | 6.2      | x1               |         |            |         |            |              |           |          |
++------------------------+----------+------------------+---------+------------+---------+------------+--------------+-----------+----------+
+| no-auth-redis          | redis    | cache.t3.medium  | 🔴 40    | 0.0%       | 0.0%    | 0.0%       | $49          | $15       | 0C/2H    |
+|                        | 6.2      | x1               |         |            |         |            |              |           |          |
++------------------------+----------+------------------+---------+------------+---------+------------+--------------+-----------+----------+
+| inadequate-backup      | redis    | cache.t3.medium  | 🔴 40    | 0.0%       | 0.0%    | 0.0%       | $49          | $15       | 0C/2H    |
+|                        | 6.2      | x1               |         |            |         |            |              |           |          |
++------------------------+----------+------------------+---------+------------+---------+------------+--------------+-----------+----------+
+| reserved-opportunity   | redis    | cache.t3.medium  | 🔴 40    | 0.0%       | 0.0%    | 0.0%       | $49          | $15       | 0C/2H    |
+|                        | 6.2      | x1               |         |            |         |            |              |           |          |
++------------------------+----------+------------------+---------+------------+---------+------------+--------------+-----------+----------+
+| long-retention-cluster | redis    | cache.t3.medium  | 🔴 40    | 0.0%       | 0.0%    | 0.0%       | $49          | $15       | 0C/2H    |
+|                        | 6.2      | x1               |         |            |         |            |              |           |          |
++------------------------+----------+------------------+---------+------------+---------+------------+--------------+-----------+----------+
+
+⚠️  ISSUES BY SEVERITY
+------------------------------------------------------------------------------------------------------------------------
++----------------------------+---------+
+| Issue Type                 |   Count |
++============================+=========+
+| over_provisioned           |      14 |
++----------------------------+---------+
+| no_auth_token              |      14 |
++----------------------------+---------+
+| inadequate_backup          |      14 |
++----------------------------+---------+
+| no_cloudwatch_alarms       |      14 |
++----------------------------+---------+
+| no_automatic_failover      |       2 |
++----------------------------+---------+
+| single_az_deployment       |       2 |
++----------------------------+---------+
+| underutilized_cache        |       1 |
++----------------------------+---------+
+| missing_encryption         |       1 |
++----------------------------+---------+
+| old_engine_version         |       1 |
++----------------------------+---------+
+| connection_exhaustion_risk |       1 |
++----------------------------+---------+
+| inefficient_node_type      |       1 |
++----------------------------+---------+
+| memory_pressure            |       1 |
++----------------------------+---------+
+| no_vpc_deployment          |       1 |
++----------------------------+---------+
+
+🚨 TOP ISSUES REQUIRING ATTENTION
+------------------------------------------------------------------------------------------------------------------------
++------------+----------------------------+-------------------------+------------------------------------------+
+| Severity   | Type                       | Cluster                 | Description                              |
++============+============================+=========================+==========================================+
+| CRITICAL   | missing_encryption         | sensitive-unencrypte... | Sensitive data cluster lacks encryption  |
++------------+----------------------------+-------------------------+------------------------------------------+
+| CRITICAL   | no_vpc_deployment          | no-vpc-cluster          | Cluster not deployed in VPC              |
++------------+----------------------------+-------------------------+------------------------------------------+
+| HIGH       | connection_exhaustion_risk | connection-exhaustio... | High connection usage: 92.3% of capacity |
++------------+----------------------------+-------------------------+------------------------------------------+
+| HIGH       | inadequate_backup          | underutilized-cache     | Backup retention only 0 days             |
++------------+----------------------------+-------------------------+------------------------------------------+
+| HIGH       | inadequate_backup          | underutilized-cache     | Backup retention only 0 days             |
++------------+----------------------------+-------------------------+------------------------------------------+
+| HIGH       | inadequate_backup          | underutilized-cache     | Backup retention only 0 days             |
++------------+----------------------------+-------------------------+------------------------------------------+
+| HIGH       | inadequate_backup          | underutilized-cache     | Backup retention only 0 days             |
++------------+----------------------------+-------------------------+------------------------------------------+
+| HIGH       | inadequate_backup          | underutilized-cache     | Backup retention only 0 days             |
++------------+----------------------------+-------------------------+------------------------------------------+
+| HIGH       | inadequate_backup          | underutilized-cache     | Backup retention only 0 days             |
++------------+----------------------------+-------------------------+------------------------------------------+
+| HIGH       | inadequate_backup          | underutilized-cache     | Backup retention only 0 days             |
++------------+----------------------------+-------------------------+------------------------------------------+
+
+... and 57 more issues (see aws_audit_results.json for complete details)
+
+💡 KEY RECOMMENDATIONS
+------------------------------------------------------------------------------------------------------------------------
++-----+-------------------+-----------------------------------------------------------------+
+|   # | Category          | Recommendation                                                  |
++=====+===================+=================================================================+
+|   1 | Cost Optimization | Implement cost-saving measures for $345/month potential savings |
++-----+-------------------+-----------------------------------------------------------------+
+|   2 | Security          | Address 2 critical security issues immediately                  |
++-----+-------------------+-----------------------------------------------------------------+
+|   3 | Performance       | Optimize cache hit rates for 14 cluster(s)                      |
++-----+-------------------+-----------------------------------------------------------------+
+|   4 | Maintenance       | Upgrade 1 cluster(s) to latest engine versions                  |
++-----+-------------------+-----------------------------------------------------------------+
+
+========================================================================================================================
+✅ ANALYSIS COMPLETE
+========================================================================================================================
+📄 Detailed report saved to: aws_audit_results.json
+📊 Performance dashboard saved to: cache_performance_dashboard.html
+📈 Rightsizing recommendations saved to: cluster_rightsizing_plan.csv
+========================================================================================================================
+
+
+Analysis complete!

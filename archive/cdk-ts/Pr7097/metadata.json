@@ -1,0 +1,36 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "464242",
+  "team": "2",
+  "startedAt": "2025-11-03T14:44:58.854Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Lambda",
+    "RDS",
+    "S3",
+    "CloudFront",
+    "Route53",
+    "IAM",
+    "SNS",
+    "CloudWatch",
+    "Config",
+    "AutoScaling",
+    "ALB",
+    "SecretsManager",
+    "KMS"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Olatunjym",
+  "dockerS3Location": ""
+}
