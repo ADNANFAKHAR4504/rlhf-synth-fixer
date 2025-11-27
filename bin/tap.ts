@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';
 
 const stack = new TapStack('tap', {
