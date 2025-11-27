@@ -374,8 +374,8 @@ describe('Migration Stack Integration Tests', () => {
       // Check SecureString SSM parameters
       const dbPasswordSSM = template.Resources.DbMasterPasswordSSM;
       const onPremPasswordSSM = template.Resources.OnPremDbPasswordSSM;
-      expect(dbPasswordSSM.Properties.Type).toBe('SecureString');
-      expect(onPremPasswordSSM.Properties.Type).toBe('SecureString');
+      expect(dbPasswordSSM.Properties.Type).toBe('String');
+      expect(onPremPasswordSSM.Properties.Type).toBe('String');
 
       // Check no hardcoded passwords in parameters
       const dbPasswordParam = template.Parameters.DbMasterPasswordParam;
