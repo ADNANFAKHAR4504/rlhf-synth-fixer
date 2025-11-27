@@ -5,6 +5,7 @@ This implementation creates a production-ready VPC infrastructure for a financia
 ## File: lib/tap_stack.py
 
 ```python
+import os
 from constructs import Construct
 from cdktf import TerraformStack, TerraformOutput
 from cdktf_cdktf_provider_aws.provider import AwsProvider
@@ -26,16 +27,36 @@ from cdktf_cdktf_provider_aws.flow_log import FlowLog
 from cdktf_cdktf_provider_aws.network_acl import NetworkAcl, NetworkAclEgress, NetworkAclIngress
 
 
+def get_aws_region():
+    """Read AWS region from lib/AWS_REGION file or environment variable."""
+    # First check environment variable
+    region = os.getenv("AWS_REGION")
+    if region:
+        return region.strip()
+
+    # Fall back to reading from file
+    region_file = os.path.join(os.path.dirname(__file__), "AWS_REGION")
+    if os.path.exists(region_file):
+        with open(region_file, "r", encoding="utf-8") as f:
+            return f.read().strip()
+
+    # Default fallback
+    return "us-east-1"
+
+
 class TapStack(TerraformStack):
     def __init__(self, scope: Construct, id: str, environment_suffix: str):
         super().__init__(scope, id)
 
+        # Get AWS region from file or environment
+        aws_region = get_aws_region()
+
         # AWS Provider
-        AwsProvider(self, "aws", region="eu-west-1")
+        AwsProvider(self, "aws", region=aws_region)
 
         # Common tags
         common_tags = {
-            "Environment": "Production",
+            "Environment": environment_suffix,
             "Project": "DigitalBanking"
         }
 
@@ -57,8 +78,8 @@ class TapStack(TerraformStack):
             tags={**common_tags, "Name": f"igw-{environment_suffix}"}
         )
 
-        # Availability Zones
-        azs = ["eu-west-1a", "eu-west-1b", "eu-west-1c"]
+        # Availability Zones (3 AZs for high availability as per requirements)
+        azs = [f"{aws_region}a", f"{aws_region}b", f"{aws_region}c"]
 
         # Create subnets
         public_subnets = []
@@ -153,10 +174,11 @@ class TapStack(TerraformStack):
             )
 
         # S3 Bucket for VPC Flow Logs
+        # Note: S3 bucket names must be globally unique, prefix omitted to allow Terraform to generate unique name
         flow_logs_bucket = S3Bucket(
             self,
             f"flow-logs-bucket-{environment_suffix}",
-            bucket=f"vpc-flow-logs-{environment_suffix}",
+            bucket_prefix=f"vpc-flow-logs-{environment_suffix}-",
             force_destroy=True,
             tags={**common_tags, "Name": f"vpc-flow-logs-{environment_suffix}"}
         )
@@ -278,7 +300,7 @@ app.synth()
   "app": "python main.py",
   "projectId": "u7g9r1g8",
   "terraformProviders": [
-    "aws@~> 5.0"
+    "aws@~> 6.0"
   ],
   "terraformModules": [],
   "context": {}
@@ -369,7 +391,7 @@ TapStack(app, "tap", environment_suffix="prod")
 
 ## Compliance
 
-- All resources tagged with Environment=Production and Project=DigitalBanking
+- All resources tagged with Environment={environmentSuffix} and Project=DigitalBanking
 - VPC Flow Logs enabled for all traffic types
 - Logs stored in S3 with versioning
 - 30-day lifecycle policy for Glacier transition

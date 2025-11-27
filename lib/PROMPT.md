@@ -50,7 +50,7 @@ Create a production-grade VPC network infrastructure using **CDKTF with Python**
    - Apply network ACLs to appropriate subnets
 
 7. **Resource Tagging**
-   - Tag all resources with Environment=Production
+   - Tag all resources with Environment={environmentSuffix} (use the suffix parameter value)
    - Tag all resources with Project=DigitalBanking
    - Resource names must include environmentSuffix for uniqueness across deployments
 
@@ -100,7 +100,7 @@ Create a production-grade VPC network infrastructure using **CDKTF with Python**
 - Flow logs must capture accepted, rejected, and all traffic types
 - S3 lifecycle transition must occur at exactly 30 days
 - Network ACLs must explicitly deny all traffic by default
-- All resources must be tagged with Environment=Production and Project=DigitalBanking
+- All resources must be tagged with Environment={environmentSuffix} and Project=DigitalBanking
 - No reliance on default main route table
 - All resources must include environmentSuffix in names
 - Code must follow CDKTF Python best practices and conventions

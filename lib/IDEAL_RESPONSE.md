@@ -324,7 +324,7 @@ app.synth()
   "projectId": "u7g9r1g8",
   "sendCrashReports": "false",
   "terraformProviders": [
-    "aws@~> 5.0"
+    "aws@~> 6.0"
   ],
   "terraformModules": [],
   "context": {
