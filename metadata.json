@@ -12,10 +12,19 @@
   ],
   "aws_services": [
     "S3 Bucket",
+    "EC2",
+    "IAM",
+    "RDS",
+    "ALB",
+    "ASG",
+    "VPC",
+    "SNS",
     "CloudFormation",
-    "Lambda",
-    "EventBridge",
+    "Backup",
     "CloudWatch LogGroup",
-    "VPC"
+    "CloudWatch Dashboard",
+    "CloudWatch Alarm",
+    "SSM Parameter Store",
+    "Secrets Manager"
   ]
 }
