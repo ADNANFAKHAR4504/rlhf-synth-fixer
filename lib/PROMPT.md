@@ -109,4 +109,4 @@ Global e-commerce platform requires consistent, high-availability infrastructure
 
 # Output format
 
-* Return only the **complete `TapStack.yml`** content (no extra commentary)
+* Return only the **complete `TapStack.yml`** content (no extra commentary).
