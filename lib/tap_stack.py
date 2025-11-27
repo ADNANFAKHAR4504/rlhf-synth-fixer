@@ -84,9 +84,6 @@ class TapStack(TerraformStack):
             encrypt=True,
         )
 
-        # Add S3 state locking using escape hatch
-        self.add_override("terraform.backend.s3.use_lockfile", True)
-
         # Get current AWS account info
         current_account = DataAwsCallerIdentity(self, "current")
 
