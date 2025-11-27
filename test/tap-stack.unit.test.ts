@@ -1,5 +1,5 @@
-import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
+import * as pulumi from "@pulumi/pulumi";
 import { TapStack } from "../lib/tap-stack";
 
 // Enable Pulumi mocking
@@ -12,10 +12,10 @@ describe("TapStack Structure", () => {
   beforeEach(() => {
     // Reset all mocks before each test
     jest.clearAllMocks();
-    
+
     // Mock Pulumi runtime behavior
     (pulumi as any).all = jest.fn().mockImplementation((values) => Promise.resolve(values));
-    (pulumi as any).Output = jest.fn().mockImplementation((value) => ({ 
+    (pulumi as any).Output = jest.fn().mockImplementation((value) => ({
       promise: () => Promise.resolve(value),
       apply: (fn: any) => fn(value)
     }));
