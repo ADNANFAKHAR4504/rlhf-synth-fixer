@@ -51,18 +51,21 @@ class TapStack(TerraformStack):
 
         # Get environment suffix from parameter or environment variable
         environment_suffix = environment_suffix or os.environ.get('ENVIRONMENT_SUFFIX', 'test')
-        state_bucket = state_bucket or os.environ.get('TERRAFORM_STATE_BUCKET', 'iac-rlhf-tf-states')
+        state_bucket = state_bucket or os.environ.get('TERRAFORM_STATE_BUCKET')
         state_bucket_region = state_bucket_region or os.environ.get('TERRAFORM_STATE_BUCKET_REGION', 'us-east-1')
 
-        # Configure S3 backend for state management
-        S3Backend(
-            self,
-            bucket=state_bucket,
-            key=f"tap/{environment_suffix}/terraform.tfstate",
-            region=state_bucket_region,
-            encrypt=True,
-            dynamodb_table="iac-rlhf-tf-state-locks"
-        )
+        # Configure S3 backend for remote state (if state_bucket is provided)
+        # Note: DynamoDB table for locking is not included to avoid ResourceNotFoundException
+        # State locking can be added later if needed by setting TERRAFORM_STATE_LOCK_TABLE env var
+        if state_bucket:
+            S3Backend(
+                self,
+                bucket=state_bucket,
+                key=f"tap/{environment_suffix}/terraform.tfstate",
+                region=state_bucket_region,
+                encrypt=True
+            )
+            print(f'✅ Configured S3 backend: s3://{state_bucket}/tap/{environment_suffix}/terraform.tfstate')
 
         # Define regions
         primary_region = "us-east-1"
