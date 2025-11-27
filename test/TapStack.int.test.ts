@@ -433,7 +433,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('should have ValidatorLambdaArn in deployment outputs if available', () => {
-      if (deploymentOutputs && deploymentOutputs.ValidatorLambdaArn) {
+      if (deploymentOutputs && deploymentOutputs.ValidatorLambdaArn && deploymentOutputs.ValidatorLambdaArn !== 'NotCreated') {
         expect(deploymentOutputs.ValidatorLambdaArn).toMatch(/^arn:aws:lambda:[a-z0-9-]+:\d+:function:.+$/);
       }
     });

@@ -8,8 +8,7 @@
   "startedAt": "2025-11-25T00:40:55+05:30",
   "subtask": "IaC Program Optimization",
   "subject_labels": [
-    "IaC Diagnosis/Edits",
-    "IaC Optimization"
+    "IaC Diagnosis/Edits"
   ],
   "aws_services": [
     "RDS",
