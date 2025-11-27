@@ -1,3 +1,6 @@
+# Ideal CloudFormation Template (JSON)
+
+```json
 {
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "Secure Data Processing Pipeline for Financial Services with comprehensive encryption, VPC isolation, and compliance controls",
@@ -1593,3 +1596,5 @@
     }
   }
 }
+
+```

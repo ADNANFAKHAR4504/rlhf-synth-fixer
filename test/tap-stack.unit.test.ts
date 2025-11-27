@@ -1,23 +1,13 @@
 import fs from 'fs';
 import path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
-describe('TapStack CloudFormation Template', () => {
+describe('Secure Data Processing Pipeline CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
-  });
-
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
   });
 
   describe('Template Structure', () => {
@@ -28,137 +18,10 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
+        'Secure Data Processing Pipeline for Financial Services with comprehensive encryption, VPC isolation, and compliance controls'
       );
     });
 
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
-    });
-  });
-
-  describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
-    });
-
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
-      );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
-    });
-  });
-
-  describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
-    });
-
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
-    });
-
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
-    });
-
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
-    });
-
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
-    });
-
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
-
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
-    });
-  });
-
-  describe('Outputs', () => {
-    test('should have all required outputs', () => {
-      const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
-      ];
-
-      expectedOutputs.forEach(outputName => {
-        expect(template.Outputs[outputName]).toBeDefined();
-      });
-    });
-
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
-      });
-    });
-
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
-    });
-
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
-    });
-
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
-      });
-    });
-  });
-
-  describe('Template Validation', () => {
     test('should have valid JSON structure', () => {
       expect(template).toBeDefined();
       expect(typeof template).toBe('object');
@@ -171,40 +34,441 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources).not.toBeNull();
       expect(template.Outputs).not.toBeNull();
     });
+  });
 
-    test('should have exactly one resource', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+  describe('Parameters', () => {
+    test('should have EnvironmentSuffix parameter', () => {
+      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
     });
 
-    test('should have exactly one parameter', () => {
+    test('EnvironmentSuffix parameter should have correct properties', () => {
+      const envSuffixParam = template.Parameters.EnvironmentSuffix;
+      expect(envSuffixParam.Type).toBe('String');
+      expect(envSuffixParam.Default).toBe('prod');
+      expect(envSuffixParam.Description).toBeDefined();
+      expect(envSuffixParam.AllowedPattern).toBe('^[a-z0-9-]+$');
+    });
+
+    test('should have SecretRotationDays parameter', () => {
+      const param = template.Parameters.SecretRotationDays;
+      expect(param).toBeDefined();
+      expect(param.Type).toBe('Number');
+      expect(param.Default).toBe(30);
+      expect(param.MinValue).toBe(1);
+      expect(param.MaxValue).toBe(365);
+    });
+
+    test('should have LogRetentionDays parameter', () => {
+      const param = template.Parameters.LogRetentionDays;
+      expect(param).toBeDefined();
+      expect(param.Type).toBe('Number');
+      expect(param.Default).toBe(90);
+      expect(param.AllowedValues).toBeDefined();
+    });
+
+    test('should have VpcCidr parameter', () => {
+      const param = template.Parameters.VpcCidr;
+      expect(param).toBeDefined();
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('10.0.0.0/16');
+      expect(param.AllowedPattern).toBeDefined();
+    });
+
+    test('should have exactly four parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
-    });
-
-    test('should have exactly four outputs', () => {
-      const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(parameterCount).toBe(4);
     });
   });
 
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
+  describe('KMS Key Resources', () => {
+    test('should have KMSKey resource', () => {
+      expect(template.Resources.KMSKey).toBeDefined();
+      expect(template.Resources.KMSKey.Type).toBe('AWS::KMS::Key');
+    });
 
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+    test('KMSKey should have key rotation enabled', () => {
+      const kmsKey = template.Resources.KMSKey;
+      expect(kmsKey.Properties.EnableKeyRotation).toBe(true);
+    });
+
+    test('KMSKey should have proper key policy', () => {
+      const kmsKey = template.Resources.KMSKey;
+      expect(kmsKey.Properties.KeyPolicy).toBeDefined();
+      expect(kmsKey.Properties.KeyPolicy.Version).toBe('2012-10-17');
+      expect(kmsKey.Properties.KeyPolicy.Statement).toBeDefined();
+    });
+
+    test('should have KMSKeyAlias resource', () => {
+      expect(template.Resources.KMSKeyAlias).toBeDefined();
+      expect(template.Resources.KMSKeyAlias.Type).toBe('AWS::KMS::Alias');
+    });
+  });
+
+  describe('VPC Resources', () => {
+    test('should have VPC resource', () => {
+      expect(template.Resources.VPC).toBeDefined();
+      expect(template.Resources.VPC.Type).toBe('AWS::EC2::VPC');
+    });
+
+    test('VPC should have DNS support enabled', () => {
+      const vpc = template.Resources.VPC;
+      expect(vpc.Properties.EnableDnsHostnames).toBe(true);
+      expect(vpc.Properties.EnableDnsSupport).toBe(true);
+    });
+
+    test('should have three private subnets', () => {
+      expect(template.Resources.PrivateSubnet1).toBeDefined();
+      expect(template.Resources.PrivateSubnet2).toBeDefined();
+      expect(template.Resources.PrivateSubnet3).toBeDefined();
+    });
+
+    test('private subnets should not have public IPs', () => {
+      expect(template.Resources.PrivateSubnet1.Properties.MapPublicIpOnLaunch).toBe(false);
+      expect(template.Resources.PrivateSubnet2.Properties.MapPublicIpOnLaunch).toBe(false);
+      expect(template.Resources.PrivateSubnet3.Properties.MapPublicIpOnLaunch).toBe(false);
+    });
+
+    test('should have PrivateRouteTable', () => {
+      expect(template.Resources.PrivateRouteTable).toBeDefined();
+      expect(template.Resources.PrivateRouteTable.Type).toBe('AWS::EC2::RouteTable');
+    });
+
+    test('should have route table associations for all private subnets', () => {
+      expect(template.Resources.PrivateSubnet1RouteTableAssociation).toBeDefined();
+      expect(template.Resources.PrivateSubnet2RouteTableAssociation).toBeDefined();
+      expect(template.Resources.PrivateSubnet3RouteTableAssociation).toBeDefined();
+    });
+  });
+
+  describe('VPC Endpoints', () => {
+    test('should have S3 VPC Endpoint', () => {
+      expect(template.Resources.S3VPCEndpoint).toBeDefined();
+      expect(template.Resources.S3VPCEndpoint.Type).toBe('AWS::EC2::VPCEndpoint');
+      expect(template.Resources.S3VPCEndpoint.Properties.VpcEndpointType).toBe('Gateway');
+    });
+
+    test('should have DynamoDB VPC Endpoint', () => {
+      expect(template.Resources.DynamoDBVPCEndpoint).toBeDefined();
+      expect(template.Resources.DynamoDBVPCEndpoint.Type).toBe('AWS::EC2::VPCEndpoint');
+      expect(template.Resources.DynamoDBVPCEndpoint.Properties.VpcEndpointType).toBe('Gateway');
+    });
+
+    test('should have Secrets Manager VPC Endpoint', () => {
+      expect(template.Resources.SecretsManagerVPCEndpoint).toBeDefined();
+      expect(template.Resources.SecretsManagerVPCEndpoint.Type).toBe('AWS::EC2::VPCEndpoint');
+      expect(template.Resources.SecretsManagerVPCEndpoint.Properties.VpcEndpointType).toBe('Interface');
+      expect(template.Resources.SecretsManagerVPCEndpoint.Properties.PrivateDnsEnabled).toBe(true);
+    });
+  });
+
+  describe('Security Groups', () => {
+    test('should have VPCEndpointSecurityGroup', () => {
+      expect(template.Resources.VPCEndpointSecurityGroup).toBeDefined();
+      expect(template.Resources.VPCEndpointSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
+    });
+
+    test('should have LambdaSecurityGroup', () => {
+      expect(template.Resources.LambdaSecurityGroup).toBeDefined();
+      expect(template.Resources.LambdaSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
+    });
+
+    test('security groups should have explicit egress rules', () => {
+      expect(template.Resources.VPCEndpointSecurityGroup.Properties.SecurityGroupEgress).toBeDefined();
+      expect(template.Resources.LambdaSecurityGroup.Properties.SecurityGroupEgress).toBeDefined();
+    });
+  });
+
+  describe('S3 Bucket', () => {
+    test('should have DataBucket resource', () => {
+      expect(template.Resources.DataBucket).toBeDefined();
+      expect(template.Resources.DataBucket.Type).toBe('AWS::S3::Bucket');
+    });
+
+    test('DataBucket should have KMS encryption', () => {
+      const bucket = template.Resources.DataBucket;
+      expect(bucket.Properties.BucketEncryption).toBeDefined();
+      const encryption = bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0];
+      expect(encryption.ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+    });
+
+    test('DataBucket should have versioning enabled', () => {
+      const bucket = template.Resources.DataBucket;
+      expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+    });
+
+    test('DataBucket should block public access', () => {
+      const bucket = template.Resources.DataBucket;
+      const publicAccessBlock = bucket.Properties.PublicAccessBlockConfiguration;
+      expect(publicAccessBlock.BlockPublicAcls).toBe(true);
+      expect(publicAccessBlock.BlockPublicPolicy).toBe(true);
+      expect(publicAccessBlock.IgnorePublicAcls).toBe(true);
+      expect(publicAccessBlock.RestrictPublicBuckets).toBe(true);
+    });
+
+    test('DataBucket should have lifecycle rules', () => {
+      const bucket = template.Resources.DataBucket;
+      expect(bucket.Properties.LifecycleConfiguration).toBeDefined();
+      expect(bucket.Properties.LifecycleConfiguration.Rules.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('DynamoDB Table', () => {
+    test('should have TransactionTable resource', () => {
+      expect(template.Resources.TransactionTable).toBeDefined();
+      expect(template.Resources.TransactionTable.Type).toBe('AWS::DynamoDB::Table');
+    });
+
+    test('TransactionTable should use PAY_PER_REQUEST billing', () => {
+      const table = template.Resources.TransactionTable;
+      expect(table.Properties.BillingMode).toBe('PAY_PER_REQUEST');
+    });
+
+    test('TransactionTable should have KMS encryption', () => {
+      const table = template.Resources.TransactionTable;
+      expect(table.Properties.SSESpecification).toBeDefined();
+      expect(table.Properties.SSESpecification.SSEEnabled).toBe(true);
+      expect(table.Properties.SSESpecification.SSEType).toBe('KMS');
+    });
+
+    test('TransactionTable should have point-in-time recovery enabled', () => {
+      const table = template.Resources.TransactionTable;
+      expect(table.Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toBe(true);
+    });
+
+    test('TransactionTable should have correct key schema', () => {
+      const table = template.Resources.TransactionTable;
+      const keySchema = table.Properties.KeySchema;
+      expect(keySchema).toHaveLength(2);
+      expect(keySchema[0].AttributeName).toBe('transactionId');
+      expect(keySchema[0].KeyType).toBe('HASH');
+      expect(keySchema[1].AttributeName).toBe('timestamp');
+      expect(keySchema[1].KeyType).toBe('RANGE');
+    });
+  });
+
+  describe('Secrets Manager', () => {
+    test('should have DatabaseSecret resource', () => {
+      expect(template.Resources.DatabaseSecret).toBeDefined();
+      expect(template.Resources.DatabaseSecret.Type).toBe('AWS::SecretsManager::Secret');
+    });
+
+    test('DatabaseSecret should use KMS encryption', () => {
+      const secret = template.Resources.DatabaseSecret;
+      expect(secret.Properties.KmsKeyId).toBeDefined();
+    });
+
+    test('DatabaseSecret should generate secure password', () => {
+      const secret = template.Resources.DatabaseSecret;
+      expect(secret.Properties.GenerateSecretString).toBeDefined();
+      expect(secret.Properties.GenerateSecretString.PasswordLength).toBe(32);
+    });
+
+    test('should have SecretRotationSchedule', () => {
+      expect(template.Resources.SecretRotationSchedule).toBeDefined();
+      expect(template.Resources.SecretRotationSchedule.Type).toBe('AWS::SecretsManager::RotationSchedule');
+    });
+  });
+
+  describe('Lambda Functions', () => {
+    test('should have DataProcessorFunction', () => {
+      expect(template.Resources.DataProcessorFunction).toBeDefined();
+      expect(template.Resources.DataProcessorFunction.Type).toBe('AWS::Lambda::Function');
+    });
+
+    test('DataProcessorFunction should use Python 3.11', () => {
+      const lambda = template.Resources.DataProcessorFunction;
+      expect(lambda.Properties.Runtime).toBe('python3.11');
+    });
+
+    test('DataProcessorFunction should be in VPC', () => {
+      const lambda = template.Resources.DataProcessorFunction;
+      expect(lambda.Properties.VpcConfig).toBeDefined();
+      expect(lambda.Properties.VpcConfig.SubnetIds).toBeDefined();
+      expect(lambda.Properties.VpcConfig.SecurityGroupIds).toBeDefined();
+    });
+
+    test('DataProcessorFunction should have KMS key for environment encryption', () => {
+      const lambda = template.Resources.DataProcessorFunction;
+      expect(lambda.Properties.KmsKeyArn).toBeDefined();
+    });
+
+    test('should have SecretRotationFunction', () => {
+      expect(template.Resources.SecretRotationFunction).toBeDefined();
+      expect(template.Resources.SecretRotationFunction.Type).toBe('AWS::Lambda::Function');
+    });
+
+    test('should have LambdaExecutionRole', () => {
+      expect(template.Resources.LambdaExecutionRole).toBeDefined();
+      expect(template.Resources.LambdaExecutionRole.Type).toBe('AWS::IAM::Role');
+    });
+  });
+
+  describe('API Gateway', () => {
+    test('should have RestApi resource', () => {
+      expect(template.Resources.RestApi).toBeDefined();
+      expect(template.Resources.RestApi.Type).toBe('AWS::ApiGateway::RestApi');
+    });
+
+    test('RestApi should use API key authentication', () => {
+      const api = template.Resources.RestApi;
+      expect(api.Properties.ApiKeySourceType).toBe('HEADER');
+    });
+
+    test('should have TransactionsResource', () => {
+      expect(template.Resources.TransactionsResource).toBeDefined();
+      expect(template.Resources.TransactionsResource.Type).toBe('AWS::ApiGateway::Resource');
+    });
+
+    test('should have RequestValidator', () => {
+      expect(template.Resources.RequestValidator).toBeDefined();
+      expect(template.Resources.RequestValidator.Properties.ValidateRequestBody).toBe(true);
+      expect(template.Resources.RequestValidator.Properties.ValidateRequestParameters).toBe(true);
+    });
+
+    test('should have ApiKey and UsagePlan', () => {
+      expect(template.Resources.ApiKey).toBeDefined();
+      expect(template.Resources.UsagePlan).toBeDefined();
+      expect(template.Resources.UsagePlanKey).toBeDefined();
+    });
+
+    test('UsagePlan should have throttling configured', () => {
+      const usagePlan = template.Resources.UsagePlan;
+      expect(usagePlan.Properties.Throttle).toBeDefined();
+      expect(usagePlan.Properties.Quota).toBeDefined();
+    });
+  });
+
+  describe('CloudWatch Resources', () => {
+    test('should have DataProcessorLogGroup', () => {
+      expect(template.Resources.DataProcessorLogGroup).toBeDefined();
+      expect(template.Resources.DataProcessorLogGroup.Type).toBe('AWS::Logs::LogGroup');
+    });
+
+    test('log groups should have KMS encryption', () => {
+      expect(template.Resources.DataProcessorLogGroup.Properties.KmsKeyId).toBeDefined();
+      expect(template.Resources.SecretRotationLogGroup.Properties.KmsKeyId).toBeDefined();
+      expect(template.Resources.ApiGatewayLogGroup.Properties.KmsKeyId).toBeDefined();
+    });
+
+    test('should have CloudWatch alarms', () => {
+      expect(template.Resources.ApiErrorAlarm).toBeDefined();
+      expect(template.Resources.ApiErrorAlarm.Type).toBe('AWS::CloudWatch::Alarm');
+      expect(template.Resources.LambdaErrorAlarm).toBeDefined();
+      expect(template.Resources.LambdaErrorAlarm.Type).toBe('AWS::CloudWatch::Alarm');
+    });
+  });
+
+  describe('Outputs', () => {
+    test('should have all required outputs', () => {
+      const expectedOutputs = [
+        'KMSKeyId',
+        'KMSKeyArn',
+        'VPCId',
+        'DataBucketName',
+        'TransactionTableName',
+        'DataProcessorFunctionArn',
+        'ApiEndpoint',
+        'ApiKeyId',
+        'DatabaseSecretArn',
+      ];
+
+      expectedOutputs.forEach(outputName => {
+        expect(template.Outputs[outputName]).toBeDefined();
       });
     });
 
-    test('export names should follow naming convention', () => {
+    test('should have exactly nine outputs', () => {
+      const outputCount = Object.keys(template.Outputs).length;
+      expect(outputCount).toBe(9);
+    });
+
+    test('all outputs should have Export names', () => {
       Object.keys(template.Outputs).forEach(outputKey => {
         const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
+        expect(output.Export).toBeDefined();
+        expect(output.Export.Name).toBeDefined();
       });
+    });
+  });
+
+  describe('Resource Tagging', () => {
+    test('all major resources should have Environment tag', () => {
+      const resourcesWithTags = [
+        'KMSKey', 'VPC', 'PrivateSubnet1', 'PrivateSubnet2', 'PrivateSubnet3',
+        'DataBucket', 'TransactionTable', 'DatabaseSecret', 'LambdaExecutionRole',
+        'DataProcessorFunction', 'RestApi'
+      ];
+
+      resourcesWithTags.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        if (resource.Properties.Tags) {
+          const envTag = resource.Properties.Tags.find((t: any) => t.Key === 'Environment');
+          expect(envTag).toBeDefined();
+        }
+      });
+    });
+
+    test('all major resources should have Project tag', () => {
+      const resourcesWithTags = [
+        'KMSKey', 'VPC', 'DataBucket', 'TransactionTable'
+      ];
+
+      resourcesWithTags.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        if (resource.Properties.Tags) {
+          const projectTag = resource.Properties.Tags.find((t: any) => t.Key === 'Project');
+          expect(projectTag).toBeDefined();
+          expect(projectTag.Value).toBe('SecureDataPipeline');
+        }
+      });
+    });
+
+    test('all major resources should have ComplianceLevel tag', () => {
+      const resourcesWithTags = [
+        'KMSKey', 'VPC', 'DataBucket', 'TransactionTable'
+      ];
+
+      resourcesWithTags.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        if (resource.Properties.Tags) {
+          const complianceTag = resource.Properties.Tags.find((t: any) => t.Key === 'ComplianceLevel');
+          expect(complianceTag).toBeDefined();
+          expect(complianceTag.Value).toBe('High');
+        }
+      });
+    });
+  });
+
+  describe('Security Best Practices', () => {
+    test('should not have any resources with public access', () => {
+      // Check S3 bucket has public access blocked
+      const bucket = template.Resources.DataBucket;
+      expect(bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
+
+      // Check subnets don't assign public IPs
+      expect(template.Resources.PrivateSubnet1.Properties.MapPublicIpOnLaunch).toBe(false);
+      expect(template.Resources.PrivateSubnet2.Properties.MapPublicIpOnLaunch).toBe(false);
+      expect(template.Resources.PrivateSubnet3.Properties.MapPublicIpOnLaunch).toBe(false);
+    });
+
+    test('all sensitive data should be encrypted with KMS', () => {
+      // S3 bucket encryption
+      const bucket = template.Resources.DataBucket;
+      expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0]
+        .ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+
+      // DynamoDB encryption
+      const table = template.Resources.TransactionTable;
+      expect(table.Properties.SSESpecification.SSEType).toBe('KMS');
+
+      // Secrets Manager encryption
+      const secret = template.Resources.DatabaseSecret;
+      expect(secret.Properties.KmsKeyId).toBeDefined();
+    });
+
+    test('Lambda functions should be in VPC', () => {
+      expect(template.Resources.DataProcessorFunction.Properties.VpcConfig).toBeDefined();
+      expect(template.Resources.SecretRotationFunction.Properties.VpcConfig).toBeDefined();
     });
   });
 });
