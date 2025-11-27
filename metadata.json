@@ -4,6 +4,8 @@
   "language": "json",
   "complexity": "expert",
   "team": "synth",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
   "po_id": "PO-101912722",
   "turn_type": "single",
   "startedAt": "2025-11-26T12:00:00+00:00",
@@ -27,7 +29,6 @@
     "CloudWatch",
     "EC2"
   ],
-  "background": "A financial services company needs to implement a secure data processing pipeline that meets strict compliance requirements for handling sensitive customer information. The pipeline must enforce encryption at all layers, implement fine-grained access controls, and maintain detailed audit logs for regulatory compliance.",
   "region": "us-east-1",
   "training_quality": 10
 }
