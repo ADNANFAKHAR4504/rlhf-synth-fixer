@@ -1,34 +1,30 @@
-import * as fs from 'fs';
-import * as path from 'path';
 import {
   CloudWatchClient,
   DescribeAlarmsCommand,
-  GetDashboardCommand,
-  DescribeAnomalyDetectorsCommand,
-  DescribeAlarmsForMetricCommand,
+  GetDashboardCommand
 } from '@aws-sdk/client-cloudwatch';
 import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
 import {
-  LambdaClient,
-  GetFunctionCommand,
-  GetFunctionConfigurationCommand,
-} from '@aws-sdk/client-lambda';
-import { SNSClient, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
-import { SQSClient, GetQueueAttributesCommand } from '@aws-sdk/client-sqs';
-import {
-  EventBridgeClient,
-  DescribeRuleCommand,
-  ListTargetsByRuleCommand,
+  EventBridgeClient
 } from '@aws-sdk/client-eventbridge';
 import {
-  IAMClient,
   GetRoleCommand,
   GetRolePolicyCommand,
+  IAMClient,
   ListRolePoliciesCommand,
 } from '@aws-sdk/client-iam';
+import {
+  GetFunctionCommand,
+  GetFunctionConfigurationCommand,
+  LambdaClient,
+} from '@aws-sdk/client-lambda';
+import { GetTopicAttributesCommand, SNSClient } from '@aws-sdk/client-sns';
+import { GetQueueAttributesCommand, SQSClient } from '@aws-sdk/client-sqs';
+import * as fs from 'fs';
+import * as path from 'path';
 
 describe('TapStack Integration Tests', () => {
   let outputs: {
@@ -39,7 +35,7 @@ describe('TapStack Integration Tests', () => {
   };
 
   const region = process.env.AWS_REGION || 'us-east-1';
-  const environmentSuffix = 'synthk9s3p4t3';
+  let environmentSuffix: string;
 
   // AWS SDK clients
   const cloudwatchClient = new CloudWatchClient({ region });
@@ -65,6 +61,15 @@ describe('TapStack Integration Tests', () => {
     }
 
     outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+
+    // Extract environment suffix from SNS topic ARN
+    // Format: arn:aws:sns:us-east-1:***:critical-alerts-{suffix}-{hash}
+    const snsArnMatch = outputs.snsTopicArn.match(/critical-alerts-([^-]+)-/);
+    if (snsArnMatch) {
+      environmentSuffix = snsArnMatch[1];
+    } else {
+      throw new Error('Could not extract environment suffix from SNS topic ARN');
+    }
   });
 
   describe('Lambda Function', () => {
