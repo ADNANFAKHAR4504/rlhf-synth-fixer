@@ -152,10 +152,17 @@ class TestNetworkingStackResources:
         assert "resource" in synth_json
         assert "aws_vpc" in synth_json["resource"]
 
-        # Verify both primary and secondary VPCs
+        # Verify both primary and secondary VPCs (CDKTF adds hash suffix)
         vpcs = synth_json["resource"]["aws_vpc"]
-        assert "primary_vpc" in vpcs
-        assert "secondary_vpc" in vpcs
+        vpc_names = list(vpcs.keys())
+
+        # Check for primary VPC (name contains 'primary_vpc')
+        primary_vpcs = [name for name in vpc_names if 'primary_vpc' in name]
+        assert len(primary_vpcs) >= 1, f"No primary VPC found in {vpc_names}"
+
+        # Check for secondary VPC (name contains 'secondary_vpc')
+        secondary_vpcs = [name for name in vpc_names if 'secondary_vpc' in name]
+        assert len(secondary_vpcs) >= 1, f"No secondary VPC found in {vpc_names}"
 
     def test_networking_stack_creates_subnet_resources(self):
         """Networking stack creates subnet resources in both regions."""
@@ -199,12 +206,13 @@ class TestNetworkingStackResources:
         assert "aws_security_group" in synth_json["resource"]
 
         security_groups = synth_json["resource"]["aws_security_group"]
+        sg_names = list(security_groups.keys())
 
-        # Verify DB and Lambda security groups in both regions
-        assert "primary_db_sg" in security_groups
-        assert "secondary_db_sg" in security_groups
-        assert "primary_lambda_sg" in security_groups
-        assert "secondary_lambda_sg" in security_groups
+        # Verify DB and Lambda security groups in both regions (CDKTF adds hash suffix)
+        assert any("primary_db_sg" in name for name in sg_names), f"No primary_db_sg found in {sg_names}"
+        assert any("secondary_db_sg" in name for name in sg_names), f"No secondary_db_sg found in {sg_names}"
+        assert any("primary_lambda_sg" in name for name in sg_names), f"No primary_lambda_sg found in {sg_names}"
+        assert any("secondary_lambda_sg" in name for name in sg_names), f"No secondary_lambda_sg found in {sg_names}"
 
     def test_networking_stack_creates_vpc_peering(self):
         """Networking stack creates VPC peering connection between regions."""
@@ -243,7 +251,10 @@ class TestDatabaseStackResources:
         # Verify global cluster exists
         assert "aws_rds_global_cluster" in synth_json["resource"]
 
-        global_cluster = synth_json["resource"]["aws_rds_global_cluster"]["global_cluster"]
+        # Find global cluster (CDKTF adds hash suffix)
+        global_clusters = synth_json["resource"]["aws_rds_global_cluster"]
+        global_cluster_name = [name for name in global_clusters.keys() if "global_cluster" in name][0]
+        global_cluster = global_clusters[global_cluster_name]
         assert global_cluster["engine"] == "aurora-mysql"
 
     def test_database_stack_creates_primary_and_secondary_clusters(self):
@@ -263,8 +274,11 @@ class TestDatabaseStackResources:
         assert "aws_rds_cluster" in synth_json["resource"]
 
         clusters = synth_json["resource"]["aws_rds_cluster"]
-        assert "primary_cluster" in clusters
-        assert "secondary_cluster" in clusters
+        cluster_names = list(clusters.keys())
+
+        # Check for primary and secondary clusters (CDKTF adds hash suffix)
+        assert any("primary_cluster" in name for name in cluster_names), f"No primary_cluster found in {cluster_names}"
+        assert any("secondary_cluster" in name for name in cluster_names), f"No secondary_cluster found in {cluster_names}"
 
     def test_database_stack_creates_cluster_instances(self):
         """Database stack creates Aurora cluster instances."""
@@ -283,8 +297,11 @@ class TestDatabaseStackResources:
         assert "aws_rds_cluster_instance" in synth_json["resource"]
 
         instances = synth_json["resource"]["aws_rds_cluster_instance"]
-        assert "primary_instance" in instances
-        assert "secondary_instance" in instances
+        instance_names = list(instances.keys())
+
+        # Check for primary and secondary instances (CDKTF adds hash suffix)
+        assert any("primary_instance" in name for name in instance_names), f"No primary_instance found in {instance_names}"
+        assert any("secondary_instance" in name for name in instance_names), f"No secondary_instance found in {instance_names}"
 
     def test_database_stack_creates_subnet_groups(self):
         """Database stack creates DB subnet groups in both regions."""
@@ -303,8 +320,11 @@ class TestDatabaseStackResources:
         assert "aws_db_subnet_group" in synth_json["resource"]
 
         subnet_groups = synth_json["resource"]["aws_db_subnet_group"]
-        assert "primary_subnet_group" in subnet_groups
-        assert "secondary_subnet_group" in subnet_groups
+        group_names = list(subnet_groups.keys())
+
+        # Check for primary and secondary subnet groups (CDKTF adds hash suffix)
+        assert any("primary_subnet_group" in name for name in group_names), f"No primary_subnet_group found in {group_names}"
+        assert any("secondary_subnet_group" in name for name in group_names), f"No secondary_subnet_group found in {group_names}"
 
 
 class TestMonitoringStackResources:
@@ -327,8 +347,11 @@ class TestMonitoringStackResources:
         assert "aws_sns_topic" in synth_json["resource"]
 
         sns_topics = synth_json["resource"]["aws_sns_topic"]
-        assert "primary_sns_topic" in sns_topics
-        assert "secondary_sns_topic" in sns_topics
+        topic_names = list(sns_topics.keys())
+
+        # Check for primary and secondary SNS topics (CDKTF adds hash suffix)
+        assert any("primary_sns_topic" in name for name in topic_names), f"No primary_sns_topic found in {topic_names}"
+        assert any("secondary_sns_topic" in name for name in topic_names), f"No secondary_sns_topic found in {topic_names}"
 
     def test_monitoring_stack_creates_cloudwatch_alarms(self):
         """Monitoring stack creates CloudWatch alarms for Aurora metrics."""
@@ -347,13 +370,14 @@ class TestMonitoringStackResources:
         assert "aws_cloudwatch_metric_alarm" in synth_json["resource"]
 
         alarms = synth_json["resource"]["aws_cloudwatch_metric_alarm"]
+        alarm_names = list(alarms.keys())
 
-        # Verify key alarms exist
-        assert "primary_replication_alarm" in alarms
-        assert "primary_cpu_alarm" in alarms
-        assert "primary_connections_alarm" in alarms
-        assert "secondary_cpu_alarm" in alarms
-        assert "secondary_connections_alarm" in alarms
+        # Verify key alarms exist (CDKTF adds hash suffix)
+        assert any("primary_replication_alarm" in name for name in alarm_names), f"No primary_replication_alarm found in {alarm_names}"
+        assert any("primary_cpu_alarm" in name for name in alarm_names), f"No primary_cpu_alarm found in {alarm_names}"
+        assert any("primary_connections_alarm" in name for name in alarm_names), f"No primary_connections_alarm found in {alarm_names}"
+        assert any("secondary_cpu_alarm" in name for name in alarm_names), f"No secondary_cpu_alarm found in {alarm_names}"
+        assert any("secondary_connections_alarm" in name for name in alarm_names), f"No secondary_connections_alarm found in {alarm_names}"
 
 
 class TestFailoverStackResources:
@@ -376,11 +400,12 @@ class TestFailoverStackResources:
         assert "aws_lambda_function" in synth_json["resource"]
 
         lambda_functions = synth_json["resource"]["aws_lambda_function"]
+        lambda_names = list(lambda_functions.keys())
 
-        # Verify health monitoring and failover trigger Lambdas
-        assert "primary_health_lambda" in lambda_functions
-        assert "primary_failover_lambda" in lambda_functions
-        assert "secondary_health_lambda" in lambda_functions
+        # Verify health monitoring and failover trigger Lambdas (CDKTF adds hash suffix)
+        assert any("primary_health_lambda" in name for name in lambda_names), f"No primary_health_lambda found in {lambda_names}"
+        assert any("primary_failover_lambda" in name for name in lambda_names), f"No primary_failover_lambda found in {lambda_names}"
+        assert any("secondary_health_lambda" in name for name in lambda_names), f"No secondary_health_lambda found in {lambda_names}"
 
     def test_failover_stack_creates_iam_roles(self):
         """Failover stack creates IAM roles for Lambda execution."""
@@ -399,8 +424,11 @@ class TestFailoverStackResources:
         assert "aws_iam_role" in synth_json["resource"]
 
         iam_roles = synth_json["resource"]["aws_iam_role"]
-        assert "primary_lambda_role" in iam_roles
-        assert "secondary_lambda_role" in iam_roles
+        role_names = list(iam_roles.keys())
+
+        # Check for primary and secondary Lambda roles (CDKTF adds hash suffix)
+        assert any("primary_lambda_role" in name for name in role_names), f"No primary_lambda_role found in {role_names}"
+        assert any("secondary_lambda_role" in name for name in role_names), f"No secondary_lambda_role found in {role_names}"
 
     def test_failover_stack_creates_eventbridge_rules(self):
         """Failover stack creates EventBridge rules for health checks."""
@@ -419,8 +447,11 @@ class TestFailoverStackResources:
         assert "aws_cloudwatch_event_rule" in synth_json["resource"]
 
         event_rules = synth_json["resource"]["aws_cloudwatch_event_rule"]
-        assert "primary_health_rule" in event_rules
-        assert "secondary_health_rule" in event_rules
+        rule_names = list(event_rules.keys())
+
+        # Check for primary and secondary health check rules (CDKTF adds hash suffix)
+        assert any("primary_health_rule" in name for name in rule_names), f"No primary_health_rule found in {rule_names}"
+        assert any("secondary_health_rule" in name for name in rule_names), f"No secondary_health_rule found in {rule_names}"
 
     def test_failover_stack_creates_route53_health_checks(self):
         """Failover stack creates Route53 health checks."""
@@ -439,8 +470,11 @@ class TestFailoverStackResources:
         assert "aws_route53_health_check" in synth_json["resource"]
 
         health_checks = synth_json["resource"]["aws_route53_health_check"]
-        assert "primary_health_check" in health_checks
-        assert "secondary_health_check" in health_checks
+        check_names = list(health_checks.keys())
+
+        # Check for primary and secondary health checks (CDKTF adds hash suffix)
+        assert any("primary_health_check" in name for name in check_names), f"No primary_health_check found in {check_names}"
+        assert any("secondary_health_check" in name for name in check_names), f"No secondary_health_check found in {check_names}"
 
 
 class TestEnvironmentSuffixUsage:
@@ -459,8 +493,10 @@ class TestEnvironmentSuffixUsage:
         synthesized = Testing.synth(stack)
         synth_json = json.loads(synthesized)
 
-        # Check VPC tags include environment suffix
-        primary_vpc = synth_json["resource"]["aws_vpc"]["primary_vpc"]
+        # Check VPC tags include environment suffix (CDKTF adds hash suffix)
+        vpcs = synth_json["resource"]["aws_vpc"]
+        primary_vpc_name = [name for name in vpcs.keys() if "primary_vpc" in name][0]
+        primary_vpc = vpcs[primary_vpc_name]
         assert "prod" in primary_vpc["tags"]["Name"]
 
     def test_environment_suffix_applied_to_cluster_names(self):
@@ -476,8 +512,10 @@ class TestEnvironmentSuffixUsage:
         synthesized = Testing.synth(stack)
         synth_json = json.loads(synthesized)
 
-        # Check cluster identifiers include environment suffix
-        global_cluster = synth_json["resource"]["aws_rds_global_cluster"]["global_cluster"]
+        # Check cluster identifiers include environment suffix (CDKTF adds hash suffix)
+        global_clusters = synth_json["resource"]["aws_rds_global_cluster"]
+        global_cluster_name = [name for name in global_clusters.keys() if "global_cluster" in name][0]
+        global_cluster = global_clusters[global_cluster_name]
         assert "staging" in global_cluster["global_cluster_identifier"]
 
     def test_environment_suffix_applied_to_lambda_names(self):
@@ -493,8 +531,10 @@ class TestEnvironmentSuffixUsage:
         synthesized = Testing.synth(stack)
         synth_json = json.loads(synthesized)
 
-        # Check Lambda function names include environment suffix
-        primary_health_lambda = synth_json["resource"]["aws_lambda_function"]["primary_health_lambda"]
+        # Check Lambda function names include environment suffix (CDKTF adds hash suffix)
+        lambda_functions = synth_json["resource"]["aws_lambda_function"]
+        primary_health_lambda_name = [name for name in lambda_functions.keys() if "primary_health_lambda" in name][0]
+        primary_health_lambda = lambda_functions[primary_health_lambda_name]
         assert "dev" in primary_health_lambda["function_name"]
 
 
@@ -514,8 +554,10 @@ class TestResourceDependencies:
         synthesized = Testing.synth(stack)
         synth_json = json.loads(synthesized)
 
-        # Check secondary cluster has dependency on primary
-        secondary_cluster = synth_json["resource"]["aws_rds_cluster"]["secondary_cluster"]
+        # Check secondary cluster has dependency on primary (CDKTF adds hash suffix)
+        clusters = synth_json["resource"]["aws_rds_cluster"]
+        secondary_cluster_name = [name for name in clusters.keys() if "secondary_cluster" in name][0]
+        secondary_cluster = clusters[secondary_cluster_name]
         assert "depends_on" in secondary_cluster
         assert any("primary_cluster" in dep for dep in secondary_cluster["depends_on"])
 
