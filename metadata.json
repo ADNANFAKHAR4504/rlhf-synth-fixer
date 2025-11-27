@@ -2,6 +2,7 @@
   "platform": "tf",
   "language": "hcl",
   "complexity": "expert",
+  "author": "mayanksethi-turing",
   "team": "synth",
   "turn_type": "single",
   "startedAt": "2025-11-25T21:29:19+0000",
