@@ -710,6 +710,7 @@
     },
     "SecretRotationSchedule": {
       "Type": "AWS::SecretsManager::RotationSchedule",
+      "DependsOn": ["SecretRotationPermission"],
       "Properties": {
         "SecretId": {
           "Ref": "DatabaseSecret"
