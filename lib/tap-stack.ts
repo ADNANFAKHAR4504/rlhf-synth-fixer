@@ -80,6 +80,31 @@ export class TapStack extends pulumi.ComponentResource {
       );
     });
 
+    // Create route table for private subnets
+    const privateRouteTable = new aws.ec2.RouteTable(
+      `private-route-table-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        tags: {
+          ...(tags as any),
+          Name: `private-route-table-${environmentSuffix}`,
+        },
+      },
+      { parent: vpc }
+    );
+
+    // Associate route table with private subnets
+    privateSubnets.forEach((subnet, i) => {
+      new aws.ec2.RouteTableAssociation(
+        `private-rta-${i}-${environmentSuffix}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: privateRouteTable.id,
+        },
+        { parent: subnet }
+      );
+    });
+
     // Create shared security group for VPC endpoints
     const vpcEndpointSecurityGroup = this.createEndpointSecurityGroup(
       vpc,
@@ -94,7 +119,7 @@ export class TapStack extends pulumi.ComponentResource {
         vpcId: vpc.id,
         serviceName: `com.amazonaws.${region}.s3`,
         vpcEndpointType: 'Gateway',
-        routeTableIds: privateSubnets.map(subnet => subnet.id),
+        routeTableIds: [privateRouteTable.id],
         tags: {
           ...(tags as any),
           Name: `s3-endpoint-${environmentSuffix}`,
@@ -154,12 +179,54 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: vpc }
     );
 
+    // Get AWS account ID and region for KMS policy
+    const awsAccountId = aws.getCallerIdentityOutput().accountId;
+
     // 5. CloudWatch Logs Group with encryption and 90-day retention
     const logEncryptionKey = new aws.kms.Key(
       `log-encryption-key-${environmentSuffix}`,
       {
         description: `CloudWatch Logs encryption key for ${environmentSuffix}`,
         enableKeyRotation: true,
+        policy: pulumi
+          .all([awsAccountId])
+          .apply(([accountId]: [string]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Sid: 'Enable IAM User Permissions',
+                  Effect: 'Allow',
+                  Principal: {
+                    AWS: `arn:aws:iam::${accountId}:root`,
+                  },
+                  Action: 'kms:*',
+                  Resource: '*',
+                },
+                {
+                  Sid: 'Allow CloudWatch Logs',
+                  Effect: 'Allow',
+                  Principal: {
+                    Service: `logs.${region}.amazonaws.com`,
+                  },
+                  Action: [
+                    'kms:Encrypt',
+                    'kms:Decrypt',
+                    'kms:ReEncrypt*',
+                    'kms:GenerateDataKey*',
+                    'kms:CreateGrant',
+                    'kms:DescribeKey',
+                  ],
+                  Resource: '*',
+                  Condition: {
+                    ArnLike: {
+                      'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${region}:${accountId}:log-group:*`,
+                    },
+                  },
+                },
+              ],
+            })
+          ),
         tags: {
           ...(tags as any),
           Name: `log-encryption-key-${environmentSuffix}`,
