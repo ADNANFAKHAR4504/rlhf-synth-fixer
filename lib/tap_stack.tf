@@ -35,7 +35,7 @@ locals {
       availability_zones    = ["eu-west-1a", "eu-west-1b", "eu-west-1c"]
       private_subnet_cidrs  = ["10.1.10.0/24", "10.1.20.0/24", "10.1.30.0/24"]
       public_subnet_cidrs   = ["10.1.1.0/24", "10.1.2.0/24", "10.1.3.0/24"]
-      database_subnet_cidrs = ["10.1.100.0/24", "10.1.200.0/24", "10.1.300.0/24"]
+      database_subnet_cidrs = ["10.1.100.0/24", "10.1.200.0/24", "10.1.250.0/24"]
 
       # RDS configuration
       db_instance_class          = "db.t3.micro"
@@ -55,7 +55,7 @@ locals {
       availability_zones    = ["us-west-2a", "us-west-2b", "us-west-2c"]
       private_subnet_cidrs  = ["10.2.10.0/24", "10.2.20.0/24", "10.2.30.0/24"]
       public_subnet_cidrs   = ["10.2.1.0/24", "10.2.2.0/24", "10.2.3.0/24"]
-      database_subnet_cidrs = ["10.2.100.0/24", "10.2.200.0/24", "10.2.300.0/24"]
+      database_subnet_cidrs = ["10.2.100.0/24", "10.2.200.0/24", "10.2.250.0/24"]
 
       # RDS configuration
       db_instance_class          = "db.t3.small"
@@ -75,7 +75,7 @@ locals {
       availability_zones    = ["us-east-1a", "us-east-1b", "us-east-1c"]
       private_subnet_cidrs  = ["10.3.10.0/24", "10.3.20.0/24", "10.3.30.0/24"]
       public_subnet_cidrs   = ["10.3.1.0/24", "10.3.2.0/24", "10.3.3.0/24"]
-      database_subnet_cidrs = ["10.3.100.0/24", "10.3.200.0/24", "10.3.300.0/24"]
+      database_subnet_cidrs = ["10.3.100.0/24", "10.3.200.0/24", "10.3.250.0/24"]
 
       # RDS configuration
       db_instance_class          = "db.r6g.large"
