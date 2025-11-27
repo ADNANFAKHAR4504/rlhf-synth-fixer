@@ -4,10 +4,13 @@
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "q6z4z0h4",
-  "team": "unknown",
+  "team": "synth",
   "startedAt": "2025-11-27T18:23:00.000Z",
   "task_sub_category": "Security-Configuration-as-Code",
   "use_case_category": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
   "aws_services": [
     "Config",
     "Lambda",
@@ -27,5 +30,5 @@
   },
   "author": "claude-code",
   "dockerS3Location": "",
-  "subtask": "Security Configuration as Code"
+  "subtask": "Security, Compliance, and Governance"
 }
