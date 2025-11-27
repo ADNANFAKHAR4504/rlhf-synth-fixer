@@ -148,8 +148,8 @@ class TapStack(TerraformStack):
             "public_rt",
             vpc_id=vpc.id,
             route=[{
-                "cidr_block": "0.0.0.0/0",
-                "gateway_id": igw.id
+                "cidrBlock": "0.0.0.0/0",
+                "gatewayId": igw.id
             }],
             tags={"Name": f"public-rt-{environment_suffix}"}
         )
@@ -189,8 +189,8 @@ class TapStack(TerraformStack):
                 f"private_rt_{i}",
                 vpc_id=vpc.id,
                 route=[{
-                    "cidr_block": "0.0.0.0/0",
-                    "nat_gateway_id": nat_gateways[i].id
+                    "cidrBlock": "0.0.0.0/0",
+                    "natGatewayId": nat_gateways[i].id
                 }],
                 tags={"Name": f"private-rt-{i}-{environment_suffix}"}
             )
@@ -524,7 +524,7 @@ docker run -d -p 8080:8080 --name payment-processor nginx:latest
             protocol="HTTP",
             vpc_id=vpc.id,
             target_type="instance",
-            deregistration_delay=30,
+            deregistration_delay="30",
             health_check={
                 "enabled": True,
                 "path": "/health",
@@ -573,7 +573,7 @@ docker run -d -p 8080:8080 --name payment-processor nginx:latest
             tag=[{
                 "key": "Name",
                 "value": f"payment-processor-{environment_suffix}",
-                "propagate_at_launch": True
+                "propagateAtLaunch": True
             }],
             depends_on=[target_group]
         )

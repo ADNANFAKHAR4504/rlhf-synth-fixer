@@ -1,23 +1,15 @@
 {
   "task_id": "h1u2r4i8",
   "po_id": "h1u2r4i8",
-  "subtask": "Environment Migration",
+  "subtask": "Failure Recovery and High Availability",
   "platform": "cdktf",
   "language": "py",
   "complexity": "expert",
   "turn_type": "single",
-  "team": "synthetic",
+  "team": "synth",
   "startedAt": "2025-11-27T18:20:00Z",
   "subject_labels": [
-    "VPC",
-    "Aurora",
-    "EC2",
-    "ALB",
-    "Route53",
-    "CloudWatch",
-    "StepFunctions",
-    "VPCPeering",
-    "KMS"
+    "Failure Recovery Automation"
   ],
   "aws_services": [
     "VPC",

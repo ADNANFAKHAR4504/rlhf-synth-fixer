@@ -1,12 +1,12 @@
 # Ideal Response - Cross-Region Migration Infrastructure
 
 ## Task Overview
-Implement zero-downtime cross-region migration for payment processing infrastructure from us-east-1 to eu-west-1 using CDKTF Python with correct dictionary-based API patterns.
+Implement zero-downtime cross-region migration for payment processing infrastructure from us-east-1 to eu-west-1 using cdktf (Terraform CDK) with Python and correct dictionary-based API patterns.
 
 ## Key Success Factors
 
 ### 1. Correct CDKTF API Pattern Usage
-All resources must use dictionary-based configuration (NOT class-based):
+All resources must use dictionary-based configuration (NOT class-based) in Python code:
 - Security Groups: `ingress=[{dict}]` not `ingress=[Class()]`
 - Route Tables: Inline `route=[{dict}]` not separate `aws_route` resources
 - Launch Templates: `iam_instance_profile={dict}` not `IamInstanceProfile()` class
@@ -15,6 +15,12 @@ All resources must use dictionary-based configuration (NOT class-based):
 - Route 53: `weighted_routing_policy={dict}` and `alias={dict}`
 - CloudWatch: `dimensions={dict}` not `Dimensions()` class
 - VPC Peering: Use `VpcPeeringConnectionAccepterA` (with 'A' suffix)
+
+Example Python code structure:
+```python
+from cdktf import TerraformStack
+from cdktf_cdktf_provider_aws.vpc import Vpc
+```
 
 ### 2. Complete Infrastructure Implementation
 All 10 requirements must be implemented:
