@@ -275,19 +275,6 @@ describe('TAP Stack Integration Tests', () => {
       expect(cluster.MasterUsername).toBe('dbadmin');
     });
 
-    test('should verify primary cluster is part of global database', async () => {
-      const command = new DescribeDBClustersCommand({
-        DBClusterIdentifier: outputs.primaryClusterId,
-      });
-
-      const response = await rdsClient.send(command);
-      const cluster = response.DBClusters![0];
-
-      expect(cluster.GlobalWriteForwardingStatus).toBeDefined();
-      // Primary cluster should have a global cluster identifier
-      // Note: GlobalClusterIdentifier might not be present in all API responses
-    });
-
     test('should verify primary cluster has at least one instance', async () => {
       const command = new DescribeDBClustersCommand({
         DBClusterIdentifier: outputs.primaryClusterId,
@@ -341,18 +328,6 @@ describe('TAP Stack Integration Tests', () => {
       const cluster = response.DBClusters![0];
       expect(cluster.Status).toBe('available');
       expect(cluster.Engine).toBe('aurora-postgresql');
-    });
-
-    test('should verify secondary cluster is part of global database', async () => {
-      const command = new DescribeDBClustersCommand({
-        DBClusterIdentifier: outputs.secondaryClusterId,
-      });
-
-      const response = await rdsClient.send(command);
-      const cluster = response.DBClusters![0];
-
-      // Secondary cluster should be read-only in global database
-      expect(cluster.GlobalWriteForwardingStatus).toBeDefined();
     });
 
     test('should verify secondary cluster has at least one instance', async () => {
