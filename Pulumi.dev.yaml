@@ -1,0 +1,8 @@
+config:
+  TapStack:environmentSuffix: "dev001"
+  TapStack:region: "us-east-1"
+  TapStack:lambdaMemory: "512"
+  TapStack:lambdaConcurrency: "1"
+  TapStack:enablePitr: "false"
+  TapStack:dlqRetries: "2"
+  TapStack:notificationEmail: "dev-payments@example.com"

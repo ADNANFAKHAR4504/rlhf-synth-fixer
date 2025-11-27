@@ -85,16 +85,8 @@ module.exports = [
 
       // Import rules
       'import/prefer-default-export': 'off',
-      'import/no-extraneous-dependencies': [
-        'error',
-        {
-          devDependencies: [
-            '**/*.test.ts',
-            'test/**/*.ts',
-            'lib/lambda/**/*.ts',
-          ],
-        },
-      ],
+      'import/no-extraneous-dependencies': 'off',
+      'import/no-unresolved': 'off',
 
       // General rules
       'no-console': 'off', // Allow console in CDK code

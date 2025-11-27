@@ -1,0 +1,8 @@
+config:
+  TapStack:environmentSuffix: "staging001"
+  TapStack:region: "us-west-2"
+  TapStack:lambdaMemory: "1024"
+  TapStack:lambdaConcurrency: "10"
+  TapStack:enablePitr: "true"
+  TapStack:dlqRetries: "3"
+  TapStack:notificationEmail: "staging-payments@example.com"
