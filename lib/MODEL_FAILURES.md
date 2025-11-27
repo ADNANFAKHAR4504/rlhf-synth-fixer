@@ -1,9 +1,3 @@
-# Model Failures Documentation
-
-This document tracks all errors encountered and fixes applied during the Terraform deployment process.
-
----
-
 ## **Issue 1 — Duplicate Variable Declaration**
 
 **Error:**
@@ -21,7 +15,6 @@ Variable names must be unique within a module.
 
 **Fix:** Removed the duplicate `aws_region` variable declaration from `variables.tf` since it was already properly defined in `tapstack.tf` with appropriate defaults and description.
 
----
 
 ## **Issue 2 — Invalid SageMaker Data Source**
 
@@ -45,7 +38,6 @@ The provider hashicorp/aws does not support data source "aws_sagemaker_endpoint"
    ```
 3. Added a comment noting that the SageMaker endpoint should be created separately and its name passed via the `fraud_model_endpoint_name` variable
 
----
 
 ## **Issue 3 — Missing S3 Lifecycle Filter**
 
@@ -76,7 +68,6 @@ filter {
 
 This applies the lifecycle rule to all objects in the bucket (empty prefix matches everything).
 
----
 
 ## **Issue 4 — Redis Automatic Failover Configuration**
 
@@ -100,7 +91,6 @@ multi_az_enabled           = var.redis_num_cache_clusters >= 2 ? var.redis_autom
 
 This allows dev environments to run with a single node while staging/prod can use multi-AZ failover.
 
----
 
 ## **Issue 5 — Missing KMS Key Policy**
 
@@ -127,7 +117,6 @@ enable_key_rotation = true
 
 **Note:** Kinesis and SNS use AWS-managed keys (`alias/aws/kinesis` and `alias/aws/sns`) which don't require custom policies.
 
----
 
 ## **Issue 6 — Invalid Aurora PostgreSQL Version**
 
@@ -152,7 +141,6 @@ Available versions were verified using:
 aws rds describe-db-engine-versions --engine aurora-postgresql --query "DBEngineVersions[?contains(EngineVersion, '15.')].EngineVersion"
 ```
 
----
 
 ## **Issue 7 — Missing Secrets Manager Lambda Permission**
 
@@ -173,7 +161,6 @@ resource "aws_lambda_permission" "secrets_manager_invoke" {
 }
 ```
 
----
 
 ## **Issue 8 — Missing Redis AUTH Token**
 
@@ -200,16 +187,17 @@ resource "aws_elasticache_replication_group" "redis" {
 }
 ```
 
----
 
 ## **Issue 9 — Missing SQS Queue Policy**
 
 **Error:**
 High severity issue where SNS topic `compliance_alerts` cannot deliver messages to SQS queue `compliance_notifications` due to missing permissions.
 
-**Root Cause:** SQS queues are private by default. Even if an SNS subscription is created, the SQS queue itself must have an access policy that explicitly allows the SNS topic to send messages (`sqs:SendMessage`).
+**Root Cause:** SQS queues are private by default. Even if an SNS subscription is created, the SQS queue itself must
+have an access policy that explicitly allows the SNS topic to send messages (`sqs:SendMessage`).
 
 **Fix:** Added `aws_sqs_queue_policy` resource to grant the necessary permissions:
+
 ```hcl
 resource "aws_sqs_queue_policy" "compliance_notifications" {
   queue_url = aws_sqs_queue.compliance_notifications.id
@@ -233,25 +221,21 @@ resource "aws_sqs_queue_policy" "compliance_notifications" {
 }
 ```
 
----
-
 ## **Issue 10 — Unused Availability Zones Variable**
 
 **Error:**
-The `availability_zones` variable was declared but never used, creating confusion as the code uses `data.aws_availability_zones` dynamically.
+The `availability_zones` variable was declared but never used, creating confusion as the code uses
+`data.aws_availability_zones` dynamically.
 
 **Fix:** Removed the unused variable declaration to clean up the code and avoid ambiguity.
-
----
 
 ## **Issue 11 — Unused Capacity Map Local**
 
 **Error:**
-A `capacity_map` local was defined with environment-specific values but never referenced, as individual variables were used instead.
+A `capacity_map` local was defined with environment-specific values but never referenced, as individual variables were
+used instead.
 
 **Fix:** Removed the unused `capacity_map` local to eliminate dead code.
-
----
 
 ## **Issue 12 — Missing Network ACLs**
 
@@ -259,33 +243,37 @@ A `capacity_map` local was defined with environment-specific values but never re
 The VPC configuration lacked Network ACLs, which are recommended for defense in depth, especially for financial systems.
 
 **Fix:** Added `aws_network_acl` resources for both public and private subnets:
+
 - **Public NACL:** Allows all traffic (standard for public subnets)
 - **Private NACL:** Allows inbound from VPC CIDR and all outbound (via NAT)
-
----
 
 ## **Issue 13 — Missing Lambda Layer for Dependencies**
 
 **Error:**
-Lambda functions import external libraries (`psycopg2`, `redis`) that are not part of the standard Python runtime, causing runtime failures.
+Lambda functions import external libraries (`psycopg2`, `redis`) that are not part of the standard Python runtime,
+causing runtime failures.
 
 **Fix:**
-1. Created a `aws_lambda_layer_version` resource to manage dependencies.
-2. Updated relevant Lambda functions (`fraud_scorer`, `analyzer`, `aurora_updater`, `query_history`, `reconciliation`) to include the layer.
-3. Created a placeholder `layer.zip` (users should replace this with a properly built layer containing `psycopg2-binary` and `redis`).
 
----
+1. Created a `aws_lambda_layer_version` resource to manage dependencies.
+2. Updated relevant Lambda functions (`fraud_scorer`, `analyzer`, `aurora_updater`, `query_history`, `reconciliation`)
+   to include the layer.
+3. Created a placeholder `layer.zip` (users should replace this with a properly built layer containing `psycopg2-binary`
+   and `redis`).
 
 ## **Issue 14 — Invalid Aurora Password Characters**
 
 **Error:**
-```
+
+```text
 Error: creating RDS Cluster ... api error InvalidParameterValue: The parameter MasterUserPassword is not a valid password. Only printable ASCII characters besides '/', '@', '"', ' ' may be used.
 ```
 
-**Root Cause:** The `random_password` resource was generating passwords containing characters that are not allowed by RDS (specifically `/`, `@`, `"`, or space) because `override_special` was not defined.
+**Root Cause:** The `random_password` resource was generating passwords containing characters that are not allowed by
+RDS (specifically `/`, `@`, `"`, or space) because `override_special` was not defined.
 
 **Fix:** Updated `random_password.aurora_password` to explicitly define allowed special characters using `override_special`:
+
 ```hcl
 resource "random_password" "aurora_password" {
   length           = 32
@@ -293,9 +281,3 @@ resource "random_password" "aurora_password" {
   override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 ```
-
----
-
-## Summary
-
-All identified issues have been resolved:
