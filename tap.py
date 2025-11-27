@@ -9,7 +9,7 @@ app = cdk.App()
 # Get environment suffix from context or environment variable
 environment_suffix = app.node.try_get_context("environmentSuffix") or os.environ.get("ENVIRONMENT_SUFFIX", "dev")
 
-# Create the stack with environment suffix
+# Create stack with environment suffix
 TapStack(
     app,
     f"TapStack{environment_suffix}",
