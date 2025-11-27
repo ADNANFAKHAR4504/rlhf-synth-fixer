@@ -3,8 +3,8 @@
  *
  * CloudWatch alarms for database lag monitoring and EventBridge cross-region replication.
  */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface MonitoringStackArgs {
   environmentSuffix: string;
@@ -242,6 +242,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
         roleArn: eventBridgeRole.arn,
         retryPolicy: {
           maximumRetryAttempts: 3,
+          maximumEventAgeInSeconds: 3600, // 1 hour
         },
         deadLetterConfig: {
           arn: dlqQueue.arn,

@@ -5,8 +5,8 @@
  * Implements timing logic to ensure primary cluster reaches 'available' state
  * before secondary attachment (ref: lessons_learnt.md section 0.3).
  */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface DatabaseStackArgs {
   environmentSuffix: string;
@@ -129,7 +129,6 @@ export class DatabaseStack extends pulumi.ComponentResource {
         masterPassword: pulumi.output(pulumi.secret('ChangeMe123!')), // Should use Secrets Manager in production
         backupRetentionPeriod: 7,
         preferredBackupWindow: '03:00-04:00',
-        backtrackWindow: 259200, // 72 hours in seconds
         enabledCloudwatchLogsExports: ['postgresql'],
         storageEncrypted: true,
         skipFinalSnapshot: true,

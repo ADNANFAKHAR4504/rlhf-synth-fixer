@@ -6,12 +6,12 @@
  */
 import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
-import { NetworkStack } from './network-stack';
-import { DatabaseStack } from './database-stack';
-import { StorageStack } from './storage-stack';
 import { ComputeStack } from './compute-stack';
-import { RoutingStack } from './routing-stack';
+import { DatabaseStack } from './database-stack';
 import { MonitoringStack } from './monitoring-stack';
+import { NetworkStack } from './network-stack';
+import { RoutingStack } from './routing-stack';
+import { StorageStack } from './storage-stack';
 
 export interface TapStackArgs {
   environmentSuffix?: string;
@@ -87,8 +87,8 @@ export class TapStack extends pulumi.ComponentResource {
         secondaryRegion,
         primaryVpcId: networkStack.primaryVpcId,
         secondaryVpcId: networkStack.secondaryVpcId,
-        primarySubnetIds: networkStack.primaryPrivateSubnetIds,
-        secondarySubnetIds: networkStack.secondaryPrivateSubnetIds,
+        primarySubnetIds: networkStack.primaryPublicSubnetIds,
+        secondarySubnetIds: networkStack.secondaryPublicSubnetIds,
         primaryAlbSecurityGroupId: networkStack.primaryAlbSecurityGroupId,
         secondaryAlbSecurityGroupId: networkStack.secondaryAlbSecurityGroupId,
         primaryDbEndpoint: databaseStack.primaryClusterEndpoint,

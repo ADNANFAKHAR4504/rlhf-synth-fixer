@@ -3,8 +3,8 @@
  *
  * Multi-region VPC infrastructure with peering connection.
  */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface NetworkStackArgs {
   environmentSuffix: string;
@@ -18,6 +18,8 @@ export class NetworkStack extends pulumi.ComponentResource {
   public readonly secondaryVpcId: pulumi.Output<string>;
   public readonly primaryPrivateSubnetIds: pulumi.Output<string[]>;
   public readonly secondaryPrivateSubnetIds: pulumi.Output<string[]>;
+  public readonly primaryPublicSubnetIds: pulumi.Output<string[]>;
+  public readonly secondaryPublicSubnetIds: pulumi.Output<string[]>;
   public readonly primaryDbSecurityGroupId: pulumi.Output<string>;
   public readonly secondaryDbSecurityGroupId: pulumi.Output<string>;
   public readonly primaryAlbSecurityGroupId: pulumi.Output<string>;
@@ -55,6 +57,79 @@ export class NetworkStack extends pulumi.ComponentResource {
       },
       { parent: this, provider: primaryProvider }
     );
+
+    // Primary Internet Gateway
+    const primaryIgw = new aws.ec2.InternetGateway(
+      `primary-igw-${environmentSuffix}`,
+      {
+        vpcId: primaryVpc.id,
+        tags: {
+          ...tags,
+          Name: `primary-igw-${environmentSuffix}`,
+          EnvironmentSuffix: environmentSuffix,
+        },
+      },
+      { parent: this, provider: primaryProvider }
+    );
+
+    // Primary Public Subnets (3 AZs)
+    const primaryPublicSubnets = ['a', 'b', 'c'].map(
+      (az, idx) =>
+        new aws.ec2.Subnet(
+          `primary-public-subnet-${az}-${environmentSuffix}`,
+          {
+            vpcId: primaryVpc.id,
+            cidrBlock: `10.0.${idx + 101}.0/24`,
+            availabilityZone: `${primaryRegion}${az}`,
+            mapPublicIpOnLaunch: true,
+            tags: {
+              ...tags,
+              Name: `primary-public-subnet-${az}-${environmentSuffix}`,
+              EnvironmentSuffix: environmentSuffix,
+            },
+          },
+          { parent: this, provider: primaryProvider }
+        )
+    );
+
+    // Primary Public Route Table
+    const primaryPublicRouteTable = new aws.ec2.RouteTable(
+      `primary-public-rt-${environmentSuffix}`,
+      {
+        vpcId: primaryVpc.id,
+        tags: {
+          ...tags,
+          Name: `primary-public-rt-${environmentSuffix}`,
+          EnvironmentSuffix: environmentSuffix,
+        },
+      },
+      { parent: this, provider: primaryProvider }
+    );
+
+    // Primary Public Route to Internet Gateway
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _primaryPublicRoute = new aws.ec2.Route(
+      `primary-public-route-${environmentSuffix}`,
+      {
+        routeTableId: primaryPublicRouteTable.id,
+        destinationCidrBlock: '0.0.0.0/0',
+        gatewayId: primaryIgw.id,
+      },
+      { parent: this, provider: primaryProvider }
+    );
+
+    // Associate Public Subnets with Public Route Table
+    primaryPublicSubnets.forEach((subnet, idx) => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const _rta = new aws.ec2.RouteTableAssociation(
+        `primary-public-rta-${['a', 'b', 'c'][idx]}-${environmentSuffix}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: primaryPublicRouteTable.id,
+        },
+        { parent: this, provider: primaryProvider }
+      );
+    });
 
     // Primary Private Subnets (3 AZs)
     const primarySubnets = ['a', 'b', 'c'].map(
@@ -98,6 +173,79 @@ export class NetworkStack extends pulumi.ComponentResource {
       },
       { parent: this, provider: secondaryProvider }
     );
+
+    // Secondary Internet Gateway
+    const secondaryIgw = new aws.ec2.InternetGateway(
+      `secondary-igw-${environmentSuffix}`,
+      {
+        vpcId: secondaryVpc.id,
+        tags: {
+          ...tags,
+          Name: `secondary-igw-${environmentSuffix}`,
+          EnvironmentSuffix: environmentSuffix,
+        },
+      },
+      { parent: this, provider: secondaryProvider }
+    );
+
+    // Secondary Public Subnets (3 AZs)
+    const secondaryPublicSubnets = ['a', 'b', 'c'].map(
+      (az, idx) =>
+        new aws.ec2.Subnet(
+          `secondary-public-subnet-${az}-${environmentSuffix}`,
+          {
+            vpcId: secondaryVpc.id,
+            cidrBlock: `10.1.${idx + 101}.0/24`,
+            availabilityZone: `${secondaryRegion}${az}`,
+            mapPublicIpOnLaunch: true,
+            tags: {
+              ...tags,
+              Name: `secondary-public-subnet-${az}-${environmentSuffix}`,
+              EnvironmentSuffix: environmentSuffix,
+            },
+          },
+          { parent: this, provider: secondaryProvider }
+        )
+    );
+
+    // Secondary Public Route Table
+    const secondaryPublicRouteTable = new aws.ec2.RouteTable(
+      `secondary-public-rt-${environmentSuffix}`,
+      {
+        vpcId: secondaryVpc.id,
+        tags: {
+          ...tags,
+          Name: `secondary-public-rt-${environmentSuffix}`,
+          EnvironmentSuffix: environmentSuffix,
+        },
+      },
+      { parent: this, provider: secondaryProvider }
+    );
+
+    // Secondary Public Route to Internet Gateway
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _secondaryPublicRoute = new aws.ec2.Route(
+      `secondary-public-route-${environmentSuffix}`,
+      {
+        routeTableId: secondaryPublicRouteTable.id,
+        destinationCidrBlock: '0.0.0.0/0',
+        gatewayId: secondaryIgw.id,
+      },
+      { parent: this, provider: secondaryProvider }
+    );
+
+    // Associate Public Subnets with Public Route Table
+    secondaryPublicSubnets.forEach((subnet, idx) => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const _rta = new aws.ec2.RouteTableAssociation(
+        `secondary-public-rta-${['a', 'b', 'c'][idx]}-${environmentSuffix}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: secondaryPublicRouteTable.id,
+        },
+        { parent: this, provider: secondaryProvider }
+      );
+    });
 
     // Secondary Private Subnets (3 AZs)
     const secondarySubnets = ['a', 'b', 'c'].map(
@@ -280,6 +428,12 @@ export class NetworkStack extends pulumi.ComponentResource {
     this.secondaryPrivateSubnetIds = pulumi.output(
       secondarySubnets.map(s => s.id)
     );
+    this.primaryPublicSubnetIds = pulumi.output(
+      primaryPublicSubnets.map(s => s.id)
+    );
+    this.secondaryPublicSubnetIds = pulumi.output(
+      secondaryPublicSubnets.map(s => s.id)
+    );
     this.primaryDbSecurityGroupId = primaryDbSg.id;
     this.secondaryDbSecurityGroupId = secondaryDbSg.id;
     this.primaryAlbSecurityGroupId = primaryAlbSg.id;
@@ -290,6 +444,8 @@ export class NetworkStack extends pulumi.ComponentResource {
       secondaryVpcId: this.secondaryVpcId,
       primaryPrivateSubnetIds: this.primaryPrivateSubnetIds,
       secondaryPrivateSubnetIds: this.secondaryPrivateSubnetIds,
+      primaryPublicSubnetIds: this.primaryPublicSubnetIds,
+      secondaryPublicSubnetIds: this.secondaryPublicSubnetIds,
     });
   }
 }
