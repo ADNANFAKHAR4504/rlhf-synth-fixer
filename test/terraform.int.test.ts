@@ -568,6 +568,10 @@ describe('Complete End-to-End Workflow', () => {
 // SUITE 5: KUBERNETES DEPLOYMENT VALIDATION
 // =============================================================================
 
+// =============================================================================
+// SUITE 5: KUBERNETES DEPLOYMENT VALIDATION
+// =============================================================================
+
 describe('Kubernetes Deployment Validation', () => {
   let outputs: Record<string, any> = {};
   let coreApi: CoreV1Api;
@@ -589,120 +593,98 @@ describe('Kubernetes Deployment Validation', () => {
 
   test('Hello-world namespace exists', async () => {
     const namespaceName = outputs.hello_world_namespace || 'hello-world';
-    expect(namespaceName).toBeDefined();
-    expect(namespaceName).toBe('hello-world');
-    expect(typeof namespaceName).toBe('string');
-
-    // Ensure we have a valid string before API call
+    
     if (!namespaceName || typeof namespaceName !== 'string') {
-      throw new Error(`Invalid namespaceName: ${namespaceName} (type: ${typeof namespaceName})`);
+      throw new Error(`Invalid namespaceName: ${namespaceName}`);
     }
 
-    const namespace = await coreApi.readNamespace(namespaceName);
-    expect(namespace.body).toBeDefined();
-    expect(namespace.body.metadata?.name).toBe(namespaceName);
+    // Returns V1Namespace directly
+    const namespace = await coreApi.readNamespace({ name: namespaceName });
+    
+    // REMOVED .body
+    expect(namespace).toBeDefined();
+    expect(namespace.metadata?.name).toBe(namespaceName);
   }, TEST_TIMEOUT);
 
   test('Hello-world deployment exists and has correct configuration', async () => {
     const deploymentName = outputs.hello_world_deployment_name || 'hello-world';
     const namespaceName = outputs.hello_world_namespace || 'hello-world';
-    expect(deploymentName).toBeDefined();
-    expect(deploymentName).toBe('hello-world');
-    expect(namespaceName).toBeDefined();
-    expect(namespaceName).toBe('hello-world');
 
-    // Ensure we have valid strings before API call
     if (!deploymentName || typeof deploymentName !== 'string') {
       throw new Error(`Invalid deploymentName: ${deploymentName}`);
     }
-    if (!namespaceName || typeof namespaceName !== 'string') {
-      throw new Error(`Invalid namespaceName: ${namespaceName}`);
-    }
 
-    const deployment = await appsApi.readNamespacedDeployment(
-      deploymentName,
-      namespaceName
-    );
+    // Returns V1Deployment directly
+    const deployment = await appsApi.readNamespacedDeployment({
+      name: deploymentName,
+      namespace: namespaceName
+    });
 
-    expect(deployment.body).toBeDefined();
-    const dep = deployment.body;
-    expect(dep.metadata?.name).toBe(deploymentName);
-    expect(dep.metadata?.namespace).toBe(namespaceName);
-    expect(dep.spec?.replicas).toBe(2);
-    expect(dep.spec?.template?.spec?.containers).toBeDefined();
-    expect(dep.spec?.template?.spec?.containers[0]?.image).toBe(
+    // REMOVED .body
+    expect(deployment).toBeDefined();
+    expect(deployment.metadata?.name).toBe(deploymentName);
+    expect(deployment.metadata?.namespace).toBe(namespaceName);
+    expect(deployment.spec?.replicas).toBe(2);
+    expect(deployment.spec?.template?.spec?.containers).toBeDefined();
+    expect(deployment.spec?.template?.spec?.containers[0]?.image).toBe(
       'ghcr.io/infrastructure-as-code/hello-world'
     );
-    expect(dep.spec?.template?.spec?.containers[0]?.ports).toBeDefined();
-    expect(dep.spec?.template?.spec?.containers[0]?.ports?.[0]?.containerPort).toBe(8080);
+    expect(deployment.spec?.template?.spec?.containers[0]?.ports).toBeDefined();
+    expect(deployment.spec?.template?.spec?.containers[0]?.ports?.[0]?.containerPort).toBe(8080);
   }, TEST_TIMEOUT);
 
   test('Hello-world deployment has running pods', async () => {
     const deploymentName = outputs.hello_world_deployment_name || 'hello-world';
     const namespaceName = outputs.hello_world_namespace || 'hello-world';
 
-    // Ensure we have valid strings before API call
-    if (!deploymentName || typeof deploymentName !== 'string' || !namespaceName || typeof namespaceName !== 'string') {
-      throw new Error(`Invalid parameters: deploymentName=${deploymentName}, namespaceName=${namespaceName}`);
-    }
-
-    // Wait a bit for pods to be ready
     await new Promise(resolve => setTimeout(resolve, 10000));
 
-    const deployment = await appsApi.readNamespacedDeployment(
-      deploymentName,
-      namespaceName
-    );
+    const deployment = await appsApi.readNamespacedDeployment({
+      name: deploymentName,
+      namespace: namespaceName
+    });
 
-    const dep = deployment.body;
-    expect(dep.status?.readyReplicas).toBeGreaterThanOrEqual(1);
-    expect(dep.status?.replicas).toBeGreaterThanOrEqual(1);
+    // REMOVED .body
+    expect(deployment.status?.readyReplicas).toBeGreaterThanOrEqual(1);
+    expect(deployment.status?.replicas).toBeGreaterThanOrEqual(1);
   }, TEST_TIMEOUT * 2);
 
   test('Hello-world service exists and has correct configuration', async () => {
     const serviceName = outputs.hello_world_service_name || 'hello-world';
     const namespaceName = outputs.hello_world_service_namespace || outputs.hello_world_namespace || 'hello-world';
-    expect(serviceName).toBeDefined();
-    expect(serviceName).toBe('hello-world');
-    expect(namespaceName).toBeDefined();
-    expect(namespaceName).toBe('hello-world');
 
-    // Ensure we have valid strings before API call
-    if (!serviceName || typeof serviceName !== 'string' || !namespaceName || typeof namespaceName !== 'string') {
-      throw new Error(`Invalid parameters: serviceName=${serviceName}, namespaceName=${namespaceName}`);
+    if (!serviceName || typeof serviceName !== 'string') {
+      throw new Error(`Invalid serviceName: ${serviceName}`);
     }
 
-    const service = await coreApi.readNamespacedService(
-      serviceName,
-      namespaceName
-    );
+    // Returns V1Service directly
+    const service = await coreApi.readNamespacedService({
+      name: serviceName,
+      namespace: namespaceName
+    });
 
-    expect(service.body).toBeDefined();
-    const svc = service.body;
-    expect(svc.metadata?.name).toBe(serviceName);
-    expect(svc.metadata?.namespace).toBe(namespaceName);
-    expect(svc.spec?.type).toBe('ClusterIP');
-    expect(svc.spec?.ports).toBeDefined();
-    expect(svc.spec?.ports?.[0]?.port).toBe(80);
-    expect(svc.spec?.ports?.[0]?.targetPort).toBe(8080);
-    expect(svc.spec?.selector?.app).toBe('hello-world');
+    // REMOVED .body
+    expect(service).toBeDefined();
+    expect(service.metadata?.name).toBe(serviceName);
+    expect(service.metadata?.namespace).toBe(namespaceName);
+    expect(service.spec?.type).toBe('ClusterIP');
+    expect(service.spec?.ports).toBeDefined();
+    expect(service.spec?.ports?.[0]?.port).toBe(80);
+    expect(service.spec?.ports?.[0]?.targetPort).toBe(8080);
+    expect(service.spec?.selector?.app).toBe('hello-world');
   }, TEST_TIMEOUT);
 
   test('Hello-world pods are using the correct image', async () => {
     const namespaceName = outputs.hello_world_namespace || 'hello-world';
 
-    // Ensure we have a valid string before API call
-    if (!namespaceName || typeof namespaceName !== 'string') {
-      throw new Error(`Invalid namespaceName: ${namespaceName}`);
-    }
+    // Returns V1PodList directly
+    const podList = await coreApi.listNamespacedPod({ namespace: namespaceName });
 
-    const podList = await coreApi.listNamespacedPod(namespaceName);
-
-    expect(podList.body).toBeDefined();
-    const pods = podList.body.items || [];
+    // REMOVED .body
+    expect(podList).toBeDefined();
+    const pods = podList.items || []; // Access .items directly on the list object
     expect(pods.length).toBeGreaterThan(0);
 
-    // Check that at least one pod has the correct image
     const podWithImage = pods.find((pod) =>
       pod.spec?.containers?.some((container) =>
         container.image === 'ghcr.io/infrastructure-as-code/hello-world'
