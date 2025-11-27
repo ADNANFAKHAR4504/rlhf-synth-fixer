@@ -53,6 +53,20 @@ This CloudFormation template deploys a complete serverless credit scoring web ap
       "NoEcho": true
     }
   },
+  "Conditions": {
+    "HasCertificate": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "CertificateArn"
+            },
+            ""
+          ]
+        }
+      ]
+    }
+  },
   "Resources": {
     "VPC": {
       "Type": "AWS::EC2::VPC",
@@ -1086,6 +1100,49 @@ This CloudFormation template deploys a complete serverless credit scoring web ap
         ]
       }
     },
+    "DBSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "credit-scoring-db-secret-${EnvironmentSuffix}"
+        },
+        "Description": "Database credentials for Aurora PostgreSQL cluster",
+        "GenerateSecretString": {
+          "SecretStringTemplate": {
+            "Fn::Sub": "{\"username\": \"${DBMasterUsername}\"}"
+          },
+          "GenerateStringKey": "password",
+          "PasswordLength": 16,
+          "ExcludeCharacters": "\"@/\\"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "credit-scoring-db-secret-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "DataClassification",
+            "Value": {
+              "Ref": "DataClassification"
+            }
+          }
+        ]
+      }
+    },
     "AuroraCluster": {
       "Type": "AWS::RDS::DBCluster",
       "DeletionPolicy": "Delete",
@@ -1097,7 +1154,9 @@ This CloudFormation template deploys a complete serverless credit scoring web ap
         "MasterUsername": {
           "Ref": "DBMasterUsername"
         },
-        "MasterUserPassword": "{{resolve:secretsmanager:credit-scoring-db-secret:SecretString:password}}",
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"
+        },
         "DBSubnetGroupName": {
           "Ref": "DBSubnetGroup"
         },
@@ -1729,6 +1788,7 @@ This CloudFormation template deploys a complete serverless credit scoring web ap
     },
     "ALBHTTPSListener": {
       "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Condition": "HasCertificate",
       "Properties": {
         "LoadBalancerArn": {
           "Ref": "ApplicationLoadBalancer"
@@ -1763,12 +1823,23 @@ This CloudFormation template deploys a complete serverless credit scoring web ap
         "Protocol": "HTTP",
         "DefaultActions": [
           {
-            "Type": "redirect",
-            "RedirectConfig": {
-              "Protocol": "HTTPS",
-              "Port": "443",
-              "StatusCode": "HTTP_301"
-            }
+            "Fn::If": [
+              "HasCertificate",
+              {
+                "Type": "redirect",
+                "RedirectConfig": {
+                  "Protocol": "HTTPS",
+                  "Port": "443",
+                  "StatusCode": "HTTP_301"
+                }
+              },
+              {
+                "Type": "forward",
+                "TargetGroupArn": {
+                  "Ref": "LambdaTargetGroup"
+                }
+              }
+            ]
           }
         ]
       }
