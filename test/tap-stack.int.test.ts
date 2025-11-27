@@ -57,6 +57,8 @@ const route53 = new Route53Client({ region: primaryRegion });
 // Initialize AWS clients for secondary region
 const dynamodbSecondary = new DynamoDBClient({ region: secondaryRegion });
 const s3Secondary = new S3Client({ region: secondaryRegion });
+const lambdaSecondary = new LambdaClient({ region: secondaryRegion });
+const kmsSecondary = new KMSClient({ region: secondaryRegion });
 
 describe('Multi-Region Disaster Recovery Infrastructure Integration Tests', () => {
   describe('DynamoDB Global Table', () => {
@@ -464,14 +466,33 @@ describe('Multi-Region Disaster Recovery Infrastructure Integration Tests', () =
     });
   });
 
-  describe('Route53 Health Check', () => {
-    test('should have health check created', async () => {
+  describe('Route53 Health Checks and Failover', () => {
+    test('should have primary health check created', async () => {
       const command = new GetHealthCheckCommand({
-        HealthCheckId: outputs.Route53HealthCheckId,
+        HealthCheckId: outputs.PrimaryHealthCheckId,
       });
       const response = await route53.send(command);
-      expect(response.HealthCheck?.Id).toBe(outputs.Route53HealthCheckId);
-      expect(response.HealthCheck?.HealthCheckConfig.Type).toBe('CALCULATED');
+      expect(response.HealthCheck?.Id).toBe(outputs.PrimaryHealthCheckId);
+      expect(response.HealthCheck?.HealthCheckConfig.Type).toBe('HTTPS');
+      expect(response.HealthCheck?.HealthCheckConfig.RequestInterval).toBe(30);
+      expect(response.HealthCheck?.HealthCheckConfig.FailureThreshold).toBe(3);
+    });
+
+    test('should have secondary health check created', async () => {
+      const command = new GetHealthCheckCommand({
+        HealthCheckId: outputs.SecondaryHealthCheckId,
+      });
+      const response = await route53.send(command);
+      expect(response.HealthCheck?.Id).toBe(outputs.SecondaryHealthCheckId);
+      expect(response.HealthCheck?.HealthCheckConfig.Type).toBe('HTTPS');
+      expect(response.HealthCheck?.HealthCheckConfig.RequestInterval).toBe(30);
+      expect(response.HealthCheck?.HealthCheckConfig.FailureThreshold).toBe(3);
+    });
+
+    test('should have Route53 hosted zone created', async () => {
+      expect(outputs.Route53HostedZoneId).toBeDefined();
+      expect(outputs.Route53HostedZoneName).toBeDefined();
+      expect(outputs.Route53HostedZoneName).toContain('.internal');
     });
   });
 

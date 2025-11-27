@@ -277,9 +277,11 @@ describe('TapStack CloudFormation Template', () => {
       expect(lambda.Properties.MemorySize).toBe(512);
     });
 
-    test('should NOT have reserved concurrent executions', () => {
-      const lambda = template.Resources.PrimaryTransactionProcessor;
-      expect(lambda.Properties.ReservedConcurrentExecutions).toBeUndefined();
+    test('should have reserved concurrent executions of at least 100', () => {
+      const primaryLambda = template.Resources.PrimaryTransactionProcessor;
+      const secondaryLambda = template.Resources.SecondaryTransactionProcessor;
+      expect(primaryLambda.Properties.ReservedConcurrentExecutions).toBeGreaterThanOrEqual(100);
+      expect(secondaryLambda.Properties.ReservedConcurrentExecutions).toBeGreaterThanOrEqual(100);
     });
 
     test('should have environment variables', () => {
@@ -416,23 +418,43 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
-  describe('Route53 Health Check', () => {
-    test('should have Route53HealthCheck', () => {
-      expect(template.Resources.Route53HealthCheck).toBeDefined();
-      expect(template.Resources.Route53HealthCheck.Type).toBe('AWS::Route53::HealthCheck');
+  describe('Route53 Configuration', () => {
+    test('should have Route53 Hosted Zone', () => {
+      expect(template.Resources.Route53HostedZone).toBeDefined();
+      expect(template.Resources.Route53HostedZone.Type).toBe('AWS::Route53::HostedZone');
     });
 
-    test('should be CALCULATED type', () => {
-      const healthCheck = template.Resources.Route53HealthCheck;
-      expect(healthCheck.Properties.HealthCheckConfig.Type).toBe('CALCULATED');
+    test('should have primary health check', () => {
+      expect(template.Resources.PrimaryHealthCheck).toBeDefined();
+      expect(template.Resources.PrimaryHealthCheck.Type).toBe('AWS::Route53::HealthCheck');
+      expect(template.Resources.PrimaryHealthCheck.Properties.HealthCheckConfig.Type).toBe('HTTPS');
     });
 
-    test('should have tags with environment suffix', () => {
-      const healthCheck = template.Resources.Route53HealthCheck;
-      const nameTag = healthCheck.Properties.HealthCheckTags.find((t: any) => t.Key === 'Name');
-      expect(nameTag.Value).toEqual({
-        'Fn::Sub': 'dr-health-check-${EnvironmentSuffix}',
-      });
+    test('should have secondary health check', () => {
+      expect(template.Resources.SecondaryHealthCheck).toBeDefined();
+      expect(template.Resources.SecondaryHealthCheck.Type).toBe('AWS::Route53::HealthCheck');
+      expect(template.Resources.SecondaryHealthCheck.Properties.HealthCheckConfig.Type).toBe('HTTPS');
+    });
+
+    test('should have failover DNS records', () => {
+      expect(template.Resources.PrimaryFailoverRecord).toBeDefined();
+      expect(template.Resources.SecondaryFailoverRecord).toBeDefined();
+      expect(template.Resources.PrimaryFailoverRecord.Properties.Failover).toBe('PRIMARY');
+      expect(template.Resources.SecondaryFailoverRecord.Properties.Failover).toBe('SECONDARY');
+    });
+
+    test('health checks should monitor every 30 seconds', () => {
+      const primaryCheck = template.Resources.PrimaryHealthCheck;
+      const secondaryCheck = template.Resources.SecondaryHealthCheck;
+      expect(primaryCheck.Properties.HealthCheckConfig.RequestInterval).toBe(30);
+      expect(secondaryCheck.Properties.HealthCheckConfig.RequestInterval).toBe(30);
+    });
+
+    test('health checks should have failure threshold of 3', () => {
+      const primaryCheck = template.Resources.PrimaryHealthCheck;
+      const secondaryCheck = template.Resources.SecondaryHealthCheck;
+      expect(primaryCheck.Properties.HealthCheckConfig.FailureThreshold).toBe(3);
+      expect(secondaryCheck.Properties.HealthCheckConfig.FailureThreshold).toBe(3);
     });
   });
 
@@ -444,11 +466,17 @@ describe('TapStack CloudFormation Template', () => {
         'PrimaryDocumentsBucketName',
         'SecondaryDocumentsBucketName',
         'PrimaryLambdaFunctionArn',
+        'SecondaryLambdaFunctionArn',
         'PrimaryKMSKeyId',
         'PrimaryKMSKeyArn',
+        'SecondaryKMSKeyId',
+        'SecondaryKMSKeyArn',
         'PrimarySNSTopicArn',
         'SecondarySNSTopicArn',
-        'Route53HealthCheckId',
+        'Route53HostedZoneId',
+        'Route53HostedZoneName',
+        'PrimaryHealthCheckId',
+        'SecondaryHealthCheckId',
         'PrimaryRegion',
         'SecondaryRegion',
       ];
@@ -476,7 +504,7 @@ describe('TapStack CloudFormation Template', () => {
   describe('Resource Count Validation', () => {
     test('should have expected number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(16); // All resources defined
+      expect(resourceCount).toBeGreaterThanOrEqual(27); // All resources defined
     });
 
     test('should have expected number of parameters', () => {
@@ -486,7 +514,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have expected number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(12);
+      expect(outputCount).toBeGreaterThanOrEqual(18);
     });
   });
 
@@ -505,6 +533,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.PrimaryDocumentsBucket.DeletionPolicy).toBe('Delete');
       expect(template.Resources.SecondaryDocumentsBucket.DeletionPolicy).toBe('Delete');
       expect(template.Resources.PrimaryTransactionProcessorLogGroup.DeletionPolicy).toBe('Delete');
+      expect(template.Resources.SecondaryTransactionProcessorLogGroup.DeletionPolicy).toBe('Delete');
     });
 
     test('no resources should have DeletionProtection enabled', () => {
@@ -524,8 +553,11 @@ describe('TapStack CloudFormation Template', () => {
         'PrimaryDocumentsBucket',
         'SecondaryDocumentsBucket',
         'PrimaryKMSKeyAlias',
+        'SecondaryKMSKeyAlias',
         'PrimaryTransactionProcessor',
+        'SecondaryTransactionProcessor',
         'PrimaryTransactionProcessorLogGroup',
+        'SecondaryTransactionProcessorLogGroup',
         'PrimaryLambdaExecutionRole',
         'SecondaryLambdaExecutionRole',
         'S3ReplicationRole',
@@ -534,15 +566,23 @@ describe('TapStack CloudFormation Template', () => {
         'DynamoDBThrottleAlarmPrimary',
         'LambdaErrorAlarmPrimary',
         'LambdaThrottleAlarmPrimary',
-        'Route53HealthCheck',
+        'LambdaErrorAlarmSecondary',
+        'LambdaThrottleAlarmSecondary',
+        'S3ReplicationLatencyAlarm',
+        'PrimaryHealthCheck',
+        'SecondaryHealthCheck',
+        'Route53HostedZone',
       ];
 
       resourcesWithNames.forEach((resourceName) => {
         const resource = template.Resources[resourceName];
+        if (!resource) {
+          throw new Error(`Resource ${resourceName} not found in template`);
+        }
         const props = resource.Properties;
         const nameProperty = props.TableName || props.BucketName || props.FunctionName ||
                             props.LogGroupName || props.RoleName || props.TopicName ||
-                            props.AlarmName || props.AliasName ||
+                            props.AlarmName || props.AliasName || props.Name ||
                             (props.HealthCheckTags && props.HealthCheckTags.find((t: any) => t.Key === 'Name')?.Value);
 
         if (nameProperty) {

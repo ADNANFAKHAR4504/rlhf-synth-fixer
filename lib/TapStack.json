@@ -474,6 +474,7 @@
         },
         "Timeout": 60,
         "MemorySize": 512,
+        "ReservedConcurrentExecutions": 100,
         "Environment": {
           "Variables": {
             "TABLE_NAME": {
@@ -575,6 +576,18 @@
                       "Fn::Sub": "${SecondaryDocumentsBucket.Arn}/*"
                     }
                   ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:Decrypt",
+                    "kms:Encrypt",
+                    "kms:GenerateDataKey",
+                    "kms:DescribeKey"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": ["SecondaryKMSKey", "Arn"]
+                  }
                 },
                 {
                   "Effect": "Allow",
@@ -720,20 +733,271 @@
         ]
       }
     },
-    "Route53HealthCheck": {
+    "LambdaErrorAlarmSecondary": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "lambda-errors-secondary-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when Lambda function errors exceed threshold in secondary region",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "SecondaryTransactionProcessor"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "SecondarySNSTopic"
+          }
+        ]
+      }
+    },
+    "LambdaThrottleAlarmSecondary": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "lambda-throttles-secondary-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when Lambda function is throttled in secondary region",
+        "MetricName": "Throttles",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "SecondaryTransactionProcessor"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "SecondarySNSTopic"
+          }
+        ]
+      }
+    },
+    "S3ReplicationLatencyAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "s3-replication-latency-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when S3 replication latency exceeds threshold",
+        "MetricName": "ReplicationLatency",
+        "Namespace": "AWS/S3",
+        "Statistic": "Maximum",
+        "Period": 900,
+        "EvaluationPeriods": 1,
+        "Threshold": 900000,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "SourceBucket",
+            "Value": {
+              "Ref": "PrimaryDocumentsBucket"
+            }
+          },
+          {
+            "Name": "DestinationBucket",
+            "Value": {
+              "Ref": "SecondaryDocumentsBucket"
+            }
+          },
+          {
+            "Name": "RuleId",
+            "Value": "ReplicateToSecondary"
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "PrimarySNSTopic"
+          }
+        ]
+      }
+    },
+    "SecondaryKMSKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for transaction encryption in secondary region - ${EnvironmentSuffix}"
+        },
+        "EnableKeyRotation": true,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow Lambda service to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:Encrypt",
+                "kms:GenerateDataKey",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow DynamoDB service to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "dynamodb.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:Encrypt",
+                "kms:GenerateDataKey",
+                "kms:DescribeKey",
+                "kms:CreateGrant"
+              ],
+              "Resource": "*"
+            }
+          ]
+        }
+      }
+    },
+    "SecondaryKMSKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/transaction-encryption-secondary-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "SecondaryKMSKey"
+        }
+      }
+    },
+    "SecondaryTransactionProcessor": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "transaction-processor-secondary-${EnvironmentSuffix}"
+        },
+        "Runtime": "nodejs22.x",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": ["SecondaryLambdaExecutionRole", "Arn"]
+        },
+        "Timeout": 60,
+        "MemorySize": 512,
+        "ReservedConcurrentExecutions": 100,
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": {
+              "Ref": "TransactionsTable"
+            },
+            "BUCKET_NAME": {
+              "Ref": "SecondaryDocumentsBucket"
+            },
+            "REGION": {
+              "Ref": "SecondaryRegion"
+            },
+            "KMS_KEY_ID": {
+              "Ref": "SecondaryKMSKey"
+            },
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');\nconst { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');\n\nconst dynamodb = new DynamoDBClient({ region: process.env.REGION });\nconst s3 = new S3Client({ region: process.env.REGION });\n\nexports.handler = async (event) => {\n  console.log('Processing transaction:', JSON.stringify(event));\n  \n  try {\n    const transactionId = event.transactionId || `txn-${Date.now()}`;\n    const timestamp = Date.now();\n    \n    // Store transaction in DynamoDB\n    await dynamodb.send(new PutItemCommand({\n      TableName: process.env.TABLE_NAME,\n      Item: {\n        transactionId: { S: transactionId },\n        timestamp: { N: timestamp.toString() },\n        data: { S: JSON.stringify(event) },\n        region: { S: process.env.REGION },\n        processedAt: { S: new Date().toISOString() }\n      }\n    }));\n    \n    // Store transaction document in S3\n    await s3.send(new PutObjectCommand({\n      Bucket: process.env.BUCKET_NAME,\n      Key: `transactions/${transactionId}.json`,\n      Body: JSON.stringify(event),\n      ServerSideEncryption: 'AES256'\n    }));\n    \n    return {\n      statusCode: 200,\n      body: JSON.stringify({\n        message: 'Transaction processed successfully',\n        transactionId,\n        region: process.env.REGION\n      })\n    };\n  } catch (error) {\n    console.error('Error processing transaction:', error);\n    throw error;\n  }\n};"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Region",
+            "Value": "secondary"
+          }
+        ]
+      }
+    },
+    "SecondaryTransactionProcessorLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/transaction-processor-secondary-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 7
+      }
+    },
+    "Route53HostedZone": {
+      "Type": "AWS::Route53::HostedZone",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "transaction-dr-${EnvironmentSuffix}.internal"
+        },
+        "HostedZoneConfig": {
+          "Comment": {
+            "Fn::Sub": "Hosted zone for DR failover - ${EnvironmentSuffix}"
+          }
+        },
+        "HostedZoneTags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Purpose",
+            "Value": "DisasterRecovery"
+          }
+        ]
+      }
+    },
+    "PrimaryHealthCheck": {
       "Type": "AWS::Route53::HealthCheck",
       "Properties": {
         "HealthCheckConfig": {
-          "Type": "CALCULATED",
-          "ChildHealthChecks": [],
-          "HealthThreshold": 1,
-          "Inverted": false
+          "Type": "HTTPS",
+          "ResourcePath": "/health",
+          "FullyQualifiedDomainName": {
+            "Fn::Sub": "primary.transaction-dr-${EnvironmentSuffix}.internal"
+          },
+          "Port": 443,
+          "RequestInterval": 30,
+          "FailureThreshold": 3
         },
         "HealthCheckTags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "dr-health-check-${EnvironmentSuffix}"
+              "Fn::Sub": "primary-health-check-${EnvironmentSuffix}"
             }
           },
           {
@@ -741,8 +1005,83 @@
             "Value": {
               "Ref": "EnvironmentSuffix"
             }
+          },
+          {
+            "Key": "Region",
+            "Value": "primary"
           }
         ]
+      }
+    },
+    "SecondaryHealthCheck": {
+      "Type": "AWS::Route53::HealthCheck",
+      "Properties": {
+        "HealthCheckConfig": {
+          "Type": "HTTPS",
+          "ResourcePath": "/health",
+          "FullyQualifiedDomainName": {
+            "Fn::Sub": "secondary.transaction-dr-${EnvironmentSuffix}.internal"
+          },
+          "Port": 443,
+          "RequestInterval": 30,
+          "FailureThreshold": 3
+        },
+        "HealthCheckTags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secondary-health-check-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Region",
+            "Value": "secondary"
+          }
+        ]
+      }
+    },
+    "PrimaryFailoverRecord": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneId": {
+          "Ref": "Route53HostedZone"
+        },
+        "Name": {
+          "Fn::Sub": "api.transaction-dr-${EnvironmentSuffix}.internal"
+        },
+        "Type": "A",
+        "SetIdentifier": "Primary",
+        "Failover": "PRIMARY",
+        "TTL": 60,
+        "ResourceRecords": ["127.0.0.1"],
+        "HealthCheckId": {
+          "Ref": "PrimaryHealthCheck"
+        }
+      }
+    },
+    "SecondaryFailoverRecord": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneId": {
+          "Ref": "Route53HostedZone"
+        },
+        "Name": {
+          "Fn::Sub": "api.transaction-dr-${EnvironmentSuffix}.internal"
+        },
+        "Type": "A",
+        "SetIdentifier": "Secondary",
+        "Failover": "SECONDARY",
+        "TTL": 60,
+        "ResourceRecords": ["127.0.0.2"],
+        "HealthCheckId": {
+          "Ref": "SecondaryHealthCheck"
+        }
       }
     }
   },
@@ -846,17 +1185,6 @@
         }
       }
     },
-    "Route53HealthCheckId": {
-      "Description": "ID of the Route 53 health check",
-      "Value": {
-        "Ref": "Route53HealthCheck"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-Route53HealthCheckId"
-        }
-      }
-    },
     "PrimaryRegion": {
       "Description": "Primary AWS region",
       "Value": {
@@ -867,6 +1195,68 @@
       "Description": "Secondary AWS region",
       "Value": {
         "Ref": "SecondaryRegion"
+      }
+    },
+    "SecondaryLambdaFunctionArn": {
+      "Description": "ARN of the secondary Lambda function",
+      "Value": {
+        "Fn::GetAtt": ["SecondaryTransactionProcessor", "Arn"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SecondaryLambdaArn"
+        }
+      }
+    },
+    "SecondaryKMSKeyId": {
+      "Description": "ID of the secondary KMS key",
+      "Value": {
+        "Ref": "SecondaryKMSKey"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SecondaryKMSKeyId"
+        }
+      }
+    },
+    "SecondaryKMSKeyArn": {
+      "Description": "ARN of the secondary KMS key",
+      "Value": {
+        "Fn::GetAtt": ["SecondaryKMSKey", "Arn"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SecondaryKMSKeyArn"
+        }
+      }
+    },
+    "Route53HostedZoneId": {
+      "Description": "ID of the Route 53 hosted zone for DR failover",
+      "Value": {
+        "Ref": "Route53HostedZone"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-Route53HostedZoneId"
+        }
+      }
+    },
+    "Route53HostedZoneName": {
+      "Description": "Name of the Route 53 hosted zone",
+      "Value": {
+        "Fn::Sub": "transaction-dr-${EnvironmentSuffix}.internal"
+      }
+    },
+    "PrimaryHealthCheckId": {
+      "Description": "ID of the primary region health check",
+      "Value": {
+        "Ref": "PrimaryHealthCheck"
+      }
+    },
+    "SecondaryHealthCheckId": {
+      "Description": "ID of the secondary region health check",
+      "Value": {
+        "Ref": "SecondaryHealthCheck"
       }
     }
   }
