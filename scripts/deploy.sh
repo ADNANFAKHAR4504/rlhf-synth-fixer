@@ -366,6 +366,29 @@ elif [ "$PLATFORM" = "pulumi" ]; then
       }
     fi
     cd ..
+  elif [ "$LANGUAGE" = "ts" ] || [ "$LANGUAGE" = "js" ]; then
+    echo "🔧 TypeScript/JavaScript Pulumi project detected"
+    pulumi login "$PULUMI_BACKEND_URL"
+
+    echo "Selecting or creating Pulumi stack..."
+    pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
+
+    # Clear any existing locks before deployment
+    echo "🔓 Clearing any stuck locks..."
+    pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes 2>/dev/null || echo "No locks to clear or cancel failed"
+
+    pulumi config set aws:defaultTags "{\"tags\":{\"Environment\":\"$ENVIRONMENT_SUFFIX\",\"Repository\":\"$REPOSITORY\",\"Author\":\"$COMMIT_AUTHOR\",\"PRNumber\":\"$PR_NUMBER\",\"Team\":\"$TEAM\",\"CreatedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"ManagedBy\":\"pulumi\"}}"
+
+    echo "Deploying infrastructure..."
+    if ! pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"; then
+      echo "⚠️ Deployment failed, attempting lock recovery..."
+      pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes || echo "Lock cancellation failed"
+      echo "🔄 Retrying deployment after lock cancellation..."
+      pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" || {
+        echo "❌ Deployment failed after retry"
+        exit 1
+      }
+    fi
   else
     echo "🔧 Python Pulumi project detected"
     export PYTHONPATH=.:bin
@@ -391,7 +414,7 @@ elif [ "$PLATFORM" = "pulumi" ]; then
 
 else
   echo "ℹ️ Unknown deployment method for platform: $PLATFORM, language: $LANGUAGE"
-  echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json, cdktf+typescript, cdktf+python, tf+hcl, pulumi+python, pulumi+java"
+  echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json, cdktf+typescript, cdktf+python, tf+hcl, pulumi+typescript, pulumi+javascript, pulumi+python, pulumi+go"
   exit 1
 fi
 
