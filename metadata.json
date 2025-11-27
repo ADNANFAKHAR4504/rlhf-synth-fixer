@@ -7,7 +7,8 @@
   "startedAt": "2025-11-26T03:01:00+0000",
   "subtask": "Application Deployment",
   "subject_labels": [
-    "Web Application Deployment"
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
   ],
   "po_id": "i4u7j7h9",
   "aws_services": [
