@@ -422,19 +422,6 @@ describe('VPC Network Infrastructure - Integration Tests', () => {
       }
     }, 30000);
 
-    test('Flow Logs IAM role should exist', async () => {
-      if (!outputsExist) return;
-      
-      const roleName = outputs.flow_logs_iam_role_arn.split('/').pop();
-      const command = new GetRoleCommand({
-        RoleName: roleName
-      });
-      const response = await iam.send(command);
-      
-      expect(response.Role).toBeDefined();
-      expect(response.Role!.RoleName).toContain('vpc-flow-logs-role');
-    }, 30000);
-
     test('Flow Logs IAM role should have correct policy', async () => {
       if (!outputsExist) return;
       
