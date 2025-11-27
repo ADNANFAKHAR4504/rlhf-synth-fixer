@@ -32,11 +32,6 @@
       "Description": "Master username for Aurora database",
       "Default": "dbadmin",
       "NoEcho": true
-    },
-    "DBMasterPassword": {
-      "Type": "String",
-      "Description": "Master password for Aurora database",
-      "NoEcho": true
     }
   },
   "Resources": {
@@ -1083,9 +1078,7 @@
         "MasterUsername": {
           "Ref": "DBMasterUsername"
         },
-        "MasterUserPassword": {
-          "Ref": "DBMasterPassword"
-        },
+        "MasterUserPassword": "{{resolve:secretsmanager:credit-scoring-db-secret:SecretString:password}}",
         "DBSubnetGroupName": {
           "Ref": "DBSubnetGroup"
         },

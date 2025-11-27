@@ -43,6 +43,7 @@ This CloudFormation template deploys a complete serverless credit scoring web ap
     },
     "CertificateArn": {
       "Type": "String",
+      "Default": "",
       "Description": "ARN of ACM certificate for ALB HTTPS listener"
     },
     "DBMasterUsername": {
@@ -50,12 +51,6 @@ This CloudFormation template deploys a complete serverless credit scoring web ap
       "Description": "Master username for Aurora database",
       "Default": "dbadmin",
       "NoEcho": true
-    },
-    "DBMasterPassword": {
-      "Type": "String",
-      "Description": "Master password for Aurora database (min 8 characters)",
-      "NoEcho": true,
-      "MinLength": 8
     }
   },
   "Resources": {
@@ -1097,14 +1092,12 @@ This CloudFormation template deploys a complete serverless credit scoring web ap
       "Properties": {
         "Engine": "aurora-postgresql",
         "EngineMode": "provisioned",
-        "EngineVersion": "15.14",
+        "EngineVersion": "15.8",
         "DatabaseName": "creditscoring",
         "MasterUsername": {
           "Ref": "DBMasterUsername"
         },
-        "MasterUserPassword": {
-          "Ref": "DBMasterPassword"
-        },
+        "MasterUserPassword": "{{resolve:secretsmanager:credit-scoring-db-secret:SecretString:password}}",
         "DBSubnetGroupName": {
           "Ref": "DBSubnetGroup"
         },
@@ -1355,7 +1348,7 @@ This CloudFormation template deploys a complete serverless credit scoring web ap
         "FunctionName": {
           "Fn::Sub": "credit-scoring-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [
@@ -1981,38 +1974,7 @@ This CloudFormation template deploys a complete serverless credit scoring web ap
       }
     }
   }
-}```
-
-
-## Deployment Instructions
-
-### Prerequisites
-
-1. ACM certificate in us-east-1 region for HTTPS
-2. AWS CLI configured with appropriate permissions
-3. Database master password (min 8 characters)
-
-### Deploy Stack
-
-```bash
-aws cloudformation create-stack \
-  --stack-name credit-scoring-prod \
-  --template-body file://lib/TapStack.json \
-  --parameters \
-    ParameterKey=EnvironmentSuffix,ParameterValue=prod \
-    ParameterKey=CertificateArn,ParameterValue=arn:aws:acm:us-east-1:ACCOUNT:certificate/CERT-ID \
-    ParameterKey=DBMasterPassword,ParameterValue=SecurePassword123! \
-  --capabilities CAPABILITY_IAM \
-  --region us-east-1
-```
-
-### Verify Deployment
-
-```bash
-aws cloudformation describe-stacks \
-  --stack-name credit-scoring-prod \
-  --region us-east-1 \
-  --query 'Stacks[0].StackStatus'
+}
 ```
 
 ## Architecture Highlights
