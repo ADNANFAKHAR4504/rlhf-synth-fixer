@@ -1,0 +1,15 @@
+{
+  "po_id": "101912761",
+  "subtask": "VPC with Dual-Stack Networking and Security Controls",
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "region": "us-east-1",
+  "environment_suffix": "synth101912761pr",
+  "training_quality": 8,
+  "tags": {
+    "Environment": "test",
+    "Owner": "iac-synth-trainer",
+    "CostCenter": "training"
+  }
+}

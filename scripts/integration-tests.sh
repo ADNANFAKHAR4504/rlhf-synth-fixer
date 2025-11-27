@@ -69,6 +69,10 @@ elif [ "$LANGUAGE" = "go" ]; then
     echo "ℹ️ lib directory not found, skipping Go integration tests"
   fi
 
+elif [ "$LANGUAGE" = "json" ] && [ "$PLATFORM" = "cfn" ]; then
+  echo "✅ CloudFormation JSON project detected, running JavaScript integration tests..."
+  npx jest --testPathPattern="\.int\.test\.js$" --testTimeout=30000
+
 elif [ "$LANGUAGE" = "js" ]; then
   echo "✅ JavaScript project detected, running integration tests..."
   npm run test:integration-js

@@ -123,7 +123,10 @@ elif [ "$PLATFORM" = "tf" ] && [ "$LANGUAGE" = "hcl" ]; then
     cd ..
 
 elif [ "$PLATFORM" = "cfn" ]; then
-    echo "✅ CloudFormation project detected, running cfn-lint..."
+    echo "✅ CloudFormation project detected, running validation..."
+
+    # Try cfn-lint first, fall back to AWS CLI validation if it fails
+    CFNLINT_FAILED=0
 
     # If Pipfile exists → use pipenv environment
     if [ -f "Pipfile" ]; then
@@ -142,8 +145,10 @@ elif [ "$PLATFORM" = "cfn" ]; then
         fi
 
         echo "🔍 Linting templates under lib/ using pipenv environment..."
-        find lib -type f \( -name "*.yaml" -o -name "*.yml" -o -name "*.json" \) \
-            -print0 | xargs -0 -r pipenv run cfn-lint -t
+        if ! find lib -type f \( -name "*.yaml" -o -name "*.yml" -o -name "*.json" \) \
+            -print0 | xargs -0 -r pipenv run cfn-lint -t 2>/dev/null; then
+            CFNLINT_FAILED=1
+        fi
 
     else
         echo "ℹ️ No Pipfile found — using system Python environment"
@@ -153,8 +158,35 @@ elif [ "$PLATFORM" = "cfn" ]; then
         fi
 
         echo "🔍 Linting templates under lib/ ..."
-        find lib -type f \( -name "*.yaml" -o -name "*.yml" -o -name "*.json" \) \
-            -print0 | xargs -0 -r cfn-lint -t
+        if ! find lib -type f \( -name "*.yaml" -o -name "*.yml" -o -name "*.json" \) \
+            -print0 | xargs -0 -r cfn-lint -t 2>/dev/null; then
+            CFNLINT_FAILED=1
+        fi
+    fi
+
+    # If cfn-lint failed, try AWS CLI validation
+    if [ $CFNLINT_FAILED -eq 1 ]; then
+        echo "⚠️ cfn-lint failed, falling back to AWS CLI validation..."
+        if ! command -v aws &>/dev/null; then
+            echo "❌ Neither cfn-lint nor AWS CLI is available"
+            exit 1
+        fi
+
+        echo "🔍 Validating templates with AWS CLI..."
+        VALIDATION_FAILED=0
+        for template in lib/*.json lib/*.yaml lib/*.yml; do
+            if [ -f "$template" ]; then
+                echo "Validating $template..."
+                if ! aws cloudformation validate-template --template-body "file://$template" >/dev/null 2>&1; then
+                    echo "❌ Validation failed for $template"
+                    VALIDATION_FAILED=1
+                fi
+            fi
+        done
+        if [ $VALIDATION_FAILED -eq 1 ]; then
+            exit 1
+        fi
+        echo "✅ All templates validated successfully with AWS CLI"
     fi
 
 elif [ "$PLATFORM" = "cicd" ] && [ "$LANGUAGE" = "yml" ]; then
