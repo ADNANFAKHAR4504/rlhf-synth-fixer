@@ -580,16 +580,16 @@ exports.handler = async (event) => {
 
     // 3. Network Load Balancer for internal mTLS
     const nlb = new aws.lb.LoadBalancer(
-      `internal-nlb-${environmentSuffix}`,
+      `nlb-internal-${environmentSuffix}`,
       {
-        name: `internal-nlb-${environmentSuffix}`,
+        name: `nlb-internal-${environmentSuffix}`,
         internal: true,
         loadBalancerType: 'network',
         subnets: privateSubnets.map(s => s.id),
         enableCrossZoneLoadBalancing: true,
         tags: {
           ...(tags as any),
-          Name: `internal-nlb-${environmentSuffix}`,
+          Name: `nlb-internal-${environmentSuffix}`,
         },
       },
       { parent: this }
