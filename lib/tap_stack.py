@@ -7,21 +7,20 @@ the TAP (Tenant Application Platform) project.
 """
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Dict, Optional
 
 from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack, Tags
 from aws_cdk import aws_autoscaling as autoscaling
-from aws_cdk import aws_certificatemanager as acm
 from aws_cdk import aws_cloudwatch as cloudwatch
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_ec2 as ec2
 from aws_cdk import aws_elasticache as elasticache
 from aws_cdk import aws_elasticloadbalancingv2 as elbv2
-from aws_cdk import aws_elasticloadbalancingv2_targets as targets
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_kms as kms
 from aws_cdk import aws_logs as logs
 from aws_cdk import aws_rds as rds
+from aws_cdk import aws_secretsmanager as secretsmanager
 from constructs import Construct
 
 
@@ -216,7 +215,10 @@ class TapStack(Stack):
                                 "logs:DescribeLogGroups",
                                 "logs:DescribeLogStreams"
                             ],
-                            resources=["*"]
+                            resources=[
+                                log_group.log_group_arn,
+                                f"{log_group.log_group_arn}:*"
+                            ]
                         )
                     ]
                 )
@@ -262,7 +264,7 @@ class TapStack(Stack):
             self, "Ec2SecurityGroup",
             vpc=self.vpc,
             description="Security group for EC2 instances",
-            allow_all_outbound=True
+            allow_all_outbound=False
         )
         security_groups['ec2'].add_ingress_rule(
             peer=security_groups['alb'],
@@ -301,6 +303,42 @@ class TapStack(Stack):
             peer=security_groups['ec2'],
             connection=ec2.Port.tcp_range(8080, 8090),
             description="Allow traffic to EC2 instances"
+        )
+
+        # Add specific egress rules for EC2 (least privilege)
+        # Allow EC2 to access RDS
+        security_groups['ec2'].add_egress_rule(
+            peer=security_groups['database'],
+            connection=ec2.Port.tcp(3306),
+            description="Allow MySQL access to Aurora"
+        )
+
+        # Allow EC2 to access Redis
+        security_groups['ec2'].add_egress_rule(
+            peer=security_groups['redis'],
+            connection=ec2.Port.tcp(6379),
+            description="Allow Redis access"
+        )
+
+        # Allow EC2 to access HTTPS for package downloads and AWS API calls
+        security_groups['ec2'].add_egress_rule(
+            peer=ec2.Peer.any_ipv4(),
+            connection=ec2.Port.tcp(443),
+            description="Allow HTTPS for AWS API and package downloads"
+        )
+
+        # Allow EC2 to access HTTP for package downloads
+        security_groups['ec2'].add_egress_rule(
+            peer=ec2.Peer.any_ipv4(),
+            connection=ec2.Port.tcp(80),
+            description="Allow HTTP for package downloads"
+        )
+
+        # Allow EC2 DNS queries
+        security_groups['ec2'].add_egress_rule(
+            peer=ec2.Peer.any_ipv4(),
+            connection=ec2.Port.udp(53),
+            description="Allow DNS queries"
         )
 
         return security_groups
@@ -361,7 +399,7 @@ class TapStack(Stack):
                 "Writer",
                 instance_type=ec2.InstanceType("db.r6g.4xlarge"),
                 enable_performance_insights=True,
-                performance_insight_retention=rds.PerformanceInsightRetention.DEFAULT,
+                performance_insight_retention=rds.PerformanceInsightRetention.LONG_TERM,
                 publicly_accessible=False
             ),
             readers=[
@@ -369,7 +407,7 @@ class TapStack(Stack):
                     f"Reader{i}",
                     instance_type=ec2.InstanceType("db.r6g.4xlarge"),
                     enable_performance_insights=True,
-                    performance_insight_retention=rds.PerformanceInsightRetention.DEFAULT,
+                    performance_insight_retention=rds.PerformanceInsightRetention.LONG_TERM,
                     publicly_accessible=False
                 ) for i in range(1, 3)
             ],
@@ -385,7 +423,7 @@ class TapStack(Stack):
                 preferred_window="03:00-04:00"
             ),
             preferred_maintenance_window="sun:04:00-sun:05:00",
-            deletion_protection=False,
+            deletion_protection=(self.environment_suffix == 'prod'),
             storage_encrypted=True,
             storage_encryption_key=self.kms_key,
             cloudwatch_logs_exports=["error", "general", "slowquery"],
@@ -498,6 +536,19 @@ class TapStack(Stack):
     def _create_redis_cluster(self) -> elasticache.CfnReplicationGroup:
         """Create ElastiCache Redis cluster with cluster mode enabled"""
 
+        # Create Redis authentication token secret
+        redis_auth_secret = secretsmanager.Secret(
+            self, "RedisAuthToken",
+            description="Authentication token for Redis cluster",
+            secret_name=f"tap/{self.environment_suffix}/redis/auth-token",
+            generate_secret_string=secretsmanager.SecretStringGenerator(
+                exclude_punctuation=True,
+                password_length=32,
+                require_each_included_type=False
+            ),
+            removal_policy=RemovalPolicy.DESTROY
+        )
+
         # Create subnet group
         subnet_group = elasticache.CfnSubnetGroup(
             self, "RedisSubnetGroup",
@@ -538,7 +589,7 @@ class TapStack(Stack):
             at_rest_encryption_enabled=True,
             kms_key_id=self.kms_key.key_arn,
             transit_encryption_enabled=True,
-            auth_token=self.node.try_get_context("redis_auth_token"),
+            auth_token=redis_auth_secret.secret_value.unsafe_unwrap(),
             snapshot_retention_limit=5,
             snapshot_window="03:00-05:00",
             preferred_maintenance_window="sun:05:00-sun:07:00",
@@ -559,6 +610,9 @@ class TapStack(Stack):
         redis_cluster.add_dependency(subnet_group)
         redis_cluster.add_dependency(parameter_group)
 
+        # Store secret for later use
+        self.redis_auth_secret = redis_auth_secret
+
         return redis_cluster
 
     def _create_application_load_balancer(self) -> elbv2.ApplicationLoadBalancer:
@@ -573,7 +627,7 @@ class TapStack(Stack):
             vpc_subnets=ec2.SubnetSelection(
                 subnet_type=ec2.SubnetType.PUBLIC
             ),
-            deletion_protection=False,
+            deletion_protection=(self.environment_suffix == 'prod'),
             http2_enabled=True,
             idle_timeout=Duration.seconds(300)
         )
@@ -632,7 +686,8 @@ class TapStack(Stack):
                                 "secretsmanager:DescribeSecret"
                             ],
                             resources=[
-                                self.aurora_cluster.secret.secret_arn
+                                self.aurora_cluster.secret.secret_arn,
+                                self.redis_auth_secret.secret_arn
                             ]
                         ),
                         iam.PolicyStatement(
@@ -640,7 +695,9 @@ class TapStack(Stack):
                                 "elasticache:DescribeCacheClusters",
                                 "elasticache:DescribeReplicationGroups"
                             ],
-                            resources=["*"]
+                            resources=[
+                                f"arn:aws:elasticache:{self.region}:{self.account}:replicationgroup/{self.redis_cluster.ref}"
+                            ]
                         ),
                         iam.PolicyStatement(
                             actions=[
@@ -661,8 +718,8 @@ class TapStack(Stack):
             "yum update -y",
             "yum install -y amazon-cloudwatch-agent",
             "yum install -y aws-cli",
-            # Install application dependencies
-            "curl -sL https://rpm.nodesource.com/setup_16.x | sudo bash -",
+            # Install application dependencies - Node.js 20 LTS
+            "curl -sL https://rpm.nodesource.com/setup_20.x | sudo bash -",
             "yum install -y nodejs",
             # Configure CloudWatch agent
             "cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF",
@@ -1084,6 +1141,13 @@ class TapStack(Stack):
             value=self.redis_cluster.attr_configuration_end_point_port,
             description="Redis configuration endpoint port",
             export_name=f"tap-{self.environment_suffix}-redis-config-port"
+        )
+
+        CfnOutput(
+            self, "RedisAuthSecretArn",
+            value=self.redis_auth_secret.secret_arn,
+            description="Redis authentication token secret ARN",
+            export_name=f"tap-{self.environment_suffix}-redis-auth-secret-arn"
         )
 
         # DynamoDB Outputs
