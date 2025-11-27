@@ -11,5 +11,11 @@
     "Environment": "test",
     "Owner": "iac-synth-trainer",
     "CostCenter": "training"
-  }
+  },
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "IAM",
+    "CloudWatch Logs"
+  ]
 }
