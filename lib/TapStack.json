@@ -639,11 +639,7 @@
             "Value": "Platform"
           }
         ]
-      },
-      "DependsOn": [
-        "SyntheticsResultsBucket",
-        "SyntheticsCanaryRole"
-      ]
+      }
     }
   },
   "Outputs": {

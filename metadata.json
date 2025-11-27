@@ -8,7 +8,7 @@
   "startedAt": "2025-11-27T07:40:00.000Z",
   "subtask": "Infrastructure QA and Management",
   "subject_labels": [
-    "Infrastructure Analysis/Monitoring"
+    "General Infrastructure Tooling QA"
   ],
   "aws_services": [
     "CloudWatch Logs",
@@ -20,5 +20,7 @@
     "CloudWatch Alarms",
     "CloudWatch Dashboard"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342"
 }
