@@ -1,0 +1,359 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Application nested stack with S3, Lambda, DynamoDB, CloudWatch, and Custom Resources",
+  "Parameters": {
+    "EnvironmentType": {
+      "Type": "String",
+      "Description": "Environment type",
+      "AllowedValues": ["development", "staging", "production"]
+    },
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Suffix for resource names"
+    },
+    "VPCId": {
+      "Type": "String",
+      "Description": "VPC ID from VPC stack"
+    },
+    "PrivateSubnet1": {
+      "Type": "String",
+      "Description": "Private Subnet 1 ID"
+    },
+    "PrivateSubnet2": {
+      "Type": "String",
+      "Description": "Private Subnet 2 ID"
+    },
+    "PrivateSubnet3": {
+      "Type": "String",
+      "Description": "Private Subnet 3 ID"
+    },
+    "LambdaExecutionRoleArn": {
+      "Type": "String",
+      "Description": "ARN of Lambda execution role"
+    },
+    "CustomResourceRoleArn": {
+      "Type": "String",
+      "Description": "ARN of Custom Resource Lambda role"
+    }
+  },
+  "Conditions": {
+    "IsProduction": {
+      "Fn::Equals": [{"Ref": "EnvironmentType"}, "production"]
+    }
+  },
+  "Resources": {
+    "AnalyticsDataBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {"Fn::Sub": "analytics-data-${EnvironmentSuffix}"},
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "TransitionToGlacier",
+              "Status": "Enabled",
+              "Transitions": [
+                {
+                  "TransitionInDays": 90,
+                  "StorageClass": "GLACIER"
+                }
+              ]
+            }
+          ]
+        },
+        "NotificationConfiguration": {
+          "LambdaConfigurations": [
+            {
+              "Event": "s3:ObjectCreated:*",
+              "Function": {"Fn::GetAtt": ["CSVProcessorFunction", "Arn"]},
+              "Filter": {
+                "S3Key": {
+                  "Rules": [
+                    {
+                      "Name": "suffix",
+                      "Value": ".csv"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentType"}
+          }
+        ]
+      },
+      "DeletionPolicy": {
+        "Fn::If": ["IsProduction", "Retain", "Delete"]
+      },
+      "UpdateReplacePolicy": {
+        "Fn::If": ["IsProduction", "Retain", "Delete"]
+      }
+    },
+    "AnalyticsDataBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {"Ref": "AnalyticsDataBucket"},
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "DenyUnencryptedObjectUploads",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${AnalyticsDataBucket.Arn}/*"
+              },
+              "Condition": {
+                "StringNotEquals": {
+                  "s3:x-amz-server-side-encryption": "AES256"
+                }
+              }
+            },
+            {
+              "Sid": "DenyInsecureTransport",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {"Fn::GetAtt": ["AnalyticsDataBucket", "Arn"]},
+                {"Fn::Sub": "${AnalyticsDataBucket.Arn}/*"}
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "LambdaSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {"Fn::Sub": "analytics-lambda-sg-${EnvironmentSuffix}"},
+        "GroupDescription": "Security group for Lambda functions",
+        "VpcId": {"Ref": "VPCId"},
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "analytics-lambda-sg-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "CSVProcessorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {"Fn::Sub": "analytics-csv-processor-${EnvironmentSuffix}"},
+        "Runtime": "python3.9",
+        "Handler": "csv-processor.lambda_handler",
+        "Role": {"Ref": "LambdaExecutionRoleArn"},
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\nimport csv\nimport io\nfrom datetime import datetime\n\ns3_client = boto3.client('s3')\ndynamodb = boto3.resource('dynamodb')\n\ndef lambda_handler(event, context):\n    \"\"\"\n    Process CSV files uploaded to S3 and store metadata in DynamoDB.\n    \"\"\"\n    try:\n        # Get bucket and key from S3 event\n        bucket = event['Records'][0]['s3']['bucket']['name']\n        key = event['Records'][0]['s3']['object']['key']\n        \n        print(f'Processing file: {bucket}/{key}')\n        \n        # Download CSV from S3\n        response = s3_client.get_object(Bucket=bucket, Key=key)\n        csv_content = response['Body'].read().decode('utf-8')\n        \n        # Parse CSV\n        csv_reader = csv.DictReader(io.StringIO(csv_content))\n        row_count = sum(1 for row in csv_reader)\n        \n        # Get file size\n        file_size = response['ContentLength']\n        \n        # Store metadata in DynamoDB\n        table_name = os.environ['DYNAMODB_TABLE']\n        table = dynamodb.Table(table_name)\n        \n        metadata = {\n            'file_id': key,\n            'bucket': bucket,\n            'file_size': file_size,\n            'row_count': row_count,\n            'upload_timestamp': datetime.utcnow().isoformat(),\n            'processing_status': 'completed',\n            'processed_timestamp': datetime.utcnow().isoformat()\n        }\n        \n        table.put_item(Item=metadata)\n        \n        print(f'Successfully processed {row_count} rows from {key}')\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'CSV processed successfully',\n                'row_count': row_count,\n                'file_size': file_size\n            })\n        }\n        \n    except Exception as e:\n        print(f'Error processing CSV: {str(e)}')\n        \n        # Store error status in DynamoDB\n        try:\n            table_name = os.environ['DYNAMODB_TABLE']\n            table = dynamodb.Table(table_name)\n            \n            error_metadata = {\n                'file_id': key,\n                'bucket': bucket,\n                'upload_timestamp': datetime.utcnow().isoformat(),\n                'processing_status': 'failed',\n                'error_message': str(e)\n            }\n            \n            table.put_item(Item=error_metadata)\n        except Exception as db_error:\n            print(f'Error storing error metadata: {str(db_error)}')\n        \n        raise e\n"
+        },
+        "MemorySize": 3072,
+        "Timeout": 300,
+        "Environment": {
+          "Variables": {
+            "DYNAMODB_TABLE": {"Ref": "MetadataTable"},
+            "ENVIRONMENT_TYPE": {"Ref": "EnvironmentType"}
+          }
+        },
+        "VpcConfig": {
+          "SecurityGroupIds": [{"Ref": "LambdaSecurityGroup"}],
+          "SubnetIds": [
+            {"Ref": "PrivateSubnet1"},
+            {"Ref": "PrivateSubnet2"},
+            {"Ref": "PrivateSubnet3"}
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentType"}
+          }
+        ]
+      }
+    },
+    "CSVProcessorFunctionPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {"Ref": "CSVProcessorFunction"},
+        "Action": "lambda:InvokeFunction",
+        "Principal": "s3.amazonaws.com",
+        "SourceArn": {"Fn::GetAtt": ["AnalyticsDataBucket", "Arn"]},
+        "SourceAccount": {"Ref": "AWS::AccountId"}
+      }
+    },
+    "MetadataTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {"Fn::Sub": "analytics-metadata-${EnvironmentSuffix}"},
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "file_id",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "upload_timestamp",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "file_id",
+            "KeyType": "HASH"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "timestamp-index",
+            "KeySchema": [
+              {
+                "AttributeName": "upload_timestamp",
+                "KeyType": "HASH"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": {
+            "Fn::If": ["IsProduction", true, false]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentType"}
+          }
+        ]
+      },
+      "DeletionPolicy": {
+        "Fn::If": ["IsProduction", "Retain", "Delete"]
+      },
+      "UpdateReplacePolicy": {
+        "Fn::If": ["IsProduction", "Retain", "Delete"]
+      }
+    },
+    "PolicyComplianceTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {"Fn::Sub": "policy-compliance-${EnvironmentSuffix}"},
+        "DisplayName": "S3 Policy Compliance Notifications",
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentType"}
+          }
+        ]
+      }
+    },
+    "CustomResourceValidatorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {"Fn::Sub": "analytics-policy-validator-${EnvironmentSuffix}"},
+        "Runtime": "python3.9",
+        "Handler": "index.lambda_handler",
+        "Role": {"Ref": "CustomResourceRoleArn"},
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport cfnresponse\n\ns3_client = boto3.client('s3')\nsns_client = boto3.client('sns')\n\ndef lambda_handler(event, context):\n    \"\"\"\n    Custom Resource to validate S3 bucket policies post-deployment.\n    \"\"\"\n    print(f'Event: {json.dumps(event)}')\n    \n    request_type = event['RequestType']\n    \n    # Handle Delete requests\n    if request_type == 'Delete':\n        cfnresponse.send(event, context, cfnresponse.SUCCESS, {})\n        return\n    \n    try:\n        # Get bucket name from resource properties\n        bucket_name = event['ResourceProperties']['BucketName']\n        sns_topic_arn = event['ResourceProperties']['SNSTopicArn']\n        \n        print(f'Validating bucket policy for: {bucket_name}')\n        \n        # Get bucket policy\n        try:\n            response = s3_client.get_bucket_policy(Bucket=bucket_name)\n            policy = json.loads(response['Policy'])\n        except s3_client.exceptions.NoSuchBucketPolicy:\n            message = f'Bucket {bucket_name} has no bucket policy'\n            print(message)\n            sns_client.publish(\n                TopicArn=sns_topic_arn,\n                Subject='S3 Bucket Policy Compliance Alert',\n                Message=message\n            )\n            cfnresponse.send(event, context, cfnresponse.SUCCESS, {'Status': 'No Policy'})\n            return\n        \n        # Check for explicit deny statements\n        has_deny = False\n        deny_statements = []\n        \n        for statement in policy.get('Statement', []):\n            if statement.get('Effect') == 'Deny':\n                has_deny = True\n                deny_statements.append(statement.get('Sid', 'Unknown'))\n        \n        if not has_deny:\n            message = f'WARNING: Bucket {bucket_name} policy does not contain explicit Deny statements. This may pose a security risk.'\n            print(message)\n            sns_client.publish(\n                TopicArn=sns_topic_arn,\n                Subject='S3 Bucket Policy Compliance Alert',\n                Message=message\n            )\n            cfnresponse.send(event, context, cfnresponse.SUCCESS, {\n                'Status': 'Non-Compliant',\n                'Message': 'No explicit Deny statements found'\n            })\n        else:\n            message = f'Bucket {bucket_name} policy is compliant. Found Deny statements: {deny_statements}'\n            print(message)\n            cfnresponse.send(event, context, cfnresponse.SUCCESS, {\n                'Status': 'Compliant',\n                'DenyStatements': ', '.join(deny_statements)\n            })\n    \n    except Exception as e:\n        error_message = f'Error validating bucket policy: {str(e)}'\n        print(error_message)\n        cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': error_message})\n"
+        },
+        "Timeout": 60,
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentType"}
+          }
+        ]
+      }
+    },
+    "BucketPolicyValidation": {
+      "Type": "Custom::BucketPolicyValidator",
+      "DependsOn": ["AnalyticsDataBucketPolicy"],
+      "Properties": {
+        "ServiceToken": {"Fn::GetAtt": ["CustomResourceValidatorFunction", "Arn"]},
+        "BucketName": {"Ref": "AnalyticsDataBucket"},
+        "SNSTopicArn": {"Ref": "PolicyComplianceTopic"}
+      }
+    },
+    "AnalyticsDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": {"Fn::Sub": "analytics-platform-${EnvironmentSuffix}"},
+        "DashboardBody": {
+          "Fn::Sub": [
+            "{\"widgets\":[{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/S3\",\"BucketSizeBytes\",{\"stat\":\"Average\",\"label\":\"Bucket Size\"}],[\"AWS/S3\",\"NumberOfObjects\",{\"stat\":\"Average\",\"label\":\"Object Count\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${Region}\",\"title\":\"S3 Bucket Metrics - ${EnvSuffix}\",\"yAxis\":{\"left\":{\"showUnits\":false}}}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/Lambda\",\"Invocations\",{\"stat\":\"Sum\",\"label\":\"Invocations\"}],[\"AWS/Lambda\",\"Errors\",{\"stat\":\"Sum\",\"label\":\"Errors\"}],[\"AWS/Lambda\",\"Duration\",{\"stat\":\"Average\",\"label\":\"Duration\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${Region}\",\"title\":\"Lambda Metrics - ${EnvSuffix}\",\"yAxis\":{\"left\":{\"showUnits\":false}}}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/DynamoDB\",\"ConsumedReadCapacityUnits\",{\"stat\":\"Sum\",\"label\":\"Read Capacity\"}],[\"AWS/DynamoDB\",\"ConsumedWriteCapacityUnits\",{\"stat\":\"Sum\",\"label\":\"Write Capacity\"}]],\"period\":300,\"stat\":\"Sum\",\"region\":\"${Region}\",\"title\":\"DynamoDB Metrics - ${EnvSuffix}\",\"yAxis\":{\"left\":{\"showUnits\":false}}}}]}",
+            {
+              "Region": {"Ref": "AWS::Region"},
+              "EnvSuffix": {"Ref": "EnvironmentSuffix"}
+            }
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "DataBucketName": {
+      "Description": "Name of the S3 data bucket",
+      "Value": {"Ref": "AnalyticsDataBucket"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-DataBucket"}
+      }
+    },
+    "MetadataTableName": {
+      "Description": "Name of the DynamoDB metadata table",
+      "Value": {"Ref": "MetadataTable"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-MetadataTable"}
+      }
+    },
+    "CSVProcessorFunctionArn": {
+      "Description": "ARN of the CSV processor Lambda function",
+      "Value": {"Fn::GetAtt": ["CSVProcessorFunction", "Arn"]},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-CSVProcessorArn"}
+      }
+    },
+    "PolicyComplianceTopicArn": {
+      "Description": "ARN of the policy compliance SNS topic",
+      "Value": {"Ref": "PolicyComplianceTopic"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-PolicyComplianceTopicArn"}
+      }
+    },
+    "DashboardURL": {
+      "Description": "URL to CloudWatch Dashboard",
+      "Value": {
+        "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=analytics-platform-${EnvironmentSuffix}"
+      }
+    }
+  }
+}

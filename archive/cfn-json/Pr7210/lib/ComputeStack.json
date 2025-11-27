@@ -1,0 +1,411 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Compute stack for Lambda functions and ECR repositories",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource names"
+    },
+    "Environment": {
+      "Type": "String",
+      "Description": "Environment type"
+    },
+    "PrivateSubnet1Id": {
+      "Type": "String",
+      "Description": "Private Subnet 1 ID"
+    },
+    "PrivateSubnet2Id": {
+      "Type": "String",
+      "Description": "Private Subnet 2 ID"
+    },
+    "LambdaSecurityGroupId": {
+      "Type": "String",
+      "Description": "Security Group ID for Lambda"
+    },
+    "DBClusterEndpoint": {
+      "Type": "String",
+      "Description": "RDS Aurora cluster endpoint"
+    },
+    "DBClusterPort": {
+      "Type": "String",
+      "Description": "RDS Aurora cluster port"
+    },
+    "LambdaImageUri": {
+      "Type": "String",
+      "Description": "ECR image URI for Lambda function"
+    }
+  },
+  "Conditions": {
+    "HasLambdaImage": {
+      "Fn::Not": [{"Fn::Equals": [{"Ref": "LambdaImageUri"}, ""]}]
+    }
+  },
+  "Resources": {
+    "ValidatorECRRepository": {
+      "Type": "AWS::ECR::Repository",
+      "Properties": {
+        "RepositoryName": {"Fn::Sub": "transaction-validator-${EnvironmentSuffix}"},
+        "ImageScanningConfiguration": {
+          "ScanOnPush": true
+        },
+        "LifecyclePolicy": {
+          "LifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"description\":\"Keep last 10 images\",\"selection\":{\"tagStatus\":\"any\",\"countType\":\"imageCountMoreThan\",\"countNumber\":10},\"action\":{\"type\":\"expire\"}}]}"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "transaction-validator-${EnvironmentSuffix}"}
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "MigrationECRRepository": {
+      "Type": "AWS::ECR::Repository",
+      "Properties": {
+        "RepositoryName": {"Fn::Sub": "db-migration-${EnvironmentSuffix}"},
+        "ImageScanningConfiguration": {
+          "ScanOnPush": true
+        },
+        "LifecyclePolicy": {
+          "LifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"description\":\"Keep last 5 images\",\"selection\":{\"tagStatus\":\"any\",\"countType\":\"imageCountMoreThan\",\"countNumber\":5},\"action\":{\"type\":\"expire\"}}]}"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "db-migration-${EnvironmentSuffix}"}
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "DBEndpointParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {"Fn::Sub": "/transaction-processing/${EnvironmentSuffix}/db-endpoint"},
+        "Type": "String",
+        "Value": {"Ref": "DBClusterEndpoint"},
+        "Description": "RDS Aurora cluster endpoint for Lambda functions",
+        "Tags": {
+          "Name": {"Fn::Sub": "db-endpoint-param-${EnvironmentSuffix}"},
+          "Environment": {"Ref": "Environment"}
+        }
+      }
+    },
+    "DBPortParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {"Fn::Sub": "/transaction-processing/${EnvironmentSuffix}/db-port"},
+        "Type": "String",
+        "Value": {"Ref": "DBClusterPort"},
+        "Description": "RDS Aurora cluster port for Lambda functions",
+        "Tags": {
+          "Name": {"Fn::Sub": "db-port-param-${EnvironmentSuffix}"},
+          "Environment": {"Ref": "Environment"}
+        }
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {"Fn::Sub": "lambda-execution-role-${EnvironmentSuffix}"},
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
+          "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "SSMParameterAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameter",
+                    "ssm:GetParameters"
+                  ],
+                  "Resource": [
+                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/transaction-processing/${EnvironmentSuffix}/*"}
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "DynamoDBAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:Query"
+                  ],
+                  "Resource": [
+                    {"Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/session-table-${EnvironmentSuffix}"}
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "S3AuditAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:GetObject"
+                  ],
+                  "Resource": [
+                    {"Fn::Sub": "arn:aws:s3:::audit-logs-${EnvironmentSuffix}/*"}
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "lambda-execution-role-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "ValidatorLambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Condition": "HasLambdaImage",
+      "Properties": {
+        "FunctionName": {"Fn::Sub": "transaction-validator-${EnvironmentSuffix}"},
+        "PackageType": "Image",
+        "Code": {
+          "ImageUri": {"Ref": "LambdaImageUri"}
+        },
+        "Role": {"Fn::GetAtt": ["LambdaExecutionRole", "Arn"]},
+        "Timeout": 30,
+        "MemorySize": 512,
+        "Environment": {
+          "Variables": {
+            "ENVIRONMENT": {"Ref": "Environment"},
+            "ENVIRONMENT_SUFFIX": {"Ref": "EnvironmentSuffix"},
+            "DB_ENDPOINT_PARAM": {"Fn::Sub": "/transaction-processing/${EnvironmentSuffix}/db-endpoint"},
+            "DB_PORT_PARAM": {"Fn::Sub": "/transaction-processing/${EnvironmentSuffix}/db-port"},
+            "SESSION_TABLE": {"Fn::Sub": "session-table-${EnvironmentSuffix}"},
+            "AUDIT_BUCKET": {"Fn::Sub": "audit-logs-${EnvironmentSuffix}"}
+          }
+        },
+        "VpcConfig": {
+          "SecurityGroupIds": [{"Ref": "LambdaSecurityGroupId"}],
+          "SubnetIds": [
+            {"Ref": "PrivateSubnet1Id"},
+            {"Ref": "PrivateSubnet2Id"}
+          ]
+        },
+        "TracingConfig": {
+          "Mode": "Active"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "transaction-validator-${EnvironmentSuffix}"}
+          },
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "Environment"}
+          }
+        ]
+      },
+      "DependsOn": ["DBEndpointParameter", "DBPortParameter"]
+    },
+    "MigrationLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {"Fn::Sub": "migration-lambda-role-${EnvironmentSuffix}"},
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "SSMParameterAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameter"
+                  ],
+                  "Resource": [
+                    {"Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/transaction-processing/${EnvironmentSuffix}/*"}
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "migration-lambda-role-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "MigrationLambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Condition": "HasLambdaImage",
+      "Properties": {
+        "FunctionName": {"Fn::Sub": "db-migration-${EnvironmentSuffix}"},
+        "PackageType": "Image",
+        "Code": {
+          "ImageUri": {"Ref": "LambdaImageUri"}
+        },
+        "Role": {"Fn::GetAtt": ["MigrationLambdaRole", "Arn"]},
+        "Timeout": 300,
+        "MemorySize": 256,
+        "Environment": {
+          "Variables": {
+            "ENVIRONMENT": {"Ref": "Environment"},
+            "ENVIRONMENT_SUFFIX": {"Ref": "EnvironmentSuffix"},
+            "DB_ENDPOINT_PARAM": {"Fn::Sub": "/transaction-processing/${EnvironmentSuffix}/db-endpoint"},
+            "DB_PORT_PARAM": {"Fn::Sub": "/transaction-processing/${EnvironmentSuffix}/db-port"}
+          }
+        },
+        "VpcConfig": {
+          "SecurityGroupIds": [{"Ref": "LambdaSecurityGroupId"}],
+          "SubnetIds": [
+            {"Ref": "PrivateSubnet1Id"},
+            {"Ref": "PrivateSubnet2Id"}
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "db-migration-${EnvironmentSuffix}"}
+          },
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "Environment"}
+          }
+        ]
+      },
+      "DependsOn": ["DBEndpointParameter", "DBPortParameter"]
+    },
+    "DBMigrationCustomResource": {
+      "Type": "Custom::DBMigration",
+      "Condition": "HasLambdaImage",
+      "Properties": {
+        "ServiceToken": {"Fn::GetAtt": ["MigrationLambdaFunction", "Arn"]},
+        "DBEndpoint": {"Ref": "DBClusterEndpoint"},
+        "DBPort": {"Ref": "DBClusterPort"},
+        "Version": "1.0.0"
+      }
+    }
+  },
+  "Outputs": {
+    "ValidatorECRRepositoryUri": {
+      "Description": "ECR repository URI for transaction validator",
+      "Value": {"Fn::GetAtt": ["ValidatorECRRepository", "RepositoryUri"]},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-ValidatorECRRepositoryUri"}
+      }
+    },
+    "MigrationECRRepositoryUri": {
+      "Description": "ECR repository URI for database migration",
+      "Value": {"Fn::GetAtt": ["MigrationECRRepository", "RepositoryUri"]},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-MigrationECRRepositoryUri"}
+      }
+    },
+    "ValidatorLambdaArn": {
+      "Description": "ARN of transaction validator Lambda function",
+      "Value": {
+        "Fn::If": [
+          "HasLambdaImage",
+          {"Fn::GetAtt": ["ValidatorLambdaFunction", "Arn"]},
+          "NotCreated"
+        ]
+      },
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-ValidatorLambdaArn"}
+      }
+    },
+    "ValidatorLambdaName": {
+      "Description": "Name of transaction validator Lambda function",
+      "Value": {
+        "Fn::If": [
+          "HasLambdaImage",
+          {"Ref": "ValidatorLambdaFunction"},
+          "NotCreated"
+        ]
+      },
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-ValidatorLambdaName"}
+      }
+    },
+    "MigrationLambdaArn": {
+      "Description": "ARN of database migration Lambda function",
+      "Value": {
+        "Fn::If": [
+          "HasLambdaImage",
+          {"Fn::GetAtt": ["MigrationLambdaFunction", "Arn"]},
+          "NotCreated"
+        ]
+      },
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-MigrationLambdaArn"}
+      }
+    },
+    "MigrationLambdaName": {
+      "Description": "Name of database migration Lambda function",
+      "Value": {
+        "Fn::If": [
+          "HasLambdaImage",
+          {"Ref": "MigrationLambdaFunction"},
+          "NotCreated"
+        ]
+      },
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-MigrationLambdaName"}
+      }
+    },
+    "DBEndpointParameterName": {
+      "Description": "SSM parameter name for database endpoint",
+      "Value": {"Ref": "DBEndpointParameter"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-DBEndpointParameterName"}
+      }
+    }
+  }
+}

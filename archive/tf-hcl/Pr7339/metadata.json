@@ -1,0 +1,36 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912656",
+  "team": "synth",
+  "startedAt": "2025-11-26T05:32:00-05:00",
+  "subtask": "RDS Aurora",
+  "subject_labels": [
+    "RDS Aurora",
+    "Route 53",
+    "S3"
+  ],
+  "aws_services": [
+    "RDS Aurora",
+    "Route 53",
+    "S3",
+    "KMS",
+    "Secrets Manager",
+    "Lambda",
+    "SNS",
+    "SQS",
+    "CloudWatch",
+    "IAM",
+    "VPC"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

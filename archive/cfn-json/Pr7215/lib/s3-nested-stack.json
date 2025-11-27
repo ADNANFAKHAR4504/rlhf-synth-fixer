@@ -1,0 +1,104 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "S3 nested stack with intelligent tiering, versioning, lifecycle policies, and cross-region replication to us-west-2",
+  "Parameters": {
+    "Environment": {"Type": "String", "Description": "Environment name"},
+    "EnvironmentSuffix": {"Type": "String", "Description": "Unique suffix for resource naming"},
+    "ProjectName": {"Type": "String", "Description": "Project name for tagging"},
+    "CostCenter": {"Type": "String", "Description": "Cost center for billing"},
+    "ReplicaBucketArn": {"Type": "String", "Description": "ARN of the replica bucket in us-west-2 (must be created separately)"}
+  },
+  "Resources": {
+    "ReplicationRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {"Fn::Sub": "s3-replication-role-${Environment}-${EnvironmentSuffix}"},
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {"Effect": "Allow", "Principal": {"Service": "s3.amazonaws.com"}, "Action": "sts:AssumeRole"}
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "S3ReplicationPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {"Effect": "Allow", "Action": ["s3:GetReplicationConfiguration", "s3:ListBucket"], "Resource": {"Fn::Sub": "arn:aws:s3:::data-bucket-${Environment}-${EnvironmentSuffix}"}},
+                {"Effect": "Allow", "Action": ["s3:GetObjectVersionForReplication", "s3:GetObjectVersionAcl"], "Resource": {"Fn::Sub": "arn:aws:s3:::data-bucket-${Environment}-${EnvironmentSuffix}/*"}},
+                {"Effect": "Allow", "Action": ["s3:ReplicateObject", "s3:ReplicateDelete"], "Resource": {"Fn::Sub": "${ReplicaBucketArn}/*"}}
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Project", "Value": {"Ref": "ProjectName"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+        ]
+      }
+    },
+    "DataBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {"Fn::Sub": "data-bucket-${Environment}-${EnvironmentSuffix}"},
+        "VersioningConfiguration": {"Status": "Enabled"},
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "TransitionToGlacier",
+              "Status": "Enabled",
+              "Transitions": [{"TransitionInDays": 30, "StorageClass": "GLACIER"}]
+            },
+            {
+              "Id": "IntelligentTiering",
+              "Status": "Enabled",
+              "Transitions": [{"TransitionInDays": 0, "StorageClass": "INTELLIGENT_TIERING"}]
+            }
+          ]
+        },
+        "ReplicationConfiguration": {
+          "Role": {"Fn::GetAtt": ["ReplicationRole", "Arn"]},
+          "Rules": [
+            {
+              "Id": "ReplicateToWest2",
+              "Status": "Enabled",
+              "Priority": 1,
+              "Filter": {},
+              "Destination": {
+                "Bucket": {"Ref": "ReplicaBucketArn"},
+                "ReplicationTime": {"Status": "Enabled", "Time": {"Minutes": 15}},
+                "Metrics": {"Status": "Enabled", "EventThreshold": {"Minutes": 15}}
+              },
+              "DeleteMarkerReplication": {"Status": "Enabled"}
+            }
+          ]
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {"ServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {"Key": "Name", "Value": {"Fn::Sub": "data-bucket-${Environment}-${EnvironmentSuffix}"}},
+          {"Key": "Environment", "Value": {"Ref": "Environment"}},
+          {"Key": "Project", "Value": {"Ref": "ProjectName"}},
+          {"Key": "CostCenter", "Value": {"Ref": "CostCenter"}}
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    }
+  },
+  "Outputs": {
+    "DataBucketName": {"Description": "Data Bucket Name", "Value": {"Ref": "DataBucket"}},
+    "DataBucketArn": {"Description": "Data Bucket ARN", "Value": {"Fn::GetAtt": ["DataBucket", "Arn"]}},
+    "ReplicaBucketArn": {"Description": "Replica Bucket ARN (in us-west-2)", "Value": {"Ref": "ReplicaBucketArn"}}
+  }
+}

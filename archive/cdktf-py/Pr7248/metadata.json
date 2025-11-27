@@ -1,0 +1,40 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "c2r9s6m4",
+  "team": "synth",
+  "startedAt": "2025-11-25T13:52:00.000Z",
+  "subtask": "IaC-Environment-Migration",
+  "subject_labels": [
+    "Blue-Green Deployment",
+    "Zero-Downtime Migration",
+    "CDKTF Python",
+    "Auto Scaling"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "Aurora PostgreSQL Serverless v2",
+    "S3",
+    "IAM",
+    "Secrets Manager",
+    "CloudWatch",
+    "SNS",
+    "NAT Gateway",
+    "Internet Gateway"
+  ],
+  "training_quality": 8,
+  "task_config": {
+    "deploy_env": "dev"
+  },
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
