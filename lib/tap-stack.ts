@@ -1023,6 +1023,9 @@ exports.handler = async (event) => {
       primaryAlbDnsName: primaryAlb.dnsName,
       drAlbDnsName: drAlb.dnsName,
       hostedZoneId: hostedZone.zoneId,
+      hostedZoneName: hostedZone.name,
+      primaryHealthCheckUrl: primaryHealthUrl.functionUrl,
+      drHealthCheckUrl: drHealthUrl.functionUrl,
     });
   }
 }

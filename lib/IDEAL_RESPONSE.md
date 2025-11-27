@@ -1,6 +1,14 @@
 # Ideal Response - Multi-Region Disaster Recovery Infrastructure
 
-This document describes the ideal, production-ready implementation of the multi-region disaster recovery infrastructure.
+**Platform**: Pulumi TypeScript
+**Language**: TypeScript
+
+This document describes the ideal, production-ready implementation of the multi-region disaster recovery infrastructure using Pulumi with TypeScript.
+
+```typescript
+import * as pulumi from '@pulumi/pulumi';
+import * as aws from '@pulumi/aws';
+```
 
 ## What Makes This Implementation Ideal
 

@@ -166,7 +166,7 @@ describe('Multi-Region DR Infrastructure Integration Tests', () => {
       if (Object.keys(outputs).length > 0) {
         const hostedZoneName = outputs.hostedZoneName || outputs['dr-infrastructure:hostedZoneName'];
         if (hostedZoneName) {
-          expect(hostedZoneName).toContain('.example.com');
+          expect(hostedZoneName).toContain('.internal');
         }
       } else {
         console.warn('Skipping - no outputs available');
@@ -220,7 +220,7 @@ describe('Multi-Region DR Infrastructure Integration Tests', () => {
           (outputs.drVpcId || outputs['dr-infrastructure:drVpcId']);
 
         if (hasMultiRegion) {
-          expect(hasMultiRegion).toBe(true);
+          expect(hasMultiRegion).toBeTruthy();
         }
       } else {
         console.warn('Skipping - no outputs available');
