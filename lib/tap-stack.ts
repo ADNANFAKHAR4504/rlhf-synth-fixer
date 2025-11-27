@@ -1209,4 +1209,3 @@ def finish_secret(service_client, arn, token):
     });
   }
 }
-
