@@ -38,11 +38,7 @@ variable "env" {
   }
 }
 
-variable "aws_region" {
-  type        = string
-  description = "AWS region for deployment"
-  default     = "us-east-1"
-}
+
 
 variable "project_name" {
   type        = string
@@ -331,7 +327,7 @@ variable "log_retention_days" {
 
 locals {
   # Resource naming convention
-  name_prefix = "${var.project_name}-${var.env}"
+  name_prefix = "${var.project_name}-${var.env}-${var.pr_number}"
 
   # Common tags for all resources
   tags = merge(
@@ -402,10 +398,74 @@ data "aws_availability_zones" "available" {
 # ============================================================================
 
 # KMS key for encryption at rest
+data "aws_iam_policy_document" "kms_key_policy" {
+  statement {
+    sid    = "Enable IAM User Permissions"
+    effect = "Allow"
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+    actions   = ["kms:*"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "Allow CloudWatch Logs"
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["logs.${var.aws_region}.amazonaws.com"]
+    }
+    actions = [
+      "kms:Encrypt*",
+      "kms:Decrypt*",
+      "kms:ReEncrypt*",
+      "kms:GenerateDataKey*",
+      "kms:Describe*"
+    ]
+    resources = ["*"]
+    condition {
+      test     = "ArnLike"
+      variable = "kms:EncryptionContext:aws:logs:arn"
+      values   = ["arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"]
+    }
+  }
+
+  statement {
+    sid    = "Allow SNS"
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["sns.amazonaws.com"]
+    }
+    actions = [
+      "kms:GenerateDataKey*",
+      "kms:Decrypt"
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "Allow SQS"
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["sqs.amazonaws.com"]
+    }
+    actions = [
+      "kms:GenerateDataKey*",
+      "kms:Decrypt"
+    ]
+    resources = ["*"]
+  }
+}
+
 resource "aws_kms_key" "main" {
   description             = "KMS key for ${local.name_prefix} encryption"
   deletion_window_in_days = 10
   enable_key_rotation     = true
+  policy                  = data.aws_iam_policy_document.kms_key_policy.json
 
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-kms"
@@ -686,6 +746,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "telemetry" {
     id     = "transition-to-ia"
     status = "Enabled"
 
+    filter {}
+
     transition {
       days          = var.lifecycle_days
       storage_class = "STANDARD_IA"
@@ -885,6 +947,7 @@ resource "aws_elasticache_replication_group" "redis" {
   transit_encryption_enabled = true
   automatic_failover_enabled = local.current_capacity.redis_nodes > 1
   engine_version             = var.engine_version
+  kms_key_id                 = aws_kms_key.main.arn
 
   log_delivery_configuration {
     destination      = aws_cloudwatch_log_group.redis_slow.name
@@ -937,11 +1000,32 @@ resource "aws_db_subnet_group" "aurora" {
   })
 }
 
+resource "aws_rds_cluster_parameter_group" "aurora" {
+  name        = "${local.name_prefix}-aurora-params"
+  family      = "aurora-postgresql15"
+  description = "Aurora PostgreSQL parameter group"
+
+  parameter {
+    name  = "log_statement"
+    value = "ddl"
+  }
+
+  parameter {
+    name  = "effective_cache_size"
+    value = "393216"
+  }
+
+  tags = merge(local.tags, {
+    Name = "${local.name_prefix}-aurora-params"
+  })
+}
+
 resource "aws_rds_cluster" "aurora" {
   cluster_identifier              = "${local.name_prefix}-aurora-cluster"
   engine                          = "aurora-postgresql"
   engine_mode                     = "provisioned"
-  engine_version                  = "15.4"
+  engine_version                  = "15.14"
+  db_cluster_parameter_group_name = aws_rds_cluster_parameter_group.aurora.name
   database_name                   = var.db_name
   master_username                 = var.master_username
   master_password                 = random_password.aurora.result
