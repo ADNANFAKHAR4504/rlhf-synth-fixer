@@ -1,6 +1,6 @@
 # Provisioning of Infrastructure Environments
 
-> **⚠️ CRITICAL REQUIREMENT: This task MUST be implemented using CDKTF with Python**
+> ** CRITICAL REQUIREMENT: This task MUST be implemented using CDKTF with Python**
 >
 > Platform: **cdktf**
 > Language: **py**
@@ -100,22 +100,22 @@ Migration infrastructure deployed in us-east-1 with AWS Database Migration Servi
 
 #### AWS Config
 - **CRITICAL**: If creating AWS Config roles, use correct managed policy:
-  - ✅ CORRECT: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
-  - ❌ WRONG: `arn:aws:iam::aws:policy/service-role/ConfigRole`
-  - ❌ WRONG: `arn:aws:iam::aws:policy/AWS_ConfigRole`
+  - CORRECT: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
+  - WRONG: `arn:aws:iam::aws:policy/service-role/ConfigRole`
+  - WRONG: `arn:aws:iam::aws:policy/AWS_ConfigRole`
 - **Alternative**: Use service-linked role `AWSServiceRoleForConfig` (auto-created)
 
 #### Lambda Functions
 - **Node.js 18.x+**: Do NOT use `require('aws-sdk')` - AWS SDK v2 not available
-  - ✅ Use AWS SDK v3: `import { S3Client } from '@aws-sdk/client-s3'`
-  - ✅ Or extract data from event object directly
+  -  Use AWS SDK v3: `import { S3Client } from '@aws-sdk/client-s3'`
+  -  Or extract data from event object directly
 - **Reserved Concurrency**: Avoid setting `reservedConcurrentExecutions` unless required
   - If required, use low values (1-5) to avoid account limit issues
 
 #### CloudWatch Synthetics
 - **CRITICAL**: Use current runtime version
-  - ✅ CORRECT: `synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0`
-  - ❌ WRONG: `SYNTHETICS_NODEJS_PUPPETEER_5_1` (deprecated)
+  -  CORRECT: `synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0`
+  -  WRONG: `SYNTHETICS_NODEJS_PUPPETEER_5_1` (deprecated)
 
 #### RDS Databases
 - **Prefer**: Aurora Serverless v2 (faster provisioning, auto-scaling)
@@ -146,11 +146,11 @@ Migration infrastructure deployed in us-east-1 with AWS Database Migration Servi
 from cdktf_cdktf_provider_aws.s3 import S3Bucket
 
 bucket = S3Bucket(self, "DataBucket",
-    bucket=f"data-bucket-{environment_suffix}",  # ✅ CORRECT
+    bucket=f"data-bucket-{environment_suffix}",  #  CORRECT
     # ...
 )
 
-# ❌ WRONG:
+#  WRONG:
 # bucket="data-bucket-prod"  # Hardcoded, will fail
 ```
 
@@ -159,11 +159,11 @@ bucket = S3Bucket(self, "DataBucket",
 from cdktf_cdktf_provider_aws.s3 import S3Bucket
 
 bucket = S3Bucket(self, "DataBucket",
-    force_destroy=True,  # ✅ CORRECT - allows resource deletion
+    force_destroy=True,  #  CORRECT - allows resource deletion
     # ...
 )
 
-# ❌ WRONG: Not setting force_destroy will block cleanup
+# WRONG: Not setting force_destroy will block cleanup
 ```
 
 ### Correct AWS Config IAM Role (CDKTF Python)
@@ -186,7 +186,7 @@ IamRolePolicyAttachment(self, "ConfigRolePolicy",
     policy_arn="arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"  # ✅ CORRECT
 )
 
-# ❌ WRONG:
+# WRONG:
 # policy_arn="arn:aws:iam::aws:policy/service-role/ConfigRole"  # Policy doesn't exist
 # policy_arn="arn:aws:iam::aws:policy/AWS_ConfigRole"  # Missing service-role/ prefix
 ```

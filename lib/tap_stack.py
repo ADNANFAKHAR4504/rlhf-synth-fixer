@@ -38,6 +38,7 @@ from cdktf_cdktf_provider_aws.route_table_association import RouteTableAssociati
 from cdktf_cdktf_provider_aws.route import Route
 from cdktf_cdktf_provider_aws.data_aws_iam_policy_document import DataAwsIamPolicyDocument
 import json
+import os
 
 
 class TapStack(TerraformStack):
@@ -248,14 +249,7 @@ class TapStack(TerraformStack):
             vpc_id=migration_vpc.id,
             ingress=[
                 SecurityGroupIngress(
-                    description="PostgreSQL from DMS",
-                    from_port=5432,
-                    to_port=5432,
-                    protocol="tcp",
-                    cidr_blocks=[migration_vpc.cidr_block]
-                ),
-                SecurityGroupIngress(
-                    description="PostgreSQL from VPC",
+                    description="PostgreSQL from VPC and DMS",
                     from_port=5432,
                     to_port=5432,
                     protocol="tcp",
@@ -415,6 +409,8 @@ class TapStack(TerraformStack):
         )
 
         # DMS Replication Instance (2 vCPUs, 8GB RAM = dms.r5.large)
+        # Note: engine_version is optional and defaults to the latest version
+        # Removing explicit engine_version to use AWS default
         dms_instance = DmsReplicationInstance(
             self,
             "dms_replication_instance",
@@ -424,9 +420,8 @@ class TapStack(TerraformStack):
             vpc_security_group_ids=[dms_sg.id],
             replication_subnet_group_id=dms_subnet_group.replication_subnet_group_id,
             publicly_accessible=False,
-            engine_version="3.5.2",
             multi_az=False,
-            auto_minor_version_upgrade=False,
+            auto_minor_version_upgrade=True,
             kms_key_arn=kms_key.arn,
             tags={
                 "Name": f"dms-replication-{environment_suffix}"
@@ -558,14 +553,17 @@ class TapStack(TerraformStack):
         # REQUIREMENT 5: Route 53 Hosted Zone
         # ==========================================
 
+        # Use a non-reserved domain name (example.com is reserved by AWS)
+        # Use a domain that can be configured via environment variable or use a test domain
+        route53_domain = os.environ.get('ROUTE53_DOMAIN', f"migration-{environment_suffix}.internal")
         hosted_zone = Route53Zone(
             self,
             "migration_hosted_zone",
-            name=f"migration-{environment_suffix}.example.com",
+            name=route53_domain,
             comment="Hosted zone for database migration blue-green deployment",
             force_destroy=True,
             tags={
-                "Name": f"migration-zone-{environment_suffix}",
+                "Name": route53_domain,
                 "Purpose": "blue-green-deployment"
             }
         )
@@ -575,14 +573,14 @@ class TapStack(TerraformStack):
             self,
             "onprem_weighted_record",
             zone_id=hosted_zone.zone_id,
-            name=f"db.migration-{environment_suffix}.example.com",
+            name=f"db.{route53_domain}",
             type="CNAME",
             ttl=60,
             weighted_routing_policy={
                 "weight": 100
             },
             set_identifier=f"onprem-{environment_suffix}",
-            records=["onprem-postgres.example.com"]
+            records=["onprem-postgres.example.com"]  # Placeholder - replace with actual on-prem hostname
         )
 
         # Weighted routing - 0% to Aurora initially
@@ -590,7 +588,7 @@ class TapStack(TerraformStack):
             self,
             "aurora_weighted_record",
             zone_id=hosted_zone.zone_id,
-            name=f"db.migration-{environment_suffix}.example.com",
+            name=f"db.{route53_domain}",
             type="CNAME",
             ttl=60,
             weighted_routing_policy={
