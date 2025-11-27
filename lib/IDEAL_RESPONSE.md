@@ -43,3 +43,36 @@ cdktf deploy
 ```
 
 All resources should be created without errors and the API should be functional.
+
+## Example Implementation
+
+```python
+from cdktf import TerraformStack
+from imports.aws.provider import AwsProvider
+from imports.aws.s3_bucket import S3Bucket
+from imports.aws.lambda_function import LambdaFunction
+from imports.aws.api_gateway_rest_api import ApiGatewayRestApi
+
+class TransactionApiStack(TerraformStack):
+    def __init__(self, scope, id, environment_suffix):
+        super().__init__(scope, id)
+
+        # Provider configuration
+        AwsProvider(self, "aws", region="us-east-1")
+
+        # S3 bucket for transaction storage
+        bucket = S3Bucket(
+            self, "transactions_bucket",
+            bucket=f"transactions-{environment_suffix}",
+            versioning={"enabled": True}
+        )
+
+        # Lambda functions for API handlers
+        upload_lambda = LambdaFunction(
+            self, "upload_lambda",
+            function_name=f"transaction-upload-{environment_suffix}",
+            runtime="python3.9",
+            handler="lambda_upload.handler",
+            filename="lib/lambda_upload.zip"
+        )
+```
