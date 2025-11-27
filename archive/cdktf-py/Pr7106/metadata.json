@@ -1,0 +1,45 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "e2u0x0",
+  "team": "synth",
+  "startedAt": "2025-11-24T02:19:00-05:00",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "Route Table",
+    "Security Group",
+    "Application Load Balancer",
+    "ALB Target Group",
+    "ALB Listener",
+    "ECR",
+    "CodeCommit",
+    "CodeBuild",
+    "CodePipeline",
+    "ECS Cluster",
+    "ECS Task Definition",
+    "ECS Service",
+    "IAM Role",
+    "IAM Policy",
+    "S3",
+    "CloudWatch Logs",
+    "CloudWatch Alarms",
+    "SNS",
+    "Lambda",
+    "SSM Parameter Store"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
