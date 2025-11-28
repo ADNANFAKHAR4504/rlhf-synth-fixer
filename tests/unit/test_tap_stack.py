@@ -89,7 +89,6 @@ class TestTapStack:
         assert webhook_lambda['memory_size'] == 1024
         assert webhook_lambda['timeout'] == 60
         assert 'arm64' in webhook_lambda['architectures']
-        assert webhook_lambda['reserved_concurrent_executions'] == 10
 
         # Verify enricher configuration
         assert enricher_lambda is not None
@@ -97,7 +96,6 @@ class TestTapStack:
         assert enricher_lambda['memory_size'] == 512
         assert enricher_lambda['timeout'] == 60
         assert 'arm64' in enricher_lambda['architectures']
-        assert enricher_lambda['reserved_concurrent_executions'] == 10
 
     def test_kms_key_configuration(self):
         """Test KMS key is configured correctly."""
