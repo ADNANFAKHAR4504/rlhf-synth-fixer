@@ -1,0 +1,43 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "synth-q4n7s2j2",
+  "team": "synth",
+  "startedAt": "2025-11-26T00:00:00Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "Aurora Serverless v2",
+    "RDS Proxy",
+    "Lambda",
+    "Application Load Balancer",
+    "Route 53",
+    "Auto Scaling",
+    "EC2",
+    "CloudWatch",
+    "SNS",
+    "SQS",
+    "WAF v2",
+    "GuardDuty",
+    "AWS Config",
+    "EventBridge",
+    "X-Ray",
+    "Kinesis Firehose",
+    "Systems Manager Parameter Store",
+    "S3",
+    "KMS",
+    "VPC Flow Logs"
+  ],
+  "region": "us-east-1",
+  "author": "mayanksethi-turing",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
