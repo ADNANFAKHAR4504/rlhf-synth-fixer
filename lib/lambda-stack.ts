@@ -208,11 +208,8 @@ async function finishSecret(arn, token) {
           securityGroupIds: [args.securityGroupId],
         },
 
-        environment: {
-          variables: {
-            AWS_REGION: 'us-east-2',
-          },
-        },
+        // Note: AWS_REGION is automatically set by Lambda, no need to configure it
+        // environment: { variables: {} },
 
         tags: {
           ...tags,
