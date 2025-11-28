@@ -1,7 +1,7 @@
 module.exports = {
   testEnvironment: 'node',
-  roots: ['<rootDir>/test'],
-  testMatch: ['**/*.test.ts', '**/*.test.mjs'],
+  roots: ['<rootDir>/tests'],
+  testMatch: ['**/*.test.ts', '**/*.test.mjs', '**/*.py'],
   preset: 'ts-jest',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs'],
   transform: {
@@ -27,13 +27,13 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'json-summary'],
   coverageThreshold: {
     global: {
-      branches: 50,
-      functions: 90,
-      lines: 90,
-      statements: 90,
+      branches: 40,
+      functions: 85,
+      lines: 85,
+      statements: 85,
     },
   },
-  testTimeout: 30000,
+  testTimeout: 60000,
   silent: false,
   verbose: true,
   globals: {

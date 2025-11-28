@@ -1,0 +1,31 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-27T11:50:43+00:00",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "po_id": "101912802",
+  "aws_services": [
+    "AWS Config",
+    "AWS Lambda",
+    "Amazon S3",
+    "Amazon SNS",
+    "AWS IAM",
+    "AWS Systems Manager",
+    "AWS KMS",
+    "Amazon EventBridge"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

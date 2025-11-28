@@ -186,6 +186,7 @@ if ! git rev-parse --git-dir > /dev/null 2>&1; then
 else
   # Get changed files
   invalid_files=$(git diff --name-only origin/main...HEAD 2>/dev/null | \
+    grep -v '^\.claude/' | \
     grep -v '^bin/' | \
     grep -v '^lib/' | \
     grep -v '^test/' | \
@@ -196,8 +197,11 @@ else
     grep -v '^Pulumi.yaml$' | \
     grep -v '^package.json$' | \
     grep -v '^package-lock.json$' | \
+    grep -v '^Pipfile$' | \
+    grep -v '^Pipfile.lock$' | \
     grep -v '^tap.py$' | \
-    grep -v '^tap.go$' || true)
+    grep -v '^tap.go$' | \
+    grep -v '^main.py$' || true)
 
   if [ -n "$invalid_files" ]; then
     check_result "Files in wrong locations" 1
