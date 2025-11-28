@@ -132,7 +132,9 @@ class TestRDSAuroraCluster:
             )
             assert len(response["DBClusters"]) == 1
             cluster = response["DBClusters"][0]
-            assert cluster["Status"] == "available" or cluster["Status"] == "creating"
+            # Accept multiple valid statuses: available, creating, backing-up, modifying, etc.
+            valid_statuses = ["available", "creating", "backing-up", "modifying", "upgrading"]
+            assert cluster["Status"] in valid_statuses, f"Cluster status '{cluster['Status']}' not in valid statuses: {valid_statuses}"
             assert cluster["Engine"] == "aurora-postgresql"
         except ClientError:
             pytest.skip("Aurora Cluster not accessible")
@@ -252,8 +254,13 @@ class TestRoute53Resources:
 
         route53 = boto3.client("route53", region_name=aws_region)
         try:
+            # Route53 API returns zone ID with "/hostedzone/" prefix, normalize for comparison
             response = route53.get_hosted_zone(Id=outputs["Route53HostedZoneId"])
-            assert response["HostedZone"]["Id"] == outputs["Route53HostedZoneId"]
+            api_zone_id = response["HostedZone"]["Id"]
+            # Strip "/hostedzone/" prefix if present
+            api_zone_id_normalized = api_zone_id.replace("/hostedzone/", "")
+            output_zone_id = outputs["Route53HostedZoneId"].replace("/hostedzone/", "")
+            assert api_zone_id_normalized == output_zone_id, f"Zone ID mismatch: API={api_zone_id_normalized}, Output={output_zone_id}
         except ClientError:
             pytest.skip("Route53 Hosted Zone not accessible")
 
