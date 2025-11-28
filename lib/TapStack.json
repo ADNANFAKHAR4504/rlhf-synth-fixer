@@ -16,17 +16,17 @@
     "DevAccountId": {
       "Type": "String",
       "Description": "AWS Account ID for dev environment",
-      "Default": "111111111111"
+      "Default": "069919905910"
     },
     "StagingAccountId": {
       "Type": "String",
       "Description": "AWS Account ID for staging environment",
-      "Default": "222222222222"
+      "Default": "069919905910"
     },
     "ProdAccountId": {
       "Type": "String",
       "Description": "AWS Account ID for prod environment",
-      "Default": "333333333333"
+      "Default": "069919905910"
     }
   },
   "Conditions": {
@@ -243,7 +243,7 @@
       "Properties": {
         "DBClusterIdentifier": {"Fn::Sub": "aurora-cluster-${Environment}-${EnvironmentSuffix}"},
         "Engine": "aurora-mysql",
-        "EngineVersion": "8.0.mysql_aurora.3.05.2",
+        "EngineVersion": "8.0.mysql_aurora.3.11.0",
         "MasterUsername": {"Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}"},
         "MasterUserPassword": {"Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}"},
         "DBSubnetGroupName": {"Ref": "DBSubnetGroup"},
@@ -254,8 +254,7 @@
         "PreferredBackupWindow": "03:00-04:00",
         "PreferredMaintenanceWindow": "mon:04:00-mon:05:00",
         "EnableCloudwatchLogsExports": ["audit", "error", "general", "slowquery"],
-        "DeletionProtection": false,
-        "SkipFinalSnapshot": true,
+        "DeletionProtection": {"Fn::If": ["IsProdEnvironment", true, false]},
         "Tags": [
           {
             "Key": "Name",
@@ -592,7 +591,7 @@
       "Type": "AWS::SSM::Parameter",
       "Properties": {
         "Name": {"Fn::Sub": "/db-connection-${Environment}-${EnvironmentSuffix}"},
-        "Type": "SecureString",
+        "Type": "String",
         "Value": {
           "Fn::Sub": [
             "{\"endpoint\":\"${Endpoint}\",\"port\":\"3306\",\"database\":\"mysql\",\"secret_arn\":\"${SecretArn}\"}",
@@ -603,7 +602,6 @@
           ]
         },
         "Description": {"Fn::Sub": "Database connection string for ${Environment} environment"},
-        "KmsKeyId": {"Ref": "EncryptionKey"},
         "Tags": {
           "Name": {"Fn::Sub": "db-connection-${Environment}-${EnvironmentSuffix}"}
         }

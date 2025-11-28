@@ -183,14 +183,18 @@ describe('Multi-Environment Aurora Database Replication System - Unit Tests', ()
       expect(cluster.Properties.KmsKeyId).toEqual({ Ref: 'EncryptionKey' });
     });
 
-    test('Aurora cluster should have DeletionProtection disabled', () => {
+    test('Aurora cluster should have DeletionProtection conditional on environment', () => {
       const cluster = template.Resources.AuroraCluster;
-      expect(cluster.Properties.DeletionProtection).toBe(false);
+      expect(cluster.Properties.DeletionProtection).toBeDefined();
+      // DeletionProtection should be conditional: true for prod, false for dev/staging
+      expect(cluster.Properties.DeletionProtection).toHaveProperty('Fn::If');
     });
 
-    test('Aurora cluster should have SkipFinalSnapshot enabled', () => {
+    // SkipFinalSnapshot is not a valid property for AWS::RDS::DBCluster
+    // It's only available for AWS::RDS::DBInstance
+    test('Aurora cluster should not have SkipFinalSnapshot (not valid for DBCluster)', () => {
       const cluster = template.Resources.AuroraCluster;
-      expect(cluster.Properties.SkipFinalSnapshot).toBe(true);
+      expect(cluster.Properties.SkipFinalSnapshot).toBeUndefined();
     });
 
     test('Aurora cluster should have 7-day backup retention', () => {
@@ -412,14 +416,18 @@ describe('Multi-Environment Aurora Database Replication System - Unit Tests', ()
       expect(param.Type).toBe('AWS::SSM::Parameter');
     });
 
-    test('DB connection parameter should be SecureString type', () => {
+    test('DB connection parameter should be String type', () => {
       const param = template.Resources.DBConnectionParameter;
-      expect(param.Properties.Type).toBe('SecureString');
+      // SSM Parameter Type must be String or StringList per cfn-lint validation
+      expect(param.Properties.Type).toBe('String');
     });
 
-    test('DB connection parameter should use KMS encryption', () => {
+    // KmsKeyId is not a valid property for AWS::SSM::Parameter
+    // Encryption is handled automatically for SecureString type, but cfn-lint requires String type
+    test('DB connection parameter should exist', () => {
       const param = template.Resources.DBConnectionParameter;
-      expect(param.Properties.KmsKeyId).toEqual({ Ref: 'EncryptionKey' });
+      expect(param).toBeDefined();
+      expect(param.Properties.Value).toBeDefined();
     });
   });
 
@@ -552,9 +560,10 @@ describe('Multi-Environment Aurora Database Replication System - Unit Tests', ()
       expect(bucket.UpdateReplacePolicy).not.toBe('Retain');
     });
 
-    test('Aurora cluster should have SkipFinalSnapshot enabled', () => {
+    // SkipFinalSnapshot is not a valid property for AWS::RDS::DBCluster
+    test('Aurora cluster should not have SkipFinalSnapshot (not valid for DBCluster)', () => {
       const cluster = template.Resources.AuroraCluster;
-      expect(cluster.Properties.SkipFinalSnapshot).toBe(true);
+      expect(cluster.Properties.SkipFinalSnapshot).toBeUndefined();
     });
   });
 });
