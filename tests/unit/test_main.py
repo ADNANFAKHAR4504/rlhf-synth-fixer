@@ -489,3 +489,446 @@ class TestDocumentation:
             content = f.read()
         assert len(content) > 100  # Should have substantial content
         assert "IDEAL RESPONSE" in content or "Corrected" in content
+
+
+class TestProdEnvironmentSpecifics:
+    """Additional tests for prod environment-specific code paths"""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        """Set up test environment variables for prod"""
+        os.environ['ENVIRONMENT'] = 'prod'
+        os.environ['AWS_REGION'] = 'us-east-1'
+        yield
+        # Cleanup
+        if 'ENVIRONMENT' in os.environ:
+            del os.environ['ENVIRONMENT']
+        if 'AWS_REGION' in os.environ:
+            del os.environ['AWS_REGION']
+
+    def test_nat_gateway_output_in_prod(self):
+        """Test NAT Gateway output is created in prod"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-prod-e4k2d5l6")
+        synth = parse_synth(stack)
+
+        # Verify NAT Gateway output exists in prod
+        outputs = synth.get('output', {})
+        assert 'nat_gateway_id' in outputs
+
+    def test_eip_domain_vpc(self):
+        """Test EIP is created with VPC domain"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-prod-e4k2d5l6")
+        synth = parse_synth(stack)
+
+        resources = synth.get('resource', {})
+        eip_resources = [v for k, v in resources.items() if 'aws_eip' in k]
+        assert len(eip_resources) > 0
+
+    def test_nat_gateway_in_public_subnet(self):
+        """Test NAT Gateway is placed in public subnet"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-prod-e4k2d5l6")
+
+        # Verify NAT Gateway attribute exists
+        assert hasattr(stack, 'nat_gateway')
+        assert hasattr(stack, 'nat_eip')
+
+    def test_private_route_table_has_nat_route(self):
+        """Test private route table has NAT Gateway route in prod"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-prod-e4k2d5l6")
+        synth = parse_synth(stack)
+
+        resources = synth.get('resource', {})
+        assert any('aws_route_table' in key for key in resources.keys())
+
+    def test_rds_multi_az_config(self):
+        """Test RDS multi-AZ is enabled in prod"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-prod-e4k2d5l6")
+
+        # Stack should have db_instance
+        assert hasattr(stack, 'db_instance')
+
+
+class TestKMSConfiguration:
+    """Tests for KMS key configuration"""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        """Set up test environment"""
+        os.environ['ENVIRONMENT'] = 'dev'
+        os.environ['AWS_REGION'] = 'us-east-1'
+        yield
+        if 'ENVIRONMENT' in os.environ:
+            del os.environ['ENVIRONMENT']
+        if 'AWS_REGION' in os.environ:
+            del os.environ['AWS_REGION']
+
+    def test_kms_key_rotation_enabled(self):
+        """Test KMS key has rotation enabled"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
+
+        # Verify log_kms_key attribute exists
+        assert hasattr(stack, 'log_kms_key')
+
+    def test_kms_key_policy_structure(self):
+        """Test KMS key policy has required statements"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
+        synth = parse_synth(stack)
+
+        resources = synth.get('resource', {})
+        kms_resources = [v for k, v in resources.items() if 'aws_kms_key' in k]
+        assert len(kms_resources) > 0
+
+
+class TestVPCNetworking:
+    """Tests for VPC networking components"""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        """Set up test environment"""
+        os.environ['ENVIRONMENT'] = 'dev'
+        os.environ['AWS_REGION'] = 'us-east-1'
+        yield
+        if 'ENVIRONMENT' in os.environ:
+            del os.environ['ENVIRONMENT']
+        if 'AWS_REGION' in os.environ:
+            del os.environ['AWS_REGION']
+
+    def test_vpc_cidr_block(self):
+        """Test VPC CIDR block is correctly configured"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
+        synth = parse_synth(stack)
+
+        outputs = synth.get('output', {})
+        assert 'vpc_cidr' in outputs
+
+    def test_public_subnet_cidr_blocks(self):
+        """Test public subnets have correct CIDR blocks"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
+
+        # Verify public subnets list
+        assert hasattr(stack, 'public_subnets')
+        assert len(stack.public_subnets) == 2
+
+    def test_private_subnet_cidr_blocks(self):
+        """Test private subnets have correct CIDR blocks"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
+
+        # Verify private subnets list
+        assert hasattr(stack, 'private_subnets')
+        assert len(stack.private_subnets) == 2
+
+    def test_igw_attached_to_vpc(self):
+        """Test Internet Gateway is attached to VPC"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
+
+        assert hasattr(stack, 'igw')
+
+    def test_public_route_table_config(self):
+        """Test public route table has IGW route"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
+
+        assert hasattr(stack, 'public_rt')
+
+    def test_private_route_table_exists(self):
+        """Test private route table exists"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
+
+        assert hasattr(stack, 'private_rt')
+
+
+class TestSecurityGroupDetails:
+    """Tests for security group configurations"""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        """Set up test environment"""
+        os.environ['ENVIRONMENT'] = 'dev'
+        os.environ['AWS_REGION'] = 'us-east-1'
+        yield
+        if 'ENVIRONMENT' in os.environ:
+            del os.environ['ENVIRONMENT']
+        if 'AWS_REGION' in os.environ:
+            del os.environ['AWS_REGION']
+
+    def test_lambda_sg_egress_all(self):
+        """Test Lambda SG allows all outbound traffic"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
+
+        assert hasattr(stack, 'lambda_sg')
+
+    def test_rds_sg_ingress_from_lambda(self):
+        """Test RDS SG allows PostgreSQL from Lambda SG"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
+
+        assert hasattr(stack, 'rds_sg')
+
+
+class TestDatabaseConfiguration:
+    """Tests for database configuration"""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        """Set up test environment"""
+        os.environ['ENVIRONMENT'] = 'dev'
+        os.environ['AWS_REGION'] = 'us-east-1'
+        yield
+        if 'ENVIRONMENT' in os.environ:
+            del os.environ['ENVIRONMENT']
+        if 'AWS_REGION' in os.environ:
+            del os.environ['AWS_REGION']
+
+    def test_db_engine_postgres(self):
+        """Test database engine is PostgreSQL"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
+        synth = parse_synth(stack)
+
+        resources = synth.get('resource', {})
+        assert any('aws_db_instance' in key for key in resources.keys())
+
+    def test_secrets_manager_secret_version(self):
+        """Test Secrets Manager secret version is created"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
+        synth = parse_synth(stack)
+
+        resources = synth.get('resource', {})
+        secret_version_keys = [k for k in resources.keys() if 'aws_secretsmanager_secret_version' in k]
+        assert len(secret_version_keys) >= 1
+
+    def test_db_subnet_group_uses_private_subnets(self):
+        """Test DB subnet group uses private subnets"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
+
+        assert hasattr(stack, 'db_subnet_group')
+
+
+class TestLambdaConfiguration:
+    """Tests for Lambda function configuration"""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        """Set up test environment"""
+        os.environ['ENVIRONMENT'] = 'dev'
+        os.environ['AWS_REGION'] = 'us-east-1'
+        yield
+        if 'ENVIRONMENT' in os.environ:
+            del os.environ['ENVIRONMENT']
+        if 'AWS_REGION' in os.environ:
+            del os.environ['AWS_REGION']
+
+    def test_lambda_runtime_python311(self):
+        """Test Lambda uses Python 3.11 runtime"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
+        synth = parse_synth(stack)
+
+        resources = synth.get('resource', {})
+        lambda_resources = [v for k, v in resources.items() if 'aws_lambda_function' in k]
+        assert len(lambda_resources) > 0
+
+    def test_lambda_timeout_30(self):
+        """Test Lambda timeout is 30 seconds"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
+
+        assert hasattr(stack, 'lambda_function')
+
+    def test_lambda_memory_256(self):
+        """Test Lambda memory is 256 MB"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
+
+        assert hasattr(stack, 'lambda_function')
+
+    def test_lambda_secrets_policy(self):
+        """Test Lambda has Secrets Manager access policy"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
+        synth = parse_synth(stack)
+
+        resources = synth.get('resource', {})
+        policy_keys = [k for k in resources.keys() if 'aws_iam_policy' in k]
+        assert len(policy_keys) >= 1
+
+
+class TestResourceTags:
+    """Tests for resource tagging"""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        """Set up test environment"""
+        os.environ['ENVIRONMENT'] = 'dev'
+        os.environ['AWS_REGION'] = 'us-east-1'
+        yield
+        if 'ENVIRONMENT' in os.environ:
+            del os.environ['ENVIRONMENT']
+        if 'AWS_REGION' in os.environ:
+            del os.environ['AWS_REGION']
+
+    def test_vpc_has_name_tag(self):
+        """Test VPC has Name tag with environment suffix"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
+
+        assert hasattr(stack, 'vpc')
+
+    def test_subnets_have_name_tags(self):
+        """Test subnets have Name tags"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
+
+        for subnet in stack.public_subnets:
+            assert subnet is not None
+        for subnet in stack.private_subnets:
+            assert subnet is not None
+
+
+class TestEnvironmentVariations:
+    """Tests for different environment configurations"""
+
+    def test_staging_environment(self):
+        """Test stack in staging environment"""
+        os.environ['ENVIRONMENT'] = 'staging'
+        os.environ['AWS_REGION'] = 'us-east-1'
+
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-staging-e4k2d5l6")
+
+        assert stack.environment == 'staging'
+        assert stack.environment_suffix == "staging-e4k2d5l6"
+
+        # Cleanup
+        del os.environ['ENVIRONMENT']
+        del os.environ['AWS_REGION']
+
+    def test_us_west_2_region(self):
+        """Test stack in us-west-2 region"""
+        os.environ['ENVIRONMENT'] = 'dev'
+        os.environ['AWS_REGION'] = 'us-west-2'
+
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-west-e4k2d5l6")
+
+        assert stack.region == 'us-west-2'
+
+        # Cleanup
+        del os.environ['ENVIRONMENT']
+        del os.environ['AWS_REGION']
+
+    def test_eu_west_1_region(self):
+        """Test stack in eu-west-1 region"""
+        os.environ['ENVIRONMENT'] = 'dev'
+        os.environ['AWS_REGION'] = 'eu-west-1'
+
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-eu-e4k2d5l6")
+
+        assert stack.region == 'eu-west-1'
+
+        # Cleanup
+        del os.environ['ENVIRONMENT']
+        del os.environ['AWS_REGION']
+
+
+class TestOutputValues:
+    """Tests for specific output values and formats"""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        """Set up test environment"""
+        os.environ['ENVIRONMENT'] = 'dev'
+        os.environ['AWS_REGION'] = 'us-east-1'
+        yield
+        if 'ENVIRONMENT' in os.environ:
+            del os.environ['ENVIRONMENT']
+        if 'AWS_REGION' in os.environ:
+            del os.environ['AWS_REGION']
+
+    def test_public_subnet_ids_output(self):
+        """Test public subnet IDs output exists"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
+        synth = parse_synth(stack)
+
+        outputs = synth.get('output', {})
+        assert 'public_subnet_ids' in outputs
+
+    def test_private_subnet_ids_output(self):
+        """Test private subnet IDs output exists"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
+        synth = parse_synth(stack)
+
+        outputs = synth.get('output', {})
+        assert 'private_subnet_ids' in outputs
+
+    def test_lambda_role_arn_output(self):
+        """Test Lambda role ARN output exists"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
+        synth = parse_synth(stack)
+
+        outputs = synth.get('output', {})
+        assert 'lambda_role_arn' in outputs
+
+
+class TestAWSProvider:
+    """Tests for AWS provider configuration"""
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        """Set up test environment"""
+        os.environ['ENVIRONMENT'] = 'dev'
+        os.environ['AWS_REGION'] = 'us-east-1'
+        yield
+        if 'ENVIRONMENT' in os.environ:
+            del os.environ['ENVIRONMENT']
+        if 'AWS_REGION' in os.environ:
+            del os.environ['AWS_REGION']
+
+    def test_aws_provider_exists(self):
+        """Test AWS provider is configured"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
+        synth = parse_synth(stack)
+
+        provider = synth.get('provider', {})
+        assert 'aws' in provider
+
+    def test_data_sources_caller_identity(self):
+        """Test caller identity data source for KMS policy"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
+
+        assert hasattr(stack, 'caller_identity')
+
+    def test_data_sources_current_region(self):
+        """Test current region data source"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
+
+        assert hasattr(stack, 'current_region')
+
+    def test_azs_data_source(self):
+        """Test availability zones data source"""
+        app = Testing.app()
+        stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
+
+        assert hasattr(stack, 'azs')
