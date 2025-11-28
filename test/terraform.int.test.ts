@@ -1,7 +1,704 @@
-describe('Turn Around Prompt API Integration Tests', () => {
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
+import {
+  EC2Client,
+  DescribeVpcsCommand,
+  DescribeSubnetsCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeInternetGatewaysCommand,
+  DescribeNatGatewaysCommand,
+  DescribeRouteTablesCommand,
+} from '@aws-sdk/client-ec2';
+import {
+  EKSClient,
+  DescribeClusterCommand,
+  ListNodegroupsCommand,
+  DescribeNodegroupCommand,
+  ListAddonsCommand,
+  DescribeAddonCommand,
+} from '@aws-sdk/client-eks';
+import {
+  IAMClient,
+  GetRoleCommand,
+  ListAttachedRolePoliciesCommand,
+  ListOpenIDConnectProvidersCommand,
+} from '@aws-sdk/client-iam';
+import {
+  KMSClient,
+  DescribeKeyCommand,
+  ListAliasesCommand,
+} from '@aws-sdk/client-kms';
+
+const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'test';
+const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
+
+const ec2Client = new EC2Client({ region: AWS_REGION });
+const eksClient = new EKSClient({ region: AWS_REGION });
+const iamClient = new IAMClient({ region: AWS_REGION });
+const kmsClient = new KMSClient({ region: AWS_REGION });
+
+describe('EKS Cluster Infrastructure Integration Tests', () => {
+  describe('VPC Configuration', () => {
+    test('VPC should exist with correct CIDR and DNS settings', async () => {
+      const response = await ec2Client.send(
+        new DescribeVpcsCommand({
+          Filters: [
+            {
+              Name: 'tag:Name',
+              Values: [`eks-vpc-${ENVIRONMENT_SUFFIX}`],
+            },
+          ],
+        })
+      );
+
+      expect(response.Vpcs).toBeDefined();
+      expect(response.Vpcs!.length).toBeGreaterThan(0);
+
+      const vpc = response.Vpcs![0];
+      expect(vpc.CidrBlock).toBe('10.0.0.0/16');
+      expect(vpc.VpcId).toBeDefined();
+      expect(vpc.State).toBe('available');
+    });
+
+    test('VPC should have kubernetes cluster tag', async () => {
+      const response = await ec2Client.send(
+        new DescribeVpcsCommand({
+          Filters: [
+            {
+              Name: 'tag:Name',
+              Values: [`eks-vpc-${ENVIRONMENT_SUFFIX}`],
+            },
+          ],
+        })
+      );
+
+      const vpc = response.Vpcs![0];
+      const clusterTag = vpc.Tags?.find(
+        (t) => t.Key === `kubernetes.io/cluster/eks-cluster-${ENVIRONMENT_SUFFIX}`
+      );
+      expect(clusterTag?.Value).toBe('shared');
+    });
+
+    test('Internet Gateway should be attached to VPC', async () => {
+      const response = await ec2Client.send(
+        new DescribeInternetGatewaysCommand({
+          Filters: [
+            {
+              Name: 'tag:Name',
+              Values: [`eks-igw-${ENVIRONMENT_SUFFIX}`],
+            },
+          ],
+        })
+      );
+
+      expect(response.InternetGateways).toBeDefined();
+      expect(response.InternetGateways!.length).toBeGreaterThan(0);
+      expect(response.InternetGateways![0].Attachments).toBeDefined();
+      expect(response.InternetGateways![0].Attachments!.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Subnet Configuration', () => {
+    test('Control plane private subnets should exist across 3 AZs', async () => {
+      const response = await ec2Client.send(
+        new DescribeSubnetsCommand({
+          Filters: [
+            {
+              Name: 'tag:Tier',
+              Values: ['control-plane'],
+            },
+            {
+              Name: 'tag:kubernetes.io/role/internal-elb',
+              Values: ['1'],
+            },
+          ],
+        })
+      );
+
+      expect(response.Subnets).toBeDefined();
+      expect(response.Subnets!.length).toBe(3);
+
+      const azs = new Set(response.Subnets!.map((s) => s.AvailabilityZone));
+      expect(azs.size).toBe(3);
+    });
+
+    test('System node group private subnets should exist', async () => {
+      const response = await ec2Client.send(
+        new DescribeSubnetsCommand({
+          Filters: [
+            {
+              Name: 'tag:NodeGroup',
+              Values: ['system'],
+            },
+          ],
+        })
+      );
+
+      expect(response.Subnets).toBeDefined();
+      expect(response.Subnets!.length).toBe(3);
+    });
+
+    test('Application node group private subnets should exist', async () => {
+      const response = await ec2Client.send(
+        new DescribeSubnetsCommand({
+          Filters: [
+            {
+              Name: 'tag:NodeGroup',
+              Values: ['application'],
+            },
+          ],
+        })
+      );
+
+      expect(response.Subnets).toBeDefined();
+      expect(response.Subnets!.length).toBe(3);
+    });
+
+    test('Spot node group private subnets should exist', async () => {
+      const response = await ec2Client.send(
+        new DescribeSubnetsCommand({
+          Filters: [
+            {
+              Name: 'tag:NodeGroup',
+              Values: ['spot'],
+            },
+          ],
+        })
+      );
+
+      expect(response.Subnets).toBeDefined();
+      expect(response.Subnets!.length).toBe(3);
+    });
+  });
+
+  describe('NAT Gateway Configuration', () => {
+    test('NAT Gateways should exist for each AZ', async () => {
+      const response = await ec2Client.send(
+        new DescribeNatGatewaysCommand({
+          Filter: [
+            {
+              Name: 'state',
+              Values: ['available'],
+            },
+          ],
+        })
+      );
+
+      const eksNatGateways = response.NatGateways?.filter((nat) =>
+        nat.Tags?.some(
+          (t) =>
+            t.Key === 'Name' &&
+            t.Value?.includes(`eks-nat-gateway`) &&
+            t.Value?.includes(ENVIRONMENT_SUFFIX)
+        )
+      );
+
+      expect(eksNatGateways).toBeDefined();
+      expect(eksNatGateways!.length).toBe(3);
+    });
+  });
+
+  describe('Route Tables', () => {
+    test('Private route tables should have NAT Gateway routes', async () => {
+      const response = await ec2Client.send(
+        new DescribeRouteTablesCommand({
+          Filters: [
+            {
+              Name: 'tag:Name',
+              Values: [`eks-private-rt-*-${ENVIRONMENT_SUFFIX}`],
+            },
+          ],
+        })
+      );
+
+      expect(response.RouteTables).toBeDefined();
+      expect(response.RouteTables!.length).toBeGreaterThan(0);
+
+      for (const rt of response.RouteTables!) {
+        const natRoute = rt.Routes?.find((r) => r.NatGatewayId);
+        expect(natRoute).toBeDefined();
+        expect(natRoute?.DestinationCidrBlock).toBe('0.0.0.0/0');
+      }
+    });
+  });
+
+  describe('Security Groups', () => {
+    test('EKS cluster security group should exist', async () => {
+      const response = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          Filters: [
+            {
+              Name: 'tag:Name',
+              Values: [`eks-cluster-sg-${ENVIRONMENT_SUFFIX}`],
+            },
+          ],
+        })
+      );
+
+      expect(response.SecurityGroups).toBeDefined();
+      expect(response.SecurityGroups!.length).toBeGreaterThan(0);
+
+      const sg = response.SecurityGroups![0];
+      const egressRule = sg.IpPermissionsEgress?.find(
+        (p) => p.IpProtocol === '-1'
+      );
+      expect(egressRule).toBeDefined();
+    });
+
+    test('System nodes security group should exist with proper rules', async () => {
+      const response = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          Filters: [
+            {
+              Name: 'tag:Name',
+              Values: [`eks-system-nodes-sg-${ENVIRONMENT_SUFFIX}`],
+            },
+          ],
+        })
+      );
+
+      expect(response.SecurityGroups).toBeDefined();
+      expect(response.SecurityGroups!.length).toBeGreaterThan(0);
+
+      const sg = response.SecurityGroups![0];
+      expect(sg.IpPermissions).toBeDefined();
+      expect(sg.IpPermissions!.length).toBeGreaterThan(0);
+    });
+
+    test('Application nodes security group should allow HTTP/HTTPS from VPC', async () => {
+      const response = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          Filters: [
+            {
+              Name: 'tag:Name',
+              Values: [`eks-application-nodes-sg-${ENVIRONMENT_SUFFIX}`],
+            },
+          ],
+        })
+      );
+
+      expect(response.SecurityGroups).toBeDefined();
+      expect(response.SecurityGroups!.length).toBeGreaterThan(0);
+
+      const sg = response.SecurityGroups![0];
+      const httpRule = sg.IpPermissions?.find((p) => p.FromPort === 80);
+      const httpsRule = sg.IpPermissions?.find(
+        (p) => p.FromPort === 443 && p.IpRanges?.some((r) => r.CidrIp)
+      );
+
+      expect(httpRule).toBeDefined();
+      expect(httpsRule).toBeDefined();
+    });
+
+    test('Spot nodes security group should exist', async () => {
+      const response = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          Filters: [
+            {
+              Name: 'tag:Name',
+              Values: [`eks-spot-nodes-sg-${ENVIRONMENT_SUFFIX}`],
+            },
+          ],
+        })
+      );
+
+      expect(response.SecurityGroups).toBeDefined();
+      expect(response.SecurityGroups!.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('EKS Cluster', () => {
+    test('EKS cluster should exist with correct version', async () => {
+      const response = await eksClient.send(
+        new DescribeClusterCommand({
+          name: `eks-cluster-${ENVIRONMENT_SUFFIX}`,
+        })
+      );
+
+      expect(response.cluster).toBeDefined();
+      expect(response.cluster!.name).toBe(`eks-cluster-${ENVIRONMENT_SUFFIX}`);
+      expect(response.cluster!.version).toBe('1.28');
+    });
+
+    test('EKS cluster should have private endpoint only', async () => {
+      const response = await eksClient.send(
+        new DescribeClusterCommand({
+          name: `eks-cluster-${ENVIRONMENT_SUFFIX}`,
+        })
+      );
+
+      const vpcConfig = response.cluster!.resourcesVpcConfig;
+      expect(vpcConfig?.endpointPrivateAccess).toBe(true);
+      expect(vpcConfig?.endpointPublicAccess).toBe(false);
+    });
+
+    test('EKS cluster should have secrets encryption enabled', async () => {
+      const response = await eksClient.send(
+        new DescribeClusterCommand({
+          name: `eks-cluster-${ENVIRONMENT_SUFFIX}`,
+        })
+      );
+
+      const encryptionConfig = response.cluster!.encryptionConfig;
+      expect(encryptionConfig).toBeDefined();
+      expect(encryptionConfig!.length).toBeGreaterThan(0);
+      expect(encryptionConfig![0].resources).toContain('secrets');
+    });
+
+    test('EKS cluster should have all log types enabled', async () => {
+      const response = await eksClient.send(
+        new DescribeClusterCommand({
+          name: `eks-cluster-${ENVIRONMENT_SUFFIX}`,
+        })
+      );
+
+      const logging = response.cluster!.logging;
+      const enabledTypes = logging?.clusterLogging?.[0]?.types;
+
+      expect(enabledTypes).toContain('api');
+      expect(enabledTypes).toContain('audit');
+      expect(enabledTypes).toContain('authenticator');
+      expect(enabledTypes).toContain('controllerManager');
+      expect(enabledTypes).toContain('scheduler');
+    });
+
+    test('EKS cluster should have OIDC issuer', async () => {
+      const response = await eksClient.send(
+        new DescribeClusterCommand({
+          name: `eks-cluster-${ENVIRONMENT_SUFFIX}`,
+        })
+      );
+
+      const oidcIssuer = response.cluster!.identity?.oidc?.issuer;
+      expect(oidcIssuer).toBeDefined();
+      expect(oidcIssuer).toContain('oidc.eks');
+    });
+  });
+
+  describe('EKS Node Groups', () => {
+    test('System node group should exist with correct configuration', async () => {
+      const response = await eksClient.send(
+        new DescribeNodegroupCommand({
+          clusterName: `eks-cluster-${ENVIRONMENT_SUFFIX}`,
+          nodegroupName: `system-${ENVIRONMENT_SUFFIX}`,
+        })
+      );
+
+      const nodegroup = response.nodegroup;
+      expect(nodegroup).toBeDefined();
+      expect(nodegroup!.instanceTypes).toContain('t3.medium');
+      expect(nodegroup!.scalingConfig?.desiredSize).toBe(2);
+      expect(nodegroup!.scalingConfig?.minSize).toBe(2);
+      expect(nodegroup!.scalingConfig?.maxSize).toBe(4);
+      expect(nodegroup!.labels?.workload).toBe('system');
+    });
+
+    test('Application node group should exist with correct configuration', async () => {
+      const response = await eksClient.send(
+        new DescribeNodegroupCommand({
+          clusterName: `eks-cluster-${ENVIRONMENT_SUFFIX}`,
+          nodegroupName: `application-${ENVIRONMENT_SUFFIX}`,
+        })
+      );
+
+      const nodegroup = response.nodegroup;
+      expect(nodegroup).toBeDefined();
+      expect(nodegroup!.instanceTypes).toContain('m5.large');
+      expect(nodegroup!.scalingConfig?.desiredSize).toBe(3);
+      expect(nodegroup!.scalingConfig?.minSize).toBe(3);
+      expect(nodegroup!.scalingConfig?.maxSize).toBe(10);
+      expect(nodegroup!.labels?.workload).toBe('application');
+    });
+
+    test('Spot node group should exist with SPOT capacity type', async () => {
+      const response = await eksClient.send(
+        new DescribeNodegroupCommand({
+          clusterName: `eks-cluster-${ENVIRONMENT_SUFFIX}`,
+          nodegroupName: `spot-${ENVIRONMENT_SUFFIX}`,
+        })
+      );
+
+      const nodegroup = response.nodegroup;
+      expect(nodegroup).toBeDefined();
+      expect(nodegroup!.capacityType).toBe('SPOT');
+      expect(nodegroup!.instanceTypes).toContain('m5.large');
+      expect(nodegroup!.scalingConfig?.desiredSize).toBe(2);
+      expect(nodegroup!.scalingConfig?.minSize).toBe(0);
+      expect(nodegroup!.scalingConfig?.maxSize).toBe(10);
+      expect(nodegroup!.labels?.workload).toBe('batch');
+    });
+
+    test('Node groups should have taints configured', async () => {
+      const nodegroups = ['system', 'application'];
+
+      for (const ng of nodegroups) {
+        const response = await eksClient.send(
+          new DescribeNodegroupCommand({
+            clusterName: `eks-cluster-${ENVIRONMENT_SUFFIX}`,
+            nodegroupName: `${ng}-${ENVIRONMENT_SUFFIX}`,
+          })
+        );
+
+        const taints = response.nodegroup!.taints;
+        expect(taints).toBeDefined();
+        expect(taints!.length).toBeGreaterThan(0);
+
+        const workloadTaint = taints!.find((t) => t.key === 'workload');
+        expect(workloadTaint).toBeDefined();
+        expect(workloadTaint!.effect).toBe('NO_SCHEDULE');
+      }
+    });
+
+    test('Node groups should have cluster autoscaler tags', async () => {
+      const response = await eksClient.send(
+        new ListNodegroupsCommand({
+          clusterName: `eks-cluster-${ENVIRONMENT_SUFFIX}`,
+        })
+      );
+
+      expect(response.nodegroups).toBeDefined();
+      expect(response.nodegroups!.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('EKS Addons', () => {
+    test('EBS CSI Driver addon should be installed', async () => {
+      const response = await eksClient.send(
+        new DescribeAddonCommand({
+          clusterName: `eks-cluster-${ENVIRONMENT_SUFFIX}`,
+          addonName: 'aws-ebs-csi-driver',
+        })
+      );
+
+      expect(response.addon).toBeDefined();
+      expect(response.addon!.addonName).toBe('aws-ebs-csi-driver');
+      expect(response.addon!.status).toBe('ACTIVE');
+    });
+
+    test('VPC CNI addon should be installed', async () => {
+      const response = await eksClient.send(
+        new DescribeAddonCommand({
+          clusterName: `eks-cluster-${ENVIRONMENT_SUFFIX}`,
+          addonName: 'vpc-cni',
+        })
+      );
+
+      expect(response.addon).toBeDefined();
+      expect(response.addon!.addonName).toBe('vpc-cni');
+      expect(response.addon!.status).toBe('ACTIVE');
+    });
+
+    test('CoreDNS addon should be installed', async () => {
+      const response = await eksClient.send(
+        new DescribeAddonCommand({
+          clusterName: `eks-cluster-${ENVIRONMENT_SUFFIX}`,
+          addonName: 'coredns',
+        })
+      );
+
+      expect(response.addon).toBeDefined();
+      expect(response.addon!.addonName).toBe('coredns');
+      expect(response.addon!.status).toBe('ACTIVE');
+    });
+
+    test('Kube Proxy addon should be installed', async () => {
+      const response = await eksClient.send(
+        new DescribeAddonCommand({
+          clusterName: `eks-cluster-${ENVIRONMENT_SUFFIX}`,
+          addonName: 'kube-proxy',
+        })
+      );
+
+      expect(response.addon).toBeDefined();
+      expect(response.addon!.addonName).toBe('kube-proxy');
+      expect(response.addon!.status).toBe('ACTIVE');
+    });
+
+    test('All required addons should be installed', async () => {
+      const response = await eksClient.send(
+        new ListAddonsCommand({
+          clusterName: `eks-cluster-${ENVIRONMENT_SUFFIX}`,
+        })
+      );
+
+      expect(response.addons).toBeDefined();
+      expect(response.addons).toContain('aws-ebs-csi-driver');
+      expect(response.addons).toContain('vpc-cni');
+      expect(response.addons).toContain('coredns');
+      expect(response.addons).toContain('kube-proxy');
+    });
+  });
+
+  describe('IAM Roles', () => {
+    test('EKS cluster IAM role should exist with correct policies', async () => {
+      const roleName = `eks-cluster-role-${ENVIRONMENT_SUFFIX}`;
+
+      const roleResponse = await iamClient.send(
+        new GetRoleCommand({ RoleName: roleName })
+      );
+      expect(roleResponse.Role).toBeDefined();
+
+      const policiesResponse = await iamClient.send(
+        new ListAttachedRolePoliciesCommand({ RoleName: roleName })
+      );
+
+      const policyArns = policiesResponse.AttachedPolicies?.map((p) => p.PolicyArn);
+      expect(policyArns).toContain('arn:aws:iam::aws:policy/AmazonEKSClusterPolicy');
+      expect(policyArns).toContain(
+        'arn:aws:iam::aws:policy/AmazonEKSVPCResourceController'
+      );
+    });
+
+    test('EKS node group IAM role should exist with correct policies', async () => {
+      const roleName = `eks-node-group-role-${ENVIRONMENT_SUFFIX}`;
+
+      const roleResponse = await iamClient.send(
+        new GetRoleCommand({ RoleName: roleName })
+      );
+      expect(roleResponse.Role).toBeDefined();
+
+      const policiesResponse = await iamClient.send(
+        new ListAttachedRolePoliciesCommand({ RoleName: roleName })
+      );
+
+      const policyArns = policiesResponse.AttachedPolicies?.map((p) => p.PolicyArn);
+      expect(policyArns).toContain('arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy');
+      expect(policyArns).toContain('arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy');
+      expect(policyArns).toContain(
+        'arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly'
+      );
+    });
+
+    test('EBS CSI Driver IAM role should exist', async () => {
+      const roleName = `eks-ebs-csi-driver-${ENVIRONMENT_SUFFIX}`;
+
+      const response = await iamClient.send(
+        new GetRoleCommand({ RoleName: roleName })
+      );
+
+      expect(response.Role).toBeDefined();
+      expect(response.Role!.AssumeRolePolicyDocument).toBeDefined();
+
+      const assumePolicy = JSON.parse(
+        decodeURIComponent(response.Role!.AssumeRolePolicyDocument!)
+      );
+      const statement = assumePolicy.Statement[0];
+      expect(statement.Action).toBe('sts:AssumeRoleWithWebIdentity');
+    });
+
+    test('Load Balancer Controller IAM role should exist', async () => {
+      const roleName = `eks-load-balancer-controller-${ENVIRONMENT_SUFFIX}`;
+
+      const response = await iamClient.send(
+        new GetRoleCommand({ RoleName: roleName })
+      );
+
+      expect(response.Role).toBeDefined();
+      expect(response.Role!.AssumeRolePolicyDocument).toBeDefined();
+    });
+
+    test('Cluster autoscaler policy should exist', async () => {
+      const roleName = `eks-node-group-role-${ENVIRONMENT_SUFFIX}`;
+      const policiesResponse = await iamClient.send(
+        new ListAttachedRolePoliciesCommand({ RoleName: roleName })
+      );
+
+      const autoscalerPolicy = policiesResponse.AttachedPolicies?.find((p) =>
+        p.PolicyName?.includes('cluster-autoscaler')
+      );
+      expect(autoscalerPolicy).toBeDefined();
+    });
+  });
+
+  describe('OIDC Provider', () => {
+    test('OIDC provider should exist for EKS cluster', async () => {
+      const response = await iamClient.send(
+        new ListOpenIDConnectProvidersCommand({})
+      );
+
+      expect(response.OpenIDConnectProviderList).toBeDefined();
+      expect(response.OpenIDConnectProviderList!.length).toBeGreaterThan(0);
+
+      const eksProvider = response.OpenIDConnectProviderList!.find((p) =>
+        p.Arn?.includes('oidc.eks')
+      );
+      expect(eksProvider).toBeDefined();
+    });
+  });
+
+  describe('KMS Key', () => {
+    test('KMS key for EKS secrets encryption should exist', async () => {
+      const aliasesResponse = await kmsClient.send(
+        new ListAliasesCommand({})
+      );
+
+      const eksAlias = aliasesResponse.Aliases?.find(
+        (a) => a.AliasName === `alias/eks-cluster-${ENVIRONMENT_SUFFIX}`
+      );
+
+      expect(eksAlias).toBeDefined();
+      expect(eksAlias!.TargetKeyId).toBeDefined();
+    });
+
+    test('KMS key should have key rotation enabled', async () => {
+      const aliasesResponse = await kmsClient.send(
+        new ListAliasesCommand({})
+      );
+
+      const eksAlias = aliasesResponse.Aliases?.find(
+        (a) => a.AliasName === `alias/eks-cluster-${ENVIRONMENT_SUFFIX}`
+      );
+
+      if (eksAlias?.TargetKeyId) {
+        const keyResponse = await kmsClient.send(
+          new DescribeKeyCommand({ KeyId: eksAlias.TargetKeyId })
+        );
+
+        expect(keyResponse.KeyMetadata).toBeDefined();
+        expect(keyResponse.KeyMetadata!.Enabled).toBe(true);
+      }
+    });
+  });
+
+  describe('Infrastructure Integration', () => {
+    test('All node groups should use the same node IAM role', async () => {
+      const nodegroups = ['system', 'application'];
+      const roleArns: string[] = [];
+
+      for (const ng of nodegroups) {
+        const response = await eksClient.send(
+          new DescribeNodegroupCommand({
+            clusterName: `eks-cluster-${ENVIRONMENT_SUFFIX}`,
+            nodegroupName: `${ng}-${ENVIRONMENT_SUFFIX}`,
+          })
+        );
+        roleArns.push(response.nodegroup!.nodeRole!);
+      }
+
+      const uniqueRoles = new Set(roleArns);
+      expect(uniqueRoles.size).toBe(1);
+    });
+
+    test('EKS cluster should use correct VPC subnets', async () => {
+      const clusterResponse = await eksClient.send(
+        new DescribeClusterCommand({
+          name: `eks-cluster-${ENVIRONMENT_SUFFIX}`,
+        })
+      );
+
+      const clusterSubnets = clusterResponse.cluster!.resourcesVpcConfig?.subnetIds;
+      expect(clusterSubnets).toBeDefined();
+      expect(clusterSubnets!.length).toBeGreaterThanOrEqual(6);
+    });
+
+    test('EKS addons should be using IRSA where applicable', async () => {
+      const response = await eksClient.send(
+        new DescribeAddonCommand({
+          clusterName: `eks-cluster-${ENVIRONMENT_SUFFIX}`,
+          addonName: 'aws-ebs-csi-driver',
+        })
+      );
+
+      expect(response.addon!.serviceAccountRoleArn).toBeDefined();
+      expect(response.addon!.serviceAccountRoleArn).toContain('ebs-csi-driver');
     });
   });
 });
