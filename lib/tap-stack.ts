@@ -301,6 +301,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         kubeconfig: cluster.kubeconfig,
         enableServerSideApply: true,
+        deleteUnreachable: true, // Allow deletion of unreachable resources during cluster recreation
       },
       { parent: this }
     );

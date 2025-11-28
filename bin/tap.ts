@@ -1,6 +1,10 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';
+
+// Configure Pulumi Kubernetes provider to handle unreachable clusters
+// This prevents deployment failures when clusters are recreated or unreachable
+process.env.PULUMI_K8S_DELETE_UNREACHABLE = process.env.PULUMI_K8S_DELETE_UNREACHABLE || 'true';
 
 const config = new pulumi.Config();
 const environmentSuffix =
