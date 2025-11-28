@@ -27,5 +27,5 @@
     "X-Ray",
     "Application Auto Scaling"
   ],
-  "training_quality": null
+  "training_quality": 8
 }
