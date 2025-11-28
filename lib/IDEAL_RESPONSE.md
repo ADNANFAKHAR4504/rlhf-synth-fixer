@@ -24,7 +24,7 @@ This IDEAL_RESPONSE fixes critical deployment blockers in the original MODEL_RES
 2. **Lambda Functions**
    - Identical payment processing functions in both regions
    - 1GB memory allocation (1024 MB)
-   - Reserved concurrency: 100 executions
+   - Reserved concurrency: 10 executions
    - VPC-attached for secure database access
 
 3. **Route 53 DNS Failover**
@@ -360,18 +360,18 @@ Both primary and secondary regions have SNS topics for operational alerts:
 |----------|--------------|--------------|
 | Aurora db.r5.large (primary) | 2 instances Multi-AZ | ~$350 |
 | Aurora db.r5.large (secondary) | 1 instance | ~$175 |
-| Lambda | 100 reserved concurrency x2 regions | ~$40 |
+| Lambda | 10 reserved concurrency x2 regions | ~$4 |
 | Route 53 | 2 hosted zones + 2 health checks | ~$2 |
 | CloudWatch | 8 alarms | ~$0.80 |
 | SNS | 2 topics (minimal traffic) | ~$0.10 |
-| **Total** | | **~$568/month** |
+| **Total** | | **~$532/month** |
 
 **Note**: Data transfer between regions for Aurora replication not included (varies based on write volume).
 
 ### Cost Optimization Strategies
 
 1. **Right-size Aurora instances**: Monitor CPU/memory usage and downsize if consistently < 50%
-2. **Reduce reserved Lambda concurrency**: If actual peak < 100, reduce to save ~$0.20/GB-hour
+2. **Adjust reserved Lambda concurrency**: Current setting of 10 can be increased if actual peak demands require it
 3. **Optimize backup retention**: 7 days is minimum; evaluate if less is acceptable for test environments
 4. **Use Aurora Serverless v2**: For variable workloads, can reduce costs by 70%+
 
@@ -392,7 +392,7 @@ Both primary and secondary regions have SNS topics for operational alerts:
 - ✅ VPC isolation for databases
 
 **Performance**:
-- ✅ Reserved Lambda concurrency (100)
+- ✅ Reserved Lambda concurrency (10)
 - ✅ Read replicas for query offloading
 - ✅ Aurora global replication (sub-second lag)
 
@@ -436,10 +436,10 @@ Both primary and secondary regions have SNS topics for operational alerts:
 4. Check for long-running transactions blocking replication
 
 **Lambda Throttling**:
-1. Verify reserved concurrency is set to 100
+1. Verify reserved concurrency is set to 10
 2. Check account-level Lambda concurrency limits
 3. Monitor concurrent executions metric
-4. Consider increasing reserved concurrency if needed
+4. Consider increasing reserved concurrency if needed (current setting is conservative)
 
 **DNS Failover Not Working**:
 1. Verify health checks are properly configured and passing
@@ -463,7 +463,7 @@ The solution achieves:
 - **RTO**: < 15 minutes (automated DNS failover in ~30 seconds + application recovery)
 - **RPO**: Near-zero (Aurora global replication with sub-second lag)
 - **Availability**: 99.99% (Multi-AZ in primary, cross-region in secondary)
-- **Scalability**: 100 concurrent Lambda executions per region, 10,000+ transactions/hour
+- **Scalability**: 10 reserved concurrent Lambda executions per region (adjustable based on demand)
 
 ---
 
@@ -787,7 +787,7 @@ The solution achieves:
         "Role": {"Fn::GetAtt": ["LambdaExecutionRole", "Arn"]},
         "MemorySize": 1024,
         "Timeout": 30,
-        "ReservedConcurrentExecutions": 100,
+        "ReservedConcurrentExecutions": 10,
         "VpcConfig": {
           "SecurityGroupIds": [{"Ref": "LambdaSecurityGroup"}],
           "SubnetIds": [
@@ -1339,7 +1339,7 @@ The solution achieves:
         "Role": {"Fn::GetAtt": ["LambdaExecutionRole", "Arn"]},
         "MemorySize": 1024,
         "Timeout": 30,
-        "ReservedConcurrentExecutions": 100,
+        "ReservedConcurrentExecutions": 10,
         "VpcConfig": {
           "SecurityGroupIds": [{"Ref": "LambdaSecurityGroup"}],
           "SubnetIds": [

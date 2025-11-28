@@ -352,7 +352,7 @@ describe('Multi-Region DR Infrastructure Integration Tests', () => {
       expect(response.Runtime).toBe('python3.11');
       expect(response.MemorySize).toBe(1024);
       expect(response.Timeout).toBe(30);
-      expect(response.ReservedConcurrentExecutions).toBe(100);
+      expect(response.ReservedConcurrentExecutions).toBe(10);
     });
 
     test('primary Lambda should be in VPC', async () => {
@@ -416,7 +416,7 @@ describe('Multi-Region DR Infrastructure Integration Tests', () => {
       expect(response.Runtime).toBe('python3.11');
       expect(response.MemorySize).toBe(1024);
       expect(response.Timeout).toBe(30);
-      expect(response.ReservedConcurrentExecutions).toBe(100);
+      expect(response.ReservedConcurrentExecutions).toBe(10);
     });
 
     test('secondary Lambda should be in VPC', async () => {
@@ -726,8 +726,8 @@ describe('Multi-Region DR Infrastructure Integration Tests', () => {
         new GetFunctionConfigurationCommand({ FunctionName: outputs.SecondaryLambdaArn })
       );
 
-      expect(primaryConfig.ReservedConcurrentExecutions).toBe(100);
-      expect(secondaryConfig.ReservedConcurrentExecutions).toBe(100);
+      expect(primaryConfig.ReservedConcurrentExecutions).toBe(10);
+      expect(secondaryConfig.ReservedConcurrentExecutions).toBe(10);
     });
 
     test('DNS failover should be configured with primary and secondary records', async () => {

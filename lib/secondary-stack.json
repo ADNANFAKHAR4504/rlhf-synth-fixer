@@ -275,7 +275,7 @@
         "Role": {"Fn::GetAtt": ["LambdaExecutionRole", "Arn"]},
         "MemorySize": 1024,
         "Timeout": 30,
-        "ReservedConcurrentExecutions": 100,
+        "ReservedConcurrentExecutions": 10,
         "VpcConfig": {
           "SecurityGroupIds": [{"Ref": "LambdaSecurityGroup"}],
           "SubnetIds": [
