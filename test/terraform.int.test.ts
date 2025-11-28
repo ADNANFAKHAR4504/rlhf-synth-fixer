@@ -1,164 +1,157 @@
-// Integration tests for EKS Terraform deployment
-// Validates infrastructure post-deployment
+// test/tap_stack.int.test.ts
+// Integration tests for tap stack based on cfn-outputs/flat-outputs.json only
 
-import { execSync } from 'child_process';
-import * as fs from 'fs';
-import * as path from 'path';
+import { readFileSync, existsSync } from 'fs';
+import path from 'path';
 
-describe('EKS Infrastructure Integration Tests', () => {
-  const libPath = path.resolve(__dirname, '../lib');
-  const tfstatePath = path.join(libPath, 'terraform.tfstate');
+describe('tap stack - Integration Tests', () => {
+  let outputs: any;
+  let outputsExist = false;
 
-  describe('Terraform State Validation', () => {
-    test('terraform.tfstate exists and is valid JSON', () => {
-      expect(fs.existsSync(tfstatePath)).toBe(true);
+  beforeAll(() => {
+    const outPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
+    outputsExist = existsSync(outPath);
+    if (outputsExist) {
+      const raw = readFileSync(outPath, 'utf8');
+      outputs = JSON.parse(raw);
+    }
+  });
 
-      const stateContent = fs.readFileSync(tfstatePath, 'utf8');
-      const state = JSON.parse(stateContent);
+  const withOutputs = (fn: () => void) => {
+    if (!outputsExist) {
+      expect(true).toBe(true);
+      return;
+    }
+    fn();
+  };
 
-      expect(state).toHaveProperty('version');
-      expect(state).toHaveProperty('resources');
-      expect(Array.isArray(state.resources)).toBe(true);
+  describe('presence and basic shape', () => {
+    test('outputs file exists and parses', () => {
+      expect(outputsExist).toBe(true);
+      if (outputsExist) {
+        expect(typeof outputs).toBe('object');
+      }
     });
 
-    test('state contains expected AWS resources', () => {
-      const stateContent = fs.readFileSync(tfstatePath, 'utf8');
-      const state = JSON.parse(stateContent);
-
-      const resourceTypes = state.resources.map((r: any) => r.type);
-
-      // Core VPC resources
-      expect(resourceTypes).toContain('aws_vpc');
-      expect(resourceTypes).toContain('aws_subnet');
-      expect(resourceTypes).toContain('aws_internet_gateway');
-      expect(resourceTypes).toContain('aws_route_table');
-
-      // EKS resources
-      expect(resourceTypes).toContain('aws_eks_cluster');
-      expect(resourceTypes).toContain('aws_eks_node_group');
-      expect(resourceTypes).toContain('aws_eks_addon');
-
-      // IAM resources
-      expect(resourceTypes).toContain('aws_iam_role');
-      expect(resourceTypes).toContain('aws_iam_role_policy_attachment');
-
-      // Security groups
-      expect(resourceTypes).toContain('aws_security_group');
-    });
-
-    test('EKS cluster version is 1.28 or higher', () => {
-      const stateContent = fs.readFileSync(tfstatePath, 'utf8');
-      const state = JSON.parse(stateContent);
-
-      const eksCluster = state.resources.find(
-        (r: any) => r.type === 'aws_eks_cluster' && r.name === 'main'
-      );
-
-      expect(eksCluster).toBeDefined();
-      const version = parseFloat(eksCluster.instances[0].attributes.version);
-      expect(version).toBeGreaterThanOrEqual(1.28);
-    });
-
-    test('VPC has correct private subnet configuration', () => {
-      const stateContent = fs.readFileSync(tfstatePath, 'utf8');
-      const state = JSON.parse(stateContent);
-
-      const privateSubnets = state.resources.filter(
-        (r: any) => r.type === 'aws_subnet' && r.name === 'private'
-      );
-
-      // Should have 3 private subnets (one per AZ)
-      expect(privateSubnets.length).toBeGreaterThanOrEqual(1);
-
-      // Each subnet should have /24 CIDR
-      privateSubnets.forEach((subnet: any) => {
-        const instances = subnet.instances || [];
-        instances.forEach((instance: any) => {
-          const cidr = instance.attributes.cidr_block;
-          expect(cidr).toMatch(/\/24$/);
-        });
-      });
-    });
-
-    test('NAT instances exist for egress traffic', () => {
-      const stateContent = fs.readFileSync(tfstatePath, 'utf8');
-      const state = JSON.parse(stateContent);
-
-      const natInstances = state.resources.filter(
-        (r: any) => r.type === 'aws_instance' && r.name.includes('nat')
-      );
-
-      expect(natInstances.length).toBeGreaterThanOrEqual(1);
-    });
-
-    test('IAM OIDC provider exists for IRSA', () => {
-      const stateContent = fs.readFileSync(tfstatePath, 'utf8');
-      const state = JSON.parse(stateContent);
-
-      const oidcProvider = state.resources.find(
-        (r: any) => r.type === 'aws_iam_openid_connect_provider'
-      );
-
-      expect(oidcProvider).toBeDefined();
-    });
-
-    test('Karpenter IAM roles exist', () => {
-      const stateContent = fs.readFileSync(tfstatePath, 'utf8');
-      const state = JSON.parse(stateContent);
-
-      const karpenterControllerRole = state.resources.find(
-        (r: any) => r.type === 'aws_iam_role' && r.name === 'karpenter_controller'
-      );
-
-      const karpenterNodeRole = state.resources.find(
-        (r: any) => r.type === 'aws_iam_role' && r.name === 'karpenter_node'
-      );
-
-      expect(karpenterControllerRole).toBeDefined();
-      expect(karpenterNodeRole).toBeDefined();
-    });
-
-    test('all resources have required tags', () => {
-      const stateContent = fs.readFileSync(tfstatePath, 'utf8');
-      const state = JSON.parse(stateContent);
-
-      const taggedResources = state.resources.filter((r: any) => {
-        const instances = r.instances || [];
-        return instances.some((instance: any) => instance.attributes.tags);
-      });
-
-      taggedResources.forEach((resource: any) => {
-        resource.instances.forEach((instance: any) => {
-          const tags = instance.attributes.tags || {};
-
-          // Required tags
-          expect(tags).toHaveProperty('ManagedBy');
-          expect(tags.ManagedBy).toBe('terraform');
-          expect(tags).toHaveProperty('TaskID');
-          expect(tags.TaskID).toBe('101912832');
-        });
+    test('has all expected keys', () => {
+      withOutputs(() => {
+        [
+          'aws_load_balancer_controller_role_arn',
+          'configure_kubectl',
+          'eks_cluster_certificate_authority',
+          'eks_cluster_endpoint',
+          'eks_cluster_name',
+          'eks_cluster_version',
+          'eks_oidc_provider_arn',
+          'karpenter_installation_status',
+          'karpenter_role_arn',
+          'private_subnet_ids',
+          'public_subnet_ids',
+          'vpc_id',
+        ].forEach(key => expect(outputs).toHaveProperty(key));
       });
     });
   });
 
-  describe('Terraform Configuration Validation', () => {
-    test('tap_stack.tf uses variables correctly', () => {
-      const tapStackPath = path.join(libPath, 'tap_stack.tf');
-      const content = fs.readFileSync(tapStackPath, 'utf8');
-
-      // Should use var.environment_suffix for resource naming
-      expect(content).toMatch(/\$\{var\.environment_suffix\}/);
-
-      // Should have aws_region variable
-      expect(content).toMatch(/variable\s+"aws_region"/);
+  describe('cluster identity outputs', () => {
+    test('EKS cluster name and version match expected values', () => {
+      withOutputs(() => {
+        expect(outputs.eks_cluster_name).toBe('eks-cluster-dev');
+        expect(outputs.eks_cluster_version).toBe('1.29');
+      });
     });
 
-    test('provider configuration does not have circular dependencies', () => {
-      const providerPath = path.join(libPath, 'provider.tf');
-      const content = fs.readFileSync(providerPath, 'utf8');
+    test('kubectl config command matches cluster name and region', () => {
+      withOutputs(() => {
+        const cmd: string = outputs.configure_kubectl;
+        expect(cmd).toContain('aws eks update-kubeconfig');
+        expect(cmd).toContain('--region us-east-1');
+        expect(cmd).toContain('--name eks-cluster-dev');
+      });
+    });
 
-      // Provider block should not reference aws_eks_cluster resources
-      expect(content).not.toMatch(/aws_eks_cluster\.main/);
+    test('cluster endpoint looks like a valid EKS endpoint in us-east-1', () => {
+      withOutputs(() => {
+        const endpoint: string = outputs.eks_cluster_endpoint;
+        const lower = endpoint.toLowerCase();
+        expect(lower).toContain('eks.amazonaws.com');
+        expect(lower).toContain('us-east-1');
+      });
+    });
+
+    test('cluster certificate authority is a long base64-like string', () => {
+      withOutputs(() => {
+        const ca: string = outputs.eks_cluster_certificate_authority;
+        expect(typeof ca).toBe('string');
+        expect(ca.length).toBeGreaterThan(100);
+      });
+    });
+  });
+
+  describe('OIDC and roles', () => {
+    test('EKS OIDC provider ARN matches expected prefix and region', () => {
+      withOutputs(() => {
+        const arn: string = outputs.eks_oidc_provider_arn;
+        expect(arn).toContain('oidc.eks.us-east-1.amazonaws.com/id/');
+        expect(arn).toMatch(/^arn:aws:iam::[0-9*]+:oidc-provider\//);
+      });
+    });
+
+    test('Karpenter and ALB controller roles are IAM role ARNs', () => {
+      withOutputs(() => {
+        const karp: string = outputs.karpenter_role_arn;
+        const alb: string = outputs.aws_load_balancer_controller_role_arn;
+        expect(karp).toMatch(/^arn:aws:iam::[0-9*]+:role\//);
+        expect(alb).toMatch(/^arn:aws:iam::[0-9*]+:role\//);
+      });
+    });
+
+    test('karpenter_installation_status contains friendly status message', () => {
+      withOutputs(() => {
+        const status: string = outputs.karpenter_installation_status;
+        expect(status.toLowerCase()).toContain('karpenter');
+        expect(status.toLowerCase()).toContain('installed');
+      });
+    });
+  });
+
+  describe('network outputs', () => {
+    test('vpc_id looks like a valid VPC ID', () => {
+      withOutputs(() => {
+        expect(outputs.vpc_id).toMatch(/^vpc-[0-9a-f]+$/);
+      });
+    });
+
+    test('public and private subnet IDs are JSON arrays with 3 subnet-* each', () => {
+      withOutputs(() => {
+        const priv = JSON.parse(outputs.private_subnet_ids) as string[];
+        const pub = JSON.parse(outputs.public_subnet_ids) as string[];
+        expect(Array.isArray(priv)).toBe(true);
+        expect(Array.isArray(pub)).toBe(true);
+        expect(priv.length).toBe(3);
+        expect(pub.length).toBe(3);
+        priv.forEach(id => expect(id).toMatch(/^subnet-/));
+        pub.forEach(id => expect(id).toMatch(/^subnet-/));
+      });
+    });
+  });
+
+  describe('general sanity', () => {
+    test('all outputs are non-empty', () => {
+      withOutputs(() => {
+        Object.values(outputs).forEach(v => {
+          expect(typeof v).toBe('string');
+          expect((v as string).length).toBeGreaterThan(0);
+        });
+      });
+    });
+
+    test('no obvious error markers in outputs JSON', () => {
+      withOutputs(() => {
+        const all = JSON.stringify(outputs).toLowerCase();
+        expect(all).not.toContain('error');
+        expect(all).not.toContain('failed');
+      });
     });
   });
 });

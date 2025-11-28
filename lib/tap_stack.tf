@@ -34,7 +34,7 @@ variable "team" {
   description = "Team name for tagging"
   type        = string
   default     = "unknown"
-}# VPC and Networking Configuration
+} # VPC and Networking Configuration
 
 data "aws_availability_zones" "available" {
   state = "available"
