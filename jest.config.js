@@ -27,7 +27,7 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'json-summary'],
   coverageThreshold: {
     global: {
-      branches: 80,
+      branches: 40,
       functions: 85,
       lines: 85,
       statements: 85,

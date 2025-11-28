@@ -1,0 +1,30 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912813",
+  "team": "synth",
+  "startedAt": "2025-11-27T22:46:00-05:00",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "DynamoDB",
+    "S3",
+    "Lambda",
+    "KMS",
+    "CloudWatch",
+    "SNS",
+    "IAM"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
