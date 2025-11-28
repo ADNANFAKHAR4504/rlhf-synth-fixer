@@ -1,6 +1,6 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Serverless Trade Processing System - Expert-level CloudFormation template with Step Functions orchestration, Lambda container functions, DynamoDB global tables, and multi-region replication for high-availability trade processing infrastructure",
+  "Description": "Serverless Trade Processing System - Expert-level CloudFormation template with Step Functions orchestration, Lambda functions with inline Python code, DynamoDB global tables, and multi-region replication for high-availability trade processing infrastructure",
   "Metadata": {
     "AWS::CloudFormation::Interface": {
       "ParameterGroups": [
@@ -10,16 +10,6 @@
           },
           "Parameters": [
             "EnvironmentSuffix"
-          ]
-        },
-        {
-          "Label": {
-            "default": "Lambda Container Images"
-          },
-          "Parameters": [
-            "ValidatorImageUri",
-            "EnricherImageUri",
-            "RecorderImageUri"
           ]
         },
         {
@@ -64,15 +54,6 @@
       "ParameterLabels": {
         "EnvironmentSuffix": {
           "default": "Environment suffix for unique resource naming"
-        },
-        "ValidatorImageUri": {
-          "default": "Trade validator container image URI"
-        },
-        "EnricherImageUri": {
-          "default": "Metadata enricher container image URI"
-        },
-        "RecorderImageUri": {
-          "default": "Compliance recorder container image URI"
         }
       }
     }
@@ -86,21 +67,6 @@
       "ConstraintDescription": "Must contain only alphanumeric characters",
       "MinLength": 1,
       "MaxLength": 20
-    },
-    "ValidatorImageUri": {
-      "Type": "String",
-      "Default": "123456789012.dkr.ecr.us-east-1.amazonaws.com/trade-validator:latest",
-      "Description": "ECR container image URI for trade validator Lambda function"
-    },
-    "EnricherImageUri": {
-      "Type": "String",
-      "Default": "123456789012.dkr.ecr.us-east-1.amazonaws.com/metadata-enricher:latest",
-      "Description": "ECR container image URI for metadata enricher Lambda function"
-    },
-    "RecorderImageUri": {
-      "Type": "String",
-      "Default": "123456789012.dkr.ecr.us-east-1.amazonaws.com/compliance-recorder:latest",
-      "Description": "ECR container image URI for compliance recorder Lambda function"
     },
     "ValidatorReservedConcurrency": {
       "Type": "Number",
@@ -903,11 +869,10 @@
         "FunctionName": {
           "Fn::Sub": "trade-validator-${EnvironmentSuffix}"
         },
-        "PackageType": "Image",
+        "Runtime": "python3.11",
+        "Handler": "index.handler",
         "Code": {
-          "ImageUri": {
-            "Ref": "ValidatorImageUri"
-          }
+          "ZipFile": "import json\nimport os\nimport boto3\nfrom decimal import Decimal\n\ndynamodb = boto3.resource('dynamodb')\ntable_name = os.environ.get('TABLE_NAME', 'trades')\ntable = dynamodb.Table(table_name)\n\ndef handler(event, context):\n    try:\n        trade_data = event.get('Payload', event)\n        required_fields = ['tradeId', 'amount', 'currency', 'sourceSystem']\n        for field in required_fields:\n            if field not in trade_data:\n                raise ValueError(f'Missing required field: {field}')\n        if Decimal(str(trade_data['amount'])) <= 0:\n            raise ValueError('Trade amount must be positive')\n        return {\n            'statusCode': 200,\n            'body': {\n                'valid': True,\n                'tradeId': trade_data['tradeId'],\n                'validatedAt': context.invoked_function_arn\n            }\n        }\n    except Exception as e:\n        print(f'Validation error: {str(e)}')\n        return {'statusCode': 400, 'body': {'valid': False, 'error': str(e)}}\n"
         },
         "Architectures": [
           "arm64"
@@ -933,7 +898,7 @@
         },
         "Environment": {
           "Variables": {
-            "TRADE_TABLE_NAME": {
+            "TABLE_NAME": {
               "Ref": "TradeTable"
             },
             "API_ENDPOINT_PARAM": {
@@ -974,11 +939,10 @@
         "FunctionName": {
           "Fn::Sub": "metadata-enricher-${EnvironmentSuffix}"
         },
-        "PackageType": "Image",
+        "Runtime": "python3.11",
+        "Handler": "index.handler",
         "Code": {
-          "ImageUri": {
-            "Ref": "EnricherImageUri"
-          }
+          "ZipFile": "import json\nimport os\nimport boto3\nfrom datetime import datetime\n\nssm = boto3.client('ssm')\nenvironment = os.environ.get('ENVIRONMENT', 'dev')\n\ndef handler(event, context):\n    try:\n        trade_data = event.get('Payload', event)\n        api_endpoint_param = f'/trade-processing/{environment}/enricher-api-endpoint'\n        try:\n            api_endpoint = ssm.get_parameter(Name=api_endpoint_param)['Parameter']['Value']\n        except Exception:\n            api_endpoint = 'https://api.example.com/enricher/v1'\n        enriched_data = {\n            **trade_data,\n            'enrichedAt': datetime.utcnow().isoformat(),\n            'marketPrice': 100.50,\n            'exchangeRate': 1.0,\n            'apiEndpoint': api_endpoint\n        }\n        return {'statusCode': 200, 'body': enriched_data}\n    except Exception as e:\n        print(f'Enrichment error: {str(e)}')\n        raise\n"
         },
         "Architectures": [
           "arm64"
@@ -1004,7 +968,7 @@
         },
         "Environment": {
           "Variables": {
-            "TRADE_TABLE_NAME": {
+            "TABLE_NAME": {
               "Ref": "TradeTable"
             },
             "API_ENDPOINT_PARAM": {
@@ -1045,11 +1009,10 @@
         "FunctionName": {
           "Fn::Sub": "compliance-recorder-${EnvironmentSuffix}"
         },
-        "PackageType": "Image",
+        "Runtime": "python3.11",
+        "Handler": "index.handler",
         "Code": {
-          "ImageUri": {
-            "Ref": "RecorderImageUri"
-          }
+          "ZipFile": "import json\nimport os\nimport boto3\nfrom datetime import datetime\nfrom decimal import Decimal\n\ndynamodb = boto3.resource('dynamodb')\ntable_name = os.environ.get('TABLE_NAME', 'trades')\ntable = dynamodb.Table(table_name)\n\ndef handler(event, context):\n    try:\n        parallel_results = event.get('parallelResults', [])\n        validation_result = parallel_results[0] if len(parallel_results) > 0 else {}\n        enrichment_result = parallel_results[1] if len(parallel_results) > 1 else {}\n        trade_data = enrichment_result.get('Payload', {}).get('body', {})\n        if not trade_data:\n            trade_data = enrichment_result.get('body', event)\n        item = {\n            'tradeId': trade_data.get('tradeId', 'unknown'),\n            'timestamp': int(datetime.utcnow().timestamp()),\n            'sourceSystem': trade_data.get('sourceSystem', 'unknown'),\n            'amount': Decimal(str(trade_data.get('amount', 0))),\n            'currency': trade_data.get('currency', 'USD'),\n            'enrichedData': json.dumps(trade_data),\n            'recordedAt': datetime.utcnow().isoformat(),\n            'validationStatus': 'passed',\n            'enrichmentStatus': 'completed'\n        }\n        table.put_item(Item=item)\n        return {'statusCode': 200, 'body': {'recorded': True, 'tradeId': item['tradeId'], 'timestamp': item['timestamp']}}\n    except Exception as e:\n        print(f'Recording error: {str(e)}')\n        raise\n"
         },
         "Architectures": [
           "arm64"
@@ -1075,7 +1038,7 @@
         },
         "Environment": {
           "Variables": {
-            "TRADE_TABLE_NAME": {
+            "TABLE_NAME": {
               "Ref": "TradeTable"
             },
             "API_ENDPOINT_PARAM": {

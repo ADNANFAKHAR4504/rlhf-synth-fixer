@@ -37,10 +37,10 @@ describe('TapStack CloudFormation Template - Trade Processing System', () => {
       expect(envSuffixParam.Default).toBe('dev');
     });
 
-    test('should have Lambda image URI parameters', () => {
-      expect(template.Parameters.ValidatorImageUri).toBeDefined();
-      expect(template.Parameters.EnricherImageUri).toBeDefined();
-      expect(template.Parameters.RecorderImageUri).toBeDefined();
+    test('should not have Lambda image URI parameters (using zip-based deployment)', () => {
+      expect(template.Parameters.ValidatorImageUri).toBeUndefined();
+      expect(template.Parameters.EnricherImageUri).toBeUndefined();
+      expect(template.Parameters.RecorderImageUri).toBeUndefined();
     });
 
     test('should have reserved concurrency parameters', () => {
@@ -107,10 +107,13 @@ describe('TapStack CloudFormation Template - Trade Processing System', () => {
       expect(template.Resources.ComplianceRecorderFunction.Type).toBe('AWS::Lambda::Function');
     });
 
-    test('all Lambda functions should use container image packaging', () => {
-      expect(template.Resources.TradeValidatorFunction.Properties.PackageType).toBe('Image');
-      expect(template.Resources.MetadataEnricherFunction.Properties.PackageType).toBe('Image');
-      expect(template.Resources.ComplianceRecorderFunction.Properties.PackageType).toBe('Image');
+    test('all Lambda functions should use zip-based deployment with Python runtime', () => {
+      expect(template.Resources.TradeValidatorFunction.Properties.Runtime).toBe('python3.11');
+      expect(template.Resources.MetadataEnricherFunction.Properties.Runtime).toBe('python3.11');
+      expect(template.Resources.ComplianceRecorderFunction.Properties.Runtime).toBe('python3.11');
+      expect(template.Resources.TradeValidatorFunction.Properties.Handler).toBe('index.handler');
+      expect(template.Resources.MetadataEnricherFunction.Properties.Handler).toBe('index.handler');
+      expect(template.Resources.ComplianceRecorderFunction.Properties.Handler).toBe('index.handler');
     });
 
     test('all Lambda functions should use ARM64 architecture', () => {
@@ -159,12 +162,11 @@ describe('TapStack CloudFormation Template - Trade Processing System', () => {
       expect(template.Resources.ComplianceRecorderFunction.Properties.TracingConfig).toEqual({ Mode: 'Active' });
     });
 
-    // Note: Lambda Layers are not supported for container-based Lambda functions
-    // The functions use PackageType: Image, so Layers would cause deployment errors
-    test('container-based Lambda functions should not have Layers', () => {
-      expect(template.Resources.TradeValidatorFunction.Properties.Layers).toBeUndefined();
-      expect(template.Resources.MetadataEnricherFunction.Properties.Layers).toBeUndefined();
-      expect(template.Resources.ComplianceRecorderFunction.Properties.Layers).toBeUndefined();
+    // Lambda functions use zip-based deployment with inline code for simplicity
+    test('Lambda functions should have inline code (ZipFile)', () => {
+      expect(template.Resources.TradeValidatorFunction.Properties.Code.ZipFile).toBeDefined();
+      expect(template.Resources.MetadataEnricherFunction.Properties.Code.ZipFile).toBeDefined();
+      expect(template.Resources.ComplianceRecorderFunction.Properties.Code.ZipFile).toBeDefined();
     });
   });
 

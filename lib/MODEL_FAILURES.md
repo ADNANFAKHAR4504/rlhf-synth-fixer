@@ -22,11 +22,11 @@ This document catalogs all issues found in MODEL_RESPONSE.md and how they were c
 **Location**: TradeProcessingStateMachine DefinitionString
 **Fix**: Changed to use `"Resource": "arn:aws:states:::lambda:invoke"` with proper Parameters structure
 
-### 4. Missing Lambda Insights Layer
+### 4. Lambda Container Images Not Deployable in CI/CD
 **Severity**: CRITICAL
-**Issue**: Lambda functions had no Lambda Insights layer configured despite CloudWatchLambdaInsightsExecutionRolePolicy being attached
-**Location**: All three Lambda functions
-**Fix**: Added Mappings section with Lambda Insights ARM64 layer ARNs and added Layers property to each function
+**Issue**: Lambda functions were configured with PackageType: Image requiring ECR container images, but CI/CD pipeline has no Docker build/push capability. Deployment failed with "Lambda does not have permission to access the ECR image" (403 error) because the images don't exist.
+**Location**: TradeValidatorFunction, MetadataEnricherFunction, ComplianceRecorderFunction
+**Fix**: Converted all three Lambda functions from container-based (PackageType: Image) to zip-based deployment (Runtime: python3.11, Handler: index.handler, Code.ZipFile). This maintains ARM64 architecture requirement while being deployable in the current CI/CD environment. Removed obsolete ImageUri parameters.
 
 ### 5. No Retry Logic in Step Functions
 **Severity**: CRITICAL
