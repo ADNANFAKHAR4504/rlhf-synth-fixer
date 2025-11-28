@@ -354,7 +354,7 @@ export class TapStack {
     const rdsInstance = new aws.rds.Instance(`${name}-rds`, {
       identifier: `${name.toLowerCase()}-rds-${envSuffix.toLowerCase()}`,
       engine: 'postgres',
-      engineVersion: '14.7',
+      engineVersion: '14',
       instanceClass: envSuffix === 'prod' ? 'db.t3.medium' : 'db.t3.micro',
       allocatedStorage: envSuffix === 'prod' ? 100 : 20,
       storageType: 'gp3',
