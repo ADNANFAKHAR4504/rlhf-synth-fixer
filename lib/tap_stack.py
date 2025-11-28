@@ -108,4 +108,6 @@ class TapStack(TerraformStack):
             secondary_lambda_security_group_id=networking.secondary_lambda_security_group_id,
             primary_sns_topic_arn=monitoring.primary_sns_topic_arn,
             secondary_sns_topic_arn=monitoring.secondary_sns_topic_arn,
+            primary_replication_alarm=monitoring.primary_replication_alarm,
+            secondary_cpu_alarm=monitoring.secondary_cpu_alarm,
         )

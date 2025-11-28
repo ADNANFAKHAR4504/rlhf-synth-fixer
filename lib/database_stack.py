@@ -76,10 +76,12 @@ class DatabaseStack(Construct):
                 {
                     "name": "binlog_format",
                     "value": "ROW",
+                    "apply_method": "pending-reboot",
                 },
                 {
                     "name": "character_set_server",
                     "value": "utf8mb4",
+                    "apply_method": "pending-reboot",
                 },
             ],
             tags={

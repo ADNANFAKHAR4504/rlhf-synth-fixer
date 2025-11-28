@@ -165,3 +165,5 @@ class MonitoringStack(Construct):
         # Export attributes for use in other stacks
         self.primary_sns_topic_arn = primary_sns_topic.arn
         self.secondary_sns_topic_arn = secondary_sns_topic.arn
+        self.primary_replication_alarm = primary_replication_alarm
+        self.secondary_cpu_alarm = secondary_cpu_alarm

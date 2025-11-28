@@ -36,6 +36,8 @@ class FailoverStack(Construct):
         secondary_lambda_security_group_id: str,
         primary_sns_topic_arn: str,
         secondary_sns_topic_arn: str,
+        primary_replication_alarm=None,
+        secondary_cpu_alarm=None,
     ):
         """Initialize failover orchestration infrastructure."""
         super().__init__(scope, construct_id)
@@ -375,6 +377,11 @@ class FailoverStack(Construct):
         )
 
         # Create Route53 health check for primary endpoint
+        # Build depends_on list for primary health check
+        primary_health_depends_on = []
+        if primary_replication_alarm is not None:
+            primary_health_depends_on.append(primary_replication_alarm)
+
         primary_health_check = Route53HealthCheck(
             self,
             "primary_health_check",
@@ -383,10 +390,16 @@ class FailoverStack(Construct):
             cloudwatch_alarm_name=f"aurora-primary-replication-lag-{environment_suffix}",
             cloudwatch_alarm_region="us-east-1",
             insufficient_data_health_status="Unhealthy",
+            depends_on=primary_health_depends_on if primary_health_depends_on else None,
             tags={
                 "Name": f"aurora-primary-health-{environment_suffix}",
             },
         )
+
+        # Build depends_on list for secondary health check
+        secondary_health_depends_on = []
+        if secondary_cpu_alarm is not None:
+            secondary_health_depends_on.append(secondary_cpu_alarm)
 
         # Create Route53 health check for secondary endpoint
         secondary_health_check = Route53HealthCheck(
@@ -397,6 +410,7 @@ class FailoverStack(Construct):
             cloudwatch_alarm_name=f"aurora-secondary-cpu-{environment_suffix}",
             cloudwatch_alarm_region="us-west-2",
             insufficient_data_health_status="Healthy",
+            depends_on=secondary_health_depends_on if secondary_health_depends_on else None,
             tags={
                 "Name": f"aurora-secondary-health-{environment_suffix}",
             },
