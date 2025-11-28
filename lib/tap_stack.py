@@ -781,6 +781,7 @@ class TapStack(Stack):
             machine_image=ec2.MachineImage.generic_linux({
                 # Amazon Linux 2 AMI IDs (x86_64) - update with latest as needed
                 "eu-west-2": "ami-0b9932f4918a00c4f",      # London
+                "eu-central-1": "ami-0084a47cc718c111a",   # Frankfurt
                 "ap-southeast-1": "ami-0dc2d3e4c0f9ebd18",  # Singapore
                 "us-west-2": "ami-0c2ab3b8efb09f272",      # Oregon
                 "us-east-1": "ami-0cff7528ff583bf9a",      # N. Virginia
