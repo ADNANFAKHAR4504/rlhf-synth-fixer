@@ -149,16 +149,41 @@ elif [ "$PLATFORM" = "cdktf" ]; then
       REPLICAS=$(aws dynamodb describe-table --table-name "$table" --query 'Table.Replicas[].RegionName' --output text 2>/dev/null || echo "")
       if [ -n "$REPLICAS" ]; then
         echo "  Table has replicas: $REPLICAS"
+        REPLICAS_TO_REMOVE=""
         for replica_region in $REPLICAS; do
           # Don't remove the primary region's replica (that's the base table)
           if [ "$replica_region" != "$AWS_REGION" ] && [ "$replica_region" != "us-east-1" ]; then
             echo "  Removing replica in $replica_region"
             aws dynamodb update-table --table-name "$table" --replica-updates "Delete={RegionName=$replica_region}" 2>/dev/null || echo "  Failed to remove replica in $replica_region"
+            REPLICAS_TO_REMOVE="$REPLICAS_TO_REMOVE $replica_region"
           fi
         done
-        # Wait for replicas to be removed before deleting the main table
-        echo "  Waiting for replica removal to complete..."
-        sleep 30
+
+        # Wait for ALL replicas to be removed before proceeding (poll until replicas are gone)
+        if [ -n "$REPLICAS_TO_REMOVE" ]; then
+          echo "  Waiting for replica removal to complete (checking replicas list)..."
+          for i in $(seq 1 60); do
+            # Wait for table to become ACTIVE again after replica removal
+            TABLE_STATUS=$(aws dynamodb describe-table --table-name "$table" --query 'Table.TableStatus' --output text 2>/dev/null || echo "DELETED")
+            CURRENT_REPLICAS=$(aws dynamodb describe-table --table-name "$table" --query 'Table.Replicas[].RegionName' --output text 2>/dev/null || echo "")
+
+            # Check if all non-primary replicas are gone
+            REPLICAS_REMAINING=false
+            for r in $CURRENT_REPLICAS; do
+              if [ "$r" != "$AWS_REGION" ] && [ "$r" != "us-east-1" ]; then
+                REPLICAS_REMAINING=true
+                break
+              fi
+            done
+
+            if [ "$REPLICAS_REMAINING" = "false" ] && [ "$TABLE_STATUS" = "ACTIVE" ]; then
+              echo "  All replicas removed, table is ACTIVE"
+              break
+            fi
+            echo "  Waiting for replicas to be removed... (status: $TABLE_STATUS, replicas: $CURRENT_REPLICAS) (attempt $i/60)"
+            sleep 10
+          done
+        fi
       fi
 
       # Check if table has deletion protection enabled and disable it
@@ -166,7 +191,14 @@ elif [ "$PLATFORM" = "cdktf" ]; then
       if [ "$DELETION_PROTECTION" = "true" ] || [ "$DELETION_PROTECTION" = "True" ]; then
         echo "  Disabling deletion protection on $table"
         aws dynamodb update-table --table-name "$table" --no-deletion-protection-enabled 2>/dev/null || echo "  Failed to disable deletion protection"
-        sleep 5
+        # Wait for table to be ACTIVE after disabling deletion protection
+        for i in $(seq 1 30); do
+          TABLE_STATUS=$(aws dynamodb describe-table --table-name "$table" --query 'Table.TableStatus' --output text 2>/dev/null || echo "ACTIVE")
+          if [ "$TABLE_STATUS" = "ACTIVE" ]; then
+            break
+          fi
+          sleep 5
+        done
       fi
 
       echo "  Deleting DynamoDB table: $table"
@@ -181,13 +213,13 @@ elif [ "$PLATFORM" = "cdktf" ]; then
     for table in $TABLES_TO_DELETE; do
       echo "  Waiting for table: $table"
       # Use a timeout loop instead of wait command which may fail on global tables
-      for i in $(seq 1 30); do
+      for i in $(seq 1 60); do
         TABLE_STATUS=$(aws dynamodb describe-table --table-name "$table" --query 'Table.TableStatus' --output text 2>/dev/null || echo "DELETED")
         if [ "$TABLE_STATUS" = "DELETED" ] || [ -z "$TABLE_STATUS" ]; then
           echo "  Table $table deleted"
           break
         fi
-        echo "  Table $table status: $TABLE_STATUS (attempt $i/30)"
+        echo "  Table $table status: $TABLE_STATUS (attempt $i/60)"
         sleep 10
       done
     done
