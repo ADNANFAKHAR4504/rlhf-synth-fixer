@@ -519,11 +519,6 @@ export class TapStack {
         viewerCertificate: {
           cloudfrontDefaultCertificate: true,
         },
-        loggingConfig: {
-          bucket: logsBucket.bucketDomainName,
-          prefix: 'cloudfront-logs/',
-          includeCookies: false,
-        },
         tags: resourceTags,
       }
     );
@@ -616,6 +611,7 @@ export class TapStack {
 
     // CloudWatch Log Group for ECS
     const ecsLogGroup = new aws.cloudwatch.LogGroup(`${name}-ecs-logs`, {
+      name: `/ecs/${name.toLowerCase()}-${envSuffix.toLowerCase()}`,
       retentionInDays: 7,
       tags: resourceTags,
     });
