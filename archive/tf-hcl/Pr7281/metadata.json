@@ -15,7 +15,7 @@
   "aws_services": [
     "VPC",
     "EC2",
-    "ELB", 
+    "ELB",
     "Auto Scaling",
     "RDS",
     "S3",
@@ -27,5 +27,11 @@
   ],
   "task_config": {
     "deploy_env": "dev.tfvars"
-  }
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
 }
