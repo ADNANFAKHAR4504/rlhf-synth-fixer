@@ -645,6 +645,15 @@ class TapStack(TerraformStack):
             provider=primary_provider
         )
 
+        # Attach X-Ray write access policy
+        IamRolePolicyAttachment(
+            self,
+            "primary_lambda_xray",
+            role=primary_lambda_role.name,
+            policy_arn="arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess",
+            provider=primary_provider
+        )
+
         # Create IAM policy for Lambda to access secrets and DynamoDB
         primary_lambda_policy = IamPolicy(
             self,
@@ -732,6 +741,9 @@ class TapStack(TerraformStack):
                 "subnet_ids": [subnet.id for subnet in primary_private_subnets],
                 "security_group_ids": [primary_lambda_sg.id]
             },
+            tracing_config={
+                "mode": "Active"
+            },
             tags={"Name": f"payment-webhook-handler-use1-{environment_suffix}"},
             provider=primary_provider,
             lifecycle={
@@ -764,6 +776,15 @@ class TapStack(TerraformStack):
             "secondary_lambda_basic_execution",
             role=secondary_lambda_role.name,
             policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
+            provider=secondary_provider
+        )
+
+        # Attach X-Ray write access policy
+        IamRolePolicyAttachment(
+            self,
+            "secondary_lambda_xray",
+            role=secondary_lambda_role.name,
+            policy_arn="arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess",
             provider=secondary_provider
         )
 
@@ -859,6 +880,9 @@ class TapStack(TerraformStack):
             vpc_config={
                 "subnet_ids": [subnet.id for subnet in secondary_private_subnets],
                 "security_group_ids": [secondary_lambda_sg.id]
+            },
+            tracing_config={
+                "mode": "Active"
             },
             tags={"Name": f"payment-webhook-handler-usw2-{environment_suffix}"},
             provider=secondary_provider,

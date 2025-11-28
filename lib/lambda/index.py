@@ -5,6 +5,16 @@ import os
 import boto3
 from botocore.exceptions import ClientError
 
+# X-Ray SDK for tracing
+try:
+    from aws_xray_sdk.core import xray_recorder
+    from aws_xray_sdk.core import patch_all
+    patch_all()
+    XRAY_AVAILABLE = True
+except ImportError:
+    XRAY_AVAILABLE = False
+    print("Warning: X-Ray SDK not available, tracing disabled")
+
 
 # Initialize AWS clients
 secretsmanager = boto3.client('secretsmanager')
@@ -46,13 +56,25 @@ def store_session_data(session_id, payment_data):
 def handler(event, context):
     """
     Lambda handler for payment webhook processing.
-    
+
     This function processes incoming payment webhooks, stores session data
     in DynamoDB, and can interact with the Aurora database if needed.
     """
+    # Add X-Ray annotations if available and segment is active
+    if XRAY_AVAILABLE:
+        try:
+            # Check if there's an active segment before adding annotations
+            segment = xray_recorder.current_segment()
+            if segment and not getattr(segment, 'is_facade', False):
+                xray_recorder.put_annotation('environment', os.environ.get('ENVIRONMENT', 'unknown'))
+                xray_recorder.put_annotation('region', os.environ.get('REGION', 'unknown'))
+        except Exception as e:
+            # Silently ignore X-Ray errors (FacadeSegmentMutationException during testing)
+            print(f"X-Ray annotation skipped: {e}")
+
     print(f"Processing webhook in region: {os.environ['REGION']}")
     print(f"Environment: {os.environ['ENVIRONMENT']}")
-    
+
     try:
         # Parse incoming webhook payload
         if 'body' in event:
