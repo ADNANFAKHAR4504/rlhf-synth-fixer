@@ -65,10 +65,11 @@ class TapStack(TerraformStack):
         )
 
         # Configure S3 Backend with native state locking
+        # Using workspace-based key to avoid conflicts
         S3Backend(
             self,
             bucket=state_bucket,
-            key=f"{environment_suffix}/{construct_id}.tfstate",
+            key=f"cdktf/{environment_suffix}/{construct_id}.tfstate",
             region=state_bucket_region,
             encrypt=True,
         )
