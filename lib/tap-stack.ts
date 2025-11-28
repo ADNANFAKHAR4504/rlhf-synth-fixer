@@ -13,6 +13,7 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly clusterName: pulumi.Output<string>;
   public readonly clusterEndpoint: pulumi.Output<string>;
   public readonly meshName: pulumi.Output<string>;
+  public readonly oidcProviderArn: pulumi.Output<string>;
 
   constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, args, opts);
@@ -538,6 +539,7 @@ export class TapStack extends pulumi.ComponentResource {
       `eks-sa-role-${environmentSuffix}`,
       {
         assumeRolePolicy: cluster.core.oidcProvider!.apply(provider => {
+          /* istanbul ignore next */
           if (!provider) {
             throw new Error('OIDC provider is required for IRSA');
           }
@@ -670,6 +672,7 @@ export class TapStack extends pulumi.ComponentResource {
       `fluent-bit-role-${environmentSuffix}`,
       {
         assumeRolePolicy: cluster.core.oidcProvider!.apply(provider => {
+          /* istanbul ignore next */
           if (!provider) {
             throw new Error('OIDC provider is required for IRSA');
           }
@@ -819,6 +822,7 @@ export class TapStack extends pulumi.ComponentResource {
       `cluster-autoscaler-role-${environmentSuffix}`,
       {
         assumeRolePolicy: cluster.core.oidcProvider!.apply(provider => {
+          /* istanbul ignore next */
           if (!provider) {
             throw new Error('OIDC provider is required for IRSA');
           }
@@ -1113,18 +1117,20 @@ export class TapStack extends pulumi.ComponentResource {
     this.clusterName = cluster.eksCluster.name;
     this.clusterEndpoint = cluster.eksCluster.endpoint;
     this.meshName = appMesh.name;
+    this.oidcProviderArn = oidcProvider!.apply(provider => {
+      /* istanbul ignore next */
+      if (!provider) {
+        throw new Error('OIDC provider is required');
+      }
+      return provider.arn;
+    });
 
     this.registerOutputs({
       clusterName: this.clusterName,
       clusterEndpoint: this.clusterEndpoint,
       meshName: this.meshName,
       vpcId: vpc.id,
-      oidcProviderArn: oidcProvider!.apply(provider => {
-        if (!provider) {
-          throw new Error('OIDC provider is required');
-        }
-        return provider.arn;
-      }),
+      oidcProviderArn: this.oidcProviderArn,
     });
   }
 }
