@@ -34,6 +34,16 @@ const defaultNetworkingStackRef = `organization/networking-stack/${environment}`
 const networkingStackRef =
   config.get('networkingStackRef') || defaultNetworkingStackRef;
 
+// Determine if we should create standalone networking (for CI/CD environments)
+// This is triggered when:
+// 1. ENVIRONMENT_SUFFIX is set (indicates CI/CD)
+// 2. No explicit networking stack reference was configured
+// 3. CREATE_STANDALONE_NETWORKING env var is set to 'true'
+const isCI =
+  !!process.env.ENVIRONMENT_SUFFIX && !config.get('networkingStackRef');
+const createStandaloneNetworking =
+  process.env.CREATE_STANDALONE_NETWORKING === 'true' || isCI;
+
 // Environment-specific configuration
 const envConfigs: Record<string, EnvironmentConfig> = {
   dev: {
@@ -131,6 +141,7 @@ const stack_instance = new TapStack(
     config: envConfig,
     dockerImageUri,
     networkingStackRef,
+    createStandaloneNetworking,
     tags: defaultTags,
   },
   { provider }

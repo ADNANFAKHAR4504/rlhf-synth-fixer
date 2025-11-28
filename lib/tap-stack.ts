@@ -48,6 +48,11 @@ export interface TapStackArgs {
   config: EnvironmentConfig;
   dockerImageUri: string;
   networkingStackRef: string;
+  /**
+   * If true, create standalone networking resources instead of using stack reference.
+   * Useful for CI/CD testing when the referenced stack doesn't exist.
+   */
+  createStandaloneNetworking?: boolean;
   tags?: pulumi.Input<{ [key: string]: string }>;
 }
 
@@ -74,6 +79,7 @@ export class TapStack extends pulumi.ComponentResource {
       config,
       dockerImageUri,
       networkingStackRef,
+      createStandaloneNetworking,
       tags,
     } = args;
 
@@ -81,10 +87,12 @@ export class TapStack extends pulumi.ComponentResource {
     validateEnvironmentConfig(config);
 
     // Get networking stack reference for VPC and subnets
+    // Use standalone networking in CI/CD environments when the referenced stack doesn't exist
     const networkingStack = new NetworkingStack(
       'networking',
       {
         stackReference: networkingStackRef,
+        createStandalone: createStandaloneNetworking,
       },
       { parent: this }
     );
