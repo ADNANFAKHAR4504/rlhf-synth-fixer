@@ -1,7 +1,9 @@
 {
   "po_id": "l3u3n8x0",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": ["Multi-Environment Consistency and Replication"],
+  "subject_labels": [
+    "Multi-Environment Consistency and Replication"
+  ],
   "platform": "pulumi",
   "language": "ts",
   "complexity": "expert",
@@ -23,5 +25,11 @@
   ],
   "estimated_deployment_time_minutes": 30,
   "training_quality": 10,
-  "status": "in_progress"
+  "status": "in_progress",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
