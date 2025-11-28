@@ -89,6 +89,7 @@ resource "aws_rds_cluster_instance" "main" {
   engine             = aws_rds_cluster.main.engine
   engine_version     = aws_rds_cluster.main.engine_version
 
+  db_parameter_group_name      = aws_db_parameter_group.main.name
   performance_insights_enabled = true
 }
 

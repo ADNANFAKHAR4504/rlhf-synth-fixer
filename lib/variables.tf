@@ -1,6 +1,7 @@
 variable "environment_suffix" {
   description = "Unique suffix for resource naming to support parallel deployments"
   type        = string
+  default     = "dev"
 }
 
 variable "primary_region" {
@@ -43,11 +44,13 @@ variable "db_master_password" {
   description = "Master password for RDS Aurora"
   type        = string
   sensitive   = true
+  default     = "ChangeMe123!"
 }
 
 variable "alert_email" {
   description = "Email address for SNS notifications"
   type        = string
+  default     = "alerts@example.com"
 }
 
 variable "availability_zones_primary" {

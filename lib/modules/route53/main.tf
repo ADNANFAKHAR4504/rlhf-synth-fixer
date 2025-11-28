@@ -24,8 +24,8 @@ resource "aws_route53_zone" "main" {
 
 resource "aws_route53_health_check" "primary" {
   fqdn              = var.primary_alb_dns
-  port              = 80
-  type              = "HTTP"
+  port              = 443
+  type              = "HTTPS"
   resource_path     = "/health"
   failure_threshold = 3
   request_interval  = 30

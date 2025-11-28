@@ -11,6 +11,15 @@ variable "environment_suffix" { type = string }
 variable "primary_region" { type = string }
 variable "dr_region" { type = string }
 
+# Get current AWS account ID for resource scoping
+data "aws_caller_identity" "current" {}
+
+locals {
+  account_id = data.aws_caller_identity.current.account_id
+  # Bucket naming pattern for S3 replication
+  s3_bucket_pattern = "app-data-${var.environment_suffix}"
+}
+
 # S3 Replication Role
 resource "aws_iam_role" "s3_replication" {
   name = "transaction-s3-replication-${var.environment_suffix}"
@@ -34,30 +43,42 @@ resource "aws_iam_policy" "s3_replication" {
     Version = "2012-10-17"
     Statement = [
       {
+        Sid    = "S3ReplicationSource"
         Effect = "Allow"
         Action = [
           "s3:GetReplicationConfiguration",
           "s3:ListBucket"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:s3:::${local.s3_bucket_pattern}-${var.primary_region}",
+          "arn:aws:s3:::${local.s3_bucket_pattern}-${var.dr_region}"
+        ]
       },
       {
+        Sid    = "S3ReplicationGetObjects"
         Effect = "Allow"
         Action = [
           "s3:GetObjectVersionForReplication",
           "s3:GetObjectVersionAcl",
           "s3:GetObjectVersionTagging"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:s3:::${local.s3_bucket_pattern}-${var.primary_region}/*",
+          "arn:aws:s3:::${local.s3_bucket_pattern}-${var.dr_region}/*"
+        ]
       },
       {
+        Sid    = "S3ReplicationDestination"
         Effect = "Allow"
         Action = [
           "s3:ReplicateObject",
           "s3:ReplicateDelete",
           "s3:ReplicateTags"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:s3:::${local.s3_bucket_pattern}-${var.primary_region}/*",
+          "arn:aws:s3:::${local.s3_bucket_pattern}-${var.dr_region}/*"
+        ]
       }
     ]
   })
@@ -91,24 +112,55 @@ resource "aws_iam_policy" "lambda_execution" {
     Version = "2012-10-17"
     Statement = [
       {
+        Sid    = "CloudWatchLogs"
         Effect = "Allow"
         Action = [
           "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:aws:logs:*:*:*"
+        Resource = [
+          "arn:aws:logs:${var.primary_region}:${local.account_id}:log-group:/aws/lambda/*${var.environment_suffix}*",
+          "arn:aws:logs:${var.primary_region}:${local.account_id}:log-group:/aws/lambda/*${var.environment_suffix}*:*",
+          "arn:aws:logs:${var.dr_region}:${local.account_id}:log-group:/aws/lambda/*${var.environment_suffix}*",
+          "arn:aws:logs:${var.dr_region}:${local.account_id}:log-group:/aws/lambda/*${var.environment_suffix}*:*"
+        ]
       },
       {
+        Sid    = "VPCNetworkInterface"
         Effect = "Allow"
         Action = [
           "ec2:CreateNetworkInterface",
           "ec2:DescribeNetworkInterfaces",
           "ec2:DeleteNetworkInterface"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:ec2:${var.primary_region}:${local.account_id}:network-interface/*",
+          "arn:aws:ec2:${var.dr_region}:${local.account_id}:network-interface/*",
+          "arn:aws:ec2:${var.primary_region}:${local.account_id}:subnet/*",
+          "arn:aws:ec2:${var.dr_region}:${local.account_id}:subnet/*",
+          "arn:aws:ec2:${var.primary_region}:${local.account_id}:security-group/*",
+          "arn:aws:ec2:${var.dr_region}:${local.account_id}:security-group/*"
+        ]
       },
       {
+        Sid    = "EC2DescribePermissions"
+        Effect = "Allow"
+        Action = [
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DescribeSubnets",
+          "ec2:DescribeSecurityGroups",
+          "ec2:DescribeVpcs"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:RequestedRegion" = [var.primary_region, var.dr_region]
+          }
+        }
+      },
+      {
+        Sid    = "DynamoDBAccess"
         Effect = "Allow"
         Action = [
           "dynamodb:GetItem",
@@ -116,15 +168,24 @@ resource "aws_iam_policy" "lambda_execution" {
           "dynamodb:UpdateItem",
           "dynamodb:Query"
         ]
-        Resource = "arn:aws:dynamodb:*:*:table/transaction-sessions-*"
+        Resource = [
+          "arn:aws:dynamodb:${var.primary_region}:${local.account_id}:table/session-store-${var.environment_suffix}",
+          "arn:aws:dynamodb:${var.dr_region}:${local.account_id}:table/session-store-${var.environment_suffix}"
+        ]
       },
       {
+        Sid    = "RDSDescribe"
         Effect = "Allow"
         Action = [
           "rds:DescribeDBClusters",
           "rds:DescribeDBInstances"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:rds:${var.primary_region}:${local.account_id}:cluster:*${var.environment_suffix}*",
+          "arn:aws:rds:${var.dr_region}:${local.account_id}:cluster:*${var.environment_suffix}*",
+          "arn:aws:rds:${var.primary_region}:${local.account_id}:db:*${var.environment_suffix}*",
+          "arn:aws:rds:${var.dr_region}:${local.account_id}:db:*${var.environment_suffix}*"
+        ]
       }
     ]
   })
@@ -161,21 +222,27 @@ resource "aws_iam_policy" "cross_region_access" {
     Version = "2012-10-17"
     Statement = [
       {
+        Sid    = "RDSFailover"
         Effect = "Allow"
         Action = [
           "rds:DescribeDBClusters",
           "rds:FailoverDBCluster"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:rds:${var.primary_region}:${local.account_id}:cluster:*${var.environment_suffix}*",
+          "arn:aws:rds:${var.dr_region}:${local.account_id}:cluster:*${var.environment_suffix}*",
+          "arn:aws:rds::${local.account_id}:global-cluster:transaction-db-${var.environment_suffix}"
+        ]
       },
       {
+        Sid    = "Route53HealthCheck"
         Effect = "Allow"
         Action = [
           "route53:GetHealthCheck",
           "route53:GetHealthCheckStatus",
           "route53:UpdateHealthCheck"
         ]
-        Resource = "*"
+        Resource = "arn:aws:route53:::healthcheck/*"
       }
     ]
   })
