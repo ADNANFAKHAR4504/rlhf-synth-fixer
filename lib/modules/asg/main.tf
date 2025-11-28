@@ -104,14 +104,14 @@ resource "aws_launch_template" "main" {
 }
 
 resource "aws_autoscaling_group" "main" {
-  name               = "${var.environment}-${var.project_name}-asg"
-  vpc_zone_identifier = var.subnet_ids
-  target_group_arns   = var.target_group_arns
-  health_check_type   = "ELB"
+  name                      = "${var.environment}-${var.project_name}-asg"
+  vpc_zone_identifier       = var.subnet_ids
+  target_group_arns         = var.target_group_arns
+  health_check_type         = "ELB"
   health_check_grace_period = 300
 
-  min_size = var.min_size
-  max_size = var.max_size
+  min_size         = var.min_size
+  max_size         = var.max_size
   desired_capacity = var.min_size
 
   launch_template {
@@ -140,7 +140,7 @@ resource "aws_autoscaling_policy" "scale_up" {
   autoscaling_group_name = aws_autoscaling_group.main.name
   adjustment_type        = "ChangeInCapacity"
   scaling_adjustment     = 1
-  cooldown              = 300
+  cooldown               = 300
 }
 
 resource "aws_autoscaling_policy" "scale_down" {
@@ -148,5 +148,5 @@ resource "aws_autoscaling_policy" "scale_down" {
   autoscaling_group_name = aws_autoscaling_group.main.name
   adjustment_type        = "ChangeInCapacity"
   scaling_adjustment     = -1
-  cooldown              = 300
+  cooldown               = 300
 }
