@@ -1,0 +1,16 @@
+name: multi-region-dr
+runtime: nodejs
+description: Multi-region disaster recovery infrastructure for payment processing
+
+config:
+  environmentSuffix:
+    type: string
+    description: Unique suffix for resource naming to prevent conflicts
+  dbPassword:
+    type: string
+    secret: true
+    description: Master password for Aurora database
+  environment:
+    type: string
+    default: production
+    description: Environment name (e.g., production, staging)
