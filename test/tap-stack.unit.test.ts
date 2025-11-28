@@ -49,29 +49,26 @@ describe('Aurora Global Database CloudFormation Template', () => {
       expect(param.MaxLength).toBe(16);
     });
 
-    test('should have DBMasterPassword parameter with NoEcho', () => {
+    test('should have DBMasterPassword parameter with NoEcho and default', () => {
       expect(template.Parameters.DBMasterPassword).toBeDefined();
       const param = template.Parameters.DBMasterPassword;
       expect(param.Type).toBe('String');
       expect(param.NoEcho).toBe(true);
+      expect(param.Default).toBe('TempPassword123!');
       expect(param.MinLength).toBe(8);
       expect(param.MaxLength).toBe(41);
     });
 
-    test('should have VPC and networking parameters', () => {
-      expect(template.Parameters.PrimaryVPCId).toBeDefined();
-      expect(template.Parameters.PrimaryVPCId.Type).toBe('AWS::EC2::VPC::Id');
-
-      expect(template.Parameters.PrimarySubnetIds).toBeDefined();
-      expect(template.Parameters.PrimarySubnetIds.Type).toBe('List<AWS::EC2::Subnet::Id>');
+    test('should have VpcCidr parameter', () => {
+      expect(template.Parameters.VpcCidr).toBeDefined();
+      const param = template.Parameters.VpcCidr;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('10.0.0.0/16');
     });
 
-    test('should have Route53 parameters', () => {
-      expect(template.Parameters.HostedZoneId).toBeDefined();
-      expect(template.Parameters.HostedZoneId.Type).toBe('AWS::Route53::HostedZone::Id');
-
-      expect(template.Parameters.DomainName).toBeDefined();
-      expect(template.Parameters.DomainName.Type).toBe('String');
+    test('should have exactly 5 parameters', () => {
+      const parameterCount = Object.keys(template.Parameters).length;
+      expect(parameterCount).toBe(5);
     });
   });
 
@@ -80,6 +77,97 @@ describe('Aurora Global Database CloudFormation Template', () => {
       expect(template.Conditions.IsProductionCondition).toBeDefined();
       expect(template.Conditions.IsProductionCondition).toEqual({
         'Fn::Equals': [{ Ref: 'IsProduction' }, 'true']
+      });
+    });
+  });
+
+  describe('VPC Resources', () => {
+    test('should have PrimaryVPC', () => {
+      const vpc = template.Resources.PrimaryVPC;
+      expect(vpc).toBeDefined();
+      expect(vpc.Type).toBe('AWS::EC2::VPC');
+      expect(vpc.Properties.CidrBlock).toEqual({ Ref: 'VpcCidr' });
+      expect(vpc.Properties.EnableDnsHostnames).toBe(true);
+      expect(vpc.Properties.EnableDnsSupport).toBe(true);
+    });
+
+    test('should have InternetGateway', () => {
+      const igw = template.Resources.InternetGateway;
+      expect(igw).toBeDefined();
+      expect(igw.Type).toBe('AWS::EC2::InternetGateway');
+    });
+
+    test('should have VPCGatewayAttachment', () => {
+      const attachment = template.Resources.VPCGatewayAttachment;
+      expect(attachment).toBeDefined();
+      expect(attachment.Type).toBe('AWS::EC2::VPCGatewayAttachment');
+      expect(attachment.Properties.VpcId).toEqual({ Ref: 'PrimaryVPC' });
+      expect(attachment.Properties.InternetGatewayId).toEqual({ Ref: 'InternetGateway' });
+    });
+
+    test('should have three private subnets', () => {
+      expect(template.Resources.PrivateSubnet1).toBeDefined();
+      expect(template.Resources.PrivateSubnet2).toBeDefined();
+      expect(template.Resources.PrivateSubnet3).toBeDefined();
+
+      expect(template.Resources.PrivateSubnet1.Type).toBe('AWS::EC2::Subnet');
+      expect(template.Resources.PrivateSubnet2.Type).toBe('AWS::EC2::Subnet');
+      expect(template.Resources.PrivateSubnet3.Type).toBe('AWS::EC2::Subnet');
+    });
+
+    test('subnets should be in different AZs', () => {
+      const subnet1 = template.Resources.PrivateSubnet1;
+      const subnet2 = template.Resources.PrivateSubnet2;
+      const subnet3 = template.Resources.PrivateSubnet3;
+
+      expect(subnet1.Properties.AvailabilityZone).toEqual({
+        'Fn::Select': [0, { 'Fn::GetAZs': { Ref: 'AWS::Region' } }]
+      });
+      expect(subnet2.Properties.AvailabilityZone).toEqual({
+        'Fn::Select': [1, { 'Fn::GetAZs': { Ref: 'AWS::Region' } }]
+      });
+      expect(subnet3.Properties.AvailabilityZone).toEqual({
+        'Fn::Select': [2, { 'Fn::GetAZs': { Ref: 'AWS::Region' } }]
+      });
+    });
+
+    test('subnets should not have public IPs', () => {
+      expect(template.Resources.PrivateSubnet1.Properties.MapPublicIpOnLaunch).toBe(false);
+      expect(template.Resources.PrivateSubnet2.Properties.MapPublicIpOnLaunch).toBe(false);
+      expect(template.Resources.PrivateSubnet3.Properties.MapPublicIpOnLaunch).toBe(false);
+    });
+
+    test('should have PrivateRouteTable', () => {
+      const rt = template.Resources.PrivateRouteTable;
+      expect(rt).toBeDefined();
+      expect(rt.Type).toBe('AWS::EC2::RouteTable');
+      expect(rt.Properties.VpcId).toEqual({ Ref: 'PrimaryVPC' });
+    });
+
+    test('should have route table associations for all subnets', () => {
+      expect(template.Resources.PrivateSubnet1RouteTableAssociation).toBeDefined();
+      expect(template.Resources.PrivateSubnet2RouteTableAssociation).toBeDefined();
+      expect(template.Resources.PrivateSubnet3RouteTableAssociation).toBeDefined();
+    });
+  });
+
+  describe('Route53 Private Hosted Zone', () => {
+    test('should have PrivateHostedZone', () => {
+      const hz = template.Resources.PrivateHostedZone;
+      expect(hz).toBeDefined();
+      expect(hz.Type).toBe('AWS::Route53::HostedZone');
+    });
+
+    test('PrivateHostedZone should be associated with VPC', () => {
+      const hz = template.Resources.PrivateHostedZone;
+      expect(hz.Properties.VPCs).toBeDefined();
+      expect(hz.Properties.VPCs[0].VPCId).toEqual({ Ref: 'PrimaryVPC' });
+    });
+
+    test('PrivateHostedZone should use internal domain', () => {
+      const hz = template.Resources.PrivateHostedZone;
+      expect(hz.Properties.Name).toEqual({
+        'Fn::Sub': 'aurora-${EnvironmentSuffix}.internal'
       });
     });
   });
@@ -176,14 +264,14 @@ describe('Aurora Global Database CloudFormation Template', () => {
       const sg = template.Resources.AuroraSecurityGroup;
       expect(sg).toBeDefined();
       expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
-      expect(sg.Properties.VpcId).toEqual({ Ref: 'PrimaryVPCId' });
+      expect(sg.Properties.VpcId).toEqual({ Ref: 'PrimaryVPC' });
     });
 
     test('should have LambdaSecurityGroup', () => {
       const sg = template.Resources.LambdaSecurityGroup;
       expect(sg).toBeDefined();
       expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
-      expect(sg.Properties.VpcId).toEqual({ Ref: 'PrimaryVPCId' });
+      expect(sg.Properties.VpcId).toEqual({ Ref: 'PrimaryVPC' });
     });
 
     test('LambdaSecurityGroup should allow HTTPS egress', () => {
@@ -231,7 +319,15 @@ describe('Aurora Global Database CloudFormation Template', () => {
       const subnetGroup = template.Resources.PrimaryDBSubnetGroup;
       expect(subnetGroup).toBeDefined();
       expect(subnetGroup.Type).toBe('AWS::RDS::DBSubnetGroup');
-      expect(subnetGroup.Properties.SubnetIds).toEqual({ Ref: 'PrimarySubnetIds' });
+    });
+
+    test('PrimaryDBSubnetGroup should reference created subnets', () => {
+      const subnetGroup = template.Resources.PrimaryDBSubnetGroup;
+      expect(subnetGroup.Properties.SubnetIds).toEqual([
+        { Ref: 'PrivateSubnet1' },
+        { Ref: 'PrivateSubnet2' },
+        { Ref: 'PrivateSubnet3' }
+      ]);
     });
 
     test('PrimaryDBSubnetGroup should include environmentSuffix in name', () => {
@@ -472,13 +568,17 @@ describe('Aurora Global Database CloudFormation Template', () => {
       expect(env.ENVIRONMENT_SUFFIX).toEqual({ Ref: 'EnvironmentSuffix' });
     });
 
-    test('PrimaryHealthCheckFunction should be in VPC', () => {
+    test('PrimaryHealthCheckFunction should be in VPC with created subnets', () => {
       const lambda = template.Resources.PrimaryHealthCheckFunction;
       expect(lambda.Properties.VpcConfig).toBeDefined();
       expect(lambda.Properties.VpcConfig.SecurityGroupIds).toEqual([
         { Ref: 'LambdaSecurityGroup' }
       ]);
-      expect(lambda.Properties.VpcConfig.SubnetIds).toEqual({ Ref: 'PrimarySubnetIds' });
+      expect(lambda.Properties.VpcConfig.SubnetIds).toEqual([
+        { Ref: 'PrivateSubnet1' },
+        { Ref: 'PrivateSubnet2' },
+        { Ref: 'PrivateSubnet3' }
+      ]);
     });
 
     test('PrimaryHealthCheckFunction should have inline code', () => {
@@ -613,6 +713,11 @@ describe('Aurora Global Database CloudFormation Template', () => {
       expect(record.Properties.Type).toBe('CNAME');
     });
 
+    test('PrimaryDNSRecord should reference PrivateHostedZone', () => {
+      const record = template.Resources.PrimaryDNSRecord;
+      expect(record.Properties.HostedZoneId).toEqual({ Ref: 'PrivateHostedZone' });
+    });
+
     test('PrimaryDNSRecord should have weighted routing', () => {
       const record = template.Resources.PrimaryDNSRecord;
       expect(record.Properties.SetIdentifier).toBe('Primary');
@@ -645,9 +750,38 @@ describe('Aurora Global Database CloudFormation Template', () => {
         { 'Fn::GetAtt': ['PrimaryCluster', 'ReadEndpoint.Address'] }
       ]);
     });
+
+    test('DNS records should use internal domain names', () => {
+      const primary = template.Resources.PrimaryDNSRecord;
+      const reader = template.Resources.PrimaryReaderDNSRecord;
+      expect(primary.Properties.Name).toEqual({
+        'Fn::Sub': 'db.aurora-${EnvironmentSuffix}.internal'
+      });
+      expect(reader.Properties.Name).toEqual({
+        'Fn::Sub': 'reader.db.aurora-${EnvironmentSuffix}.internal'
+      });
+    });
   });
 
   describe('Outputs', () => {
+    test('should have VpcId output', () => {
+      const output = template.Outputs.VpcId;
+      expect(output).toBeDefined();
+      expect(output.Value).toEqual({ Ref: 'PrimaryVPC' });
+    });
+
+    test('should have subnet outputs', () => {
+      expect(template.Outputs.PrivateSubnet1Id).toBeDefined();
+      expect(template.Outputs.PrivateSubnet2Id).toBeDefined();
+      expect(template.Outputs.PrivateSubnet3Id).toBeDefined();
+    });
+
+    test('should have HostedZoneId output', () => {
+      const output = template.Outputs.HostedZoneId;
+      expect(output).toBeDefined();
+      expect(output.Value).toEqual({ Ref: 'PrivateHostedZone' });
+    });
+
     test('should have GlobalClusterId output', () => {
       const output = template.Outputs.GlobalClusterId;
       expect(output).toBeDefined();
@@ -709,43 +843,30 @@ describe('Aurora Global Database CloudFormation Template', () => {
       expect(template.Outputs.ReaderDNSEndpoint).toBeDefined();
     });
 
-    test('all exports should use stack name prefix', () => {
-      const exportsWithStackName = [
-        'GlobalClusterId',
-        'PrimaryClusterId',
-        'PrimaryClusterEndpoint',
-        'PrimaryClusterReaderEndpoint',
-        'PrimaryKMSKeyId',
-        'PrimaryKMSKeyArn',
-        'AuroraSecurityGroupId',
-        'DBClusterParameterGroupName'
-      ];
-
-      exportsWithStackName.forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        if (output && output.Export) {
-          expect(output.Export.Name).toEqual({
-            'Fn::Sub': `\${AWS::StackName}-${outputKey}`
-          });
-        }
+    test('DNS endpoint outputs should use internal domain format', () => {
+      expect(template.Outputs.DNSEndpoint.Value).toEqual({
+        'Fn::Sub': 'db.aurora-${EnvironmentSuffix}.internal'
+      });
+      expect(template.Outputs.ReaderDNSEndpoint.Value).toEqual({
+        'Fn::Sub': 'reader.db.aurora-${EnvironmentSuffix}.internal'
       });
     });
   });
 
   describe('Resource Count Validation', () => {
-    test('should have exactly 25 resources', () => {
+    test('should have exactly 36 resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(25);
+      expect(resourceCount).toBe(36);
     });
 
-    test('should have exactly 8 parameters', () => {
+    test('should have exactly 5 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(8);
+      expect(parameterCount).toBe(5);
     });
 
-    test('should have exactly 12 outputs', () => {
+    test('should have exactly 17 outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(12);
+      expect(outputCount).toBe(17);
     });
 
     test('should have exactly 1 condition', () => {
@@ -755,7 +876,7 @@ describe('Aurora Global Database CloudFormation Template', () => {
   });
 
   describe('environmentSuffix Usage', () => {
-    test('all resource names should include environmentSuffix', () => {
+    test('key resources should include environmentSuffix', () => {
       const resourcesWithSuffix = [
         'PrimaryKMSKey',
         'PrimaryKMSKeyAlias',
@@ -774,7 +895,9 @@ describe('Aurora Global Database CloudFormation Template', () => {
         'PrimaryHealthCheckSchedule',
         'PrimaryRoute53HealthCheck',
         'PrimaryClusterHealthAlarm',
-        'ReplicationLagAlarm'
+        'ReplicationLagAlarm',
+        'PrivateHostedZone',
+        'PrimaryVPC'
       ];
 
       resourcesWithSuffix.forEach(resourceKey => {
@@ -782,6 +905,41 @@ describe('Aurora Global Database CloudFormation Template', () => {
         const resourceStr = JSON.stringify(resource);
         expect(resourceStr).toMatch(/EnvironmentSuffix/);
       });
+    });
+  });
+
+  describe('Self-Contained Architecture', () => {
+    test('template should create its own VPC', () => {
+      expect(template.Resources.PrimaryVPC).toBeDefined();
+      expect(template.Resources.PrimaryVPC.Type).toBe('AWS::EC2::VPC');
+    });
+
+    test('template should create its own subnets', () => {
+      expect(template.Resources.PrivateSubnet1).toBeDefined();
+      expect(template.Resources.PrivateSubnet2).toBeDefined();
+      expect(template.Resources.PrivateSubnet3).toBeDefined();
+    });
+
+    test('template should create its own private hosted zone', () => {
+      expect(template.Resources.PrivateHostedZone).toBeDefined();
+      expect(template.Resources.PrivateHostedZone.Type).toBe('AWS::Route53::HostedZone');
+    });
+
+    test('all networking should reference created resources', () => {
+      // Security groups should reference created VPC
+      expect(template.Resources.AuroraSecurityGroup.Properties.VpcId).toEqual({ Ref: 'PrimaryVPC' });
+      expect(template.Resources.LambdaSecurityGroup.Properties.VpcId).toEqual({ Ref: 'PrimaryVPC' });
+
+      // Subnet group should reference created subnets
+      expect(template.Resources.PrimaryDBSubnetGroup.Properties.SubnetIds).toEqual([
+        { Ref: 'PrivateSubnet1' },
+        { Ref: 'PrivateSubnet2' },
+        { Ref: 'PrivateSubnet3' }
+      ]);
+
+      // DNS records should reference created hosted zone
+      expect(template.Resources.PrimaryDNSRecord.Properties.HostedZoneId).toEqual({ Ref: 'PrivateHostedZone' });
+      expect(template.Resources.PrimaryReaderDNSRecord.Properties.HostedZoneId).toEqual({ Ref: 'PrivateHostedZone' });
     });
   });
 });

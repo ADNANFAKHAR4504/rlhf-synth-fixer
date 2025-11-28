@@ -25,25 +25,15 @@
     "DBMasterPassword": {
       "Type": "String",
       "NoEcho": true,
+      "Default": "TempPassword123!",
       "Description": "Master password for Aurora database (min 8 characters)",
       "MinLength": 8,
       "MaxLength": 41
     },
-    "PrimaryVPCId": {
-      "Type": "AWS::EC2::VPC::Id",
-      "Description": "VPC ID for primary region (us-east-1)"
-    },
-    "PrimarySubnetIds": {
-      "Type": "List<AWS::EC2::Subnet::Id>",
-      "Description": "At least 3 subnet IDs in different AZs for primary region"
-    },
-    "HostedZoneId": {
-      "Type": "AWS::Route53::HostedZone::Id",
-      "Description": "Route 53 Hosted Zone ID for DNS failover"
-    },
-    "DomainName": {
+    "VpcCidr": {
       "Type": "String",
-      "Description": "Domain name for Aurora endpoints (e.g., db.example.com)"
+      "Default": "10.0.0.0/16",
+      "Description": "CIDR block for the VPC"
     }
   },
   "Conditions": {
@@ -55,6 +45,189 @@
     }
   },
   "Resources": {
+    "PrimaryVPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": {"Ref": "VpcCidr"},
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-vpc-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentSuffix"}
+          }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-igw-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentSuffix"}
+          }
+        ]
+      }
+    },
+    "VPCGatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {"Ref": "PrimaryVPC"},
+        "InternetGatewayId": {"Ref": "InternetGateway"}
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "PrimaryVPC"},
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [0, {"Fn::GetAZs": {"Ref": "AWS::Region"}}]
+        },
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-private-subnet-1-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentSuffix"}
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "PrimaryVPC"},
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [1, {"Fn::GetAZs": {"Ref": "AWS::Region"}}]
+        },
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-private-subnet-2-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentSuffix"}
+          }
+        ]
+      }
+    },
+    "PrivateSubnet3": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "PrimaryVPC"},
+        "CidrBlock": "10.0.3.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [2, {"Fn::GetAZs": {"Ref": "AWS::Region"}}]
+        },
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-private-subnet-3-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentSuffix"}
+          }
+        ]
+      }
+    },
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {"Ref": "PrimaryVPC"},
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-private-rt-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentSuffix"}
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {"Ref": "PrivateSubnet1"},
+        "RouteTableId": {"Ref": "PrivateRouteTable"}
+      }
+    },
+    "PrivateSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {"Ref": "PrivateSubnet2"},
+        "RouteTableId": {"Ref": "PrivateRouteTable"}
+      }
+    },
+    "PrivateSubnet3RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {"Ref": "PrivateSubnet3"},
+        "RouteTableId": {"Ref": "PrivateRouteTable"}
+      }
+    },
+    "PrivateHostedZone": {
+      "Type": "AWS::Route53::HostedZone",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "aurora-${EnvironmentSuffix}.internal"
+        },
+        "VPCs": [
+          {
+            "VPCId": {"Ref": "PrimaryVPC"},
+            "VPCRegion": {"Ref": "AWS::Region"}
+          }
+        ],
+        "HostedZoneConfig": {
+          "Comment": {
+            "Fn::Sub": "Private hosted zone for Aurora cluster - ${EnvironmentSuffix}"
+          }
+        },
+        "HostedZoneTags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-hosted-zone-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentSuffix"}
+          }
+        ]
+      }
+    },
     "PrimaryKMSKey": {
       "Type": "AWS::KMS::Key",
       "Properties": {
@@ -171,7 +344,7 @@
         "GroupDescription": {
           "Fn::Sub": "Security group for Aurora cluster - ${EnvironmentSuffix}"
         },
-        "VpcId": {"Ref": "PrimaryVPCId"},
+        "VpcId": {"Ref": "PrimaryVPC"},
         "Tags": [
           {
             "Key": "Name",
@@ -192,7 +365,7 @@
         "GroupDescription": {
           "Fn::Sub": "Security group for Lambda health check functions - ${EnvironmentSuffix}"
         },
-        "VpcId": {"Ref": "PrimaryVPCId"},
+        "VpcId": {"Ref": "PrimaryVPC"},
         "SecurityGroupEgress": [
           {
             "IpProtocol": "tcp",
@@ -244,7 +417,11 @@
         "DBSubnetGroupDescription": {
           "Fn::Sub": "Subnet group for Aurora primary cluster - ${EnvironmentSuffix}"
         },
-        "SubnetIds": {"Ref": "PrimarySubnetIds"},
+        "SubnetIds": [
+          {"Ref": "PrivateSubnet1"},
+          {"Ref": "PrivateSubnet2"},
+          {"Ref": "PrivateSubnet3"}
+        ],
         "Tags": [
           {
             "Key": "Name",
@@ -507,7 +684,11 @@
           "SecurityGroupIds": [
             {"Ref": "LambdaSecurityGroup"}
           ],
-          "SubnetIds": {"Ref": "PrimarySubnetIds"}
+          "SubnetIds": [
+            {"Ref": "PrivateSubnet1"},
+            {"Ref": "PrivateSubnet2"},
+            {"Ref": "PrivateSubnet3"}
+          ]
         },
         "Environment": {
           "Variables": {
@@ -673,8 +854,10 @@
     "PrimaryDNSRecord": {
       "Type": "AWS::Route53::RecordSet",
       "Properties": {
-        "HostedZoneId": {"Ref": "HostedZoneId"},
-        "Name": {"Ref": "DomainName"},
+        "HostedZoneId": {"Ref": "PrivateHostedZone"},
+        "Name": {
+          "Fn::Sub": "db.aurora-${EnvironmentSuffix}.internal"
+        },
         "Type": "CNAME",
         "SetIdentifier": "Primary",
         "Weight": 100,
@@ -692,9 +875,9 @@
     "PrimaryReaderDNSRecord": {
       "Type": "AWS::Route53::RecordSet",
       "Properties": {
-        "HostedZoneId": {"Ref": "HostedZoneId"},
+        "HostedZoneId": {"Ref": "PrivateHostedZone"},
         "Name": {
-          "Fn::Sub": "reader.${DomainName}"
+          "Fn::Sub": "reader.db.aurora-${EnvironmentSuffix}.internal"
         },
         "Type": "CNAME",
         "SetIdentifier": "PrimaryReader",
@@ -712,6 +895,51 @@
     }
   },
   "Outputs": {
+    "VpcId": {
+      "Description": "VPC ID for the Aurora cluster",
+      "Value": {"Ref": "PrimaryVPC"},
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VpcId"
+        }
+      }
+    },
+    "PrivateSubnet1Id": {
+      "Description": "Private Subnet 1 ID",
+      "Value": {"Ref": "PrivateSubnet1"},
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PrivateSubnet1Id"
+        }
+      }
+    },
+    "PrivateSubnet2Id": {
+      "Description": "Private Subnet 2 ID",
+      "Value": {"Ref": "PrivateSubnet2"},
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PrivateSubnet2Id"
+        }
+      }
+    },
+    "PrivateSubnet3Id": {
+      "Description": "Private Subnet 3 ID",
+      "Value": {"Ref": "PrivateSubnet3"},
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PrivateSubnet3Id"
+        }
+      }
+    },
+    "HostedZoneId": {
+      "Description": "Private hosted zone ID",
+      "Value": {"Ref": "PrivateHostedZone"},
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-HostedZoneId"
+        }
+      }
+    },
     "GlobalClusterId": {
       "Description": "Global cluster identifier",
       "Value": {"Ref": "GlobalCluster"},
@@ -804,12 +1032,14 @@
     },
     "DNSEndpoint": {
       "Description": "Route 53 DNS endpoint for Aurora cluster",
-      "Value": {"Ref": "DomainName"}
+      "Value": {
+        "Fn::Sub": "db.aurora-${EnvironmentSuffix}.internal"
+      }
     },
     "ReaderDNSEndpoint": {
       "Description": "Route 53 DNS endpoint for Aurora reader",
       "Value": {
-        "Fn::Sub": "reader.${DomainName}"
+        "Fn::Sub": "reader.db.aurora-${EnvironmentSuffix}.internal"
       }
     }
   }
