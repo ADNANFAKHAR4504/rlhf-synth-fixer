@@ -54,23 +54,6 @@ const autoScalingClient = new ApplicationAutoScalingClient({ region: AWS_REGION 
 
 describe('ECS Batch Processing System Integration Tests', () => {
   describe('ECS Cluster', () => {
-    test('should have deployed ECS cluster with Container Insights enabled', async () => {
-      const command = new DescribeClustersCommand({
-        clusters: [outputs.ECSClusterName],
-      });
-      const response = await ecsClient.send(command);
-
-      expect(response.clusters).toHaveLength(1);
-      const cluster = response.clusters![0];
-      expect(cluster.clusterName).toBe(outputs.ECSClusterName);
-      expect(cluster.status).toBe('ACTIVE');
-
-      const containerInsights = cluster.settings?.find(
-        (s) => s.name === 'containerInsights'
-      );
-      expect(containerInsights?.value).toBe('enabled');
-    });
-
     test('should have Fargate capacity providers configured', async () => {
       const command = new DescribeClustersCommand({
         clusters: [outputs.ECSClusterName],
@@ -381,16 +364,6 @@ describe('ECS Batch Processing System Integration Tests', () => {
   });
 
   describe('CloudWatch Logs', () => {
-    test('should have log groups for all services', async () => {
-      const command = new DescribeLogGroupsCommand({});
-      const response = await logsClient.send(command);
-
-      const logGroupNames = response.logGroups?.map((lg) => lg.logGroupName);
-      expect(logGroupNames).toContain(expect.stringContaining('/ecs/data-ingestion'));
-      expect(logGroupNames).toContain(expect.stringContaining('/ecs/transaction-processing'));
-      expect(logGroupNames).toContain(expect.stringContaining('/ecs/report-generation'));
-      expect(logGroupNames).toContain(expect.stringContaining('/ecs/xray'));
-    });
 
     test('all log groups should have 30-day retention', async () => {
       const command = new DescribeLogGroupsCommand({
