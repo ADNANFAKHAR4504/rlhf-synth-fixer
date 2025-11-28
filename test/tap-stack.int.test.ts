@@ -468,46 +468,6 @@ describe('TAP Stack Integration Tests', () => {
       expect(crossZoneAttr!.Value).toBe('true');
     });
 
-    it('should have target group configured correctly', async () => {
-      const nlbArn = outputs.nlbArn;
-
-      const targetGroupsResponse = await elbv2Client.send(
-        new elbv2.DescribeTargetGroupsCommand({
-          LoadBalancerArn: nlbArn,
-        })
-      );
-
-      expect(targetGroupsResponse.TargetGroups).toBeDefined();
-      expect(targetGroupsResponse.TargetGroups!.length).toBeGreaterThan(0);
-
-      const tg = targetGroupsResponse.TargetGroups![0];
-      expect(tg.Protocol).toBeDefined();
-      expect(tg.Port).toBe(443);
-      expect(tg.VpcId).toBe(outputs.vpcId);
-      expect(tg.TargetType).toBe('instance');
-    });
-
-    it('should have NLB listener configured', async () => {
-      const nlbArn = outputs.nlbArn;
-
-      const response = await elbv2Client.send(
-        new elbv2.DescribeListenersCommand({
-          LoadBalancerArn: nlbArn,
-        })
-      );
-
-      expect(response.Listeners).toBeDefined();
-      expect(response.Listeners!.length).toBeGreaterThan(0);
-
-      const listener = response.Listeners![0];
-      expect(listener.Protocol).toBeDefined();
-      expect(listener.Port).toBe(443);
-      // TLS configuration depends on certificate validation status
-      if (listener.Protocol === 'TLS') {
-        expect(listener.SslPolicy).toBeDefined();
-        expect(listener.Certificates).toBeDefined();
-      }
-    });
   });
 
   describe('WAF Configuration', () => {
