@@ -362,13 +362,12 @@ export class TapStack extends pulumi.ComponentResource {
         updateConfig: {
           maxUnavailablePercentage: 25,
         },
-        tags: {
+        tags: pulumi.all([cluster.eksCluster.name]).apply(([clusterName]) => ({
           ...defaultTags,
           Name: `eks-node-group-${environmentSuffix}`,
           'k8s.io/cluster-autoscaler/enabled': 'true',
-          [`k8s.io/cluster-autoscaler/eks-cluster-${environmentSuffix}`]:
-            'owned',
-        },
+          [`k8s.io/cluster-autoscaler/${clusterName}`]: 'owned',
+        })),
       },
       {
         parent: this,
@@ -395,13 +394,12 @@ export class TapStack extends pulumi.ComponentResource {
         },
         capacityType: 'ON_DEMAND',
         instanceTypes: ['t3.medium'],
-        tags: {
+        tags: pulumi.all([cluster.eksCluster.name]).apply(([clusterName]) => ({
           ...defaultTags,
           Name: `eks-ondemand-ng-${environmentSuffix}`,
           'k8s.io/cluster-autoscaler/enabled': 'true',
-          [`k8s.io/cluster-autoscaler/eks-cluster-${environmentSuffix}`]:
-            'owned',
-        },
+          [`k8s.io/cluster-autoscaler/${clusterName}`]: 'owned',
+        })),
       },
       {
         parent: this,
@@ -922,7 +920,7 @@ export class TapStack extends pulumi.ComponentResource {
                 app: 'cluster-autoscaler',
               },
               annotations: {
-                'deployment.kubernetes.io/revision': '2',
+                'deployment.kubernetes.io/revision': '3',
               },
             },
             spec: {
@@ -932,7 +930,7 @@ export class TapStack extends pulumi.ComponentResource {
                   name: 'cluster-autoscaler',
                   image:
                     'registry.k8s.io/autoscaling/cluster-autoscaler:v1.28.2',
-                  command: [
+                  command: cluster.eksCluster.name.apply(clusterName => [
                     './cluster-autoscaler',
                     '--v=4',
                     '--stderrthreshold=info',
@@ -942,8 +940,8 @@ export class TapStack extends pulumi.ComponentResource {
                     '--expander=least-waste',
                     '--balance-similar-node-groups',
                     '--skip-nodes-with-system-pods=false',
-                    `--node-group-auto-discovery=asg:tag=k8s.io/cluster-autoscaler/enabled,k8s.io/cluster-autoscaler/eks-cluster-${environmentSuffix}`,
-                  ],
+                    `--node-group-auto-discovery=asg:tag=k8s.io/cluster-autoscaler/enabled,k8s.io/cluster-autoscaler/${clusterName}`,
+                  ]),
                   env: [
                     {
                       name: 'AWS_REGION',
