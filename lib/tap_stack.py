@@ -518,7 +518,7 @@ docker run -d -p 8080:8080 --name payment-processor nginx:latest
             tags={"Name": f"payment-tg-{environment_suffix}"}
         )
 
-        # ALB Listener (dictionary-based default_action)
+        # ALB Listener (dictionary-based default_action with camelCase keys for CDKTF)
         LbListener(
             self,
             "alb_listener",
@@ -529,7 +529,7 @@ docker run -d -p 8080:8080 --name payment-processor nginx:latest
             certificate_arn=certificate.arn,
             default_action=[{
                 "type": "forward",
-                "target_group_arn": target_group.arn
+                "targetGroupArn": target_group.arn
             }]
         )
 
