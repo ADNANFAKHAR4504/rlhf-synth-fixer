@@ -441,11 +441,21 @@ class PaymentProcessingStack(TerraformStack):
 
         # FIX 3: Lambda function with .zip deployment package (created separately)
         # FIX 1: environmentSuffix in Lambda name
+        # Get the project root directory for proper path resolution during deployment
+        # In CI/CD, GITHUB_WORKSPACE provides the project root; locally, use relative to __file__
+        github_workspace = os.environ.get('GITHUB_WORKSPACE')
+        if github_workspace:
+            lambda_zip_path = os.path.join(github_workspace, "lib", "lambda", "payment_webhook.zip")
+        else:
+            # Local development: path relative to this file's location
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            lambda_zip_path = os.path.join(project_root, "lib", "lambda", "payment_webhook.zip")
+
         self.lambda_function = LambdaFunction(
             self,
             f"payment_webhook_{self.environment_suffix}",
             function_name=f"payment-webhook-{self.environment_suffix}",
-            filename="lib/lambda/payment_webhook.zip",  # FIX 3: Proper .zip file
+            filename=lambda_zip_path,  # FIX 3: Using absolute path for deployment
             handler="payment_webhook.handler",
             runtime="python3.11",
             role=self.lambda_role.arn,
