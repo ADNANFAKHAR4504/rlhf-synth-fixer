@@ -1,0 +1,14 @@
+{
+  "language": "python",
+  "app": "python main.py",
+  "projectId": "healthcare-disaster-recovery",
+  "sendCrashReports": false,
+  "terraformProviders": [
+    "aws@~> 5.0"
+  ],
+  "terraformModules": [],
+  "context": {
+    "excludeStackIdFromLogicalIds": "true",
+    "allowSepCharsInLogicalIds": "true"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "po_id": "101912761",
+  "subtask": "VPC with Dual-Stack Networking and Security Controls",
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "startedAt": "2025-11-27T17:56:27.882936",
+  "team": "synth",
+  "region": "us-east-1",
+  "training_quality": 8,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "subject_labels": [
+    "VPC",
+    "Dual-Stack",
+    "Networking",
+    "Security"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "IAM",
+    "CloudWatch Logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

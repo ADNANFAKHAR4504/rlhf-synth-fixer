@@ -1,0 +1,32 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-27T21:56:00-08:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "po_id": "k3a8a4y5",
+  "aws_services": [
+    "VPC",
+    "RDS",
+    "DMS",
+    "Secrets Manager",
+    "Lambda",
+    "CloudWatch",
+    "KMS",
+    "IAM",
+    "EC2"
+  ],
+  "region": "us-east-2",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-28T00:31:41.420470",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
+  ],
+  "po_id": "101912826",
+  "aws_services": [
+    "AWS Database Migration Service",
+    "Amazon RDS Aurora PostgreSQL",
+    "Amazon Route 53",
+    "AWS Systems Manager Parameter Store",
+    "Amazon CloudWatch",
+    "Amazon SNS",
+    "Amazon VPC",
+    "AWS KMS"
+  ],
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

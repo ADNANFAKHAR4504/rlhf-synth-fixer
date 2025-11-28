@@ -1,0 +1,16 @@
+{
+  "extends": "../tsconfig.json",
+  "exclude": [
+    "node_modules",
+    "cdk.out",
+    "templates",
+    "archive",
+    "subcategory-references",
+    "worktree",
+    "test",
+    "tests",
+    "cli",
+    "**/*.d.ts"
+  ],
+  "include": ["../index.ts", "../lib/**/*.ts", "../bin/**/*.ts"]
+}
