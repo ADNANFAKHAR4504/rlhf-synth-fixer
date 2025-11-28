@@ -14,17 +14,7 @@ terraform {
   }
 
   # Partial backend config: values are injected at `terraform init` time
-  backend "s3" {
-    # These values should be provided via backend config file or CLI
-    # terraform init -backend-config="bucket=your-terraform-state-bucket"
-    # key                    = "states/${terraform.workspace}/terraform.tfstate"
-    # encrypt               = true
-    # dynamodb_table        = "terraform-state-locks"
-    # workspace_key_prefix  = "workspaces"
-    bucket = "my-terraform-state-prod-12345-us-east-2"
-    key    = "dev/terraform.tfstate"
-    region = "us-east-2"
-  }
+  backend "s3" {}
 }
 
 # Primary AWS provider for general resources
@@ -1250,12 +1240,12 @@ output "db_subnet_group_name" {
 
 ```hcl
 resource "aws_s3_bucket" "main" {
-  bucket = "${var.environment}-${var.project_name}-app-datas"
+  bucket = "${var.environment}-${var.project_name}-app-data-log"
 
   tags = merge(
     var.common_tags,
     {
-      Name = "${var.environment}-${var.project_name}-app-datas"
+      Name = "${var.environment}-${var.project_name}-app-data-log"
     }
   )
 }
