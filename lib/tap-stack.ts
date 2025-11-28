@@ -632,7 +632,11 @@ export class TapStack extends pulumi.ComponentResource {
           },
         },
       },
-      { provider: k8sProvider, parent: this, dependsOn: [cluster, tigeraNamespace] }
+      {
+        provider: k8sProvider,
+        parent: this,
+        dependsOn: [cluster, tigeraNamespace],
+      }
     );
 
     // Create CloudWatch log group for Fluent Bit
