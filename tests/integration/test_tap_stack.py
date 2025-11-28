@@ -9,7 +9,18 @@ import boto3
 
 # Read outputs from flat-outputs.json
 outputs_path = os.path.join(os.getcwd(), "cfn-outputs", "flat-outputs.json")
-outputs = json.load(open(outputs_path, "r", encoding="utf-8"))
+raw_outputs = json.load(open(outputs_path, "r", encoding="utf-8"))
+
+# Handle nested CDKTF output format: {"TapStackxxx": {"key": "value"}}
+# Flatten by merging all stack outputs into a single dict
+outputs = {}
+for key, value in raw_outputs.items():
+    if isinstance(value, dict):
+        # Nested format - merge the inner dict
+        outputs.update(value)
+    else:
+        # Flat format - use as-is
+        outputs[key] = value
 
 # Get environment variables for region
 region = os.environ.get("AWS_REGION", "us-east-1")
