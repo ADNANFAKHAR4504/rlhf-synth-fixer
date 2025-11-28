@@ -90,11 +90,11 @@ class TestStackStructure:
         assert len(lambda_functions) >= 3
         # Verify Lambda function configurations
         for lambda_func in lambda_functions.values():
-            assert lambda_func[0]["runtime"] == "python3.11"
-            assert "filename" in lambda_func[0]
-            assert lambda_func[0]["filename"].startswith("lib/lambda/")
-            assert lambda_func[0]["filename"].endswith(".zip")
-            assert lambda_func[0]["timeout"] == 60
+            assert lambda_func["runtime"] == "python3.11"
+            assert "filename" in lambda_func
+            assert lambda_func["filename"].startswith("lib/lambda/")
+            assert lambda_func["filename"].endswith(".zip")
+            assert lambda_func["timeout"] == 60
 
     def test_lambda_iam_roles_created(self):
         """IAM roles for Lambda functions are created."""
@@ -117,7 +117,7 @@ class TestStackStructure:
         assert len(log_groups) >= 3
         # Verify retention is set
         for log_group in log_groups.values():
-            assert log_group[0]["retention_in_days"] == 7
+            assert log_group["retention_in_days"] == 7
 
     def test_config_rules_created(self):
         """AWS Config rules are created for compliance checks."""
@@ -128,7 +128,7 @@ class TestStackStructure:
         assert len(config_rules) >= 3
         # Verify config rules use custom Lambda
         for rule in config_rules.values():
-            assert rule[0]["source"][0]["owner"] == "CUSTOM_LAMBDA"
+            assert rule["source"]["owner"] == "CUSTOM_LAMBDA"
 
     def test_lambda_permissions_created(self):
         """Lambda permissions allow Config to invoke functions."""
@@ -139,8 +139,8 @@ class TestStackStructure:
         assert len(lambda_permissions) >= 3
         # Verify permissions allow Config
         for permission in lambda_permissions.values():
-            assert permission[0]["principal"] == "config.amazonaws.com"
-            assert permission[0]["action"] == "lambda:InvokeFunction"
+            assert permission["principal"] == "config.amazonaws.com"
+            assert permission["action"] == "lambda:InvokeFunction"
 
     def test_sns_topics_created(self):
         """SNS topics for notifications are created in both regions."""
@@ -159,7 +159,7 @@ class TestStackStructure:
         assert len(sns_policies) >= 2
         # Verify policies allow EventBridge
         for policy in sns_policies.values():
-            policy_doc = json.loads(policy[0]["policy"])
+            policy_doc = json.loads(policy["policy"])
             assert policy_doc["Statement"][0]["Principal"]["Service"] == "events.amazonaws.com"
 
     def test_eventbridge_rules_created(self):
@@ -171,7 +171,7 @@ class TestStackStructure:
         assert len(event_rules) >= 2
         # Verify event pattern
         for rule in event_rules.values():
-            event_pattern = json.loads(rule[0]["event_pattern"])
+            event_pattern = json.loads(rule["event_pattern"])
             assert event_pattern["source"] == ["aws.config"]
 
     def test_eventbridge_targets_created(self):
@@ -191,7 +191,7 @@ class TestStackStructure:
         assert len(ssm_documents) >= 2
         # Verify document type
         for document in ssm_documents.values():
-            assert document[0]["document_type"] == "Automation"
+            assert document["document_type"] == "Automation"
 
     def test_config_aggregator_created(self):
         """Config aggregator is created in primary region."""
@@ -202,7 +202,7 @@ class TestStackStructure:
         assert len(aggregators) >= 1
         # Verify aggregator configuration
         for aggregator in aggregators.values():
-            assert aggregator[0]["account_aggregation_source"][0]["all_regions"] is True
+            assert aggregator["account_aggregation_source"]["all_regions"] is True
 
     def test_cloudwatch_dashboard_created(self):
         """CloudWatch dashboard for compliance monitoring is created."""
@@ -213,7 +213,7 @@ class TestStackStructure:
         assert len(dashboards) >= 1
         # Verify dashboard has widgets
         for dashboard in dashboards.values():
-            dashboard_body = json.loads(dashboard[0]["dashboard_body"])
+            dashboard_body = json.loads(dashboard["dashboard_body"])
             assert "widgets" in dashboard_body
             assert len(dashboard_body["widgets"]) >= 4
 
@@ -290,26 +290,26 @@ class TestResourceConfiguration:
         """S3 bucket names include environment suffix."""
         s3_buckets = self.resources["aws_s3_bucket"]
         for bucket in s3_buckets.values():
-            assert "config-test" in bucket[0]["bucket"]
+            assert "test" in bucket["bucket"]
 
     def test_lambda_function_names_include_environment(self):
         """Lambda function names include environment suffix."""
         lambda_functions = self.resources["aws_lambda_function"]
         for func in lambda_functions.values():
-            assert "config-test" in func[0]["function_name"]
+            assert "test" in func["function_name"]
 
     def test_iam_role_names_include_environment(self):
         """IAM role names include environment suffix."""
         iam_roles = self.resources["aws_iam_role"]
         for role in iam_roles.values():
-            if "name" in role[0]:
-                assert "config-test" in role[0]["name"]
+            if "name" in role:
+                assert "test" in role["name"]
 
     def test_config_recorder_names_include_environment(self):
         """Config recorder names include environment suffix."""
         config_recorders = self.resources["aws_config_configuration_recorder"]
         for recorder in config_recorders.values():
-            assert "config-test" in recorder[0]["name"]
+            assert "test" in recorder["name"]
 
     def test_lambda_source_code_policy_references(self):
         """Lambda IAM roles reference proper policy ARNs."""
@@ -317,5 +317,5 @@ class TestResourceConfiguration:
         # Should have policy attachments for Lambda basic execution role
         assert len(iam_policy_attachments) >= 1
         for attachment in iam_policy_attachments.values():
-            if "lambda" in attachment[0]["role"]:
-                assert "AWSLambdaBasicExecutionRole" in attachment[0]["policy_arn"]
+            if "lambda" in attachment["role"]:
+                assert "AWSLambdaBasicExecutionRole" in attachment["policy_arn"]

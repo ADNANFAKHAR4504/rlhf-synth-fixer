@@ -159,7 +159,7 @@ class TapStack(TerraformStack):
             self,
             "config_role_primary_policy",
             role=config_role_primary.name,
-            policy_arn="arn:aws:iam::aws:policy/service-role/ConfigRole",
+            policy_arn="arn:aws:iam::aws:policy/service-role/AWS_ConfigRole",
             provider=primary_provider
         )
 
@@ -258,7 +258,7 @@ class TapStack(TerraformStack):
             self,
             "config_role_secondary_policy",
             role=config_role_secondary.name,
-            policy_arn="arn:aws:iam::aws:policy/service-role/ConfigRole",
+            policy_arn="arn:aws:iam::aws:policy/service-role/AWS_ConfigRole",
             provider=secondary_provider
         )
 
