@@ -1,6 +1,49 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
+/**
+ * Configuration interface for TapStack
+ */
+export interface TapStackConfig {
+  environmentSuffix: string;
+  region: string;
+  lambdaMemory: number;
+  lambdaConcurrency: number;
+  enablePitr: boolean;
+  dlqRetries: number;
+  notificationEmail: string;
+}
+
+/**
+ * Load configuration from Pulumi config, environment variables, or defaults
+ */
+export function loadConfig(config: pulumi.Config): TapStackConfig {
+  const environment = pulumi.getStack();
+
+  const environmentSuffix =
+    config.get('environmentSuffix') ??
+    process.env.ENVIRONMENT_SUFFIX ??
+    environment;
+
+  const region = config.get('region') ?? process.env.AWS_REGION ?? 'us-east-1';
+  const lambdaMemory = config.getNumber('lambdaMemory') ?? 512;
+  const lambdaConcurrency = config.getNumber('lambdaConcurrency') ?? 0;
+  const enablePitr = config.getBoolean('enablePitr') ?? false;
+  const dlqRetries = config.getNumber('dlqRetries') ?? 2;
+  const notificationEmail =
+    config.get('notificationEmail') ?? 'test@example.com';
+
+  return {
+    environmentSuffix,
+    region,
+    lambdaMemory,
+    lambdaConcurrency,
+    enablePitr,
+    dlqRetries,
+    notificationEmail,
+  };
+}
+
 interface PaymentProcessorArgs {
   environment: string;
   environmentSuffix: string;
@@ -214,7 +257,8 @@ class PaymentProcessor extends pulumi.ComponentResource {
         architectures: ['arm64'],
         memorySize: args.lambdaMemory,
         timeout: 30,
-        reservedConcurrentExecutions: args.lambdaConcurrency,
+        reservedConcurrentExecutions:
+          args.lambdaConcurrency > 0 ? args.lambdaConcurrency : undefined,
         code: new pulumi.asset.AssetArchive({
           'index.js': new pulumi.asset.StringAsset(`
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -326,20 +370,18 @@ export class TapStack extends pulumi.ComponentResource {
 
     const config = new pulumi.Config();
     const environment = pulumi.getStack();
-    const environmentSuffix =
-      config.get('environmentSuffix') ||
-      process.env.ENVIRONMENT_SUFFIX ||
-      environment;
-    const region =
-      config.get('region') || process.env.AWS_REGION || 'us-east-1';
-    const lambdaMemory = config.getNumber('lambdaMemory') || 512;
-    const lambdaConcurrency = config.getNumber('lambdaConcurrency') || 1;
-    const enablePitr = config.getBoolean('enablePitr') || false;
-    const dlqRetries = config.getNumber('dlqRetries') || 2;
-    const notificationEmail =
-      config.get('notificationEmail') || 'test@example.com';
+    const stackConfig = loadConfig(config);
 
     const resourceOpts = { parent: this };
+    const {
+      environmentSuffix,
+      region,
+      lambdaMemory,
+      lambdaConcurrency,
+      enablePitr,
+      dlqRetries,
+      notificationEmail,
+    } = stackConfig;
 
     // VPC for Lambda
     this.vpc = new aws.ec2.Vpc(
