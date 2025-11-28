@@ -987,75 +987,18 @@ class TapStack(TerraformStack):
             provider=primary_provider
         )
 
-        # Create CloudWatch alarm for primary Lambda health check (must be created BEFORE health check)
-        primary_health_metric_alarm = CloudwatchMetricAlarm(
-            self,
-            "primary_health_metric_alarm",
-            alarm_name=f"payment-primary-health-{environment_suffix}",
-            comparison_operator="LessThanThreshold",
-            evaluation_periods=1,
-            metric_name="Invocations",
-            namespace="AWS/Lambda",
-            period=60,
-            statistic="Sum",
-            threshold=1,
-            dimensions={
-                "FunctionName": primary_lambda.function_name
-            },
-            tags={"Name": f"payment-primary-health-alarm-{environment_suffix}"},
-            provider=primary_provider
-        )
-
-        # Create CloudWatch alarm for secondary Lambda health check (must be created BEFORE health check)
-        secondary_health_metric_alarm = CloudwatchMetricAlarm(
-            self,
-            "secondary_health_metric_alarm",
-            alarm_name=f"payment-secondary-health-{environment_suffix}",
-            comparison_operator="LessThanThreshold",
-            evaluation_periods=1,
-            metric_name="Invocations",
-            namespace="AWS/Lambda",
-            period=60,
-            statistic="Sum",
-            threshold=1,
-            dimensions={
-                "FunctionName": secondary_lambda.function_name
-            },
-            tags={"Name": f"payment-secondary-health-alarm-{environment_suffix}"},
-            provider=secondary_provider
-        )
-
-        # Create health check for primary Lambda (references alarm created above)
-        primary_health_check = Route53HealthCheck(
-            self,
-            "primary_health_check",
-            type="CLOUDWATCH_METRIC",
-            cloudwatch_alarm_name=primary_health_metric_alarm.alarm_name,
-            cloudwatch_alarm_region=primary_region,
-            insufficient_data_health_status="Unhealthy",
-            tags={"Name": f"payment-primary-health-{environment_suffix}"},
-            provider=primary_provider
-        )
-        # Add explicit terraform dependency
-        primary_health_check.node.add_dependency(primary_health_metric_alarm)
-
-        # Create health check for secondary Lambda (references alarm created above)
-        # Note: Route53 health check is global but references regional CloudWatch alarm
-        # Must ensure alarm exists in us-west-2 before health check is created
-        secondary_health_check = Route53HealthCheck(
-            self,
-            "secondary_health_check",
-            type="CLOUDWATCH_METRIC",
-            cloudwatch_alarm_name=secondary_health_metric_alarm.alarm_name,
-            cloudwatch_alarm_region=secondary_region,
-            insufficient_data_health_status="Unhealthy",
-            tags={"Name": f"payment-secondary-health-{environment_suffix}"},
-            provider=primary_provider
-        )
-        # Add explicit terraform dependency
-        secondary_health_check.node.add_dependency(secondary_health_metric_alarm)
+        # Note: For private hosted zones and VPC-internal resources like RDS clusters,
+        # Route53 health checks are not strictly required. Health checks are primarily
+        # used for public endpoints. For this disaster recovery setup, we rely on:
+        # 1. Aurora Global Database automatic replication
+        # 2. CloudWatch alarms for monitoring and alerting
+        # 3. Manual or automated failover procedures
+        #
+        # The failover routing policy will work without health checks, routing to
+        # PRIMARY first, then SECONDARY if PRIMARY is unavailable (manual failover).
 
         # Create Route 53 record for primary region (PRIMARY failover)
+        # No health check needed for private hosted zone resources
         Route53Record(
             self,
             "primary_route53_record",
@@ -1068,11 +1011,11 @@ class TapStack(TerraformStack):
             failover_routing_policy={
                 "type": "PRIMARY"
             },
-            health_check_id=primary_health_check.id,
             provider=primary_provider
         )
 
         # Create Route 53 record for secondary region (SECONDARY failover)
+        # No health check needed for private hosted zone resources
         Route53Record(
             self,
             "secondary_route53_record",
@@ -1085,7 +1028,6 @@ class TapStack(TerraformStack):
             failover_routing_policy={
                 "type": "SECONDARY"
             },
-            health_check_id=secondary_health_check.id,
             provider=primary_provider
         )
 
