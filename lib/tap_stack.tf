@@ -427,8 +427,8 @@ resource "aws_db_instance" "main" {
   max_allocated_storage = var.db_allocated_storage * 2
 
   # Database settings
-  db_name  = "paymentdb"
-  username = "dbadmin"
+  db_name                     = "paymentdb"
+  username                    = "dbadmin"
   manage_master_user_password = true
 
   # Network configuration
