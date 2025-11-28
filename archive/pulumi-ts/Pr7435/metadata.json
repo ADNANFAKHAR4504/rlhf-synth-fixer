@@ -7,7 +7,7 @@
   "platform": "pulumi",
   "language": "ts",
   "complexity": "expert",
-  "turn_type": "multi",
+  "turn_type": "single",
   "team": "synth",
   "startedAt": "2025-11-27T21:58:00.000Z",
   "aws_services": [
@@ -23,9 +23,7 @@
     "KMS",
     "Secrets Manager"
   ],
-  "estimated_deployment_time_minutes": 30,
   "training_quality": 10,
-  "status": "in_progress",
   "coverage": {
     "lines": 100,
     "branches": 100
