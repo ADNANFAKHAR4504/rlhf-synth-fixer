@@ -62,9 +62,14 @@ import '../lib/tap-stack';
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
-// Get configuration
+// Get configuration - use environment variables with Pulumi config as fallback
 const config = new pulumi.Config();
-const environmentSuffix = config.require('environmentSuffix');
+const environmentSuffix =
+  process.env.ENVIRONMENT_SUFFIX || config.get('environmentSuffix') || 'dev';
+const dbPassword =
+  process.env.TF_VAR_db_password ||
+  config.getSecret('dbPassword') ||
+  pulumi.secret('DefaultPassword123!');
 const primaryRegion = 'us-east-1';
 const secondaryRegion = 'us-west-2';
 
@@ -661,7 +666,7 @@ const primaryCluster = new aws.rds.Cluster(
     engineVersion: '15.7',
     databaseName: 'paymentdb',
     masterUsername: 'dbadmin',
-    masterPassword: config.requireSecret('dbPassword'),
+    masterPassword: dbPassword,
     dbSubnetGroupName: primaryDbSubnetGroup.name,
     vpcSecurityGroupIds: [primaryDbSg.id],
     globalClusterIdentifier: globalCluster.id,
