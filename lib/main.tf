@@ -30,8 +30,8 @@ resource "aws_vpc" "main" {
   tags = merge(
     var.tags,
     {
-      Name                                                                  = "eks-vpc-${var.environment_suffix}"
-      Environment                                                           = var.environment
+      Name                                                 = "eks-vpc-${var.environment_suffix}"
+      Environment                                          = var.environment
       "kubernetes.io/cluster/${local.cluster_name_unique}" = "shared"
     }
   )
@@ -61,12 +61,12 @@ resource "aws_subnet" "system_private" {
   tags = merge(
     var.tags,
     {
-      Name                                                                  = "eks-system-private-${var.availability_zones[count.index]}-${var.environment_suffix}"
-      Environment                                                           = var.environment
-      Type                                                                  = "private"
-      NodeGroup                                                             = "system"
+      Name                                                 = "eks-system-private-${var.availability_zones[count.index]}-${var.environment_suffix}"
+      Environment                                          = var.environment
+      Type                                                 = "private"
+      NodeGroup                                            = "system"
       "kubernetes.io/cluster/${local.cluster_name_unique}" = "shared"
-      "kubernetes.io/role/internal-elb"                                     = "1"
+      "kubernetes.io/role/internal-elb"                    = "1"
     }
   )
 }
@@ -82,12 +82,12 @@ resource "aws_subnet" "application_private" {
   tags = merge(
     var.tags,
     {
-      Name                                                                  = "eks-app-private-${var.availability_zones[count.index]}-${var.environment_suffix}"
-      Environment                                                           = var.environment
-      Type                                                                  = "private"
-      NodeGroup                                                             = "application"
+      Name                                                 = "eks-app-private-${var.availability_zones[count.index]}-${var.environment_suffix}"
+      Environment                                          = var.environment
+      Type                                                 = "private"
+      NodeGroup                                            = "application"
       "kubernetes.io/cluster/${local.cluster_name_unique}" = "shared"
-      "kubernetes.io/role/internal-elb"                                     = "1"
+      "kubernetes.io/role/internal-elb"                    = "1"
     }
   )
 }
@@ -103,12 +103,12 @@ resource "aws_subnet" "spot_private" {
   tags = merge(
     var.tags,
     {
-      Name                                                                  = "eks-spot-private-${var.availability_zones[count.index]}-${var.environment_suffix}"
-      Environment                                                           = var.environment
-      Type                                                                  = "private"
-      NodeGroup                                                             = "spot"
+      Name                                                 = "eks-spot-private-${var.availability_zones[count.index]}-${var.environment_suffix}"
+      Environment                                          = var.environment
+      Type                                                 = "private"
+      NodeGroup                                            = "spot"
       "kubernetes.io/cluster/${local.cluster_name_unique}" = "shared"
-      "kubernetes.io/role/internal-elb"                                     = "1"
+      "kubernetes.io/role/internal-elb"                    = "1"
     }
   )
 }
@@ -125,11 +125,11 @@ resource "aws_subnet" "public" {
   tags = merge(
     var.tags,
     {
-      Name                                                                  = "eks-public-${var.availability_zones[count.index]}-${var.environment_suffix}"
-      Environment                                                           = var.environment
-      Type                                                                  = "public"
+      Name                                                 = "eks-public-${var.availability_zones[count.index]}-${var.environment_suffix}"
+      Environment                                          = var.environment
+      Type                                                 = "public"
       "kubernetes.io/cluster/${local.cluster_name_unique}" = "shared"
-      "kubernetes.io/role/elb"                                              = "1"
+      "kubernetes.io/role/elb"                             = "1"
     }
   )
 }

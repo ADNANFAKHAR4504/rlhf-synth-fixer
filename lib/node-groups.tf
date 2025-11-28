@@ -71,11 +71,11 @@ resource "aws_eks_node_group" "system" {
   tags = merge(
     var.tags,
     {
-      Name                                                                      = "eks-system-nodegroup-${var.environment_suffix}"
-      Environment                                                               = var.environment
-      NodeGroup                                                                 = "system"
+      Name                                                     = "eks-system-nodegroup-${var.environment_suffix}"
+      Environment                                              = var.environment
+      NodeGroup                                                = "system"
       "k8s.io/cluster-autoscaler/${local.cluster_name_unique}" = var.enable_cluster_autoscaler ? "owned" : ""
-      "k8s.io/cluster-autoscaler/enabled"                                       = var.enable_cluster_autoscaler ? "true" : "false"
+      "k8s.io/cluster-autoscaler/enabled"                      = var.enable_cluster_autoscaler ? "true" : "false"
     }
   )
 
@@ -120,11 +120,11 @@ resource "aws_eks_node_group" "application" {
   tags = merge(
     var.tags,
     {
-      Name                                                                      = "eks-application-nodegroup-${var.environment_suffix}"
-      Environment                                                               = var.environment
-      NodeGroup                                                                 = "application"
+      Name                                                     = "eks-application-nodegroup-${var.environment_suffix}"
+      Environment                                              = var.environment
+      NodeGroup                                                = "application"
       "k8s.io/cluster-autoscaler/${local.cluster_name_unique}" = var.enable_cluster_autoscaler ? "owned" : ""
-      "k8s.io/cluster-autoscaler/enabled"                                       = var.enable_cluster_autoscaler ? "true" : "false"
+      "k8s.io/cluster-autoscaler/enabled"                      = var.enable_cluster_autoscaler ? "true" : "false"
     }
   )
 
@@ -170,11 +170,11 @@ resource "aws_eks_node_group" "spot" {
   tags = merge(
     var.tags,
     {
-      Name                                                                      = "eks-spot-nodegroup-${var.environment_suffix}"
-      Environment                                                               = var.environment
-      NodeGroup                                                                 = "spot"
+      Name                                                     = "eks-spot-nodegroup-${var.environment_suffix}"
+      Environment                                              = var.environment
+      NodeGroup                                                = "spot"
       "k8s.io/cluster-autoscaler/${local.cluster_name_unique}" = var.enable_cluster_autoscaler ? "owned" : ""
-      "k8s.io/cluster-autoscaler/enabled"                                       = var.enable_cluster_autoscaler ? "true" : "false"
+      "k8s.io/cluster-autoscaler/enabled"                      = var.enable_cluster_autoscaler ? "true" : "false"
     }
   )
 
