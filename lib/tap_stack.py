@@ -547,11 +547,10 @@ class TapStack(TerraformStack):
             )
 
         # Create secondary Aurora cluster (read replica in secondary region)
-        # Note: Secondary clusters in a global database should NOT specify:
-        # - database_name (inherited from global cluster)
-        # - master_username (inherited from global cluster)
-        # - master_password (inherited from global cluster)
-        # They only reference the global cluster and provide regional configuration
+        # Note: For Aurora Global Database, the secondary cluster must be created
+        # from scratch with global_cluster_identifier set from the beginning.
+        # If the cluster already exists standalone, it must be destroyed and recreated.
+        # The create_before_destroy lifecycle ensures zero downtime during recreation.
         secondary_cluster = RdsCluster(
             self,
             "secondary_cluster",
@@ -561,6 +560,7 @@ class TapStack(TerraformStack):
             db_subnet_group_name=secondary_db_subnet_group.name,
             vpc_security_group_ids=[secondary_rds_sg.id],
             global_cluster_identifier=global_cluster.id,
+            source_region=primary_region,  # Required for global database secondary
             kms_key_id=secondary_rds_kms.arn,
             storage_encrypted=True,
             skip_final_snapshot=True,
@@ -568,7 +568,8 @@ class TapStack(TerraformStack):
             provider=secondary_provider,
             depends_on=[primary_cluster, secondary_rds_kms],
             lifecycle={
-                "ignore_changes": ["master_username", "master_password", "database_name"]
+                "create_before_destroy": True,
+                "ignore_changes": ["master_username", "master_password", "database_name", "replication_source_identifier"]
             }
         )
 
