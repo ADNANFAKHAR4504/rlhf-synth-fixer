@@ -90,7 +90,9 @@ I'll create a production-ready CloudFormation template for a serverless cryptocu
     "PriceAlertNotificationsTopic": {
       "Type": "AWS::SNS::Topic",
       "Properties": {
-        "TopicName": { "Fn::Sub": "PriceAlertNotifications-${EnvironmentSuffix}" },
+        "TopicName": {
+          "Fn::Sub": "PriceAlertNotifications-${EnvironmentSuffix}"
+        },
         "KmsMasterKeyId": { "Ref": "PriceAlertsKMSKey" },
         "Tags": [
           { "Key": "Environment", "Value": "Production" },
@@ -101,7 +103,9 @@ I'll create a production-ready CloudFormation template for a serverless cryptocu
     "ProcessPriceChecksLogGroup": {
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
-        "LogGroupName": { "Fn::Sub": "/aws/lambda/ProcessPriceChecks-${EnvironmentSuffix}" },
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/ProcessPriceChecks-${EnvironmentSuffix}"
+        },
         "RetentionInDays": 30,
         "Tags": [
           { "Key": "Environment", "Value": "Production" },
@@ -112,7 +116,9 @@ I'll create a production-ready CloudFormation template for a serverless cryptocu
     "ProcessPriceChecksExecutionRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": { "Fn::Sub": "ProcessPriceChecksRole-${EnvironmentSuffix}" },
+        "RoleName": {
+          "Fn::Sub": "ProcessPriceChecksRole-${EnvironmentSuffix}"
+        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -181,7 +187,9 @@ I'll create a production-ready CloudFormation template for a serverless cryptocu
                 {
                   "Effect": "Allow",
                   "Action": ["logs:CreateLogStream", "logs:PutLogEvents"],
-                  "Resource": { "Fn::GetAtt": ["ProcessPriceChecksLogGroup", "Arn"] }
+                  "Resource": {
+                    "Fn::GetAtt": ["ProcessPriceChecksLogGroup", "Arn"]
+                  }
                 }
               ]
             }
@@ -197,8 +205,10 @@ I'll create a production-ready CloudFormation template for a serverless cryptocu
       "Type": "AWS::Lambda::Function",
       "DependsOn": "ProcessPriceChecksLogGroup",
       "Properties": {
-        "FunctionName": { "Fn::Sub": "ProcessPriceChecks-${EnvironmentSuffix}" },
-        "Runtime": "nodejs18.x",
+        "FunctionName": {
+          "Fn::Sub": "ProcessPriceChecks-${EnvironmentSuffix}"
+        },
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": { "Fn::GetAtt": ["ProcessPriceChecksExecutionRole", "Arn"] },
         "Architectures": ["arm64"],
@@ -246,7 +256,9 @@ I'll create a production-ready CloudFormation template for a serverless cryptocu
     "LambdaExecutionRoleArn": {
       "Description": "ARN of the Lambda execution role",
       "Value": { "Fn::GetAtt": ["ProcessPriceChecksExecutionRole", "Arn"] },
-      "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-LambdaExecutionRoleArn" } }
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-LambdaExecutionRoleArn" }
+      }
     }
   }
 }
@@ -255,13 +267,15 @@ I'll create a production-ready CloudFormation template for a serverless cryptocu
 ## Key Implementation Details
 
 ### 1. DynamoDB Table
+
 - **Partition Key**: `userId` (String) - enables efficient user-specific queries
 - **Sort Key**: `alertId` (String) - allows multiple alerts per user
 - **Billing Mode**: PAY_PER_REQUEST - cost-effective for variable workloads
 - **Point-in-Time Recovery**: Enabled for data protection
 
 ### 2. Lambda Function
-- **Runtime**: Node.js 18.x on ARM64 architecture (Graviton2)
+
+- **Runtime**: Node.js 22.x on ARM64 architecture (Graviton2)
 - **Memory**: 512MB for optimal price/performance ratio
 - **Timeout**: 60 seconds to handle batch operations
 - **Reserved Concurrency**: **REMOVED** - Not configured due to AWS account-level concurrency constraints. In production, this would be set based on load testing and coordinated with AWS support for account limit increases.
@@ -269,15 +283,18 @@ I'll create a production-ready CloudFormation template for a serverless cryptocu
 - **Logging**: CloudWatch Logs with 30-day retention
 
 ### 3. SNS Topic
+
 - **Encryption**: Server-side encryption with customer-managed KMS key
 - **Use Case**: Multi-channel notification delivery (email, SMS, webhooks)
 
 ### 4. KMS Key
+
 - **Purpose**: Encrypt Lambda environment variables and SNS messages
 - **Key Policy**: Grants access to Lambda and SNS services
 - **Alias**: Friendly name for easier management
 
 ### 5. IAM Role
+
 - **Least Privilege**: Explicit resource ARNs (no wildcards)
 - **Policies**:
   - DynamoDB: Full CRUD on PriceAlerts table only
@@ -286,6 +303,7 @@ I'll create a production-ready CloudFormation template for a serverless cryptocu
   - CloudWatch Logs: Write to specific log group only
 
 ### 6. CloudWatch Logs
+
 - **Retention**: 30 days as required
 - **Log Group**: Pre-created to ensure proper permissions
 
@@ -331,6 +349,7 @@ aws cloudformation deploy \\
 ## Testing
 
 The solution includes comprehensive tests:
+
 - **69 unit tests** for CloudFormation template validation
 - **31 Lambda handler unit tests** with 100% code coverage
 - **29 integration tests** validating deployed resources
@@ -359,6 +378,7 @@ AWS accounts have a default concurrent execution limit of 1000, with a minimum o
 
 **Production Recommendation**:
 In a real production environment:
+
 1. Conduct load testing to determine actual concurrency needs
 2. Set reserved concurrency to 5-20 for most workloads (not 100)
 3. Coordinate with AWS support for account limit increases if needed
@@ -366,6 +386,7 @@ In a real production environment:
 
 **Alternative Approach**:
 Instead of reserved concurrency, rely on:
+
 - AWS auto-scaling of Lambda concurrency
 - CloudWatch alarms for throttling
 - SQS queues for buffering during traffic spikes (mentioned as optional enhancement)

@@ -319,11 +319,6 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(lambda.DependsOn).toBe('ProcessPriceChecksLogGroup');
     });
 
-    test('Lambda should use nodejs18.x runtime', () => {
-      const lambda = template.Resources.ProcessPriceChecksFunction;
-      expect(lambda.Properties.Runtime).toBe('nodejs18.x');
-    });
-
     test('Lambda should have correct handler', () => {
       const lambda = template.Resources.ProcessPriceChecksFunction;
       expect(lambda.Properties.Handler).toBe('index.handler');
@@ -444,11 +439,11 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       resourcesWithNames.forEach(resourceName => {
         const resource = template.Resources[resourceName];
         const nameProperty = resource.Properties.TableName ||
-                            resource.Properties.TopicName ||
-                            resource.Properties.LogGroupName ||
-                            resource.Properties.RoleName ||
-                            resource.Properties.FunctionName ||
-                            resource.Properties.AliasName;
+          resource.Properties.TopicName ||
+          resource.Properties.LogGroupName ||
+          resource.Properties.RoleName ||
+          resource.Properties.FunctionName ||
+          resource.Properties.AliasName;
 
         expect(nameProperty).toBeDefined();
         expect(nameProperty['Fn::Sub']).toContain('${EnvironmentSuffix}');

@@ -1,11 +1,11 @@
+import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
+import { DeleteItemCommand, DynamoDBClient, GetItemCommand, PutItemCommand, QueryCommand } from '@aws-sdk/client-dynamodb';
+import { GetRoleCommand, IAMClient, ListAttachedRolePoliciesCommand, ListRolePoliciesCommand } from '@aws-sdk/client-iam';
+import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
+import { GetFunctionCommand, InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
+import { GetTopicAttributesCommand, PublishCommand, SNSClient } from '@aws-sdk/client-sns';
 import * as fs from 'fs';
 import * as path from 'path';
-import { DynamoDBClient, PutItemCommand, GetItemCommand, QueryCommand, DeleteItemCommand } from '@aws-sdk/client-dynamodb';
-import { LambdaClient, InvokeCommand, GetFunctionCommand } from '@aws-sdk/client-lambda';
-import { SNSClient, PublishCommand, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
-import { KMSClient, DescribeKeyCommand } from '@aws-sdk/client-kms';
-import { IAMClient, GetRoleCommand, ListRolePoliciesCommand, ListAttachedRolePoliciesCommand } from '@aws-sdk/client-iam';
-import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
 
 describe('TapStack Integration Tests', () => {
   let outputs: any;
@@ -185,7 +185,7 @@ describe('TapStack Integration Tests', () => {
       const command = new GetFunctionCommand({ FunctionName: functionName });
       const response = await lambdaClient.send(command);
 
-      expect(response.Configuration?.Runtime).toBe('nodejs18.x');
+      expect(response.Configuration?.Runtime).toBe('nodejs22.x');
     });
 
     test('Lambda function should have correct architecture', async () => {

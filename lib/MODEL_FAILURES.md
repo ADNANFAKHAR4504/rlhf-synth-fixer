@@ -10,6 +10,7 @@ The original CloudFormation template had one critical failure that prevented suc
 
 **MODEL_RESPONSE Issue**:
 The template specified `ReservedConcurrentExecutions: 100` for the Lambda function, which conflicts with AWS account concurrency limits. The error was:
+
 ```
 Specified ReservedConcurrentExecutions for function decreases account's UnreservedConcurrentExecution below its minimum value of [100].
 ```
@@ -28,7 +29,7 @@ Remove the `ReservedConcurrentExecutions` property entirely:
     "Type": "AWS::Lambda::Function",
     "Properties": {
       "FunctionName": { "Fn::Sub": "ProcessPriceChecks-${EnvironmentSuffix}" },
-      "Runtime": "nodejs18.x",
+      "Runtime": "nodejs22.x",
       "Handler": "index.handler",
       "Architectures": ["arm64"],
       "MemorySize": 512,
@@ -41,10 +42,12 @@ Remove the `ReservedConcurrentExecutions` property entirely:
 ```
 
 **AWS Documentation Reference**:
+
 - [Lambda Reserved Concurrency](https://docs.aws.amazon.com/lambda/latest/dg/configuration-concurrency.html)
 - AWS requires maintaining at least 100 unreserved concurrent executions per account
 
 **Cost/Security/Performance Impact**:
+
 - **Cost**: Neutral (pay-per-use remains the same)
 - **Performance**: Shared concurrency pool; may experience throttling under extreme load but AWS handles gracefully
 - **Security**: No impact
@@ -52,11 +55,13 @@ Remove the `ReservedConcurrentExecutions` property entirely:
 
 **Why the Model Made This Mistake**:
 The model followed the PROMPT requirement literally without considering:
+
 1. AWS account-level concurrency constraints
 2. The shared nature of the test account
 3. Best practices for reserved concurrency (typically only used for critical production workloads with known traffic patterns)
 
 For a real production system, reserved concurrency should be:
+
 - Calculated based on actual traffic patterns
 - Set to 5-20 for most applications (not 100)
 - Coordinated with account-level limit increases if needed

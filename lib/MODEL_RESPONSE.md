@@ -42,10 +42,7 @@ This is a complete CloudFormation JSON template implementing a serverless crypto
               "Principal": {
                 "Service": "lambda.amazonaws.com"
               },
-              "Action": [
-                "kms:Decrypt",
-                "kms:DescribeKey"
-              ],
+              "Action": ["kms:Decrypt", "kms:DescribeKey"],
               "Resource": "*"
             },
             {
@@ -54,10 +51,7 @@ This is a complete CloudFormation JSON template implementing a serverless crypto
               "Principal": {
                 "Service": "sns.amazonaws.com"
               },
-              "Action": [
-                "kms:Decrypt",
-                "kms:GenerateDataKey"
-              ],
+              "Action": ["kms:Decrypt", "kms:GenerateDataKey"],
               "Resource": "*"
             }
           ]
@@ -205,10 +199,7 @@ This is a complete CloudFormation JSON template implementing a serverless crypto
                     "dynamodb:DeleteItem"
                   ],
                   "Resource": {
-                    "Fn::GetAtt": [
-                      "PriceAlertsTable",
-                      "Arn"
-                    ]
+                    "Fn::GetAtt": ["PriceAlertsTable", "Arn"]
                   }
                 }
               ]
@@ -236,15 +227,9 @@ This is a complete CloudFormation JSON template implementing a serverless crypto
               "Statement": [
                 {
                   "Effect": "Allow",
-                  "Action": [
-                    "kms:Decrypt",
-                    "kms:DescribeKey"
-                  ],
+                  "Action": ["kms:Decrypt", "kms:DescribeKey"],
                   "Resource": {
-                    "Fn::GetAtt": [
-                      "PriceAlertsKMSKey",
-                      "Arn"
-                    ]
+                    "Fn::GetAtt": ["PriceAlertsKMSKey", "Arn"]
                   }
                 }
               ]
@@ -257,15 +242,9 @@ This is a complete CloudFormation JSON template implementing a serverless crypto
               "Statement": [
                 {
                   "Effect": "Allow",
-                  "Action": [
-                    "logs:CreateLogStream",
-                    "logs:PutLogEvents"
-                  ],
+                  "Action": ["logs:CreateLogStream", "logs:PutLogEvents"],
                   "Resource": {
-                    "Fn::GetAtt": [
-                      "ProcessPriceChecksLogGroup",
-                      "Arn"
-                    ]
+                    "Fn::GetAtt": ["ProcessPriceChecksLogGroup", "Arn"]
                   }
                 }
               ]
@@ -291,17 +270,12 @@ This is a complete CloudFormation JSON template implementing a serverless crypto
         "FunctionName": {
           "Fn::Sub": "ProcessPriceChecks-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
-          "Fn::GetAtt": [
-            "ProcessPriceChecksExecutionRole",
-            "Arn"
-          ]
+          "Fn::GetAtt": ["ProcessPriceChecksExecutionRole", "Arn"]
         },
-        "Architectures": [
-          "arm64"
-        ],
+        "Architectures": ["arm64"],
         "MemorySize": 512,
         "Timeout": 60,
         "ReservedConcurrentExecutions": 100,
@@ -322,10 +296,7 @@ This is a complete CloudFormation JSON template implementing a serverless crypto
           }
         },
         "KmsKeyArn": {
-          "Fn::GetAtt": [
-            "PriceAlertsKMSKey",
-            "Arn"
-          ]
+          "Fn::GetAtt": ["PriceAlertsKMSKey", "Arn"]
         },
         "Tags": [
           {
@@ -344,10 +315,7 @@ This is a complete CloudFormation JSON template implementing a serverless crypto
     "LambdaFunctionArn": {
       "Description": "ARN of the ProcessPriceChecks Lambda function",
       "Value": {
-        "Fn::GetAtt": [
-          "ProcessPriceChecksFunction",
-          "Arn"
-        ]
+        "Fn::GetAtt": ["ProcessPriceChecksFunction", "Arn"]
       },
       "Export": {
         "Name": {
@@ -380,10 +348,7 @@ This is a complete CloudFormation JSON template implementing a serverless crypto
     "KMSKeyArn": {
       "Description": "ARN of the customer-managed KMS key",
       "Value": {
-        "Fn::GetAtt": [
-          "PriceAlertsKMSKey",
-          "Arn"
-        ]
+        "Fn::GetAtt": ["PriceAlertsKMSKey", "Arn"]
       },
       "Export": {
         "Name": {
@@ -394,10 +359,7 @@ This is a complete CloudFormation JSON template implementing a serverless crypto
     "LambdaExecutionRoleArn": {
       "Description": "ARN of the Lambda execution role",
       "Value": {
-        "Fn::GetAtt": [
-          "ProcessPriceChecksExecutionRole",
-          "Arn"
-        ]
+        "Fn::GetAtt": ["ProcessPriceChecksExecutionRole", "Arn"]
       },
       "Export": {
         "Name": {
@@ -438,7 +400,7 @@ This is a complete CloudFormation JSON template implementing a serverless crypto
    - Separate policies for DynamoDB, SNS, KMS, and CloudWatch Logs
 
 6. **ProcessPriceChecksFunction**: Lambda function
-   - Node.js 18 runtime
+   - Node.js 22 runtime
    - ARM64 architecture (Graviton2)
    - 512MB memory
    - 100 reserved concurrent executions
