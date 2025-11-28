@@ -527,6 +527,32 @@ const secondaryLambdaSg = new aws.ec2.SecurityGroup(
 // Aurora Global Database
 // ============================================================================
 
+// KMS Key for Aurora Secondary Cluster (required for cross-region encrypted replica)
+const secondaryDbKmsKey = new aws.kms.Key(
+  `kms-aurora-secondary-${environmentSuffix}`,
+  {
+    description: `KMS key for Aurora secondary cluster in ${secondaryRegion}`,
+    deletionWindowInDays: 10,
+    enableKeyRotation: true,
+    tags: {
+      ...commonTags,
+      Name: `kms-aurora-secondary-${environmentSuffix}`,
+      Purpose: 'aurora-encryption',
+    },
+  },
+  { provider: secondaryProvider }
+);
+
+// KMS Key Alias for easier reference
+const secondaryDbKmsAlias = new aws.kms.Alias(
+  `kms-alias-aurora-secondary-${environmentSuffix}`,
+  {
+    name: `alias/aurora-secondary-${environmentSuffix}`,
+    targetKeyId: secondaryDbKmsKey.id,
+  },
+  { provider: secondaryProvider }
+);
+
 // DB Subnet Group - Primary
 const primaryDbSubnetGroup = new aws.rds.SubnetGroup(
   `db-subnet-primary-${environmentSuffix}`,
@@ -639,6 +665,8 @@ const secondaryCluster = new aws.rds.Cluster(
     dbSubnetGroupName: secondaryDbSubnetGroup.name,
     vpcSecurityGroupIds: [secondaryDbSg.id],
     globalClusterIdentifier: globalCluster.id,
+    kmsKeyId: secondaryDbKmsKey.arn,
+    storageEncrypted: true,
     skipFinalSnapshot: true,
     enabledCloudwatchLogsExports: ['postgresql'],
     tags: {
@@ -649,7 +677,7 @@ const secondaryCluster = new aws.rds.Cluster(
   },
   {
     provider: secondaryProvider,
-    dependsOn: [primaryInstance1, primaryInstance2],
+    dependsOn: [primaryInstance1, primaryInstance2, secondaryDbKmsKey],
   }
 );
 
@@ -1543,12 +1571,8 @@ const primaryDashboard = new aws.cloudwatch.Dashboard(
               type: 'metric',
               properties: {
                 metrics: [
-                  [
-                    'DR/DatabaseHealth',
-                    'DatabaseHealth',
-                    { stat: 'Average', region },
-                  ],
-                  ['.', 'DatabaseLatency', { stat: 'Average', region }],
+                  ['DR/DatabaseHealth', 'DatabaseHealth', { stat: 'Average' }],
+                  ['.', 'DatabaseLatency', { stat: 'Average' }],
                 ],
                 period: 60,
                 stat: 'Average',
@@ -1568,12 +1592,12 @@ const primaryDashboard = new aws.cloudwatch.Dashboard(
                   [
                     'AWS/RDS',
                     'CPUUtilization',
-                    { DBClusterIdentifier: clusterId, stat: 'Average' },
+                    { DBClusterIdentifier: clusterId },
                   ],
                   [
                     '.',
                     'DatabaseConnections',
-                    { DBClusterIdentifier: clusterId, stat: 'Average' },
+                    { DBClusterIdentifier: clusterId },
                   ],
                 ],
                 period: 300,
@@ -1591,7 +1615,6 @@ const primaryDashboard = new aws.cloudwatch.Dashboard(
                     'Invocations',
                     {
                       FunctionName: `db-healthcheck-primary-${environmentSuffix}`,
-                      stat: 'Sum',
                     },
                   ],
                   [
@@ -1599,20 +1622,11 @@ const primaryDashboard = new aws.cloudwatch.Dashboard(
                     'Errors',
                     {
                       FunctionName: `db-healthcheck-primary-${environmentSuffix}`,
-                      stat: 'Sum',
-                    },
-                  ],
-                  [
-                    '.',
-                    'Duration',
-                    {
-                      FunctionName: `db-healthcheck-primary-${environmentSuffix}`,
-                      stat: 'Average',
                     },
                   ],
                 ],
                 period: 300,
-                stat: 'Average',
+                stat: 'Sum',
                 region,
                 title: 'Lambda Health Check Metrics',
               },
@@ -1654,12 +1668,8 @@ const secondaryDashboard = new aws.cloudwatch.Dashboard(
               type: 'metric',
               properties: {
                 metrics: [
-                  [
-                    'DR/DatabaseHealth',
-                    'DatabaseHealth',
-                    { stat: 'Average', region },
-                  ],
-                  ['.', 'DatabaseLatency', { stat: 'Average', region }],
+                  ['DR/DatabaseHealth', 'DatabaseHealth', { stat: 'Average' }],
+                  ['.', 'DatabaseLatency', { stat: 'Average' }],
                 ],
                 period: 60,
                 stat: 'Average',
@@ -1679,17 +1689,12 @@ const secondaryDashboard = new aws.cloudwatch.Dashboard(
                   [
                     'AWS/RDS',
                     'CPUUtilization',
-                    { DBClusterIdentifier: clusterId, stat: 'Average' },
-                  ],
-                  [
-                    '.',
-                    'DatabaseConnections',
-                    { DBClusterIdentifier: clusterId, stat: 'Average' },
+                    { DBClusterIdentifier: clusterId },
                   ],
                   [
                     '.',
                     'AuroraGlobalDBReplicationLag',
-                    { DBClusterIdentifier: clusterId, stat: 'Average' },
+                    { DBClusterIdentifier: clusterId },
                   ],
                 ],
                 period: 300,
@@ -1707,7 +1712,6 @@ const secondaryDashboard = new aws.cloudwatch.Dashboard(
                     'Invocations',
                     {
                       FunctionName: `db-healthcheck-secondary-${environmentSuffix}`,
-                      stat: 'Sum',
                     },
                   ],
                   [
@@ -1715,20 +1719,11 @@ const secondaryDashboard = new aws.cloudwatch.Dashboard(
                     'Errors',
                     {
                       FunctionName: `db-healthcheck-secondary-${environmentSuffix}`,
-                      stat: 'Sum',
-                    },
-                  ],
-                  [
-                    '.',
-                    'Duration',
-                    {
-                      FunctionName: `db-healthcheck-secondary-${environmentSuffix}`,
-                      stat: 'Average',
                     },
                   ],
                 ],
                 period: 300,
-                stat: 'Average',
+                stat: 'Sum',
                 region,
                 title: 'Lambda Health Check Metrics',
               },
