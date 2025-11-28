@@ -96,16 +96,85 @@ if [ "$PLATFORM" = "cdk" ]; then
 elif [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ CDKTF project detected, running CDKTF deploy..."
 
-  # Pre-deployment cleanup: Delete orphaned CloudWatch Log Groups that may cause conflicts
-  echo "🧹 Checking for orphaned CloudWatch Log Groups from previous deployments..."
+  # Pre-deployment cleanup: Delete orphaned AWS resources that may cause conflicts
+  echo "🧹 Cleaning up orphaned resources from previous failed deployments..."
+
+  # CloudWatch Log Groups
+  echo "  📋 Checking CloudWatch Log Groups..."
   for log_group_name in "/aws/lambda/webhook-processor-${ENVIRONMENT_SUFFIX}" "/aws/lambda/price-enricher-${ENVIRONMENT_SUFFIX}"; do
     if aws logs describe-log-groups --log-group-name-prefix "$log_group_name" --query "logGroups[?logGroupName=='${log_group_name}'].logGroupName" --output text 2>/dev/null | grep -q "$log_group_name"; then
-      echo "  ⚠️ Found orphaned log group: $log_group_name - deleting..."
+      echo "    ⚠️ Found orphaned log group: $log_group_name - deleting..."
       aws logs delete-log-group --log-group-name "$log_group_name" 2>/dev/null || true
-      echo "  ✅ Deleted $log_group_name"
     fi
   done
-  echo "✅ CloudWatch Log Group cleanup completed"
+
+  # DynamoDB Table
+  echo "  📋 Checking DynamoDB Tables..."
+  DYNAMO_TABLE="crypto-prices-${ENVIRONMENT_SUFFIX}"
+  if aws dynamodb describe-table --table-name "$DYNAMO_TABLE" --query "Table.TableName" --output text 2>/dev/null | grep -q "$DYNAMO_TABLE"; then
+    echo "    ⚠️ Found orphaned DynamoDB table: $DYNAMO_TABLE - deleting..."
+    aws dynamodb delete-table --table-name "$DYNAMO_TABLE" 2>/dev/null || true
+    echo "    ⏳ Waiting for table deletion..."
+    aws dynamodb wait table-not-exists --table-name "$DYNAMO_TABLE" 2>/dev/null || true
+  fi
+
+  # KMS Alias (delete alias before key)
+  echo "  📋 Checking KMS Aliases..."
+  KMS_ALIAS="alias/lambda-crypto-processor-${ENVIRONMENT_SUFFIX}"
+  if aws kms describe-key --key-id "$KMS_ALIAS" --query "KeyMetadata.KeyId" --output text 2>/dev/null; then
+    echo "    ⚠️ Found orphaned KMS alias: $KMS_ALIAS - deleting..."
+    aws kms delete-alias --alias-name "$KMS_ALIAS" 2>/dev/null || true
+  fi
+
+  # SNS Topics
+  echo "  📋 Checking SNS Topics..."
+  SNS_TOPIC_PREFIX="price-updates-success-${ENVIRONMENT_SUFFIX}"
+  SNS_TOPIC_ARN=$(aws sns list-topics --query "Topics[?contains(TopicArn, '${SNS_TOPIC_PREFIX}')].TopicArn" --output text 2>/dev/null || echo "")
+  if [ -n "$SNS_TOPIC_ARN" ] && [ "$SNS_TOPIC_ARN" != "None" ]; then
+    echo "    ⚠️ Found orphaned SNS topic: $SNS_TOPIC_ARN - deleting..."
+    aws sns delete-topic --topic-arn "$SNS_TOPIC_ARN" 2>/dev/null || true
+  fi
+
+  # SQS Queues
+  echo "  📋 Checking SQS Queues..."
+  for queue_name in "webhook-processor-dlq-${ENVIRONMENT_SUFFIX}" "price-enricher-dlq-${ENVIRONMENT_SUFFIX}"; do
+    QUEUE_URL=$(aws sqs get-queue-url --queue-name "$queue_name" --query "QueueUrl" --output text 2>/dev/null || echo "")
+    if [ -n "$QUEUE_URL" ] && [ "$QUEUE_URL" != "None" ]; then
+      echo "    ⚠️ Found orphaned SQS queue: $queue_name - deleting..."
+      aws sqs delete-queue --queue-url "$QUEUE_URL" 2>/dev/null || true
+    fi
+  done
+
+  # IAM Roles (be careful - only delete if orphaned)
+  echo "  📋 Checking IAM Roles..."
+  for role_name in "webhook-processor-role-${ENVIRONMENT_SUFFIX}" "price-enricher-role-${ENVIRONMENT_SUFFIX}"; do
+    if aws iam get-role --role-name "$role_name" --query "Role.RoleName" --output text 2>/dev/null | grep -q "$role_name"; then
+      echo "    ⚠️ Found orphaned IAM role: $role_name - cleaning up..."
+      # Detach all policies first
+      ATTACHED_POLICIES=$(aws iam list-attached-role-policies --role-name "$role_name" --query "AttachedPolicies[].PolicyArn" --output text 2>/dev/null || echo "")
+      for policy_arn in $ATTACHED_POLICIES; do
+        aws iam detach-role-policy --role-name "$role_name" --policy-arn "$policy_arn" 2>/dev/null || true
+      done
+      # Delete inline policies
+      INLINE_POLICIES=$(aws iam list-role-policies --role-name "$role_name" --query "PolicyNames[]" --output text 2>/dev/null || echo "")
+      for policy_name in $INLINE_POLICIES; do
+        aws iam delete-role-policy --role-name "$role_name" --policy-name "$policy_name" 2>/dev/null || true
+      done
+      # Delete the role
+      aws iam delete-role --role-name "$role_name" 2>/dev/null || true
+    fi
+  done
+
+  # Lambda Functions
+  echo "  📋 Checking Lambda Functions..."
+  for func_name in "webhook-processor-${ENVIRONMENT_SUFFIX}" "price-enricher-${ENVIRONMENT_SUFFIX}"; do
+    if aws lambda get-function --function-name "$func_name" --query "Configuration.FunctionName" --output text 2>/dev/null | grep -q "$func_name"; then
+      echo "    ⚠️ Found orphaned Lambda function: $func_name - deleting..."
+      aws lambda delete-function --function-name "$func_name" 2>/dev/null || true
+    fi
+  done
+
+  echo "✅ Orphaned resource cleanup completed"
 
   if [ "$LANGUAGE" = "go" ]; then
     echo "🔧 Ensuring .gen exists for CDKTF Go deploy"
