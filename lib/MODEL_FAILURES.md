@@ -50,3 +50,13 @@ Warning: Invalid Attribute Combination ... No attribute specified when one (and 
 
 **Root Cause:** The `aws_s3_bucket_lifecycle_configuration` resource requires a `filter` block (even if empty) or a `prefix` to define the scope of the rule. Missing this attribute triggers a validation warning in newer AWS provider versions.
 **Fix:** Added an empty `filter {}` block to the lifecycle rule to explicitly apply it to all objects in the bucket.
+
+### **Issue 7 — Step Functions Logging Permissions**
+
+**Error:**
+```
+AccessDeniedException: The state machine IAM Role is not authorized to access the Log Destination
+```
+
+**Root Cause:** The IAM role assigned to the Step Function lacked the specific CloudWatch Logs permissions required to configure and write execution logs. Step Functions requires `logs:CreateLogDelivery`, `logs:PutResourcePolicy`, and related actions to set up logging to a Log Group.
+**Fix:** Updated the `aws_iam_role_policy.step_functions` to include the necessary `logs:*` permissions with `Resource: "*"`.
