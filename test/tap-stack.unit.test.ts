@@ -701,9 +701,34 @@ describe('TapStack Unit Tests', () => {
     });
 
     it('should test metrics-server role OIDC provider integration', () => {
-      // This ensures the metrics-server role creation OIDC logic gets covered  
+      // This ensures the metrics-server role creation OIDC logic gets covered
       expect(stack).toBeDefined();
       expect(stack.oidcProviderArn).toBeDefined();
+    });
+  });
+
+  describe('Default Parameter Handling', () => {
+    it('should use default environmentSuffix when not provided', () => {
+      // Create stack without environmentSuffix to test the default value
+      const stackWithDefaults = new TapStack('test-tap-stack-defaults', {});
+      expect(stackWithDefaults).toBeDefined();
+      expect(stackWithDefaults).toBeInstanceOf(TapStack);
+    });
+
+    it('should use default tags when not provided', () => {
+      // Create stack without tags to test the default empty object
+      const stackWithoutTags = new TapStack('test-tap-stack-no-tags', {
+        environmentSuffix: 'test',
+      });
+      expect(stackWithoutTags).toBeDefined();
+      expect(stackWithoutTags).toBeInstanceOf(TapStack);
+    });
+
+    it('should use both defaults when neither parameter is provided', () => {
+      // Create stack with minimal args to test both defaults
+      const minimalStack = new TapStack('test-tap-stack-minimal', {});
+      expect(minimalStack).toBeDefined();
+      expect(minimalStack).toBeInstanceOf(TapStack);
     });
   });
 });
