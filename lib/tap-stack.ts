@@ -326,7 +326,7 @@ export class TapStack {
 
     // 4. RDS Database
     const dbSubnetGroup = new aws.rds.SubnetGroup(`${name}-db-subnet-group`, {
-      name: `${name.toLowerCase()}-db-subnet-group-${envSuffix}`,
+      name: `${name.toLowerCase()}-db-subnet-group-${envSuffix.toLowerCase()}`,
       subnetIds: this.privateSubnetIds,
       tags: resourceTags.apply(t => ({
         ...t,
