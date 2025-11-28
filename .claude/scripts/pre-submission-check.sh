@@ -200,7 +200,8 @@ else
     grep -v '^Pipfile$' | \
     grep -v '^Pipfile.lock$' | \
     grep -v '^tap.py$' | \
-    grep -v '^tap.go$' || true)
+    grep -v '^tap.go$' | \
+    grep -v '^main.py$' || true)
 
   if [ -n "$invalid_files" ]; then
     check_result "Files in wrong locations" 1

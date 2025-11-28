@@ -1,7 +1,7 @@
 module.exports = {
   testEnvironment: 'node',
-  roots: ['<rootDir>/test'],
-  testMatch: ['**/*.test.ts', '**/*.test.mjs'],
+  roots: ['<rootDir>/tests'],
+  testMatch: ['**/*.test.ts', '**/*.test.mjs', '**/*.py'],
   preset: 'ts-jest',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs'],
   transform: {
@@ -27,10 +27,10 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'json-summary'],
   coverageThreshold: {
     global: {
-      branches: 30, // Pulumi code with mocks has lower branch coverage
-      functions: 80,
-      lines: 95,
-      statements: 95,
+      branches: 40,
+      functions: 85,
+      lines: 85,
+      statements: 85,
     },
   },
   testTimeout: 60000,

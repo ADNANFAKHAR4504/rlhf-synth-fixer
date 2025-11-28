@@ -1,0 +1,854 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Advanced Observability Platform for Microservices Monitoring",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Environment suffix for resource naming uniqueness",
+      "Default": "prod",
+      "AllowedPattern": "[a-z0-9-]+",
+      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+    },
+    "XRaySamplingRate": {
+      "Type": "Number",
+      "Description": "X-Ray sampling rate percentage",
+      "Default": 0.1,
+      "MinValue": 0,
+      "MaxValue": 1,
+      "ConstraintDescription": "Must be between 0 and 1"
+    },
+    "AlertEmail": {
+      "Type": "String",
+      "Default": "alerts@example.com",
+      "Description": "Email address for critical alerts",
+      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+      "ConstraintDescription": "Must be a valid email address"
+    },
+    "AlertPhoneNumber": {
+      "Type": "String",
+      "Default": "+15551234567",
+      "Description": "Phone number for SMS alerts (E.164 format: +1234567890)",
+      "AllowedPattern": "^\\+[1-9]\\d{1,14}$",
+      "ConstraintDescription": "Must be in E.164 format"
+    },
+    "CrossAccountRoleArn": {
+      "Type": "String",
+      "Description": "ARN of the IAM role in the target account for cross-account metric sharing",
+      "Default": "",
+      "AllowedPattern": "(^arn:aws:iam::[0-9]{12}:role/.+$|^$)",
+      "ConstraintDescription": "Must be a valid IAM role ARN or empty"
+    },
+    "Department": {
+      "Type": "String",
+      "Description": "Department name for cost allocation",
+      "Default": "Engineering",
+      "AllowedValues": [
+        "Engineering",
+        "Finance",
+        "Operations",
+        "Security"
+      ]
+    }
+  },
+  "Conditions": {
+    "HasCrossAccountRole": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "CrossAccountRoleArn"
+            },
+            ""
+          ]
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "KMSKey": {
+      "Type": "AWS::KMS::Key",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for SNS encryption - ${EnvironmentSuffix}"
+        },
+        "EnableKeyRotation": true,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow SNS to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "sns.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow CloudWatch to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudwatch.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
+              "Resource": "*"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "observability-kms-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Department",
+            "Value": {
+              "Ref": "Department"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "KMSKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/observability-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "KMSKey"
+        }
+      }
+    },
+    "AlertTopic": {
+      "Type": "AWS::SNS::Topic",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "observability-alerts-${EnvironmentSuffix}"
+        },
+        "DisplayName": "Observability Platform Alerts",
+        "KmsMasterKeyId": {
+          "Ref": "KMSKey"
+        },
+        "Subscription": [
+          {
+            "Endpoint": {
+              "Ref": "AlertEmail"
+            },
+            "Protocol": "email"
+          },
+          {
+            "Endpoint": {
+              "Ref": "AlertPhoneNumber"
+            },
+            "Protocol": "sms"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "observability-alerts-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Department",
+            "Value": {
+              "Ref": "Department"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "MetricsLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/observability/metrics-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "metrics-logs-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Department",
+            "Value": {
+              "Ref": "Department"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "LatencyMetricFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "FilterName": {
+          "Fn::Sub": "latency-extractor-${EnvironmentSuffix}"
+        },
+        "LogGroupName": {
+          "Ref": "MetricsLogGroup"
+        },
+        "FilterPattern": "{$.latency = *}",
+        "MetricTransformations": [
+          {
+            "MetricName": "RequestLatency",
+            "MetricNamespace": {
+              "Fn::Sub": "CustomMetrics/${EnvironmentSuffix}"
+            },
+            "MetricValue": "$.latency",
+            "Unit": "Milliseconds",
+            "DefaultValue": 0
+          }
+        ]
+      }
+    },
+    "ErrorRateMetricFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "FilterName": {
+          "Fn::Sub": "error-rate-extractor-${EnvironmentSuffix}"
+        },
+        "LogGroupName": {
+          "Ref": "MetricsLogGroup"
+        },
+        "FilterPattern": "{$.error = *}",
+        "MetricTransformations": [
+          {
+            "MetricName": "ErrorRate",
+            "MetricNamespace": {
+              "Fn::Sub": "CustomMetrics/${EnvironmentSuffix}"
+            },
+            "MetricValue": "1",
+            "Unit": "Count",
+            "DefaultValue": 0
+          }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "observability-lambda-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+          "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "MetricsProcessingPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:GetLogEvents",
+                    "logs:FilterLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "MetricsLogGroup",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:PutMetricData"
+                  ],
+                  "Resource": "*",
+                  "Condition": {
+                    "StringEquals": {
+                      "cloudwatch:namespace": {
+                        "Fn::Sub": "CustomMetrics/${EnvironmentSuffix}"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "observability-lambda-role-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Department",
+            "Value": {
+              "Ref": "Department"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "MetricsProcessorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "metrics-processor-${EnvironmentSuffix}"
+        },
+        "Description": "Processes custom metrics from CloudWatch Logs",
+        "Runtime": "python3.11",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 60,
+        "MemorySize": 256,
+        "ReservedConcurrentExecutions": 5,
+        "TracingConfig": {
+          "Mode": "Active"
+        },
+        "Environment": {
+          "Variables": {
+            "CUSTOM_NAMESPACE": {
+              "Fn::Sub": "CustomMetrics/${EnvironmentSuffix}"
+            },
+            "LOG_GROUP_NAME": {
+              "Ref": "MetricsLogGroup"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\n\ncloudwatch = boto3.client('cloudwatch')\n\ndef lambda_handler(event, context):\n    namespace = os.environ['CUSTOM_NAMESPACE']\n    metrics = []\n    \n    try:\n        for record in event.get('Records', []):\n            if 'body' in record:\n                data = json.loads(record['body'])\n            else:\n                data = record\n            \n            if 'metrics' in data:\n                for metric in data['metrics']:\n                    metrics.append({\n                        'MetricName': metric.get('name', 'CustomMetric'),\n                        'Value': float(metric.get('value', 0)),\n                        'Unit': metric.get('unit', 'None'),\n                        'Timestamp': datetime.utcnow(),\n                        'Dimensions': [\n                            {\n                                'Name': 'Service',\n                                'Value': metric.get('service', 'default')\n                            }\n                        ]\n                    })\n        \n        if metrics:\n            cloudwatch.put_metric_data(\n                Namespace=namespace,\n                MetricData=metrics\n            )\n            \n        return {\n            'statusCode': 200,\n            'body': json.dumps(f'Processed {len(metrics)} metrics')\n        }\n    except Exception as e:\n        print(f'Error processing metrics: {str(e)}')\n        return {\n            'statusCode': 500,\n            'body': json.dumps(f'Error: {str(e)}')\n        }\n"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "metrics-processor-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Department",
+            "Value": {
+              "Ref": "Department"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "MetricsProcessorLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/metrics-processor-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30,
+        "Tags": [
+          {
+            "Key": "Department",
+            "Value": {
+              "Ref": "Department"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "MetricCollectionRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "metric-collection-schedule-${EnvironmentSuffix}"
+        },
+        "Description": "Triggers metric collection every 5 minutes",
+        "ScheduleExpression": "cron(0/5 * * * ? *)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "MetricsProcessorFunction",
+                "Arn"
+              ]
+            },
+            "Id": "MetricsProcessorTarget",
+            "Input": "{\"triggerType\": \"scheduled\", \"metrics\": []}"
+          }
+        ]
+      }
+    },
+    "MetricCollectionRulePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "MetricsProcessorFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "MetricCollectionRule",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "XRayGroup": {
+      "Type": "AWS::XRay::Group",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "observability-traces-${EnvironmentSuffix}"
+        },
+        "FilterExpression": "service(\"*\") { fault = true OR error = true OR responsetime > 2 }",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "observability-xray-group-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Department",
+            "Value": {
+              "Ref": "Department"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "XRaySamplingRule": {
+      "Type": "AWS::XRay::SamplingRule",
+      "Properties": {
+        "RuleName": {
+          "Fn::Sub": "observability-sampling-${EnvironmentSuffix}"
+        },
+        "SamplingRule": {
+          "RuleName": {
+            "Fn::Sub": "observability-sampling-${EnvironmentSuffix}"
+          },
+          "Priority": 1000,
+          "FixedRate": {
+            "Ref": "XRaySamplingRate"
+          },
+          "ReservoirSize": 1,
+          "ServiceName": "*",
+          "ServiceType": "*",
+          "Host": "*",
+          "HTTPMethod": "*",
+          "URLPath": "*",
+          "Version": 1,
+          "ResourceARN": "*"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "observability-xray-sampling-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Department",
+            "Value": {
+              "Ref": "Department"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "HighLatencyAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "high-latency-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alerts when request latency exceeds threshold",
+        "MetricName": "RequestLatency",
+        "Namespace": {
+          "Fn::Sub": "CustomMetrics/${EnvironmentSuffix}"
+        },
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 1000,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "high-latency-alarm-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Department",
+            "Value": {
+              "Ref": "Department"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "HighErrorRateAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "high-error-rate-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alerts when error rate exceeds threshold",
+        "MetricName": "ErrorRate",
+        "Namespace": {
+          "Fn::Sub": "CustomMetrics/${EnvironmentSuffix}"
+        },
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 10,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "high-error-rate-alarm-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Department",
+            "Value": {
+              "Ref": "Department"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "CompositeAlarm": {
+      "Type": "AWS::CloudWatch::CompositeAlarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "composite-health-check-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Composite alarm that triggers when multiple metrics indicate issues",
+        "AlarmRule": {
+          "Fn::Sub": "ALARM(${HighLatencyAlarm}) OR ALARM(${HighErrorRateAlarm})"
+        },
+        "AlarmActions": [
+          {
+            "Ref": "AlertTopic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "composite-alarm-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Department",
+            "Value": {
+              "Ref": "Department"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "LatencyAnomalyDetector": {
+      "Type": "AWS::CloudWatch::AnomalyDetector",
+      "Properties": {
+        "MetricName": "RequestLatency",
+        "Namespace": {
+          "Fn::Sub": "CustomMetrics/${EnvironmentSuffix}"
+        },
+        "Stat": "Average"
+      }
+    },
+    "ErrorRateAnomalyDetector": {
+      "Type": "AWS::CloudWatch::AnomalyDetector",
+      "Properties": {
+        "MetricName": "ErrorRate",
+        "Namespace": {
+          "Fn::Sub": "CustomMetrics/${EnvironmentSuffix}"
+        },
+        "Stat": "Sum"
+      }
+    },
+    "ObservabilityDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": {
+          "Fn::Sub": "observability-${EnvironmentSuffix}"
+        },
+        "DashboardBody": {
+          "Fn::Sub": [
+            "{\"widgets\":[{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"CustomMetrics/${EnvironmentSuffix}\",\"RequestLatency\",{\"stat\":\"Average\",\"label\":\"Avg Latency\"}],[\".\",\".\",{\"stat\":\"p99\",\"label\":\"P99 Latency\"}],[{\"expression\":\"ANOMALY_DETECTION_BAND(m1)\",\"label\":\"Latency Anomaly Band\",\"id\":\"ad1\"}]],\"view\":\"timeSeries\",\"region\":\"${AWS::Region}\",\"title\":\"Request Latency\",\"period\":300,\"yAxis\":{\"left\":{\"label\":\"Milliseconds\"}}}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"CustomMetrics/${EnvironmentSuffix}\",\"ErrorRate\",{\"stat\":\"Sum\",\"label\":\"Total Errors\"}],[{\"expression\":\"m1/300\",\"label\":\"Error Rate/sec\",\"id\":\"e1\"}]],\"view\":\"timeSeries\",\"region\":\"${AWS::Region}\",\"title\":\"Error Rate\",\"period\":300,\"yAxis\":{\"left\":{\"label\":\"Count\"}}}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/Lambda\",\"Invocations\",{\"stat\":\"Sum\",\"label\":\"Lambda Invocations\"}],[\".\",\"Errors\",{\"stat\":\"Sum\",\"label\":\"Lambda Errors\"}],[{\"expression\":\"(m2/m1)*100\",\"label\":\"Error Percentage\",\"id\":\"e1\"}]],\"view\":\"timeSeries\",\"region\":\"${AWS::Region}\",\"title\":\"Lambda Metrics with Math\",\"period\":300}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/XRay\",\"TraceSummary.ByResponseTime\",{\"stat\":\"Average\"}]],\"view\":\"timeSeries\",\"region\":\"${AWS::Region}\",\"title\":\"X-Ray Trace Summary\",\"period\":300}}]}",
+            {}
+          ]
+        }
+      }
+    },
+    "CrossAccountMetricRole": {
+      "Type": "AWS::IAM::Role",
+      "Condition": "HasCrossAccountRole",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "observability-cross-account-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Ref": "CrossAccountRoleArn"
+                }
+              },
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "sts:ExternalId": {
+                    "Fn::Sub": "observability-${EnvironmentSuffix}"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "CloudWatchMetricSharing",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudwatch:GetMetricData",
+                    "cloudwatch:GetMetricStatistics",
+                    "cloudwatch:ListMetrics"
+                  ],
+                  "Resource": "*",
+                  "Condition": {
+                    "StringEquals": {
+                      "cloudwatch:namespace": {
+                        "Fn::Sub": "CustomMetrics/${EnvironmentSuffix}"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "observability-cross-account-role-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Department",
+            "Value": {
+              "Ref": "Department"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "MetricsLogGroupName": {
+      "Description": "Name of the CloudWatch Logs group for metrics",
+      "Value": {
+        "Ref": "MetricsLogGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-MetricsLogGroup"
+        }
+      }
+    },
+    "MetricsProcessorFunctionArn": {
+      "Description": "ARN of the metrics processor Lambda function",
+      "Value": {
+        "Fn::GetAtt": [
+          "MetricsProcessorFunction",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-MetricsProcessor"
+        }
+      }
+    },
+    "AlertTopicArn": {
+      "Description": "ARN of the SNS topic for alerts",
+      "Value": {
+        "Ref": "AlertTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AlertTopic"
+        }
+      }
+    },
+    "CustomMetricsNamespace": {
+      "Description": "CloudWatch custom metrics namespace",
+      "Value": {
+        "Fn::Sub": "CustomMetrics/${EnvironmentSuffix}"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-MetricsNamespace"
+        }
+      }
+    },
+    "DashboardURL": {
+      "Description": "URL to the CloudWatch dashboard",
+      "Value": {
+        "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=observability-${EnvironmentSuffix}"
+      }
+    },
+    "XRayGroupName": {
+      "Description": "Name of the X-Ray group",
+      "Value": {
+        "Fn::Sub": "observability-traces-${EnvironmentSuffix}"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-XRayGroup"
+        }
+      }
+    },
+    "CrossAccountRoleArn": {
+      "Condition": "HasCrossAccountRole",
+      "Description": "ARN of the cross-account metrics sharing role",
+      "Value": {
+        "Fn::GetAtt": [
+          "CrossAccountMetricRole",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CrossAccountRole"
+        }
+      }
+    }
+  }
+}
