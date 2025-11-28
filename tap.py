@@ -8,7 +8,20 @@ from cdktf import App
 from lib.tap_stack import TapStack
 
 # Get environment variables from the environment or use defaults
-environment_suffix = os.getenv("ENVIRONMENT_SUFFIX", "dev")
+base_environment_suffix = os.getenv("ENVIRONMENT_SUFFIX", "dev")
+github_run_number = os.getenv("GITHUB_RUN_NUMBER", "")
+github_run_id = os.getenv("GITHUB_RUN_ID", "")
+
+# Create unique environment suffix by appending GitHub run number
+# This ensures each CI run creates unique resource names, avoiding conflicts
+if github_run_number:
+    environment_suffix = f"{base_environment_suffix}-run{github_run_number}"
+elif github_run_id:
+    # Fallback to run ID if run number not available (truncated for name length)
+    environment_suffix = f"{base_environment_suffix}-{github_run_id[-8:]}"
+else:
+    environment_suffix = base_environment_suffix
+
 state_bucket = os.getenv("TERRAFORM_STATE_BUCKET", "iac-rlhf-tf-states")
 state_bucket_region = os.getenv("TERRAFORM_STATE_BUCKET_REGION", "us-east-1")
 aws_region = os.getenv("AWS_REGION", "us-east-1")
