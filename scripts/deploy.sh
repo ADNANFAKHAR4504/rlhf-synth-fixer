@@ -66,23 +66,21 @@ if [ "$PLATFORM" = "cdk" ]; then
   STACK_NAME="TapStack${ENVIRONMENT_SUFFIX}"
   STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "NOT_FOUND")
 
-  if [[ "$STACK_STATUS" =~ ^(ROLLBACK_COMPLETE|ROLLBACK_FAILED|UPDATE_ROLLBACK_COMPLETE|UPDATE_ROLLBACK_FAILED|CREATE_FAILED|DELETE_FAILED)$ ]]; then
+  if [[ "$STACK_STATUS" =~ ^(ROLLBACK_COMPLETE|UPDATE_ROLLBACK_COMPLETE|CREATE_FAILED|DELETE_FAILED)$ ]]; then
     echo "⚠️ Stack is in $STACK_STATUS state. Attempting to delete..."
 
     # Try CDK destroy first
     npm run cdk:destroy -- --force || true
 
-    # If stack still exists and in DELETE_FAILED or ROLLBACK_FAILED, force delete with AWS CLI
+    # If stack still exists and in DELETE_FAILED, force delete with AWS CLI
     STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "NOT_FOUND")
 
-    if [[ "$STACK_STATUS" =~ ^(DELETE_FAILED|ROLLBACK_FAILED|UPDATE_ROLLBACK_FAILED)$ ]]; then
-      echo "⚠️ Stack still in $STACK_STATUS state. Force deleting with AWS CLI..."
-      # Try to continue rollback only if not in ROLLBACK_FAILED
-      if [[ "$STACK_STATUS" != "ROLLBACK_FAILED" ]]; then
-        aws cloudformation continue-update-rollback --stack-name "$STACK_NAME" \
-          --resources-to-skip "TapVpcRestrictDefaultSecurityGroupCustomResource2332DAD5" 2>/dev/null || true
-        sleep 5
-      fi
+    if [[ "$STACK_STATUS" == "DELETE_FAILED" ]]; then
+      echo "⚠️ Stack still in DELETE_FAILED state. Force deleting with AWS CLI..."
+      # Get stuck resources and continue-update-rollback to unstick
+      aws cloudformation continue-update-rollback --stack-name "$STACK_NAME" \
+        --resources-to-skip "TapVpcRestrictDefaultSecurityGroupCustomResource2332DAD5" 2>/dev/null || true
+      sleep 5
       # Now try delete again
       aws cloudformation delete-stack --stack-name "$STACK_NAME"
       echo "⏳ Waiting for stack deletion..."
@@ -162,11 +160,11 @@ elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
   fi
 
   # Handle failed states that need cleanup
-  if [[ "$STACK_STATUS" =~ ^(ROLLBACK_COMPLETE|ROLLBACK_FAILED|CREATE_FAILED|UPDATE_ROLLBACK_COMPLETE|UPDATE_ROLLBACK_FAILED|DELETE_FAILED)$ ]]; then
+  if [[ "$STACK_STATUS" =~ ^(ROLLBACK_COMPLETE|CREATE_FAILED|UPDATE_ROLLBACK_COMPLETE|DELETE_FAILED)$ ]]; then
     echo "⚠️ Stack is in $STACK_STATUS state. Deleting stack before redeployment..."
 
-    # Try to continue rollback if stuck (except for ROLLBACK_FAILED which needs direct deletion)
-    if [[ "$STACK_STATUS" =~ ^(ROLLBACK_COMPLETE|UPDATE_ROLLBACK_COMPLETE)$ ]]; then
+    # Try to continue rollback if stuck
+    if [[ "$STACK_STATUS" =~ (ROLLBACK|UPDATE_ROLLBACK) ]]; then
       aws cloudformation continue-update-rollback --stack-name "$STACK_NAME" 2>/dev/null || true
       sleep 10
     fi
@@ -232,11 +230,11 @@ elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
   fi
 
   # Handle failed states that need cleanup
-  if [[ "$STACK_STATUS" =~ ^(ROLLBACK_COMPLETE|ROLLBACK_FAILED|CREATE_FAILED|UPDATE_ROLLBACK_COMPLETE|UPDATE_ROLLBACK_FAILED|DELETE_FAILED)$ ]]; then
+  if [[ "$STACK_STATUS" =~ ^(ROLLBACK_COMPLETE|CREATE_FAILED|UPDATE_ROLLBACK_COMPLETE|DELETE_FAILED)$ ]]; then
     echo "⚠️ Stack is in $STACK_STATUS state. Deleting stack before redeployment..."
 
-    # Try to continue rollback if stuck (except for ROLLBACK_FAILED which needs direct deletion)
-    if [[ "$STACK_STATUS" =~ ^(ROLLBACK_COMPLETE|UPDATE_ROLLBACK_COMPLETE)$ ]]; then
+    # Try to continue rollback if stuck
+    if [[ "$STACK_STATUS" =~ (ROLLBACK|UPDATE_ROLLBACK) ]]; then
       aws cloudformation continue-update-rollback --stack-name "$STACK_NAME" 2>/dev/null || true
       sleep 10
     fi
