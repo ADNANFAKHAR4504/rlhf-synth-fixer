@@ -1,6 +1,6 @@
 env                       = "staging"
 aws_region                = "us-west-1"
-pr_number                 = "pr7457"
+pr_number                 = "pr7511"
 kinesis_stream_mode       = "PROVISIONED"
 kinesis_shard_count       = 2
 dynamodb_billing_mode     = "PROVISIONED"
