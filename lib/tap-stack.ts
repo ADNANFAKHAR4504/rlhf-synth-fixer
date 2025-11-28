@@ -345,26 +345,6 @@ export class TapStack extends pulumi.ComponentResource {
       );
     });
 
-    // Launch template for mixed instances
-    const launchTemplate = new aws.ec2.LaunchTemplate(
-      `eks-node-lt-${environmentSuffix}`,
-      {
-        tagSpecifications: [
-          {
-            resourceType: 'instance',
-            tags: {
-              ...defaultTags,
-              Name: `eks-node-${environmentSuffix}`,
-              'k8s.io/cluster-autoscaler/enabled': 'true',
-              [`k8s.io/cluster-autoscaler/eks-cluster-${environmentSuffix}`]:
-                'owned',
-            },
-          },
-        ],
-      },
-      { parent: this }
-    );
-
     // Managed node group with mixed instances
     const managedNodeGroup = new aws.eks.NodeGroup(
       `eks-node-group-${environmentSuffix}`,
@@ -379,10 +359,6 @@ export class TapStack extends pulumi.ComponentResource {
         },
         capacityType: 'SPOT',
         instanceTypes: ['t3.medium', 't3a.medium', 't2.medium'],
-        launchTemplate: {
-          id: launchTemplate.id,
-          version: '1',
-        },
         updateConfig: {
           maxUnavailablePercentage: 25,
         },
@@ -396,7 +372,7 @@ export class TapStack extends pulumi.ComponentResource {
       },
       {
         parent: this,
-        dependsOn: [cluster, launchTemplate],
+        dependsOn: [cluster],
         customTimeouts: {
           create: '15m',
           update: '15m',
