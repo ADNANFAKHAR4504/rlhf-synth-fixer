@@ -64,8 +64,9 @@ class TestPaymentProcessingStack:
 
         # Verify subnet resources exist
         resources = synth.get('resource', {})
-        subnet_keys = [key for key in resources.keys() if 'aws_subnet' in key]
-        assert len(subnet_keys) >= 4  # At least 2 public + 2 private
+        # Count actual subnet instances, not just resource types
+        subnet_count = sum(len(v) for k, v in resources.items() if 'aws_subnet' in k)
+        assert subnet_count >= 4  # At least 2 public + 2 private
 
     def test_security_groups_created(self):
         """Test Lambda and RDS security groups are created"""
@@ -75,8 +76,9 @@ class TestPaymentProcessingStack:
 
         # Verify security group resources exist
         resources = synth.get('resource', {})
-        sg_keys = [key for key in resources.keys() if 'aws_security_group' in key]
-        assert len(sg_keys) >= 2  # Lambda SG + RDS SG
+        # Count actual security group instances
+        sg_count = sum(len(v) for k, v in resources.items() if 'aws_security_group' in k)
+        assert sg_count >= 2  # Lambda SG + RDS SG
 
     def test_rds_instance_created(self):
         """Test RDS instance is created"""
@@ -330,8 +332,9 @@ class TestPaymentProcessingStack:
 
         # Verify IAM policy attachments exist
         resources = synth.get('resource', {})
-        policy_keys = [key for key in resources.keys() if 'aws_iam_role_policy_attachment' in key]
-        assert len(policy_keys) >= 2  # Basic execution + VPC execution + Secrets
+        # Count actual policy attachment instances
+        policy_count = sum(len(v) for k, v in resources.items() if 'aws_iam_role_policy_attachment' in k)
+        assert policy_count >= 2  # Basic execution + VPC execution + Secrets
 
     def test_kms_alias_created(self):
         """Test KMS alias is created for log encryption key"""
@@ -403,8 +406,9 @@ class TestPaymentProcessingStack:
 
         # Verify route table associations exist
         resources = synth.get('resource', {})
-        rta_keys = [key for key in resources.keys() if 'aws_route_table_association' in key]
-        assert len(rta_keys) >= 4  # 2 public + 2 private subnets
+        # Count actual route table association instances
+        rta_count = sum(len(v) for k, v in resources.items() if 'aws_route_table_association' in k)
+        assert rta_count >= 4  # 2 public + 2 private subnets
 
     def test_lambda_depends_on_log_group(self):
         """Test Lambda function depends on log group creation"""
