@@ -6,9 +6,33 @@ pulumi.runtime.setMocks({
     id: string;
     state: any;
   } {
+    // Add computed properties based on resource type
+    const state = { ...args.inputs };
+
+    // Handle RDS Instance - add endpoint
+    if (args.type === 'aws:rds/instance:Instance') {
+      state.endpoint = `${args.name}.mock-region.rds.amazonaws.com:5432`;
+    }
+
+    // Handle ALB - add dnsName
+    if (args.type === 'aws:lb/loadBalancer:LoadBalancer') {
+      state.dnsName = `${args.name}.mock-region.elb.amazonaws.com`;
+      state.arnSuffix = `app/${args.name}/12345`;
+    }
+
+    // Handle CloudFront Distribution - add domainName
+    if (args.type === 'aws:cloudfront/distribution:Distribution') {
+      state.domainName = `${args.name}.cloudfront.net`;
+    }
+
+    // Handle Target Group - add arnSuffix
+    if (args.type === 'aws:lb/targetGroup:TargetGroup') {
+      state.arnSuffix = `targetgroup/${args.name}/12345`;
+    }
+
     return {
       id: args.name + '_id',
-      state: args.inputs,
+      state: state,
     };
   },
   call: function (args: pulumi.runtime.MockCallArgs) {

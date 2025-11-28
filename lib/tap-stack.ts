@@ -617,6 +617,7 @@ export class TapStack {
     });
 
     // ECS Task Definition
+    const logGroupName = `/ecs/${name.toLowerCase()}-${envSuffix.toLowerCase()}`;
     const taskDefinition = new aws.ecs.TaskDefinition(`${name}-task-def`, {
       family: `${name}-${envSuffix}`,
       cpu: '256',
@@ -638,8 +639,8 @@ export class TapStack {
           logConfiguration: {
             logDriver: 'awslogs',
             options: {
-              'awslogs-group': ecsLogGroup.name,
-              'awslogs-region': aws.config.region!,
+              'awslogs-group': logGroupName,
+              'awslogs-region': 'us-east-1',
               'awslogs-stream-prefix': 'ecs',
             },
           },
