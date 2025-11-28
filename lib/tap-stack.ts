@@ -379,7 +379,10 @@ export class TapStack extends pulumi.ComponentResource {
         instanceTypes: ['t3.medium', 't3a.medium', 't2.medium'],
         launchTemplate: {
           id: launchTemplate.id,
-          version: pulumi.interpolate`${launchTemplate.latestVersion}`,
+          version: '$Latest',
+        },
+        updateConfig: {
+          maxUnavailable: 1,
         },
         tags: {
           ...defaultTags,
@@ -602,6 +605,17 @@ export class TapStack extends pulumi.ComponentResource {
       { provider: k8sProvider, parent: this, dependsOn: [appNamespace] }
     );
 
+    // Create tigera-operator namespace first
+    const tigeraNamespace = new k8s.core.v1.Namespace(
+      'tigera-operator-namespace',
+      {
+        metadata: {
+          name: 'tigera-operator',
+        },
+      },
+      { provider: k8sProvider, parent: this, dependsOn: [cluster] }
+    );
+
     // Install Calico using Helm
     const calicoChart = new k8s.helm.v3.Chart(
       'calico',
@@ -618,7 +632,7 @@ export class TapStack extends pulumi.ComponentResource {
           },
         },
       },
-      { provider: k8sProvider, parent: this, dependsOn: [cluster] }
+      { provider: k8sProvider, parent: this, dependsOn: [cluster, tigeraNamespace] }
     );
 
     // Create CloudWatch log group for Fluent Bit
@@ -730,6 +744,19 @@ export class TapStack extends pulumi.ComponentResource {
           serviceAccount: {
             create: false,
             name: 'fluent-bit',
+          },
+          service: {
+            type: 'ClusterIP',
+            enabled: false,
+          },
+          resources: {
+            limits: {
+              memory: '256Mi',
+            },
+            requests: {
+              cpu: '100m',
+              memory: '128Mi',
+            },
           },
           config: {
             outputs: pulumi.interpolate`[OUTPUT]
