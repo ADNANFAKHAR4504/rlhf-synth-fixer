@@ -518,38 +518,32 @@ export class TapStack extends pulumi.ComponentResource {
     const serviceAccountRole = new aws.iam.Role(
       `eks-sa-role-${environmentSuffix}`,
       {
-        assumeRolePolicy: cluster.core.oidcProvider!.apply(provider => {
-          if (!provider) {
-            throw new Error('OIDC provider is required for IRSA');
-          }
-          const urlStr =
-            typeof provider.url === 'string'
-              ? provider.url
-              : provider.url.toString();
-          const urlWithoutProtocol = urlStr.replace('https://', '');
-          const arnStr =
-            typeof provider.arn === 'string'
-              ? provider.arn
-              : provider.arn.toString();
-          return JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Principal: {
-                  Federated: arnStr,
-                },
-                Action: 'sts:AssumeRoleWithWebIdentity',
-                Condition: {
-                  StringEquals: {
-                    [`${urlWithoutProtocol}:sub`]:
-                      'system:serviceaccount:applications:app-service-account',
+        assumeRolePolicy: pulumi
+          .all([
+            cluster.core.oidcProvider!.url,
+            cluster.core.oidcProvider!.arn,
+          ])
+          .apply(([url, arn]) => {
+            const urlWithoutProtocol = url.replace('https://', '');
+            return JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Principal: {
+                    Federated: arn,
+                  },
+                  Action: 'sts:AssumeRoleWithWebIdentity',
+                  Condition: {
+                    StringEquals: {
+                      [`${urlWithoutProtocol}:sub`]:
+                        'system:serviceaccount:applications:app-service-account',
+                    },
                   },
                 },
-              },
-            ],
-          });
-        }),
+              ],
+            });
+          }),
         tags: defaultTags,
       },
       { parent: this, dependsOn: [cluster] }
@@ -639,38 +633,32 @@ export class TapStack extends pulumi.ComponentResource {
     const fluentBitRole = new aws.iam.Role(
       `fluent-bit-role-${environmentSuffix}`,
       {
-        assumeRolePolicy: cluster.core.oidcProvider!.apply(provider => {
-          if (!provider) {
-            throw new Error('OIDC provider is required for IRSA');
-          }
-          const urlStr =
-            typeof provider.url === 'string'
-              ? provider.url
-              : provider.url.toString();
-          const urlWithoutProtocol = urlStr.replace('https://', '');
-          const arnStr =
-            typeof provider.arn === 'string'
-              ? provider.arn
-              : provider.arn.toString();
-          return JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Principal: {
-                  Federated: arnStr,
-                },
-                Action: 'sts:AssumeRoleWithWebIdentity',
-                Condition: {
-                  StringEquals: {
-                    [`${urlWithoutProtocol}:sub`]:
-                      'system:serviceaccount:kube-system:fluent-bit',
+        assumeRolePolicy: pulumi
+          .all([
+            cluster.core.oidcProvider!.url,
+            cluster.core.oidcProvider!.arn,
+          ])
+          .apply(([url, arn]) => {
+            const urlWithoutProtocol = url.replace('https://', '');
+            return JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Principal: {
+                    Federated: arn,
+                  },
+                  Action: 'sts:AssumeRoleWithWebIdentity',
+                  Condition: {
+                    StringEquals: {
+                      [`${urlWithoutProtocol}:sub`]:
+                        'system:serviceaccount:kube-system:fluent-bit',
+                    },
                   },
                 },
-              },
-            ],
-          });
-        }),
+              ],
+            });
+          }),
         tags: defaultTags,
       },
       { parent: this, dependsOn: [cluster] }
@@ -761,38 +749,32 @@ export class TapStack extends pulumi.ComponentResource {
     const clusterAutoscalerRole = new aws.iam.Role(
       `cluster-autoscaler-role-${environmentSuffix}`,
       {
-        assumeRolePolicy: cluster.core.oidcProvider!.apply(provider => {
-          if (!provider) {
-            throw new Error('OIDC provider is required for IRSA');
-          }
-          const urlStr =
-            typeof provider.url === 'string'
-              ? provider.url
-              : provider.url.toString();
-          const urlWithoutProtocol = urlStr.replace('https://', '');
-          const arnStr =
-            typeof provider.arn === 'string'
-              ? provider.arn
-              : provider.arn.toString();
-          return JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Principal: {
-                  Federated: arnStr,
-                },
-                Action: 'sts:AssumeRoleWithWebIdentity',
-                Condition: {
-                  StringEquals: {
-                    [`${urlWithoutProtocol}:sub`]:
-                      'system:serviceaccount:kube-system:cluster-autoscaler',
+        assumeRolePolicy: pulumi
+          .all([
+            cluster.core.oidcProvider!.url,
+            cluster.core.oidcProvider!.arn,
+          ])
+          .apply(([url, arn]) => {
+            const urlWithoutProtocol = url.replace('https://', '');
+            return JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Principal: {
+                    Federated: arn,
+                  },
+                  Action: 'sts:AssumeRoleWithWebIdentity',
+                  Condition: {
+                    StringEquals: {
+                      [`${urlWithoutProtocol}:sub`]:
+                        'system:serviceaccount:kube-system:cluster-autoscaler',
+                    },
                   },
                 },
-              },
-            ],
-          });
-        }),
+              ],
+            });
+          }),
         tags: defaultTags,
       },
       { parent: this, dependsOn: [cluster] }
