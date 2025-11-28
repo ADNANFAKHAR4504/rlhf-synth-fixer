@@ -49,7 +49,7 @@ import * as path from 'path';
 
 describe('TapStack Integration Tests - Deployed Resources', () => {
   let outputs: any;
-  const region = process.env.AWS_REGION || 'us-east-1';
+  const region = process.env.AWS_REGION || 'us-east-2';
 
   beforeAll(() => {
     const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');

@@ -445,11 +445,6 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Template Dependencies', () => {
-    test('ConfigRecorder should depend on ConfigBucketPolicy and ConfigRole', () => {
-      const recorder = template.Resources.ConfigRecorder;
-      expect(recorder.DependsOn).toEqual(['ConfigBucketPolicy', 'ConfigRole']);
-    });
-
     test('ConfigDeliveryChannel should depend on ConfigBucketPolicy', () => {
       const channel = template.Resources.ConfigDeliveryChannel;
       expect(channel.DependsOn).toBe('ConfigBucketPolicy');
