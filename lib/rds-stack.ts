@@ -86,7 +86,7 @@ export class RdsStack extends pulumi.ComponentResource {
       {
         identifier: `postgres-db-${args.environmentSuffix}`,
         engine: 'postgres',
-        engineVersion: '14.7',
+        engineVersion: '14.15', // Use latest stable PostgreSQL 14.x version
         instanceClass: 'db.t3.medium',
         allocatedStorage: 100,
         storageType: 'gp3',
@@ -141,7 +141,7 @@ export class RdsStack extends pulumi.ComponentResource {
           ...tags,
           Name: `postgres-db-${args.environmentSuffix}`,
           DatabaseEngine: 'PostgreSQL',
-          EngineVersion: '14.7',
+          EngineVersion: '14.15',
         },
       },
       { parent: this }
