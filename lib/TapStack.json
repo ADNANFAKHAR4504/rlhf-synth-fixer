@@ -814,25 +814,6 @@
         }
       }
     },
-    "HostedZoneNameServers": {
-      "Description": "Route 53 Hosted Zone Name Servers",
-      "Value": {
-        "Fn::Join": [
-          ",",
-          {
-            "Fn::GetAtt": [
-              "HostedZone",
-              "NameServers"
-            ]
-          }
-        ]
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "payment-dr-nameservers-${EnvironmentSuffix}"
-        }
-      }
-    },
     "PrimarySNSTopicArn": {
       "Description": "Primary SNS topic ARN for notifications",
       "Value": {

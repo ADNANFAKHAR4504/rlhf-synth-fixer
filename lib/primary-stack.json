@@ -573,10 +573,6 @@
         "Name": {"Fn::Sub": "payment-dr-hosted-zone-${EnvironmentSuffix}"}
       }
     },
-    "HostedZoneNameServers": {
-      "Description": "Route 53 Hosted Zone Name Servers",
-      "Value": {"Fn::Join": [",", {"Fn::GetAtt": ["Route53HostedZone", "NameServers"]}]}
-    },
     "SNSTopicArn": {
       "Description": "SNS Topic ARN for failover notifications",
       "Value": {"Ref": "FailoverNotificationTopic"},

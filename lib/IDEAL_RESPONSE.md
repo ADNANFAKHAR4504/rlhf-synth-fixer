@@ -256,7 +256,6 @@ If lag exceeds 1 second, CloudWatch alarm triggers and SNS notification sent.
 | PrimaryLambdaArn | ARN of primary Lambda function | arn:aws:lambda:us-east-1:342597974367:function:payment-processor-primary-synthf6n9q4 |
 | GlobalClusterId | Global cluster identifier | payment-dr-global-synthf6n9q4 |
 | HostedZoneId | Route 53 hosted zone ID | Z123456789ABCD |
-| HostedZoneNameServers | DNS nameservers | ns-1234.awsdns-12.org,... |
 | SNSTopicArn | Primary SNS topic ARN | arn:aws:sns:us-east-1:342597974367:payment-dr-failover-synthf6n9q4 |
 
 ### Secondary Stack Outputs
@@ -1041,10 +1040,6 @@ The solution achieves:
       "Export": {
         "Name": {"Fn::Sub": "payment-dr-hosted-zone-${EnvironmentSuffix}"}
       }
-    },
-    "HostedZoneNameServers": {
-      "Description": "Route 53 Hosted Zone Name Servers",
-      "Value": {"Fn::Join": [",", {"Fn::GetAtt": ["Route53HostedZone", "NameServers"]}]}
     },
     "SNSTopicArn": {
       "Description": "SNS Topic ARN for failover notifications",

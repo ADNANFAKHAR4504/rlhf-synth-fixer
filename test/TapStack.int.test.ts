@@ -129,7 +129,6 @@ describe('Multi-Region DR Infrastructure Integration Tests', () => {
     test('should have global resources outputs', () => {
       expect(outputs.GlobalClusterId).toBeDefined();
       expect(outputs.HostedZoneId).toBeDefined();
-      expect(outputs.HostedZoneNameServers).toBeDefined();
     });
 
     test('should have consistent environment suffix across resources', () => {
@@ -469,14 +468,7 @@ describe('Multi-Region DR Infrastructure Integration Tests', () => {
       expect(response.HostedZone!.Config?.Comment).toContain('failover');
     });
 
-    test('should have nameservers configured', () => {
-      expect(outputs.HostedZoneNameServers).toBeDefined();
-      const nameservers = outputs.HostedZoneNameServers.split(',');
-      expect(nameservers.length).toBe(4);
-      nameservers.forEach(ns => {
-        expect(ns).toContain('awsdns');
-      });
-    });
+    // Note: HostedZoneNameServers test removed - private hosted zones don't have nameservers
 
     test('should have DNS records with failover routing', async () => {
       const command = new ListResourceRecordSetsCommand({

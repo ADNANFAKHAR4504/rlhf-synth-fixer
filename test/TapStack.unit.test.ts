@@ -477,7 +477,6 @@ describe('CloudFormation Multi-Region DR Template Unit Tests', () => {
       expect(primaryTemplate.Outputs.PrimaryLambdaArn).toBeDefined();
       expect(primaryTemplate.Outputs.GlobalClusterId).toBeDefined();
       expect(primaryTemplate.Outputs.HostedZoneId).toBeDefined();
-      expect(primaryTemplate.Outputs.HostedZoneNameServers).toBeDefined();
       expect(primaryTemplate.Outputs.SNSTopicArn).toBeDefined();
     });
 
@@ -696,7 +695,6 @@ describe('CloudFormation Multi-Region DR Template Unit Tests', () => {
       expect(tapStackTemplate.Outputs.PrimaryClusterEndpoint).toBeDefined();
       expect(tapStackTemplate.Outputs.PrimaryLambdaArn).toBeDefined();
       expect(tapStackTemplate.Outputs.HostedZoneId).toBeDefined();
-      expect(tapStackTemplate.Outputs.HostedZoneNameServers).toBeDefined();
       expect(tapStackTemplate.Outputs.PrimarySNSTopicArn).toBeDefined();
     });
 
