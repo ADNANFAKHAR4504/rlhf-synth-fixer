@@ -1,0 +1,28 @@
+# terraform.tfvars.example
+# Copy to dev.tfvars, staging.tfvars, prod.tfvars and customize
+
+# Region configuration
+aws_region = "us-east-1"
+
+# Environment configuration
+environment        = "dev"
+environment_suffix = "abc123"
+cost_center        = "engineering"
+
+# Networking
+vpc_cidr = "10.0.0.0/16"
+
+# ECS configuration
+container_image    = "nginx:latest"
+container_port     = 80
+task_cpu           = 256
+task_memory        = 512
+desired_count      = 2
+log_retention_days = 7
+
+# RDS configuration
+database_name      = "appdb"
+db_master_username = "admin"
+db_master_password = "ChangeMe123!"
+db_instance_class  = "db.t4g.medium"
+db_instance_count  = 2
