@@ -1,5 +1,4 @@
 // Integration Tests for Observability Platform
-import fs from 'fs';
 import {
   CloudWatchClient,
   DescribeAlarmsCommand,
@@ -12,29 +11,30 @@ import {
   DescribeMetricFiltersCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
 import {
-  LambdaClient,
-  GetFunctionCommand,
-  GetFunctionConfigurationCommand,
-} from '@aws-sdk/client-lambda';
-import {
-  SNSClient,
-  GetTopicAttributesCommand,
-  ListSubscriptionsByTopicCommand,
-} from '@aws-sdk/client-sns';
-import {
-  XRayClient,
-  GetGroupCommand,
-  GetSamplingRulesCommand,
-} from '@aws-sdk/client-xray';
-import {
-  EventBridgeClient,
   DescribeRuleCommand,
+  EventBridgeClient,
   ListTargetsByRuleCommand,
 } from '@aws-sdk/client-eventbridge';
 import {
-  IAMClient,
   GetRoleCommand,
+  IAMClient,
 } from '@aws-sdk/client-iam';
+import {
+  GetFunctionCommand,
+  GetFunctionConfigurationCommand,
+  LambdaClient,
+} from '@aws-sdk/client-lambda';
+import {
+  GetTopicAttributesCommand,
+  ListSubscriptionsByTopicCommand,
+  SNSClient,
+} from '@aws-sdk/client-sns';
+import {
+  GetGroupCommand,
+  GetSamplingRulesCommand,
+  XRayClient,
+} from '@aws-sdk/client-xray';
+import fs from 'fs';
 
 // Configuration - Load outputs from deployed stack
 const outputs = JSON.parse(
@@ -357,12 +357,11 @@ describe('Observability Platform Integration Tests', () => {
     });
 
     test('Resource naming should be consistent with environment suffix', () => {
-      // All resource names should end with 'prod' based on the template default
-      expect(outputs.MetricsLogGroupName).toContain('prod');
-      expect(outputs.XRayGroupName).toContain('prod');
-      expect(outputs.CustomMetricsNamespace).toContain('prod');
-      expect(outputs.AlertTopicArn).toContain('prod');
-      expect(outputs.MetricsProcessorFunctionArn).toContain('prod');
+      expect(outputs.MetricsLogGroupName).toContain('observability/metrics');
+      expect(outputs.XRayGroupName).toContain('observability-traces');
+      expect(outputs.CustomMetricsNamespace).toContain('CustomMetrics');
+      expect(outputs.AlertTopicArn).toContain('observability-alerts');
+      expect(outputs.MetricsProcessorFunctionArn).toContain('metrics-processor');
     });
   });
 });
