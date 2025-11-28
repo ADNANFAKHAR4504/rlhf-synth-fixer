@@ -3,4 +3,3 @@ config:
   TapStack:environmentSuffix: pr7476
   TapStack:environment: production
   TapStack:hostedZoneName: dr-pr7476.example.com
-  TapStack:dbPassword: TempPassword123!

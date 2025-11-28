@@ -659,6 +659,10 @@ elif [ "$PLATFORM" = "pulumi" ]; then
 
     pulumi config set aws:defaultTags "{\"tags\":{\"Environment\":\"$ENVIRONMENT_SUFFIX\",\"Repository\":\"$REPOSITORY\",\"Author\":\"$COMMIT_AUTHOR\",\"PRNumber\":\"$PR_NUMBER\",\"Team\":\"$TEAM\",\"CreatedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"ManagedBy\":\"pulumi\"}}"
 
+    # Set dbPassword as encrypted secret (required for Pulumi stacks with secret config)
+    echo "Setting dbPassword configuration..."
+    pulumi config set TapStack:dbPassword "TempPassword123!" --secret
+
     echo "Deploying infrastructure..."
     if ! pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"; then
       echo "⚠️ Deployment failed, attempting lock recovery..."
