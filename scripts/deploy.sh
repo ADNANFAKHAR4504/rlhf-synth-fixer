@@ -124,14 +124,40 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   RESOURCE_SUFFIX="${ENVIRONMENT_SUFFIX}"
   echo "🧹 Checking for stale AWS resources with suffix: $RESOURCE_SUFFIX"
 
-  # Clean up stale DynamoDB tables
+  # Define regions to clean up (primary and secondary for DR scenarios)
+  CLEANUP_REGIONS="us-east-1 us-west-2"
+
+  # Clean up stale Lambda functions (in all regions)
+  echo "Cleaning up stale Lambda functions..."
+  for region in $CLEANUP_REGIONS; do
+    for func in $(aws lambda list-functions --region "$region" --query "Functions[?contains(FunctionName, '-${RESOURCE_SUFFIX}')].FunctionName" --output text 2>/dev/null || echo ""); do
+      if [ -n "$func" ]; then
+        echo "  Deleting Lambda function: $func (region: $region)"
+        aws lambda delete-function --function-name "$func" --region "$region" 2>/dev/null || echo "  Failed to delete $func"
+      fi
+    done
+  done
+
+  # Clean up stale DynamoDB tables and wait for deletion
   echo "Cleaning up stale DynamoDB tables..."
+  TABLES_TO_DELETE=""
   for table in $(aws dynamodb list-tables --query "TableNames[?contains(@, '-${RESOURCE_SUFFIX}')]" --output text 2>/dev/null || echo ""); do
     if [ -n "$table" ]; then
       echo "  Deleting DynamoDB table: $table"
       aws dynamodb delete-table --table-name "$table" 2>/dev/null || echo "  Failed to delete $table (may not exist)"
+      TABLES_TO_DELETE="$TABLES_TO_DELETE $table"
     fi
   done
+
+  # Wait for DynamoDB tables to be fully deleted
+  if [ -n "$TABLES_TO_DELETE" ]; then
+    echo "  Waiting for DynamoDB tables to be deleted..."
+    for table in $TABLES_TO_DELETE; do
+      echo "  Waiting for table: $table"
+      aws dynamodb wait table-not-exists --table-name "$table" 2>/dev/null || echo "  Table $table deletion wait timed out"
+    done
+    echo "  DynamoDB table deletion complete"
+  fi
 
   # Clean up stale IAM roles
   echo "Cleaning up stale IAM roles..."
@@ -163,13 +189,15 @@ elif [ "$PLATFORM" = "cdktf" ]; then
     fi
   done
 
-  # Clean up stale KMS aliases (keys will be scheduled for deletion)
+  # Clean up stale KMS aliases in all regions (keys will be scheduled for deletion)
   echo "Cleaning up stale KMS aliases..."
-  for alias in $(aws kms list-aliases --query "Aliases[?contains(AliasName, '-${RESOURCE_SUFFIX}')].AliasName" --output text 2>/dev/null || echo ""); do
-    if [ -n "$alias" ]; then
-      echo "  Deleting KMS alias: $alias"
-      aws kms delete-alias --alias-name "$alias" 2>/dev/null || echo "  Failed to delete $alias"
-    fi
+  for region in $CLEANUP_REGIONS; do
+    for alias in $(aws kms list-aliases --region "$region" --query "Aliases[?contains(AliasName, '-${RESOURCE_SUFFIX}')].AliasName" --output text 2>/dev/null || echo ""); do
+      if [ -n "$alias" ]; then
+        echo "  Deleting KMS alias: $alias (region: $region)"
+        aws kms delete-alias --alias-name "$alias" --region "$region" 2>/dev/null || echo "  Failed to delete $alias"
+      fi
+    done
   done
 
   # Clean up stale S3 buckets (must empty first)
@@ -182,6 +210,36 @@ elif [ "$PLATFORM" = "cdktf" ]; then
       aws s3api delete-objects --bucket "$bucket" --delete "$(aws s3api list-object-versions --bucket "$bucket" --query '{Objects: Versions[].{Key: Key, VersionId: VersionId}}' --output json 2>/dev/null || echo '{"Objects": []}')" 2>/dev/null || true
       aws s3api delete-objects --bucket "$bucket" --delete "$(aws s3api list-object-versions --bucket "$bucket" --query '{Objects: DeleteMarkers[].{Key: Key, VersionId: VersionId}}' --output json 2>/dev/null || echo '{"Objects": []}')" 2>/dev/null || true
       aws s3api delete-bucket --bucket "$bucket" 2>/dev/null || echo "  Failed to delete $bucket"
+    fi
+  done
+
+  # Clean up stale Route53 health checks
+  echo "Cleaning up stale Route53 health checks..."
+  for check_id in $(aws route53 list-health-checks --query "HealthChecks[?contains(CallerReference, '-${RESOURCE_SUFFIX}')].Id" --output text 2>/dev/null || echo ""); do
+    if [ -n "$check_id" ]; then
+      echo "  Deleting Route53 health check: $check_id"
+      aws route53 delete-health-check --health-check-id "$check_id" 2>/dev/null || echo "  Failed to delete $check_id"
+    fi
+  done
+
+  # Clean up stale SNS topics (in all regions)
+  echo "Cleaning up stale SNS topics..."
+  for region in $CLEANUP_REGIONS; do
+    for topic_arn in $(aws sns list-topics --region "$region" --query "Topics[?contains(TopicArn, '-${RESOURCE_SUFFIX}')].TopicArn" --output text 2>/dev/null || echo ""); do
+      if [ -n "$topic_arn" ]; then
+        echo "  Deleting SNS topic: $topic_arn"
+        aws sns delete-topic --topic-arn "$topic_arn" --region "$region" 2>/dev/null || echo "  Failed to delete $topic_arn"
+      fi
+    done
+  done
+
+  # Clean up stale CloudWatch alarms (in all regions)
+  echo "Cleaning up stale CloudWatch alarms..."
+  for region in $CLEANUP_REGIONS; do
+    ALARMS=$(aws cloudwatch describe-alarms --region "$region" --query "MetricAlarms[?contains(AlarmName, '-${RESOURCE_SUFFIX}')].AlarmName" --output text 2>/dev/null || echo "")
+    if [ -n "$ALARMS" ]; then
+      echo "  Deleting CloudWatch alarms in $region: $ALARMS"
+      aws cloudwatch delete-alarms --alarm-names $ALARMS --region "$region" 2>/dev/null || echo "  Failed to delete alarms"
     fi
   done
 
