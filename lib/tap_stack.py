@@ -650,6 +650,16 @@ class TapStack(TerraformStack):
             provider=secondary_provider,
             depends_on=[primary_instance]
         )
+        
+        # Add lifecycle block to ignore changes to global_cluster_identifier
+        # This prevents Terraform from trying to modify global_cluster_identifier after initial creation
+        # IMPORTANT: If the secondary cluster already exists as a standalone cluster (without global_cluster_identifier),
+        # it must be manually deleted first before it can be added to the global cluster.
+        # AWS does not allow adding existing standalone clusters to global clusters.
+        # After deletion, Terraform will create a new cluster as part of the global cluster.
+        secondary_cluster.add_override("lifecycle", {
+            "ignore_changes": ["global_cluster_identifier"]
+        })
 
         # Secondary Aurora instance (reader)
         secondary_instance = RdsClusterInstance(
