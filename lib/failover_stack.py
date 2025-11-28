@@ -1,6 +1,8 @@
 """Failover stack for Lambda functions and Route53."""
 
+import os
 from constructs import Construct
+from cdktf import TerraformAsset, AssetType
 from cdktf_cdktf_provider_aws.iam_role import IamRole
 from cdktf_cdktf_provider_aws.iam_role_policy import IamRolePolicy
 from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
@@ -37,6 +39,24 @@ class FailoverStack(Construct):
     ):
         """Initialize failover orchestration infrastructure."""
         super().__init__(scope, construct_id)
+
+        # Create TerraformAssets for Lambda zip files
+        # Use absolute path to lambda directory relative to this file's location
+        lambda_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "lambda")
+
+        health_monitor_asset = TerraformAsset(
+            self,
+            "health_monitor_asset",
+            path=os.path.join(lambda_dir, "health_monitor.zip"),
+            type=AssetType.FILE,
+        )
+
+        failover_trigger_asset = TerraformAsset(
+            self,
+            "failover_trigger_asset",
+            path=os.path.join(lambda_dir, "failover_trigger.zip"),
+            type=AssetType.FILE,
+        )
 
         # Get AWS account ID
         account = DataAwsCallerIdentity(
@@ -217,8 +237,8 @@ class FailoverStack(Construct):
                     "ENVIRONMENT_SUFFIX": environment_suffix,
                 }
             },
-            filename="lambda/health_monitor.zip",
-            source_code_hash="${filebase64sha256(\"lambda/health_monitor.zip\")}",
+            filename=health_monitor_asset.path,
+            source_code_hash=health_monitor_asset.asset_hash,
             tags={
                 "Name": f"aurora-health-monitor-primary-{environment_suffix}",
             },
@@ -248,8 +268,8 @@ class FailoverStack(Construct):
                     "ENVIRONMENT_SUFFIX": environment_suffix,
                 }
             },
-            filename="lambda/failover_trigger.zip",
-            source_code_hash="${filebase64sha256(\"lambda/failover_trigger.zip\")}",
+            filename=failover_trigger_asset.path,
+            source_code_hash=failover_trigger_asset.asset_hash,
             tags={
                 "Name": f"aurora-failover-trigger-primary-{environment_suffix}",
             },
@@ -279,8 +299,8 @@ class FailoverStack(Construct):
                     "ENVIRONMENT_SUFFIX": environment_suffix,
                 }
             },
-            filename="lambda/health_monitor.zip",
-            source_code_hash="${filebase64sha256(\"lambda/health_monitor.zip\")}",
+            filename=health_monitor_asset.path,
+            source_code_hash=health_monitor_asset.asset_hash,
             tags={
                 "Name": f"aurora-health-monitor-secondary-{environment_suffix}",
             },
