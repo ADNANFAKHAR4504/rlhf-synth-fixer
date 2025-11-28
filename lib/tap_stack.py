@@ -33,6 +33,8 @@ from cdktf_cdktf_provider_aws.sns_topic_subscription import SnsTopicSubscription
 from cdktf_cdktf_provider_aws.secretsmanager_secret import SecretsmanagerSecret
 from cdktf_cdktf_provider_aws.secretsmanager_secret_version import SecretsmanagerSecretVersion
 from cdktf_cdktf_provider_aws.data_aws_availability_zones import DataAwsAvailabilityZones
+from cdktf_cdktf_provider_aws.kms_key import KmsKey
+from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
 import json
 import os
 
@@ -387,6 +389,25 @@ class TapStack(TerraformStack):
 
         # ===== RDS AURORA GLOBAL DATABASE =====
 
+        # Create KMS key for secondary RDS cluster (required for cross-region replica)
+        secondary_rds_kms = KmsKey(
+            self,
+            "secondary_rds_kms",
+            description=f"KMS key for RDS Aurora in secondary region - {environment_suffix}",
+            enable_key_rotation=True,
+            tags={"Name": f"payment-rds-kms-usw2-{environment_suffix}"},
+            provider=secondary_provider
+        )
+
+        # Create KMS alias for easier identification
+        KmsAlias(
+            self,
+            "secondary_rds_kms_alias",
+            name=f"alias/payment-rds-usw2-{environment_suffix}",
+            target_key_id=secondary_rds_kms.key_id,
+            provider=secondary_provider
+        )
+
         # Create security group for RDS in primary region
         primary_rds_sg = SecurityGroup(
             self,
@@ -535,10 +556,12 @@ class TapStack(TerraformStack):
             db_subnet_group_name=secondary_db_subnet_group.name,
             vpc_security_group_ids=[secondary_rds_sg.id],
             global_cluster_identifier=global_cluster.id,
+            kms_key_id=secondary_rds_kms.arn,
+            storage_encrypted=True,
             skip_final_snapshot=True,
             tags={"Name": f"payment-cluster-usw2-{environment_suffix}"},
             provider=secondary_provider,
-            depends_on=[primary_cluster]
+            depends_on=[primary_cluster, secondary_rds_kms]
         )
 
         # Create secondary cluster instances
@@ -964,58 +987,68 @@ class TapStack(TerraformStack):
             provider=primary_provider
         )
 
-        # Create health check for primary Lambda
+        # Create CloudWatch alarm for primary Lambda health check (must be created BEFORE health check)
+        primary_health_metric_alarm = CloudwatchMetricAlarm(
+            self,
+            "primary_health_metric_alarm",
+            alarm_name=f"payment-primary-health-{environment_suffix}",
+            comparison_operator="LessThanThreshold",
+            evaluation_periods=1,
+            metric_name="Invocations",
+            namespace="AWS/Lambda",
+            period=60,
+            statistic="Sum",
+            threshold=1,
+            dimensions={
+                "FunctionName": primary_lambda.function_name
+            },
+            tags={"Name": f"payment-primary-health-alarm-{environment_suffix}"},
+            provider=primary_provider
+        )
+
+        # Create CloudWatch alarm for secondary Lambda health check (must be created BEFORE health check)
+        secondary_health_metric_alarm = CloudwatchMetricAlarm(
+            self,
+            "secondary_health_metric_alarm",
+            alarm_name=f"payment-secondary-health-{environment_suffix}",
+            comparison_operator="LessThanThreshold",
+            evaluation_periods=1,
+            metric_name="Invocations",
+            namespace="AWS/Lambda",
+            period=60,
+            statistic="Sum",
+            threshold=1,
+            dimensions={
+                "FunctionName": secondary_lambda.function_name
+            },
+            tags={"Name": f"payment-secondary-health-alarm-{environment_suffix}"},
+            provider=secondary_provider
+        )
+
+        # Create health check for primary Lambda (references alarm created above)
         primary_health_check = Route53HealthCheck(
             self,
             "primary_health_check",
             type="CLOUDWATCH_METRIC",
-            cloudwatch_alarm_name=CloudwatchMetricAlarm(
-                self,
-                "primary_health_metric_alarm",
-                alarm_name=f"payment-primary-health-{environment_suffix}",
-                comparison_operator="LessThanThreshold",
-                evaluation_periods=1,
-                metric_name="Invocations",
-                namespace="AWS/Lambda",
-                period=60,
-                statistic="Sum",
-                threshold=1,
-                dimensions={
-                    "FunctionName": primary_lambda.function_name
-                },
-                provider=primary_provider
-            ).alarm_name,
+            cloudwatch_alarm_name=primary_health_metric_alarm.alarm_name,
             cloudwatch_alarm_region=primary_region,
             insufficient_data_health_status="Unhealthy",
             tags={"Name": f"payment-primary-health-{environment_suffix}"},
-            provider=primary_provider
+            provider=primary_provider,
+            depends_on=[primary_health_metric_alarm]
         )
 
-        # Create health check for secondary Lambda
+        # Create health check for secondary Lambda (references alarm created above)
         secondary_health_check = Route53HealthCheck(
             self,
             "secondary_health_check",
             type="CLOUDWATCH_METRIC",
-            cloudwatch_alarm_name=CloudwatchMetricAlarm(
-                self,
-                "secondary_health_metric_alarm",
-                alarm_name=f"payment-secondary-health-{environment_suffix}",
-                comparison_operator="LessThanThreshold",
-                evaluation_periods=1,
-                metric_name="Invocations",
-                namespace="AWS/Lambda",
-                period=60,
-                statistic="Sum",
-                threshold=1,
-                dimensions={
-                    "FunctionName": secondary_lambda.function_name
-                },
-                provider=secondary_provider
-            ).alarm_name,
+            cloudwatch_alarm_name=secondary_health_metric_alarm.alarm_name,
             cloudwatch_alarm_region=secondary_region,
             insufficient_data_health_status="Unhealthy",
             tags={"Name": f"payment-secondary-health-{environment_suffix}"},
-            provider=primary_provider
+            provider=primary_provider,
+            depends_on=[secondary_health_metric_alarm]
         )
 
         # Create Route 53 record for primary region (PRIMARY failover)
