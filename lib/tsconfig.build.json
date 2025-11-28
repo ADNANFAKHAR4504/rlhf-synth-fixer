@@ -1,5 +1,5 @@
 {
-  "extends": "./tsconfig.json",
+  "extends": "../tsconfig.json",
   "exclude": [
     "node_modules",
     "cdk.out",
@@ -12,5 +12,5 @@
     "cli",
     "**/*.d.ts"
   ],
-  "include": ["index.ts", "lib/**/*.ts", "bin/**/*.ts"]
+  "include": ["../index.ts", "../lib/**/*.ts", "../bin/**/*.ts"]
 }
