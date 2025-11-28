@@ -1,0 +1,27 @@
+{
+  "po_id": "f1s1t7p1",
+  "subtask": "Application Deployment",
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "team": "synth",
+  "region": "us-east-1",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "Lambda",
+    "S3",
+    "API Gateway"
+  ],
+  "startedAt": "2025-11-27T22:00:00.000Z",
+  "training_quality": 0,
+  "status": "in_progress",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
