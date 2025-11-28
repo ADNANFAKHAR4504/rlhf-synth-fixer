@@ -15,7 +15,7 @@ from cdktf_cdktf_provider_aws.eip import Eip
 from cdktf_cdktf_provider_aws.nat_gateway import NatGateway
 from cdktf_cdktf_provider_aws.route_table import RouteTable
 from cdktf_cdktf_provider_aws.route_table_association import RouteTableAssociation
-from cdktf_cdktf_provider_aws.security_group import SecurityGroup
+from cdktf_cdktf_provider_aws.security_group import SecurityGroup, SecurityGroupIngress, SecurityGroupEgress
 from cdktf_cdktf_provider_aws.rds_global_cluster import RdsGlobalCluster
 from cdktf_cdktf_provider_aws.rds_cluster import RdsCluster
 from cdktf_cdktf_provider_aws.rds_cluster_instance import RdsClusterInstance
@@ -251,7 +251,7 @@ class TapStack(TerraformStack):
         )
 
         # Security Groups (Requirement 1)
-        # ALB Security Group (dictionary-based ingress/egress)
+        # ALB Security Group (using typed struct classes)
         alb_sg = SecurityGroup(
             self,
             "alb_sg",
@@ -259,28 +259,30 @@ class TapStack(TerraformStack):
             description="Security group for Application Load Balancer",
             vpc_id=vpc.id,
             ingress=[
-                {
-                    "from_port": 443,
-                    "to_port": 443,
-                    "protocol": "tcp",
-                    "cidr_blocks": ["0.0.0.0/0"],
-                    "description": "HTTPS from internet"
-                },
-                {
-                    "from_port": 80,
-                    "to_port": 80,
-                    "protocol": "tcp",
-                    "cidr_blocks": ["0.0.0.0/0"],
-                    "description": "HTTP from internet"
-                }
+                SecurityGroupIngress(
+                    from_port=443,
+                    to_port=443,
+                    protocol="tcp",
+                    cidr_blocks=["0.0.0.0/0"],
+                    description="HTTPS from internet"
+                ),
+                SecurityGroupIngress(
+                    from_port=80,
+                    to_port=80,
+                    protocol="tcp",
+                    cidr_blocks=["0.0.0.0/0"],
+                    description="HTTP from internet"
+                )
             ],
-            egress=[{
-                "from_port": 0,
-                "to_port": 0,
-                "protocol": "-1",
-                "cidr_blocks": ["0.0.0.0/0"],
-                "description": "All outbound traffic"
-            }],
+            egress=[
+                SecurityGroupEgress(
+                    from_port=0,
+                    to_port=0,
+                    protocol="-1",
+                    cidr_blocks=["0.0.0.0/0"],
+                    description="All outbound traffic"
+                )
+            ],
             tags={"Name": f"alb-sg-{environment_suffix}"}
         )
 
@@ -292,28 +294,30 @@ class TapStack(TerraformStack):
             description="Security group for EC2 instances",
             vpc_id=vpc.id,
             ingress=[
-                {
-                    "from_port": 443,
-                    "to_port": 443,
-                    "protocol": "tcp",
-                    "security_groups": [alb_sg.id],
-                    "description": "HTTPS from ALB"
-                },
-                {
-                    "from_port": 8080,
-                    "to_port": 8080,
-                    "protocol": "tcp",
-                    "security_groups": [alb_sg.id],
-                    "description": "App port from ALB"
-                }
+                SecurityGroupIngress(
+                    from_port=443,
+                    to_port=443,
+                    protocol="tcp",
+                    security_groups=[alb_sg.id],
+                    description="HTTPS from ALB"
+                ),
+                SecurityGroupIngress(
+                    from_port=8080,
+                    to_port=8080,
+                    protocol="tcp",
+                    security_groups=[alb_sg.id],
+                    description="App port from ALB"
+                )
             ],
-            egress=[{
-                "from_port": 0,
-                "to_port": 0,
-                "protocol": "-1",
-                "cidr_blocks": ["0.0.0.0/0"],
-                "description": "All outbound traffic"
-            }],
+            egress=[
+                SecurityGroupEgress(
+                    from_port=0,
+                    to_port=0,
+                    protocol="-1",
+                    cidr_blocks=["0.0.0.0/0"],
+                    description="All outbound traffic"
+                )
+            ],
             tags={"Name": f"ec2-sg-{environment_suffix}"}
         )
 
@@ -324,20 +328,24 @@ class TapStack(TerraformStack):
             name=f"aurora-sg-{environment_suffix}",
             description="Security group for Aurora cluster",
             vpc_id=vpc.id,
-            ingress=[{
-                "from_port": 3306,
-                "to_port": 3306,
-                "protocol": "tcp",
-                "security_groups": [ec2_sg.id],
-                "description": "MySQL from EC2"
-            }],
-            egress=[{
-                "from_port": 0,
-                "to_port": 0,
-                "protocol": "-1",
-                "cidr_blocks": ["0.0.0.0/0"],
-                "description": "All outbound traffic"
-            }],
+            ingress=[
+                SecurityGroupIngress(
+                    from_port=3306,
+                    to_port=3306,
+                    protocol="tcp",
+                    security_groups=[ec2_sg.id],
+                    description="MySQL from EC2"
+                )
+            ],
+            egress=[
+                SecurityGroupEgress(
+                    from_port=0,
+                    to_port=0,
+                    protocol="-1",
+                    cidr_blocks=["0.0.0.0/0"],
+                    description="All outbound traffic"
+                )
+            ],
             tags={"Name": f"aurora-sg-{environment_suffix}"}
         )
 
