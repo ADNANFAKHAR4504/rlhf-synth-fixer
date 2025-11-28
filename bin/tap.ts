@@ -15,8 +15,12 @@ const environmentSuffix =
   process.env.ENVIRONMENT_SUFFIX || config.get('environmentSuffix') || 'dev';
 
 // Get environment from stack name or config
+// In CI/CD, stack names may be dynamic (e.g., TapStackpr7308), so default to 'dev'
 const stack = pulumi.getStack();
-const environment = (stack as 'dev' | 'staging' | 'prod') || 'dev';
+const validEnvironments = ['dev', 'staging', 'prod'];
+const environment = validEnvironments.includes(stack)
+  ? (stack as 'dev' | 'staging' | 'prod')
+  : 'dev';
 
 // Get region from config
 const region = awsConfig.get('region') || process.env.AWS_REGION || 'us-east-1';
