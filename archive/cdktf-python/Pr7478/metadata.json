@@ -10,7 +10,9 @@
   "team": "synth",
   "startedAt": "2025-11-27T22:00:00Z",
   "turn_type": "single",
-  "subject_labels": ["Serverless & Event-Driven"],
+  "subject_labels": [
+    "Serverless & Event-Driven"
+  ],
   "files_created": [
     "lib/main.py",
     "lib/lambda/payment_webhook.py",
@@ -22,5 +24,11 @@
     "tap.py",
     "cdktf.json",
     "tests/unit/test_main.py"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
