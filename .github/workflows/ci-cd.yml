@@ -636,6 +636,7 @@ jobs:
     # For all other subject labels: Require int-tests to succeed
     if: |
       always() && !cancelled() &&
+      github.event_name == 'pull_request' &&
       (needs.analysis.result == 'success' || needs.analysis.result == 'skipped') &&
       (needs.cicd-pipeline-optimization.result == 'success' || needs.cicd-pipeline-optimization.result == 'skipped') &&
       (
@@ -727,6 +728,71 @@ jobs:
           prompt: "Review this pull request's infrastructure code changes, validate file formats and compliance, and provide a comprehensive code review. You MUST post your review findings as a comment on this pull request when complete."
           allowed_tools: "Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite"
           custom_instructions: "${{ env.SYSTEM_PROMPT_CONTENT }}"
+
+      - name: Check for Critical Issues in Claude Review
+        id: check_critical
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🔍 Checking for critical validation failures in Claude review..."
+          
+          # Fetch all PR comments
+          gh pr view ${{ github.event.pull_request.number }} --comments --json comments \
+            | jq -r '.comments[].body' > all_comments.txt
+          
+          # Check for critical failure indicators
+          CRITICAL_FOUND=false
+          
+          if grep -q "❌ CRITICAL:" all_comments.txt; then
+            echo "❌ Found CRITICAL error markers in review"
+            CRITICAL_FOUND=true
+          fi
+          
+          if grep -q "Exit with code 1 to fail the job" all_comments.txt; then
+            echo "❌ Claude explicitly requested job failure"
+            CRITICAL_FOUND=true
+          fi
+          
+          if grep -q "validation FAILED" all_comments.txt; then
+            echo "❌ Validation failures detected"
+            CRITICAL_FOUND=true
+          fi
+          
+          if grep -q "BLOCKED:" all_comments.txt; then
+            echo "❌ Blocking issues found"
+            CRITICAL_FOUND=true
+          fi
+          
+          # Check if validation script reported errors
+          if grep -q "Metadata validation FAILED" all_comments.txt; then
+            echo "❌ Metadata validation script reported failures"
+            CRITICAL_FOUND=true
+          fi
+          
+          if [ "$CRITICAL_FOUND" = true ]; then
+            echo ""
+            echo "=========================================="
+            echo "CRITICAL ISSUES DETECTED IN CLAUDE REVIEW"
+            echo "=========================================="
+            echo ""
+            echo "Claude's review identified critical validation failures."
+            echo "Please check the PR comments for detailed information."
+            echo ""
+            echo "Common critical issues:"
+            echo "  - Missing or invalid required metadata fields"
+            echo "  - Invalid subject_labels for the subtask"
+            echo "  - Platform/language mismatches"
+            echo "  - Files in restricted directories"
+            echo "  - AI-generated PROMPT files"
+            echo "  - Missing or invalid required files"
+            echo ""
+            echo "critical_issues_found=true" >> $GITHUB_OUTPUT
+            exit 1
+          else
+            echo "✅ No critical validation failures detected"
+            echo "critical_issues_found=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Extract Claude Quality Score from PR Comment
         id: extract
         env:
@@ -773,8 +839,16 @@ jobs:
 
           # 5️⃣ Validate range and clean
           if [ -z "$SCORE" ]; then
-            echo "⚠️ Could not find any quality score. Defaulting to 0."
-            SCORE=0
+            echo "❌ ERROR: Could not find any quality score in Claude review or metadata.json"
+            echo ""
+            echo "This indicates one of the following:"
+            echo "  1. Claude failed to complete the review properly"
+            echo "  2. Claude did not include SCORE:X line in the PR comment"
+            echo "  3. metadata.json was not updated with training_quality field"
+            echo ""
+            echo "Please check the PR comments to verify Claude completed the review."
+            echo "If the review is incomplete, the job must fail."
+            exit 1
           fi
 
           SCORE_INT=$(echo "$SCORE" | awk '{print int($1)}')
@@ -790,6 +864,41 @@ jobs:
           echo "✅ Final Claude quality score: $SCORE"
           echo "quality_score=$SCORE" >> $GITHUB_OUTPUT
 
+      - name: Verify Claude Ran Validation Script
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🔍 Verifying Claude executed mandatory validation checks..."
+          
+          # Fetch all PR comments
+          gh pr view ${{ github.event.pull_request.number }} --comments --json comments \
+            | jq -r '.comments[].body' > all_comments.txt
+          
+          # Check for evidence of validation script execution
+          VALIDATION_EVIDENCE=false
+          
+          if grep -q "validate-metadata.sh" all_comments.txt || \
+             grep -q "Metadata validation PASSED" all_comments.txt || \
+             grep -q "Metadata validation FAILED" all_comments.txt || \
+             grep -q "Validating metadata.json" all_comments.txt; then
+            echo "✅ Evidence found that Claude ran metadata validation"
+            VALIDATION_EVIDENCE=true
+          fi
+          
+          if [ "$VALIDATION_EVIDENCE" = false ]; then
+            echo "⚠️ WARNING: No clear evidence Claude ran metadata validation script"
+            echo "⚠️ Review comment may be incomplete or validation was skipped"
+            echo ""
+            echo "Expected to find one of:"
+            echo "  - 'validate-metadata.sh' command execution"
+            echo "  - 'Metadata validation PASSED' or 'FAILED'"
+            echo "  - 'Validating metadata.json' output"
+            echo ""
+            echo "This is a warning only - review will continue based on score."
+            echo "However, please verify the review is complete by checking PR comments."
+          else
+            echo "✅ Validation script execution confirmed"
+          fi
 
       - name: Enforce Quality Threshold
         id: quality_gate
