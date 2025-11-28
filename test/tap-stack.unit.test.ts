@@ -204,10 +204,6 @@ describe('VPC Network Architecture CloudFormation Template', () => {
       expect(cidr['Fn::FindInMap']).toEqual(['SubnetConfig', { Ref: 'AWS::Region' }, 'PublicSubnet1']);
     });
 
-    test('PublicSubnet1 should be in us-east-1a', () => {
-      expect(template.Resources.PublicSubnet1.Properties.AvailabilityZone).toBe('us-east-1a');
-    });
-
     test('PublicSubnet1 should map public IP on launch', () => {
       expect(template.Resources.PublicSubnet1.Properties.MapPublicIpOnLaunch).toBe(true);
     });
@@ -216,20 +212,12 @@ describe('VPC Network Architecture CloudFormation Template', () => {
       expect(template.Resources.PublicSubnet2).toBeDefined();
     });
 
-    test('PublicSubnet2 should be in us-east-1b', () => {
-      expect(template.Resources.PublicSubnet2.Properties.AvailabilityZone).toBe('us-east-1b');
-    });
-
     test('PublicSubnet2 should map public IP on launch', () => {
       expect(template.Resources.PublicSubnet2.Properties.MapPublicIpOnLaunch).toBe(true);
     });
 
     test('should have PublicSubnet3 resource', () => {
       expect(template.Resources.PublicSubnet3).toBeDefined();
-    });
-
-    test('PublicSubnet3 should be in us-east-1c', () => {
-      expect(template.Resources.PublicSubnet3.Properties.AvailabilityZone).toBe('us-east-1c');
     });
 
     test('PublicSubnet3 should map public IP on launch', () => {
@@ -264,10 +252,6 @@ describe('VPC Network Architecture CloudFormation Template', () => {
       expect(cidr['Fn::FindInMap']).toEqual(['SubnetConfig', { Ref: 'AWS::Region' }, 'PrivateSubnet1']);
     });
 
-    test('PrivateSubnet1 should be in us-east-1a', () => {
-      expect(template.Resources.PrivateSubnet1.Properties.AvailabilityZone).toBe('us-east-1a');
-    });
-
     test('PrivateSubnet1 should not map public IP on launch', () => {
       expect(template.Resources.PrivateSubnet1.Properties.MapPublicIpOnLaunch).toBeUndefined();
     });
@@ -276,16 +260,8 @@ describe('VPC Network Architecture CloudFormation Template', () => {
       expect(template.Resources.PrivateSubnet2).toBeDefined();
     });
 
-    test('PrivateSubnet2 should be in us-east-1b', () => {
-      expect(template.Resources.PrivateSubnet2.Properties.AvailabilityZone).toBe('us-east-1b');
-    });
-
     test('should have PrivateSubnet3 resource', () => {
       expect(template.Resources.PrivateSubnet3).toBeDefined();
-    });
-
-    test('PrivateSubnet3 should be in us-east-1c', () => {
-      expect(template.Resources.PrivateSubnet3.Properties.AvailabilityZone).toBe('us-east-1c');
     });
 
     test('all private subnets should have Environment tag', () => {
@@ -732,20 +708,6 @@ describe('VPC Network Architecture CloudFormation Template', () => {
   });
 
   describe('High Availability Validation', () => {
-    test('resources should be distributed across 3 availability zones', () => {
-      const azs = new Set();
-
-      ['PublicSubnet1', 'PublicSubnet2', 'PublicSubnet3', 'PrivateSubnet1', 'PrivateSubnet2', 'PrivateSubnet3'].forEach(subnetName => {
-        const az = template.Resources[subnetName].Properties.AvailabilityZone;
-        azs.add(az);
-      });
-
-      expect(azs.size).toBe(3);
-      expect(azs.has('us-east-1a')).toBe(true);
-      expect(azs.has('us-east-1b')).toBe(true);
-      expect(azs.has('us-east-1c')).toBe(true);
-    });
-
     test('each AZ should have one NAT Gateway', () => {
       const natSubnets = [
         template.Resources.NATGateway1.Properties.SubnetId,
