@@ -65,3 +65,6 @@ provider "aws" {
     }
   }
 }
+
+# Random provider for generating random values
+provider "random" {}

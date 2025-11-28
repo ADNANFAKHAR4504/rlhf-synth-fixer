@@ -1131,7 +1131,7 @@ resource "aws_lb_listener" "main_eu_west_1" {
 # Launch Template - US-EAST-1
 resource "aws_launch_template" "web_us_east_1" {
   provider      = aws.us_east_1
-  name_prefix   = substr("${local.environment}", 0, 3) # Max 6 chars, using first 3 of env
+  name_prefix   = substr("${local.environment}", 0, 3) # Using first 3 chars of environment
   image_id      = data.aws_ami.amazon_linux_2_us.id
   instance_type = local.env_config[local.environment].instance_type
 
@@ -1213,7 +1213,7 @@ CWCONFIG
 # Launch Template - EU-WEST-1
 resource "aws_launch_template" "web_eu_west_1" {
   provider      = aws.eu_west_1
-  name_prefix   = substr("${local.environment}", 0, 3) # Max 6 chars, using first 3 of env  
+  name_prefix   = substr("${local.environment}", 0, 3) # Using first 3 chars of environment  
   image_id      = data.aws_ami.amazon_linux_2_eu.id
   instance_type = local.env_config[local.environment].instance_type
 
