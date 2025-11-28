@@ -34,6 +34,7 @@ from cdktf_cdktf_provider_aws.secretsmanager_secret import SecretsmanagerSecret
 from cdktf_cdktf_provider_aws.secretsmanager_secret_version import SecretsmanagerSecretVersion
 from cdktf_cdktf_provider_aws.data_aws_availability_zones import DataAwsAvailabilityZones
 import json
+import os
 
 
 class TapStack(TerraformStack):
@@ -54,6 +55,10 @@ class TapStack(TerraformStack):
         state_bucket_region = kwargs.get('state_bucket_region', 'us-east-1')
         state_bucket = kwargs.get('state_bucket', 'iac-rlhf-tf-states')
         default_tags = kwargs.get('default_tags', {})
+
+        # Get absolute path to Lambda placeholder (relative to project root)
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        lambda_zip_path = os.path.join(project_root, "lambda_placeholder.zip")
 
         # Define regions
         primary_region = "us-east-1"
@@ -683,8 +688,8 @@ class TapStack(TerraformStack):
             runtime="python3.11",
             memory_size=1024,
             timeout=30,
-            filename="${path.module}/../../../lambda_placeholder.zip",
-            source_code_hash=Fn.filebase64sha256("${path.module}/../../../lambda_placeholder.zip"),
+            filename=lambda_zip_path,
+            source_code_hash=Fn.filebase64sha256(lambda_zip_path),
             environment={
                 "variables": {
                     "REGION": primary_region,
@@ -808,8 +813,8 @@ class TapStack(TerraformStack):
             runtime="python3.11",
             memory_size=1024,
             timeout=30,
-            filename="${path.module}/../../../lambda_placeholder.zip",
-            source_code_hash=Fn.filebase64sha256("${path.module}/../../../lambda_placeholder.zip"),
+            filename=lambda_zip_path,
+            source_code_hash=Fn.filebase64sha256(lambda_zip_path),
             environment={
                 "variables": {
                     "REGION": secondary_region,
