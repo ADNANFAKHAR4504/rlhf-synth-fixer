@@ -136,12 +136,43 @@ api error InvalidParameterValue: Backtrack is not enabled for the aurora-postgre
 
 ---
 
+### 6. Integration Test Fixes (MEDIUM)
+
+**Issue**: Integration tests failed due to:
+1. Aurora cluster status check only accepted "available" or "creating", but clusters can be in "backing-up" status during backup operations
+2. Route53 hosted zone ID comparison failed because API returns zone ID with "/hostedzone/" prefix, but outputs don't include this prefix
+
+**Error**:
+```
+AssertionError: assert ('backing-up' == 'available' or 'backing-up' == 'creating')
+AssertionError: assert '/hostedzone/Z084467518FDWB67PQOLK' == 'Z084467518FDWB67PQOLK'
+```
+
+**Location**: `tests/integration/test_tap_stack.py:135, 256`
+
+**Fix Applied**:
+```python
+# Fix 1: Accept multiple valid cluster statuses
+valid_statuses = ["available", "creating", "backing-up", "modifying", "upgrading"]
+assert cluster["Status"] in valid_statuses
+
+# Fix 2: Normalize Route53 zone ID comparison
+api_zone_id_normalized = api_zone_id.replace("/hostedzone/", "")
+output_zone_id = outputs["Route53HostedZoneId"].replace("/hostedzone/", "")
+assert api_zone_id_normalized == output_zone_id
+```
+
+**Impact**: MEDIUM - Integration tests failed, preventing validation of deployed infrastructure
+**Category**: C (Test configuration issue)
+
+---
+
 ## Summary Statistics
 
-- **Total Fixes**: 5 issues
+- **Total Fixes**: 6 issues
 - **Category A (Critical)**: 3 fixes
 - **Category B (High)**: 1 fix
-- **Category C (Medium)**: 1 fix
+- **Category C (Medium)**: 2 fixes
 
 **Deployment Readiness**:
 - ✓ Code synthesizes successfully after fixes
@@ -157,3 +188,4 @@ api error InvalidParameterValue: Backtrack is not enabled for the aurora-postgre
 - Lambda deployment package path resolution in CDKTF
 - Importance of stack outputs for testing
 - AWS service limitations (Aurora backtrack for MySQL only)
+- Integration test robustness (handling AWS API response variations)
