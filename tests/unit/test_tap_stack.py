@@ -92,8 +92,11 @@ class TestStackStructure:
         for lambda_func in lambda_functions.values():
             assert lambda_func["runtime"] == "python3.11"
             assert "filename" in lambda_func
-            assert lambda_func["filename"].startswith("lib/lambda/")
-            assert lambda_func["filename"].endswith(".zip")
+            # Accept both relative and absolute paths for Lambda ZIP files
+            filename = lambda_func["filename"]
+            assert "lib/lambda/" in filename or "lib\\lambda\\" in filename, \
+                f"Expected Lambda filename to contain lib/lambda/, got: {filename}"
+            assert filename.endswith(".zip")
             assert lambda_func["timeout"] == 60
 
     def test_lambda_iam_roles_created(self):
