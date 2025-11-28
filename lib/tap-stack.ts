@@ -379,10 +379,10 @@ export class TapStack extends pulumi.ComponentResource {
         instanceTypes: ['t3.medium', 't3a.medium', 't2.medium'],
         launchTemplate: {
           id: launchTemplate.id,
-          version: '$Latest',
+          version: '1',
         },
         updateConfig: {
-          maxUnavailable: 1,
+          maxUnavailablePercentage: 25,
         },
         tags: {
           ...defaultTags,
@@ -392,7 +392,15 @@ export class TapStack extends pulumi.ComponentResource {
             'owned',
         },
       },
-      { parent: this, dependsOn: [cluster] }
+      {
+        parent: this,
+        dependsOn: [cluster, launchTemplate],
+        customTimeouts: {
+          create: '15m',
+          update: '15m',
+          delete: '15m'
+        }
+      }
     );
 
     // Create on-demand node group (30% of capacity)
@@ -417,7 +425,15 @@ export class TapStack extends pulumi.ComponentResource {
             'owned',
         },
       },
-      { parent: this, dependsOn: [cluster] }
+      {
+        parent: this,
+        dependsOn: [cluster, managedNodeGroup],
+        customTimeouts: {
+          create: '15m',
+          update: '15m',
+          delete: '15m'
+        }
+      }
     );
 
     // Create App Mesh
@@ -753,9 +769,27 @@ export class TapStack extends pulumi.ComponentResource {
             type: 'ClusterIP',
             enabled: false,
           },
+          daemonSet: {
+            enabled: true,
+          },
+          tolerations: [
+            {
+              key: 'node.kubernetes.io/not-ready',
+              operator: 'Exists',
+              effect: 'NoExecute',
+              tolerationSeconds: 300,
+            },
+            {
+              key: 'node.kubernetes.io/unreachable',
+              operator: 'Exists',
+              effect: 'NoExecute',
+              tolerationSeconds: 300,
+            },
+          ],
           resources: {
             limits: {
               memory: '256Mi',
+              cpu: '200m',
             },
             requests: {
               cpu: '100m',
