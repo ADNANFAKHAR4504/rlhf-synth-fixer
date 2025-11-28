@@ -8,7 +8,6 @@ aws-cdk-aws-lambda-python-alpha = "*"
 pulumi_random = "*"
 pulumi = "*"
 pulumi-aws = "*"
-boto3 = "*"
 moto = {extras = ["sqs", "sns", "lambda", "dynamodb", "cloudwatch"], version = "*"}
 attrs = "*"
 aws-lambda-powertools = "*"
@@ -28,6 +27,7 @@ openpyxl = "*"
 cdktf = "*"
 cdktf-cdktf-provider-aws = "*"
 constructs = "*"
+boto3 = "*"
 
 [dev-packages]
 boto3 = "*"
