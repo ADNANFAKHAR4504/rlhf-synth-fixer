@@ -17,12 +17,10 @@ const costCenter = config.get('costCenter') || 'crypto-alerts-team';
 const complianceScope = config.get('complianceScope') || 'SOC2';
 
 // Lambda configuration
-const priceCheckerTimeout =
-  config.getNumber('priceCheckerTimeout') || 60;
+const priceCheckerTimeout = config.getNumber('priceCheckerTimeout') || 60;
 const priceCheckerMemorySize =
   config.getNumber('priceCheckerMemorySize') || 512;
-const alertProcessorTimeout =
-  config.getNumber('alertProcessorTimeout') || 30;
+const alertProcessorTimeout = config.getNumber('alertProcessorTimeout') || 30;
 const alertProcessorMemorySize =
   config.getNumber('alertProcessorMemorySize') || 256;
 
@@ -33,8 +31,7 @@ const scheduleExpression =
 const kmsKeyDeletionWindowInDays =
   config.getNumber('kmsKeyDeletionWindowInDays') || 7;
 const exchangeApiEndpoint =
-  config.get('exchangeApiEndpoint') ||
-  'https://api.exchange.com/v1/prices';
+  config.get('exchangeApiEndpoint') || 'https://api.exchange.com/v1/prices';
 
 // Get metadata from environment variables for tagging
 const repository = process.env.REPOSITORY || 'iac-test-automations';
@@ -99,7 +96,6 @@ export const kmsKeyAlias = cryptoAlertsStack.kmsKeyAlias.name;
 export const eventRuleName = cryptoAlertsStack.eventRuleName;
 export const streamEventSourceMappingId =
   cryptoAlertsStack.streamEventSourceMapping.id;
-export const priceCheckerTargetId =
-  cryptoAlertsStack.priceCheckerTarget.id;
+export const priceCheckerTargetId = cryptoAlertsStack.priceCheckerTarget.id;
 export const priceCheckerPermissionId =
   cryptoAlertsStack.priceCheckerPermission.id;

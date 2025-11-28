@@ -110,8 +110,7 @@ export class TapStack extends pulumi.ComponentResource {
     const priceCheckerMemorySize = args.priceCheckerMemorySize || 512;
     const alertProcessorTimeout = args.alertProcessorTimeout || 30;
     const alertProcessorMemorySize = args.alertProcessorMemorySize || 256;
-    const scheduleExpression =
-      args.scheduleExpression || 'cron(* * * * ? *)';
+    const scheduleExpression = args.scheduleExpression || 'cron(* * * * ? *)';
     const kmsKeyDeletionWindowInDays = args.kmsKeyDeletionWindowInDays || 7;
     const exchangeApiEndpoint =
       args.exchangeApiEndpoint || 'https://api.exchange.com/v1/prices';
