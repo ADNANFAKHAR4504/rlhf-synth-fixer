@@ -3,13 +3,13 @@
   "language": "py",
   "complexity": "expert",
   "turn_type": "single",
-  "po_id": "c7x4s9x0",
   "team": "synth",
   "startedAt": "2025-11-27T16:32:02+05:30",
   "subtask": "Failure Recovery and High Availability",
   "subject_labels": [
     "Failure Recovery Automation"
   ],
+  "po_id": "c7x4s9x0",
   "aws_services": [
     "DynamoDB",
     "S3",
@@ -18,5 +18,6 @@
     "CloudWatch",
     "SNS"
   ],
+  "region": "us-east-1",
   "training_quality": 10
 }

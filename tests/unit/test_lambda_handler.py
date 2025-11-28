@@ -2,8 +2,10 @@
 import sys
 import os
 import json
-from unittest.mock import Mock, patch, MagicMock, call
-from decimal import Decimal
+from unittest.mock import Mock, patch
+
+# Set region before any boto3 imports
+os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
 
 sys.path.append(os.path.join(os.getcwd(), "lib", "lambda"))
 
@@ -13,7 +15,8 @@ class TestLambdaPaymentProcessorHandler:
 
     @patch.dict(os.environ, {
         'DYNAMODB_TABLE': 'test-table',
-        'S3_BUCKET': 'test-bucket'
+        'S3_BUCKET': 'test-bucket',
+        'AWS_DEFAULT_REGION': 'us-east-1'
     })
     @patch('payment_processor.s3')
     @patch('payment_processor.dynamodb')
@@ -68,7 +71,8 @@ class TestLambdaPaymentProcessorHandler:
 
     @patch.dict(os.environ, {
         'DYNAMODB_TABLE': 'test-table',
-        'S3_BUCKET': 'test-bucket'
+        'S3_BUCKET': 'test-bucket',
+        'AWS_DEFAULT_REGION': 'us-east-1'
     })
     @patch('payment_processor.s3')
     @patch('payment_processor.dynamodb')
@@ -106,7 +110,8 @@ class TestLambdaPaymentProcessorHandler:
 
     @patch.dict(os.environ, {
         'DYNAMODB_TABLE': 'test-table',
-        'S3_BUCKET': 'test-bucket'
+        'S3_BUCKET': 'test-bucket',
+        'AWS_DEFAULT_REGION': 'us-east-1'
     })
     @patch('payment_processor.s3')
     @patch('payment_processor.dynamodb')
@@ -144,7 +149,8 @@ class TestLambdaPaymentProcessorHandler:
 
     @patch.dict(os.environ, {
         'DYNAMODB_TABLE': 'custom-table',
-        'S3_BUCKET': 'custom-bucket'
+        'S3_BUCKET': 'custom-bucket',
+        'AWS_DEFAULT_REGION': 'us-east-1'
     })
     @patch('payment_processor.s3')
     @patch('payment_processor.dynamodb')
@@ -182,7 +188,8 @@ class TestLambdaPaymentProcessorHandler:
 
     @patch.dict(os.environ, {
         'DYNAMODB_TABLE': 'test-table',
-        'S3_BUCKET': 'test-bucket'
+        'S3_BUCKET': 'test-bucket',
+        'AWS_DEFAULT_REGION': 'us-east-1'
     })
     @patch('payment_processor.s3')
     @patch('payment_processor.dynamodb')

@@ -5,7 +5,6 @@ from cdktf import TerraformStack, TerraformOutput, S3Backend
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.dynamodb_table import (
     DynamodbTable,
-    DynamodbTableReplica,
     DynamodbTableAttribute,
     DynamodbTablePointInTimeRecovery,
     DynamodbTableGlobalSecondaryIndex
@@ -14,12 +13,6 @@ from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_versioning import (
     S3BucketVersioningA,
     S3BucketVersioningVersioningConfiguration
-)
-from cdktf_cdktf_provider_aws.s3_bucket_replication_configuration import (
-    S3BucketReplicationConfigurationA,
-    S3BucketReplicationConfigurationRule,
-    S3BucketReplicationConfigurationRuleDestination,
-    S3BucketReplicationConfigurationRuleFilter
 )
 from cdktf_cdktf_provider_aws.iam_role import IamRole
 from cdktf_cdktf_provider_aws.iam_role_policy import IamRolePolicy
@@ -30,6 +23,7 @@ from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import (
 from cdktf_cdktf_provider_aws.sns_topic import SnsTopic
 import json
 import os
+import zipfile
 
 
 class TapStack(TerraformStack):
@@ -59,83 +53,60 @@ class TapStack(TerraformStack):
             region=state_bucket_region
         )
 
-        # Primary region (us-east-1)
-        primary_provider = AwsProvider(
+        # Single region provider
+        provider = AwsProvider(
             self,
-            "aws_primary",
-            region="us-east-1",
-            alias="primary",
+            "aws",
+            region=self.aws_region,
             default_tags=[default_tags]
         )
 
-        # Secondary region (us-west-2)
-        secondary_provider = AwsProvider(
-            self,
-            "aws_secondary",
-            region="us-west-2",
-            alias="secondary",
-            default_tags=[default_tags]
-        )
+        # Create DynamoDB table for payment transactions
+        self.payments_table = self._create_dynamodb_table(provider)
 
-        # Create DynamoDB Global Table for payment transactions
-        self.payments_table = self._create_dynamodb_table(primary_provider, secondary_provider)
+        # Create S3 bucket for audit logs
+        self.audit_bucket = self._create_s3_bucket(provider)
 
-        # Create S3 buckets with cross-region replication
-        self.primary_bucket, self.secondary_bucket = self._create_s3_replication(
-            primary_provider, secondary_provider
-        )
+        # Create Lambda function for payment processing
+        self.payment_lambda = self._create_lambda_function(provider)
 
-        # Create Lambda functions in both regions
-        self.primary_lambda, self.secondary_lambda = self._create_lambda_functions(
-            primary_provider, secondary_provider
-        )
-
-        # Create SNS topics for notifications
-        self.primary_sns, self.secondary_sns = self._create_sns_topics(
-            primary_provider, secondary_provider
-        )
+        # Create SNS topic for notifications
+        self.notification_sns = self._create_sns_topic(provider)
 
         # Create CloudWatch alarms
-        self._create_cloudwatch_alarms(primary_provider, secondary_provider)
+        self._create_cloudwatch_alarms(provider)
 
         # Outputs
         TerraformOutput(
             self,
             "dynamodb_table_name",
             value=self.payments_table.name,
-            description="DynamoDB Global Table name"
+            description="DynamoDB table name"
         )
 
         TerraformOutput(
             self,
-            "primary_bucket_name",
-            value=self.primary_bucket.bucket,
-            description="Primary S3 bucket name"
+            "audit_bucket_name",
+            value=self.audit_bucket.bucket,
+            description="S3 audit bucket name"
         )
 
         TerraformOutput(
             self,
-            "secondary_bucket_name",
-            value=self.secondary_bucket.bucket,
-            description="Secondary S3 bucket name"
+            "lambda_arn",
+            value=self.payment_lambda.arn,
+            description="Lambda function ARN"
         )
 
         TerraformOutput(
             self,
-            "primary_lambda_arn",
-            value=self.primary_lambda.arn,
-            description="Primary Lambda function ARN"
+            "sns_topic_arn",
+            value=self.notification_sns.arn,
+            description="SNS topic ARN"
         )
 
-        TerraformOutput(
-            self,
-            "secondary_lambda_arn",
-            value=self.secondary_lambda.arn,
-            description="Secondary Lambda function ARN"
-        )
-
-    def _create_dynamodb_table(self, primary_provider, secondary_provider):
-        """Create DynamoDB Global Table with cross-region replication"""
+    def _create_dynamodb_table(self, provider):
+        """Create DynamoDB table for payment transactions"""
 
         table = DynamodbTable(
             self,
@@ -160,132 +131,37 @@ class TapStack(TerraformStack):
                     projection_type="ALL"
                 )
             ],
-            replica=[
-                DynamodbTableReplica(region_name="us-west-2")
-            ],
-            provider=primary_provider
+            provider=provider
         )
 
         return table
 
-    def _create_s3_replication(self, primary_provider, secondary_provider):
-        """Create S3 buckets with cross-region replication"""
+    def _create_s3_bucket(self, provider):
+        """Create S3 bucket for audit logs"""
 
-        # IAM role for replication
-        replication_role = IamRole(
+        # Audit bucket
+        audit_bucket = S3Bucket(
             self,
-            "s3_replication_role",
-            name=f"s3-replication-role-{self.environment_suffix}",
-            assume_role_policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [{
-                    "Effect": "Allow",
-                    "Principal": {"Service": "s3.amazonaws.com"},
-                    "Action": "sts:AssumeRole"
-                }]
-            }),
-            provider=primary_provider
+            "audit_bucket",
+            bucket=f"payment-audit-{self.environment_suffix}",
+            provider=provider
         )
 
-        # Primary bucket (source)
-        primary_bucket = S3Bucket(
-            self,
-            "primary_audit_bucket",
-            bucket=f"payment-audit-primary-{self.environment_suffix}",
-            provider=primary_provider
-        )
-
-        # Enable versioning on primary bucket
+        # Enable versioning on audit bucket
         S3BucketVersioningA(
             self,
-            "primary_bucket_versioning",
-            bucket=primary_bucket.id,
+            "audit_bucket_versioning",
+            bucket=audit_bucket.id,
             versioning_configuration=S3BucketVersioningVersioningConfiguration(
                 status="Enabled"
             ),
-            provider=primary_provider
+            provider=provider
         )
 
-        # Secondary bucket (destination)
-        secondary_bucket = S3Bucket(
-            self,
-            "secondary_audit_bucket",
-            bucket=f"payment-audit-secondary-{self.environment_suffix}",
-            provider=secondary_provider
-        )
+        return audit_bucket
 
-        # Enable versioning on secondary bucket
-        S3BucketVersioningA(
-            self,
-            "secondary_bucket_versioning",
-            bucket=secondary_bucket.id,
-            versioning_configuration=S3BucketVersioningVersioningConfiguration(
-                status="Enabled"
-            ),
-            provider=secondary_provider
-        )
-
-        # Replication policy
-        replication_policy = IamRolePolicy(
-            self,
-            "replication_policy",
-            role=replication_role.id,
-            policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "s3:GetReplicationConfiguration",
-                            "s3:ListBucket"
-                        ],
-                        "Resource": primary_bucket.arn
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "s3:GetObjectVersionForReplication",
-                            "s3:GetObjectVersionAcl"
-                        ],
-                        "Resource": f"{primary_bucket.arn}/*"
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
-                            "s3:ReplicateObject",
-                            "s3:ReplicateDelete"
-                        ],
-                        "Resource": f"{secondary_bucket.arn}/*"
-                    }
-                ]
-            }),
-            provider=primary_provider
-        )
-
-        # Replication configuration
-        S3BucketReplicationConfigurationA(
-            self,
-            "bucket_replication",
-            bucket=primary_bucket.id,
-            role=replication_role.arn,
-            rule=[S3BucketReplicationConfigurationRule(
-                id="replicate-all",
-                status="Enabled",
-                priority=1,
-                filter=S3BucketReplicationConfigurationRuleFilter(prefix=""),
-                destination=S3BucketReplicationConfigurationRuleDestination(
-                    bucket=secondary_bucket.arn,
-                    storage_class="STANDARD"
-                )
-            )],
-            depends_on=[replication_policy],
-            provider=primary_provider
-        )
-
-        return primary_bucket, secondary_bucket
-
-    def _create_lambda_functions(self, primary_provider, secondary_provider):
-        """Create Lambda functions in both regions for payment processing"""
+    def _create_lambda_function(self, provider):
+        """Create Lambda function for payment processing"""
 
         # IAM role for Lambda
         lambda_role = IamRole(
@@ -300,7 +176,7 @@ class TapStack(TerraformStack):
                     "Action": "sts:AssumeRole"
                 }]
             }),
-            provider=primary_provider
+            provider=provider
         )
 
         # Lambda policy
@@ -336,14 +212,11 @@ class TapStack(TerraformStack):
                             "s3:PutObject",
                             "s3:GetObject"
                         ],
-                        "Resource": [
-                            f"{self.primary_bucket.arn}/*",
-                            f"{self.secondary_bucket.arn}/*"
-                        ]
+                        "Resource": f"{self.audit_bucket.arn}/*"
                     }
                 ]
             }),
-            provider=primary_provider
+            provider=provider
         )
 
         # Lambda function code
@@ -402,77 +275,54 @@ def handler(event, context):
         with open(lambda_file, "w", encoding="utf-8") as f:
             f.write(lambda_code)
 
-        # Primary Lambda
-        primary_lambda = LambdaFunction(
+        # Create zip file for Lambda deployment
+        lambda_zip = os.path.join(lambda_dir, "payment_processor.zip")
+        with zipfile.ZipFile(lambda_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            zipf.write(lambda_file, "payment_processor.py")
+
+        # Payment Lambda
+        payment_lambda = LambdaFunction(
             self,
-            "primary_payment_lambda",
-            function_name=f"payment-processor-primary-{self.environment_suffix}",
+            "payment_lambda",
+            function_name=f"payment-processor-{self.environment_suffix}",
             role=lambda_role.arn,
             handler="payment_processor.handler",
             runtime="python3.11",
-            filename=lambda_file,
+            filename=lambda_zip,
             environment={
                 "variables": {
                     "DYNAMODB_TABLE": self.payments_table.name,
-                    "S3_BUCKET": self.primary_bucket.bucket,
-                    "REGION": "us-east-1"
+                    "S3_BUCKET": self.audit_bucket.bucket,
+                    "REGION": self.aws_region
                 }
             },
             timeout=30,
             memory_size=512,
-            provider=primary_provider
+            provider=provider
         )
 
-        # Secondary Lambda (same role, different bucket)
-        secondary_lambda = LambdaFunction(
+        return payment_lambda
+
+    def _create_sns_topic(self, provider):
+        """Create SNS topic for notifications"""
+
+        sns_topic = SnsTopic(
             self,
-            "secondary_payment_lambda",
-            function_name=f"payment-processor-secondary-{self.environment_suffix}",
-            role=lambda_role.arn,
-            handler="payment_processor.handler",
-            runtime="python3.11",
-            filename=lambda_file,
-            environment={
-                "variables": {
-                    "DYNAMODB_TABLE": self.payments_table.name,
-                    "S3_BUCKET": self.secondary_bucket.bucket,
-                    "REGION": "us-west-2"
-                }
-            },
-            timeout=30,
-            memory_size=512,
-            provider=secondary_provider
+            "notification_topic",
+            name=f"payment-notifications-{self.environment_suffix}",
+            provider=provider
         )
 
-        return primary_lambda, secondary_lambda
+        return sns_topic
 
-    def _create_sns_topics(self, primary_provider, secondary_provider):
-        """Create SNS topics for notifications"""
-
-        primary_sns = SnsTopic(
-            self,
-            "primary_notification_topic",
-            name=f"payment-notifications-primary-{self.environment_suffix}",
-            provider=primary_provider
-        )
-
-        secondary_sns = SnsTopic(
-            self,
-            "secondary_notification_topic",
-            name=f"payment-notifications-secondary-{self.environment_suffix}",
-            provider=secondary_provider
-        )
-
-        return primary_sns, secondary_sns
-
-    def _create_cloudwatch_alarms(self, primary_provider, secondary_provider):
+    def _create_cloudwatch_alarms(self, provider):
         """Create CloudWatch alarms for monitoring"""
 
-        # Alarm for primary Lambda errors
+        # Alarm for Lambda errors
         CloudwatchMetricAlarm(
             self,
-            "primary_lambda_errors",
-            alarm_name=f"payment-lambda-errors-primary-{self.environment_suffix}",
+            "lambda_errors",
+            alarm_name=f"payment-lambda-errors-{self.environment_suffix}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=2,
             metric_name="Errors",
@@ -480,32 +330,12 @@ def handler(event, context):
             period=60,
             statistic="Sum",
             threshold=5,
-            alarm_description="Alert on Lambda errors in primary region",
+            alarm_description="Alert on Lambda errors",
             dimensions={
-                "FunctionName": self.primary_lambda.function_name
+                "FunctionName": self.payment_lambda.function_name
             },
-            alarm_actions=[self.primary_sns.arn],
-            provider=primary_provider
-        )
-
-        # Alarm for secondary Lambda errors
-        CloudwatchMetricAlarm(
-            self,
-            "secondary_lambda_errors",
-            alarm_name=f"payment-lambda-errors-secondary-{self.environment_suffix}",
-            comparison_operator="GreaterThanThreshold",
-            evaluation_periods=2,
-            metric_name="Errors",
-            namespace="AWS/Lambda",
-            period=60,
-            statistic="Sum",
-            threshold=5,
-            alarm_description="Alert on Lambda errors in secondary region",
-            dimensions={
-                "FunctionName": self.secondary_lambda.function_name
-            },
-            alarm_actions=[self.secondary_sns.arn],
-            provider=secondary_provider
+            alarm_actions=[self.notification_sns.arn],
+            provider=provider
         )
 
         # Alarm for DynamoDB throttling
@@ -524,6 +354,6 @@ def handler(event, context):
             dimensions={
                 "TableName": self.payments_table.name
             },
-            alarm_actions=[self.primary_sns.arn],
-            provider=primary_provider
+            alarm_actions=[self.notification_sns.arn],
+            provider=provider
         )
