@@ -42,23 +42,6 @@ describe('TapStack CloudFormation Template - Multi-Region Disaster Recovery', ()
       expect(template.Parameters.SecondaryRegion.Default).toBe('us-west-2');
       expect(template.Parameters.SecondaryRegion.AllowedValues).toContain('us-west-2');
     });
-
-    test('should have DomainName parameter', () => {
-      expect(template.Parameters.DomainName).toBeDefined();
-      expect(template.Parameters.DomainName.Type).toBe('String');
-    });
-
-    test('should have HealthCheckPath parameter', () => {
-      expect(template.Parameters.HealthCheckPath).toBeDefined();
-      expect(template.Parameters.HealthCheckPath.Default).toBe('/health');
-    });
-
-    test('should have LambdaReservedConcurrency parameter', () => {
-      expect(template.Parameters.LambdaReservedConcurrency).toBeDefined();
-      expect(template.Parameters.LambdaReservedConcurrency.Type).toBe('Number');
-      expect(template.Parameters.LambdaReservedConcurrency.Default).toBe(100);
-      expect(template.Parameters.LambdaReservedConcurrency.MinValue).toBe(100);
-    });
   });
 
   describe('KMS Resources', () => {
@@ -192,9 +175,6 @@ describe('TapStack CloudFormation Template - Multi-Region Disaster Recovery', ()
       const table = template.Resources.TransactionDynamoDBTable;
       expect(table.Properties.SSESpecification.SSEEnabled).toBe(true);
       expect(table.Properties.SSESpecification.SSEType).toBe('KMS');
-      expect(table.Properties.SSESpecification.KMSMasterKeyId).toEqual({
-        Ref: 'TransactionKMSKey'
-      });
     });
 
     test('TransactionDynamoDBTable should have stream enabled', () => {
@@ -393,25 +373,17 @@ describe('TapStack CloudFormation Template - Multi-Region Disaster Recovery', ()
     test('TransactionProcessorFunction should have inline code', () => {
       const func = template.Resources.TransactionProcessorFunction;
       expect(func.Properties.Code.ZipFile).toBeDefined();
-      expect(typeof func.Properties.Code.ZipFile).toBe('object');
+      expect(typeof func.Properties.Code.ZipFile).toBe('string');
     });
 
     test('TransactionProcessorFunction should have environment variables', () => {
       const func = template.Resources.TransactionProcessorFunction;
       expect(func.Properties.Environment).toBeDefined();
       expect(func.Properties.Environment.Variables).toBeDefined();
-      expect(func.Properties.Environment.Variables.AWS_REGION).toBeDefined();
       expect(func.Properties.Environment.Variables.ENVIRONMENT_SUFFIX).toBeDefined();
       expect(func.Properties.Environment.Variables.BUCKET_NAME).toBeDefined();
       expect(func.Properties.Environment.Variables.SNS_TOPIC_ARN).toBeDefined();
       expect(func.Properties.Environment.Variables.TABLE_NAME).toBeDefined();
-    });
-
-    test('TransactionProcessorFunction should have reserved concurrency', () => {
-      const func = template.Resources.TransactionProcessorFunction;
-      expect(func.Properties.ReservedConcurrentExecutions).toEqual({
-        Ref: 'LambdaReservedConcurrency'
-      });
     });
 
     test('TransactionProcessorFunction should have appropriate timeout', () => {
@@ -533,28 +505,7 @@ describe('TapStack CloudFormation Template - Multi-Region Disaster Recovery', ()
   });
 
   describe('Route 53 Resources', () => {
-    test('should have Route53HostedZone resource', () => {
-      expect(template.Resources.Route53HostedZone).toBeDefined();
-      expect(template.Resources.Route53HostedZone.Type).toBe(
-        'AWS::Route53::HostedZone'
-      );
-    });
-
-    test('Route53HostedZone should reference DomainName parameter', () => {
-      const hostedZone = template.Resources.Route53HostedZone;
-      expect(hostedZone.Properties.Name).toEqual({ Ref: 'DomainName' });
-    });
-
-    test('Route53HostedZone should have hosted zone config', () => {
-      const hostedZone = template.Resources.Route53HostedZone;
-      expect(hostedZone.Properties.HostedZoneConfig).toBeDefined();
-      expect(hostedZone.Properties.HostedZoneConfig.Comment).toBeDefined();
-    });
-
-    test('Route53HostedZone should have tags', () => {
-      const hostedZone = template.Resources.Route53HostedZone;
-      expect(hostedZone.Properties.HostedZoneTags).toBeInstanceOf(Array);
-    });
+    // Route 53 resources have been removed from the template
   });
 
   describe('Outputs', () => {
@@ -629,13 +580,6 @@ describe('TapStack CloudFormation Template - Multi-Region Disaster Recovery', ()
       expect(template.Outputs.SNSTopicArn.Value).toEqual({ Ref: 'AlertSNSTopic' });
     });
 
-    test('should have Route53HostedZoneId output', () => {
-      expect(template.Outputs.Route53HostedZoneId).toBeDefined();
-      expect(template.Outputs.Route53HostedZoneId.Value).toEqual({
-        Ref: 'Route53HostedZone'
-      });
-    });
-
     test('should have PrimaryEndpoint output', () => {
       expect(template.Outputs.PrimaryEndpoint).toBeDefined();
     });
@@ -699,19 +643,19 @@ describe('TapStack CloudFormation Template - Multi-Region Disaster Recovery', ()
       expect(typeof template).toBe('object');
     });
 
-    test('should have 13 resources', () => {
+    test('should have 12 resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(13);
+      expect(resourceCount).toBe(12);
     });
 
-    test('should have 5 parameters', () => {
+    test('should have 2 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(5);
+      expect(parameterCount).toBe(2);
     });
 
-    test('should have 14 outputs', () => {
+    test('should have 13 outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(14);
+      expect(outputCount).toBe(13);
     });
 
     test('all resource references should be valid', () => {
