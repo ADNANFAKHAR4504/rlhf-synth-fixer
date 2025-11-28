@@ -161,7 +161,7 @@ export class DynamoDBComponent extends pulumi.ComponentResource {
     new aws.appautoscaling.Policy(
       `transactions-read-policy-${environmentSuffix}`,
       {
-        name: `DynamoDBReadCapacityUtilization-${transactionTable.name}`,
+        name: pulumi.interpolate`DynamoDBReadCapacityUtilization-${transactionTable.name}`,
         policyType: 'TargetTrackingScaling',
         resourceId: transactionTableReadTarget.resourceId,
         scalableDimension: transactionTableReadTarget.scalableDimension,
@@ -179,7 +179,7 @@ export class DynamoDBComponent extends pulumi.ComponentResource {
     new aws.appautoscaling.Policy(
       `transactions-write-policy-${environmentSuffix}`,
       {
-        name: `DynamoDBWriteCapacityUtilization-${transactionTable.name}`,
+        name: pulumi.interpolate`DynamoDBWriteCapacityUtilization-${transactionTable.name}`,
         policyType: 'TargetTrackingScaling',
         resourceId: transactionTableWriteTarget.resourceId,
         scalableDimension: transactionTableWriteTarget.scalableDimension,
