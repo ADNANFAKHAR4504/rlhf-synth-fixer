@@ -1,13 +1,13 @@
 {
   "task_id": "h1u2r4i8",
   "po_id": "h1u2r4i8",
-  "subtask": "Failure Recovery and High Availability",
   "platform": "cdktf",
   "language": "py",
   "complexity": "expert",
   "turn_type": "single",
   "team": "synth",
   "startedAt": "2025-11-27T18:20:00Z",
+  "subtask": "Failure Recovery and High Availability",
   "subject_labels": [
     "Failure Recovery Automation"
   ],
@@ -30,122 +30,6 @@
     "EIP",
     "NAT"
   ],
-  "description": "Zero-Downtime Cross-Region Migration of Payment Processing Infrastructure from us-east-1 to eu-west-1",
-  "requirements": [
-    "VPC infrastructure in eu-west-1 matching us-east-1 topology with 3 AZs",
-    "Aurora Global Database Cluster (primary in us-east-1, secondary in eu-west-1, MySQL 8.0)",
-    "EC2 Auto Scaling groups in eu-west-1 with containerized payment processors",
-    "Application Load Balancer in eu-west-1 with health checks and target groups",
-    "Route 53 weighted routing policy (initial: 100% us-east-1, 0% eu-west-1)",
-    "CloudWatch alarms for database replication lag and EC2 health",
-    "Step Functions state machine to orchestrate migration workflow",
-    "Migration runbook as Terraform output with weight adjustment commands",
-    "VPC peering between regions with route table updates",
-    "KMS keys in eu-west-1 with cross-region key policies"
-  ],
-  "resources": {
-    "vpc": {
-      "count": 1,
-      "type": "aws_vpc",
-      "description": "VPC in eu-west-1 with 3 AZs"
-    },
-    "subnets": {
-      "count": 6,
-      "type": "aws_subnet",
-      "description": "3 public and 3 private subnets across AZs"
-    },
-    "internet_gateway": {
-      "count": 1,
-      "type": "aws_internet_gateway",
-      "description": "Internet gateway for public subnets"
-    },
-    "nat_gateways": {
-      "count": 3,
-      "type": "aws_nat_gateway",
-      "description": "NAT gateways in each AZ for private subnets"
-    },
-    "route_tables": {
-      "count": 4,
-      "type": "aws_route_table",
-      "description": "Route tables for public and private subnets"
-    },
-    "security_groups": {
-      "count": 3,
-      "type": "aws_security_group",
-      "description": "Security groups for ALB, EC2, and Aurora"
-    },
-    "aurora_global_cluster": {
-      "count": 1,
-      "type": "aws_rds_global_cluster",
-      "description": "Aurora Global Database with primary in us-east-1"
-    },
-    "aurora_cluster_secondary": {
-      "count": 1,
-      "type": "aws_rds_cluster",
-      "description": "Aurora secondary cluster in eu-west-1"
-    },
-    "aurora_instances": {
-      "count": 1,
-      "type": "aws_rds_cluster_instance",
-      "description": "Aurora instance in eu-west-1 (single writer)"
-    },
-    "launch_template": {
-      "count": 1,
-      "type": "aws_launch_template",
-      "description": "Launch template for EC2 instances"
-    },
-    "autoscaling_group": {
-      "count": 1,
-      "type": "aws_autoscaling_group",
-      "description": "Auto Scaling group for payment processors"
-    },
-    "load_balancer": {
-      "count": 1,
-      "type": "aws_lb",
-      "description": "Application Load Balancer in eu-west-1"
-    },
-    "target_groups": {
-      "count": 1,
-      "type": "aws_lb_target_group",
-      "description": "Target group for ALB"
-    },
-    "lb_listener": {
-      "count": 1,
-      "type": "aws_lb_listener",
-      "description": "ALB listener on port 443"
-    },
-    "route53_zone": {
-      "count": 1,
-      "type": "aws_route53_zone",
-      "description": "Route 53 hosted zone"
-    },
-    "route53_records": {
-      "count": 2,
-      "type": "aws_route53_record",
-      "description": "Weighted routing records for both regions"
-    },
-    "cloudwatch_alarms": {
-      "count": 2,
-      "type": "aws_cloudwatch_metric_alarm",
-      "description": "Alarms for replication lag and EC2 health"
-    },
-    "step_functions": {
-      "count": 1,
-      "type": "aws_sfn_state_machine",
-      "description": "State machine for migration orchestration"
-    },
-    "vpc_peering": {
-      "count": 0,
-      "type": "aws_vpc_peering_connection",
-      "description": "VPC peering documentation (placeholder for production)"
-    },
-    "kms_keys": {
-      "count": 1,
-      "type": "aws_kms_key",
-      "description": "KMS key in eu-west-1 with cross-region policy"
-    }
-  },
+  "region": "us-east-1",
   "training_quality": 10,
-  "created_at": "2025-11-27T18:20:00Z",
-  "updated_at": "2025-11-27T18:20:00Z"
 }
