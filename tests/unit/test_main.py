@@ -53,7 +53,8 @@ class TestPaymentProcessingStack:
         synth = parse_synth(stack)
 
         # Verify VPC resource exists
-        assert any('aws_vpc' in key for key in synth.keys())
+        resources = synth.get('resource', {})
+        assert any('aws_vpc' in key for key in resources.keys())
 
     def test_subnet_creation(self):
         """Test public and private subnets are created"""
@@ -62,7 +63,8 @@ class TestPaymentProcessingStack:
         synth = parse_synth(stack)
 
         # Verify subnet resources exist
-        subnet_keys = [key for key in synth.keys() if 'aws_subnet' in key]
+        resources = synth.get('resource', {})
+        subnet_keys = [key for key in resources.keys() if 'aws_subnet' in key]
         assert len(subnet_keys) >= 4  # At least 2 public + 2 private
 
     def test_security_groups_created(self):
@@ -72,7 +74,8 @@ class TestPaymentProcessingStack:
         synth = parse_synth(stack)
 
         # Verify security group resources exist
-        sg_keys = [key for key in synth.keys() if 'aws_security_group' in key]
+        resources = synth.get('resource', {})
+        sg_keys = [key for key in resources.keys() if 'aws_security_group' in key]
         assert len(sg_keys) >= 2  # Lambda SG + RDS SG
 
     def test_rds_instance_created(self):
@@ -82,7 +85,8 @@ class TestPaymentProcessingStack:
         synth = parse_synth(stack)
 
         # Verify RDS instance exists
-        assert any('aws_db_instance' in key for key in synth.keys())
+        resources = synth.get('resource', {})
+        assert any('aws_db_instance' in key for key in resources.keys())
 
     def test_secrets_manager_for_password(self):
         """Test Secrets Manager secret is created for database password"""
@@ -91,7 +95,8 @@ class TestPaymentProcessingStack:
         synth = parse_synth(stack)
 
         # Verify Secrets Manager resources exist
-        secret_keys = [key for key in synth.keys() if 'aws_secretsmanager_secret' in key]
+        resources = synth.get('resource', {})
+        secret_keys = [key for key in resources.keys() if 'aws_secretsmanager_secret' in key]
         assert len(secret_keys) >= 1
 
     def test_lambda_function_created(self):
@@ -101,7 +106,8 @@ class TestPaymentProcessingStack:
         synth = parse_synth(stack)
 
         # Verify Lambda function exists
-        assert any('aws_lambda_function' in key for key in synth.keys())
+        resources = synth.get('resource', {})
+        assert any('aws_lambda_function' in key for key in resources.keys())
 
     def test_lambda_iam_role_created(self):
         """Test Lambda IAM role and policies are created"""
@@ -110,7 +116,8 @@ class TestPaymentProcessingStack:
         synth = parse_synth(stack)
 
         # Verify IAM role exists
-        assert any('aws_iam_role' in key for key in synth.keys())
+        resources = synth.get('resource', {})
+        assert any('aws_iam_role' in key for key in resources.keys())
 
     def test_kms_key_for_logs(self):
         """Test KMS key is created for CloudWatch Logs encryption"""
@@ -119,7 +126,8 @@ class TestPaymentProcessingStack:
         synth = parse_synth(stack)
 
         # Verify KMS key exists
-        assert any('aws_kms_key' in key for key in synth.keys())
+        resources = synth.get('resource', {})
+        assert any('aws_kms_key' in key for key in resources.keys())
 
     def test_cloudwatch_log_group_with_kms(self):
         """Test CloudWatch log group is created with KMS encryption"""
@@ -128,7 +136,8 @@ class TestPaymentProcessingStack:
         synth = parse_synth(stack)
 
         # Verify log group exists
-        assert any('aws_cloudwatch_log_group' in key for key in synth.keys())
+        resources = synth.get('resource', {})
+        assert any('aws_cloudwatch_log_group' in key for key in resources.keys())
 
     def test_nat_gateway_not_created_in_dev(self):
         """Test NAT Gateway is NOT created in dev environment"""
@@ -138,7 +147,8 @@ class TestPaymentProcessingStack:
         synth = parse_synth(stack)
 
         # Verify NAT Gateway does NOT exist
-        nat_keys = [key for key in synth.keys() if 'aws_nat_gateway' in key]
+        resources = synth.get('resource', {})
+        nat_keys = [key for key in resources.keys() if 'aws_nat_gateway' in key]
         assert len(nat_keys) == 0
 
     def test_nat_gateway_created_in_prod(self):
@@ -149,7 +159,8 @@ class TestPaymentProcessingStack:
         synth = parse_synth(stack)
 
         # Verify NAT Gateway exists
-        nat_keys = [key for key in synth.keys() if 'aws_nat_gateway' in key]
+        resources = synth.get('resource', {})
+        nat_keys = [key for key in resources.keys() if 'aws_nat_gateway' in key]
         assert len(nat_keys) >= 1
 
     def test_availability_zone_validation(self):
@@ -159,7 +170,8 @@ class TestPaymentProcessingStack:
         synth = parse_synth(stack)
 
         # Verify AZ data source exists
-        assert any('data.aws_availability_zones' in key for key in synth.keys())
+        data_sources = synth.get('data', {})
+        assert any('aws_availability_zones' in key for key in data_sources.keys())
 
     def test_stack_outputs_exist(self):
         """Test comprehensive stack outputs are created"""
@@ -247,7 +259,8 @@ class TestPaymentProcessingStack:
         synth = parse_synth(stack)
 
         # Find Lambda function resource
-        lambda_resources = [v for k, v in synth.items() if 'aws_lambda_function' in k]
+        resources = synth.get('resource', {})
+        lambda_resources = [v for k, v in resources.items() if 'aws_lambda_function' in k]
         assert len(lambda_resources) > 0
 
     def test_rds_multi_az_in_prod(self):
@@ -285,7 +298,8 @@ class TestPaymentProcessingStack:
         synth = parse_synth(stack)
 
         # Verify IGW exists
-        assert any('aws_internet_gateway' in key for key in synth.keys())
+        resources = synth.get('resource', {})
+        assert any('aws_internet_gateway' in key for key in resources.keys())
 
     def test_route_tables_created(self):
         """Test public and private route tables are created"""
@@ -294,7 +308,8 @@ class TestPaymentProcessingStack:
         synth = parse_synth(stack)
 
         # Verify route tables exist
-        rt_keys = [key for key in synth.keys() if 'aws_route_table' in key]
+        resources = synth.get('resource', {})
+        rt_keys = [key for key in resources.keys() if 'aws_route_table' in key]
         assert len(rt_keys) >= 2  # Public RT + Private RT
 
     def test_db_subnet_group_created(self):
@@ -304,7 +319,8 @@ class TestPaymentProcessingStack:
         synth = parse_synth(stack)
 
         # Verify DB subnet group exists
-        assert any('aws_db_subnet_group' in key for key in synth.keys())
+        resources = synth.get('resource', {})
+        assert any('aws_db_subnet_group' in key for key in resources.keys())
 
     def test_iam_policy_attachments(self):
         """Test IAM policy attachments exist for Lambda role"""
@@ -313,7 +329,8 @@ class TestPaymentProcessingStack:
         synth = parse_synth(stack)
 
         # Verify IAM policy attachments exist
-        policy_keys = [key for key in synth.keys() if 'aws_iam_role_policy_attachment' in key]
+        resources = synth.get('resource', {})
+        policy_keys = [key for key in resources.keys() if 'aws_iam_role_policy_attachment' in key]
         assert len(policy_keys) >= 2  # Basic execution + VPC execution + Secrets
 
     def test_kms_alias_created(self):
@@ -323,7 +340,8 @@ class TestPaymentProcessingStack:
         synth = parse_synth(stack)
 
         # Verify KMS alias exists
-        assert any('aws_kms_alias' in key for key in synth.keys())
+        resources = synth.get('resource', {})
+        assert any('aws_kms_alias' in key for key in resources.keys())
 
     def test_lambda_environment_variables(self):
         """Test Lambda has required environment variables"""
@@ -340,7 +358,8 @@ class TestPaymentProcessingStack:
         synth = parse_synth(stack)
 
         # Verify data sources exist
-        data_keys = [key for key in synth.keys() if key.startswith('data.')]
+        data_sources = synth.get('data', {})
+        data_keys = list(data_sources.keys())
         assert len(data_keys) >= 3  # AZs, caller identity, region
 
     def test_complete_infrastructure_synthesis(self):
@@ -350,7 +369,7 @@ class TestPaymentProcessingStack:
         synth = parse_synth(stack)
 
         # Verify synthesized output has required sections
-        assert 'resource' in synth or any('aws_' in key for key in synth.keys())
+        assert 'resource' in synth or 'data' in synth
         assert 'output' in synth
 
     def test_resource_naming_with_environment_suffix(self):
@@ -372,7 +391,8 @@ class TestPaymentProcessingStack:
         synth = parse_synth(stack)
 
         # Verify EIP exists
-        eip_keys = [key for key in synth.keys() if 'aws_eip' in key]
+        resources = synth.get('resource', {})
+        eip_keys = [key for key in resources.keys() if 'aws_eip' in key]
         assert len(eip_keys) >= 1
 
     def test_route_table_associations(self):
@@ -382,7 +402,8 @@ class TestPaymentProcessingStack:
         synth = parse_synth(stack)
 
         # Verify route table associations exist
-        rta_keys = [key for key in synth.keys() if 'aws_route_table_association' in key]
+        resources = synth.get('resource', {})
+        rta_keys = [key for key in resources.keys() if 'aws_route_table_association' in key]
         assert len(rta_keys) >= 4  # 2 public + 2 private subnets
 
     def test_lambda_depends_on_log_group(self):
@@ -401,7 +422,8 @@ class TestPaymentProcessingStack:
         synth = parse_synth(stack)
 
         # Verify caller identity data source exists
-        assert any('data.aws_caller_identity' in key for key in synth.keys())
+        data_sources = synth.get('data', {})
+        assert any('aws_caller_identity' in key for key in data_sources.keys())
 
     def test_region_data_source(self):
         """Test region data source is configured"""
@@ -410,7 +432,8 @@ class TestPaymentProcessingStack:
         synth = parse_synth(stack)
 
         # Verify region data source exists
-        assert any('data.aws_region' in key for key in synth.keys())
+        data_sources = synth.get('data', {})
+        assert any('aws_region' in key for key in data_sources.keys())
 
 
 class TestLambdaFunction:
