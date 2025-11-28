@@ -598,12 +598,16 @@ elif [ "$PLATFORM" = "tf" ]; then
 
 elif [ "$PLATFORM" = "pulumi" ]; then
   echo "✅ Pulumi project detected, running Pulumi deploy..."
-  
+
   if [ -z "$PULUMI_BACKEND_URL" ]; then
     echo "❌ PULUMI_BACKEND_URL environment variable is required for Pulumi projects"
     exit 1
   fi
-  
+
+  # Configure Pulumi to handle unreachable Kubernetes clusters
+  export PULUMI_K8S_DELETE_UNREACHABLE=true
+  echo "🔧 Set PULUMI_K8S_DELETE_UNREACHABLE=true to handle unreachable clusters"
+
   echo "Using environment suffix: $ENVIRONMENT_SUFFIX"
   echo "Selecting or creating Pulumi stack Using ENVIRONMENT_SUFFIX=$ENVIRONMENT_SUFFIX"
   
