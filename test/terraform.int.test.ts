@@ -152,4 +152,3 @@ describe("Log Groups Naming Consistency", () => {
     });
   });
 });
-});

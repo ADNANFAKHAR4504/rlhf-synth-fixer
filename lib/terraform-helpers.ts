@@ -16,33 +16,38 @@ export interface ValidationResult {
 /**
  * Validates that a Terraform configuration includes required components
  */
-export function validateTerraformConfig(config: TerraformConfig): ValidationResult {
+export function validateTerraformConfig(
+  config: TerraformConfig
+): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
   if (!config.provider) {
-    errors.push("Provider configuration is required");
+    errors.push('Provider configuration is required');
   }
 
   if (!config.backend) {
-    errors.push("Backend configuration is required");
+    errors.push('Backend configuration is required');
   }
 
   if (!config.resources || config.resources.length === 0) {
-    warnings.push("No resources defined");
+    warnings.push('No resources defined');
   }
 
   return {
     valid: errors.length === 0,
     errors,
-    warnings
+    warnings,
   };
 }
 
 /**
  * Checks if a resource name includes environment suffix
  */
-export function hasEnvironmentSuffix(resourceName: string, suffix: string): boolean {
+export function hasEnvironmentSuffix(
+  resourceName: string,
+  suffix: string
+): boolean {
   return resourceName.includes(suffix);
 }
 
@@ -50,7 +55,7 @@ export function hasEnvironmentSuffix(resourceName: string, suffix: string): bool
  * Validates Lambda configuration for ARM64 architecture
  */
 export function validateLambdaArchitecture(architecture: string[]): boolean {
-  return architecture.includes("arm64");
+  return architecture.includes('arm64');
 }
 
 /**
@@ -64,20 +69,25 @@ export function validatePITR(pitrEnabled: boolean): boolean {
  * Validates Step Functions workflow type
  */
 export function validateStepFunctionsType(type: string): boolean {
-  return type === "EXPRESS";
+  return type === 'EXPRESS';
 }
 
 /**
  * Validates reserved concurrent executions
  */
-export function validateReservedConcurrency(concurrency: number, expected: number): boolean {
+export function validateReservedConcurrency(
+  concurrency: number,
+  expected: number
+): boolean {
   return concurrency === expected;
 }
 
 /**
  * Parses Terraform outputs
  */
-export function parseTerraformOutputs(outputsJson: string): Record<string, any> {
+export function parseTerraformOutputs(
+  outputsJson: string
+): Record<string, any> {
   try {
     return JSON.parse(outputsJson);
   } catch (error) {
@@ -93,24 +103,29 @@ export function validateIAMPolicy(policy: string): ValidationResult {
   const warnings: string[] = [];
 
   if (policy.includes('"Resource": "*"')) {
-    warnings.push("IAM policy contains wildcard resource");
+    warnings.push('IAM policy contains wildcard resource');
   }
 
   if (policy.includes('"Action": "*"')) {
-    errors.push("IAM policy contains wildcard action - violates least privilege");
+    errors.push(
+      'IAM policy contains wildcard action - violates least privilege'
+    );
   }
 
   return {
     valid: errors.length === 0,
     errors,
-    warnings
+    warnings,
   };
 }
 
 /**
  * Extracts environment suffix from resource name
  */
-export function extractEnvironmentSuffix(resourceName: string, prefix: string): string | null {
+export function extractEnvironmentSuffix(
+  resourceName: string,
+  prefix: string
+): string | null {
   const pattern = new RegExp(`${prefix}-(\\w+)$`);
   const match = resourceName.match(pattern);
   return match ? match[1] : null;
@@ -119,7 +134,11 @@ export function extractEnvironmentSuffix(resourceName: string, prefix: string): 
 /**
  * Validates CloudWatch log retention policy
  */
-export function validateLogRetention(retentionDays: number, minDays: number, maxDays: number): boolean {
+export function validateLogRetention(
+  retentionDays: number,
+  minDays: number,
+  maxDays: number
+): boolean {
   return retentionDays >= minDays && retentionDays <= maxDays;
 }
 
