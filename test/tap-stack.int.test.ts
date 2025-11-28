@@ -25,7 +25,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // Load stack outputs
-const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+const outputsPath = path.join(
+  __dirname,
+  '..',
+  'cfn-outputs',
+  'flat-outputs.json'
+);
 const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
 
 // Initialize AWS clients
@@ -52,7 +57,9 @@ describe('Crypto Alerts Infrastructure Integration Tests', () => {
     });
 
     it('should have valid ARN format for table', () => {
-      expect(outputs.tableArn).toMatch(/^arn:aws:dynamodb:us-east-1:\d+:table\/.+$/);
+      expect(outputs.tableArn).toMatch(
+        /^arn:aws:dynamodb:us-east-1:\d+:table\/.+$/
+      );
     });
 
     it('should have valid ARN format for topic', () => {
@@ -60,8 +67,12 @@ describe('Crypto Alerts Infrastructure Integration Tests', () => {
     });
 
     it('should have valid ARN format for Lambda functions', () => {
-      expect(outputs.priceCheckerFunctionArn).toMatch(/^arn:aws:lambda:us-east-1:\d+:function:.+$/);
-      expect(outputs.alertProcessorFunctionArn).toMatch(/^arn:aws:lambda:us-east-1:\d+:function:.+$/);
+      expect(outputs.priceCheckerFunctionArn).toMatch(
+        /^arn:aws:lambda:us-east-1:\d+:function:.+$/
+      );
+      expect(outputs.alertProcessorFunctionArn).toMatch(
+        /^arn:aws:lambda:us-east-1:\d+:function:.+$/
+      );
     });
   });
 
@@ -102,7 +113,9 @@ describe('Crypto Alerts Infrastructure Integration Tests', () => {
       const response = await dynamoDBClient.send(command);
 
       expect(response.Table?.StreamSpecification?.StreamEnabled).toBe(true);
-      expect(response.Table?.StreamSpecification?.StreamViewType).toBe('NEW_AND_OLD_IMAGES');
+      expect(response.Table?.StreamSpecification?.StreamViewType).toBe(
+        'NEW_AND_OLD_IMAGES'
+      );
     });
 
     it('should have global secondary index on coinSymbol', async () => {
@@ -138,7 +151,9 @@ describe('Crypto Alerts Infrastructure Integration Tests', () => {
 
       const response = await dynamoDBClient.send(command);
 
-      expect(response.Table?.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
+      expect(response.Table?.BillingModeSummary?.BillingMode).toBe(
+        'PAY_PER_REQUEST'
+      );
     });
   });
 
@@ -174,7 +189,9 @@ describe('Crypto Alerts Infrastructure Integration Tests', () => {
       const response = await lambdaClient.send(command);
 
       expect(response.Configuration).toBeDefined();
-      expect(response.Configuration?.FunctionName).toBe(outputs.priceCheckerFunctionName);
+      expect(response.Configuration?.FunctionName).toBe(
+        outputs.priceCheckerFunctionName
+      );
     });
 
     it('should have alert processor Lambda deployed', async () => {
@@ -185,7 +202,9 @@ describe('Crypto Alerts Infrastructure Integration Tests', () => {
       const response = await lambdaClient.send(command);
 
       expect(response.Configuration).toBeDefined();
-      expect(response.Configuration?.FunctionName).toBe(outputs.alertProcessorFunctionName);
+      expect(response.Configuration?.FunctionName).toBe(
+        outputs.alertProcessorFunctionName
+      );
     });
 
     it('should use Node.js 18 runtime', async () => {
@@ -216,8 +235,12 @@ describe('Crypto Alerts Infrastructure Integration Tests', () => {
       const response = await lambdaClient.send(command);
 
       expect(response.Configuration?.Environment?.Variables).toBeDefined();
-      expect(response.Configuration?.Environment?.Variables?.TABLE_NAME).toBe(outputs.tableName);
-      expect(response.Configuration?.Environment?.Variables?.EXCHANGE_API_ENDPOINT).toBeDefined();
+      expect(
+        response.Configuration?.Environment?.Variables?.TABLE_NAME
+      ).toBe(outputs.tableName);
+      expect(
+        response.Configuration?.Environment?.Variables?.EXCHANGE_API_ENDPOINT
+      ).toBeDefined();
     });
 
     it('should have environment variables configured for alert processor', async () => {
@@ -228,7 +251,9 @@ describe('Crypto Alerts Infrastructure Integration Tests', () => {
       const response = await lambdaClient.send(command);
 
       expect(response.Configuration?.Environment?.Variables).toBeDefined();
-      expect(response.Configuration?.Environment?.Variables?.TOPIC_ARN).toBe(outputs.topicArn);
+      expect(
+        response.Configuration?.Environment?.Variables?.TOPIC_ARN
+      ).toBe(outputs.topicArn);
     });
 
     it('should have KMS encryption for environment variables', async () => {
@@ -264,7 +289,9 @@ describe('Crypto Alerts Infrastructure Integration Tests', () => {
 
       expect(response.logGroups).toBeDefined();
       expect(response.logGroups?.length).toBeGreaterThan(0);
-      expect(response.logGroups?.[0].logGroupName).toBe(`/aws/lambda/${outputs.priceCheckerFunctionName}`);
+      expect(response.logGroups?.[0].logGroupName).toBe(
+        `/aws/lambda/${outputs.priceCheckerFunctionName}`
+      );
     });
 
     it('should have log group for alert processor', async () => {
@@ -276,7 +303,9 @@ describe('Crypto Alerts Infrastructure Integration Tests', () => {
 
       expect(response.logGroups).toBeDefined();
       expect(response.logGroups?.length).toBeGreaterThan(0);
-      expect(response.logGroups?.[0].logGroupName).toBe(`/aws/lambda/${outputs.alertProcessorFunctionName}`);
+      expect(response.logGroups?.[0].logGroupName).toBe(
+        `/aws/lambda/${outputs.alertProcessorFunctionName}`
+      );
     });
 
     it('should have 14-day retention policy', async () => {
@@ -320,7 +349,9 @@ describe('Crypto Alerts Infrastructure Integration Tests', () => {
 
       expect(response.Targets).toBeDefined();
       expect(response.Targets?.length).toBeGreaterThan(0);
-      expect(response.Targets?.[0].Arn).toBe(outputs.priceCheckerFunctionArn);
+      expect(response.Targets?.[0].Arn).toBe(
+        outputs.priceCheckerFunctionArn
+      );
     });
 
     it('should be in ENABLED state', async () => {
@@ -454,3 +485,4 @@ describe('Crypto Alerts Infrastructure Integration Tests', () => {
     });
   });
 });
+
