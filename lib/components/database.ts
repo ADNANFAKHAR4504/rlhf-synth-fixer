@@ -39,7 +39,6 @@ export class DatabaseComponent extends pulumi.ComponentResource {
       kmsKeyId,
       subnetIds,
       vpcId,
-      availabilityZones,
       backupRetentionDays,
       tags,
     } = args;
@@ -111,6 +110,8 @@ export class DatabaseComponent extends pulumi.ComponentResource {
     );
 
     // Create Aurora PostgreSQL cluster
+    // Note: We don't specify availabilityZones explicitly to avoid replacement
+    // issues when AZ order changes. AWS will distribute across AZs based on subnet group.
     const cluster = new aws.rds.Cluster(
       `aurora-cluster-${environmentSuffix}`,
       {
@@ -131,13 +132,16 @@ export class DatabaseComponent extends pulumi.ComponentResource {
         deletionProtection: false,
         enabledCloudwatchLogsExports: ['postgresql'],
         dbClusterParameterGroupName: clusterParameterGroup.name,
-        availabilityZones: availabilityZones,
         tags: pulumi.all([tags]).apply(([t]) => ({
           ...t,
           Name: `aurora-cluster-${environmentSuffix}`,
         })),
       },
-      { parent: this }
+      {
+        parent: this,
+        // Ignore changes to availabilityZones to prevent replacement when AZ list order differs
+        ignoreChanges: ['availabilityZones'],
+      }
     );
 
     // Create DB parameter group
