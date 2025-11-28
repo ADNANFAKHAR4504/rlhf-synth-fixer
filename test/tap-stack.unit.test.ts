@@ -1,6 +1,6 @@
 import * as pulumi from '@pulumi/pulumi';
 
-// Mock Pulumi runtime to enable testing
+// Mock Pulumi runtime to enable testing - must be set before importing TapStack
 pulumi.runtime.setMocks({
   newResource: function (args: pulumi.runtime.MockResourceArgs): {
     id: string;
@@ -127,14 +127,13 @@ pulumi.runtime.setMocks({
   },
 });
 
-describe('TapStack', () => {
-  let stack: any;
+// Import TapStack after mocks are set up
+import { TapStack } from '../lib/tap-stack';
 
+describe('TapStack', () => {
   describe('Basic Instantiation', () => {
-    it('should create stack with minimal props', async () => {
-      const { TapStack } = await import('../lib/tap-stack');
-      
-      stack = new TapStack('test-stack', {
+    it('should create stack with minimal props', () => {
+      const stack = new TapStack('test-stack', {
         environmentSuffix: 'test',
       });
 
@@ -146,10 +145,8 @@ describe('TapStack', () => {
       expect(stack.redisEndpoint).toBeDefined();
     });
 
-    it('should create stack with deletion protection enabled', async () => {
-      const { TapStack } = await import('../lib/tap-stack');
-      
-      stack = new TapStack('test-stack-protected', {
+    it('should create stack with deletion protection enabled', () => {
+      const stack = new TapStack('test-stack-protected', {
         environmentSuffix: 'prod',
         enableDeletionProtection: true,
       });
@@ -157,10 +154,8 @@ describe('TapStack', () => {
       expect(stack).toBeDefined();
     });
 
-    it('should create stack with deletion protection disabled', async () => {
-      const { TapStack } = await import('../lib/tap-stack');
-      
-      stack = new TapStack('test-stack-unprotected', {
+    it('should create stack with deletion protection disabled', () => {
+      const stack = new TapStack('test-stack-unprotected', {
         environmentSuffix: 'dev',
         enableDeletionProtection: false,
       });
@@ -170,8 +165,9 @@ describe('TapStack', () => {
   });
 
   describe('Output Values', () => {
-    beforeAll(async () => {
-      const { TapStack } = await import('../lib/tap-stack');
+    let stack: TapStack;
+
+    beforeAll(() => {
       stack = new TapStack('test-stack-outputs', {
         environmentSuffix: 'test',
       });
@@ -209,9 +205,7 @@ describe('TapStack', () => {
   });
 
   describe('Environment Suffix Handling', () => {
-    it('should accept dev environment suffix', async () => {
-      const { TapStack } = await import('../lib/tap-stack');
-      
+    it('should accept dev environment suffix', () => {
       const devStack = new TapStack('dev-stack', {
         environmentSuffix: 'dev',
       });
@@ -219,9 +213,7 @@ describe('TapStack', () => {
       expect(devStack).toBeDefined();
     });
 
-    it('should accept prod environment suffix', async () => {
-      const { TapStack } = await import('../lib/tap-stack');
-      
+    it('should accept prod environment suffix', () => {
       const prodStack = new TapStack('prod-stack', {
         environmentSuffix: 'prod',
       });
@@ -229,9 +221,7 @@ describe('TapStack', () => {
       expect(prodStack).toBeDefined();
     });
 
-    it('should accept staging environment suffix', async () => {
-      const { TapStack } = await import('../lib/tap-stack');
-      
+    it('should accept staging environment suffix', () => {
       const stagingStack = new TapStack('staging-stack', {
         environmentSuffix: 'staging',
       });
@@ -239,9 +229,7 @@ describe('TapStack', () => {
       expect(stagingStack).toBeDefined();
     });
 
-    it('should accept custom environment suffix', async () => {
-      const { TapStack } = await import('../lib/tap-stack');
-      
+    it('should accept custom environment suffix', () => {
       const customStack = new TapStack('custom-stack', {
         environmentSuffix: 'pr123',
       });
@@ -251,9 +239,7 @@ describe('TapStack', () => {
   });
 
   describe('Props Interface', () => {
-    it('should use default deletion protection when not specified', async () => {
-      const { TapStack } = await import('../lib/tap-stack');
-      
+    it('should use default deletion protection when not specified', () => {
       const defaultStack = new TapStack('default-stack', {
         environmentSuffix: 'test',
       });
@@ -261,9 +247,7 @@ describe('TapStack', () => {
       expect(defaultStack).toBeDefined();
     });
 
-    it('should accept all valid props', async () => {
-      const { TapStack } = await import('../lib/tap-stack');
-      
+    it('should accept all valid props', () => {
       const fullStack = new TapStack('full-stack', {
         environmentSuffix: 'integration',
         enableDeletionProtection: true,
@@ -274,8 +258,9 @@ describe('TapStack', () => {
   });
 
   describe('Resource Creation', () => {
-    beforeAll(async () => {
-      const { TapStack } = await import('../lib/tap-stack');
+    let stack: TapStack;
+
+    beforeAll(() => {
       stack = new TapStack('test-resources', {
         environmentSuffix: 'test',
       });
@@ -360,8 +345,6 @@ describe('TapStack', () => {
 
   describe('Network Configuration', () => {
     it('should create infrastructure with correct network topology', async () => {
-      const { TapStack } = await import('../lib/tap-stack');
-      
       const networkStack = new TapStack('network-stack', {
         environmentSuffix: 'test',
       });
@@ -371,9 +354,7 @@ describe('TapStack', () => {
       expect(vpcId).toMatch(/^vpc-/);
     });
 
-    it('should create multi-AZ deployment', async () => {
-      const { TapStack } = await import('../lib/tap-stack');
-      
+    it('should create multi-AZ deployment', () => {
       const multiAzStack = new TapStack('multi-az-stack', {
         environmentSuffix: 'test',
       });
@@ -385,8 +366,6 @@ describe('TapStack', () => {
 
   describe('Database Configuration', () => {
     it('should create Aurora PostgreSQL cluster with correct version', async () => {
-      const { TapStack } = await import('../lib/tap-stack');
-      
       const dbStack = new TapStack('db-stack', {
         environmentSuffix: 'test',
       });
@@ -399,8 +378,6 @@ describe('TapStack', () => {
 
   describe('Cache Configuration', () => {
     it('should create Redis cluster', async () => {
-      const { TapStack } = await import('../lib/tap-stack');
-      
       const cacheStack = new TapStack('cache-stack', {
         environmentSuffix: 'test',
       });
@@ -413,8 +390,6 @@ describe('TapStack', () => {
 
   describe('Load Balancer Configuration', () => {
     it('should create ALB with DNS name', async () => {
-      const { TapStack } = await import('../lib/tap-stack');
-      
       const lbStack = new TapStack('lb-stack', {
         environmentSuffix: 'test',
       });
@@ -427,8 +402,6 @@ describe('TapStack', () => {
 
   describe('ECS Configuration', () => {
     it('should create ECS cluster with correct name', async () => {
-      const { TapStack } = await import('../lib/tap-stack');
-      
       const ecsStack = new TapStack('ecs-stack', {
         environmentSuffix: 'test',
       });
