@@ -359,12 +359,18 @@ class TapStack(TerraformStack):
             provider=primary_provider
         )
 
+        # Get absolute paths for Lambda ZIP files (needed for CDKTF deployment)
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        ec2_lambda_zip = os.path.join(project_root, "lib", "lambda", "ec2_tags_checker.zip")
+        rds_lambda_zip = os.path.join(project_root, "lib", "lambda", "rds_encryption_checker.zip")
+        s3_lambda_zip = os.path.join(project_root, "lib", "lambda", "s3_policies_checker.zip")
+
         # Lambda Function: EC2 Tags Checker
         ec2_lambda = LambdaFunction(
             self,
             "ec2_tags_lambda",
             function_name=f"ec2-tags-checker-{environment_suffix}",
-            filename="lib/lambda/ec2_tags_checker.zip",
+            filename=ec2_lambda_zip,
             handler="ec2_tags_checker.lambda_handler",
             runtime="python3.11",
             role=lambda_role.arn,
@@ -378,7 +384,7 @@ class TapStack(TerraformStack):
             self,
             "rds_encryption_lambda",
             function_name=f"rds-encryption-checker-{environment_suffix}",
-            filename="lib/lambda/rds_encryption_checker.zip",
+            filename=rds_lambda_zip,
             handler="rds_encryption_checker.lambda_handler",
             runtime="python3.11",
             role=lambda_role.arn,
@@ -392,7 +398,7 @@ class TapStack(TerraformStack):
             self,
             "s3_policies_lambda",
             function_name=f"s3-policies-checker-{environment_suffix}",
-            filename="lib/lambda/s3_policies_checker.zip",
+            filename=s3_lambda_zip,
             handler="s3_policies_checker.lambda_handler",
             runtime="python3.11",
             role=lambda_role.arn,
