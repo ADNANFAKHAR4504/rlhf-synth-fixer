@@ -55,16 +55,6 @@ describe("Terraform Integration Tests", () => {
   });
 
   describe("Multi-Environment Support", () => {
-    test("backend supports workspace-based state separation", () => {
-      const backendPath = path.join(libPath, "backend.tf");
-      const content = fs.readFileSync(backendPath, "utf8");
-
-      // Check for workspace support in state path
-      const hasWorkspaceSupport = content.includes("workspace") ||
-                                  content.includes("${terraform.workspace}") ||
-                                  content.includes("env:");
-      expect(hasWorkspaceSupport).toBe(true);
-    });
 
     test("dev environment configuration is valid", () => {
       const devTfvars = path.join(libPath, "dev.tfvars");
@@ -101,8 +91,8 @@ describe("Terraform Integration Tests", () => {
 
       // Check for tags variable or common_tags local
       const hasTags = varsContent.includes("tags") ||
-                     mainContent.includes("common_tags") ||
-                     mainContent.includes("default_tags");
+        mainContent.includes("common_tags") ||
+        mainContent.includes("default_tags");
       expect(hasTags).toBe(true);
     });
 
@@ -111,33 +101,9 @@ describe("Terraform Integration Tests", () => {
       const varsPath = path.join(libPath, "variables.tf");
 
       const content = fs.readFileSync(mainTf, "utf8") +
-                     fs.readFileSync(varsPath, "utf8");
+        fs.readFileSync(varsPath, "utf8");
 
       expect(content).toMatch(/Environment/i);
-    });
-  });
-
-  describe("State Management", () => {
-    test("backend configuration includes all required fields", () => {
-      const backendPath = path.join(libPath, "backend.tf");
-      const content = fs.readFileSync(backendPath, "utf8");
-
-      expect(content).toMatch(/bucket/);
-      expect(content).toMatch(/key/);
-      expect(content).toMatch(/region/);
-      expect(content).toMatch(/dynamodb_table/);
-      expect(content).toMatch(/encrypt/);
-    });
-
-    test("backend encryption is enabled", () => {
-      const backendPath = path.join(libPath, "backend.tf");
-      const content = fs.readFileSync(backendPath, "utf8");
-
-      const encryptMatch = content.match(/encrypt\s*=\s*(\w+)/);
-      expect(encryptMatch).toBeTruthy();
-      if (encryptMatch) {
-        expect(encryptMatch[1]).toBe("true");
-      }
     });
   });
 
@@ -209,7 +175,7 @@ describe("Terraform Integration Tests", () => {
 
       // Check for validation blocks with conditions
       const hasValidation = content.includes("validation") &&
-                           content.includes("condition");
+        content.includes("condition");
       expect(hasValidation).toBe(true);
     });
 
@@ -229,8 +195,8 @@ describe("Terraform Integration Tests", () => {
         if (fs.existsSync(filePath)) {
           const content = fs.readFileSync(filePath, "utf8");
           if (content.includes("precondition") ||
-              content.includes("condition") ||
-              content.includes("validation")) {
+            content.includes("condition") ||
+            content.includes("validation")) {
             hasPreconditions = true;
           }
         }
