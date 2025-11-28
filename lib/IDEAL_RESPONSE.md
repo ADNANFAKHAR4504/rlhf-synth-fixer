@@ -97,35 +97,6 @@ locals {
   # Current environment configuration
   current_config = local.environment_config[var.environment_suffix]
 
-  # ELB service account IDs by region
-  # https://docs.aws.amazon.com/elasticloadbalancing/latest/application/enable-access-logging.html
-  elb_service_accounts = {
-    "us-east-1"      = "127311923021"
-    "us-east-2"      = "033677994240"
-    "us-west-1"      = "027434742980"
-    "us-west-2"      = "797873946194"
-    "af-south-1"     = "098369216593"
-    "ca-central-1"   = "985666609251"
-    "eu-central-1"   = "054676820928"
-    "eu-north-1"     = "897822967062"
-    "eu-south-1"     = "635631232127"
-    "eu-west-1"      = "156460612806"
-    "eu-west-2"      = "652711504416"
-    "eu-west-3"      = "009996457667"
-    "ap-east-1"      = "754344448648"
-    "ap-northeast-1" = "582318560864"
-    "ap-northeast-2" = "600734575887"
-    "ap-northeast-3" = "383597477331"
-    "ap-southeast-1" = "114774131450"
-    "ap-southeast-2" = "783225319266"
-    "ap-southeast-3" = "589379963580"
-    "ap-south-1"     = "718504428378"
-    "me-south-1"     = "076674570225"
-    "sa-east-1"      = "507241528517"
-  }
-
-  elb_service_account_arn = "arn:aws:iam::${local.elb_service_accounts[local.current_config.region]}:root"
-
   # Common tags
   common_tags = {
     Project     = var.project_name
@@ -151,41 +122,6 @@ resource "aws_kms_key" "rds_encryption" {
   deletion_window_in_days = var.environment_suffix == "prod" ? 30 : 7
   enable_key_rotation     = true
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "Enable IAM User Permissions"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
-        }
-        Action   = "kms:*"
-        Resource = "*"
-      },
-      {
-        Sid    = "Allow CloudWatch Logs"
-        Effect = "Allow"
-        Principal = {
-          Service = "logs.${var.aws_region}.amazonaws.com"
-        }
-        Action = [
-          "kms:Encrypt",
-          "kms:Decrypt",
-          "kms:ReEncrypt*",
-          "kms:GenerateDataKey*",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-        Condition = {
-          ArnEquals = {
-            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/vpc/flowlogs-${local.name_prefix}"
-          }
-        }
-      }
-    ]
-  })
-
   tags = merge(local.common_tags, {
     Name    = "${local.name_prefix}-rds-kms-key"
     Service = "RDS"
@@ -197,43 +133,11 @@ resource "aws_kms_alias" "rds_encryption" {
   target_key_id = aws_kms_key.rds_encryption.key_id
 }
 
-
-
-# ================================
-# AWS SECRETS MANAGER
-# ================================
-
-# Generate random password for RDS
-resource "random_password" "db_password" {
-  length  = 32
-  special = true
-}
-
-# Store RDS password in Secrets Manager
-resource "aws_secretsmanager_secret" "db_password" {
-  name                    = "${local.name_prefix}-rds-password"
-  description             = "RDS password for ${var.environment_suffix} environment"
-  kms_key_id              = aws_kms_key.rds_encryption.arn
-  recovery_window_in_days = var.environment_suffix == "prod" ? 30 : 0
-
-  tags = merge(local.common_tags, {
-    Name    = "${local.name_prefix}-rds-password"
-    Service = "SecretsManager"
-  })
-}
-
-resource "aws_secretsmanager_secret_version" "db_password" {
-  secret_id = aws_secretsmanager_secret.db_password.id
-  secret_string = jsonencode({
-    username = "dbadmin"
-    password = random_password.db_password.result
-  })
-}
-
 # KMS key for S3 encryption
 resource "aws_kms_key" "s3_encryption" {
   description             = "KMS key for S3 encryption in ${var.environment_suffix} environment"
   deletion_window_in_days = var.environment_suffix == "prod" ? 30 : 7
+  enable_key_rotation     = true
 
   tags = merge(local.common_tags, {
     Name    = "${local.name_prefix}-s3-kms-key"
@@ -527,10 +431,9 @@ resource "aws_db_instance" "main" {
   max_allocated_storage = var.db_allocated_storage * 2
 
   # Database settings
-  db_name                       = "paymentdb"
-  username                      = "dbadmin"
-  manage_master_user_password   = true
-  master_user_secret_kms_key_id = aws_kms_key.rds_encryption.arn
+  db_name  = "paymentdb"
+  username = "dbadmin"
+  manage_master_user_password = true
 
   # Network configuration
   db_subnet_group_name   = aws_db_subnet_group.main.name
@@ -572,18 +475,6 @@ resource "aws_lb" "main" {
   subnets            = aws_subnet.public[*].id
 
   enable_deletion_protection = var.environment_suffix == "prod"
-
-  access_logs {
-    bucket  = aws_s3_bucket.alb_logs.bucket
-    enabled = true
-    prefix  = "alb-logs"
-  }
-
-  depends_on = [
-    aws_s3_bucket_policy.alb_logs,
-    aws_s3_bucket_public_access_block.alb_logs,
-    aws_s3_bucket_server_side_encryption_configuration.alb_logs
-  ]
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-payment-alb"
@@ -643,7 +534,10 @@ resource "aws_s3_bucket" "assets" {
   })
 }
 
-
+# Random ID for bucket naming
+resource "random_id" "bucket_suffix" {
+  byte_length = 4
+}
 
 # S3 Bucket Versioning
 resource "aws_s3_bucket_versioning" "assets" {
@@ -676,125 +570,6 @@ resource "aws_s3_bucket_public_access_block" "assets" {
   restrict_public_buckets = true
 }
 
-# S3 Bucket for ALB Access Logs
-resource "aws_s3_bucket" "alb_logs" {
-  bucket = "${local.name_prefix}-alb-logs-${random_id.bucket_suffix.hex}"
-
-  tags = merge(local.common_tags, {
-    Name    = "${local.name_prefix}-alb-logs"
-    Service = "ALB"
-  })
-}
-
-# ALB logs bucket server-side encryption
-resource "aws_s3_bucket_server_side_encryption_configuration" "alb_logs" {
-  bucket = aws_s3_bucket.alb_logs.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      kms_master_key_id = aws_kms_key.s3_encryption.arn
-      sse_algorithm     = "aws:kms"
-    }
-    bucket_key_enabled = true
-  }
-}
-
-# ALB logs bucket versioning
-resource "aws_s3_bucket_versioning" "alb_logs" {
-  bucket = aws_s3_bucket.alb_logs.id
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-# ALB logs bucket policy
-resource "aws_s3_bucket_policy" "alb_logs" {
-  bucket = aws_s3_bucket.alb_logs.id
-
-  depends_on = [
-    aws_s3_bucket.alb_logs,
-    aws_s3_bucket_public_access_block.alb_logs
-  ]
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "AWSLogDeliveryWrite"
-        Effect = "Allow"
-        Principal = {
-          Service = "delivery.logs.amazonaws.com"
-        }
-        Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.alb_logs.arn}/alb-logs/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
-        Condition = {
-          StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
-          }
-        }
-      },
-      {
-        Sid    = "AWSLogDeliveryAclCheck"
-        Effect = "Allow"
-        Principal = {
-          Service = "delivery.logs.amazonaws.com"
-        }
-        Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.alb_logs.arn
-      },
-      {
-        Sid    = "ELBAccessLogsWrite"
-        Effect = "Allow"
-        Principal = {
-          AWS = local.elb_service_account_arn
-        }
-        Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.alb_logs.arn}/alb-logs/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
-      },
-      {
-        Sid    = "ELBAccessLogsAclCheck"
-        Effect = "Allow"
-        Principal = {
-          AWS = local.elb_service_account_arn
-        }
-        Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.alb_logs.arn
-      }
-    ]
-  })
-}
-
-# ALB logs bucket public access block
-resource "aws_s3_bucket_public_access_block" "alb_logs" {
-  bucket = aws_s3_bucket.alb_logs.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-# ALB logs bucket lifecycle configuration
-resource "aws_s3_bucket_lifecycle_configuration" "alb_logs" {
-  bucket = aws_s3_bucket.alb_logs.id
-
-  rule {
-    id     = "alb_logs_lifecycle"
-    status = "Enabled"
-
-    expiration {
-      days = 90
-    }
-
-    noncurrent_version_expiration {
-      noncurrent_days = 30
-    }
-  }
-}
-
-# Data sources for ALB logging
-data "aws_caller_identity" "current" {}
-
 # S3 Bucket Lifecycle Configuration
 resource "aws_s3_bucket_lifecycle_configuration" "assets" {
   bucket = aws_s3_bucket.assets.id
@@ -822,131 +597,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "assets" {
       noncurrent_days = local.current_config.s3_archive_days
     }
   }
-}
-
-# ================================
-# MONITORING AND LOGGING
-# ================================
-
-# CloudWatch Log Group for VPC Flow Logs
-resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
-  name              = "/aws/vpc/flowlogs-${local.name_prefix}"
-  retention_in_days = var.environment_suffix == "prod" ? 365 : 30
-  kms_key_id        = aws_kms_key.rds_encryption.arn
-
-  tags = merge(local.common_tags, {
-    Name    = "${local.name_prefix}-vpc-flow-logs"
-    Service = "CloudWatch"
-  })
-}
-
-# IAM Role for VPC Flow Logs
-resource "aws_iam_role" "flow_logs_role" {
-  name = "${local.name_prefix}-flow-logs-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "vpc-flow-logs.amazonaws.com"
-        }
-      }
-    ]
-  })
-
-  tags = local.common_tags
-}
-
-resource "aws_iam_role_policy" "flow_logs_delivery_policy" {
-  name = "${local.name_prefix}-flow-logs-delivery-policy"
-  role = aws_iam_role.flow_logs_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents",
-          "logs:DescribeLogGroups",
-          "logs:DescribeLogStreams"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-}
-
-# VPC Flow Logs
-resource "aws_flow_log" "vpc_flow_logs" {
-  iam_role_arn    = aws_iam_role.flow_logs_role.arn
-  log_destination = aws_cloudwatch_log_group.vpc_flow_logs.arn
-  traffic_type    = "ALL"
-  vpc_id          = aws_vpc.main.id
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-vpc-flow-logs"
-  })
-}
-
-# CloudWatch Alarms
-resource "aws_cloudwatch_metric_alarm" "rds_cpu" {
-  alarm_name          = "${local.name_prefix}-rds-cpu-utilization"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/RDS"
-  period              = "120"
-  statistic           = "Average"
-  threshold           = "80"
-  alarm_description   = "This metric monitors RDS CPU utilization"
-  alarm_actions       = var.environment_suffix == "prod" ? [aws_sns_topic.alerts[0].arn] : []
-
-  dimensions = {
-    DBInstanceIdentifier = aws_db_instance.main.id
-  }
-
-  tags = local.common_tags
-}
-
-resource "aws_cloudwatch_metric_alarm" "alb_response_time" {
-  alarm_name          = "${local.name_prefix}-alb-response-time"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "TargetResponseTime"
-  namespace           = "AWS/ApplicationELB"
-  period              = "120"
-  statistic           = "Average"
-  threshold           = "1"
-  alarm_description   = "This metric monitors ALB response time"
-  alarm_actions       = var.environment_suffix == "prod" ? [aws_sns_topic.alerts[0].arn] : []
-
-  dimensions = {
-    LoadBalancer = aws_lb.main.arn_suffix
-  }
-
-  tags = local.common_tags
-}
-
-# SNS Topic for alerts (only in production)
-resource "aws_sns_topic" "alerts" {
-  count = var.environment_suffix == "prod" ? 1 : 0
-  name  = "${local.name_prefix}-alerts"
-
-  tags = merge(local.common_tags, {
-    Name    = "${local.name_prefix}-alerts"
-    Service = "SNS"
-  })
-}
-
-# Random ID for bucket naming
-resource "random_id" "bucket_suffix" {
-  byte_length = 8
 }
 
 # ================================
