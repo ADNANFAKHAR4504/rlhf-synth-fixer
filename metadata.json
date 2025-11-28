@@ -20,5 +20,7 @@
     "AWS KMS",
     "Amazon EventBridge"
   ],
-  "training_quality": 9
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing"
 }
