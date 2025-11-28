@@ -1,10 +1,10 @@
 resource "aws_s3_bucket" "main" {
-  bucket = "${var.environment}-${var.project_name}-app-data-lg"
+  bucket = "${var.environment}-${var.project_name}-app-data-log"
 
   tags = merge(
     var.common_tags,
     {
-      Name = "${var.environment}-${var.project_name}-app-data-lg"
+      Name = "${var.environment}-${var.project_name}-app-data-log"
     }
   )
 }

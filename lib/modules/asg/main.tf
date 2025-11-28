@@ -14,7 +14,7 @@ data "aws_ami" "amazon_linux" {
 }
 
 resource "aws_iam_role" "ec2" {
-  name = "${var.environment}-${var.project_name}-ec2-role"
+  name = "${var.environment}-${var.project_name}-ec2-roles"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
