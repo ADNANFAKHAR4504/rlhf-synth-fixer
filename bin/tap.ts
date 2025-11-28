@@ -10,7 +10,9 @@ import { TapStack } from '../lib/tap-stack';
 
 // Get configuration values
 const config = new pulumi.Config();
-const environmentSuffix = config.require('environmentSuffix');
+// Support both Pulumi config and environment variable for CI/CD compatibility
+const environmentSuffix =
+  config.get('environmentSuffix') || process.env.ENVIRONMENT_SUFFIX || 'dev';
 const migrationPhase = config.get('migrationPhase') || 'dev';
 const costCenter = config.get('costCenter') || 'migration-team';
 const complianceScope = config.get('complianceScope') || 'PCI-DSS';
