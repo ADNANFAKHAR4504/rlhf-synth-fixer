@@ -921,6 +921,9 @@ export class TapStack extends pulumi.ComponentResource {
               labels: {
                 app: 'cluster-autoscaler',
               },
+              annotations: {
+                'deployment.kubernetes.io/revision': '2',
+              },
             },
             spec: {
               serviceAccountName: 'cluster-autoscaler',
