@@ -387,7 +387,6 @@ export class TapStack {
 
     // 5. S3 Buckets
     const logsBucket = new aws.s3.Bucket(`${name}-logs-bucket`, {
-      acl: 'log-delivery-write',
       serverSideEncryptionConfiguration: {
         rule: {
           applyServerSideEncryptionByDefault: {
