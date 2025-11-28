@@ -21,4 +21,4 @@ backup_retention          = 7
 location_processor_memory = 512
 geofence_checker_memory   = 512
 warehouse_updater_memory  = 512
-pr_number                 = "pr7507"
+pr_number                 = "pr7512"
