@@ -53,11 +53,29 @@ class TapStack(TerraformStack):
             region=state_bucket_region
         )
 
-        # Single region provider
+        # Single region provider (main provider for new resources)
         provider = AwsProvider(
             self,
             "aws",
             region=self.aws_region,
+            default_tags=[default_tags]
+        )
+
+        # Legacy provider aliases for cleaning up orphaned multi-region resources
+        # These are needed to destroy orphaned resources from previous deployments
+        AwsProvider(
+            self,
+            "aws_primary",
+            alias="primary",
+            region=self.aws_region,
+            default_tags=[default_tags]
+        )
+
+        AwsProvider(
+            self,
+            "aws_secondary",
+            alias="secondary",
+            region="us-west-2",
             default_tags=[default_tags]
         )
 
