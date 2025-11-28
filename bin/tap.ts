@@ -2,7 +2,13 @@ import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';
 
 const config = new pulumi.Config();
-const environmentSuffix = config.require('environmentSuffix');
+
+// Get environmentSuffix from Pulumi config, fallback to ENVIRONMENT_SUFFIX env var, or use 'dev'
+const environmentSuffix =
+  config.get('environmentSuffix') ||
+  process.env.ENVIRONMENT_SUFFIX ||
+  'dev';
+
 const enableDeletionProtection =
   config.getBoolean('enableDeletionProtection') || false;
 
