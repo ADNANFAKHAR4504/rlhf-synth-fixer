@@ -1,6 +1,6 @@
 # Local variables for unique naming
 locals {
-  cluster_name_unique = "${var.cluster_name}-${var.environment_suffix}-${formatdate("YYMMDDhhmm", timestamp())}"
+  cluster_name_unique = "${var.cluster_name}-${var.environment_suffix}"
 }
 
 # IAM role for EKS cluster
@@ -39,7 +39,7 @@ resource "aws_iam_role_policy_attachment" "eks_vpc_resource_controller" {
 
 # CloudWatch log group for EKS cluster
 resource "aws_cloudwatch_log_group" "eks_cluster" {
-  name              = "/aws/eks/${var.cluster_name}-${var.environment_suffix}-${formatdate("YYYYMMDDhhmmss", timestamp())}/cluster"
+  name              = "/aws/eks/${var.cluster_name}-${var.environment_suffix}/cluster"
   retention_in_days = 7
 
   tags = merge(
@@ -51,13 +51,13 @@ resource "aws_cloudwatch_log_group" "eks_cluster" {
   )
 
   lifecycle {
-    ignore_changes = [name]
+    ignore_changes = []
   }
 }
 
 # EKS Cluster
 resource "aws_eks_cluster" "main" {
-  name     = local.cluster_name_unique
+  name     = "${var.cluster_name}-${var.environment_suffix}"
   role_arn = aws_iam_role.eks_cluster.arn
   version  = var.cluster_version
 
@@ -96,13 +96,13 @@ resource "aws_eks_cluster" "main" {
   tags = merge(
     var.tags,
     {
-      Name        = local.cluster_name_unique
+      Name        = "${var.cluster_name}-${var.environment_suffix}"
       Environment = var.environment
     }
   )
 
   lifecycle {
-    ignore_changes = [name]
+    ignore_changes = []
   }
 }
 

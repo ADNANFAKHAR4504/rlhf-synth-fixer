@@ -3,7 +3,7 @@ data "aws_caller_identity" "current" {}
 
 # KMS key for EKS cluster encryption
 resource "aws_kms_key" "eks" {
-  description             = "KMS key for EKS cluster ${local.cluster_name_unique} encryption"
+  description             = "KMS key for EKS cluster ${var.cluster_name}-${var.environment_suffix} encryption"
   deletion_window_in_days = var.kms_key_deletion_window
   enable_key_rotation     = true
 
@@ -30,9 +30,10 @@ resource "aws_vpc" "main" {
   tags = merge(
     var.tags,
     {
-      Name                                                 = "eks-vpc-${var.environment_suffix}"
-      Environment                                          = var.environment
-      "kubernetes.io/cluster/${local.cluster_name_unique}" = "shared"
+      Name                                                                  = "eks-vpc-${var.environment_suffix}"
+      Environment                                                           = var.environment
+      "kubernetes.io/cluster/${var.cluster_name}-${var.environment_suffix}" = "shared"
+      "kubernetes.io/cluster/${local.cluster_name_unique}"                  = "shared"
     }
   )
 }
