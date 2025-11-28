@@ -164,6 +164,15 @@ export class LambdaComponent extends pulumi.ComponentResource {
           imageUri: dockerImageUri,
         };
 
+    // Don't set reserved concurrency in CI/CD to avoid account limit issues
+    const reservedConcurrency = useZipDeployment
+      ? undefined
+      : cpu === 2
+        ? 100
+        : cpu === 1
+          ? 50
+          : 10;
+
     const lambdaFunction = new aws.lambda.Function(
       `payment-processor-${environmentSuffix}`,
       {
@@ -171,7 +180,7 @@ export class LambdaComponent extends pulumi.ComponentResource {
         role: role.arn,
         timeout: 300,
         memorySize: memory,
-        reservedConcurrentExecutions: cpu === 2 ? 100 : cpu === 1 ? 50 : 10,
+        reservedConcurrentExecutions: reservedConcurrency,
         vpcConfig: {
           subnetIds: subnetIds,
           securityGroupIds: [securityGroup.id],
