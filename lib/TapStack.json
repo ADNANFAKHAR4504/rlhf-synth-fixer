@@ -116,7 +116,7 @@
       "Properties": {
         "VpcId": {"Ref": "VPC"},
         "CidrBlock": {"Fn::FindInMap": ["SubnetConfig", {"Ref": "AWS::Region"}, "PublicSubnet1"]},
-        "AvailabilityZone": "us-east-1a",
+        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": {"Ref": "AWS::Region"}}]},
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
@@ -136,7 +136,7 @@
       "Properties": {
         "VpcId": {"Ref": "VPC"},
         "CidrBlock": {"Fn::FindInMap": ["SubnetConfig", {"Ref": "AWS::Region"}, "PublicSubnet2"]},
-        "AvailabilityZone": "us-east-1b",
+        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": {"Ref": "AWS::Region"}}]},
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
@@ -156,7 +156,7 @@
       "Properties": {
         "VpcId": {"Ref": "VPC"},
         "CidrBlock": {"Fn::FindInMap": ["SubnetConfig", {"Ref": "AWS::Region"}, "PublicSubnet3"]},
-        "AvailabilityZone": "us-east-1c",
+        "AvailabilityZone": {"Fn::Select": [2, {"Fn::GetAZs": {"Ref": "AWS::Region"}}]},
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
@@ -176,7 +176,7 @@
       "Properties": {
         "VpcId": {"Ref": "VPC"},
         "CidrBlock": {"Fn::FindInMap": ["SubnetConfig", {"Ref": "AWS::Region"}, "PrivateSubnet1"]},
-        "AvailabilityZone": "us-east-1a",
+        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": {"Ref": "AWS::Region"}}]},
         "Tags": [
           {
             "Key": "Name",
@@ -195,7 +195,7 @@
       "Properties": {
         "VpcId": {"Ref": "VPC"},
         "CidrBlock": {"Fn::FindInMap": ["SubnetConfig", {"Ref": "AWS::Region"}, "PrivateSubnet2"]},
-        "AvailabilityZone": "us-east-1b",
+        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": {"Ref": "AWS::Region"}}]},
         "Tags": [
           {
             "Key": "Name",
@@ -214,7 +214,7 @@
       "Properties": {
         "VpcId": {"Ref": "VPC"},
         "CidrBlock": {"Fn::FindInMap": ["SubnetConfig", {"Ref": "AWS::Region"}, "PrivateSubnet3"]},
-        "AvailabilityZone": "us-east-1c",
+        "AvailabilityZone": {"Fn::Select": [2, {"Fn::GetAZs": {"Ref": "AWS::Region"}}]},
         "Tags": [
           {
             "Key": "Name",
