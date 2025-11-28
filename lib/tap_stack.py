@@ -18,6 +18,7 @@ from cdktf_cdktf_provider_aws.route_table_association import RouteTableAssociati
 from cdktf_cdktf_provider_aws.security_group import SecurityGroup, SecurityGroupIngress, SecurityGroupEgress
 from cdktf_cdktf_provider_aws.rds_cluster import RdsCluster
 from cdktf_cdktf_provider_aws.rds_cluster_instance import RdsClusterInstance
+from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
 from cdktf_cdktf_provider_aws.iam_role import IamRole
 from cdktf_cdktf_provider_aws.iam_instance_profile import IamInstanceProfile
 from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
@@ -337,6 +338,16 @@ class TapStack(TerraformStack):
             tags={"Name": f"aurora-sg-{environment_suffix}"}
         )
 
+        # DB Subnet Group for Aurora (required for RDS in custom VPC)
+        db_subnet_group = DbSubnetGroup(
+            self,
+            "db_subnet_group",
+            name=f"payment-db-subnet-group-{environment_suffix}",
+            description="DB subnet group for payment Aurora cluster",
+            subnet_ids=[s.id for s in private_subnets],
+            tags={"Name": f"db-subnet-group-{environment_suffix}"}
+        )
+
         # 2. Aurora Cluster (simplified - no global cluster to reduce complexity)
         aurora_cluster = RdsCluster(
             self,
@@ -350,7 +361,7 @@ class TapStack(TerraformStack):
             backup_retention_period=7,
             preferred_backup_window="03:00-04:00",
             preferred_maintenance_window="mon:04:00-mon:05:00",
-            db_subnet_group_name=None,  # Will create inline
+            db_subnet_group_name=db_subnet_group.name,
             vpc_security_group_ids=[aurora_sg.id],
             storage_encrypted=True,
             kms_key_id=kms_key.arn,
