@@ -9,7 +9,8 @@ the TAP (Tenant Application Platform) project.
 import json
 from typing import Dict, Optional
 
-from aws_cdk import CfnDeletionPolicy, CfnOutput, Duration, RemovalPolicy, Stack, Tags
+from aws_cdk import (CfnDeletionPolicy, CfnOutput, Duration, RemovalPolicy,
+                     Stack, Tags)
 from aws_cdk import aws_autoscaling as autoscaling
 from aws_cdk import aws_cloudwatch as cloudwatch
 from aws_cdk import aws_dynamodb as dynamodb

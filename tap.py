@@ -29,7 +29,7 @@ account = os.getenv('CDK_DEFAULT_ACCOUNT')
 
 # Define regions for multi-region deployment
 primary_region = os.getenv('CDK_DEFAULT_REGION') or 'eu-west-2'
-secondary_region = os.getenv('CDK_SECONDARY_REGION') or 'ap-southeast-1'
+secondary_region = os.getenv('CDK_SECONDARY_REGION') or 'eu-central-1'
 third_region = os.getenv('CDK_THIRD_REGION') or 'us-west-2'
 
 # Metadata for tagging
