@@ -9,7 +9,7 @@ the TAP (Tenant Application Platform) project.
 import json
 from typing import Dict, Optional
 
-from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack, Tags
+from aws_cdk import CfnDeletionPolicy, CfnOutput, Duration, RemovalPolicy, Stack, Tags
 from aws_cdk import aws_autoscaling as autoscaling
 from aws_cdk import aws_cloudwatch as cloudwatch
 from aws_cdk import aws_dynamodb as dynamodb
@@ -397,7 +397,10 @@ class TapStack(Stack):
             ),
             writer=rds.ClusterInstance.provisioned(
                 "Writer",
-                instance_type=ec2.InstanceType("db.r6g.4xlarge"),
+                instance_type=ec2.InstanceType.of(
+                    ec2.InstanceClass.R6G,
+                    ec2.InstanceSize.XLARGE4
+                ),
                 enable_performance_insights=True,
                 performance_insight_retention=rds.PerformanceInsightRetention.LONG_TERM,
                 publicly_accessible=False
@@ -405,7 +408,10 @@ class TapStack(Stack):
             readers=[
                 rds.ClusterInstance.provisioned(
                     f"Reader{i}",
-                    instance_type=ec2.InstanceType("db.r6g.4xlarge"),
+                    instance_type=ec2.InstanceType.of(
+                        ec2.InstanceClass.R6G,
+                        ec2.InstanceSize.XLARGE4
+                    ),
                     enable_performance_insights=True,
                     performance_insight_retention=rds.PerformanceInsightRetention.LONG_TERM,
                     publicly_accessible=False
@@ -609,6 +615,16 @@ class TapStack(Stack):
             ]
         )
 
+        # Set deletion and update policies to handle state transitions gracefully
+        redis_cluster.cfn_options.deletion_policy = (
+            CfnDeletionPolicy.SNAPSHOT if self.environment_suffix == 'prod'
+            else CfnDeletionPolicy.DELETE
+        )
+        redis_cluster.cfn_options.update_replace_policy = (
+            CfnDeletionPolicy.SNAPSHOT if self.environment_suffix == 'prod'
+            else CfnDeletionPolicy.DELETE
+        )
+
         redis_cluster.add_dependency(subnet_group)
         redis_cluster.add_dependency(parameter_group)
 
@@ -761,9 +777,13 @@ class TapStack(Stack):
                 subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
             ),
             instance_type=ec2.InstanceType("m5.4xlarge"),
-            machine_image=ec2.MachineImage.latest_amazon_linux2(
-                cached_in_context=True
-            ),
+            machine_image=ec2.MachineImage.generic_linux({
+                # Amazon Linux 2 AMI IDs (x86_64) - update with latest as needed
+                "eu-west-2": "ami-0b9932f4918a00c4f",      # London
+                "ap-southeast-1": "ami-0dc2d3e4c0f9ebd18",  # Singapore
+                "us-west-2": "ami-0c2ab3b8efb09f272",      # Oregon
+                "us-east-1": "ami-0cff7528ff583bf9a",      # N. Virginia
+            }),
             role=instance_role,
             security_group=self.security_groups['ec2'],
             user_data=user_data,
