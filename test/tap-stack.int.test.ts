@@ -50,7 +50,7 @@ function createManifestInput(
     lambdaMemory: config.lambda.memory,
     lambdaCpu: config.lambda.cpu,
     databaseInstanceClass: config.database.instanceClass,
-    databaseEngineVersion: '15.4',
+    databaseEngineVersion: '15.8',
     secretRotationDays: 30,
     backupRetentionDays: 7,
     logRetentionDays: 30,
@@ -246,9 +246,9 @@ describe('TapStack Integration Tests', () => {
         createManifestInput(createProdConfig(), dockerImageUri)
       );
 
-      expect(devManifest.configuration.database.engineVersion).toBe('15.4');
-      expect(stagingManifest.configuration.database.engineVersion).toBe('15.4');
-      expect(prodManifest.configuration.database.engineVersion).toBe('15.4');
+      expect(devManifest.configuration.database.engineVersion).toBe('15.8');
+      expect(stagingManifest.configuration.database.engineVersion).toBe('15.8');
+      expect(prodManifest.configuration.database.engineVersion).toBe('15.8');
     });
 
     it('should have identical secret rotation policy across environments', () => {

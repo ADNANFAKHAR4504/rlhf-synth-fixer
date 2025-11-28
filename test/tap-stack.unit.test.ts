@@ -53,7 +53,7 @@ function createManifestInput(config: EnvironmentConfig): ManifestInput {
     lambdaMemory: config.lambda.memory,
     lambdaCpu: config.lambda.cpu,
     databaseInstanceClass: config.database.instanceClass,
-    databaseEngineVersion: '15.4',
+    databaseEngineVersion: '15.8',
     secretRotationDays: 30,
     backupRetentionDays: 7,
     logRetentionDays: 30,
@@ -286,7 +286,7 @@ describe('Manifest Generation', () => {
 
     expect(manifest.configuration.database).toEqual({
       instanceClass: 'db.r6g.large',
-      engineVersion: '15.4',
+      engineVersion: '15.8',
     });
   });
 
