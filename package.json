@@ -46,7 +46,7 @@
     "destroy:production": "cdk destroy --context environment=production",
     "cdktf:get": "cdktf get",
     "cdktf:synth": "cdktf synth",
-    "cdktf:build-lambdas": "bash lib/build_lambdas.sh",
+    "cdktf:build-lambdas": "bash lib/build_lambdas.sh && mkdir -p cdktf.out/stacks/TransactionApiStack/lib && cp lib/*.zip cdktf.out/stacks/TransactionApiStack/lib/",
     "cdktf:deploy": "npm run cdktf:build-lambdas && cdktf deploy '*' --auto-approve",
     "cdktf:destroy": "cdktf destroy --auto-approve",
     "tf": "terraform",
