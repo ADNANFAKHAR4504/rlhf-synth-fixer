@@ -559,7 +559,7 @@ const globalCluster = new aws.rds.GlobalCluster(
   {
     globalClusterIdentifier: `global-cluster-${environmentSuffix}`,
     engine: 'aurora-postgresql',
-    engineVersion: '15.4',
+    engineVersion: '15.7',
     databaseName: 'paymentdb',
     storageEncrypted: true,
   },
@@ -572,7 +572,7 @@ const primaryCluster = new aws.rds.Cluster(
   {
     clusterIdentifier: `aurora-primary-${environmentSuffix}`,
     engine: 'aurora-postgresql',
-    engineVersion: '15.4',
+    engineVersion: '15.7',
     databaseName: 'paymentdb',
     masterUsername: 'dbadmin',
     masterPassword: config.requireSecret('dbPassword'),
@@ -602,7 +602,7 @@ const primaryInstance1 = new aws.rds.ClusterInstance(
     clusterIdentifier: primaryCluster.id,
     instanceClass: 'db.r6g.large',
     engine: 'aurora-postgresql',
-    engineVersion: '15.4',
+    engineVersion: '15.7',
     publiclyAccessible: false,
     tags: {
       ...commonTags,
@@ -619,7 +619,7 @@ const primaryInstance2 = new aws.rds.ClusterInstance(
     clusterIdentifier: primaryCluster.id,
     instanceClass: 'db.r6g.large',
     engine: 'aurora-postgresql',
-    engineVersion: '15.4',
+    engineVersion: '15.7',
     publiclyAccessible: false,
     tags: {
       ...commonTags,
@@ -635,7 +635,7 @@ const secondaryCluster = new aws.rds.Cluster(
   {
     clusterIdentifier: `aurora-secondary-${environmentSuffix}`,
     engine: 'aurora-postgresql',
-    engineVersion: '15.4',
+    engineVersion: '15.7',
     dbSubnetGroupName: secondaryDbSubnetGroup.name,
     vpcSecurityGroupIds: [secondaryDbSg.id],
     globalClusterIdentifier: globalCluster.id,
@@ -661,7 +661,7 @@ const secondaryInstance1 = new aws.rds.ClusterInstance(
     clusterIdentifier: secondaryCluster.id,
     instanceClass: 'db.r6g.large',
     engine: 'aurora-postgresql',
-    engineVersion: '15.4',
+    engineVersion: '15.7',
     publiclyAccessible: false,
     tags: {
       ...commonTags,
