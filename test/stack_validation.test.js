@@ -160,17 +160,16 @@ describe('CloudFormation Stack Validation', () => {
     expect(template.Resources.GlobalTableCustomResourceRole).toBeDefined();
   });
 
-  test('Lambda Insights is enabled on all Lambda functions', () => {
+  // Lambda Layers are not supported for container-based Lambda functions
+  // The functions use PackageType: Image, so Layers would cause deployment errors
+  test('Container Lambda functions do not have Layers (not supported)', () => {
     const validatorFunction = template.Resources.TradeValidatorFunction;
     const enricherFunction = template.Resources.MetadataEnricherFunction;
     const recorderFunction = template.Resources.ComplianceRecorderFunction;
 
-    expect(validatorFunction.Properties.Layers).toBeDefined();
-    expect(validatorFunction.Properties.Layers.length).toBeGreaterThan(0);
-    expect(enricherFunction.Properties.Layers).toBeDefined();
-    expect(enricherFunction.Properties.Layers.length).toBeGreaterThan(0);
-    expect(recorderFunction.Properties.Layers).toBeDefined();
-    expect(recorderFunction.Properties.Layers.length).toBeGreaterThan(0);
+    expect(validatorFunction.Properties.Layers).toBeUndefined();
+    expect(enricherFunction.Properties.Layers).toBeUndefined();
+    expect(recorderFunction.Properties.Layers).toBeUndefined();
   });
 
   test('X-Ray tracing is enabled on Lambda functions', () => {

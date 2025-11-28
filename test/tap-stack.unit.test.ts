@@ -159,13 +159,12 @@ describe('TapStack CloudFormation Template - Trade Processing System', () => {
       expect(template.Resources.ComplianceRecorderFunction.Properties.TracingConfig).toEqual({ Mode: 'Active' });
     });
 
-    test('all Lambda functions should have Lambda Insights layers', () => {
-      expect(template.Resources.TradeValidatorFunction.Properties.Layers).toBeDefined();
-      expect(template.Resources.TradeValidatorFunction.Properties.Layers.length).toBeGreaterThan(0);
-      expect(template.Resources.MetadataEnricherFunction.Properties.Layers).toBeDefined();
-      expect(template.Resources.MetadataEnricherFunction.Properties.Layers.length).toBeGreaterThan(0);
-      expect(template.Resources.ComplianceRecorderFunction.Properties.Layers).toBeDefined();
-      expect(template.Resources.ComplianceRecorderFunction.Properties.Layers.length).toBeGreaterThan(0);
+    // Note: Lambda Layers are not supported for container-based Lambda functions
+    // The functions use PackageType: Image, so Layers would cause deployment errors
+    test('container-based Lambda functions should not have Layers', () => {
+      expect(template.Resources.TradeValidatorFunction.Properties.Layers).toBeUndefined();
+      expect(template.Resources.MetadataEnricherFunction.Properties.Layers).toBeUndefined();
+      expect(template.Resources.ComplianceRecorderFunction.Properties.Layers).toBeUndefined();
     });
   });
 
