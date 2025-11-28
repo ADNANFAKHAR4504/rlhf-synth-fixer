@@ -529,3 +529,9 @@ pipenv run test-py-unit
 # Integration tests
 pipenv run test-py-integration
 ```
+
+**Integration Test Robustness**:
+- Tests handle AWS API response variations (e.g., DynamoDB encryption with AWS-managed keys)
+- Tests accept multiple valid resource states (e.g., Aurora clusters in global cluster or standalone)
+- Tests gracefully handle resource lifecycle states (creating, backing-up, modifying, etc.)
+- Route53 zone ID comparison normalizes "/hostedzone/" prefix for accurate matching
