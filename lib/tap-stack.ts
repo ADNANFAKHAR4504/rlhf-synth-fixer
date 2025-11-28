@@ -29,8 +29,8 @@ export interface TapStackArgs {
 export class TapStack extends pulumi.ComponentResource {
   // Primary region outputs
   public readonly primaryVpcId: pulumi.Output<string>;
-  public readonly primaryPublicSubnetIds: pulumi.Output<string[]>;
-  public readonly primaryPrivateSubnetIds: pulumi.Output<string[]>;
+  public readonly primaryPublicSubnetIds: pulumi.Output<string>[];
+  public readonly primaryPrivateSubnetIds: pulumi.Output<string>[];
   public readonly primaryAuroraEndpoint: pulumi.Output<string>;
   public readonly primaryAuroraReaderEndpoint: pulumi.Output<string>;
   public readonly primaryLambdaArn: pulumi.Output<string>;
@@ -40,8 +40,8 @@ export class TapStack extends pulumi.ComponentResource {
 
   // Secondary region outputs
   public readonly secondaryVpcId: pulumi.Output<string>;
-  public readonly secondaryPublicSubnetIds: pulumi.Output<string[]>;
-  public readonly secondaryPrivateSubnetIds: pulumi.Output<string[]>;
+  public readonly secondaryPublicSubnetIds: pulumi.Output<string>[];
+  public readonly secondaryPrivateSubnetIds: pulumi.Output<string>[];
   public readonly secondaryAuroraEndpoint: pulumi.Output<string>;
   public readonly secondaryAuroraReaderEndpoint: pulumi.Output<string>;
   public readonly secondaryLambdaArn: pulumi.Output<string>;
