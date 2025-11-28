@@ -1,7 +1,7 @@
 # dev.tfvars - Development environment
 aws_region         = "eu-west-1"
 environment        = "dev"
-environment_suffix = "devtest"
+environment_suffix = "devtest1"
 cost_center        = "engineering-dev"
 vpc_cidr           = "10.1.0.0/16"
 task_cpu           = 256

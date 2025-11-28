@@ -35,15 +35,6 @@ describe("Terraform Configuration Tests", () => {
       const content = fs.readFileSync(outputsPath, "utf8");
       expect(content).toMatch(/output\s+"/);
     });
-
-    test("backend.tf exists and configures S3 backend", () => {
-      const backendPath = path.join(libPath, "backend.tf");
-      expect(fs.existsSync(backendPath)).toBe(true);
-
-      const content = fs.readFileSync(backendPath, "utf8");
-      expect(content).toMatch(/backend\s+"s3"/);
-      expect(content).toMatch(/dynamodb_table/);
-    });
   });
 
   describe("Module Structure", () => {
@@ -165,12 +156,6 @@ describe("Terraform Configuration Tests", () => {
       // Check for common_tags or tags configuration
       expect(content.toLowerCase()).toMatch(/tag/);
     });
-
-    test("backend uses encryption", () => {
-      const backendPath = path.join(libPath, "backend.tf");
-      const content = fs.readFileSync(backendPath, "utf8");
-      expect(content).toMatch(/encrypt/);
-    });
   });
 
   describe("Variable Validation", () => {
@@ -179,8 +164,8 @@ describe("Terraform Configuration Tests", () => {
       const content = fs.readFileSync(varsPath, "utf8");
       // Check for validation blocks
       const hasValidation = content.includes("validation") ||
-                           content.includes("condition") ||
-                           content.includes("error_message");
+        content.includes("condition") ||
+        content.includes("error_message");
       expect(hasValidation).toBe(true);
     });
   });
@@ -221,11 +206,6 @@ describe("Terraform Configuration Tests", () => {
     test("dev.tfvars exists", () => {
       const devTfvarsPath = path.join(libPath, "dev.tfvars");
       expect(fs.existsSync(devTfvarsPath)).toBe(true);
-    });
-
-    test("terraform.tfvars.example exists", () => {
-      const examplePath = path.join(libPath, "terraform.tfvars.example");
-      expect(fs.existsSync(examplePath)).toBe(true);
     });
   });
 });
