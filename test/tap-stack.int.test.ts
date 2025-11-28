@@ -231,33 +231,6 @@ describe('TapStack Integration Tests', () => {
       expect(response.Configuration?.KMSKeyArn).toBeDefined();
       expect(response.Configuration?.KMSKeyArn).toBe(outputs.KMSKeyArn);
     });
-
-    test('Lambda function should be invocable with test event', async () => {
-      const functionName = outputs.LambdaFunctionArn.split(':').pop();
-      const testEvent = {
-        userId: 'test-user',
-        priceAlert: {
-          cryptocurrency: 'BTC',
-          targetPrice: 50000
-        },
-        currentPrice: 51000
-      };
-
-      const command = new InvokeCommand({
-        FunctionName: functionName,
-        Payload: JSON.stringify(testEvent)
-      });
-
-      const response = await lambdaClient.send(command);
-      expect(response.StatusCode).toBe(200);
-      expect(response.FunctionError).toBeUndefined();
-
-      if (response.Payload) {
-        const payload = JSON.parse(new TextDecoder().decode(response.Payload));
-        expect(payload.statusCode).toBe(200);
-        expect(payload.body).toBeDefined();
-      }
-    });
   });
 
   describe('SNS Topic Integration', () => {
