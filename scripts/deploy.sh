@@ -95,6 +95,7 @@ if [ "$PLATFORM" = "cdk" ]; then
 
 elif [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ CDKTF project detected, running CDKTF deploy..."
+<<<<<<< HEAD
 
   # Pre-deployment cleanup: Delete orphaned AWS resources that may cause conflicts
   echo "🧹 Cleaning up orphaned resources from previous failed deployments..."
@@ -176,6 +177,9 @@ elif [ "$PLATFORM" = "cdktf" ]; then
 
   echo "✅ Orphaned resource cleanup completed"
 
+=======
+  
+>>>>>>> a8714e8fbb (fix(synth-i3k9m2t1): add missing scripts/deploy.sh for pulumi deployment)
   if [ "$LANGUAGE" = "go" ]; then
     echo "🔧 Ensuring .gen exists for CDKTF Go deploy"
 
@@ -199,6 +203,7 @@ elif [ "$PLATFORM" = "cdktf" ]; then
     fi
     # Go modules are prepared during build; avoid cache-clearing and extra tidying here
   fi
+<<<<<<< HEAD
 
   # Clean up any stale resources before deploying (CDKTF uses local state)
   RESOURCE_SUFFIX="${ENVIRONMENT_SUFFIX}"
@@ -392,6 +397,8 @@ elif [ "$PLATFORM" = "cdktf" ]; then
 
   echo "✅ Stale resource cleanup completed"
 
+=======
+>>>>>>> a8714e8fbb (fix(synth-i3k9m2t1): add missing scripts/deploy.sh for pulumi deployment)
   npm run cdktf:deploy
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
