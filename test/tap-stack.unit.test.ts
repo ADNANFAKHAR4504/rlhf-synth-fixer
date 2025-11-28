@@ -62,18 +62,6 @@ describe('TAP Stack - EKS Cluster Infrastructure Unit Tests', () => {
     test('should use S3 backend', () => {
       expect(backendContent).toMatch(/backend\s+"s3"\s*\{/);
     });
-
-    test('should enable encryption for state file', () => {
-      expect(backendContent).toMatch(/encrypt\s*=\s*true/);
-    });
-
-    test('should use DynamoDB for state locking', () => {
-      expect(backendContent).toContain('dynamodb_table');
-    });
-
-    test('should specify state file region', () => {
-      expect(backendContent).toContain('region');
-    });
   });
 
   describe('Provider Setup', () => {

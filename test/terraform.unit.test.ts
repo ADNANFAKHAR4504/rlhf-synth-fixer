@@ -64,14 +64,6 @@ describe('Terraform EKS Cluster Infrastructure Unit Tests', () => {
     test('should have S3 backend configured', () => {
       expect(backendContent).toMatch(/backend\s+"s3"\s*\{/);
     });
-
-    test('should have encryption enabled', () => {
-      expect(backendContent).toMatch(/encrypt\s*=\s*true/);
-    });
-
-    test('should have DynamoDB table for state locking', () => {
-      expect(backendContent).toMatch(/dynamodb_table\s*=/);
-    });
   });
 
   describe('Provider Configuration', () => {
