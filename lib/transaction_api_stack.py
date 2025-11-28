@@ -39,13 +39,13 @@ class TransactionApiStack(TerraformStack):
         # Get AWS account ID
         current = DataAwsCallerIdentity(self, "current")
 
-        # Variable for unique resource naming
+        # Variable for unique resource naming (must be short to fit AWS naming limits)
         env_suffix = TerraformVariable(
             self,
             "environmentSuffix",
             type="string",
             description="Unique suffix for resource naming to avoid conflicts",
-            default=f"dev-{current.account_id}"
+            default="dev"
         )
 
         # S3 Bucket for transaction files with unique name
