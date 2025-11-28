@@ -334,7 +334,7 @@ class TapStack(TerraformStack):
             deletion_protection=False,
             skip_final_snapshot=True,
             apply_immediately=True,
-            backtrack_window=259200,  # 72 hours for rollback capability
+            # Note: backtrack_window is not supported for Aurora PostgreSQL (only available for Aurora MySQL)
             serverlessv2_scaling_configuration={
                 "min_capacity": 0.5,
                 "max_capacity": 2.0
