@@ -1,6 +1,9 @@
-// tests/unit/terraform-unit-tests.ts
-// Unit tests for database migration Terraform infrastructure
-// No Terraform commands are executed - only file presence and syntax checks
+/**
+ * Database Migration Infrastructure Unit Tests
+ *
+ * These tests validate the Terraform configuration files for correctness,
+ * security best practices, and proper resource configuration.
+ */
 
 import fs from "fs";
 import path from "path";
@@ -28,6 +31,11 @@ describe("Database Migration Infrastructure - File Presence", () => {
     expect(fs.existsSync(filePath)).toBe(true);
   });
 
+  test("backend.tf exists", () => {
+    const filePath = path.join(LIB_DIR, "backend.tf");
+    expect(fs.existsSync(filePath)).toBe(true);
+  });
+
   test("terraform.tfvars.example exists", () => {
     const filePath = path.join(LIB_DIR, "terraform.tfvars.example");
     expect(fs.existsSync(filePath)).toBe(true);
@@ -38,7 +46,7 @@ describe("Database Migration Infrastructure - File Presence", () => {
     expect(fs.existsSync(filePath)).toBe(true);
   });
 
-  test("AWS_REGION file exists", () => {
+  test("AWS_REGION file exists with us-east-1", () => {
     const filePath = path.join(LIB_DIR, "AWS_REGION");
     expect(fs.existsSync(filePath)).toBe(true);
     const region = fs.readFileSync(filePath, "utf8").trim();
@@ -323,14 +331,17 @@ describe("Database Migration Infrastructure - Outputs", () => {
     expect(outputsContent).toMatch(/output\s+"private_subnet_ids"/);
   });
 
-  test("exports Aurora outputs", () => {
+  test("exports Aurora cluster outputs", () => {
+    expect(outputsContent).toMatch(/output\s+"aurora_cluster_id"/);
     expect(outputsContent).toMatch(/output\s+"aurora_cluster_endpoint"/);
     expect(outputsContent).toMatch(/output\s+"aurora_cluster_reader_endpoint"/);
+    expect(outputsContent).toMatch(/output\s+"aurora_cluster_port"/);
     expect(outputsContent).toMatch(/output\s+"aurora_database_name"/);
   });
 
   test("exports DMS outputs", () => {
     expect(outputsContent).toMatch(/output\s+"dms_replication_instance_arn"/);
+    expect(outputsContent).toMatch(/output\s+"dms_replication_instance_private_ip"/);
     expect(outputsContent).toMatch(/output\s+"dms_replication_task_arn"/);
     expect(outputsContent).toMatch(/output\s+"dms_source_endpoint_arn"/);
     expect(outputsContent).toMatch(/output\s+"dms_target_endpoint_arn"/);
