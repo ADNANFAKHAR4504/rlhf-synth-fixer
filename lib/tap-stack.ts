@@ -11,6 +11,17 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly primaryVpcId: pulumi.Output<string>;
   public readonly drVpcId: pulumi.Output<string>;
   public readonly auroraGlobalClusterId: pulumi.Output<string>;
+  public readonly primaryClusterEndpoint: pulumi.Output<string>;
+  public readonly drClusterEndpoint: pulumi.Output<string>;
+  public readonly dynamoTableName: pulumi.Output<string>;
+  public readonly primaryBucketName: pulumi.Output<string>;
+  public readonly drBucketName: pulumi.Output<string>;
+  public readonly primaryAlbDnsName: pulumi.Output<string>;
+  public readonly drAlbDnsName: pulumi.Output<string>;
+  public readonly hostedZoneId: pulumi.Output<string>;
+  public readonly hostedZoneName: pulumi.Output<string>;
+  public readonly primaryHealthCheckUrl: pulumi.Output<string>;
+  public readonly drHealthCheckUrl: pulumi.Output<string>;
 
   constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, args, opts);
@@ -1012,6 +1023,17 @@ exports.handler = async (event) => {
     this.primaryVpcId = primaryVpc.id;
     this.drVpcId = drVpc.id;
     this.auroraGlobalClusterId = globalCluster.id;
+    this.primaryClusterEndpoint = primaryCluster.endpoint;
+    this.drClusterEndpoint = drCluster.endpoint;
+    this.dynamoTableName = dynamoTable.name;
+    this.primaryBucketName = primaryBucket.bucket;
+    this.drBucketName = drBucket.bucket;
+    this.primaryAlbDnsName = primaryAlb.dnsName;
+    this.drAlbDnsName = drAlb.dnsName;
+    this.hostedZoneId = hostedZone.zoneId;
+    this.hostedZoneName = hostedZone.name;
+    this.primaryHealthCheckUrl = primaryHealthUrl.functionUrl;
+    this.drHealthCheckUrl = drHealthUrl.functionUrl;
 
     this.registerOutputs({
       primaryVpcId: this.primaryVpcId,
