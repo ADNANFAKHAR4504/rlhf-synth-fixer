@@ -53,6 +53,11 @@ export interface TapStackArgs {
    * Useful for CI/CD testing when the referenced stack doesn't exist.
    */
   createStandaloneNetworking?: boolean;
+  /**
+   * If true, use zip deployment for Lambda instead of container image.
+   * Useful for CI/CD testing when the Docker image doesn't exist.
+   */
+  useZipDeployment?: boolean;
   tags?: pulumi.Input<{ [key: string]: string }>;
 }
 
@@ -80,6 +85,7 @@ export class TapStack extends pulumi.ComponentResource {
       dockerImageUri,
       networkingStackRef,
       createStandaloneNetworking,
+      useZipDeployment,
       tags,
     } = args;
 
@@ -159,6 +165,7 @@ export class TapStack extends pulumi.ComponentResource {
           DB_SECRET_ARN: secrets.databaseSecretArn,
         },
         tags: tags,
+        useZipDeployment: useZipDeployment,
       },
       { parent: this }
     );

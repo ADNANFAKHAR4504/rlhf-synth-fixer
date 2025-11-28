@@ -141,6 +141,9 @@ const provider = new aws.Provider('aws', {
   },
 });
 
+// Use zip deployment in CI/CD when Docker image is not available
+const useZipDeployment = isCIEnvironment && !config.get('dockerImageUri');
+
 // Instantiate the main stack
 const stack_instance = new TapStack(
   'tap-infrastructure',
@@ -150,6 +153,7 @@ const stack_instance = new TapStack(
     dockerImageUri,
     networkingStackRef,
     createStandaloneNetworking,
+    useZipDeployment,
     tags: defaultTags,
   },
   { provider }

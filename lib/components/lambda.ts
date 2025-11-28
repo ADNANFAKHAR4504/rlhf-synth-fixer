@@ -18,6 +18,11 @@ export interface LambdaComponentArgs {
   databaseSecretArn: pulumi.Input<string>;
   environmentVariables: Record<string, pulumi.Input<string>>;
   tags?: pulumi.Input<{ [key: string]: string }>;
+  /**
+   * If true, use zip deployment with a placeholder handler instead of container image.
+   * Useful for CI/CD testing when the Docker image doesn't exist.
+   */
+  useZipDeployment?: boolean;
 }
 
 export class LambdaComponent extends pulumi.ComponentResource {
@@ -42,6 +47,7 @@ export class LambdaComponent extends pulumi.ComponentResource {
       databaseSecretArn,
       environmentVariables,
       tags,
+      useZipDeployment,
     } = args;
 
     // Create security group for Lambda
@@ -140,11 +146,28 @@ export class LambdaComponent extends pulumi.ComponentResource {
     );
 
     // Create Lambda function
+    // For CI/CD testing, use zip deployment with a placeholder handler
+    // For production, use container image deployment
+    const lambdaConfig = useZipDeployment
+      ? {
+          runtime: 'nodejs20.x' as const,
+          handler: 'index.handler',
+          // Inline code for CI/CD testing - minimal placeholder
+          code: new pulumi.asset.AssetArchive({
+            'index.js': new pulumi.asset.StringAsset(
+              'exports.handler = async () => ({ statusCode: 200, body: "OK" });'
+            ),
+          }),
+        }
+      : {
+          packageType: 'Image' as const,
+          imageUri: dockerImageUri,
+        };
+
     const lambdaFunction = new aws.lambda.Function(
       `payment-processor-${environmentSuffix}`,
       {
-        packageType: 'Image',
-        imageUri: dockerImageUri,
+        ...lambdaConfig,
         role: role.arn,
         timeout: 300,
         memorySize: memory,
