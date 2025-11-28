@@ -68,7 +68,7 @@ export class DmsStack extends pulumi.ComponentResource {
         multiAz: false,
 
         // Engine configuration
-        engineVersion: '3.5.3', // Use latest stable DMS engine version
+        engineVersion: '3.5.4', // Use latest stable DMS engine version
         autoMinorVersionUpgrade: true,
 
         // Apply changes immediately for faster provisioning
