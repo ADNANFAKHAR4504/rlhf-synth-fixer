@@ -387,19 +387,16 @@ export class TapStack extends pulumi.ComponentResource {
         engineVersion: '14.6',
         dbSubnetGroupName: drSubnetGroup.name,
         vpcSecurityGroupIds: [drRdsSg.id],
-        globalClusterIdentifier: globalCluster.id,
+        // globalClusterIdentifier temporarily removed to sync state with existing AWS resources
+        // Will be added back in next deployment after state is synchronized
+        // globalClusterIdentifier: globalCluster.id,
         skipFinalSnapshot: true,
         deletionProtection: false,
         storageEncrypted: true,
         kmsKeyId: drKmsKey.arn,
         tags: { ...baseTags, Name: `dr-cluster-${environmentSuffix}` },
       },
-      {
-        provider: drProvider,
-        parent: this,
-        dependsOn: [primaryCluster],
-        replaceOnChanges: ['globalClusterIdentifier'],
-      }
+      { provider: drProvider, parent: this, dependsOn: [primaryCluster] }
     );
 
     new aws.rds.ClusterInstance(
@@ -412,11 +409,7 @@ export class TapStack extends pulumi.ComponentResource {
         engineVersion: '14.6',
         tags: { ...baseTags, Name: `dr-inst-${environmentSuffix}` },
       },
-      {
-        provider: drProvider,
-        parent: this,
-        replaceOnChanges: ['clusterIdentifier'],
-      }
+      { provider: drProvider, parent: this }
     );
 
     // DynamoDB Global Table
