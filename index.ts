@@ -1401,7 +1401,7 @@ const replicationLagAlarm = new aws.cloudwatch.MetricAlarm(
     threshold: 60000,
     alarmDescription:
       'Alert when replication lag exceeds 1 minute (RPO threshold)',
-    alarmActions: [primarySnsTopic.arn],
+    alarmActions: [secondarySnsTopic.arn],
     dimensions: {
       DBClusterIdentifier: `aurora-secondary-${environmentSuffix}`,
     },
