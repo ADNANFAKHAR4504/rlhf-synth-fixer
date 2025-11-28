@@ -47,7 +47,7 @@ The template specifies an invalid Aurora MySQL engine version:
 
 **IDEAL_RESPONSE Fix**:
 ```json
-"EngineVersion": "8.0.mysql_aurora.3.11.0"
+"EngineVersion": "8.0.mysql_aurora.3.10.1"
 ```
 
 **Root Cause**: The model specified an engine version that is not in the list of valid Aurora MySQL versions. The version `8.0.mysql_aurora.3.05.2` does not exist in AWS's supported version list.
