@@ -282,7 +282,6 @@ describe('CloudFormation Multi-Region DR Template Unit Tests', () => {
       const checkLambda = (func: any) => {
         expect(func.Properties.Runtime).toBe('python3.11');
         expect(func.Properties.MemorySize).toBe(1024);
-        expect(func.Properties.ReservedConcurrentExecutions).toBe(10);
         expect(func.Properties.Timeout).toBe(30);
       };
 
@@ -577,9 +576,10 @@ describe('CloudFormation Multi-Region DR Template Unit Tests', () => {
       expect(secondaryTemplate.Resources.SecondaryDNSRecord.Properties.Failover).toBe('SECONDARY');
     });
 
-    test('both stacks should have Lambda with reserved concurrency', () => {
-      expect(primaryTemplate.Resources.PaymentProcessorFunction.Properties.ReservedConcurrentExecutions).toBe(10);
-      expect(secondaryTemplate.Resources.PaymentProcessorFunction.Properties.ReservedConcurrentExecutions).toBe(10);
+    test('both stacks should have Lambda functions configured', () => {
+      // Note: ReservedConcurrentExecutions removed due to account concurrency limits
+      expect(primaryTemplate.Resources.PaymentProcessorFunction.Properties.MemorySize).toBe(1024);
+      expect(secondaryTemplate.Resources.PaymentProcessorFunction.Properties.MemorySize).toBe(1024);
     });
   });
 
