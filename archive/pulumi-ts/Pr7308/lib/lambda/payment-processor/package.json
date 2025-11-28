@@ -1,0 +1,15 @@
+{
+  "name": "payment-processor",
+  "version": "1.0.0",
+  "description": "Payment processing Lambda function",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "aws-sdk": "^2.1400.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
