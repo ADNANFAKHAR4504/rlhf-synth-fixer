@@ -939,7 +939,8 @@ export class TapStack extends pulumi.ComponentResource {
                     '--expander=least-waste',
                     '--balance-similar-node-groups',
                     '--skip-nodes-with-system-pods=false',
-                    '--node-group-auto-discovery=asg:tag=k8s.io/cluster-autoscaler/enabled,k8s.io/cluster-autoscaler/eks-cluster-' + environmentSuffix,
+                    '--node-group-auto-discovery=asg:tag=k8s.io/cluster-autoscaler/enabled,k8s.io/cluster-autoscaler/eks-cluster-' +
+                      environmentSuffix,
                   ],
                   env: [
                     {
@@ -963,7 +964,11 @@ export class TapStack extends pulumi.ComponentResource {
           },
         },
       },
-      { provider: k8sProvider, parent: this, dependsOn: [clusterAutoscalerSA, managedNodeGroup, onDemandNodeGroup] }
+      {
+        provider: k8sProvider,
+        parent: this,
+        dependsOn: [clusterAutoscalerSA, managedNodeGroup, onDemandNodeGroup],
+      }
     );
 
     // Install metrics-server for HPA
