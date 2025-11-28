@@ -656,10 +656,12 @@ const primaryInstance2 = new aws.rds.ClusterInstance(
 );
 
 // Secondary Aurora Cluster
+// Force replacement by changing identifier to fix Global Cluster membership issue
+// AWS doesn't allow adding existing clusters to a Global Cluster after creation
 const secondaryCluster = new aws.rds.Cluster(
   `aurora-secondary-${environmentSuffix}`,
   {
-    clusterIdentifier: `aurora-secondary-${environmentSuffix}`,
+    clusterIdentifier: `aurora-secondary-v2-${environmentSuffix}`,
     engine: 'aurora-postgresql',
     engineVersion: '15.7',
     dbSubnetGroupName: secondaryDbSubnetGroup.name,
@@ -671,7 +673,7 @@ const secondaryCluster = new aws.rds.Cluster(
     enabledCloudwatchLogsExports: ['postgresql'],
     tags: {
       ...commonTags,
-      Name: `aurora-secondary-${environmentSuffix}`,
+      Name: `aurora-secondary-v2-${environmentSuffix}`,
       Role: 'secondary',
     },
   },
@@ -685,7 +687,7 @@ const secondaryCluster = new aws.rds.Cluster(
 const secondaryInstance1 = new aws.rds.ClusterInstance(
   `aurora-secondary-instance-1-${environmentSuffix}`,
   {
-    identifier: `aurora-secondary-instance-1-${environmentSuffix}`,
+    identifier: `aurora-secondary-v2-instance-1-${environmentSuffix}`,
     clusterIdentifier: secondaryCluster.id,
     instanceClass: 'db.r6g.large',
     engine: 'aurora-postgresql',
@@ -693,7 +695,7 @@ const secondaryInstance1 = new aws.rds.ClusterInstance(
     publiclyAccessible: false,
     tags: {
       ...commonTags,
-      Name: `aurora-secondary-instance-1-${environmentSuffix}`,
+      Name: `aurora-secondary-v2-instance-1-${environmentSuffix}`,
     },
   },
   { provider: secondaryProvider }
@@ -1431,7 +1433,7 @@ const replicationLagAlarm = new aws.cloudwatch.MetricAlarm(
       'Alert when replication lag exceeds 1 minute (RPO threshold)',
     alarmActions: [secondarySnsTopic.arn],
     dimensions: {
-      DBClusterIdentifier: `aurora-secondary-${environmentSuffix}`,
+      DBClusterIdentifier: `aurora-secondary-v2-${environmentSuffix}`,
     },
     tags: {
       ...commonTags,
