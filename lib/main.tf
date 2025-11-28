@@ -378,7 +378,7 @@ resource "aws_dms_replication_instance" "main" {
   replication_subnet_group_id = aws_dms_replication_subnet_group.main.id
   publicly_accessible         = false
   multi_az                    = true
-  engine_version              = "3.5.1"
+  engine_version              = "3.4.7"
   auto_minor_version_upgrade  = false
   allow_major_version_upgrade = false
   apply_immediately           = true

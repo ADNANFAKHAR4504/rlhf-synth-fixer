@@ -45,7 +45,7 @@ variable "availability_zones" {
 variable "aurora_engine_version" {
   description = "Aurora PostgreSQL engine version (matching source PostgreSQL 13.x)"
   type        = string
-  default     = "13.12"
+  default     = "13.9"
 }
 
 variable "aurora_instance_class" {
