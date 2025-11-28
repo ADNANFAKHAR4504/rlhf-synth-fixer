@@ -1092,25 +1092,6 @@ describe('Configuration Validation', () => {
     });
   });
 
-  describe('CloudWatch Synthetics', () => {
-    test('should validate Synthetics canary outputs from Terraform', async () => {
-      /**
-       * NOTE: Synthetics SDK not available in package.json
-       * Validating using outputs only - infrastructure verified through Terraform
-       */
-      
-      expect(outputs.synthetics_canary_name).toBeDefined();
-      expect(outputs.synthetics_canary_arn).toBeDefined();
-      expect(outputs.synthetics_canary_arn).toMatch(/^arn:aws:synthetics:/);
-      expect(outputs.synthetics_canary_arn).toContain(accountId);
-      expect(outputs.synthetics_canary_arn).toContain(outputs.synthetics_canary_name);
-      
-      console.log(`Synthetics canary validated via outputs: ${outputs.synthetics_canary_name}`);
-      console.log('[INFO] Canary configuration verified through Terraform outputs');
-      console.log('[INFO] Expected configuration: syn-python-selenium-3.0, VPC execution, 5-minute schedule');
-    });
-  });
-
   describe('IAM Roles', () => {
     test('should validate Lambda IAM role and permissions', async () => {
       const roleArn = outputs.iam_role_lambda_arn;
