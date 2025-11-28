@@ -362,12 +362,14 @@ export class TapStack extends pulumi.ComponentResource {
         updateConfig: {
           maxUnavailablePercentage: 25,
         },
-        tags: pulumi.all([cluster.eksCluster.name]).apply(([clusterName]) => ({
-          ...defaultTags,
-          Name: `eks-node-group-${environmentSuffix}`,
-          'k8s.io/cluster-autoscaler/enabled': 'true',
-          [`k8s.io/cluster-autoscaler/${clusterName}`]: 'owned',
-        })),
+        tags: pulumi
+          .all([cluster.eksCluster.name, defaultTags])
+          .apply(([clusterName, tags]) => ({
+            ...tags,
+            Name: `eks-node-group-${environmentSuffix}`,
+            'k8s.io/cluster-autoscaler/enabled': 'true',
+            [`k8s.io/cluster-autoscaler/${clusterName}`]: 'owned',
+          })) as any,
       },
       {
         parent: this,
@@ -394,12 +396,14 @@ export class TapStack extends pulumi.ComponentResource {
         },
         capacityType: 'ON_DEMAND',
         instanceTypes: ['t3.medium'],
-        tags: pulumi.all([cluster.eksCluster.name]).apply(([clusterName]) => ({
-          ...defaultTags,
-          Name: `eks-ondemand-ng-${environmentSuffix}`,
-          'k8s.io/cluster-autoscaler/enabled': 'true',
-          [`k8s.io/cluster-autoscaler/${clusterName}`]: 'owned',
-        })),
+        tags: pulumi
+          .all([cluster.eksCluster.name, defaultTags])
+          .apply(([clusterName, tags]) => ({
+            ...tags,
+            Name: `eks-ondemand-ng-${environmentSuffix}`,
+            'k8s.io/cluster-autoscaler/enabled': 'true',
+            [`k8s.io/cluster-autoscaler/${clusterName}`]: 'owned',
+          })) as any,
       },
       {
         parent: this,
