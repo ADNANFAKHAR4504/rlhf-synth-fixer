@@ -1,5 +1,0 @@
-config:
-  aws:region: us-east-1
-  TapStack:costCenter: engineering
-  TapStack:owner: platform-team
-encryptionsalt: v1:4Y8eoH4ymAg=:v1:WaIh3A/WySZfKq2a:X3W+Br8TBb1bI1OUTWlaQBNNeGhdRw==
