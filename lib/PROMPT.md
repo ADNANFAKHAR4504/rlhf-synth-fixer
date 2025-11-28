@@ -2,7 +2,7 @@ Hey team,
 
 We need to build a real-time cryptocurrency price alert system for a fintech startup. The business problem is interesting - crypto markets are incredibly volatile, and users need instant notifications when prices hit their thresholds. During major market events, we could see thousands of alerts triggering simultaneously, but most of the time, the system sits relatively quiet. The architecture needs to scale instantly when markets go crazy but stay cost-effective during normal periods.
 
-The challenge here is designing for those explosive spikes in activity. When Bitcoin suddenly drops 10% or Ethereum surges, every user who set alerts around those price points needs to be notified immediately. We're talking potentially thousands of concurrent price updates and alert evaluations happening within seconds. Traditional infrastructure would be expensive to maintain during the 95% of time when markets are calm.
+The challenge here is designing for those explosive spikes in activity. When Bitcoin suddenly drops 10% or Ethereum surges, every user who set alerts around those price points needs to be notified immediately.  Traditional infrastructure would be expensive to maintain during the 95% of time when markets are calm.
 
 I've been asked to create this infrastructure using CloudFormation with JSON templates. The solution needs to be fully serverless to handle the scaling requirements and cost optimization goals.
 
@@ -15,7 +15,6 @@ Create a serverless cryptocurrency price alert processing system using **CloudFo
 1. **Price Webhook Processing**
    - Lambda function named 'PriceWebhookProcessor' with 1GB memory
    - Receives real-time price updates from cryptocurrency exchanges
-   - Must handle high concurrent invocations during market volatility
 
 2. **Alert Storage**
    - DynamoDB table named 'CryptoAlerts' with on-demand billing
@@ -70,14 +69,12 @@ Create a serverless cryptocurrency price alert processing system using **CloudFo
 - FORBIDDEN: Retain policies on any resource
 - Lambda functions must specify ARM64 architecture (Graviton2)
 - EventBridge rules must use rate expressions, not cron
-- Reserved concurrent executions required on PriceWebhookProcessor and AlertMatcher
 - Lambda destinations required for routing (not DLQ)
 
 ### Constraints
 
 - Lambda functions must use ARM-based Graviton2 processors for cost optimization
 - DynamoDB tables must use on-demand billing with point-in-time recovery enabled
-- All Lambda functions must have reserved concurrent executions set to prevent throttling
 - Use Lambda destinations instead of DLQ for failed invocations
 - CloudWatch Logs retention must be exactly 3 days to minimize costs
 - Lambda functions must use environment variables for configuration, not hardcoded values
@@ -88,8 +85,8 @@ Create a serverless cryptocurrency price alert processing system using **CloudFo
 
 ## Success Criteria
 
-- **Functionality**: All three Lambda functions created with correct memory and concurrency settings
-- **Performance**: System handles burst traffic during market volatility with reserved concurrency
+- **Functionality**: All three Lambda functions created with correct memory
+- **Performance**: System handles burst traffic during market
 - **Reliability**: EventBridge triggers AlertMatcher every 60 seconds reliably
 - **Security**: IAM roles follow least privilege with no wildcard permissions
 - **Resource Naming**: All resources include environmentSuffix parameter for multi-environment support
@@ -99,8 +96,8 @@ Create a serverless cryptocurrency price alert processing system using **CloudFo
 ## What to deliver
 
 - Complete CloudFormation JSON template implementing the serverless alert system
-- Lambda function 'PriceWebhookProcessor' with 1GB memory and 100 reserved concurrent executions
-- Lambda function 'AlertMatcher' with 2GB memory and 50 reserved concurrent executions
+- Lambda function 'PriceWebhookProcessor' with 1GB memory
+- Lambda function 'AlertMatcher' with 2GB memory
 - Lambda function 'ProcessedAlerts' as destination target
 - DynamoDB table 'CryptoAlerts' with userId/alertId keys and point-in-time recovery
 - EventBridge rule triggering AlertMatcher every 60 seconds
