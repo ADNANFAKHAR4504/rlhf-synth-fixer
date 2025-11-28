@@ -2,6 +2,7 @@
 import inspect
 
 
+# Trigger pipeline - updated 2025-11-28
 # Tests for constructs_lib modules
 class TestConstructsLibModules:
     """Tests for constructs_lib package modules."""
