@@ -55,6 +55,7 @@
     },
     "OnPremisesDatabaseEndpoint": {
       "Type": "String",
+      "Default": "onprem-db.example.com",
       "Description": "On-premises PostgreSQL database endpoint (hostname or IP)"
     },
     "OnPremisesDatabasePort": {
@@ -64,14 +65,17 @@
     },
     "OnPremisesDatabaseName": {
       "Type": "String",
+      "Default": "mydb",
       "Description": "On-premises PostgreSQL database name"
     },
     "OnPremisesDatabaseUsername": {
       "Type": "String",
+      "Default": "dbuser",
       "Description": "On-premises PostgreSQL database username"
     },
     "OnPremisesDatabasePassword": {
       "Type": "String",
+      "Default": "TempPassword123!",
       "NoEcho": true,
       "Description": "On-premises PostgreSQL database password"
     },
@@ -82,15 +86,18 @@
     },
     "AuroraDBPassword": {
       "Type": "String",
+      "Default": "TempPassword123!",
       "NoEcho": true,
       "Description": "Aurora PostgreSQL master password"
     },
     "Route53HostedZoneName": {
       "Type": "String",
+      "Default": "turing.com",
       "Description": "Route 53 hosted zone name (e.g., example.com)"
     },
     "AlertEmail": {
       "Type": "String",
+      "Default": "alerts@example.com",
       "Description": "Email address for DMS replication alerts"
     }
   },
