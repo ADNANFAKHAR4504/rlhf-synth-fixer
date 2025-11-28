@@ -95,7 +95,18 @@ if [ "$PLATFORM" = "cdk" ]; then
 
 elif [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ CDKTF project detected, running CDKTF deploy..."
-  
+
+  # Pre-deployment cleanup: Delete orphaned CloudWatch Log Groups that may cause conflicts
+  echo "🧹 Checking for orphaned CloudWatch Log Groups from previous deployments..."
+  for log_group_name in "/aws/lambda/webhook-processor-${ENVIRONMENT_SUFFIX}" "/aws/lambda/price-enricher-${ENVIRONMENT_SUFFIX}"; do
+    if aws logs describe-log-groups --log-group-name-prefix "$log_group_name" --query "logGroups[?logGroupName=='${log_group_name}'].logGroupName" --output text 2>/dev/null | grep -q "$log_group_name"; then
+      echo "  ⚠️ Found orphaned log group: $log_group_name - deleting..."
+      aws logs delete-log-group --log-group-name "$log_group_name" 2>/dev/null || true
+      echo "  ✅ Deleted $log_group_name"
+    fi
+  done
+  echo "✅ CloudWatch Log Group cleanup completed"
+
   if [ "$LANGUAGE" = "go" ]; then
     echo "🔧 Ensuring .gen exists for CDKTF Go deploy"
 
