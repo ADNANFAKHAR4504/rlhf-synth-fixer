@@ -625,7 +625,11 @@ export class TapStack extends pulumi.ComponentResource {
           installation: {
             kubernetesProvider: 'EKS',
           },
+          tigeraOperator: {
+            registry: 'quay.io/',
+          },
         },
+        skipAwait: true,
       },
       {
         provider: k8sProvider,
@@ -747,7 +751,6 @@ export class TapStack extends pulumi.ComponentResource {
           },
           service: {
             type: 'ClusterIP',
-            enabled: false,
           },
           daemonSet: {
             enabled: true,
@@ -786,11 +789,12 @@ export class TapStack extends pulumi.ComponentResource {
     auto_create_group false`,
           },
         },
+        skipAwait: true,
       },
       {
         provider: k8sProvider,
         parent: this,
-        dependsOn: [fluentBitServiceAccount],
+        dependsOn: [fluentBitServiceAccount, cluster],
       }
     );
 
@@ -930,9 +934,12 @@ export class TapStack extends pulumi.ComponentResource {
                     '--v=4',
                     '--stderrthreshold=info',
                     '--cloud-provider=aws',
-                    pulumi.interpolate`--nodes=2:10:${managedNodeGroup.id}`,
+                    '--logtostderr=true',
                     '--skip-nodes-with-local-storage=false',
                     '--expander=least-waste',
+                    '--balance-similar-node-groups',
+                    '--skip-nodes-with-system-pods=false',
+                    '--node-group-auto-discovery=asg:tag=k8s.io/cluster-autoscaler/enabled,k8s.io/cluster-autoscaler/eks-cluster-' + environmentSuffix,
                   ],
                   env: [
                     {
@@ -956,7 +963,7 @@ export class TapStack extends pulumi.ComponentResource {
           },
         },
       },
-      { provider: k8sProvider, parent: this, dependsOn: [clusterAutoscalerSA] }
+      { provider: k8sProvider, parent: this, dependsOn: [clusterAutoscalerSA, managedNodeGroup, onDemandNodeGroup] }
     );
 
     // Install metrics-server for HPA
