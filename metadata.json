@@ -1,5 +1,5 @@
 {
-  "platform": "terraform",
+  "platform": "tf",
   "language": "hcl",
   "complexity": "expert",
   "turn_type": "single",
@@ -27,5 +27,7 @@
     "KMS",
     "VPC"
   ],
-  "training_quality": 6
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing"
 }
