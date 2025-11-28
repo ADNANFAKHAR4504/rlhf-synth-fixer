@@ -58,18 +58,22 @@ from constructs import Construct
 
 
 class TapStack(TerraformStack):
-    def __init__(self, scope: Construct, ns: str, environment_suffix: str):
+    def __init__(self, scope: Construct, ns: str, environment_suffix: str,
+                 state_bucket: str = None, state_bucket_region: str = None,
+                 aws_region: str = None, default_tags: dict = None):
         super().__init__(scope, ns)
 
         self.environment_suffix = environment_suffix
-        self.primary_region = "us-east-1"
+        self.primary_region = aws_region or "us-east-1"
         self.secondary_region = "us-west-2"
 
-        # Common tags
+        # Common tags - merge default_tags if provided
         self.common_tags = {
             "Environment": "Production",
             "DisasterRecovery": "Enabled"
         }
+        if default_tags and "tags" in default_tags:
+            self.common_tags.update(default_tags["tags"])
 
         # Primary region provider
         self.primary_provider = AwsProvider(
@@ -168,12 +172,11 @@ class TapStack(TerraformStack):
             provider=provider
         )
 
-        # include account id in the alias to prevent AlreadyExists conflicts
+        # Use environment suffix for alias uniqueness
         KmsAlias(
             self,
             f"kms-alias-{region_name}-{self.environment_suffix}",
-            name=(f"alias/dr-healthcare-{region_name}-{self.environment_suffix}-"
-                  f"{self.account.account_id}"),
+            name=(f"alias/dr-healthcare-{region_name}-{self.environment_suffix}"),
             target_key_id=key.key_id,
             provider=provider
         )
@@ -267,8 +270,7 @@ class TapStack(TerraformStack):
 
     def _create_s3_bucket(self, region_name: str, kms_key: KmsKey, provider: AwsProvider) -> S3Bucket:
         """Create S3 bucket with encryption"""
-        # include account id to ensure globally unique bucket names and avoid
-        # BucketAlreadyExists/BucketAlreadyOwnedByYou errors from prior runs
+        # S3 bucket names must be globally unique, so include account id
         bucket_name = (f"dr-healthcare-{region_name}-{self.environment_suffix}-"
                        f"{self.account.account_id}")
 
@@ -329,8 +331,7 @@ class TapStack(TerraformStack):
         replication_role = IamRole(
             self,
             f"s3-replication-role-{self.environment_suffix}",
-            name=(f"dr-s3-replication-role-{self.environment_suffix}-"
-                  f"{self.account.account_id}"),
+            name=(f"dr-s3-replication-role-{self.environment_suffix}"),
             assume_role_policy=json.dumps(assume_role_policy),
             tags=self.common_tags,
             provider=self.primary_provider
@@ -384,8 +385,7 @@ class TapStack(TerraformStack):
         IamRolePolicy(
             self,
             f"s3-replication-policy-{self.environment_suffix}",
-            name=(f"dr-s3-replication-policy-{self.environment_suffix}-"
-                  f"{self.account.account_id}"),
+            name=(f"dr-s3-replication-policy-{self.environment_suffix}"),
             role=replication_role.id,
             policy=json.dumps(replication_policy),
             provider=self.primary_provider
@@ -429,11 +429,12 @@ class TapStack(TerraformStack):
         self, table_name: str, primary_kms: KmsKey, secondary_kms: KmsKey
     ) -> DynamodbTable:
         """Create DynamoDB global table"""
+        # Use a simpler naming without the full account ID to avoid conflicts
+        # The environment_suffix should be unique enough
         table = DynamodbTable(
             self,
             f"dynamodb-{table_name}-{self.environment_suffix}",
-            name=(f"dr-{table_name}-{self.environment_suffix}-"
-                  f"{self.account.account_id}"),
+            name=(f"dr-{table_name}-{self.environment_suffix}"),
             billing_mode="PAY_PER_REQUEST",
             hash_key="id",
             attribute=[
@@ -477,8 +478,7 @@ class TapStack(TerraformStack):
         role = IamRole(
             self,
             f"lambda-role-{region_name}-{self.environment_suffix}",
-            name=(f"dr-lambda-role-{region_name}-{self.environment_suffix}-"
-                  f"{self.account.account_id}"),
+            name=(f"dr-lambda-role-{region_name}-{self.environment_suffix}"),
             assume_role_policy=json.dumps(assume_role_policy),
             tags=self.common_tags,
             provider=provider
@@ -537,8 +537,7 @@ class TapStack(TerraformStack):
         policy = IamPolicy(
             self,
             f"lambda-policy-{region_name}-{self.environment_suffix}",
-            name=(f"dr-lambda-policy-{region_name}-{self.environment_suffix}-"
-                  f"{self.account.account_id}"),
+            name=(f"dr-lambda-policy-{region_name}-{self.environment_suffix}"),
             policy=json.dumps(lambda_policy),
             tags=self.common_tags,
             provider=provider
@@ -610,8 +609,7 @@ def handler(event, context):
         function = LambdaFunction(
             self,
             f"lambda-{region_name}-{self.environment_suffix}",
-            function_name=(f"dr-health-check-{region_name}-{self.environment_suffix}-"
-                           f"{self.account.account_id}"),
+            function_name=(f"dr-health-check-{region_name}-{self.environment_suffix}"),
             role=role.arn,
             handler="health_check.handler",
             runtime="python3.11",
@@ -636,8 +634,7 @@ def handler(event, context):
         topic = SnsTopic(
             self,
             f"sns-topic-{region_name}-{self.environment_suffix}",
-            name=(f"dr-alerts-{region_name}-{self.environment_suffix}-"
-                  f"{self.account.account_id}"),
+            name=(f"dr-alerts-{region_name}-{self.environment_suffix}"),
             tags=self.common_tags,
             provider=provider
         )
