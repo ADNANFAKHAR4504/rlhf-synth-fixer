@@ -1,0 +1,146 @@
+============================================================
+CloudWatch Observability Platform Infrastructure Analysis
+============================================================
+Environment Suffix: pr7492
+Name Prefix: cw-obs-pr7492
+Moto Endpoint: http://127.0.0.1:5001
+
+=== S3 Bucket Analysis ===
+✅ PASS: Metric streams bucket created with encryption
+       Bucket: cw-obs-pr7492-metric-streams
+✅ PASS: Synthetics artifacts bucket created with encryption
+       Bucket: cw-obs-pr7492-synthetics-artifacts
+✅ PASS: S3 lifecycle configuration for 15-month retention
+       Transitions: 90d->STANDARD_IA, 180d->GLACIER, 365d->DEEP_ARCHIVE, 450d expiration
+
+=== Lambda Function Analysis ===
+❌ FAIL: Lambda IAM role creation
+       An error occurred (EntityAlreadyExists) when calling the CreateRole operation: Role with name cw-obs-pr7492-lambda-processor-role already exists.
+❌ FAIL: Metric processor Lambda creation
+       An error occurred (ResourceConflictException) when calling the CreateFunction operation: Function already exist: cw-obs-pr7492-metric-processor
+❌ FAIL: Alarm processor Lambda creation
+       An error occurred (ResourceConflictException) when calling the CreateFunction operation: Function already exist: cw-obs-pr7492-alarm-processor
+✅ PASS: Lambda ARM64 (Graviton2) architecture configured
+       Cost optimization through ARM64 processors
+
+=== SNS Topic Analysis ===
+✅ PASS: Critical alarms SNS topic created
+       Topic: cw-obs-pr7492-critical-alarms
+✅ PASS: Warning alarms SNS topic created
+       Topic: cw-obs-pr7492-warning-alarms
+✅ PASS: Info alarms SNS topic created
+       Topic: cw-obs-pr7492-info-alarms
+✅ PASS: SNS delivery policy with exponential backoff
+       Retry: 5 attempts, min delay 20s, max delay 600s
+
+=== CloudWatch Alarms Analysis ===
+✅ PASS: Critical alarm created: CPUUtilization
+       Threshold: 80, Namespace: AWS/ECS
+✅ PASS: Warning alarm created: MemoryUtilization
+       Threshold: 85, Namespace: AWS/ECS
+✅ PASS: Critical alarm created: ErrorRate
+       Threshold: 5, Namespace: AWS/Lambda
+✅ PASS: Warning alarm created: ResponseTime
+       Threshold: 1000, Namespace: CustomMetrics/cw-obs-pr7492
+✅ PASS: Composite alarm with AND/OR logic pattern verified
+       system_health: (high_cpu AND high_memory) OR high_error_rate
+✅ PASS: Composite alarm with action suppressor configured
+       Suppressor: maintenance_mode, extension_period: 300s
+
+=== Anomaly Detector Analysis ===
+✅ PASS: Anomaly detector for Lambda Duration
+       Metric: Duration, Band width: 2 std dev
+✅ PASS: Anomaly detector for Error Count
+       Metric: ErrorCount, Band width: 3 std dev
+✅ PASS: Anomaly detector for Response Time
+       Metric: ResponseTime, Band width: 1.5 std dev
+✅ PASS: Anomaly detector for ECS Memory
+       Metric: MemoryUtilization, Band width: 2 std dev
+✅ PASS: ANOMALY_DETECTION_BAND expressions configured
+       Multiple metrics with customized band widths (1.5-3 std dev)
+
+=== ECS Container Insights Analysis ===
+✅ PASS: ECS cluster created with Container Insights enabled
+       Cluster: microservices-cluster
+✅ PASS: ECS task error log metric filter configured
+       Pattern: [time, request_id, level=ERROR*, ...]
+
+=== Kinesis Firehose Analysis ===
+✅ PASS: Kinesis Firehose delivery stream configuration
+       Name: cw-obs-pr7492-metric-stream, Destination: extended_s3
+✅ PASS: Firehose buffering configuration
+       Size: 128MB, Interval: 60s
+✅ PASS: Data format conversion to Parquet
+       OpenXJSONSerDe -> ParquetSerDe with Glue schema
+✅ PASS: S3 prefix partitioning with timestamps
+       Prefix: metrics/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/
+
+=== CloudWatch Metric Stream Analysis ===
+✅ PASS: CloudWatch Metric Stream configuration
+       Name: cw-obs-pr7492-stream, Format: opentelemetry0.7
+✅ PASS: Metric stream namespace filters
+       Namespaces: AWS/Lambda, AWS/ECS, CustomMetrics/cw-obs-pr7492, AWS/ApplicationELB, AWS/RDS
+✅ PASS: Extended statistics configuration (percentiles)
+       Statistics: p50, p90, p95, p99
+
+=== CloudWatch Synthetics Analysis ===
+✅ PASS: Primary region Synthetics canary configured
+       Runtime: syn-python-selenium-2.0, Schedule: rate(5 minutes)
+✅ PASS: Secondary region Synthetics canary configured
+       Multi-region monitoring enabled for high availability
+✅ PASS: Canary run configuration
+       Timeout: 60s, Memory: 960MB, X-Ray: enabled
+✅ PASS: Canary artifact encryption
+       S3 encryption mode: SSE_S3
+✅ PASS: Synthetics canary alarms configured
+       Threshold: 90% success rate, both regions monitored
+
+=== Cross-Account Observability Analysis ===
+✅ PASS: OAM (Observability Access Manager) sink configured
+       Sink: cw-obs-pr7492-oam-sink
+✅ PASS: OAM resource types configured
+       Types: AWS::CloudWatch::Metric, AWS::Logs::LogGroup, AWS::XRay::Trace
+✅ PASS: Cross-account IAM role with external ID
+       External ID: cloudwatch-cross-account
+✅ PASS: Cross-account monitoring dashboard
+       Dashboard includes Lambda invocations and errors from linked accounts
+
+=== CloudWatch Dashboard Analysis ===
+✅ PASS: Dashboard with 10 widget types
+       Comprehensive observability dashboard
+✅ PASS: Widget type: Line chart (Lambda metrics)
+✅ PASS: Widget type: Number widget (Error rate)
+✅ PASS: Widget type: Stacked area chart (ECS metrics)
+✅ PASS: Widget type: Log widget (Recent errors)
+✅ PASS: Widget type: Alarm status widget
+✅ PASS: Widget type: Pie chart (Daily distribution)
+✅ PASS: Widget type: Gauge widget (CPU utilization)
+✅ PASS: Widget type: Bar chart (Error distribution)
+✅ PASS: Widget type: Text widget (Documentation)
+✅ PASS: Widget type: Anomaly detection band
+✅ PASS: Dashboard annotations for thresholds
+       Critical (80%), Warning (60%) thresholds visualized
+
+=== IAM Role Analysis ===
+✅ PASS: IAM role for CloudWatch Metric Streams
+       Role: cw-obs-pr7492-metric-streams-role (already exists)
+✅ PASS: IAM role for Kinesis Firehose
+       Role: cw-obs-pr7492-firehose-role (already exists)
+✅ PASS: IAM role for Lambda functions
+       Role: cw-obs-pr7492-lambda-processor-role (already exists)
+✅ PASS: IAM role for CloudWatch Synthetics
+       Role: cw-obs-pr7492-synthetics-role (already exists)
+✅ PASS: IAM role for SNS delivery logging
+       Role: cw-obs-pr7492-sns-delivery-role (already exists)
+✅ PASS: IAM policies follow least privilege principle
+       Scoped permissions for each service
+
+============================================================
+Analysis Summary
+============================================================
+Total Tests: 58
+Passed: 55 (94.8%)
+Failed: 3 (5.2%)
+
+❌ 3 validation(s) failed.
+============================================================
