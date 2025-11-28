@@ -43,16 +43,10 @@ describe('TapStack CloudFormation Template - Trade Processing System', () => {
       expect(template.Parameters.RecorderImageUri).toBeUndefined();
     });
 
-    test('should have reserved concurrency parameters', () => {
-      expect(template.Parameters.ValidatorReservedConcurrency).toBeDefined();
-      expect(template.Parameters.EnricherReservedConcurrency).toBeDefined();
-      expect(template.Parameters.RecorderReservedConcurrency).toBeDefined();
-    });
-
-    test('reserved concurrency parameters should have correct types', () => {
-      expect(template.Parameters.ValidatorReservedConcurrency.Type).toBe('Number');
-      expect(template.Parameters.EnricherReservedConcurrency.Type).toBe('Number');
-      expect(template.Parameters.RecorderReservedConcurrency.Type).toBe('Number');
+    test('should not have reserved concurrency parameters (removed due to AWS account limits)', () => {
+      expect(template.Parameters.ValidatorReservedConcurrency).toBeUndefined();
+      expect(template.Parameters.EnricherReservedConcurrency).toBeUndefined();
+      expect(template.Parameters.RecorderReservedConcurrency).toBeUndefined();
     });
   });
 
@@ -122,10 +116,10 @@ describe('TapStack CloudFormation Template - Trade Processing System', () => {
       expect(template.Resources.ComplianceRecorderFunction.Properties.Architectures).toEqual(['arm64']);
     });
 
-    test('all Lambda functions should have reserved concurrent executions', () => {
-      expect(template.Resources.TradeValidatorFunction.Properties.ReservedConcurrentExecutions).toBeDefined();
-      expect(template.Resources.MetadataEnricherFunction.Properties.ReservedConcurrentExecutions).toBeDefined();
-      expect(template.Resources.ComplianceRecorderFunction.Properties.ReservedConcurrentExecutions).toBeDefined();
+    test('Lambda functions should not have reserved concurrent executions (removed due to AWS account limits)', () => {
+      expect(template.Resources.TradeValidatorFunction.Properties.ReservedConcurrentExecutions).toBeUndefined();
+      expect(template.Resources.MetadataEnricherFunction.Properties.ReservedConcurrentExecutions).toBeUndefined();
+      expect(template.Resources.ComplianceRecorderFunction.Properties.ReservedConcurrentExecutions).toBeUndefined();
     });
 
     test('all Lambda functions should have DLQ configurations', () => {
@@ -558,7 +552,8 @@ describe('TapStack CloudFormation Template - Trade Processing System', () => {
 
     test('should have expected parameter count', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBeGreaterThanOrEqual(10);
+      // After removing ImageUri and ReservedConcurrency params, we have 8 parameters
+      expect(parameterCount).toBeGreaterThanOrEqual(8);
     });
 
     test('should have expected output count', () => {

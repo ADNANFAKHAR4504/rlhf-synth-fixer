@@ -28,7 +28,13 @@ This document catalogs all issues found in MODEL_RESPONSE.md and how they were c
 **Location**: TradeValidatorFunction, MetadataEnricherFunction, ComplianceRecorderFunction
 **Fix**: Converted all three Lambda functions from container-based (PackageType: Image) to zip-based deployment (Runtime: python3.11, Handler: index.handler, Code.ZipFile). This maintains ARM64 architecture requirement while being deployable in the current CI/CD environment. Removed obsolete ImageUri parameters.
 
-### 5. No Retry Logic in Step Functions
+### 5. Lambda ReservedConcurrentExecutions Exceeds Account Limits
+**Severity**: CRITICAL
+**Issue**: Lambda functions specified ReservedConcurrentExecutions which would reduce the AWS account's unreserved concurrency pool below the minimum threshold of 100. Deployment failed with "Specified ReservedConcurrentExecutions for function decreases account's UnreservedConcurrentExecution below its minimum value of [100]".
+**Location**: TradeValidatorFunction, MetadataEnricherFunction, ComplianceRecorderFunction
+**Fix**: Removed ReservedConcurrentExecutions from all Lambda functions and corresponding parameters. Lambda functions now use the unreserved concurrency pool, which is appropriate for development/test environments.
+
+### 6. No Retry Logic in Step Functions
 **Severity**: CRITICAL
 **Issue**: State machine tasks had no retry configuration for transient failures
 **Location**: TradeProcessingStateMachine definition

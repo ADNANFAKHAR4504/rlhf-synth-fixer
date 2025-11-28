@@ -14,16 +14,6 @@
         },
         {
           "Label": {
-            "default": "Lambda Concurrency Settings"
-          },
-          "Parameters": [
-            "ValidatorReservedConcurrency",
-            "EnricherReservedConcurrency",
-            "RecorderReservedConcurrency"
-          ]
-        },
-        {
-          "Label": {
             "default": "API Configuration"
           },
           "Parameters": [
@@ -67,27 +57,6 @@
       "ConstraintDescription": "Must contain only alphanumeric characters",
       "MinLength": 1,
       "MaxLength": 20
-    },
-    "ValidatorReservedConcurrency": {
-      "Type": "Number",
-      "Default": 10,
-      "Description": "Reserved concurrent executions for trade validator Lambda",
-      "MinValue": 1,
-      "MaxValue": 1000
-    },
-    "EnricherReservedConcurrency": {
-      "Type": "Number",
-      "Default": 10,
-      "Description": "Reserved concurrent executions for metadata enricher Lambda",
-      "MinValue": 1,
-      "MaxValue": 1000
-    },
-    "RecorderReservedConcurrency": {
-      "Type": "Number",
-      "Default": 10,
-      "Description": "Reserved concurrent executions for compliance recorder Lambda",
-      "MinValue": 1,
-      "MaxValue": 1000
     },
     "TradeValidatorAPIEndpoint": {
       "Type": "String",
@@ -885,9 +854,6 @@
         },
         "Timeout": 300,
         "MemorySize": 512,
-        "ReservedConcurrentExecutions": {
-          "Ref": "ValidatorReservedConcurrency"
-        },
         "DeadLetterConfig": {
           "TargetArn": {
             "Fn::GetAtt": [
@@ -955,9 +921,6 @@
         },
         "Timeout": 300,
         "MemorySize": 512,
-        "ReservedConcurrentExecutions": {
-          "Ref": "EnricherReservedConcurrency"
-        },
         "DeadLetterConfig": {
           "TargetArn": {
             "Fn::GetAtt": [
@@ -1025,9 +988,6 @@
         },
         "Timeout": 300,
         "MemorySize": 512,
-        "ReservedConcurrentExecutions": {
-          "Ref": "RecorderReservedConcurrency"
-        },
         "DeadLetterConfig": {
           "TargetArn": {
             "Fn::GetAtt": [
