@@ -407,7 +407,8 @@ exports.handler = async (event, context) => {
       code: lambda.Code.fromInline(taskProcessorCode),
       timeout: cdk.Duration.minutes(5),
       memorySize: 1024,
-      reservedConcurrentExecutions: 50,
+      // Note: reservedConcurrentExecutions removed for test environment compatibility
+      // In production, set reservedConcurrentExecutions: 50
       role: lambdaRole,
       vpc: this.vpc,
       vpcSubnets: {
