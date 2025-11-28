@@ -12,7 +12,7 @@ This implementation creates a serverless cryptocurrency price alert processing s
     "EnvironmentSuffix": {
       "Type": "String",
       "Default": "dev",
-      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)"
+      "Description": "Environment suffix for resource naming (e.g., dev, qa, prod)"
     }
   },
   "Resources": {
@@ -461,7 +461,7 @@ This implementation creates a serverless cryptocurrency price alert processing s
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "EventBridge-AlertMatcher-Role-${EnvironmentSuffix}"
+          "Fn::Sub": "AlertMatcher-EventBridge-Role-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
