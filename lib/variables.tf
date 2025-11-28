@@ -7,6 +7,7 @@ variable "aws_region" {
 variable "environment_suffix" {
   description = "Unique suffix for resource naming to ensure uniqueness across deployments"
   type        = string
+  default     = "dev"
 }
 
 variable "environment" {
@@ -70,6 +71,7 @@ variable "aurora_master_password" {
   description = "Master password for Aurora cluster"
   type        = string
   sensitive   = true
+  default     = "ChangeMe123!"
 }
 
 variable "aurora_database_name" {
@@ -112,6 +114,7 @@ variable "dms_allocated_storage" {
 variable "dms_source_endpoint_host" {
   description = "On-premises source database host"
   type        = string
+  default     = "source-db.example.com"
 }
 
 variable "dms_source_endpoint_port" {
@@ -130,12 +133,14 @@ variable "dms_source_username" {
   description = "Source database username"
   type        = string
   sensitive   = true
+  default     = "dms_user"
 }
 
 variable "dms_source_password" {
   description = "Source database password"
   type        = string
   sensitive   = true
+  default     = "ChangeMe123!"
 }
 
 # S3 Configuration
