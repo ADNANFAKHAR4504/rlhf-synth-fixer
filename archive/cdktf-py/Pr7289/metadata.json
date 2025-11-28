@@ -27,5 +27,11 @@
     "NAT Gateway"
   ],
   "task_id": "s6u0s7s4",
-  "training_quality": 10
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
