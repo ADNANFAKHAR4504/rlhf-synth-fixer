@@ -260,7 +260,7 @@ class TestRoute53Resources:
             # Strip "/hostedzone/" prefix if present
             api_zone_id_normalized = api_zone_id.replace("/hostedzone/", "")
             output_zone_id = outputs["Route53HostedZoneId"].replace("/hostedzone/", "")
-            assert api_zone_id_normalized == output_zone_id, f"Zone ID mismatch: API={api_zone_id_normalized}, Output={output_zone_id}
+            assert api_zone_id_normalized == output_zone_id, f"Zone ID mismatch: API={api_zone_id_normalized}, Output={output_zone_id}"
         except ClientError:
             pytest.skip("Route53 Hosted Zone not accessible")
 
