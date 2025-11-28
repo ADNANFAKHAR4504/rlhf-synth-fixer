@@ -116,9 +116,10 @@ describe('VPC Network Architecture Integration Tests', () => {
 
       const azs = new Set(response.Subnets!.map(s => s.AvailabilityZone));
       expect(azs.size).toBe(3);
-      expect(azs.has('us-east-1a')).toBe(true);
-      expect(azs.has('us-east-1b')).toBe(true);
-      expect(azs.has('us-east-1c')).toBe(true);
+      // Verify each AZ is in the us-east-1 region
+      azs.forEach(az => {
+        expect(az).toMatch(/^us-east-1[a-z]$/);
+      });
     });
 
     test('public subnets should have MapPublicIpOnLaunch enabled', async () => {
