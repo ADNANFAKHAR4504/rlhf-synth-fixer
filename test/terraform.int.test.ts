@@ -424,20 +424,27 @@ describe('VPC Network Infrastructure - Integration Tests', () => {
 
     test('Flow Logs IAM role should have correct policy', async () => {
       if (!outputsExist) return;
-      
+
       const roleName = outputs.flow_logs_iam_role_arn.split('/').pop();
-      const policyName = roleName.replace('role', 'policy');
-      
+
+      // Extract environment suffix from role name
+      // Role name pattern: payment-gateway-flowlogs-${environment_suffix}-${random_hex}
+      // Policy name pattern: payment-gateway-flowlogs-policy-${environment_suffix}
+      const roleNameParts = roleName.split('-');
+      // Remove the last part (random hex) and reconstruct environment suffix
+      const environmentSuffix = roleNameParts.slice(3, -1).join('-'); // Get parts between 'flowlogs' and random hex
+      const policyName = `payment-gateway-flowlogs-policy-${environmentSuffix}`;
+
       const command = new GetRolePolicyCommand({
         RoleName: roleName,
         PolicyName: policyName
       });
       const response = await iam.send(command);
-      
+
       expect(response.PolicyDocument).toBeDefined();
       const policy = JSON.parse(decodeURIComponent(response.PolicyDocument!));
       expect(policy.Statement).toBeDefined();
-      
+
       const statement = policy.Statement[0];
       expect(statement.Action).toContain('logs:PutLogEvents');
       expect(statement.Action).toContain('logs:CreateLogStream');
