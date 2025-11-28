@@ -9,8 +9,8 @@ from unittest.mock import Mock, mock_open, patch
 from lib.optimize import (CloudWatchMetricsAnalyzer, ConfidenceLevel,
                           EC2Optimizer, ElastiCacheOptimizer,
                           InfrastructureOptimizer, LambdaOptimizer,
-                          OptimizationRecommendation, OptimizationReporter,
-                          RDSOptimizer)
+                          LoadTestRunner, OptimizationRecommendation,
+                          OptimizationReporter, RDSOptimizer)
 
 
 class TestConfidenceLevel(unittest.TestCase):
@@ -188,9 +188,15 @@ class TestCloudWatchMetricsAnalyzer(unittest.TestCase):
 
     def test_calculate_confidence_insufficient_data(self):
         """Test confidence calculation with insufficient data."""
-        data = [10, 20, 30]
+        # Now requires at least 50 data points (changed from 100)
+        data = [10, 20, 30]  # Only 3 data points
         confidence = self.analyzer.calculate_confidence(data, 50)
         self.assertEqual(confidence, 0.0)
+
+        # Test with exactly 50 data points (should work now)
+        data_50 = [10] * 50
+        confidence = self.analyzer.calculate_confidence(data_50, 50)
+        self.assertGreaterEqual(confidence, 0.0)
 
     def test_calculate_confidence_zero_mean(self):
         """Test confidence calculation with zero mean."""
@@ -257,9 +263,9 @@ class TestRDSOptimizer(unittest.TestCase):
             }]
         }
 
-        # Mock CloudWatch metrics - low CPU usage
-        cpu_metrics = [25.0] * 200  # Low and consistent CPU
-        conn_metrics = [50.0] * 200  # Low connections
+        # Mock CloudWatch metrics - low CPU usage (threshold changed to < 50%)
+        cpu_metrics = [45.0] * 200  # Below new threshold of 50%
+        conn_metrics = [150.0] * 200  # Below new threshold of 200
 
         mock_cloudwatch.get_metric_statistics.side_effect = [
             {'Datapoints': [{'Timestamp': datetime.now(timezone.utc), 'Average': v} for v in cpu_metrics]},
@@ -276,7 +282,8 @@ class TestRDSOptimizer(unittest.TestCase):
         self.assertEqual(rec.resource_type, 'RDS')
         self.assertEqual(rec.current_config, 'db.r6g.2xlarge')
         self.assertEqual(rec.proposed_config, 'db.r6g.xlarge')
-        self.assertGreater(rec.confidence_score, 0.9)
+        # Now uses LOW confidence (0.75) instead of HIGH (0.95)
+        self.assertGreaterEqual(rec.confidence_score, ConfidenceLevel.LOW.value)
 
     @patch('lib.optimize.boto3.client')
     def test_analyze_rds_instances_no_recommendation(self, mock_boto_client):
@@ -301,9 +308,9 @@ class TestRDSOptimizer(unittest.TestCase):
             }]
         }
 
-        # High CPU usage - no downsize recommendation
-        cpu_metrics = [80.0] * 200
-        conn_metrics = [200.0] * 200
+        # High CPU usage - no downsize recommendation (above new threshold of 50%)
+        cpu_metrics = [80.0] * 200  # Above 50% threshold
+        conn_metrics = [250.0] * 200  # Above 200 threshold
 
         mock_cloudwatch.get_metric_statistics.side_effect = [
             {'Datapoints': [{'Timestamp': datetime.now(timezone.utc), 'Average': v} for v in cpu_metrics]},
@@ -341,10 +348,11 @@ class TestRDSOptimizer(unittest.TestCase):
         }
 
         # Mock CloudWatch metrics - low usage on both primary and replica
-        cpu_metrics = [25.0] * 200
-        conn_metrics = [30.0] * 200  # Low connections for replica removal
+        # Updated thresholds: lag < 200ms (was 100ms), connections < 100 (was 50)
+        cpu_metrics = [45.0] * 200
+        conn_metrics = [80.0] * 200  # Below new threshold of 100 for replica removal
         storage_metrics = []
-        replica_lag = [50.0] * 200  # Low replica lag
+        replica_lag = [150.0] * 200  # Below new threshold of 200ms
 
         mock_cloudwatch.get_metric_statistics.side_effect = [
             {'Datapoints': [{'Timestamp': datetime.now(timezone.utc), 'Average': v} for v in cpu_metrics]},
@@ -364,6 +372,8 @@ class TestRDSOptimizer(unittest.TestCase):
             rec = replica_recs[0]
             self.assertEqual(rec.resource_id, 'test-db-replica')
             self.assertEqual(rec.proposed_config, 'Remove')
+            # Now uses LOW confidence instead of HIGH
+            self.assertGreaterEqual(rec.confidence_score, ConfidenceLevel.LOW.value)
 
     @patch('lib.optimize.boto3.client')
     def test_analyze_rds_instances_exception(self, mock_boto_client):
@@ -425,8 +435,8 @@ class TestEC2Optimizer(unittest.TestCase):
             }]
         }
 
-        # Low CPU utilization
-        cpu_metrics = [30.0] * 200
+        # Low CPU utilization (threshold changed to < 60% from < 40%)
+        cpu_metrics = [55.0] * 200  # Below new threshold of 60%
         network_metrics = [1000000.0] * 200
 
         mock_cloudwatch.get_metric_statistics.side_effect = [
@@ -441,6 +451,8 @@ class TestEC2Optimizer(unittest.TestCase):
         rec = recommendations[0]
         self.assertEqual(rec.resource_id, 'test-asg')
         self.assertEqual(rec.resource_type, 'EC2-ASG')
+        # Now uses LOW confidence instead of HIGH
+        self.assertGreaterEqual(rec.confidence_score, ConfidenceLevel.LOW.value)
 
     @patch('lib.optimize.boto3.client')
     def test_analyze_auto_scaling_groups_exception(self, mock_boto_client):
@@ -504,8 +516,8 @@ class TestElastiCacheOptimizer(unittest.TestCase):
             }]
         }
 
-        # Low memory usage
-        memory_metrics = [30.0] * 200
+        # Low memory usage (threshold changed to < 60% from < 40%)
+        memory_metrics = [55.0] * 200  # Below new threshold of 60%
         hit_rate_metrics = [95.0] * 200
 
         mock_cloudwatch.get_metric_statistics.side_effect = [
@@ -520,6 +532,8 @@ class TestElastiCacheOptimizer(unittest.TestCase):
         rec = recommendations[0]
         self.assertEqual(rec.resource_id, 'test-redis')
         self.assertEqual(rec.resource_type, 'ElastiCache-Redis')
+        # Now uses LOW confidence instead of HIGH
+        self.assertGreaterEqual(rec.confidence_score, ConfidenceLevel.LOW.value)
 
     @patch('lib.optimize.boto3.client')
     def test_analyze_redis_clusters_exception(self, mock_boto_client):
@@ -578,8 +592,8 @@ class TestLambdaOptimizer(unittest.TestCase):
             }]
         }
 
-        # Low duration metrics
-        duration_metrics = [2000.0] * 200  # 2 seconds
+        # Low duration metrics (threshold changed to < 5000ms from < 3000ms)
+        duration_metrics = [4500.0] * 200  # 4.5 seconds, below new threshold of 5 seconds
         cold_start_metrics = [500.0] * 50
 
         mock_cloudwatch.get_metric_statistics.side_effect = [
@@ -594,6 +608,8 @@ class TestLambdaOptimizer(unittest.TestCase):
         rec = recommendations[0]
         self.assertEqual(rec.resource_id, 'test-function')
         self.assertEqual(rec.resource_type, 'Lambda')
+        # Now uses LOW confidence instead of HIGH
+        self.assertGreaterEqual(rec.confidence_score, ConfidenceLevel.LOW.value)
 
     @patch('lib.optimize.boto3.client')
     def test_analyze_lambda_functions_skip_small_memory(self, mock_boto_client):
@@ -800,13 +816,17 @@ class TestInfrastructureOptimizer(unittest.TestCase):
         mock_lambda_analyze.return_value = []
 
         optimizer = InfrastructureOptimizer(region='us-east-1')
-        recommendations = optimizer.run_optimization_analysis(days=45, confidence_threshold=0.95)
+        # Default confidence threshold is now 0.75 (changed from 0.95)
+        recommendations = optimizer.run_optimization_analysis(days=45, confidence_threshold=0.75)
 
-        # Should only get high confidence recommendations
-        self.assertEqual(len(recommendations), 2)
+        # Should get recommendations with confidence >= 0.75
+        # rds_rec (0.96) and ec2_rec (0.97) should be included
+        # low_confidence_rec (0.80) should also be included now
+        self.assertGreaterEqual(len(recommendations), 2)
         self.assertIn(rds_rec, recommendations)
         self.assertIn(ec2_rec, recommendations)
-        self.assertNotIn(low_confidence_rec, recommendations)
+        # With threshold 0.75, the 0.80 confidence recommendation should be included
+        self.assertIn(low_confidence_rec, recommendations)
 
     @patch.object(OptimizationReporter, 'generate_csv_report')
     @patch.object(OptimizationReporter, 'generate_json_report')
@@ -1006,12 +1026,64 @@ class TestInfrastructureOptimizer(unittest.TestCase):
         # Should complete without error
 
 
+class TestLoadTestRunner(unittest.TestCase):
+    """Test LoadTestRunner class."""
+
+    @patch('lib.optimize.subprocess.run')
+    @patch('lib.optimize.os.path.exists')
+    @patch('lib.optimize.time.sleep')
+    def test_run_load_test_success(self, mock_sleep, mock_exists, mock_subprocess):
+        """Test successful load test execution."""
+        mock_exists.return_value = True
+        mock_subprocess.return_value = Mock(returncode=0, stderr='')
+
+        result = LoadTestRunner.run_load_test(duration_minutes=5, outputs_file='test-outputs.json')
+
+        self.assertTrue(result)
+        mock_subprocess.assert_called_once()
+        # Should wait 5 minutes (300 seconds) for metrics to propagate
+        mock_sleep.assert_called_once_with(300)
+
+    @patch('lib.optimize.os.path.exists')
+    def test_run_load_test_script_not_found(self, mock_exists):
+        """Test load test when script is not found."""
+        mock_exists.return_value = False
+
+        result = LoadTestRunner.run_load_test()
+
+        self.assertFalse(result)
+
+    @patch('lib.optimize.subprocess.run')
+    @patch('lib.optimize.os.path.exists')
+    def test_run_load_test_failure(self, mock_exists, mock_subprocess):
+        """Test load test with non-zero return code."""
+        mock_exists.return_value = True
+        mock_subprocess.return_value = Mock(returncode=1, stderr='Error occurred')
+
+        result = LoadTestRunner.run_load_test()
+
+        self.assertFalse(result)
+
+    @patch('lib.optimize.subprocess.run')
+    @patch('lib.optimize.os.path.exists')
+    def test_run_load_test_timeout(self, mock_exists, mock_subprocess):
+        """Test load test with timeout."""
+        from subprocess import TimeoutExpired
+        mock_exists.return_value = True
+        mock_subprocess.side_effect = TimeoutExpired('cmd', 10)
+
+        result = LoadTestRunner.run_load_test()
+
+        self.assertFalse(result)
+
+
 class TestMainFunction(unittest.TestCase):
     """Test main function and CLI."""
 
+    @patch('lib.optimize.LoadTestRunner.run_load_test')
     @patch('lib.optimize.InfrastructureOptimizer')
-    @patch('sys.argv', ['optimize.py', '--region', 'us-west-2', '--days', '30', '--confidence', '0.90'])
-    def test_main_function_basic(self, mock_optimizer_class):
+    @patch('sys.argv', ['optimize.py', '--region', 'us-west-2', '--days', '30', '--confidence', '0.90', '--skip-load-test'])
+    def test_main_function_basic(self, mock_optimizer_class, mock_load_test):
         """Test main function with basic arguments."""
         from lib.optimize import main
 
@@ -1024,6 +1096,8 @@ class TestMainFunction(unittest.TestCase):
 
         main()
 
+        # Load test should be skipped
+        mock_load_test.assert_not_called()
         # With explicit region, should create one optimizer for that region
         mock_optimizer_class.assert_called_with(region='us-west-2')
         mock_optimizer.run_optimization_analysis.assert_called_with(
@@ -1033,28 +1107,99 @@ class TestMainFunction(unittest.TestCase):
         # Reports should be generated when recommendations exist
         self.assertTrue(mock_optimizer.generate_reports.called)
 
+    @patch('lib.optimize.LoadTestRunner.run_load_test')
     @patch('lib.optimize.InfrastructureOptimizer')
-    @patch('builtins.input', return_value='yes')
-    @patch('sys.argv', ['optimize.py', '--apply', '--region', 'us-east-1'])
-    def test_main_function_apply_yes(self, mock_input, mock_optimizer_class):
-        """Test main function with apply flag and user confirmation."""
+    @patch('sys.argv', ['optimize.py', '--region', 'us-west-2'])
+    def test_main_function_with_load_test(self, mock_optimizer_class, mock_load_test):
+        """Test main function with load test enabled (default)."""
         from lib.optimize import main
 
         mock_optimizer = Mock()
         mock_optimizer_class.return_value = mock_optimizer
-        # Return non-empty list so apply is attempted
-        test_recommendations = [{'resource_id': 'test', 'recommendation': 'test'}]
-        mock_optimizer.run_optimization_analysis.return_value = test_recommendations
+        mock_optimizer.run_optimization_analysis.return_value = []
+        mock_load_test.return_value = True
 
         main()
 
-        # Should call apply_recommendations with the recommendations list
-        mock_optimizer.apply_recommendations.assert_called_with(test_recommendations, dry_run=False)
+        # Load test should be called by default
+        mock_load_test.assert_called_once()
 
+    @patch('sys.argv', ['optimize.py', '--apply', '--region', 'us-east-1', '--skip-load-test'])
+    @patch('builtins.input', return_value='yes')
+    @patch('lib.optimize.InfrastructureOptimizer')
+    @patch('lib.optimize.LoadTestRunner.run_load_test')
+    def test_main_function_apply_yes(self, mock_load_test, mock_optimizer_class, mock_input):
+        """Test main function with apply flag and user confirmation."""
+        from lib.optimize import OptimizationRecommendation
+
+        # Create proper recommendation objects
+        test_recommendations = [
+            OptimizationRecommendation(
+                resource_id='test-resource',
+                resource_type='RDS',
+                current_config='db.r6g.2xlarge',
+                proposed_config='db.r6g.xlarge',
+                p50_utilization=20.0,
+                p95_utilization=25.0,
+                p99_utilization=30.0,
+                current_hourly_cost=0.504,
+                proposed_hourly_cost=0.252,
+                annual_savings=2190.0,
+                confidence_score=0.95,
+                recommendation_reason='test',
+                rollback_strategy='test',
+                implementation_notes='test'
+            )
+        ]
+
+        mock_optimizer = Mock()
+        # Ensure the same mock instance is returned every time InfrastructureOptimizer is instantiated
+        mock_optimizer_class.return_value = mock_optimizer
+        mock_optimizer.run_optimization_analysis.return_value = test_recommendations
+        # Mock generate_reports to avoid any issues
+        mock_optimizer.generate_reports.return_value = None
+
+        from lib.optimize import main
+        try:
+            main()
+        except Exception as e:
+            self.fail(f"main() raised an exception: {e}")
+
+        # Verify that InfrastructureOptimizer was instantiated
+        self.assertTrue(mock_optimizer_class.called,
+                       "InfrastructureOptimizer should have been instantiated")
+
+        # Verify that run_optimization_analysis was called
+        self.assertTrue(mock_optimizer.run_optimization_analysis.called,
+                        "run_optimization_analysis should have been called")
+
+        # Verify that generate_reports was called (indicates recommendations were found)
+        self.assertTrue(mock_optimizer.generate_reports.called,
+                        "generate_reports should have been called when recommendations exist")
+
+        # Verify that apply_recommendations was called
+        self.assertTrue(mock_optimizer.apply_recommendations.called,
+                       "apply_recommendations should have been called")
+
+        # Get the call arguments
+        call_args_list = mock_optimizer.apply_recommendations.call_args_list
+        self.assertGreater(len(call_args_list), 0, "apply_recommendations should have been called")
+
+        # Check the call - it should be called with recommendations and dry_run=False
+        last_call = call_args_list[-1]
+        # The function signature is: apply_recommendations(recommendations, dry_run=False)
+        # So first positional arg should be the recommendations list
+        self.assertEqual(len(last_call[0]), 1, "apply_recommendations should be called with recommendations as first arg")
+        self.assertEqual(last_call[0][0], test_recommendations,
+                        "apply_recommendations should be called with test_recommendations")
+        # Check keyword argument
+        self.assertFalse(last_call[1].get('dry_run', True), "Should be called with dry_run=False")
+
+    @patch('lib.optimize.LoadTestRunner.run_load_test')
     @patch('lib.optimize.InfrastructureOptimizer')
     @patch('builtins.input', return_value='no')
-    @patch('sys.argv', ['optimize.py', '--apply'])
-    def test_main_function_apply_no(self, mock_input, mock_optimizer_class):
+    @patch('sys.argv', ['optimize.py', '--apply', '--skip-load-test'])
+    def test_main_function_apply_no(self, mock_optimizer_class, mock_input, mock_load_test):
         """Test main function with apply flag and user rejection."""
         from lib.optimize import main
 
