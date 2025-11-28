@@ -29,5 +29,7 @@
     "Cloud Environment Setup",
     "Multi-Environment Consistency and Replication"
   ],
-  "training_quality": 8
+  "training_quality": 8,
+  "author": "iamarpit-turing",
+  "reviewer": "akshat-jain355"
 }
