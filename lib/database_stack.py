@@ -5,7 +5,7 @@ from cdktf_cdktf_provider_aws.rds_global_cluster import RdsGlobalCluster
 from cdktf_cdktf_provider_aws.rds_cluster import RdsCluster
 from cdktf_cdktf_provider_aws.rds_cluster_instance import RdsClusterInstance
 from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
-from cdktf_cdktf_provider_aws.rds_cluster_parameter_group import RdsClusterParameterGroup
+from cdktf_cdktf_provider_aws.rds_cluster_parameter_group import RdsClusterParameterGroup, RdsClusterParameterGroupParameter
 
 
 class DatabaseStack(Construct):
@@ -73,16 +73,16 @@ class DatabaseStack(Construct):
             family="aurora-mysql8.0",
             description="Parameter group for primary Aurora cluster",
             parameter=[
-                {
-                    "name": "binlog_format",
-                    "value": "ROW",
-                    "apply_method": "pending-reboot",
-                },
-                {
-                    "name": "character_set_server",
-                    "value": "utf8mb4",
-                    "apply_method": "pending-reboot",
-                },
+                RdsClusterParameterGroupParameter(
+                    name="binlog_format",
+                    value="ROW",
+                    apply_method="pending-reboot"
+                ),
+                RdsClusterParameterGroupParameter(
+                    name="character_set_server",
+                    value="utf8mb4",
+                    apply_method="pending-reboot"
+                ),
             ],
             tags={
                 "Name": f"primary-aurora-params-{environment_suffix}",
