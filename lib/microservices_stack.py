@@ -11,7 +11,6 @@ from cdktf_cdktf_provider_aws.route import Route
 from cdktf_cdktf_provider_aws.security_group import SecurityGroup, SecurityGroupIngress, SecurityGroupEgress
 from cdktf_cdktf_provider_aws.eks_cluster import EksCluster, EksClusterVpcConfig
 from cdktf_cdktf_provider_aws.eks_fargate_profile import EksFargateProfile, EksFargateProfileSelector
-from cdktf_cdktf_provider_aws.eks_addon import EksAddon
 from cdktf_cdktf_provider_aws.iam_role import IamRole
 from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
 from cdktf_cdktf_provider_aws.iam_policy import IamPolicy
@@ -661,47 +660,19 @@ class MicroservicesStack(Construct):
 
     def _create_eks_addons(self):
         """Install EKS addons including AWS Load Balancer Controller support."""
-        # VPC CNI addon - let AWS auto-select compatible version
-        vpc_cni_addon = EksAddon(
-            self,
-            "vpc_cni_addon",
-            cluster_name=self.eks_cluster.name,
-            addon_name="vpc-cni",
-            # Removed addon_version to let AWS auto-select compatible version for EKS 1.29
-            resolve_conflicts_on_create="OVERWRITE",
-            resolve_conflicts_on_update="OVERWRITE",
-            tags={"Name": f"vpc-cni-addon-{self.environment_suffix}"}
-        )
-        # Ensure kube-system Fargate profile is ready before creating addon
-        vpc_cni_addon.node.add_dependency(self.kube_system_profile)
+        # IMPORTANT: EKS automatically manages vpc-cni, coredns, and kube-proxy addons for Fargate clusters
+        # Explicit creation causes timing issues and DEGRADED states due to Fargate profile dependencies
+        # These addons are automatically installed and managed by EKS when the cluster is created
+        # Reference: https://docs.aws.amazon.com/eks/latest/userguide/eks-add-ons.html
 
-        # CoreDNS addon - let AWS auto-select compatible version
-        coredns_addon = EksAddon(
-            self,
-            "coredns_addon",
-            cluster_name=self.eks_cluster.name,
-            addon_name="coredns",
-            # Removed addon_version to let AWS auto-select compatible version for EKS 1.29
-            resolve_conflicts_on_create="OVERWRITE",
-            resolve_conflicts_on_update="OVERWRITE",
-            tags={"Name": f"coredns-addon-{self.environment_suffix}"}
-        )
-        # Ensure kube-system Fargate profile is ready before creating addon
-        coredns_addon.node.add_dependency(self.kube_system_profile)
+        # Removed explicit addon creation to avoid deployment timeouts:
+        # - vpc-cni: EKS automatically configures for Fargate networking
+        # - coredns: EKS automatically installs and patches for Fargate compatibility
+        # - kube-proxy: EKS automatically installs appropriate version
 
-        # kube-proxy addon - let AWS auto-select compatible version
-        kube_proxy_addon = EksAddon(
-            self,
-            "kube_proxy_addon",
-            cluster_name=self.eks_cluster.name,
-            addon_name="kube-proxy",
-            # Removed addon_version to let AWS auto-select compatible version for EKS 1.29
-            resolve_conflicts_on_create="OVERWRITE",
-            resolve_conflicts_on_update="OVERWRITE",
-            tags={"Name": f"kube-proxy-addon-{self.environment_suffix}"}
-        )
-        # Ensure kube-system Fargate profile is ready before creating addon
-        kube_proxy_addon.node.add_dependency(self.kube_system_profile)
+        # If explicit addon management is needed, use:
+        # resolve_conflicts_on_create="OVERWRITE" and resolve_conflicts_on_update="PRESERVE"
+        # But for Fargate-only clusters, letting EKS auto-manage is recommended
 
         # Create IAM role for AWS Load Balancer Controller
         oidc_issuer = Fn.replace(

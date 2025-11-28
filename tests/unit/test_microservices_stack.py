@@ -272,17 +272,10 @@ class TestMicroservicesStackResources:
         synth = Testing.synth(stack)
         resources = json.loads(synth)['resource']
 
-        # Verify EKS addons
-        assert 'aws_eks_addon' in resources
-        addons = resources['aws_eks_addon']
-
-        # Should have 3 addons: vpc-cni, coredns, kube-proxy
-        assert len(addons) == 3
-
-        addon_names = [config['addon_name'] for config in addons.values()]
-        assert 'vpc-cni' in addon_names
-        assert 'coredns' in addon_names
-        assert 'kube-proxy' in addon_names
+        # EKS addons (vpc-cni, coredns, kube-proxy) are automatically managed by AWS EKS
+        # for Fargate clusters and should NOT be explicitly created to avoid timing/state issues
+        # Verify they are NOT in the synthesized Terraform (EKS auto-manages them)
+        assert 'aws_eks_addon' not in resources or len(resources.get('aws_eks_addon', {})) == 0
 
     def test_security_group_has_correct_ingress_rules(self):
         """Security group has correct ingress rules for cluster communication."""
