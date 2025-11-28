@@ -236,8 +236,9 @@ resource "aws_rds_cluster_parameter_group" "aurora" {
 
   # Parameters matching PostgreSQL 13.x configuration
   parameter {
-    name  = "shared_preload_libraries"
-    value = "pg_stat_statements,pg_hint_plan"
+    name         = "shared_preload_libraries"
+    value        = "pg_stat_statements,pg_hint_plan"
+    apply_method = "pending-reboot"
   }
 
   parameter {
@@ -377,7 +378,7 @@ resource "aws_dms_replication_instance" "main" {
   replication_subnet_group_id = aws_dms_replication_subnet_group.main.id
   publicly_accessible         = false
   multi_az                    = true
-  engine_version              = "3.5.2"
+  engine_version              = "3.5.1"
   auto_minor_version_upgrade  = false
   allow_major_version_upgrade = false
   apply_immediately           = true
@@ -575,6 +576,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "migration" {
   rule {
     id     = "transition-old-versions"
     status = "Enabled"
+
+    filter {
+      prefix = ""
+    }
 
     transition {
       days          = var.s3_lifecycle_ia_transition_days
