@@ -35,28 +35,56 @@ The model generated an invalid CloudFormation resource name with a space:
 
 ---
 
-### 2. Invalid Aurora MySQL Engine Version
+### 2. Aurora MySQL Engine Version Validation and Update Constraints
 
-**Impact Level**: Critical - Lint Failure
+**Impact Level**: Critical - Lint Failure and Deployment Failure
 
 **MODEL_RESPONSE Issue**:
-The template specifies an invalid Aurora MySQL engine version:
+The template initially specified an invalid Aurora MySQL engine version:
 ```json
 "EngineVersion": "8.0.mysql_aurora.3.05.2"
 ```
 
+**Additional Deployment Issue**:
+When an existing stack was deployed with `8.0.mysql_aurora.3.11.0`, attempting to update to `8.0.mysql_aurora.3.10.1` failed because AWS RDS does not allow downgrading engine versions.
+
 **IDEAL_RESPONSE Fix**:
 ```json
-"EngineVersion": "8.0.mysql_aurora.3.10.1"
+"AuroraCluster": {
+  "Type": "AWS::RDS::DBCluster",
+  "Metadata": {
+    "cfn-lint": {
+      "config": {
+        "ignore_checks": ["E3690"]
+      }
+    }
+  },
+  "Properties": {
+    "EngineVersion": "8.0.mysql_aurora.3.11.0"
+  }
+}
 ```
 
-**Root Cause**: The model specified an engine version that is not in the list of valid Aurora MySQL versions. The version `8.0.mysql_aurora.3.05.2` does not exist in AWS's supported version list.
+**Root Cause**: 
+1. The model initially specified `8.0.mysql_aurora.3.05.2` which is not a valid AWS-supported version.
+2. When corrected to `8.0.mysql_aurora.3.10.1` to satisfy cfn-lint, the existing stack had `3.11.0` deployed.
+3. AWS RDS does not allow downgrading engine versions (only upgrades are permitted).
+4. cfn-lint's version validation list is outdated and doesn't include `3.11.0`, even though AWS supports it.
 
-**AWS Documentation Reference**: [Aurora MySQL Engine Versions](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/AuroraMySQL.Updates.html)
+**AWS Documentation Reference**: 
+- [Aurora MySQL Engine Versions](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/AuroraMySQL.Updates.html)
+- [Modifying an Aurora DB Cluster](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.Modifying.html)
 
-**Deployment Impact**: cfn-lint validation fails with error `E3690: '8.0.mysql_aurora.3.05.2' is not one of [valid versions]`. While the template may deploy, using an invalid version string can cause unpredictable behavior.
+**Deployment Impact**: 
+1. **Initial deployment**: cfn-lint validation fails with error `E3690: '8.0.mysql_aurora.3.11.0' is not one of [valid versions]` even though AWS supports this version.
+2. **Stack updates**: When an existing stack uses `3.11.0`, attempting to change to `3.10.1` fails with error: "Cannot upgrade aurora-mysql from 8.0.mysql_aurora.3.11.0 to 8.0.mysql_aurora.3.10.1" because AWS RDS doesn't allow downgrading engine versions.
+3. **Resolution**: Must use `3.11.0` with cfn-lint metadata to suppress the false positive validation error.
 
-**Training Value**: The model should validate engine versions against AWS's current supported versions list. This requires up-to-date knowledge of AWS service version availability.
+**Training Value**: 
+1. The model should validate engine versions against AWS's current supported versions list.
+2. The model should understand that AWS RDS only allows engine version upgrades, not downgrades.
+3. The model should be aware that cfn-lint validation lists may be outdated compared to actual AWS-supported versions.
+4. When updating existing infrastructure, the model should check current deployed versions before attempting changes.
 
 ---
 

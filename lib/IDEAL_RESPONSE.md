@@ -247,10 +247,17 @@ This document contains the corrected CloudFormation infrastructure code after ap
     },
     "AuroraCluster": {
       "Type": "AWS::RDS::DBCluster",
+      "Metadata": {
+        "cfn-lint": {
+          "config": {
+            "ignore_checks": ["E3690"]
+          }
+        }
+      },
       "Properties": {
         "DBClusterIdentifier": {"Fn::Sub": "aurora-cluster-${Environment}-${EnvironmentSuffix}"},
         "Engine": "aurora-mysql",
-        "EngineVersion": "8.0.mysql_aurora.3.10.1",
+        "EngineVersion": "8.0.mysql_aurora.3.11.0",
         "MasterUsername": {"Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}"},
         "MasterUserPassword": {"Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}"},
         "DBSubnetGroupName": {"Ref": "DBSubnetGroup"},
