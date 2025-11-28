@@ -1,0 +1,17 @@
+{
+  "name": "threshold-checker",
+  "version": "1.0.0",
+  "description": "Threshold checker Lambda function",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.450.0",
+    "@aws-sdk/client-sqs": "^3.450.0",
+    "@aws-sdk/lib-dynamodb": "^3.450.0",
+    "aws-xray-sdk-core": "^3.5.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.131",
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.3"
+  }
+}

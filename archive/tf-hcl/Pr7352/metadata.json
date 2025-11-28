@@ -1,0 +1,36 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-26T07:46:00Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Migration",
+    "Blue-Green Deployment",
+    "Financial Services"
+  ],
+  "aws_services": [
+    "RDS Aurora",
+    "Lambda",
+    "Application Load Balancer",
+    "DMS",
+    "CloudWatch",
+    "Route53",
+    "S3",
+    "IAM",
+    "VPC",
+    "DynamoDB",
+    "Transit Gateway"
+  ],
+  "po_id": "101912678",
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

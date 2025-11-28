@@ -1,0 +1,29 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "c4e6q1",
+  "team": "synth",
+  "startedAt": "2025-11-24T00:00:00Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "SNS",
+    "SQS",
+    "KMS",
+    "IAM",
+    "CloudWatch"
+  ],
+  "region": "us-east-1",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

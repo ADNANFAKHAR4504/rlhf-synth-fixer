@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912560",
+  "team": "synth",
+  "startedAt": "2025-11-21T12:52:00-05:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Serverless Architecture",
+    "Real-time Processing",
+    "Event-Driven Systems"
+  ],
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "SNS",
+    "CloudWatch",
+    "EventBridge",
+    "KMS",
+    "IAM"
+  ],
+  "training_quality": 8,
+  "region": "us-east-1",
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

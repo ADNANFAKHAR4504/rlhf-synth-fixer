@@ -1,0 +1,580 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Multi-environment data analytics platform - Consolidated deployment template for testing",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Suffix to append to all resource names for uniqueness (e.g., dev, test, prod)",
+      "Default": "dev",
+      "MinLength": 3,
+      "MaxLength": 10,
+      "AllowedPattern": "[a-z0-9]+",
+      "ConstraintDescription": "Must contain only lowercase letters and numbers"
+    },
+    "EnvironmentType": {
+      "Type": "String",
+      "Description": "Environment type for conditional resource configuration",
+      "AllowedValues": ["development", "staging", "production"],
+      "Default": "development"
+    }
+  },
+  "Conditions": {
+    "IsProduction": {
+      "Fn::Equals": [{"Ref": "EnvironmentType"}, "production"]
+    }
+  },
+  "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "analytics-vpc-${EnvironmentSuffix}"}
+          },
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentType"}
+          }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "analytics-igw-${EnvironmentSuffix}"}
+          },
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentType"}
+          }
+        ]
+      }
+    },
+    "VPCGatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "InternetGatewayId": {"Ref": "InternetGateway"}
+      }
+    },
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "analytics-public-1-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "analytics-public-2-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": "10.0.11.0/24",
+        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "analytics-private-1-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": "10.0.12.0/24",
+        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "analytics-private-2-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "analytics-public-rt-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "VPCGatewayAttachment",
+      "Properties": {
+        "RouteTableId": {"Ref": "PublicRouteTable"},
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {"Ref": "InternetGateway"}
+      }
+    },
+    "PublicSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {"Ref": "PublicSubnet1"},
+        "RouteTableId": {"Ref": "PublicRouteTable"}
+      }
+    },
+    "PublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {"Ref": "PublicSubnet2"},
+        "RouteTableId": {"Ref": "PublicRouteTable"}
+      }
+    },
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "analytics-private-rt-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {"Ref": "PrivateSubnet1"},
+        "RouteTableId": {"Ref": "PrivateRouteTable"}
+      }
+    },
+    "PrivateSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {"Ref": "PrivateSubnet2"},
+        "RouteTableId": {"Ref": "PrivateRouteTable"}
+      }
+    },
+    "S3VPCEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "ServiceName": {"Fn::Sub": "com.amazonaws.${AWS::Region}.s3"},
+        "RouteTableIds": [{"Ref": "PrivateRouteTable"}]
+      }
+    },
+    "DynamoDBVPCEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "ServiceName": {"Fn::Sub": "com.amazonaws.${AWS::Region}.dynamodb"},
+        "RouteTableIds": [{"Ref": "PrivateRouteTable"}]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {"Fn::Sub": "analytics-lambda-${EnvironmentSuffix}"},
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {"Service": "lambda.amazonaws.com"},
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "S3Access",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+                  "Resource": {"Fn::Sub": "arn:aws:s3:::analytics-data-${EnvironmentSuffix}/*"}
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": ["s3:ListBucket"],
+                  "Resource": {"Fn::Sub": "arn:aws:s3:::analytics-data-${EnvironmentSuffix}"}
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "DynamoDBAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": ["dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:UpdateItem", "dynamodb:Query", "dynamodb:Scan"],
+                  "Resource": {"Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/analytics-metadata-${EnvironmentSuffix}"}
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentType"}
+          }
+        ]
+      }
+    },
+    "LambdaSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {"Fn::Sub": "analytics-lambda-sg-${EnvironmentSuffix}"},
+        "GroupDescription": "Security group for Lambda functions",
+        "VpcId": {"Ref": "VPC"},
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "analytics-lambda-sg-${EnvironmentSuffix}"}
+          },
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentType"}
+          }
+        ]
+      }
+    },
+    "AnalyticsDataBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {"Fn::Sub": "analytics-data-${EnvironmentSuffix}-${AWS::AccountId}"},
+        "VersioningConfiguration": {"Status": "Enabled"},
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}
+            }
+          ]
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "TransitionToGlacier",
+              "Status": "Enabled",
+              "Transitions": [
+                {
+                  "TransitionInDays": 90,
+                  "StorageClass": "GLACIER"
+                }
+              ]
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentType"}
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete"
+    },
+    "AnalyticsDataBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {"Ref": "AnalyticsDataBucket"},
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "DenyUnencryptedObjectUploads",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:PutObject",
+              "Resource": {"Fn::Sub": "${AnalyticsDataBucket.Arn}/*"},
+              "Condition": {
+                "StringNotEquals": {
+                  "s3:x-amz-server-side-encryption": "AES256"
+                }
+              }
+            },
+            {
+              "Sid": "DenyInsecureTransport",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {"Fn::GetAtt": ["AnalyticsDataBucket", "Arn"]},
+                {"Fn::Sub": "${AnalyticsDataBucket.Arn}/*"}
+              ],
+              "Condition": {
+                "Bool": {"aws:SecureTransport": "false"}
+              }
+            }
+          ]
+        }
+      }
+    },
+    "MetadataTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {"Fn::Sub": "analytics-metadata-${EnvironmentSuffix}"},
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "file_id",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "upload_timestamp",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "file_id",
+            "KeyType": "HASH"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "timestamp-index",
+            "KeySchema": [
+              {
+                "AttributeName": "upload_timestamp",
+                "KeyType": "HASH"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": {"Fn::If": ["IsProduction", true, false]}
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentType"}
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete"
+    },
+    "CSVProcessorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {"Fn::Sub": "analytics-csv-processor-${EnvironmentSuffix}"},
+        "Runtime": "python3.9",
+        "Handler": "index.lambda_handler",
+        "Role": {"Fn::GetAtt": ["LambdaExecutionRole", "Arn"]},
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\nimport csv\nimport io\nfrom datetime import datetime\n\ns3_client = boto3.client('s3')\ndynamodb = boto3.resource('dynamodb')\n\ndef lambda_handler(event, context):\n    try:\n        bucket = event['Records'][0]['s3']['bucket']['name']\n        key = event['Records'][0]['s3']['object']['key']\n        print(f'Processing file: s3://{bucket}/{key}')\n        response = s3_client.get_object(Bucket=bucket, Key=key)\n        csv_content = response['Body'].read().decode('utf-8')\n        file_size = response['ContentLength']\n        csv_reader = csv.DictReader(io.StringIO(csv_content))\n        rows = list(csv_reader)\n        row_count = len(rows)\n        column_names = list(rows[0].keys()) if rows else []\n        print(f'File contains {row_count} rows and {len(column_names)} columns')\n        table_name = os.environ['DYNAMODB_TABLE']\n        table = dynamodb.Table(table_name)\n        current_time = datetime.utcnow().isoformat()\n        metadata = {\n            'file_id': key,\n            'bucket': bucket,\n            'file_name': os.path.basename(key),\n            'file_size': file_size,\n            'row_count': row_count,\n            'column_count': len(column_names),\n            'column_names': column_names,\n            'upload_timestamp': current_time,\n            'processing_status': 'completed',\n            'processed_timestamp': current_time,\n            'environment': os.environ.get('ENVIRONMENT_TYPE', 'unknown')\n        }\n        table.put_item(Item=metadata)\n        print(f'Successfully processed {row_count} rows from {key}')\n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'CSV processed successfully',\n                'file': key,\n                'row_count': row_count,\n                'file_size': file_size\n            })\n        }\n    except Exception as e:\n        error_message = f'Error processing CSV: {str(e)}'\n        print(error_message)\n        try:\n            table_name = os.environ['DYNAMODB_TABLE']\n            table = dynamodb.Table(table_name)\n            error_metadata = {\n                'file_id': key,\n                'bucket': bucket,\n                'upload_timestamp': datetime.utcnow().isoformat(),\n                'processing_status': 'failed',\n                'error_message': str(e)\n            }\n            table.put_item(Item=error_metadata)\n        except Exception as db_error:\n            print(f'Failed to store error metadata: {str(db_error)}')\n        raise e\n"
+        },
+        "MemorySize": 3072,
+        "Timeout": 300,
+        "Environment": {
+          "Variables": {
+            "DYNAMODB_TABLE": {"Ref": "MetadataTable"},
+            "ENVIRONMENT_TYPE": {"Ref": "EnvironmentType"}
+          }
+        },
+        "VpcConfig": {
+          "SecurityGroupIds": [{"Ref": "LambdaSecurityGroup"}],
+          "SubnetIds": [{"Ref": "PrivateSubnet1"}, {"Ref": "PrivateSubnet2"}]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentType"}
+          }
+        ]
+      }
+    },
+    "CSVProcessorFunctionPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {"Ref": "CSVProcessorFunction"},
+        "Action": "lambda:InvokeFunction",
+        "Principal": "s3.amazonaws.com",
+        "SourceArn": {"Fn::GetAtt": ["AnalyticsDataBucket", "Arn"]},
+        "SourceAccount": {"Ref": "AWS::AccountId"}
+      }
+    },
+    "PolicyComplianceTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {"Fn::Sub": "policy-compliance-${EnvironmentSuffix}"},
+        "DisplayName": "S3 Policy Compliance Notifications",
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentType"}
+          }
+        ]
+      }
+    },
+    "DriftDetectionSNSTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {"Fn::Sub": "cloudformation-drift-${EnvironmentSuffix}"},
+        "DisplayName": "CloudFormation Drift Detection Notifications",
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentType"}
+          }
+        ]
+      }
+    },
+    "AnalyticsDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": {"Fn::Sub": "analytics-platform-${EnvironmentSuffix}"},
+        "DashboardBody": {
+          "Fn::Sub": "{\"widgets\":[{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/S3\",\"BucketSizeBytes\",{\"stat\":\"Average\"}],[\"AWS/S3\",\"NumberOfObjects\",{\"stat\":\"Average\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${AWS::Region}\",\"title\":\"S3 Bucket Metrics\"}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/Lambda\",\"Invocations\",{\"stat\":\"Sum\"}],[\"AWS/Lambda\",\"Errors\",{\"stat\":\"Sum\"}],[\"AWS/Lambda\",\"Duration\",{\"stat\":\"Average\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${AWS::Region}\",\"title\":\"Lambda Metrics\"}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/DynamoDB\",\"ConsumedReadCapacityUnits\",{\"stat\":\"Sum\"}],[\"AWS/DynamoDB\",\"ConsumedWriteCapacityUnits\",{\"stat\":\"Sum\"}]],\"period\":300,\"stat\":\"Sum\",\"region\":\"${AWS::Region}\",\"title\":\"DynamoDB Metrics\"}}]}"
+        }
+      }
+    },
+    "ServiceCatalogPortfolio": {
+      "Type": "AWS::ServiceCatalog::Portfolio",
+      "Properties": {
+        "DisplayName": {"Fn::Sub": "Analytics-Platform-${EnvironmentSuffix}"},
+        "Description": "Self-service portfolio for test instance provisioning",
+        "ProviderName": "Platform Engineering Team",
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "EnvironmentType"}
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "VPCId": {
+      "Description": "VPC ID",
+      "Value": {"Ref": "VPC"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-VPCId"}
+      }
+    },
+    "DataBucketName": {
+      "Description": "Name of the S3 data bucket",
+      "Value": {"Ref": "AnalyticsDataBucket"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-DataBucket"}
+      }
+    },
+    "MetadataTableName": {
+      "Description": "Name of the DynamoDB metadata table",
+      "Value": {"Ref": "MetadataTable"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-MetadataTable"}
+      }
+    },
+    "CSVProcessorFunctionArn": {
+      "Description": "ARN of the CSV processor Lambda function",
+      "Value": {"Fn::GetAtt": ["CSVProcessorFunction", "Arn"]},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-CSVProcessorArn"}
+      }
+    },
+    "CSVProcessorFunctionName": {
+      "Description": "Name of the CSV processor Lambda function",
+      "Value": {"Ref": "CSVProcessorFunction"}
+    },
+    "PolicyComplianceTopicArn": {
+      "Description": "ARN of the policy compliance SNS topic",
+      "Value": {"Ref": "PolicyComplianceTopic"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-PolicyComplianceTopicArn"}
+      }
+    },
+    "DriftDetectionTopicArn": {
+      "Description": "SNS Topic ARN for drift detection notifications",
+      "Value": {"Ref": "DriftDetectionSNSTopic"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-DriftTopicArn"}
+      }
+    },
+    "DashboardURL": {
+      "Description": "URL to CloudWatch Dashboard",
+      "Value": {
+        "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=analytics-platform-${EnvironmentSuffix}"
+      }
+    },
+    "ServiceCatalogPortfolioId": {
+      "Description": "Service Catalog Portfolio ID",
+      "Value": {"Ref": "ServiceCatalogPortfolio"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-PortfolioId"}
+      }
+    },
+    "LambdaExecutionRoleArn": {
+      "Description": "ARN of Lambda execution role",
+      "Value": {"Fn::GetAtt": ["LambdaExecutionRole", "Arn"]}
+    },
+    "LambdaSecurityGroupId": {
+      "Description": "ID of Lambda security group",
+      "Value": {"Ref": "LambdaSecurityGroup"}
+    },
+    "PublicSubnet1Id": {
+      "Description": "Public Subnet 1 ID",
+      "Value": {"Ref": "PublicSubnet1"}
+    },
+    "PublicSubnet2Id": {
+      "Description": "Public Subnet 2 ID",
+      "Value": {"Ref": "PublicSubnet2"}
+    },
+    "PrivateSubnet1Id": {
+      "Description": "Private Subnet 1 ID",
+      "Value": {"Ref": "PrivateSubnet1"}
+    },
+    "PrivateSubnet2Id": {
+      "Description": "Private Subnet 2 ID",
+      "Value": {"Ref": "PrivateSubnet2"}
+    }
+  }
+}

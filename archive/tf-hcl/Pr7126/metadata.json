@@ -1,0 +1,32 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912528",
+  "team": "synth",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "startedAt": "2025-11-24T03:59:00Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Network Architecture",
+    "Multi-VPC Design",
+    "Transit Gateway",
+    "Hub-and-Spoke Topology"
+  ],
+  "aws_services": [
+    "VPC",
+    "Transit Gateway",
+    "Route53",
+    "NAT Gateway",
+    "S3",
+    "VPC Flow Logs"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
