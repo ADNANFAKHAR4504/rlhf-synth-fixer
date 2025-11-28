@@ -400,8 +400,8 @@ export class TapStack extends pulumi.ComponentResource {
         customTimeouts: {
           create: '15m',
           update: '15m',
-          delete: '15m'
-        }
+          delete: '15m',
+        },
       }
     );
 
@@ -433,8 +433,8 @@ export class TapStack extends pulumi.ComponentResource {
         customTimeouts: {
           create: '15m',
           update: '15m',
-          delete: '15m'
-        }
+          delete: '15m',
+        },
       }
     );
 
