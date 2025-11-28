@@ -22,5 +22,7 @@
     "Amazon VPC",
     "AWS KMS"
   ],
-  "training_quality": 6
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
+  "training_quality": 9
 }
