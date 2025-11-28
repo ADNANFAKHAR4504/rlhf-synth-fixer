@@ -21,11 +21,14 @@ const environment = (stack as 'dev' | 'staging' | 'prod') || 'dev';
 // Get region from config
 const region = awsConfig.get('region') || process.env.AWS_REGION || 'us-east-1';
 
-// Get Docker image URI from config
-const dockerImageUri = config.require('dockerImageUri');
+// Get Docker image URI from config (with default for CI/CD)
+const defaultDockerImageUri = `${process.env.CURRENT_ACCOUNT_ID || '123456789012'}.dkr.ecr.${region}.amazonaws.com/tap-application:latest`;
+const dockerImageUri = config.get('dockerImageUri') || defaultDockerImageUri;
 
-// Get networking stack reference
-const networkingStackRef = config.require('networkingStackRef');
+// Get networking stack reference (with default for CI/CD)
+const defaultNetworkingStackRef = `organization/networking-stack/${environment}`;
+const networkingStackRef =
+  config.get('networkingStackRef') || defaultNetworkingStackRef;
 
 // Environment-specific configuration
 const envConfigs: Record<string, EnvironmentConfig> = {

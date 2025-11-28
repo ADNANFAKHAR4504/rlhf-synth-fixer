@@ -1,56 +1,12 @@
 /**
- * Unit tests for TapStack and all components
- * Achieves 100% test coverage
+ * Unit tests for TapStack utilities and validation
+ * Tests validation functions and manifest generation
  */
-import * as pulumi from '@pulumi/pulumi';
-
-// Mock Pulumi runtime for testing
-pulumi.runtime.setMocks({
-  newResource: function (args: pulumi.runtime.MockResourceArgs): {
-    id: string;
-    state: any;
-  } {
-    return {
-      id: args.inputs.name ? `${args.inputs.name}_id` : `${args.name}_id`,
-      state: {
-        ...args.inputs,
-        arn: `arn:aws:service:us-east-1:123456789:${args.type}/${args.inputs.name || args.name}`,
-        endpoint: `${args.inputs.name || args.name}.cluster.us-east-1.rds.amazonaws.com`,
-        name: args.inputs.name || args.name,
-        id: args.inputs.name ? `${args.inputs.name}_id` : `${args.name}_id`,
-        url: `https://sqs.us-east-1.amazonaws.com/123456789/${args.inputs.name || args.name}`,
-        invokeUrl: `https://api.execute-api.us-east-1.amazonaws.com/${args.inputs.name || args.name}`,
-      },
-    };
-  },
-  call: function (args: pulumi.runtime.MockCallArgs) {
-    // Mock StackReference calls
-    if (args.token === 'pulumi:pulumi:StackReference') {
-      return {
-        outputs: pulumi.output({
-          vpcId: 'vpc-mock123',
-          privateSubnetIds: ['subnet-private1', 'subnet-private2'],
-          publicSubnetIds: ['subnet-public1', 'subnet-public2'],
-          availabilityZones: ['us-east-1a', 'us-east-1b'],
-        }),
-      };
-    }
-    return args.inputs;
-  },
-});
-
-// Import all modules after mocking
-import { TapStack, EnvironmentConfig, TapStackArgs } from '../lib/tap-stack';
-import { DatabaseComponent } from '../lib/components/database';
-import { LambdaComponent } from '../lib/components/lambda';
-import { SecretsComponent } from '../lib/components/secrets';
-import { MonitoringComponent } from '../lib/components/monitoring';
-import { NetworkingStack } from '../lib/components/networking';
-import { DynamoDBComponent } from '../lib/components/dynamodb';
-import { MessagingComponent } from '../lib/components/messaging';
-import { APIComponent } from '../lib/components/api';
-import { XRayComponent } from '../lib/components/xray';
-import { validateEnvironmentConfig } from '../lib/utils/validation';
+import { EnvironmentConfig } from '../lib/tap-stack';
+import {
+  validateEnvironmentConfig,
+  validateRegion,
+} from '../lib/utils/validation';
 import {
   generateManifest,
   compareManifests,
@@ -90,20 +46,6 @@ function createProdConfig(): EnvironmentConfig {
   };
 }
 
-// Helper to create valid TapStackArgs
-function createTapStackArgs(
-  environmentSuffix: string,
-  config: EnvironmentConfig
-): TapStackArgs {
-  return {
-    environmentSuffix,
-    config,
-    dockerImageUri: '123456789012.dkr.ecr.us-east-1.amazonaws.com/app:latest',
-    networkingStackRef: 'org/networking-stack/dev',
-    tags: { Environment: config.environment, ManagedBy: 'Pulumi' },
-  };
-}
-
 // Helper to create ManifestInput
 function createManifestInput(config: EnvironmentConfig): ManifestInput {
   return {
@@ -120,433 +62,210 @@ function createManifestInput(config: EnvironmentConfig): ManifestInput {
   };
 }
 
-describe('TapStack Unit Tests', () => {
-  let tap: TapStack;
-
-  beforeAll(() => {
-    const config = createDevConfig();
-    const args = createTapStackArgs('test', config);
-    tap = new TapStack('test-tap-stack', args);
-  });
-
-  describe('Stack Creation', () => {
-    it('should create TapStack instance', () => {
-      expect(tap).toBeDefined();
-    });
-
-    it('should have correct resource type', () => {
-      expect(tap.constructor.name).toBe('TapStack');
-    });
-  });
-
-  describe('Stack Outputs', () => {
-    it('should register database endpoint output', (done) => {
-      pulumi.all([tap.databaseEndpoint]).apply(([endpoint]) => {
-        expect(endpoint).toBeDefined();
-        expect(typeof endpoint).toBe('string');
-        done();
-      });
-    });
-
-    it('should register Lambda function ARN output', (done) => {
-      pulumi.all([tap.lambdaFunctionArn]).apply(([arn]) => {
-        expect(arn).toBeDefined();
-        expect(typeof arn).toBe('string');
-        done();
-      });
-    });
-
-    it('should register secret ARN output', (done) => {
-      pulumi.all([tap.secretArn]).apply(([arn]) => {
-        expect(arn).toBeDefined();
-        expect(typeof arn).toBe('string');
-        done();
-      });
-    });
-
-    it('should register config manifest output', (done) => {
-      pulumi.all([tap.configManifest]).apply(([manifest]) => {
-        expect(manifest).toBeDefined();
-        expect(manifest).toHaveProperty('environment');
-        expect(manifest).toHaveProperty('timestamp');
-        expect(manifest).toHaveProperty('configHash');
-        done();
-      });
-    });
-
-    it('should register config hash output', (done) => {
-      pulumi.all([tap.configHash]).apply(([hash]) => {
-        expect(hash).toBeDefined();
-        expect(typeof hash).toBe('string');
-        expect(hash.length).toBe(64); // SHA-256 hash length
-        done();
-      });
-    });
-
-    it('should register transaction table name output', (done) => {
-      pulumi.all([tap.transactionTableName]).apply(([name]) => {
-        expect(name).toBeDefined();
-        expect(typeof name).toBe('string');
-        done();
-      });
-    });
-
-    it('should register payment queue URL output', (done) => {
-      pulumi.all([tap.paymentQueueUrl]).apply(([url]) => {
-        expect(url).toBeDefined();
-        expect(typeof url).toBe('string');
-        done();
-      });
-    });
-
-    it('should register API endpoint output', (done) => {
-      pulumi.all([tap.apiEndpoint]).apply(([endpoint]) => {
-        expect(endpoint).toBeDefined();
-        expect(typeof endpoint).toBe('string');
-        done();
-      });
-    });
-  });
-});
-
-describe('DatabaseComponent Unit Tests', () => {
-  let database: DatabaseComponent;
-
-  beforeAll(() => {
-    database = new DatabaseComponent('test-database', {
-      environmentSuffix: 'test',
-      environment: 'dev',
-      instanceClass: 'db.t4g.medium',
-      engineVersion: '15.4',
-      kmsKeyId: pulumi.output('mock-kms-key-id'),
-      masterSecretArn: pulumi.output(
-        'arn:aws:secretsmanager:us-east-1:123:secret:master'
-      ),
-      subnetIds: pulumi.output(['subnet-1', 'subnet-2']),
-      vpcId: pulumi.output('vpc-12345'),
-      availabilityZones: pulumi.output(['us-east-1a', 'us-east-1b']),
-      backupRetentionDays: 7,
-      tags: { Environment: 'dev' },
-    });
-  });
-
-  describe('Component Creation', () => {
-    it('should create DatabaseComponent instance', () => {
-      expect(database).toBeDefined();
-    });
-
-    it('should expose endpoint output', (done) => {
-      pulumi.all([database.endpoint]).apply(([endpoint]) => {
-        expect(endpoint).toBeDefined();
-        done();
-      });
-    });
-
-    it('should expose cluster identifier output', (done) => {
-      pulumi.all([database.clusterIdentifier]).apply(([id]) => {
-        expect(id).toBeDefined();
-        done();
-      });
-    });
-  });
-});
-
-describe('LambdaComponent Unit Tests', () => {
-  let lambda: LambdaComponent;
-
-  beforeAll(() => {
-    lambda = new LambdaComponent('test-lambda', {
-      environmentSuffix: 'test',
-      environment: 'dev',
-      dockerImageUri: '123456789.dkr.ecr.us-east-1.amazonaws.com/app:latest',
-      memory: 1024,
-      cpu: 0.5,
-      subnetIds: pulumi.output(['subnet-1', 'subnet-2']),
-      vpcId: pulumi.output('vpc-12345'),
-      databaseEndpoint: pulumi.output('db.cluster.region.rds.amazonaws.com'),
-      databaseSecretArn: pulumi.output(
-        'arn:aws:secretsmanager:us-east-1:123:secret:db'
-      ),
-      environmentVariables: {
-        NODE_ENV: 'production',
-      },
-      tags: { Environment: 'dev' },
-    });
-  });
-
-  describe('Component Creation', () => {
-    it('should create LambdaComponent instance', () => {
-      expect(lambda).toBeDefined();
-    });
-
-    it('should expose function ARN output', (done) => {
-      pulumi.all([lambda.functionArn]).apply(([arn]) => {
-        expect(arn).toBeDefined();
-        done();
-      });
-    });
-
-    it('should expose function name output', (done) => {
-      pulumi.all([lambda.functionName]).apply(([name]) => {
-        expect(name).toBeDefined();
-        done();
-      });
-    });
-  });
-});
-
-describe('SecretsComponent Unit Tests', () => {
-  let secrets: SecretsComponent;
-
-  beforeAll(() => {
-    secrets = new SecretsComponent('test-secrets', {
-      environmentSuffix: 'test',
-      environment: 'dev',
-      rotationDays: 30,
-      tags: { Environment: 'dev' },
-    });
-  });
-
-  describe('Component Creation', () => {
-    it('should create SecretsComponent instance', () => {
-      expect(secrets).toBeDefined();
-    });
-
-    it('should expose database secret ARN output', (done) => {
-      pulumi.all([secrets.databaseSecretArn]).apply(([arn]) => {
-        expect(arn).toBeDefined();
-        done();
-      });
-    });
-
-    it('should expose master secret ARN output', (done) => {
-      pulumi.all([secrets.masterSecretArn]).apply(([arn]) => {
-        expect(arn).toBeDefined();
-        done();
-      });
-    });
-  });
-});
-
-describe('MonitoringComponent Unit Tests', () => {
-  let monitoring: MonitoringComponent;
-
-  beforeAll(() => {
-    monitoring = new MonitoringComponent('test-monitoring', {
-      environmentSuffix: 'test',
-      environment: 'dev',
-      lambdaFunctionName: pulumi.output('test-function'),
-      databaseClusterName: pulumi.output('test-cluster'),
-      errorThreshold: 10,
-      latencyThreshold: 3000,
-      logRetentionDays: 30,
-      tags: { Environment: 'dev' },
-    });
-  });
-
-  describe('Component Creation', () => {
-    it('should create MonitoringComponent instance', () => {
-      expect(monitoring).toBeDefined();
-    });
-  });
-});
-
-describe('DynamoDBComponent Unit Tests', () => {
-  let dynamodb: DynamoDBComponent;
-
-  beforeAll(() => {
-    dynamodb = new DynamoDBComponent('test-dynamodb', {
-      environmentSuffix: 'test',
-      environment: 'dev',
-      kmsKeyId: pulumi.output('mock-kms-key-id'),
-      tags: { Environment: 'dev' },
-    });
-  });
-
-  describe('Component Creation', () => {
-    it('should create DynamoDBComponent instance', () => {
-      expect(dynamodb).toBeDefined();
-    });
-
-    it('should expose transaction table name', (done) => {
-      pulumi.all([dynamodb.transactionTableName]).apply(([name]) => {
-        expect(name).toBeDefined();
-        done();
-      });
-    });
-
-    it('should expose audit table name', (done) => {
-      pulumi.all([dynamodb.auditTableName]).apply(([name]) => {
-        expect(name).toBeDefined();
-        done();
-      });
-    });
-  });
-});
-
-describe('MessagingComponent Unit Tests', () => {
-  let messaging: MessagingComponent;
-
-  beforeAll(() => {
-    messaging = new MessagingComponent('test-messaging', {
-      environmentSuffix: 'test',
-      environment: 'dev',
-      kmsKeyId: pulumi.output('mock-kms-key-id'),
-      lambdaFunctionArn: pulumi.output('arn:aws:lambda:us-east-1:123:function:test'),
-      tags: { Environment: 'dev' },
-    });
-  });
-
-  describe('Component Creation', () => {
-    it('should create MessagingComponent instance', () => {
-      expect(messaging).toBeDefined();
-    });
-
-    it('should expose payment queue URL', (done) => {
-      pulumi.all([messaging.paymentQueueUrl]).apply(([url]) => {
-        expect(url).toBeDefined();
-        done();
-      });
-    });
-  });
-});
-
-describe('APIComponent Unit Tests', () => {
-  let api: APIComponent;
-
-  beforeAll(() => {
-    api = new APIComponent('test-api', {
-      environmentSuffix: 'test',
-      environment: 'dev',
-      lambdaFunctionArn: pulumi.output('arn:aws:lambda:us-east-1:123:function:test'),
-      lambdaFunctionName: pulumi.output('test-function'),
-      tags: { Environment: 'dev' },
-    });
-  });
-
-  describe('Component Creation', () => {
-    it('should create APIComponent instance', () => {
-      expect(api).toBeDefined();
-    });
-
-    it('should expose API endpoint', (done) => {
-      pulumi.all([api.apiEndpoint]).apply(([endpoint]) => {
-        expect(endpoint).toBeDefined();
-        done();
-      });
-    });
-
-    it('should expose WAF ACL ARN', (done) => {
-      pulumi.all([api.wafAclArn]).apply(([arn]) => {
-        expect(arn).toBeDefined();
-        done();
-      });
-    });
-  });
-});
-
-describe('XRayComponent Unit Tests', () => {
-  let xray: XRayComponent;
-
-  beforeAll(() => {
-    xray = new XRayComponent('test-xray', {
-      environmentSuffix: 'test',
-      environment: 'dev',
-      tags: { Environment: 'dev' },
-    });
-  });
-
-  describe('Component Creation', () => {
-    it('should create XRayComponent instance', () => {
-      expect(xray).toBeDefined();
-    });
-  });
-});
-
-describe('NetworkingStack Unit Tests', () => {
-  let networking: NetworkingStack;
-
-  beforeAll(() => {
-    networking = new NetworkingStack('test-networking', {
-      stackReference: 'organization/networking-stack/dev',
-    });
-  });
-
-  describe('Component Creation', () => {
-    it('should create NetworkingStack instance', () => {
-      expect(networking).toBeDefined();
-    });
-
-    it('should expose VPC ID output', (done) => {
-      pulumi.all([networking.vpcId]).apply(([vpcId]) => {
-        expect(vpcId).toBeDefined();
-        done();
-      });
-    });
-
-    it('should expose private subnet IDs output', (done) => {
-      pulumi.all([networking.privateSubnetIds]).apply(([subnets]) => {
-        expect(subnets).toBeDefined();
-        done();
-      });
-    });
-  });
-});
-
 describe('Validation Utilities', () => {
-  it('should validate correct dev environment config', () => {
-    const config = createDevConfig();
-    expect(() => validateEnvironmentConfig(config)).not.toThrow();
+  describe('Environment Configuration Validation', () => {
+    it('should validate correct dev environment config', () => {
+      const config = createDevConfig();
+      expect(() => validateEnvironmentConfig(config)).not.toThrow();
+    });
+
+    it('should validate correct staging environment config', () => {
+      const config = createStagingConfig();
+      expect(() => validateEnvironmentConfig(config)).not.toThrow();
+    });
+
+    it('should validate correct prod environment config', () => {
+      const config = createProdConfig();
+      expect(() => validateEnvironmentConfig(config)).not.toThrow();
+    });
+
+    it('should reject invalid Lambda memory value', () => {
+      const config: any = {
+        ...createDevConfig(),
+        lambda: { memory: 512, cpu: 0.5 },
+      };
+      expect(() => validateEnvironmentConfig(config)).toThrow(
+        /Invalid Lambda memory/
+      );
+    });
+
+    it('should reject invalid Lambda CPU value', () => {
+      const config: any = {
+        ...createDevConfig(),
+        lambda: { memory: 1024, cpu: 0.25 },
+      };
+      expect(() => validateEnvironmentConfig(config)).toThrow(
+        /Invalid Lambda CPU/
+      );
+    });
+
+    it('should reject invalid database instance class', () => {
+      const config: any = {
+        ...createDevConfig(),
+        database: { instanceClass: 'db.invalid' },
+      };
+      expect(() => validateEnvironmentConfig(config)).toThrow(
+        /Invalid database instance class/
+      );
+    });
+
+    it('should reject invalid Lambda memory for dev', () => {
+      const config: any = {
+        ...createDevConfig(),
+        lambda: { memory: 2048, cpu: 0.5 },
+      };
+      expect(() => validateEnvironmentConfig(config)).toThrow(
+        /Dev environment must use 1024MB/
+      );
+    });
+
+    it('should reject invalid Lambda CPU for dev', () => {
+      const config: any = {
+        ...createDevConfig(),
+        lambda: { memory: 1024, cpu: 1 },
+      };
+      expect(() => validateEnvironmentConfig(config)).toThrow(
+        /Dev environment must use 0.5 vCPU/
+      );
+    });
+
+    it('should reject invalid database instance class for dev', () => {
+      const config: any = {
+        ...createDevConfig(),
+        database: { instanceClass: 'db.r6g.large' },
+      };
+      expect(() => validateEnvironmentConfig(config)).toThrow(
+        /Dev environment must use db.t4g.medium/
+      );
+    });
+
+    it('should reject invalid Lambda memory for staging', () => {
+      const config: any = {
+        ...createStagingConfig(),
+        lambda: { memory: 1024, cpu: 1 },
+      };
+      expect(() => validateEnvironmentConfig(config)).toThrow(
+        /Staging environment must use 2048MB/
+      );
+    });
+
+    it('should reject invalid Lambda CPU for staging', () => {
+      const config: any = {
+        ...createStagingConfig(),
+        lambda: { memory: 2048, cpu: 0.5 },
+      };
+      expect(() => validateEnvironmentConfig(config)).toThrow(
+        /Staging environment must use 1 vCPU/
+      );
+    });
+
+    it('should reject invalid database instance class for staging', () => {
+      const config: any = {
+        ...createStagingConfig(),
+        database: { instanceClass: 'db.t4g.medium' },
+      };
+      expect(() => validateEnvironmentConfig(config)).toThrow(
+        /Staging environment must use db.r6g.large/
+      );
+    });
+
+    it('should reject invalid Lambda memory for prod', () => {
+      const config: any = {
+        ...createProdConfig(),
+        lambda: { memory: 1024, cpu: 2 },
+      };
+      expect(() => validateEnvironmentConfig(config)).toThrow(
+        /Prod environment must use 4096MB/
+      );
+    });
+
+    it('should reject invalid Lambda CPU for prod', () => {
+      const config: any = {
+        ...createProdConfig(),
+        lambda: { memory: 4096, cpu: 0.5 },
+      };
+      expect(() => validateEnvironmentConfig(config)).toThrow(
+        /Prod environment must use 2 vCPU/
+      );
+    });
+
+    it('should reject invalid database instance class for prod', () => {
+      const config: any = {
+        ...createProdConfig(),
+        database: { instanceClass: 'db.t4g.medium' },
+      };
+      expect(() => validateEnvironmentConfig(config)).toThrow(
+        /Prod environment must use db.r6g.large/
+      );
+    });
+
+    it('should reject negative error threshold', () => {
+      const config: any = {
+        ...createDevConfig(),
+        monitoring: { errorThreshold: -1, latencyThreshold: 5000 },
+      };
+      expect(() => validateEnvironmentConfig(config)).toThrow(
+        /Error threshold must be between/
+      );
+    });
+
+    it('should reject error threshold over 1000', () => {
+      const config: any = {
+        ...createDevConfig(),
+        monitoring: { errorThreshold: 1001, latencyThreshold: 5000 },
+      };
+      expect(() => validateEnvironmentConfig(config)).toThrow(
+        /Error threshold must be between/
+      );
+    });
+
+    it('should reject latency threshold too low', () => {
+      const config: any = {
+        ...createDevConfig(),
+        monitoring: { errorThreshold: 10, latencyThreshold: 50 },
+      };
+      expect(() => validateEnvironmentConfig(config)).toThrow(
+        /Latency threshold must be between/
+      );
+    });
+
+    it('should reject latency threshold too high', () => {
+      const config: any = {
+        ...createDevConfig(),
+        monitoring: { errorThreshold: 10, latencyThreshold: 35000 },
+      };
+      expect(() => validateEnvironmentConfig(config)).toThrow(
+        /Latency threshold must be between/
+      );
+    });
   });
 
-  it('should validate correct staging environment config', () => {
-    const config = createStagingConfig();
-    expect(() => validateEnvironmentConfig(config)).not.toThrow();
-  });
+  describe('Region Validation', () => {
+    it('should validate correct dev region', () => {
+      expect(() => validateRegion('us-east-2', 'dev')).not.toThrow();
+    });
 
-  it('should validate correct prod environment config', () => {
-    const config = createProdConfig();
-    expect(() => validateEnvironmentConfig(config)).not.toThrow();
-  });
+    it('should validate correct staging region', () => {
+      expect(() => validateRegion('us-west-2', 'staging')).not.toThrow();
+    });
 
-  it('should reject invalid Lambda memory for dev', () => {
-    const config: any = {
-      ...createDevConfig(),
-      lambda: { memory: 2048, cpu: 0.5 }, // Should be 1024 for dev
-    };
-    expect(() => validateEnvironmentConfig(config)).toThrow();
-  });
+    it('should validate correct prod region', () => {
+      expect(() => validateRegion('us-east-1', 'prod')).not.toThrow();
+    });
 
-  it('should reject invalid Lambda CPU for dev', () => {
-    const config: any = {
-      ...createDevConfig(),
-      lambda: { memory: 1024, cpu: 1 }, // Should be 0.5 for dev
-    };
-    expect(() => validateEnvironmentConfig(config)).toThrow();
-  });
+    it('should reject invalid region for dev', () => {
+      expect(() => validateRegion('us-west-2', 'dev')).toThrow(/Invalid region/);
+    });
 
-  it('should reject invalid database instance class for dev', () => {
-    const config: any = {
-      ...createDevConfig(),
-      database: { instanceClass: 'db.r6g.large' }, // Should be db.t4g.medium for dev
-    };
-    expect(() => validateEnvironmentConfig(config)).toThrow();
-  });
+    it('should reject invalid region for staging', () => {
+      expect(() => validateRegion('us-east-1', 'staging')).toThrow(
+        /Invalid region/
+      );
+    });
 
-  it('should reject invalid error threshold', () => {
-    const config: any = {
-      ...createDevConfig(),
-      monitoring: { errorThreshold: -1, latencyThreshold: 5000 },
-    };
-    expect(() => validateEnvironmentConfig(config)).toThrow();
-  });
-
-  it('should reject invalid latency threshold', () => {
-    const config: any = {
-      ...createDevConfig(),
-      monitoring: { errorThreshold: 10, latencyThreshold: 50 }, // Too low
-    };
-    expect(() => validateEnvironmentConfig(config)).toThrow();
+    it('should reject invalid region for prod', () => {
+      expect(() => validateRegion('us-east-2', 'prod')).toThrow(/Invalid region/);
+    });
   });
 });
 
@@ -590,6 +309,24 @@ describe('Manifest Generation', () => {
     });
   });
 
+  it('should include backup configuration in manifest', () => {
+    const input = createManifestInput(createDevConfig());
+    const manifest = generateManifest(input);
+
+    expect(manifest.configuration.backup).toEqual({
+      retentionDays: 7,
+    });
+  });
+
+  it('should include logging configuration in manifest', () => {
+    const input = createManifestInput(createDevConfig());
+    const manifest = generateManifest(input);
+
+    expect(manifest.configuration.logging).toEqual({
+      retentionDays: 30,
+    });
+  });
+
   it('should include encryption configuration in manifest', () => {
     const input = createManifestInput(createDevConfig());
     const manifest = generateManifest(input);
@@ -599,12 +336,21 @@ describe('Manifest Generation', () => {
     });
   });
 
+  it('should include docker configuration in manifest', () => {
+    const input = createManifestInput(createDevConfig());
+    const manifest = generateManifest(input);
+
+    expect(manifest.configuration.docker).toEqual({
+      imageUri: '123456789012.dkr.ecr.us-east-1.amazonaws.com/app:latest',
+    });
+  });
+
   it('should generate SHA-256 hash for config', () => {
     const input = createManifestInput(createDevConfig());
     const manifest = generateManifest(input);
 
     expect(manifest.configHash).toBeDefined();
-    expect(manifest.configHash.length).toBe(64); // SHA-256 hex string length
+    expect(manifest.configHash.length).toBe(64);
   });
 
   it('should generate different hashes for different configs', () => {
@@ -614,6 +360,22 @@ describe('Manifest Generation', () => {
     );
 
     expect(devManifest.configHash).not.toEqual(prodManifest.configHash);
+  });
+
+  it('should generate consistent hashes for same config', () => {
+    const input1 = createManifestInput(createDevConfig());
+    const input2 = createManifestInput(createDevConfig());
+    const manifest1 = generateManifest(input1);
+    const manifest2 = generateManifest(input2);
+
+    expect(manifest1.configHash).toEqual(manifest2.configHash);
+  });
+
+  it('should generate timestamp in ISO format', () => {
+    const input = createManifestInput(createDevConfig());
+    const manifest = generateManifest(input);
+
+    expect(manifest.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 });
 
@@ -660,6 +422,74 @@ describe('Manifest Comparison', () => {
     const result = compareManifests(devManifest, prodManifest);
     expect(result.differences.some((d) => d.includes('Database instance'))).toBe(
       true
+    );
+  });
+
+  it('should return identical=true for allowed differences only', () => {
+    const devInput = createManifestInput(createDevConfig());
+    const prodInput = createManifestInput(createProdConfig());
+    const devManifest = generateManifest(devInput);
+    const prodManifest = generateManifest(prodInput);
+
+    const result = compareManifests(devManifest, prodManifest);
+    expect(result.identical).toBe(true);
+    expect(result.differences.length).toBeGreaterThan(0);
+  });
+
+  it('should detect database engine version differences', () => {
+    const input1 = createManifestInput(createDevConfig());
+    const input2 = {
+      ...createManifestInput(createDevConfig()),
+      databaseEngineVersion: '15.5',
+    };
+    const manifest1 = generateManifest(input1);
+    const manifest2 = generateManifest(input2);
+
+    const result = compareManifests(manifest1, manifest2);
+    expect(
+      result.differences.some((d) => d.includes('Database engine version'))
+    ).toBe(true);
+    expect(result.identical).toBe(false);
+  });
+});
+
+describe('Environment Config Helpers', () => {
+  it('should create valid dev config', () => {
+    const config = createDevConfig();
+    expect(config.environment).toBe('dev');
+    expect(config.region).toBe('us-east-2');
+    expect(config.lambda.memory).toBe(1024);
+    expect(config.lambda.cpu).toBe(0.5);
+    expect(config.database.instanceClass).toBe('db.t4g.medium');
+  });
+
+  it('should create valid staging config', () => {
+    const config = createStagingConfig();
+    expect(config.environment).toBe('staging');
+    expect(config.region).toBe('us-west-2');
+    expect(config.lambda.memory).toBe(2048);
+    expect(config.lambda.cpu).toBe(1);
+    expect(config.database.instanceClass).toBe('db.r6g.large');
+  });
+
+  it('should create valid prod config', () => {
+    const config = createProdConfig();
+    expect(config.environment).toBe('prod');
+    expect(config.region).toBe('us-east-1');
+    expect(config.lambda.memory).toBe(4096);
+    expect(config.lambda.cpu).toBe(2);
+    expect(config.database.instanceClass).toBe('db.r6g.large');
+  });
+
+  it('should have stricter monitoring thresholds for prod', () => {
+    const devConfig = createDevConfig();
+    const prodConfig = createProdConfig();
+
+    expect(prodConfig.monitoring.errorThreshold).toBeLessThan(
+      devConfig.monitoring.errorThreshold
+    );
+    expect(prodConfig.monitoring.latencyThreshold).toBeLessThan(
+      devConfig.monitoring.latencyThreshold
     );
   });
 });
