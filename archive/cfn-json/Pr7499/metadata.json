@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912838",
+  "team": "synth",
+  "startedAt": "2025-11-28T01:21:44+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
+  ],
+  "aws_services": [
+    "RDS Aurora",
+    "Lambda",
+    "S3",
+    "VPC",
+    "KMS",
+    "Systems Manager",
+    "CloudWatch",
+    "Secrets Manager"
+  ],
+  "region": "us-east-1",
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
