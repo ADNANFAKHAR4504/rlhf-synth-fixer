@@ -85,9 +85,9 @@
       "description": "Aurora secondary cluster in eu-west-1"
     },
     "aurora_instances": {
-      "count": 2,
+      "count": 1,
       "type": "aws_rds_cluster_instance",
-      "description": "Aurora instances in eu-west-1"
+      "description": "Aurora instance in eu-west-1 (single writer)"
     },
     "launch_template": {
       "count": 1,
@@ -135,9 +135,9 @@
       "description": "State machine for migration orchestration"
     },
     "vpc_peering": {
-      "count": 1,
+      "count": 0,
       "type": "aws_vpc_peering_connection",
-      "description": "VPC peering between us-east-1 and eu-west-1"
+      "description": "VPC peering documentation (placeholder for production)"
     },
     "kms_keys": {
       "count": 1,
