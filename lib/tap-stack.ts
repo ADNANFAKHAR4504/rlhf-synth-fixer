@@ -394,7 +394,12 @@ export class TapStack extends pulumi.ComponentResource {
         kmsKeyId: drKmsKey.arn,
         tags: { ...baseTags, Name: `dr-cluster-${environmentSuffix}` },
       },
-      { provider: drProvider, parent: this, dependsOn: [primaryCluster] }
+      {
+        provider: drProvider,
+        parent: this,
+        dependsOn: [primaryCluster],
+        replaceOnChanges: ['globalClusterIdentifier'],
+      }
     );
 
     new aws.rds.ClusterInstance(
@@ -407,7 +412,11 @@ export class TapStack extends pulumi.ComponentResource {
         engineVersion: '14.6',
         tags: { ...baseTags, Name: `dr-inst-${environmentSuffix}` },
       },
-      { provider: drProvider, parent: this }
+      {
+        provider: drProvider,
+        parent: this,
+        replaceOnChanges: ['clusterIdentifier'],
+      }
     );
 
     // DynamoDB Global Table
