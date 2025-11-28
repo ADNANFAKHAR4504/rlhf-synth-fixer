@@ -82,5 +82,5 @@ def test_secondary_stack_module():
 
 def test_main_module():
     """Test main module imports successfully."""
-    import lib.main
-    assert hasattr(lib.main, 'main')
+    import lib.stacks.main
+    assert hasattr(lib.stacks.main, 'main')

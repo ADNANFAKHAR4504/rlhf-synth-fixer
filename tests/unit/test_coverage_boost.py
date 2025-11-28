@@ -94,15 +94,15 @@ class TestMainModule:
 
     def test_main_function(self):
         """Test main function inspection."""
-        from lib.main import main
+        from lib.stacks.main import main
         assert callable(main)
         sig = inspect.signature(main)
         assert sig is not None
 
     def test_main_module_attributes(self):
         """Test main module has expected attributes."""
-        import lib.main
-        assert hasattr(lib.main, 'main')
-        assert hasattr(lib.main, 'PrimaryStack')
-        assert hasattr(lib.main, 'SecondaryStack')
-        assert hasattr(lib.main, 'GlobalStack')
+        import lib.stacks.main
+        assert hasattr(lib.stacks.main, 'main')
+        assert hasattr(lib.stacks.main, 'PrimaryStack')
+        assert hasattr(lib.stacks.main, 'SecondaryStack')
+        assert hasattr(lib.stacks.main, 'GlobalStack')
