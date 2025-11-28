@@ -343,7 +343,7 @@ class TapStack(TerraformStack):
             "aurora_cluster",
             cluster_identifier=f"payment-cluster-{environment_suffix}",
             engine="aurora-mysql",
-            engine_version="8.0.mysql_aurora.3.05.2",
+            engine_version="8.0.mysql_aurora.3.07.1",
             database_name="payments",
             master_username="admin",
             master_password="ChangeMe123!",  # In production, use AWS Secrets Manager
@@ -367,7 +367,7 @@ class TapStack(TerraformStack):
             cluster_identifier=aurora_cluster.id,
             instance_class="db.r5.large",
             engine="aurora-mysql",
-            engine_version="8.0.mysql_aurora.3.05.2",
+            engine_version="8.0.mysql_aurora.3.07.1",
             publicly_accessible=False,
             tags={"Name": f"aurora-instance-0-{environment_suffix}"}
         )
@@ -465,7 +465,7 @@ docker run -d -p 8080:8080 --name payment-processor nginx:latest
                 "http_put_response_hop_limit": 1
             },
             tag_specifications=[{
-                "resource_type": "instance",
+                "resourceType": "instance",
                 "tags": {"Name": f"payment-processor-{environment_suffix}"}
             }]
         )
@@ -488,7 +488,7 @@ docker run -d -p 8080:8080 --name payment-processor nginx:latest
         certificate = AcmCertificate(
             self,
             "certificate",
-            domain_name=f"payment.example-{environment_suffix}.com",
+            domain_name=f"payment-{environment_suffix}.internal.turing.dev",
             validation_method="DNS",
             lifecycle={"create_before_destroy": True},
             tags={"Name": f"payment-cert-{environment_suffix}"}
@@ -561,7 +561,7 @@ docker run -d -p 8080:8080 --name payment-processor nginx:latest
         hosted_zone = Route53Zone(
             self,
             "hosted_zone",
-            name=f"payment-{environment_suffix}.example.com",
+            name=f"payment-{environment_suffix}.internal.turing.dev",
             force_destroy=True,
             tags={"Name": f"payment-zone-{environment_suffix}"}
         )
@@ -571,7 +571,7 @@ docker run -d -p 8080:8080 --name payment-processor nginx:latest
             self,
             "route53_record_eu",
             zone_id=hosted_zone.zone_id,
-            name=f"api.payment-{environment_suffix}.example.com",
+            name=f"api.payment-{environment_suffix}.internal.turing.dev",
             type="A",
             weighted_routing_policy={
                 "weight": 0
@@ -590,7 +590,7 @@ docker run -d -p 8080:8080 --name payment-processor nginx:latest
             self,
             "route53_record_us",
             zone_id=hosted_zone.zone_id,
-            name=f"api.payment-{environment_suffix}.example.com",
+            name=f"api.payment-{environment_suffix}.internal.turing.dev",
             type="A",
             weighted_routing_policy={
                 "weight": 100
