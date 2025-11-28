@@ -41,10 +41,15 @@ class TestPaymentProcessingStack:
         assert stack.region == 'us-east-1'
 
     def test_environment_suffix_generation(self):
-        """Test environment suffix is correctly generated from task ID"""
+        """Test environment suffix is correctly generated from task ID with timestamp"""
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
-        assert stack.environment_suffix == "dev-e4k2d5l6"
+        # Should have format: env-taskid-timestamp (e.g., "dev-e4k2d5l6-317422")
+        assert stack.environment_suffix.startswith("dev-e4k2d5l6-")
+        # Verify timestamp component is 6 digits
+        parts = stack.environment_suffix.split("-")
+        assert len(parts) == 3  # env, taskid, timestamp
+        assert len(parts[2]) == 6  # timestamp is 6 digits
 
     def test_vpc_creation(self):
         """Test VPC is created with correct configuration"""
@@ -380,8 +385,8 @@ class TestPaymentProcessingStack:
         app = Testing.app()
         stack = PaymentProcessingStack(app, "test-payment-processing-e4k2d5l6")
 
-        # Verify environment suffix is applied
-        assert stack.environment_suffix == "dev-e4k2d5l6"
+        # Verify environment suffix is applied with timestamp
+        assert stack.environment_suffix.startswith("dev-e4k2d5l6-")
         assert hasattr(stack, 'vpc')
         assert hasattr(stack, 'lambda_function')
         assert hasattr(stack, 'db_instance')
@@ -812,7 +817,7 @@ class TestEnvironmentVariations:
         stack = PaymentProcessingStack(app, "test-payment-processing-staging-e4k2d5l6")
 
         assert stack.environment == 'staging'
-        assert stack.environment_suffix == "staging-e4k2d5l6"
+        assert stack.environment_suffix.startswith("staging-e4k2d5l6-")
 
         # Cleanup
         del os.environ['ENVIRONMENT']

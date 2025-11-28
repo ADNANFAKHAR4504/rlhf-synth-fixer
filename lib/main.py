@@ -20,6 +20,7 @@ FIXES APPLIED:
 
 import os
 import json
+import time
 from constructs import Construct
 from cdktf import App, TerraformStack, TerraformOutput, Fn
 from cdktf_cdktf_provider_aws.provider import AwsProvider
@@ -69,7 +70,9 @@ class PaymentProcessingStack(TerraformStack):
         self.region = os.environ.get('AWS_REGION', 'us-east-1')
 
         # FIX 1: Generate unique environmentSuffix for all resources
-        self.environment_suffix = f"{self.environment}-{id[-8:]}"  # e.g., "dev-e4k2d5l6"
+        # Add timestamp to avoid conflicts with orphaned resources
+        timestamp = str(int(time.time()))[-6:]  # Last 6 digits of timestamp
+        self.environment_suffix = f"{self.environment}-{id[-8:]}-{timestamp}"  # e.g., "dev-e4k2d5l6-317422"
 
         # Initialize AWS provider - FIX 4: Single region design
         AwsProvider(self, "aws", region=self.region)
