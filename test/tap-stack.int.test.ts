@@ -229,10 +229,11 @@ describe('Multi-Region DR Infrastructure Integration Tests', () => {
 
     it('should have failover infrastructure', () => {
       if (Object.keys(outputs).length > 0) {
-        const hasFailover =
+        const hasFailover = !!(
           (outputs.hostedZoneId || outputs['dr-infrastructure:hostedZoneId']) &&
           (outputs.primaryHealthCheckUrl || outputs['dr-infrastructure:primaryHealthCheckUrl']) &&
-          (outputs.drHealthCheckUrl || outputs['dr-infrastructure:drHealthCheckUrl']);
+          (outputs.drHealthCheckUrl || outputs['dr-infrastructure:drHealthCheckUrl'])
+        );
 
         if (hasFailover) {
           expect(hasFailover).toBe(true);
