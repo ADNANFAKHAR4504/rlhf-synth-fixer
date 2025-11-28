@@ -52,7 +52,8 @@ export class AuroraStack extends pulumi.ComponentResource {
     // AWS RDS doesn't allow: '/', '@', '"', ' ' in passwords
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const crypto = require('crypto');
-    const allowedChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%&()*+,-.:<=>?[]^_`{|}~';
+    const allowedChars =
+      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%&()*+,-.:<=>?[]^_`{|}~';
     let masterPasswordString = '';
     const bytes = crypto.randomBytes(32);
     for (let i = 0; i < 32; i++) {
