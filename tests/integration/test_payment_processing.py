@@ -1,16 +1,16 @@
-"""Integration tests for TapStack."""
+"""Integration tests for PaymentProcessingStack."""
 from cdktf import App, Testing
 
-from lib.tap_stack import TapStack
+from lib.main import PaymentProcessingStack
 
 
-class TestTurnAroundPromptAPIIntegrationTests:
-    """Turn Around Prompt API Integration Tests."""
+class TestPaymentProcessingIntegrationTests:
+    """Payment Processing Infrastructure Integration Tests."""
 
     def test_terraform_configuration_synthesis(self):
         """Test that stack instantiates properly."""
         app = App()
-        stack = TapStack(
+        stack = PaymentProcessingStack(
             app,
             "IntegrationTestStack",
             environment_suffix="test",
@@ -19,4 +19,3 @@ class TestTurnAroundPromptAPIIntegrationTests:
 
         # Verify basic structure
         assert stack is not None
-
