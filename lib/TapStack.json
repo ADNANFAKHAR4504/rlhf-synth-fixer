@@ -89,7 +89,7 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "igw-production"
+            "Value": {"Fn::Sub": "igw-${EnvironmentSuffix}"}
           },
           {
             "Key": "Environment",
@@ -275,7 +275,7 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "nat-1a-production"
+            "Value": {"Fn::Sub": "nat-1a-${EnvironmentSuffix}"}
           },
           {
             "Key": "Environment",
@@ -293,7 +293,7 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "nat-1b-production"
+            "Value": {"Fn::Sub": "nat-1b-${EnvironmentSuffix}"}
           },
           {
             "Key": "Environment",
@@ -311,7 +311,7 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "nat-1c-production"
+            "Value": {"Fn::Sub": "nat-1c-${EnvironmentSuffix}"}
           },
           {
             "Key": "Environment",
