@@ -129,7 +129,7 @@ export class TapStack extends pulumi.ComponentResource {
         environment: config.environment,
         instanceClass: config.database.instanceClass,
         engineVersion: '15.4',
-        kmsKeyId: kmsKey.id,
+        kmsKeyId: kmsKey.arn,
         masterSecretArn: secrets.masterSecretArn,
         subnetIds: networkingStack.privateSubnetIds,
         vpcId: networkingStack.vpcId,
@@ -169,7 +169,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         environmentSuffix,
         environment: config.environment,
-        kmsKeyId: kmsKey.id,
+        kmsKeyId: kmsKey.arn,
         tags: tags,
       },
       { parent: this }
@@ -181,7 +181,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         environmentSuffix,
         environment: config.environment,
-        kmsKeyId: kmsKey.id,
+        kmsKeyId: kmsKey.arn,
         lambdaFunctionArn: lambda.functionArn,
         tags: tags,
       },
