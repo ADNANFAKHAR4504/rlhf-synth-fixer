@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import * as http from 'http';
 import * as https from 'https';
 
 describe('TapStack Integration Tests', () => {
@@ -29,14 +30,22 @@ describe('TapStack Integration Tests', () => {
 
     it('should have public subnet IDs', () => {
       expect(outputs.publicSubnetIds).toBeDefined();
-      expect(Array.isArray(outputs.publicSubnetIds)).toBe(true);
-      expect(outputs.publicSubnetIds.length).toBeGreaterThanOrEqual(3);
+      // Handle both array and string (JSON serialized) formats
+      const subnets = typeof outputs.publicSubnetIds === 'string'
+        ? JSON.parse(outputs.publicSubnetIds)
+        : outputs.publicSubnetIds;
+      expect(Array.isArray(subnets)).toBe(true);
+      expect(subnets.length).toBeGreaterThanOrEqual(3);
     });
 
     it('should have private subnet IDs', () => {
       expect(outputs.privateSubnetIds).toBeDefined();
-      expect(Array.isArray(outputs.privateSubnetIds)).toBe(true);
-      expect(outputs.privateSubnetIds.length).toBeGreaterThanOrEqual(3);
+      // Handle both array and string (JSON serialized) formats
+      const subnets = typeof outputs.privateSubnetIds === 'string'
+        ? JSON.parse(outputs.privateSubnetIds)
+        : outputs.privateSubnetIds;
+      expect(Array.isArray(subnets)).toBe(true);
+      expect(subnets.length).toBeGreaterThanOrEqual(3);
     });
   });
 
@@ -70,7 +79,7 @@ describe('TapStack Integration Tests', () => {
     it('should be accessible via HTTP', done => {
       const albUrl = `http://${outputs.albDnsName}`;
 
-      https
+      http
         .get(albUrl, res => {
           expect(res.statusCode).toBeDefined();
           expect([200, 503]).toContain(res.statusCode); // 503 is acceptable if targets are unhealthy initially
