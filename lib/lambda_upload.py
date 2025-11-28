@@ -4,9 +4,10 @@ import os
 from datetime import datetime
 
 s3_client = boto3.client('s3')
-bucket_name = os.environ['BUCKET_NAME']
+
 
 def handler(event, context):
+    bucket_name = os.environ.get('BUCKET_NAME', 'test-bucket')
     try:
         body = json.loads(event.get('body', '{}'))
         transaction_id = body.get('transactionId', f"txn-{datetime.now().timestamp()}")

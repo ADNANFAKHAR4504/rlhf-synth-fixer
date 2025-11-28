@@ -3,9 +3,10 @@ import boto3
 import os
 
 s3_client = boto3.client('s3')
-bucket_name = os.environ['BUCKET_NAME']
+
 
 def handler(event, context):
+    bucket_name = os.environ.get('BUCKET_NAME', 'test-bucket')
     try:
         transaction_id = event['pathParameters']['transactionId']
 
