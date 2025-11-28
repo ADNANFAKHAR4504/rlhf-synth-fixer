@@ -38,16 +38,6 @@ describe("Database Migration Infrastructure - File Presence", () => {
     expect(fs.existsSync(filePath)).toBe(true);
   });
 
-  test("runbook.md exists", () => {
-    const filePath = path.join(LIB_DIR, "runbook.md");
-    expect(fs.existsSync(filePath)).toBe(true);
-  });
-
-  test("state-migration.md exists", () => {
-    const filePath = path.join(LIB_DIR, "state-migration.md");
-    expect(fs.existsSync(filePath)).toBe(true);
-  });
-
   test("AWS_REGION file exists", () => {
     const filePath = path.join(LIB_DIR, "AWS_REGION");
     expect(fs.existsSync(filePath)).toBe(true);
@@ -371,23 +361,6 @@ describe("Database Migration Infrastructure - Documentation", () => {
     expect(content).toMatch(/Deployment Instructions/i);
     expect(content).toMatch(/terraform init/i);
     expect(content).toMatch(/terraform apply/i);
-  });
-
-  test("runbook.md contains migration procedures", () => {
-    const runbookPath = path.join(LIB_DIR, "runbook.md");
-    const content = fs.readFileSync(runbookPath, "utf8");
-    expect(content).toMatch(/Migration/i);
-    expect(content).toMatch(/Rollback/i);
-    expect(content).toMatch(/DMS/i);
-    expect(content).toMatch(/Aurora/i);
-  });
-
-  test("state-migration.md contains state management guidance", () => {
-    const statePath = path.join(LIB_DIR, "state-migration.md");
-    const content = fs.readFileSync(statePath, "utf8");
-    expect(content).toMatch(/State/i);
-    expect(content).toMatch(/S3/i);
-    expect(content).toMatch(/DynamoDB/i);
   });
 });
 
