@@ -33,16 +33,16 @@ class TestPaymentProcessingIntegrationTests:
 
         # Verify VPC components exist
         assert stack.vpc is not None
-        assert stack.private_subnet_1 is not None
-        assert stack.private_subnet_2 is not None
+        assert stack.private_subnets is not None
+        assert len(stack.private_subnets) == 2
 
         # Verify database components exist
         assert stack.db_subnet_group is not None
-        assert stack.rds_instance is not None
+        assert stack.db_instance is not None
 
         # Verify Lambda components exist
         assert stack.lambda_function is not None
 
         # Verify security components exist
-        assert stack.kms_key is not None
-        assert stack.db_credentials_secret is not None
+        assert stack.log_kms_key is not None
+        assert stack.db_password_secret is not None
