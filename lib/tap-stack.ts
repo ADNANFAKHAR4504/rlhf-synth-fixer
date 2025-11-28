@@ -352,6 +352,7 @@ export class TapStack {
     );
 
     const rdsInstance = new aws.rds.Instance(`${name}-rds`, {
+      identifier: `${name.toLowerCase()}-rds-${envSuffix.toLowerCase()}`,
       engine: 'postgres',
       engineVersion: '14.7',
       instanceClass: envSuffix === 'prod' ? 'db.t3.medium' : 'db.t3.micro',
@@ -374,7 +375,7 @@ export class TapStack {
       skipFinalSnapshot: envSuffix !== 'prod',
       finalSnapshotIdentifier:
         envSuffix === 'prod'
-          ? `${name}-final-snapshot-${Date.now()}`
+          ? `${name.toLowerCase()}-final-snapshot-${Date.now()}`
           : undefined,
       tags: resourceTags.apply(t => ({
         ...t,
