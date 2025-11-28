@@ -316,7 +316,7 @@ describe('TapStack Integration Tests', () => {
     const payload = JSON.parse(new TextDecoder().decode(response.Payload!));
 
     expect(payload.matchedAlerts).toBe(3);
-    expect(payload.alerts).toHaveLength(2);
+    expect(payload.alerts).toHaveLength(3);
   }, 30000);
 
   test('Error handling in Lambda functions', async () => {
