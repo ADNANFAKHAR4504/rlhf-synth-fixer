@@ -1,0 +1,31 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "7095",
+  "team": "5",
+  "startedAt": "2025-11-23T06:28:29.972Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "production-grade Kubernetes environment with cost-optimized spot instances and automated scaling for fintech microservices",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "EKS",
+    "VPC",
+    "EC2",
+    "IAM",
+    "KMS",
+    "S3",
+    "CloudWatch",
+    "AutoScaling"
+  ],
+  "training_quality": 9.5,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}
