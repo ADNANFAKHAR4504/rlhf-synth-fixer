@@ -71,7 +71,8 @@ export const secondaryVpcId = stack.secondaryVpcId;
 export const secondaryPublicSubnetIds = stack.secondaryPublicSubnetIds;
 export const secondaryPrivateSubnetIds = stack.secondaryPrivateSubnetIds;
 export const secondaryAuroraEndpoint = stack.secondaryAuroraEndpoint;
-export const secondaryAuroraReaderEndpoint = stack.secondaryAuroraReaderEndpoint;
+export const secondaryAuroraReaderEndpoint =
+  stack.secondaryAuroraReaderEndpoint;
 export const secondaryLambdaArn = stack.secondaryLambdaArn;
 export const secondaryLambdaName = stack.secondaryLambdaName;
 export const secondaryEventBridgeRuleArn = stack.secondaryEventBridgeRuleArn;
