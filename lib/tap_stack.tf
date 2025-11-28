@@ -118,6 +118,41 @@ resource "aws_kms_key" "rds_encryption" {
   deletion_window_in_days = var.environment_suffix == "prod" ? 30 : 7
   enable_key_rotation     = true
 
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${var.aws_region}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnEquals = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/vpc/flowlogs-${local.name_prefix}"
+          }
+        }
+      }
+    ]
+  })
+
   tags = merge(local.common_tags, {
     Name    = "${local.name_prefix}-rds-kms-key"
     Service = "RDS"
@@ -511,6 +546,8 @@ resource "aws_lb" "main" {
     prefix  = "alb-logs"
   }
 
+  depends_on = [aws_s3_bucket_policy.alb_logs]
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-payment-alb"
   })
@@ -601,6 +638,72 @@ resource "aws_s3_bucket_public_access_block" "assets" {
   ignore_public_acls      = true
   restrict_public_buckets = true
 }
+
+# S3 Bucket for ALB Access Logs
+resource "aws_s3_bucket" "alb_logs" {
+  bucket = "${local.name_prefix}-alb-logs-${random_id.alb_logs_suffix.hex}"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-alb-logs"
+  })
+}
+
+resource "random_id" "alb_logs_suffix" {
+  byte_length = 8
+}
+
+# ALB logs bucket policy
+resource "aws_s3_bucket_policy" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_elb_service_account.main.id}:root"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.alb_logs.arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.alb_logs.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.alb_logs.arn
+      }
+    ]
+  })
+}
+
+# ALB logs bucket public access block
+resource "aws_s3_bucket_public_access_block" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Data source for ALB service account
+data "aws_elb_service_account" "main" {}
 
 # S3 Bucket Lifecycle Configuration
 resource "aws_s3_bucket_lifecycle_configuration" "assets" {
