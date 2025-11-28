@@ -275,6 +275,11 @@
     "StepFunctionsVPCEndpoint": {
       "Type": "AWS::EC2::VPCEndpoint",
       "DeletionPolicy": "Delete",
+      "DependsOn": [
+        "PrivateSubnet1RouteTableAssociation",
+        "PrivateSubnet2RouteTableAssociation",
+        "VPCEndpointSecurityGroup"
+      ],
       "Properties": {
         "VpcId": {
           "Ref": "TradeProcessingVPC"
