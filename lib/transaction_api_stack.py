@@ -181,8 +181,8 @@ def handler(event, context):
             memory_size=256,
             timeout=30,
             environment={"variables": {"BUCKET_NAME": transaction_bucket.id}},
-            source_code_hash="${filebase64sha256(\"lambda_upload.zip\")}",
-            filename="lambda_upload.zip",
+            source_code_hash="${filebase64sha256(\"lib/lambda_upload.zip\")}",
+            filename="lib/lambda_upload.zip",
             tags={"Name": "Upload Handler"}
         )
 
@@ -244,8 +244,8 @@ def handler(event, context):
             memory_size=256,
             timeout=60,
             environment={"variables": {"BUCKET_NAME": transaction_bucket.id}},
-            source_code_hash="${filebase64sha256(\"lambda_process.zip\")}",
-            filename="lambda_process.zip",
+            source_code_hash="${filebase64sha256(\"lib/lambda_process.zip\")}",
+            filename="lib/lambda_process.zip",
             tags={"Name": "Process Handler"}
         )
 
@@ -299,8 +299,8 @@ def handler(event, context):
             memory_size=256,
             timeout=30,
             environment={"variables": {"BUCKET_NAME": transaction_bucket.id}},
-            source_code_hash="${filebase64sha256(\"lambda_status.zip\")}",
-            filename="lambda_status.zip",
+            source_code_hash="${filebase64sha256(\"lib/lambda_status.zip\")}",
+            filename="lib/lambda_status.zip",
             tags={"Name": "Status Handler"}
         )
 
