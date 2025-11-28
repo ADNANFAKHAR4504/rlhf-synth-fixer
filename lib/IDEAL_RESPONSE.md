@@ -1806,12 +1806,21 @@ export const vpcPeeringConnectionId = vpcPeeringConnection.id;
 
 ### Configuration
 
+The stack uses environment variables with Pulumi config as fallback:
+
+**Environment Variables (preferred for CI/CD):**
+- `ENVIRONMENT_SUFFIX` - Unique suffix for resource naming
+- `TF_VAR_db_password` - Master password for Aurora database
+
+**Pulumi Config (optional):**
 ```bash
 pulumi stack init dev
 pulumi config set environmentSuffix dev01
 pulumi config set --secret dbPassword YourSecurePassword123!
 pulumi config set environment production
 ```
+
+Note: Default values are provided in Pulumi.yaml, so explicit configuration is optional.
 
 ### Deployment
 
