@@ -49,12 +49,15 @@ export class AuroraStack extends pulumi.ComponentResource {
     );
 
     // Generate random password for master user
+    // AWS RDS doesn't allow: '/', '@', '"', ' ' in passwords
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const crypto = require('crypto');
-    const masterPasswordString = crypto
-      .randomBytes(32)
-      .toString('base64')
-      .slice(0, 32);
+    const allowedChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%&()*+,-.:<=>?[]^_`{|}~';
+    let masterPasswordString = '';
+    const bytes = crypto.randomBytes(32);
+    for (let i = 0; i < 32; i++) {
+      masterPasswordString += allowedChars[bytes[i] % allowedChars.length];
+    }
 
     // Create Aurora Serverless v2 cluster
     this.cluster = new aws.rds.Cluster(
