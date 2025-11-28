@@ -1,0 +1,31 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349066",
+  "team": "3",
+  "startedAt": "2025-11-27T14:06:28.681Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "S3",
+    "EC2",
+    "IAM",
+    "CloudTrail",
+    "Lambda",
+    "CloudWatch Logs",
+    "Security Groups",
+    "VPC Flow Logs",
+    "KMS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Chandan-devs-tech",
+  "dockerS3Location": ""
+}
