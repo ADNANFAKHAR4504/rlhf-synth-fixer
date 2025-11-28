@@ -12,4 +12,4 @@ instance_class       = "db.t3.medium"
 log_retention_days   = 3
 lifecycle_days       = 7
 backup_retention     = 3
-pr_number            = "pr7406"
+pr_number            = "pr7465"

@@ -25,6 +25,8 @@ terraform {
       version = "~> 3.5"
     }
   }
+  
+  backend "s3" {}
 }
 
 # ============================================================================
@@ -2589,7 +2591,7 @@ instance_class       = "db.t3.medium"
 log_retention_days   = 3
 lifecycle_days       = 7
 backup_retention     = 3
-pr_number            = "pr7406"
+pr_number            = "pr7465"
 ```
 
 ---
@@ -2626,7 +2628,7 @@ timeout_seconds                  = 120
 visibility_timeout               = 600
 retention_period                 = 1209600
 optimization_schedule_expression = "rate(1 minute)"
-pr_number                        = "pr7406"
+pr_number                        = "pr7465"
 ```
 
 ---
@@ -2657,7 +2659,7 @@ backup_retention          = 7
 location_processor_memory = 512
 geofence_checker_memory   = 512
 warehouse_updater_memory  = 512
-pr_number                 = "pr7406"
+pr_number                 = "pr7465"
 ```
 
 ---
