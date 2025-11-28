@@ -7,6 +7,7 @@ variable "aws_region" {
 variable "environment_suffix" {
   description = "Environment suffix for resource naming to prevent conflicts"
   type        = string
+  default     = "dev"
 }
 
 variable "team" {
