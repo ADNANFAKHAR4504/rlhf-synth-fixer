@@ -95,6 +95,7 @@ describe("Multi-Environment Payment Platform Infrastructure - Integration Tests"
   let kmsClient: KMSClient;
   let iamClient: IAMClient;
 
+
   beforeAll(() => {
     if (!fs.existsSync(outputFile)) {
       throw new Error(`Output file not found: ${outputFile}. Ensure infrastructure is deployed.`);
