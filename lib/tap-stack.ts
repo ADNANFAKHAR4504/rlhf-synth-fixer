@@ -1,7 +1,7 @@
 /**
  * tap-stack.ts
  * Crypto Alerts Infrastructure Stack
- * 
+ *
  * This stack provisions a serverless cryptocurrency price alert system using:
  * - DynamoDB for storing user alerts
  * - Lambda functions for price checking and alert processing
@@ -10,8 +10,8 @@
  * - KMS for encryption
  */
 
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface TapStackArgs {
   /**
@@ -96,7 +96,11 @@ export class TapStack extends pulumi.ComponentResource {
   private readonly alertProcessorLambda: aws.lambda.Function;
   private readonly priceCheckerRule: aws.cloudwatch.EventRule;
 
-  constructor(name: string, args: TapStackArgs = {}, opts?: pulumi.ComponentResourceOptions) {
+  constructor(
+    name: string,
+    args: TapStackArgs = {},
+    opts?: pulumi.ComponentResourceOptions
+  ) {
     super('custom:infrastructure:TapStack', name, {}, opts);
 
     // Set defaults
@@ -106,9 +110,11 @@ export class TapStack extends pulumi.ComponentResource {
     const priceCheckerMemorySize = args.priceCheckerMemorySize || 512;
     const alertProcessorTimeout = args.alertProcessorTimeout || 30;
     const alertProcessorMemorySize = args.alertProcessorMemorySize || 256;
-    const scheduleExpression = args.scheduleExpression || 'cron(* * * * ? *)';
+    const scheduleExpression =
+      args.scheduleExpression || 'cron(* * * * ? *)';
     const kmsKeyDeletionWindowInDays = args.kmsKeyDeletionWindowInDays || 7;
-    const exchangeApiEndpoint = args.exchangeApiEndpoint || 'https://api.exchange.com/v1/prices';
+    const exchangeApiEndpoint =
+      args.exchangeApiEndpoint || 'https://api.exchange.com/v1/prices';
 
     // Create KMS key for encrypting environment variables
     this.kmsKey = new aws.kms.Key(
@@ -241,14 +247,22 @@ export class TapStack extends pulumi.ComponentResource {
         name: `price-checker-policy-${environmentSuffix}`,
         role: this.priceCheckerRole.id,
         policy: pulumi
-          .all([this.cryptoAlertsTable.arn, this.priceAlertsTopic.arn, this.kmsKey.arn])
+          .all([
+            this.cryptoAlertsTable.arn,
+            this.priceAlertsTopic.arn,
+            this.kmsKey.arn,
+          ])
           .apply(([tableArn, _topicArn, keyArn]) =>
             JSON.stringify({
               Version: '2012-10-17',
               Statement: [
                 {
                   Effect: 'Allow',
-                  Action: ['dynamodb:Scan', 'dynamodb:Query', 'dynamodb:GetItem'],
+                  Action: [
+                    'dynamodb:Scan',
+                    'dynamodb:Query',
+                    'dynamodb:GetItem',
+                  ],
                   Resource: [tableArn, `${tableArn}/index/*`],
                 },
                 {
@@ -300,7 +314,11 @@ export class TapStack extends pulumi.ComponentResource {
         name: `alert-processor-policy-${environmentSuffix}`,
         role: this.alertProcessorRole.id,
         policy: pulumi
-          .all([this.cryptoAlertsTable.streamArn, this.priceAlertsTopic.arn, this.kmsKey.arn])
+          .all([
+            this.cryptoAlertsTable.streamArn,
+            this.priceAlertsTopic.arn,
+            this.kmsKey.arn,
+          ])
           .apply(([streamArn, topicArn, keyArn]) =>
             JSON.stringify({
               Version: '2012-10-17',
@@ -448,7 +466,10 @@ function checkThreshold(alert, currentPrice) {
           Service: 'crypto-alerts',
         },
       },
-      { parent: this, dependsOn: [this.priceCheckerLogGroup, priceCheckerPolicy] }
+      {
+        parent: this,
+        dependsOn: [this.priceCheckerLogGroup, priceCheckerPolicy],
+      }
     );
 
     // Alert Processor Lambda Function
@@ -533,7 +554,10 @@ This is an automated notification from the Crypto Alert System.
           Service: 'crypto-alerts',
         },
       },
-      { parent: this, dependsOn: [this.alertProcessorLogGroup, alertProcessorPolicy] }
+      {
+        parent: this,
+        dependsOn: [this.alertProcessorLogGroup, alertProcessorPolicy],
+      }
     );
 
     // DynamoDB Stream Event Source Mapping
@@ -611,4 +635,3 @@ This is an automated notification from the Crypto Alert System.
     });
   }
 }
-

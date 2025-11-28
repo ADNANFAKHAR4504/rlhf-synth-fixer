@@ -5,8 +5,8 @@
  * using Lambda, DynamoDB, SNS, EventBridge, and supporting AWS services.
  */
 
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';
 
 // Get configuration values
@@ -17,16 +17,24 @@ const costCenter = config.get('costCenter') || 'crypto-alerts-team';
 const complianceScope = config.get('complianceScope') || 'SOC2';
 
 // Lambda configuration
-const priceCheckerTimeout = config.getNumber('priceCheckerTimeout') || 60;
-const priceCheckerMemorySize = config.getNumber('priceCheckerMemorySize') || 512;
-const alertProcessorTimeout = config.getNumber('alertProcessorTimeout') || 30;
-const alertProcessorMemorySize = config.getNumber('alertProcessorMemorySize') || 256;
+const priceCheckerTimeout =
+  config.getNumber('priceCheckerTimeout') || 60;
+const priceCheckerMemorySize =
+  config.getNumber('priceCheckerMemorySize') || 512;
+const alertProcessorTimeout =
+  config.getNumber('alertProcessorTimeout') || 30;
+const alertProcessorMemorySize =
+  config.getNumber('alertProcessorMemorySize') || 256;
 
 // Operational configuration
 const logRetentionDays = config.getNumber('logRetentionDays') || 14;
-const scheduleExpression = config.get('scheduleExpression') || 'cron(* * * * ? *)';
-const kmsKeyDeletionWindowInDays = config.getNumber('kmsKeyDeletionWindowInDays') || 7;
-const exchangeApiEndpoint = config.get('exchangeApiEndpoint') || 'https://api.exchange.com/v1/prices';
+const scheduleExpression =
+  config.get('scheduleExpression') || 'cron(* * * * ? *)';
+const kmsKeyDeletionWindowInDays =
+  config.getNumber('kmsKeyDeletionWindowInDays') || 7;
+const exchangeApiEndpoint =
+  config.get('exchangeApiEndpoint') ||
+  'https://api.exchange.com/v1/prices';
 
 // Get metadata from environment variables for tagging
 const repository = process.env.REPOSITORY || 'iac-test-automations';
@@ -78,14 +86,20 @@ const cryptoAlertsStack = new TapStack(
 export const tableName = cryptoAlertsStack.tableName;
 export const tableArn = cryptoAlertsStack.tableArn;
 export const topicArn = cryptoAlertsStack.topicArn;
-export const priceCheckerFunctionName = cryptoAlertsStack.priceCheckerFunctionName;
-export const priceCheckerFunctionArn = cryptoAlertsStack.priceCheckerFunctionArn;
-export const alertProcessorFunctionName = cryptoAlertsStack.alertProcessorFunctionName;
-export const alertProcessorFunctionArn = cryptoAlertsStack.alertProcessorFunctionArn;
+export const priceCheckerFunctionName =
+  cryptoAlertsStack.priceCheckerFunctionName;
+export const priceCheckerFunctionArn =
+  cryptoAlertsStack.priceCheckerFunctionArn;
+export const alertProcessorFunctionName =
+  cryptoAlertsStack.alertProcessorFunctionName;
+export const alertProcessorFunctionArn =
+  cryptoAlertsStack.alertProcessorFunctionArn;
 export const kmsKeyId = cryptoAlertsStack.kmsKeyId;
 export const kmsKeyAlias = cryptoAlertsStack.kmsKeyAlias.name;
 export const eventRuleName = cryptoAlertsStack.eventRuleName;
-export const streamEventSourceMappingId = cryptoAlertsStack.streamEventSourceMapping.id;
-export const priceCheckerTargetId = cryptoAlertsStack.priceCheckerTarget.id;
-export const priceCheckerPermissionId = cryptoAlertsStack.priceCheckerPermission.id;
-
+export const streamEventSourceMappingId =
+  cryptoAlertsStack.streamEventSourceMapping.id;
+export const priceCheckerTargetId =
+  cryptoAlertsStack.priceCheckerTarget.id;
+export const priceCheckerPermissionId =
+  cryptoAlertsStack.priceCheckerPermission.id;
