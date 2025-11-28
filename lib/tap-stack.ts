@@ -30,8 +30,19 @@ export interface TapStackArgs {
  */
 export class TapStack extends pulumi.ComponentResource {
   public readonly vpcId: pulumi.Output<string>;
+  public readonly vpcCidr: pulumi.Output<string>;
+  public readonly privateSubnetIds: pulumi.Output<string[]>;
   public readonly nlbArn: pulumi.Output<string>;
+  public readonly nlbDnsName: pulumi.Output<string>;
   public readonly secretArn: pulumi.Output<string>;
+  public readonly secretName: pulumi.Output<string>;
+  public readonly rotationLambdaArn: pulumi.Output<string>;
+  public readonly auditLogGroupName: pulumi.Output<string>;
+  public readonly wafWebAclArn: pulumi.Output<string>;
+  public readonly microserviceSecurityGroupId: pulumi.Output<string>;
+  public readonly ec2LaunchTemplateId: pulumi.Output<string>;
+  public readonly orchestrationLambdaArn: pulumi.Output<string>;
+  public readonly configParameterName: pulumi.Output<string>;
 
   constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, args, opts);
@@ -965,8 +976,19 @@ exports.handler = async (event) => {
 
     // Export key outputs
     this.vpcId = vpc.id;
+    this.vpcCidr = vpc.cidrBlock;
+    this.privateSubnetIds = pulumi.output(privateSubnets.map(s => s.id));
     this.nlbArn = nlb.arn;
+    this.nlbDnsName = nlb.dnsName;
     this.secretArn = dbSecret.arn;
+    this.secretName = dbSecret.name;
+    this.rotationLambdaArn = rotationLambda.arn;
+    this.auditLogGroupName = auditLogGroup.name;
+    this.wafWebAclArn = wafWebAcl.arn;
+    this.microserviceSecurityGroupId = microserviceSecurityGroup.id;
+    this.ec2LaunchTemplateId = ec2LaunchTemplate.id;
+    this.orchestrationLambdaArn = orchestrationLambda.arn;
+    this.configParameterName = configParameter.name;
 
     this.registerOutputs({
       vpcId: vpc.id,
