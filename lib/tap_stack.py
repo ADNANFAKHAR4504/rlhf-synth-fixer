@@ -549,12 +549,11 @@ class TapStack(TerraformStack):
         # Create secondary Aurora cluster (read replica in secondary region)
         # Note: For Aurora Global Database, the secondary cluster must be created
         # from scratch with global_cluster_identifier set from the beginning.
-        # If the cluster already exists standalone, it must be destroyed and recreated.
-        # The create_before_destroy lifecycle ensures zero downtime during recreation.
+        # Using a versioned identifier (v2) to force recreation with proper config.
         secondary_cluster = RdsCluster(
             self,
             "secondary_cluster",
-            cluster_identifier=f"payment-cluster-usw2-{environment_suffix}",
+            cluster_identifier=f"payment-cluster-usw2-{environment_suffix}-v2",
             engine="aurora-postgresql",
             engine_version="14.6",
             db_subnet_group_name=secondary_db_subnet_group.name,
@@ -564,26 +563,25 @@ class TapStack(TerraformStack):
             kms_key_id=secondary_rds_kms.arn,
             storage_encrypted=True,
             skip_final_snapshot=True,
-            tags={"Name": f"payment-cluster-usw2-{environment_suffix}"},
+            tags={"Name": f"payment-cluster-usw2-{environment_suffix}-v2"},
             provider=secondary_provider,
             depends_on=[primary_cluster, secondary_rds_kms],
             lifecycle={
-                "create_before_destroy": True,
                 "ignore_changes": ["master_username", "master_password", "database_name", "replication_source_identifier"]
             }
         )
 
-        # Create secondary cluster instances
+        # Create secondary cluster instances (using v2 naming for new cluster)
         for i in range(2):
             RdsClusterInstance(
                 self,
                 f"secondary_cluster_instance_{i}",
-                identifier=f"payment-instance-usw2-{i}-{environment_suffix}",
+                identifier=f"payment-instance-usw2-{i}-{environment_suffix}-v2",
                 cluster_identifier=secondary_cluster.id,
                 instance_class="db.r6g.large",
                 engine="aurora-postgresql",
                 publicly_accessible=False,
-                tags={"Name": f"payment-instance-usw2-{i}-{environment_suffix}"},
+                tags={"Name": f"payment-instance-usw2-{i}-{environment_suffix}-v2"},
                 provider=secondary_provider
             )
 
