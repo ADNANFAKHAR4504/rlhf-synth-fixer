@@ -1,67 +1,79 @@
-from constructs import Construct
-from cdktf import TerraformStack, TerraformOutput
-from cdktf_cdktf_provider_aws.provider import AwsProvider
-from cdktf_cdktf_provider_aws.kms_key import KmsKey
-from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
+import json
+import os
+
+from cdktf import TerraformOutput, TerraformStack
+from cdktf_cdktf_provider_aws.cloudwatch_dashboard import CloudwatchDashboard
+from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import \
+    CloudwatchMetricAlarm
+from cdktf_cdktf_provider_aws.data_aws_caller_identity import \
+    DataAwsCallerIdentity
+from cdktf_cdktf_provider_aws.data_aws_region import DataAwsRegion
 from cdktf_cdktf_provider_aws.dynamodb_table import (
-    DynamodbTable, DynamodbTableReplica, DynamodbTablePointInTimeRecovery,
-    DynamodbTableAttribute, DynamodbTableServerSideEncryption
-)
+    DynamodbTable, DynamodbTableAttribute, DynamodbTablePointInTimeRecovery,
+    DynamodbTableReplica, DynamodbTableServerSideEncryption)
+from cdktf_cdktf_provider_aws.iam_policy import IamPolicy
+from cdktf_cdktf_provider_aws.iam_role import IamRole
+from cdktf_cdktf_provider_aws.iam_role_policy import IamRolePolicy
+from cdktf_cdktf_provider_aws.iam_role_policy_attachment import \
+    IamRolePolicyAttachment
+from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
+from cdktf_cdktf_provider_aws.kms_key import KmsKey
+from cdktf_cdktf_provider_aws.lambda_function import (
+    LambdaFunction, LambdaFunctionEnvironment)
+from cdktf_cdktf_provider_aws.provider import AwsProvider
+from cdktf_cdktf_provider_aws.route import Route
+from cdktf_cdktf_provider_aws.route53_health_check import Route53HealthCheck
+from cdktf_cdktf_provider_aws.route53_record import (
+    Route53Record, Route53RecordWeightedRoutingPolicy)
+from cdktf_cdktf_provider_aws.route53_zone import Route53Zone
+from cdktf_cdktf_provider_aws.route_table import RouteTable
+from cdktf_cdktf_provider_aws.route_table_association import \
+    RouteTableAssociation
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
-from cdktf_cdktf_provider_aws.s3_bucket_versioning import (
-    S3BucketVersioningA, S3BucketVersioningVersioningConfiguration
-)
-from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
-    S3BucketServerSideEncryptionConfigurationA,
-    S3BucketServerSideEncryptionConfigurationRuleA,
-    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA
-)
 from cdktf_cdktf_provider_aws.s3_bucket_replication_configuration import (
     S3BucketReplicationConfigurationA, S3BucketReplicationConfigurationRule,
     S3BucketReplicationConfigurationRuleDestination,
     S3BucketReplicationConfigurationRuleDestinationEncryptionConfiguration,
     S3BucketReplicationConfigurationRuleSourceSelectionCriteria,
-    S3BucketReplicationConfigurationRuleSourceSelectionCriteriaSseKmsEncryptedObjects
-)
-from cdktf_cdktf_provider_aws.iam_role import IamRole
-from cdktf_cdktf_provider_aws.iam_role_policy import IamRolePolicy
-from cdktf_cdktf_provider_aws.iam_policy import IamPolicy
-from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
-from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction, LambdaFunctionEnvironment
-from cdktf_cdktf_provider_aws.vpc import Vpc
-from cdktf_cdktf_provider_aws.subnet import Subnet
-from cdktf_cdktf_provider_aws.security_group import SecurityGroup, SecurityGroupIngress, SecurityGroupEgress
-from cdktf_cdktf_provider_aws.vpc_peering_connection import VpcPeeringConnection
-from cdktf_cdktf_provider_aws.vpc_peering_connection_accepter import VpcPeeringConnectionAccepterA
-from cdktf_cdktf_provider_aws.route import Route
-from cdktf_cdktf_provider_aws.route_table import RouteTable
-from cdktf_cdktf_provider_aws.route_table_association import RouteTableAssociation
+    S3BucketReplicationConfigurationRuleSourceSelectionCriteriaSseKmsEncryptedObjects)
+from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
+    S3BucketServerSideEncryptionConfigurationA,
+    S3BucketServerSideEncryptionConfigurationRuleA,
+    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA)
+from cdktf_cdktf_provider_aws.s3_bucket_versioning import (
+    S3BucketVersioningA, S3BucketVersioningVersioningConfiguration)
+from cdktf_cdktf_provider_aws.security_group import (SecurityGroup,
+                                                     SecurityGroupEgress,
+                                                     SecurityGroupIngress)
 from cdktf_cdktf_provider_aws.sns_topic import SnsTopic
-from cdktf_cdktf_provider_aws.sns_topic_subscription import SnsTopicSubscription
-from cdktf_cdktf_provider_aws.cloudwatch_dashboard import CloudwatchDashboard
-from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import CloudwatchMetricAlarm
-from cdktf_cdktf_provider_aws.route53_health_check import Route53HealthCheck
-from cdktf_cdktf_provider_aws.route53_zone import Route53Zone
-from cdktf_cdktf_provider_aws.route53_record import Route53Record, Route53RecordWeightedRoutingPolicy
-from cdktf_cdktf_provider_aws.data_aws_caller_identity import DataAwsCallerIdentity
-from cdktf_cdktf_provider_aws.data_aws_region import DataAwsRegion
-import json
-import os
+from cdktf_cdktf_provider_aws.sns_topic_subscription import \
+    SnsTopicSubscription
+from cdktf_cdktf_provider_aws.subnet import Subnet
+from cdktf_cdktf_provider_aws.vpc import Vpc
+from cdktf_cdktf_provider_aws.vpc_peering_connection import \
+    VpcPeeringConnection
+from cdktf_cdktf_provider_aws.vpc_peering_connection_accepter import \
+    VpcPeeringConnectionAccepterA
+from constructs import Construct
 
 
 class TapStack(TerraformStack):
-    def __init__(self, scope: Construct, ns: str, environment_suffix: str):
+    def __init__(self, scope: Construct, ns: str, environment_suffix: str,
+                 state_bucket: str = None, state_bucket_region: str = None,
+                 aws_region: str = None, default_tags: dict = None):
         super().__init__(scope, ns)
 
         self.environment_suffix = environment_suffix
-        self.primary_region = "us-east-1"
+        self.primary_region = aws_region or "us-east-1"
         self.secondary_region = "us-west-2"
 
-        # Common tags
+        # Common tags - merge default_tags if provided
         self.common_tags = {
             "Environment": "Production",
             "DisasterRecovery": "Enabled"
         }
+        if default_tags and "tags" in default_tags:
+            self.common_tags.update(default_tags["tags"])
 
         # Primary region provider
         self.primary_provider = AwsProvider(
@@ -160,10 +172,11 @@ class TapStack(TerraformStack):
             provider=provider
         )
 
+        # Use environment suffix for alias uniqueness
         KmsAlias(
             self,
             f"kms-alias-{region_name}-{self.environment_suffix}",
-            name=f"alias/dr-healthcare-{region_name}-{self.environment_suffix}",
+            name=(f"alias/dr-healthcare-{region_name}-{self.environment_suffix}"),
             target_key_id=key.key_id,
             provider=provider
         )
@@ -257,10 +270,14 @@ class TapStack(TerraformStack):
 
     def _create_s3_bucket(self, region_name: str, kms_key: KmsKey, provider: AwsProvider) -> S3Bucket:
         """Create S3 bucket with encryption"""
+        # S3 bucket names must be globally unique, so include account id
+        bucket_name = (f"dr-healthcare-{region_name}-{self.environment_suffix}-"
+                       f"{self.account.account_id}")
+
         bucket = S3Bucket(
             self,
             f"s3-bucket-{region_name}-{self.environment_suffix}",
-            bucket=f"dr-healthcare-{region_name}-{self.environment_suffix}",
+            bucket=bucket_name,
             tags={**self.common_tags, "Region": region_name},
             provider=provider
         )
@@ -314,7 +331,7 @@ class TapStack(TerraformStack):
         replication_role = IamRole(
             self,
             f"s3-replication-role-{self.environment_suffix}",
-            name=f"dr-s3-replication-role-{self.environment_suffix}",
+            name=(f"dr-s3-replication-role-{self.environment_suffix}"),
             assume_role_policy=json.dumps(assume_role_policy),
             tags=self.common_tags,
             provider=self.primary_provider
@@ -368,7 +385,7 @@ class TapStack(TerraformStack):
         IamRolePolicy(
             self,
             f"s3-replication-policy-{self.environment_suffix}",
-            name=f"dr-s3-replication-policy-{self.environment_suffix}",
+            name=(f"dr-s3-replication-policy-{self.environment_suffix}"),
             role=replication_role.id,
             policy=json.dumps(replication_policy),
             provider=self.primary_provider
@@ -412,10 +429,12 @@ class TapStack(TerraformStack):
         self, table_name: str, primary_kms: KmsKey, secondary_kms: KmsKey
     ) -> DynamodbTable:
         """Create DynamoDB global table"""
+        # Use a simpler naming without the full account ID to avoid conflicts
+        # The environment_suffix should be unique enough
         table = DynamodbTable(
             self,
             f"dynamodb-{table_name}-{self.environment_suffix}",
-            name=f"dr-{table_name}-{self.environment_suffix}",
+            name=(f"dr-{table_name}-{self.environment_suffix}"),
             billing_mode="PAY_PER_REQUEST",
             hash_key="id",
             attribute=[
@@ -459,7 +478,7 @@ class TapStack(TerraformStack):
         role = IamRole(
             self,
             f"lambda-role-{region_name}-{self.environment_suffix}",
-            name=f"dr-lambda-role-{region_name}-{self.environment_suffix}",
+            name=(f"dr-lambda-role-{region_name}-{self.environment_suffix}"),
             assume_role_policy=json.dumps(assume_role_policy),
             tags=self.common_tags,
             provider=provider
@@ -518,7 +537,7 @@ class TapStack(TerraformStack):
         policy = IamPolicy(
             self,
             f"lambda-policy-{region_name}-{self.environment_suffix}",
-            name=f"dr-lambda-policy-{region_name}-{self.environment_suffix}",
+            name=(f"dr-lambda-policy-{region_name}-{self.environment_suffix}"),
             policy=json.dumps(lambda_policy),
             tags=self.common_tags,
             provider=provider
@@ -539,8 +558,8 @@ class TapStack(TerraformStack):
         vpc: Vpc, provider: AwsProvider
     ) -> LambdaFunction:
         """Create Lambda function"""
-        import zipfile
         import tempfile
+        import zipfile
 
         # Create Lambda function code directory
         lambda_code = """
@@ -590,7 +609,7 @@ def handler(event, context):
         function = LambdaFunction(
             self,
             f"lambda-{region_name}-{self.environment_suffix}",
-            function_name=f"dr-health-check-{region_name}-{self.environment_suffix}",
+            function_name=(f"dr-health-check-{region_name}-{self.environment_suffix}"),
             role=role.arn,
             handler="health_check.handler",
             runtime="python3.11",
@@ -615,7 +634,7 @@ def handler(event, context):
         topic = SnsTopic(
             self,
             f"sns-topic-{region_name}-{self.environment_suffix}",
-            name=f"dr-alerts-{region_name}-{self.environment_suffix}",
+            name=(f"dr-alerts-{region_name}-{self.environment_suffix}"),
             tags=self.common_tags,
             provider=provider
         )
@@ -686,7 +705,7 @@ def handler(event, context):
             ),
             set_identifier=f"secondary-{self.environment_suffix}",
             health_check_id=self.secondary_health_check.id,
-            provider=self.primary_provider
+            provider=self.secondary_provider
         )
 
     def _create_cloudwatch_dashboards(self):
