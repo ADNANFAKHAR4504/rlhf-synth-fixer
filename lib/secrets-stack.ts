@@ -99,7 +99,8 @@ export class SecretsStack extends pulumi.ComponentResource {
 
     // Export outputs
     this.secretArn = this.secret.arn;
-    this.kmsKeyId = kmsKey.id;
+    // Use ARN for RDS kmsKeyId which requires an ARN format
+    this.kmsKeyId = kmsKey.arn;
 
     this.registerOutputs({
       secretArn: this.secretArn,

@@ -47,11 +47,16 @@ export class VpcStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Get availability zones using Pulumi Output pattern
+    // Get availability zones using the parent's provider to ensure correct region
+    // The provider is passed via opts from the main stack
+    const provider = opts?.provider;
     const azs = pulumi.output(
-      aws.getAvailabilityZones({
-        state: 'available',
-      })
+      aws.getAvailabilityZones(
+        {
+          state: 'available',
+        },
+        { provider: provider as aws.Provider | undefined }
+      )
     );
 
     // Create private subnets in multiple AZs for Multi-AZ deployment
