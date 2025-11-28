@@ -33,8 +33,8 @@ class TransactionApiStack(TerraformStack):
     def __init__(self, scope: Construct, stack_id: str):
         super().__init__(scope, stack_id)
 
-        # Provider
-        AwsProvider(self, "AWS", region="us-east-1")
+        # Provider - use us-west-2 to match CI/CD environment
+        AwsProvider(self, "AWS", region="us-west-2")
 
         # Get AWS account ID
         current = DataAwsCallerIdentity(self, "current")
