@@ -483,7 +483,7 @@ class TapStack(TerraformStack):
             "global_cluster",
             global_cluster_identifier=f"payment-global-cluster-{environment_suffix}",
             engine="aurora-postgresql",
-            engine_version="14.10",
+            engine_version="14.6",
             database_name="payment_db",
             storage_encrypted=True,
             provider=primary_provider
@@ -495,7 +495,7 @@ class TapStack(TerraformStack):
             "primary_cluster",
             cluster_identifier=f"payment-cluster-use1-{environment_suffix}",
             engine="aurora-postgresql",
-            engine_version="14.10",
+            engine_version="14.6",
             database_name="payment_db",
             master_username="dbadmin",
             master_password="ChangeMe123!",  # In production, use Secrets Manager
@@ -531,7 +531,7 @@ class TapStack(TerraformStack):
             "secondary_cluster",
             cluster_identifier=f"payment-cluster-usw2-{environment_suffix}",
             engine="aurora-postgresql",
-            engine_version="14.10",
+            engine_version="14.6",
             db_subnet_group_name=secondary_db_subnet_group.name,
             vpc_security_group_ids=[secondary_rds_sg.id],
             global_cluster_identifier=global_cluster.id,
@@ -946,7 +946,7 @@ class TapStack(TerraformStack):
                 "FunctionName": secondary_lambda.function_name
             },
             tags={"Name": f"payment-lambda-errors-usw2-{environment_suffix}"},
-            provider=primary_provider
+            provider=secondary_provider
         )
 
         # ===== ROUTE 53 HEALTH CHECKS AND FAILOVER =====
@@ -1010,7 +1010,7 @@ class TapStack(TerraformStack):
                 dimensions={
                     "FunctionName": secondary_lambda.function_name
                 },
-                provider=primary_provider
+                provider=secondary_provider
             ).alarm_name,
             cloudwatch_alarm_region=secondary_region,
             insufficient_data_health_status="Unhealthy",
