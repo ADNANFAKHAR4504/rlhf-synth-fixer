@@ -1034,11 +1034,14 @@ class TapStack(TerraformStack):
             cloudwatch_alarm_region=primary_region,
             insufficient_data_health_status="Unhealthy",
             tags={"Name": f"payment-primary-health-{environment_suffix}"},
-            provider=primary_provider,
-            depends_on=[primary_health_metric_alarm]
+            provider=primary_provider
         )
+        # Add explicit terraform dependency
+        primary_health_check.node.add_dependency(primary_health_metric_alarm)
 
         # Create health check for secondary Lambda (references alarm created above)
+        # Note: Route53 health check is global but references regional CloudWatch alarm
+        # Must ensure alarm exists in us-west-2 before health check is created
         secondary_health_check = Route53HealthCheck(
             self,
             "secondary_health_check",
@@ -1047,9 +1050,10 @@ class TapStack(TerraformStack):
             cloudwatch_alarm_region=secondary_region,
             insufficient_data_health_status="Unhealthy",
             tags={"Name": f"payment-secondary-health-{environment_suffix}"},
-            provider=primary_provider,
-            depends_on=[secondary_health_metric_alarm]
+            provider=primary_provider
         )
+        # Add explicit terraform dependency
+        secondary_health_check.node.add_dependency(secondary_health_metric_alarm)
 
         # Create Route 53 record for primary region (PRIMARY failover)
         Route53Record(
