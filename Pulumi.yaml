@@ -2,4 +2,4 @@ name: crypto-alerts
 runtime:
   name: nodejs
 description: Pulumi TypeScript infrastructure for serverless cryptocurrency price alert system
-main: index.ts
+main: bin/tap.ts
