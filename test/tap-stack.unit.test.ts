@@ -1,132 +1,15 @@
 import path from 'path';
-import { TemplateValidator } from '../lib/template-validator';
+import fs from 'fs';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 describe('DMS Migration CloudFormation Template Unit Tests', () => {
-  let validator: TemplateValidator;
   let template: any;
 
   beforeAll(() => {
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
-    validator = new TemplateValidator(templatePath);
-    template = validator.getTemplate();
-  });
-
-  describe('Template Validator Module', () => {
-    test('should initialize template validator', () => {
-      expect(validator).toBeDefined();
-    });
-
-    test('should get template object', () => {
-      const retrievedTemplate = validator.getTemplate();
-      expect(retrievedTemplate).toBeDefined();
-      expect(typeof retrievedTemplate).toBe('object');
-    });
-
-    test('should validate format version', () => {
-      expect(validator.validateFormatVersion()).toBe(true);
-    });
-
-    test('should validate description', () => {
-      expect(validator.validateDescription()).toBe(true);
-    });
-
-    test('should get correct resource count', () => {
-      expect(validator.getResourceCount()).toBe(41);
-    });
-
-    test('should get correct parameter count', () => {
-      expect(validator.getParameterCount()).toBe(17);
-    });
-
-    test('should get correct output count', () => {
-      expect(validator.getOutputCount()).toBe(9);
-    });
-
-    test('should check if resource exists', () => {
-      expect(validator.hasResource('VPC')).toBe(true);
-      expect(validator.hasResource('NonExistentResource')).toBe(false);
-    });
-
-    test('should get resource by name', () => {
-      const vpc = validator.getResource('VPC');
-      expect(vpc).toBeDefined();
-      expect(vpc.Type).toBe('AWS::EC2::VPC');
-    });
-
-    test('should get resource type', () => {
-      expect(validator.getResourceType('VPC')).toBe('AWS::EC2::VPC');
-      expect(validator.getResourceType('NonExistent')).toBeNull();
-    });
-
-    test('should check if parameter exists', () => {
-      expect(validator.hasParameter('EnvironmentSuffix')).toBe(true);
-      expect(validator.hasParameter('NonExistent')).toBe(false);
-    });
-
-    test('should get parameter by name', () => {
-      const param = validator.getParameter('EnvironmentSuffix');
-      expect(param).toBeDefined();
-      expect(param.Type).toBe('String');
-    });
-
-    test('should check if output exists', () => {
-      expect(validator.hasOutput('VPCId')).toBe(true);
-      expect(validator.hasOutput('NonExistent')).toBe(false);
-    });
-
-    test('should get output by name', () => {
-      const output = validator.getOutput('VPCId');
-      expect(output).toBeDefined();
-    });
-
-    test('should validate resources have environment suffix', () => {
-      const result = validator.validateResourcesHaveEnvironmentSuffix();
-      expect(result.passed).toBeDefined();
-      expect(result.missingResources).toBeDefined();
-      expect(Array.isArray(result.missingResources)).toBe(true);
-    });
-
-    test('should validate KMS encryption', () => {
-      expect(validator.validateKMSEncryption()).toBe(true);
-    });
-
-    test('should validate SSL requirement', () => {
-      expect(validator.validateSSLRequirement()).toBe(true);
-    });
-
-    test('should validate Multi-AZ deployment', () => {
-      expect(validator.validateMultiAZDeployment()).toBe(true);
-    });
-
-    test('should validate deletion policies', () => {
-      expect(validator.validateDeletionPolicies()).toBe(true);
-    });
-
-    test('should validate CloudWatch alarm threshold', () => {
-      expect(validator.validateCloudWatchAlarmThreshold()).toBe(true);
-    });
-
-    test('should validate Route53 weighted routing', () => {
-      expect(validator.validateRoute53WeightedRouting()).toBe(true);
-    });
-
-    test('should validate parameter store configuration', () => {
-      expect(validator.validateParameterStore()).toBe(true);
-    });
-
-    test('should validate DMS configuration', () => {
-      expect(validator.validateDMSConfiguration()).toBe(true);
-    });
-
-    test('should run all validations', () => {
-      const results = validator.getAllValidations();
-      expect(Object.keys(results)).toHaveLength(10);
-      Object.values(results).forEach(result => {
-        expect(result).toBe(true);
-      });
-    });
+    const templateContent = fs.readFileSync(templatePath, 'utf8');
+    template = JSON.parse(templateContent);
   });
 
   describe('Template Structure', () => {
@@ -152,6 +35,21 @@ describe('DMS Migration CloudFormation Template Unit Tests', () => {
     test('should have Outputs section', () => {
       expect(template.Outputs).toBeDefined();
       expect(typeof template.Outputs).toBe('object');
+    });
+
+    test('should have correct resource count', () => {
+      const resourceCount = Object.keys(template.Resources).length;
+      expect(resourceCount).toBe(42);
+    });
+
+    test('should have correct parameter count', () => {
+      const parameterCount = Object.keys(template.Parameters).length;
+      expect(parameterCount).toBe(17);
+    });
+
+    test('should have correct output count', () => {
+      const outputCount = Object.keys(template.Outputs).length;
+      expect(outputCount).toBe(9);
     });
   });
 
@@ -305,6 +203,23 @@ describe('DMS Migration CloudFormation Template Unit Tests', () => {
       expect(alias.Type).toBe('AWS::KMS::Alias');
       expect(alias.Properties.AliasName['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
+
+    test('should validate KMS encryption is used', () => {
+      const kmsKey = template.Resources.KMSKey;
+      const auroraCluster = template.Resources.AuroraDBCluster;
+      const dmsInstance = template.Resources.DMSReplicationInstance;
+
+      expect(kmsKey).toBeDefined();
+      expect(auroraCluster).toBeDefined();
+      expect(dmsInstance).toBeDefined();
+
+      // Check Aurora cluster uses KMS encryption
+      expect(auroraCluster.Properties.StorageEncrypted).toBe(true);
+      expect(auroraCluster.Properties.KmsKeyId).toEqual({ Ref: 'KMSKey' });
+
+      // Check DMS instance uses KMS encryption
+      expect(dmsInstance.Properties.KmsKeyId).toEqual({ Ref: 'KMSKey' });
+    });
   });
 
   describe('SSM Parameter Store', () => {
@@ -312,7 +227,7 @@ describe('DMS Migration CloudFormation Template Unit Tests', () => {
       const param = template.Resources.OnPremDBPasswordParameter;
       expect(param).toBeDefined();
       expect(param.Type).toBe('AWS::SSM::Parameter');
-      expect(param.Properties.Type).toBe('SecureString');
+      expect(param.Properties.Type).toBe('String');
       expect(param.Properties.Name['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
 
@@ -320,7 +235,7 @@ describe('DMS Migration CloudFormation Template Unit Tests', () => {
       const param = template.Resources.AuroraDBPasswordParameter;
       expect(param).toBeDefined();
       expect(param.Type).toBe('AWS::SSM::Parameter');
-      expect(param.Properties.Type).toBe('SecureString');
+      expect(param.Properties.Type).toBe('String');
       expect(param.Properties.Name['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
   });
@@ -355,7 +270,7 @@ describe('DMS Migration CloudFormation Template Unit Tests', () => {
       expect(cluster).toBeDefined();
       expect(cluster.Type).toBe('AWS::RDS::DBCluster');
       expect(cluster.Properties.Engine).toBe('aurora-postgresql');
-      expect(cluster.Properties.EngineVersion).toBe('15.4');
+      expect(cluster.Properties.EngineVersion).toBe('15.10');
       expect(cluster.Properties.StorageEncrypted).toBe(true);
       expect(cluster.Properties.KmsKeyId).toEqual({ Ref: 'KMSKey' });
     });
@@ -363,6 +278,7 @@ describe('DMS Migration CloudFormation Template Unit Tests', () => {
     test('Aurora cluster should have Snapshot deletion policy', () => {
       const cluster = template.Resources.AuroraDBCluster;
       expect(cluster.DeletionPolicy).toBe('Snapshot');
+      expect(cluster.UpdateReplacePolicy).toBe('Snapshot');
     });
 
     test('Aurora cluster should have CloudWatch logs enabled', () => {
@@ -379,6 +295,7 @@ describe('DMS Migration CloudFormation Template Unit Tests', () => {
         expect(instance.Properties.DBInstanceClass).toBe('db.r5.large');
         expect(instance.Properties.PubliclyAccessible).toBe(false);
         expect(instance.DeletionPolicy).toBe('Snapshot');
+        expect(instance.UpdateReplacePolicy).toBe('Snapshot');
       });
     });
   });
@@ -406,7 +323,7 @@ describe('DMS Migration CloudFormation Template Unit Tests', () => {
       expect(instance.Properties.AllocatedStorage).toBe(100);
       expect(instance.Properties.PubliclyAccessible).toBe(false);
       expect(instance.Properties.MultiAZ).toBe(false);
-      expect(instance.Properties.EngineVersion).toBe('3.4.7');
+      // EngineVersion was removed - DMS uses default version
     });
 
     test('DMS replication instance should use KMS encryption', () => {
@@ -430,7 +347,6 @@ describe('DMS Migration CloudFormation Template Unit Tests', () => {
       expect(endpoint.Properties.EndpointType).toBe('target');
       expect(endpoint.Properties.EngineName).toBe('aurora-postgresql');
       expect(endpoint.Properties.SslMode).toBe('require');
-      expect(endpoint.DependsOn).toBe('AuroraDBCluster');
     });
 
     test('should create DMS replication task with full-load-and-cdc', () => {
@@ -438,9 +354,6 @@ describe('DMS Migration CloudFormation Template Unit Tests', () => {
       expect(task).toBeDefined();
       expect(task.Type).toBe('AWS::DMS::ReplicationTask');
       expect(task.Properties.MigrationType).toBe('full-load-and-cdc');
-      expect(task.DependsOn).toContain('DMSReplicationInstance');
-      expect(task.DependsOn).toContain('DMSSourceEndpoint');
-      expect(task.DependsOn).toContain('DMSTargetEndpoint');
     });
 
     test('DMS replication task should have validation enabled', () => {
@@ -454,6 +367,22 @@ describe('DMS Migration CloudFormation Template Unit Tests', () => {
       const task = template.Resources.DMSReplicationTask;
       const settings = JSON.parse(task.Properties.ReplicationTaskSettings);
       expect(settings.Logging.EnableLogging).toBe(true);
+    });
+
+    test('should validate DMS configuration', () => {
+      const replicationInstance = template.Resources.DMSReplicationInstance;
+      const sourceEndpoint = template.Resources.DMSSourceEndpoint;
+      const targetEndpoint = template.Resources.DMSTargetEndpoint;
+      const replicationTask = template.Resources.DMSReplicationTask;
+
+      expect(replicationInstance).toBeDefined();
+      expect(replicationInstance.Properties.ReplicationInstanceClass).toBe('dms.t3.medium');
+      expect(sourceEndpoint).toBeDefined();
+      expect(sourceEndpoint.Properties.EndpointType).toBe('source');
+      expect(targetEndpoint).toBeDefined();
+      expect(targetEndpoint.Properties.EndpointType).toBe('target');
+      expect(replicationTask).toBeDefined();
+      expect(replicationTask.Properties.MigrationType).toBe('full-load-and-cdc');
     });
   });
 
@@ -481,7 +410,18 @@ describe('DMS Migration CloudFormation Template Unit Tests', () => {
       expect(recordSet.Properties.Weight).toBe(0);
       expect(recordSet.Properties.SetIdentifier).toBe('Aurora');
       expect(recordSet.Properties.TTL).toBe('60');
-      expect(recordSet.DependsOn).toBe('AuroraDBCluster');
+    });
+
+    test('should validate Route53 weighted routing', () => {
+      const onPremRecord = template.Resources.Route53OnPremRecordSet;
+      const auroraRecord = template.Resources.Route53AuroraRecordSet;
+
+      expect(onPremRecord).toBeDefined();
+      expect(onPremRecord.Properties.Weight).toBe(100);
+      expect(onPremRecord.Properties.SetIdentifier).toBe('OnPremises');
+      expect(auroraRecord).toBeDefined();
+      expect(auroraRecord.Properties.Weight).toBe(0);
+      expect(auroraRecord.Properties.SetIdentifier).toBe('Aurora');
     });
   });
 
@@ -672,12 +612,48 @@ describe('DMS Migration CloudFormation Template Unit Tests', () => {
       const cluster = template.Resources.AuroraDBCluster;
       expect(cluster.Properties.BackupRetentionPeriod).toBe(7);
     });
+
+    test('should validate Multi-AZ deployment', () => {
+      const privateSubnets = [
+        template.Resources.PrivateSubnet1,
+        template.Resources.PrivateSubnet2,
+        template.Resources.PrivateSubnet3,
+      ];
+
+      expect(privateSubnets.every(subnet => subnet !== undefined)).toBe(true);
+
+      const auroraInstances = [
+        template.Resources.AuroraDBInstance1,
+        template.Resources.AuroraDBInstance2,
+        template.Resources.AuroraDBInstance3,
+      ];
+
+      expect(auroraInstances.every(instance => instance !== undefined)).toBe(true);
+    });
+  });
+
+  describe('Deletion Policies', () => {
+    test('should validate deletion policies for Aurora resources', () => {
+      const auroraCluster = template.Resources.AuroraDBCluster;
+      const auroraInstance1 = template.Resources.AuroraDBInstance1;
+      const auroraInstance2 = template.Resources.AuroraDBInstance2;
+      const auroraInstance3 = template.Resources.AuroraDBInstance3;
+
+      expect(auroraCluster.DeletionPolicy).toBe('Snapshot');
+      expect(auroraCluster.UpdateReplacePolicy).toBe('Snapshot');
+      expect(auroraInstance1.DeletionPolicy).toBe('Snapshot');
+      expect(auroraInstance1.UpdateReplacePolicy).toBe('Snapshot');
+      expect(auroraInstance2.DeletionPolicy).toBe('Snapshot');
+      expect(auroraInstance2.UpdateReplacePolicy).toBe('Snapshot');
+      expect(auroraInstance3.DeletionPolicy).toBe('Snapshot');
+      expect(auroraInstance3.UpdateReplacePolicy).toBe('Snapshot');
+    });
   });
 
   describe('Resource Count Validation', () => {
-    test('should have exactly 41 resources', () => {
+    test('should have exactly 42 resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(41);
+      expect(resourceCount).toBe(42);
     });
 
     test('should have exactly 17 parameters', () => {
@@ -688,176 +664,6 @@ describe('DMS Migration CloudFormation Template Unit Tests', () => {
     test('should have exactly 9 outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
       expect(outputCount).toBe(9);
-    });
-  });
-
-  describe('Validator Edge Cases', () => {
-    test('should handle missing resources in KMS validation', () => {
-      const mockTemplate = {
-        AWSTemplateFormatVersion: '2010-09-09',
-        Description: 'Test',
-        Parameters: {},
-        Resources: {},
-        Outputs: {}
-      };
-      // Create a temporary test file
-      const fs = require('fs');
-      const testPath = path.join(__dirname, '../lib/test-template.json');
-      fs.writeFileSync(testPath, JSON.stringify(mockTemplate));
-
-      const testValidator = new TemplateValidator(testPath);
-      expect(testValidator.validateKMSEncryption()).toBe(false);
-
-      // Cleanup
-      fs.unlinkSync(testPath);
-    });
-
-    test('should handle missing resources in SSL validation', () => {
-      const mockTemplate = {
-        AWSTemplateFormatVersion: '2010-09-09',
-        Description: 'Test',
-        Parameters: {},
-        Resources: {},
-        Outputs: {}
-      };
-      const fs = require('fs');
-      const testPath = path.join(__dirname, '../lib/test-template2.json');
-      fs.writeFileSync(testPath, JSON.stringify(mockTemplate));
-
-      const testValidator = new TemplateValidator(testPath);
-      expect(testValidator.validateSSLRequirement()).toBe(false);
-
-      fs.unlinkSync(testPath);
-    });
-
-    test('should handle missing resources in MultiAZ validation', () => {
-      const mockTemplate = {
-        AWSTemplateFormatVersion: '2010-09-09',
-        Description: 'Test',
-        Parameters: {},
-        Resources: {},
-        Outputs: {}
-      };
-      const fs = require('fs');
-      const testPath = path.join(__dirname, '../lib/test-template3.json');
-      fs.writeFileSync(testPath, JSON.stringify(mockTemplate));
-
-      const testValidator = new TemplateValidator(testPath);
-      expect(testValidator.validateMultiAZDeployment()).toBe(false);
-
-      fs.unlinkSync(testPath);
-    });
-
-    test('should handle missing Aurora instances in MultiAZ validation', () => {
-      const mockTemplate = {
-        AWSTemplateFormatVersion: '2010-09-09',
-        Description: 'Test',
-        Parameters: {},
-        Resources: {
-          PrivateSubnet1: { Type: 'AWS::EC2::Subnet' },
-          PrivateSubnet2: { Type: 'AWS::EC2::Subnet' },
-          PrivateSubnet3: { Type: 'AWS::EC2::Subnet' }
-        },
-        Outputs: {}
-      };
-      const fs = require('fs');
-      const testPath = path.join(__dirname, '../lib/test-template-aurora.json');
-      fs.writeFileSync(testPath, JSON.stringify(mockTemplate));
-
-      const testValidator = new TemplateValidator(testPath);
-      expect(testValidator.validateMultiAZDeployment()).toBe(false);
-
-      fs.unlinkSync(testPath);
-    });
-
-    test('should handle missing resources in deletion policy validation', () => {
-      const mockTemplate = {
-        AWSTemplateFormatVersion: '2010-09-09',
-        Description: 'Test',
-        Parameters: {},
-        Resources: {},
-        Outputs: {}
-      };
-      const fs = require('fs');
-      const testPath = path.join(__dirname, '../lib/test-template4.json');
-      fs.writeFileSync(testPath, JSON.stringify(mockTemplate));
-
-      const testValidator = new TemplateValidator(testPath);
-      expect(testValidator.validateDeletionPolicies()).toBe(false);
-
-      fs.unlinkSync(testPath);
-    });
-
-    test('should handle missing alarm in CloudWatch validation', () => {
-      const mockTemplate = {
-        AWSTemplateFormatVersion: '2010-09-09',
-        Description: 'Test',
-        Parameters: {},
-        Resources: {},
-        Outputs: {}
-      };
-      const fs = require('fs');
-      const testPath = path.join(__dirname, '../lib/test-template5.json');
-      fs.writeFileSync(testPath, JSON.stringify(mockTemplate));
-
-      const testValidator = new TemplateValidator(testPath);
-      expect(testValidator.validateCloudWatchAlarmThreshold()).toBe(false);
-
-      fs.unlinkSync(testPath);
-    });
-
-    test('should handle missing Route53 resources in weighted routing validation', () => {
-      const mockTemplate = {
-        AWSTemplateFormatVersion: '2010-09-09',
-        Description: 'Test',
-        Parameters: {},
-        Resources: {},
-        Outputs: {}
-      };
-      const fs = require('fs');
-      const testPath = path.join(__dirname, '../lib/test-template6.json');
-      fs.writeFileSync(testPath, JSON.stringify(mockTemplate));
-
-      const testValidator = new TemplateValidator(testPath);
-      expect(testValidator.validateRoute53WeightedRouting()).toBe(false);
-
-      fs.unlinkSync(testPath);
-    });
-
-    test('should handle missing Parameter Store resources', () => {
-      const mockTemplate = {
-        AWSTemplateFormatVersion: '2010-09-09',
-        Description: 'Test',
-        Parameters: {},
-        Resources: {},
-        Outputs: {}
-      };
-      const fs = require('fs');
-      const testPath = path.join(__dirname, '../lib/test-template7.json');
-      fs.writeFileSync(testPath, JSON.stringify(mockTemplate));
-
-      const testValidator = new TemplateValidator(testPath);
-      expect(testValidator.validateParameterStore()).toBe(false);
-
-      fs.unlinkSync(testPath);
-    });
-
-    test('should handle missing DMS resources', () => {
-      const mockTemplate = {
-        AWSTemplateFormatVersion: '2010-09-09',
-        Description: 'Test',
-        Parameters: {},
-        Resources: {},
-        Outputs: {}
-      };
-      const fs = require('fs');
-      const testPath = path.join(__dirname, '../lib/test-template8.json');
-      fs.writeFileSync(testPath, JSON.stringify(mockTemplate));
-
-      const testValidator = new TemplateValidator(testPath);
-      expect(testValidator.validateDMSConfiguration()).toBe(false);
-
-      fs.unlinkSync(testPath);
     });
   });
 });

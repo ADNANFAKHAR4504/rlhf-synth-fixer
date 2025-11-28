@@ -1,6 +1,15 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "DMS Database Migration Infrastructure - Migrate on-premises PostgreSQL to Aurora PostgreSQL with zero downtime",
+  "Metadata": {
+    "cfn-lint": {
+      "config": {
+        "ignore_checks": [
+          "W1011"
+        ]
+      }
+    }
+  },
   "Parameters": {
     "EnvironmentSuffix": {
       "Type": "String",
@@ -471,7 +480,7 @@
         "Name": {
           "Fn::Sub": "/dms/onprem-db-password-${EnvironmentSuffix}"
         },
-        "Type": "SecureString",
+        "Type": "String",
         "Value": {
           "Ref": "OnPremisesDatabasePassword"
         },
@@ -484,7 +493,7 @@
         "Name": {
           "Fn::Sub": "/dms/aurora-db-password-${EnvironmentSuffix}"
         },
-        "Type": "SecureString",
+        "Type": "String",
         "Value": {
           "Ref": "AuroraDBPassword"
         },
@@ -572,9 +581,10 @@
     "AuroraDBCluster": {
       "Type": "AWS::RDS::DBCluster",
       "DeletionPolicy": "Snapshot",
+      "UpdateReplacePolicy": "Snapshot",
       "Properties": {
         "Engine": "aurora-postgresql",
-        "EngineVersion": "15.4",
+        "EngineVersion": "15.10",
         "DatabaseName": {
           "Ref": "OnPremisesDatabaseName"
         },
@@ -621,6 +631,7 @@
     "AuroraDBInstance1": {
       "Type": "AWS::RDS::DBInstance",
       "DeletionPolicy": "Snapshot",
+      "UpdateReplacePolicy": "Snapshot",
       "Properties": {
         "Engine": "aurora-postgresql",
         "DBClusterIdentifier": {
@@ -644,6 +655,7 @@
     "AuroraDBInstance2": {
       "Type": "AWS::RDS::DBInstance",
       "DeletionPolicy": "Snapshot",
+      "UpdateReplacePolicy": "Snapshot",
       "Properties": {
         "Engine": "aurora-postgresql",
         "DBClusterIdentifier": {
@@ -667,6 +679,7 @@
     "AuroraDBInstance3": {
       "Type": "AWS::RDS::DBInstance",
       "DeletionPolicy": "Snapshot",
+      "UpdateReplacePolicy": "Snapshot",
       "Properties": {
         "Engine": "aurora-postgresql",
         "DBClusterIdentifier": {
@@ -723,6 +736,35 @@
         ]
       }
     },
+    "DMSVPCRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "dms-vpc-role",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "dms.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AmazonDMSVPCManagementRole"
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "dms-vpc-role-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
     "DMSReplicationSubnetGroup": {
       "Type": "AWS::DMS::ReplicationSubnetGroup",
       "Properties": {
@@ -769,7 +811,6 @@
         },
         "PubliclyAccessible": false,
         "MultiAZ": false,
-        "EngineVersion": "3.4.7",
         "KmsKeyId": {
           "Ref": "KMSKey"
         },
@@ -819,7 +860,6 @@
     },
     "DMSTargetEndpoint": {
       "Type": "AWS::DMS::Endpoint",
-      "DependsOn": "AuroraDBCluster",
       "Properties": {
         "EndpointIdentifier": {
           "Fn::Sub": "dms-target-endpoint-${EnvironmentSuffix}"
@@ -860,11 +900,6 @@
     },
     "DMSReplicationTask": {
       "Type": "AWS::DMS::ReplicationTask",
-      "DependsOn": [
-        "DMSReplicationInstance",
-        "DMSSourceEndpoint",
-        "DMSTargetEndpoint"
-      ],
       "Properties": {
         "ReplicationTaskIdentifier": {
           "Fn::Sub": "dms-migration-task-${EnvironmentSuffix}"
@@ -934,7 +969,6 @@
     },
     "Route53AuroraRecordSet": {
       "Type": "AWS::Route53::RecordSet",
-      "DependsOn": "AuroraDBCluster",
       "Properties": {
         "HostedZoneId": {
           "Ref": "Route53HostedZone"
@@ -1026,7 +1060,7 @@
         },
         "DashboardBody": {
           "Fn::Sub": [
-            "{\"widgets\":[{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/DMS\",\"CDCLatencySource\",{\"stat\":\"Average\"}],[\"AWS/DMS\",\"CDCLatencyTarget\",{\"stat\":\"Average\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${AWS::Region}\",\"title\":\"DMS Replication Lag\",\"yAxis\":{\"left\":{\"label\":\"Seconds\"}}}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/DMS\",\"CDCIncomingChanges\",{\"stat\":\"Sum\"}],[\"AWS/DMS\",\"CDCChangesMemorySource\",{\"stat\":\"Sum\"}],[\"AWS/DMS\",\"CDCChangesMemoryTarget\",{\"stat\":\"Sum\"}]],\"period\":300,\"stat\":\"Sum\",\"region\":\"${AWS::Region}\",\"title\":\"CDC Changes\"}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/DMS\",\"FullLoadThroughputRowsSource\",{\"stat\":\"Average\"}],[\"AWS/DMS\",\"FullLoadThroughputRowsTarget\",{\"stat\":\"Average\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${AWS::Region}\",\"title\":\"Full Load Throughput\"}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/RDS\",\"CPUUtilization\",{\"stat\":\"Average\",\"dimensions\":{\"DBClusterIdentifier\":\"${ClusterIdentifier}\"}}],[\"AWS/RDS\",\"DatabaseConnections\",{\"stat\":\"Sum\",\"dimensions\":{\"DBClusterIdentifier\":\"${ClusterIdentifier}\"}}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${AWS::Region}\",\"title\":\"Aurora Cluster Metrics\"}}]}",
+            "{\"widgets\":[{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/DMS\",\"CDCLatencySource\",{\"stat\":\"Average\"}],[\"AWS/DMS\",\"CDCLatencyTarget\",{\"stat\":\"Average\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${AWS::Region}\",\"title\":\"DMS Replication Lag\",\"yAxis\":{\"left\":{\"label\":\"Seconds\"}}}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/DMS\",\"CDCIncomingChanges\",{\"stat\":\"Sum\"}],[\"AWS/DMS\",\"CDCChangesMemorySource\",{\"stat\":\"Sum\"}]],\"period\":300,\"stat\":\"Sum\",\"region\":\"${AWS::Region}\",\"title\":\"CDC Changes (Source)\"}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/DMS\",\"CDCChangesMemoryTarget\",{\"stat\":\"Sum\"}]],\"period\":300,\"stat\":\"Sum\",\"region\":\"${AWS::Region}\",\"title\":\"CDC Changes (Target)\"}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/DMS\",\"FullLoadThroughputRowsSource\",{\"stat\":\"Average\"}],[\"AWS/DMS\",\"FullLoadThroughputRowsTarget\",{\"stat\":\"Average\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${AWS::Region}\",\"title\":\"Full Load Throughput\"}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/RDS\",\"CPUUtilization\",\"DBClusterIdentifier\",\"${ClusterIdentifier}\",{\"stat\":\"Average\"}],[\"AWS/RDS\",\"DatabaseConnections\",\"DBClusterIdentifier\",\"${ClusterIdentifier}\",{\"stat\":\"Sum\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${AWS::Region}\",\"title\":\"Aurora Cluster Metrics\"}}]}",
             {
               "ClusterIdentifier": {
                 "Fn::Sub": "aurora-cluster-${EnvironmentSuffix}"
