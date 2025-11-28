@@ -1,0 +1,12 @@
+environment_suffix  = "dev-001"
+primary_region      = "us-east-1"
+dr_region           = "us-west-2"
+domain_name         = "example.com"
+vpc_cidr_primary    = "10.0.0.0/16"
+vpc_cidr_dr         = "10.1.0.0/16"
+db_master_username  = "admin"
+db_master_password  = "CHANGEME-SecurePassword123!"
+alert_email         = "alerts@example.com"
+
+availability_zones_primary = ["us-east-1a", "us-east-1b", "us-east-1c"]
+availability_zones_dr      = ["us-west-2a", "us-west-2b", "us-west-2c"]

@@ -1,0 +1,34 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912812",
+  "team": "synth",
+  "startedAt": "2025-11-27T23:05:06+00:00",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "RDS",
+    "Aurora PostgreSQL",
+    "DynamoDB",
+    "Route 53",
+    "S3",
+    "Lambda",
+    "VPC",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "Application Load Balancer"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
