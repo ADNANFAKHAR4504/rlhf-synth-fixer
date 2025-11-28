@@ -325,7 +325,6 @@ class TapStack(TerraformStack):
             architectures=["arm64"],
             memory_size=1024,
             timeout=60,
-            reserved_concurrent_executions=10,
             filename=os.path.abspath(
                 os.path.join(os.path.dirname(__file__), "lambda/webhook_processor.zip")
             ),
@@ -369,7 +368,6 @@ class TapStack(TerraformStack):
             architectures=["arm64"],
             memory_size=512,
             timeout=60,
-            reserved_concurrent_executions=10,
             filename=os.path.abspath(
                 os.path.join(os.path.dirname(__file__), "lambda/price_enricher.zip")
             ),
