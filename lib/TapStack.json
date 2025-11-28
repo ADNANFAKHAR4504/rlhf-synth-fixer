@@ -9,7 +9,8 @@
             "default": "Environment Configuration"
           },
           "Parameters": [
-            "EnvironmentSuffix"
+            "EnvironmentSuffix",
+            "CreateDeliveryChannel"
           ]
         }
       ]
@@ -22,6 +23,22 @@
       "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
       "AllowedPattern": "^[a-zA-Z0-9]+$",
       "ConstraintDescription": "Must contain only alphanumeric characters"
+    },
+    "CreateDeliveryChannel": {
+      "Type": "String",
+      "Default": "true",
+      "AllowedValues": ["true", "false"],
+      "Description": "Set to false if a Config delivery channel already exists in this region (AWS Config allows only one delivery channel per region)"
+    }
+  },
+  "Conditions": {
+    "ShouldCreateDeliveryChannel": {
+      "Fn::Equals": [
+        {
+          "Ref": "CreateDeliveryChannel"
+        },
+        "true"
+      ]
     }
   },
   "Resources": {
@@ -296,7 +313,7 @@
     },
     "ConfigRecorder": {
       "Type": "AWS::Config::ConfigurationRecorder",
-      "DependsOn": ["ConfigBucketPolicy", "ConfigRole"],
+      "DependsOn": ["ConfigBucketPolicy"],
       "Properties": {
         "Name": {
           "Fn::Sub": "config-recorder-${EnvironmentSuffix}"
@@ -315,6 +332,7 @@
     },
     "ConfigDeliveryChannel": {
       "Type": "AWS::Config::DeliveryChannel",
+      "Condition": "ShouldCreateDeliveryChannel",
       "DependsOn": "ConfigBucketPolicy",
       "Properties": {
         "Name": {
@@ -399,7 +417,7 @@
                   "Action": [
                     "ec2:DescribeSecurityGroups",
                     "rds:DescribeDBInstances",
-                    "s3:GetBucketEncryption",
+                    "s3:GetEncryptionConfiguration",
                     "ec2:DescribeVolumes"
                   ],
                   "Resource": "*"
@@ -559,8 +577,7 @@
     "ConfigRuleTagCompliance": {
       "Type": "AWS::Config::ConfigRule",
       "DependsOn": [
-        "ConfigRecorder",
-        "ConfigDeliveryChannel"
+        "ConfigRecorder"
       ],
       "Properties": {
         "ConfigRuleName": {
@@ -600,8 +617,7 @@
     "ConfigRuleEncryptionCompliance": {
       "Type": "AWS::Config::ConfigRule",
       "DependsOn": [
-        "ConfigRecorder",
-        "ConfigDeliveryChannel"
+        "ConfigRecorder"
       ],
       "Properties": {
         "ConfigRuleName": {
@@ -640,8 +656,7 @@
     "ConfigRuleSecurityGroupCompliance": {
       "Type": "AWS::Config::ConfigRule",
       "DependsOn": [
-        "ConfigRecorder",
-        "ConfigDeliveryChannel"
+        "ConfigRecorder"
       ],
       "Properties": {
         "ConfigRuleName": {
