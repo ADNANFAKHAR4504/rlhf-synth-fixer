@@ -29,17 +29,32 @@ export interface TapStackArgs {
 export class TapStack extends pulumi.ComponentResource {
   // Primary region outputs
   public readonly primaryVpcId: pulumi.Output<string>;
+  public readonly primaryPublicSubnetIds: pulumi.Output<string[]>;
+  public readonly primaryPrivateSubnetIds: pulumi.Output<string[]>;
   public readonly primaryAuroraEndpoint: pulumi.Output<string>;
+  public readonly primaryAuroraReaderEndpoint: pulumi.Output<string>;
   public readonly primaryLambdaArn: pulumi.Output<string>;
+  public readonly primaryLambdaName: pulumi.Output<string>;
+  public readonly primaryEventBridgeRuleArn: pulumi.Output<string>;
+  public readonly primarySnsTopicArn: pulumi.Output<string>;
 
   // Secondary region outputs
   public readonly secondaryVpcId: pulumi.Output<string>;
+  public readonly secondaryPublicSubnetIds: pulumi.Output<string[]>;
+  public readonly secondaryPrivateSubnetIds: pulumi.Output<string[]>;
   public readonly secondaryAuroraEndpoint: pulumi.Output<string>;
+  public readonly secondaryAuroraReaderEndpoint: pulumi.Output<string>;
   public readonly secondaryLambdaArn: pulumi.Output<string>;
+  public readonly secondaryLambdaName: pulumi.Output<string>;
+  public readonly secondaryEventBridgeRuleArn: pulumi.Output<string>;
+  public readonly secondarySnsTopicArn: pulumi.Output<string>;
 
   // Global outputs
   public readonly dynamoDbTableName: pulumi.Output<string>;
+  public readonly dynamoDbTableArn: pulumi.Output<string>;
   public readonly route53ZoneId: pulumi.Output<string>;
+  public readonly route53NameServers: pulumi.Output<string[]>;
+  public readonly vpcPeeringConnectionId: pulumi.Output<string>;
 
   constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, args, opts);
@@ -274,16 +289,34 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Store outputs
+    // Primary region
     this.primaryVpcId = primaryVpc.vpcId;
+    this.primaryPublicSubnetIds = primaryVpc.publicSubnetIds;
+    this.primaryPrivateSubnetIds = primaryVpc.privateSubnetIds;
     this.primaryAuroraEndpoint = primaryAurora.clusterEndpoint;
+    this.primaryAuroraReaderEndpoint = primaryAurora.clusterReaderEndpoint;
     this.primaryLambdaArn = primaryLambda.functionArn;
+    this.primaryLambdaName = primaryLambda.functionName;
+    this.primaryEventBridgeRuleArn = primaryEventBridge.ruleArn;
+    this.primarySnsTopicArn = primaryMonitoring.snsTopicArn;
 
+    // Secondary region
     this.secondaryVpcId = secondaryVpc.vpcId;
+    this.secondaryPublicSubnetIds = secondaryVpc.publicSubnetIds;
+    this.secondaryPrivateSubnetIds = secondaryVpc.privateSubnetIds;
     this.secondaryAuroraEndpoint = secondaryAurora.clusterEndpoint;
+    this.secondaryAuroraReaderEndpoint = secondaryAurora.clusterReaderEndpoint;
     this.secondaryLambdaArn = secondaryLambda.functionArn;
+    this.secondaryLambdaName = secondaryLambda.functionName;
+    this.secondaryEventBridgeRuleArn = secondaryEventBridge.ruleArn;
+    this.secondarySnsTopicArn = secondaryMonitoring.snsTopicArn;
 
+    // Global resources
     this.dynamoDbTableName = dynamoDb.tableName;
+    this.dynamoDbTableArn = dynamoDb.tableArn;
     this.route53ZoneId = route53.zoneId;
+    this.route53NameServers = route53.nameServers;
+    this.vpcPeeringConnectionId = peeringConnection.id;
 
     // Register outputs
     this.registerOutputs({

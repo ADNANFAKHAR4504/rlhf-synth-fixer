@@ -45,14 +45,41 @@ const provider = new aws.Provider('aws', {
 
 // Instantiate the main stack component for the infrastructure.
 // This encapsulates all the resources for the platform.
-new TapStack(
+const stack = new TapStack(
   'pulumi-infra',
   {
+    environmentSuffix: environmentSuffix,
     tags: defaultTags,
   },
   { provider }
 );
 
-// To use the stack outputs, you can export them.
-// For example, if TapStack had an output `bucketName`:
-// export const bucketName = stack.bucketName;
+// Export all stack outputs for use by tests and other consumers
+// Primary region
+export const primaryVpcId = stack.primaryVpcId;
+export const primaryPublicSubnetIds = stack.primaryPublicSubnetIds;
+export const primaryPrivateSubnetIds = stack.primaryPrivateSubnetIds;
+export const primaryAuroraEndpoint = stack.primaryAuroraEndpoint;
+export const primaryAuroraReaderEndpoint = stack.primaryAuroraReaderEndpoint;
+export const primaryLambdaArn = stack.primaryLambdaArn;
+export const primaryLambdaName = stack.primaryLambdaName;
+export const primaryEventBridgeRuleArn = stack.primaryEventBridgeRuleArn;
+export const primarySnsTopicArn = stack.primarySnsTopicArn;
+
+// Secondary region
+export const secondaryVpcId = stack.secondaryVpcId;
+export const secondaryPublicSubnetIds = stack.secondaryPublicSubnetIds;
+export const secondaryPrivateSubnetIds = stack.secondaryPrivateSubnetIds;
+export const secondaryAuroraEndpoint = stack.secondaryAuroraEndpoint;
+export const secondaryAuroraReaderEndpoint = stack.secondaryAuroraReaderEndpoint;
+export const secondaryLambdaArn = stack.secondaryLambdaArn;
+export const secondaryLambdaName = stack.secondaryLambdaName;
+export const secondaryEventBridgeRuleArn = stack.secondaryEventBridgeRuleArn;
+export const secondarySnsTopicArn = stack.secondarySnsTopicArn;
+
+// Global resources
+export const dynamoDbTableName = stack.dynamoDbTableName;
+export const dynamoDbTableArn = stack.dynamoDbTableArn;
+export const route53ZoneId = stack.route53ZoneId;
+export const route53NameServers = stack.route53NameServers;
+export const vpcPeeringConnectionId = stack.vpcPeeringConnectionId;
