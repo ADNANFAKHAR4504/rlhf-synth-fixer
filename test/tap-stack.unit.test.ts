@@ -387,9 +387,9 @@ describe('Aurora Global Database CloudFormation Template', () => {
       expect(cluster.Properties.BackupRetentionPeriod).toBe(7);
     });
 
-    test('PrimaryCluster should enable backtrack with 24-hour window', () => {
+    test('PrimaryCluster should not have backtrack (not supported for global databases)', () => {
       const cluster = template.Resources.PrimaryCluster;
-      expect(cluster.Properties.BacktrackWindow).toBe(86400);
+      expect(cluster.Properties.BacktrackWindow).toBeUndefined();
     });
 
     test('PrimaryCluster should enable IAM database authentication', () => {

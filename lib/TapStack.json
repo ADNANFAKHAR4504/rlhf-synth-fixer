@@ -489,7 +489,6 @@
             false
           ]
         },
-        "BacktrackWindow": 86400,
         "EnableIAMDatabaseAuthentication": true,
         "Tags": [
           {
