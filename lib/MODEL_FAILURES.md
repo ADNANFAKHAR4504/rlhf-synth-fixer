@@ -151,4 +151,4 @@ Task is considered successfully fixed when:
 **Platform documentation matters more than language familiarity**. Even though Python was used, CDKTF Python API != AWS CDK Python API. Model must prioritize platform-specific patterns over language conventions.
 
 ### Key Takeaway
-When working with Infrastructure-as-Code tools that wrap other tools (CDKTF wraps Terraform), **always follow the wrapper's API patterns**, not the underlying tool's native language or similar-looking frameworks.
+When working with Infrastructure-as-Code tools that wrap other tools (CDKTF wraps Terraform), **always follow the wrapper's API patterns**, not the underlying tool's native language or similar-looking frameworks.# Trigger retry
