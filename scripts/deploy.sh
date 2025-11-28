@@ -138,13 +138,39 @@ elif [ "$PLATFORM" = "cdktf" ]; then
     done
   done
 
-  # Clean up stale DynamoDB tables and wait for deletion
+  # Clean up stale DynamoDB tables (including global tables with replicas)
   echo "Cleaning up stale DynamoDB tables..."
   TABLES_TO_DELETE=""
   for table in $(aws dynamodb list-tables --query "TableNames[?contains(@, '-${RESOURCE_SUFFIX}')]" --output text 2>/dev/null || echo ""); do
     if [ -n "$table" ]; then
+      echo "  Processing DynamoDB table: $table"
+
+      # Check if table has replicas (global table) and remove them first
+      REPLICAS=$(aws dynamodb describe-table --table-name "$table" --query 'Table.Replicas[].RegionName' --output text 2>/dev/null || echo "")
+      if [ -n "$REPLICAS" ]; then
+        echo "  Table has replicas: $REPLICAS"
+        for replica_region in $REPLICAS; do
+          # Don't remove the primary region's replica (that's the base table)
+          if [ "$replica_region" != "$AWS_REGION" ] && [ "$replica_region" != "us-east-1" ]; then
+            echo "  Removing replica in $replica_region"
+            aws dynamodb update-table --table-name "$table" --replica-updates "Delete={RegionName=$replica_region}" 2>/dev/null || echo "  Failed to remove replica in $replica_region"
+          fi
+        done
+        # Wait for replicas to be removed before deleting the main table
+        echo "  Waiting for replica removal to complete..."
+        sleep 30
+      fi
+
+      # Check if table has deletion protection enabled and disable it
+      DELETION_PROTECTION=$(aws dynamodb describe-table --table-name "$table" --query 'Table.DeletionProtectionEnabled' --output text 2>/dev/null || echo "false")
+      if [ "$DELETION_PROTECTION" = "true" ] || [ "$DELETION_PROTECTION" = "True" ]; then
+        echo "  Disabling deletion protection on $table"
+        aws dynamodb update-table --table-name "$table" --no-deletion-protection-enabled 2>/dev/null || echo "  Failed to disable deletion protection"
+        sleep 5
+      fi
+
       echo "  Deleting DynamoDB table: $table"
-      aws dynamodb delete-table --table-name "$table" 2>/dev/null || echo "  Failed to delete $table (may not exist)"
+      aws dynamodb delete-table --table-name "$table" 2>/dev/null || echo "  Failed to delete $table (may not exist or still has replicas)"
       TABLES_TO_DELETE="$TABLES_TO_DELETE $table"
     fi
   done
@@ -154,7 +180,16 @@ elif [ "$PLATFORM" = "cdktf" ]; then
     echo "  Waiting for DynamoDB tables to be deleted..."
     for table in $TABLES_TO_DELETE; do
       echo "  Waiting for table: $table"
-      aws dynamodb wait table-not-exists --table-name "$table" 2>/dev/null || echo "  Table $table deletion wait timed out"
+      # Use a timeout loop instead of wait command which may fail on global tables
+      for i in $(seq 1 30); do
+        TABLE_STATUS=$(aws dynamodb describe-table --table-name "$table" --query 'Table.TableStatus' --output text 2>/dev/null || echo "DELETED")
+        if [ "$TABLE_STATUS" = "DELETED" ] || [ -z "$TABLE_STATUS" ]; then
+          echo "  Table $table deleted"
+          break
+        fi
+        echo "  Table $table status: $TABLE_STATUS (attempt $i/30)"
+        sleep 10
+      done
     done
     echo "  DynamoDB table deletion complete"
   fi
