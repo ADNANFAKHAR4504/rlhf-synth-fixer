@@ -133,7 +133,7 @@ def test_tap_stack_instantiates_successfully_via_props(self):
 **IDEAL_RESPONSE Fix**: Created comprehensive test suite with 22 tests covering:
 
 1. **Resource Creation Tests**: VPC, subnets, EKS cluster, Fargate profiles, ECR repositories
-2. **Configuration Validation**: EKS version 1.28, logging enabled, scan_on_push, etc.
+2. **Configuration Validation**: EKS version 1.29, logging enabled, scan_on_push, etc.
 3. **Security Tests**: OIDC provider, IRSA roles, security groups, ALB controller role
 4. **Infrastructure Tests**: Secrets Manager, CloudWatch logs, EKS addons
 5. **Naming Convention Tests**: Environment suffix inclusion
@@ -141,7 +141,7 @@ def test_tap_stack_instantiates_successfully_via_props(self):
 ```python
 # CORRECT - Comprehensive resource validation
 def test_eks_cluster_created_with_correct_version(self):
-    """EKS cluster created with version 1.28."""
+    """EKS cluster created with version 1.29."""
     app = App()
     stack = TapStack(app, "TestStack", environment_suffix="test", aws_region="us-east-1")
     synth = Testing.synth(stack)
@@ -149,7 +149,7 @@ def test_eks_cluster_created_with_correct_version(self):
 
     assert 'aws_eks_cluster' in resources
     cluster_config = list(resources['aws_eks_cluster'].values())[0]
-    assert cluster_config['version'] == '1.28'
+    assert cluster_config['version'] == '1.29'
     assert 'test' in cluster_config['name']
 ```
 
@@ -204,7 +204,7 @@ assert any('vpc_id' in name for name in output_names)
 - Confused terminology made it harder to understand the actual requirements
 
 **IDEAL_RESPONSE Fix**: Despite confusing terminology, correctly implemented:
-- EKS cluster v1.28 with Fargate compute profiles
+- EKS cluster v1.29 with Fargate compute profiles
 - Three namespace-specific Fargate profiles (payment, fraud-detection, reporting)
 - Plus kube-system Fargate profile for core add-ons
 
@@ -295,13 +295,77 @@ sys.path.append(...)  # Path modification after imports
 
 ---
 
+### 3. EKS Addon Version Compatibility and Dependency Management
+
+**Impact Level**: Critical
+
+**MODEL_RESPONSE Issue**: The model used hardcoded addon versions that were incompatible with EKS 1.29, and attempted to use incorrect dependency API:
+
+```python
+# INCORRECT - Hardcoded versions incompatible with EKS 1.29
+vpc_cni_addon = EksAddon(
+    self,
+    "vpc_cni_addon",
+    cluster_name=self.eks_cluster.name,
+    addon_name="vpc-cni",
+    addon_version="v1.15.0-eksbuild.2",  # ❌ Not supported for EKS 1.29
+    ...
+)
+vpc_cni_addon.add_dependency(self.kube_system_profile)  # ❌ Wrong API
+```
+
+Error output:
+```
+Error: creating EKS Add-On (eks-payment-cluster-pr7284:vpc-cni): 
+InvalidParameterException: Addon version specified is not supported
+
+Error: waiting for EKS Add-On (eks-payment-cluster-pr7284:coredns) create: 
+timeout while waiting for state to become 'ACTIVE' (last state: 'CREATING', timeout: 20m0s)
+```
+
+**IDEAL_RESPONSE Fix**: Removed hardcoded versions and used correct dependency API:
+
+```python
+# CORRECT - Auto-select compatible versions and proper dependency management
+vpc_cni_addon = EksAddon(
+    self,
+    "vpc_cni_addon",
+    cluster_name=self.eks_cluster.name,
+    addon_name="vpc-cni",
+    # Removed addon_version to let AWS auto-select compatible version for EKS 1.29
+    resolve_conflicts_on_create="OVERWRITE",
+    resolve_conflicts_on_update="OVERWRITE",
+    tags={"Name": f"vpc-cni-addon-{self.environment_suffix}"}
+)
+# Ensure kube-system Fargate profile is ready before creating addon
+vpc_cni_addon.node.add_dependency(self.kube_system_profile)  # ✅ Correct API
+```
+
+**Root Cause**: 
+1. Hardcoded addon versions (v1.15.0-eksbuild.2, v1.10.1-eksbuild.6) were not compatible with EKS 1.29
+2. CDKTF Python requires using `node.add_dependency()` on constructs, not `add_dependency()` directly on resources
+3. CoreDNS addon was timing out because it was created before the kube-system Fargate profile was ready
+
+**AWS Documentation Reference**: 
+- [EKS Add-on Versions](https://docs.aws.amazon.com/eks/latest/userguide/managing-add-ons.html)
+- [CDKTF Construct Dependencies](https://developer.hashicorp.com/terraform/cdktf/concepts/constructs#dependencies)
+
+**Cost/Security/Performance Impact**:
+- Deployment blocker: Addon creation fails with version incompatibility errors
+- Reliability: CoreDNS timeout prevents cluster from becoming fully operational
+- Training Impact: Demonstrates importance of version compatibility and proper dependency management in CDKTF
+
+---
+
 ## Summary
 
-- **Total failures**: 2 Critical, 2 High, 2 Medium, 2 Low = 8 failures
+- **Total failures**: 3 Critical, 2 High, 2 Medium, 2 Low = 9 failures
 - **Primary knowledge gaps**:
   1. CDKTF AWS provider API syntax (security groups, backend configuration)
-  2. CDKTF output naming conventions vs CDK
-  3. Comprehensive infrastructure testing practices
+  2. CDKTF dependency management (`node.add_dependency()` vs `add_dependency()`)
+  3. EKS addon version compatibility and auto-selection best practices
+  4. CDKTF output naming conventions vs CDK
+  5. Comprehensive infrastructure testing practices
 
 - **Training value**: **EXTREMELY HIGH**
   - Critical API errors that block deployment teach correct CDKTF patterns
@@ -318,7 +382,7 @@ sys.path.append(...)  # Path modification after imports
   - ✅ Ready for deployment (blocked only by AWS credentials in local environment)
 
 - **Architecture Implemented**:
-  - EKS cluster v1.28 across 3 AZs
+  - EKS cluster v1.29 across 3 AZs
   - 4 Fargate profiles (payment, fraud-detection, reporting, kube-system)
   - 3 ECR repositories with vulnerability scanning
   - OIDC provider + 3 namespace-specific IRSA roles
@@ -326,6 +390,8 @@ sys.path.append(...)  # Path modification after imports
   - Secrets Manager integration
   - CloudWatch Container Insights
   - VPC with public/private subnets
+  - EKS addons (VPC CNI, CoreDNS, kube-proxy) with auto-selected versions
+  - Proper dependency management ensuring addons wait for kube-system Fargate profile
   - All resources include environmentSuffix for uniqueness
   - All resources are destroyable (no retention policies)
 

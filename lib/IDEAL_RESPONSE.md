@@ -11,7 +11,7 @@ This is the corrected and validated implementation of an EKS-based microservices
 
 ### Infrastructure Components
 
-1. **EKS Cluster v1.28**
+1. **EKS Cluster v1.29**
    - Deployed across 3 availability zones in us-east-1
    - OIDC provider enabled for IAM Roles for Service Accounts (IRSA)
    - All cluster logging enabled (api, audit, authenticator, controllerManager, scheduler)
@@ -56,11 +56,39 @@ This is the corrected and validated implementation of an EKS-based microservices
    - 7-day retention for cost optimization
 
 8. **EKS Add-ons**
-   - VPC CNI v1.15.0-eksbuild.2
-   - CoreDNS v1.10.1-eksbuild.6
-   - kube-proxy v1.28.2-eksbuild.2
+   - VPC CNI (auto-selected compatible version for EKS 1.29)
+   - CoreDNS (auto-selected compatible version for EKS 1.29)
+   - kube-proxy (auto-selected compatible version for EKS 1.29)
+   - All addons configured with dependencies on kube-system Fargate profile
+   - Resolve conflicts set to OVERWRITE for reliable deployment
 
 ## Key Implementation Details
+
+### EKS Addon Configuration (Fixed)
+
+**CRITICAL FIX**: EKS addons should use auto-selected versions for compatibility and proper dependency management.
+
+```python
+# CORRECT - Auto-select compatible versions and set dependencies
+vpc_cni_addon = EksAddon(
+    self,
+    "vpc_cni_addon",
+    cluster_name=self.eks_cluster.name,
+    addon_name="vpc-cni",
+    # Removed addon_version to let AWS auto-select compatible version for EKS 1.29
+    resolve_conflicts_on_create="OVERWRITE",
+    resolve_conflicts_on_update="OVERWRITE",
+    tags={"Name": f"vpc-cni-addon-{self.environment_suffix}"}
+)
+# Ensure kube-system Fargate profile is ready before creating addon
+vpc_cni_addon.node.add_dependency(self.kube_system_profile)
+```
+
+**Key Points**:
+- AWS auto-selects compatible addon versions based on cluster version (1.29)
+- Hardcoded versions can cause compatibility errors (e.g., "Addon version specified is not supported")
+- Dependencies must use `node.add_dependency()` in CDKTF Python, not `add_dependency()` directly
+- CoreDNS addon requires kube-system Fargate profile to be ready to prevent timeout errors
 
 ### Security Group Configuration (Fixed)
 
@@ -158,7 +186,7 @@ Created 22 comprehensive unit tests covering:
    - Route tables configuration
 
 2. **EKS Cluster** (3 tests)
-   - Cluster creation with correct version (1.28)
+   - Cluster creation with correct version (1.29)
    - All logging types enabled
    - Security group ingress rules
 
@@ -352,21 +380,25 @@ pytest.ini                           # Pytest configuration
 
 1. **SecurityGroupIngress API**: Changed from standalone resource to inline configuration
 2. **Terraform Backend**: Removed invalid `use_lockfile` parameter
+3. **EKS Addon Versions**: Removed hardcoded versions to let AWS auto-select compatible versions for EKS 1.29
+4. **EKS Addon Dependencies**: Fixed dependency management using `node.add_dependency()` instead of `add_dependency()`
 
 ### High-Priority Improvements
 
-3. **Test Suite**: Replaced placeholder tests with 22 comprehensive unit tests achieving 100% coverage
-4. **Output Handling**: Updated tests to handle CDKTF's construct-path-prefixed output naming
+3. **EKS Addon Configuration**: Removed hardcoded versions, enabled auto-selection for EKS 1.29 compatibility
+4. **Dependency Management**: Fixed addon dependencies using `node.add_dependency()` API
+5. **Test Suite**: Replaced placeholder tests with 22 comprehensive unit tests achieving 100% coverage
+6. **Output Handling**: Updated tests to handle CDKTF's construct-path-prefixed output naming
 
 ### Medium-Priority Improvements
 
-5. **PROMPT Interpretation**: Correctly implemented EKS+Fargate despite confusing terminology
-6. **Test Robustness**: Added defensive checks for CDKTF JSON serialization variations
+7. **PROMPT Interpretation**: Correctly implemented EKS+Fargate despite confusing terminology
+8. **Test Robustness**: Added defensive checks for CDKTF JSON serialization variations
 
 ### Low-Priority Fixes
 
-7. **Import Ordering**: Moved imports to top of test files per PEP 8
-8. **Trailing Newlines**: Removed extra blank lines
+9. **Import Ordering**: Moved imports to top of test files per PEP 8
+10. **Trailing Newlines**: Removed extra blank lines
 
 ## Validation Results
 

@@ -370,7 +370,7 @@ class MicroservicesStack(Construct):
             self.fargate_profiles.append(profile)
 
         # Create Fargate profile for kube-system (required for core addons)
-        kube_system_profile = EksFargateProfile(
+        self.kube_system_profile = EksFargateProfile(
             self,
             "fargate_profile_kube_system",
             cluster_name=self.eks_cluster.name,
@@ -385,7 +385,7 @@ class MicroservicesStack(Construct):
             ],
             tags={"Name": f"kube-system-fargate-profile-{self.environment_suffix}"}
         )
-        self.fargate_profiles.append(kube_system_profile)
+        self.fargate_profiles.append(self.kube_system_profile)
 
     def _create_ecr_repositories(self):
         """Create ECR repositories for each microservice."""
@@ -661,41 +661,47 @@ class MicroservicesStack(Construct):
 
     def _create_eks_addons(self):
         """Install EKS addons including AWS Load Balancer Controller support."""
-        # VPC CNI addon
+        # VPC CNI addon - let AWS auto-select compatible version
         vpc_cni_addon = EksAddon(
             self,
             "vpc_cni_addon",
             cluster_name=self.eks_cluster.name,
             addon_name="vpc-cni",
-            addon_version="v1.15.0-eksbuild.2",
+            # Removed addon_version to let AWS auto-select compatible version for EKS 1.29
             resolve_conflicts_on_create="OVERWRITE",
             resolve_conflicts_on_update="OVERWRITE",
             tags={"Name": f"vpc-cni-addon-{self.environment_suffix}"}
         )
+        # Ensure kube-system Fargate profile is ready before creating addon
+        vpc_cni_addon.node.add_dependency(self.kube_system_profile)
 
-        # CoreDNS addon
+        # CoreDNS addon - let AWS auto-select compatible version
         coredns_addon = EksAddon(
             self,
             "coredns_addon",
             cluster_name=self.eks_cluster.name,
             addon_name="coredns",
-            addon_version="v1.10.1-eksbuild.6",
+            # Removed addon_version to let AWS auto-select compatible version for EKS 1.29
             resolve_conflicts_on_create="OVERWRITE",
             resolve_conflicts_on_update="OVERWRITE",
             tags={"Name": f"coredns-addon-{self.environment_suffix}"}
         )
+        # Ensure kube-system Fargate profile is ready before creating addon
+        coredns_addon.node.add_dependency(self.kube_system_profile)
 
-        # kube-proxy addon
+        # kube-proxy addon - let AWS auto-select compatible version
         kube_proxy_addon = EksAddon(
             self,
             "kube_proxy_addon",
             cluster_name=self.eks_cluster.name,
             addon_name="kube-proxy",
-            addon_version="v1.29.0-eksbuild.1",
+            # Removed addon_version to let AWS auto-select compatible version for EKS 1.29
             resolve_conflicts_on_create="OVERWRITE",
             resolve_conflicts_on_update="OVERWRITE",
             tags={"Name": f"kube-proxy-addon-{self.environment_suffix}"}
         )
+        # Ensure kube-system Fargate profile is ready before creating addon
+        kube_proxy_addon.node.add_dependency(self.kube_system_profile)
 
         # Create IAM role for AWS Load Balancer Controller
         oidc_issuer = Fn.replace(
