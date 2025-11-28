@@ -1571,8 +1571,8 @@ const primaryDashboard = new aws.cloudwatch.Dashboard(
               type: 'metric',
               properties: {
                 metrics: [
-                  ['DR/DatabaseHealth', 'DatabaseHealth', { stat: 'Average' }],
-                  ['.', 'DatabaseLatency', { stat: 'Average' }],
+                  ['DR/DatabaseHealth', 'DatabaseHealth'],
+                  ['.', 'DatabaseLatency'],
                 ],
                 period: 60,
                 stat: 'Average',
@@ -1588,18 +1588,7 @@ const primaryDashboard = new aws.cloudwatch.Dashboard(
             {
               type: 'metric',
               properties: {
-                metrics: [
-                  [
-                    'AWS/RDS',
-                    'CPUUtilization',
-                    { DBClusterIdentifier: clusterId },
-                  ],
-                  [
-                    '.',
-                    'DatabaseConnections',
-                    { DBClusterIdentifier: clusterId },
-                  ],
-                ],
+                metrics: [['AWS/RDS', 'CPUUtilization']],
                 period: 300,
                 stat: 'Average',
                 region,
@@ -1609,22 +1598,7 @@ const primaryDashboard = new aws.cloudwatch.Dashboard(
             {
               type: 'metric',
               properties: {
-                metrics: [
-                  [
-                    'AWS/Lambda',
-                    'Invocations',
-                    {
-                      FunctionName: `db-healthcheck-primary-${environmentSuffix}`,
-                    },
-                  ],
-                  [
-                    '.',
-                    'Errors',
-                    {
-                      FunctionName: `db-healthcheck-primary-${environmentSuffix}`,
-                    },
-                  ],
-                ],
+                metrics: [['AWS/Lambda', 'Invocations']],
                 period: 300,
                 stat: 'Sum',
                 region,
@@ -1634,13 +1608,7 @@ const primaryDashboard = new aws.cloudwatch.Dashboard(
             {
               type: 'metric',
               properties: {
-                metrics: [
-                  [
-                    'AWS/Route53',
-                    'HealthCheckStatus',
-                    { HealthCheckId: primaryHealthCheck.id },
-                  ],
-                ],
+                metrics: [['AWS/Route53', 'HealthCheckStatus']],
                 period: 60,
                 stat: 'Minimum',
                 region: 'us-east-1',
@@ -1668,8 +1636,8 @@ const secondaryDashboard = new aws.cloudwatch.Dashboard(
               type: 'metric',
               properties: {
                 metrics: [
-                  ['DR/DatabaseHealth', 'DatabaseHealth', { stat: 'Average' }],
-                  ['.', 'DatabaseLatency', { stat: 'Average' }],
+                  ['DR/DatabaseHealth', 'DatabaseHealth'],
+                  ['.', 'DatabaseLatency'],
                 ],
                 period: 60,
                 stat: 'Average',
@@ -1685,18 +1653,7 @@ const secondaryDashboard = new aws.cloudwatch.Dashboard(
             {
               type: 'metric',
               properties: {
-                metrics: [
-                  [
-                    'AWS/RDS',
-                    'CPUUtilization',
-                    { DBClusterIdentifier: clusterId },
-                  ],
-                  [
-                    '.',
-                    'AuroraGlobalDBReplicationLag',
-                    { DBClusterIdentifier: clusterId },
-                  ],
-                ],
+                metrics: [['AWS/RDS', 'AuroraGlobalDBReplicationLag']],
                 period: 300,
                 stat: 'Average',
                 region,
@@ -1706,22 +1663,7 @@ const secondaryDashboard = new aws.cloudwatch.Dashboard(
             {
               type: 'metric',
               properties: {
-                metrics: [
-                  [
-                    'AWS/Lambda',
-                    'Invocations',
-                    {
-                      FunctionName: `db-healthcheck-secondary-${environmentSuffix}`,
-                    },
-                  ],
-                  [
-                    '.',
-                    'Errors',
-                    {
-                      FunctionName: `db-healthcheck-secondary-${environmentSuffix}`,
-                    },
-                  ],
-                ],
+                metrics: [['AWS/Lambda', 'Invocations']],
                 period: 300,
                 stat: 'Sum',
                 region,
@@ -1731,13 +1673,7 @@ const secondaryDashboard = new aws.cloudwatch.Dashboard(
             {
               type: 'metric',
               properties: {
-                metrics: [
-                  [
-                    'AWS/Route53',
-                    'HealthCheckStatus',
-                    { HealthCheckId: secondaryHealthCheck.id },
-                  ],
-                ],
+                metrics: [['AWS/Route53', 'HealthCheckStatus']],
                 period: 60,
                 stat: 'Minimum',
                 region: 'us-east-1',
