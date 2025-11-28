@@ -1,5 +1,6 @@
 """Unit tests for Transaction API Stack"""
 
+import json
 import pytest
 from cdktf import Testing
 from lib.transaction_api_stack import TransactionApiStack
@@ -20,12 +21,14 @@ class TestTransactionApiStack:
         stack = TransactionApiStack(app, "TestStack")
         synthesized = Testing.synth(stack)
         assert synthesized is not None
+        assert isinstance(synthesized, str)
 
     def test_s3_bucket_created(self):
         """Test that S3 bucket is created"""
         app = Testing.app()
         stack = TransactionApiStack(app, "TestStack")
-        synthesized = Testing.synth(stack)
+        synthesized_str = Testing.synth(stack)
+        synthesized = json.loads(synthesized_str)
 
         # Check if S3 bucket resource exists in synthesized JSON
         assert "resource" in synthesized
@@ -36,7 +39,8 @@ class TestTransactionApiStack:
         """Test that Lambda functions are created"""
         app = Testing.app()
         stack = TransactionApiStack(app, "TestStack")
-        synthesized = Testing.synth(stack)
+        synthesized_str = Testing.synth(stack)
+        synthesized = json.loads(synthesized_str)
 
         # Check if Lambda function resources exist
         assert "aws_lambda_function" in synthesized["resource"]
@@ -50,7 +54,8 @@ class TestTransactionApiStack:
         """Test that API Gateway is created"""
         app = Testing.app()
         stack = TransactionApiStack(app, "TestStack")
-        synthesized = Testing.synth(stack)
+        synthesized_str = Testing.synth(stack)
+        synthesized = json.loads(synthesized_str)
 
         # Check if API Gateway resources exist
         assert "aws_api_gateway_rest_api" in synthesized["resource"]
@@ -60,7 +65,8 @@ class TestTransactionApiStack:
         """Test that IAM role is created for Lambda"""
         app = Testing.app()
         stack = TransactionApiStack(app, "TestStack")
-        synthesized = Testing.synth(stack)
+        synthesized_str = Testing.synth(stack)
+        synthesized = json.loads(synthesized_str)
 
         # Check if IAM role exists
         assert "aws_iam_role" in synthesized["resource"]
@@ -70,7 +76,8 @@ class TestTransactionApiStack:
         """Test that Lambda permissions for API Gateway are created"""
         app = Testing.app()
         stack = TransactionApiStack(app, "TestStack")
-        synthesized = Testing.synth(stack)
+        synthesized_str = Testing.synth(stack)
+        synthesized = json.loads(synthesized_str)
 
         # Check if Lambda permissions exist
         assert "aws_lambda_permission" in synthesized["resource"]
@@ -84,7 +91,8 @@ class TestTransactionApiStack:
         """Test that API Gateway deployment is created"""
         app = Testing.app()
         stack = TransactionApiStack(app, "TestStack")
-        synthesized = Testing.synth(stack)
+        synthesized_str = Testing.synth(stack)
+        synthesized = json.loads(synthesized_str)
 
         # Check if API Gateway deployment exists
         assert "aws_api_gateway_deployment" in synthesized["resource"]
@@ -94,7 +102,8 @@ class TestTransactionApiStack:
         """Test that stack outputs are defined"""
         app = Testing.app()
         stack = TransactionApiStack(app, "TestStack")
-        synthesized = Testing.synth(stack)
+        synthesized_str = Testing.synth(stack)
+        synthesized = json.loads(synthesized_str)
 
         # Check if outputs are defined
         assert "output" in synthesized
