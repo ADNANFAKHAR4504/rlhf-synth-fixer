@@ -277,8 +277,7 @@
       "DeletionPolicy": "Delete",
       "DependsOn": [
         "PrivateSubnet1RouteTableAssociation",
-        "PrivateSubnet2RouteTableAssociation",
-        "VPCEndpointSecurityGroup"
+        "PrivateSubnet2RouteTableAssociation"
       ],
       "Properties": {
         "VpcId": {
