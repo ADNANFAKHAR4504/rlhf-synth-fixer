@@ -1,5 +1,0 @@
-config:
-  aws:region: us-east-1
-  TapStack:environmentSuffix: pr7476
-  TapStack:environment: production
-  TapStack:hostedZoneName: dr-pr7476.example.com

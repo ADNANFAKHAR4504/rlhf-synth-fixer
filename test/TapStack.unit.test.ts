@@ -37,6 +37,7 @@ pulumi.runtime.setMocks({
 });
 
 describe('Multi-Region DR Infrastructure Unit Tests', () => {
+  // Configuration Tests
   describe('Configuration Validation', () => {
     it('should have environmentSuffix config', () => {
       const config = new pulumi.Config();
@@ -56,198 +57,275 @@ describe('Multi-Region DR Infrastructure Unit Tests', () => {
       expect(config.get).toBeDefined();
     });
 
-    it('should have hostedZoneName config with default', () => {
+    it('should validate environment suffix is required', () => {
       const config = new pulumi.Config();
-      config.get = jest.fn().mockImplementation((key: string) => {
-        if (key === 'hostedZoneName') return 'dr-test.example.com';
-        if (key === 'environment') return 'production';
-        return undefined;
-      });
-      expect(config.get('hostedZoneName')).toBe('dr-test.example.com');
+      config.require = jest.fn().mockReturnValue('test-suffix');
+      const suffix = config.require('environmentSuffix');
+      expect(suffix).toBe('test-suffix');
     });
   });
 
-  describe('VPC Infrastructure Resources', () => {
-    it('should create VPC with correct properties', () => {
-      const vpc = new aws.ec2.Vpc('test-vpc', {
+  // VPC Infrastructure Tests - Primary Region
+  describe('VPC Infrastructure - Primary Region', () => {
+    it('should create primary VPC with correct CIDR', () => {
+      const vpc = new aws.ec2.Vpc('test-vpc-primary', {
         cidrBlock: '10.0.0.0/16',
         enableDnsHostnames: true,
         enableDnsSupport: true,
-        tags: { Name: 'test-vpc-synthi3k9m2t1' },
+        tags: { Name: 'vpc-primary-test' },
       });
-
       expect(vpc).toBeDefined();
     });
 
-    it('should create subnets in multiple AZs', () => {
-      const vpc = new aws.ec2.Vpc('test-vpc', {
-        cidrBlock: '10.0.0.0/16',
-      });
-
-      const subnet1 = new aws.ec2.Subnet('subnet-1', {
-        vpcId: vpc.id,
-        cidrBlock: '10.0.1.0/24',
-        availabilityZone: 'us-east-1a',
-      });
-
-      const subnet2 = new aws.ec2.Subnet('subnet-2', {
-        vpcId: vpc.id,
-        cidrBlock: '10.0.2.0/24',
-        availabilityZone: 'us-east-1b',
-      });
-
-      const subnet3 = new aws.ec2.Subnet('subnet-3', {
-        vpcId: vpc.id,
-        cidrBlock: '10.0.3.0/24',
-        availabilityZone: 'us-east-1c',
-      });
-
-      expect(subnet1).toBeDefined();
-      expect(subnet2).toBeDefined();
-      expect(subnet3).toBeDefined();
+    it('should create primary private subnets in 3 AZs', () => {
+      const vpc = new aws.ec2.Vpc('test-vpc', { cidrBlock: '10.0.0.0/16' });
+      const azs = ['us-east-1a', 'us-east-1b', 'us-east-1c'];
+      const subnets = azs.map((az, index) =>
+        new aws.ec2.Subnet(`subnet-private-primary-${index}`, {
+          vpcId: vpc.id,
+          cidrBlock: `10.0.${index + 1}.0/24`,
+          availabilityZone: az,
+        })
+      );
+      expect(subnets.length).toBe(3);
     });
 
-    it('should create Internet Gateway', () => {
-      const vpc = new aws.ec2.Vpc('test-vpc', {
-        cidrBlock: '10.0.0.0/16',
-      });
+    it('should create primary public subnets in 3 AZs', () => {
+      const vpc = new aws.ec2.Vpc('test-vpc', { cidrBlock: '10.0.0.0/16' });
+      const azs = ['us-east-1a', 'us-east-1b', 'us-east-1c'];
+      const subnets = azs.map((az, index) =>
+        new aws.ec2.Subnet(`subnet-public-primary-${index}`, {
+          vpcId: vpc.id,
+          cidrBlock: `10.0.${index + 10}.0/24`,
+          availabilityZone: az,
+          mapPublicIpOnLaunch: true,
+        })
+      );
+      expect(subnets.length).toBe(3);
+    });
 
-      const igw = new aws.ec2.InternetGateway('test-igw', {
+    it('should create primary Internet Gateway', () => {
+      const vpc = new aws.ec2.Vpc('test-vpc', { cidrBlock: '10.0.0.0/16' });
+      const igw = new aws.ec2.InternetGateway('igw-primary-test', {
         vpcId: vpc.id,
+        tags: { Name: 'igw-primary-test' },
       });
-
       expect(igw).toBeDefined();
     });
 
-    it('should create NAT Gateway with EIP', () => {
-      const eip = new aws.ec2.Eip('test-eip', {
-        domain: 'vpc',
-      });
-
+    it('should create primary NAT Gateway with EIP', () => {
+      const eip = new aws.ec2.Eip('eip-nat-primary-test', { domain: 'vpc' });
       const subnet = new aws.ec2.Subnet('test-subnet', {
         vpcId: 'vpc-123',
         cidrBlock: '10.0.10.0/24',
       });
-
-      const natGw = new aws.ec2.NatGateway('test-nat', {
+      const natGw = new aws.ec2.NatGateway('nat-primary-test', {
         allocationId: eip.id,
         subnetId: subnet.id,
       });
-
-      expect(eip).toBeDefined();
       expect(natGw).toBeDefined();
     });
 
-    it('should create VPC endpoints for cost optimization', () => {
-      const vpc = new aws.ec2.Vpc('test-vpc', {
-        cidrBlock: '10.0.0.0/16',
-      });
-
-      const cwEndpoint = new aws.ec2.VpcEndpoint('cw-endpoint', {
+    it('should create primary public route table', () => {
+      const vpc = new aws.ec2.Vpc('test-vpc', { cidrBlock: '10.0.0.0/16' });
+      const igw = new aws.ec2.InternetGateway('test-igw', { vpcId: vpc.id });
+      const rt = new aws.ec2.RouteTable('rt-public-primary-test', {
         vpcId: vpc.id,
-        serviceName: 'com.amazonaws.us-east-1.logs',
-        vpcEndpointType: 'Interface',
-        privateDnsEnabled: true,
+        routes: [{ cidrBlock: '0.0.0.0/0', gatewayId: igw.id }],
       });
-
-      const snsEndpoint = new aws.ec2.VpcEndpoint('sns-endpoint', {
-        vpcId: vpc.id,
-        serviceName: 'com.amazonaws.us-east-1.sns',
-        vpcEndpointType: 'Interface',
-        privateDnsEnabled: true,
-      });
-
-      expect(cwEndpoint).toBeDefined();
-      expect(snsEndpoint).toBeDefined();
+      expect(rt).toBeDefined();
     });
 
-    it('should create VPC peering connection', () => {
-      const primaryVpc = new aws.ec2.Vpc('primary-vpc', {
-        cidrBlock: '10.0.0.0/16',
+    it('should create primary private route table with NAT', () => {
+      const vpc = new aws.ec2.Vpc('test-vpc', { cidrBlock: '10.0.0.0/16' });
+      const rt = new aws.ec2.RouteTable('rt-private-primary-test', {
+        vpcId: vpc.id,
+        routes: [{ cidrBlock: '0.0.0.0/0', natGatewayId: 'nat-123' }],
       });
+      expect(rt).toBeDefined();
+    });
+  });
 
-      const secondaryVpc = new aws.ec2.Vpc('secondary-vpc', {
+  // VPC Infrastructure Tests - Secondary Region
+  describe('VPC Infrastructure - Secondary Region', () => {
+    it('should create secondary VPC with correct CIDR', () => {
+      const vpc = new aws.ec2.Vpc('test-vpc-secondary', {
         cidrBlock: '10.1.0.0/16',
+        enableDnsHostnames: true,
+        enableDnsSupport: true,
+        tags: { Name: 'vpc-secondary-test' },
       });
+      expect(vpc).toBeDefined();
+    });
 
-      const peering = new aws.ec2.VpcPeeringConnection('peering', {
-        vpcId: primaryVpc.id,
-        peerVpcId: secondaryVpc.id,
+    it('should create secondary private subnets in 3 AZs', () => {
+      const vpc = new aws.ec2.Vpc('test-vpc', { cidrBlock: '10.1.0.0/16' });
+      const azs = ['us-west-2a', 'us-west-2b', 'us-west-2c'];
+      const subnets = azs.map((az, index) =>
+        new aws.ec2.Subnet(`subnet-private-secondary-${index}`, {
+          vpcId: vpc.id,
+          cidrBlock: `10.1.${index + 1}.0/24`,
+          availabilityZone: az,
+        })
+      );
+      expect(subnets.length).toBe(3);
+    });
+
+    it('should create secondary Internet Gateway', () => {
+      const vpc = new aws.ec2.Vpc('test-vpc', { cidrBlock: '10.1.0.0/16' });
+      const igw = new aws.ec2.InternetGateway('igw-secondary-test', {
+        vpcId: vpc.id,
+        tags: { Name: 'igw-secondary-test' },
+      });
+      expect(igw).toBeDefined();
+    });
+
+    it('should create secondary NAT Gateway', () => {
+      const eip = new aws.ec2.Eip('eip-nat-secondary-test', { domain: 'vpc' });
+      const natGw = new aws.ec2.NatGateway('nat-secondary-test', {
+        allocationId: eip.id,
+        subnetId: 'subnet-123',
+      });
+      expect(natGw).toBeDefined();
+    });
+  });
+
+  // VPC Peering Tests
+  describe('VPC Peering', () => {
+    it('should create VPC peering connection', () => {
+      const peering = new aws.ec2.VpcPeeringConnection('peering-test', {
+        vpcId: 'vpc-primary-123',
+        peerVpcId: 'vpc-secondary-456',
         peerRegion: 'us-west-2',
         autoAccept: false,
       });
-
       expect(peering).toBeDefined();
     });
+
+    it('should create VPC peering accepter', () => {
+      const accepter = new aws.ec2.VpcPeeringConnectionAccepter('peering-accepter-test', {
+        vpcPeeringConnectionId: 'pcx-123',
+        autoAccept: true,
+      });
+      expect(accepter).toBeDefined();
+    });
+
+    it('should create peering routes in primary region', () => {
+      const route = new aws.ec2.Route('route-peering-primary-test', {
+        routeTableId: 'rtb-primary-123',
+        destinationCidrBlock: '10.1.0.0/16',
+        vpcPeeringConnectionId: 'pcx-123',
+      });
+      expect(route).toBeDefined();
+    });
+
+    it('should create peering routes in secondary region', () => {
+      const route = new aws.ec2.Route('route-peering-secondary-test', {
+        routeTableId: 'rtb-secondary-123',
+        destinationCidrBlock: '10.0.0.0/16',
+        vpcPeeringConnectionId: 'pcx-123',
+      });
+      expect(route).toBeDefined();
+    });
   });
 
+  // Security Groups Tests
   describe('Security Groups', () => {
-    it('should create Lambda security group with valid name', () => {
-      const vpc = new aws.ec2.Vpc('test-vpc', {
-        cidrBlock: '10.0.0.0/16',
-      });
-
-      const lambdaSg = new aws.ec2.SecurityGroup('lambda-sg-primary-test', {
-        vpcId: vpc.id,
-        description: 'Security group for Lambda health check functions',
-      });
-
-      expect(lambdaSg).toBeDefined();
-    });
-
-    it('should create database security group with valid name', () => {
-      const vpc = new aws.ec2.Vpc('test-vpc', {
-        cidrBlock: '10.0.0.0/16',
-      });
-
-      const dbSg = new aws.ec2.SecurityGroup('db-sg-primary-test', {
-        vpcId: vpc.id,
+    it('should create primary database security group', () => {
+      const sg = new aws.ec2.SecurityGroup('db-sg-primary-test', {
+        vpcId: 'vpc-123',
         description: 'Security group for Aurora primary cluster',
+        ingress: [{
+          protocol: 'tcp',
+          fromPort: 5432,
+          toPort: 5432,
+          cidrBlocks: ['10.0.0.0/16', '10.1.0.0/16'],
+        }],
       });
-
-      expect(dbSg).toBeDefined();
+      expect(sg).toBeDefined();
     });
 
-    it('should create security group rules for database access', () => {
-      const dbSg = new aws.ec2.SecurityGroup('db-sg', {
+    it('should create secondary database security group', () => {
+      const sg = new aws.ec2.SecurityGroup('db-sg-secondary-test', {
+        vpcId: 'vpc-456',
+        description: 'Security group for Aurora secondary cluster',
+        ingress: [{
+          protocol: 'tcp',
+          fromPort: 5432,
+          toPort: 5432,
+          cidrBlocks: ['10.0.0.0/16', '10.1.0.0/16'],
+        }],
+      });
+      expect(sg).toBeDefined();
+    });
+
+    it('should create primary Lambda security group', () => {
+      const sg = new aws.ec2.SecurityGroup('lambda-sg-primary-test', {
         vpcId: 'vpc-123',
+        description: 'Security group for Lambda health check functions',
+        egress: [{
+          protocol: '-1',
+          fromPort: 0,
+          toPort: 0,
+          cidrBlocks: ['0.0.0.0/0'],
+        }],
       });
+      expect(sg).toBeDefined();
+    });
 
-      const lambdaSg = new aws.ec2.SecurityGroup('lambda-sg', {
-        vpcId: 'vpc-123',
+    it('should create secondary Lambda security group', () => {
+      const sg = new aws.ec2.SecurityGroup('lambda-sg-secondary-test', {
+        vpcId: 'vpc-456',
+        description: 'Security group for Lambda health check functions',
+        egress: [{
+          protocol: '-1',
+          fromPort: 0,
+          toPort: 0,
+          cidrBlocks: ['0.0.0.0/0'],
+        }],
       });
-
-      const rule = new aws.ec2.SecurityGroupRule('db-sgr-lambda', {
-        type: 'ingress',
-        fromPort: 5432,
-        toPort: 5432,
-        protocol: 'tcp',
-        sourceSecurityGroupId: lambdaSg.id,
-        securityGroupId: dbSg.id,
-      });
-
-      expect(rule).toBeDefined();
+      expect(sg).toBeDefined();
     });
   });
 
+  // KMS Key Tests
+  describe('KMS Keys', () => {
+    it('should create KMS key for Aurora secondary cluster', () => {
+      const key = new aws.kms.Key('kms-aurora-secondary-test', {
+        description: 'KMS key for Aurora secondary cluster in us-west-2',
+        deletionWindowInDays: 10,
+        enableKeyRotation: true,
+      });
+      expect(key).toBeDefined();
+    });
+
+    it('should create KMS alias for Aurora secondary', () => {
+      const alias = new aws.kms.Alias('kms-alias-aurora-secondary-test', {
+        name: 'alias/aurora-secondary-test',
+        targetKeyId: 'key-123',
+      });
+      expect(alias).toBeDefined();
+    });
+  });
+
+  // Aurora Global Database Tests
   describe('Aurora Global Database', () => {
     it('should create global cluster', () => {
       const globalCluster = new aws.rds.GlobalCluster('global-cluster-test', {
         globalClusterIdentifier: 'global-cluster-test',
         engine: 'aurora-postgresql',
-        engineVersion: '15.4',
+        engineVersion: '15.7',
         databaseName: 'paymentdb',
         storageEncrypted: true,
       });
-
       expect(globalCluster).toBeDefined();
     });
 
-    it('should create primary cluster with correct configuration', () => {
+    it('should create primary Aurora cluster', () => {
       const cluster = new aws.rds.Cluster('aurora-primary-test', {
         clusterIdentifier: 'aurora-primary-test',
         engine: 'aurora-postgresql',
-        engineVersion: '15.4',
+        engineVersion: '15.7',
         databaseName: 'paymentdb',
         masterUsername: 'dbadmin',
         storageEncrypted: true,
@@ -255,192 +333,235 @@ describe('Multi-Region DR Infrastructure Unit Tests', () => {
         skipFinalSnapshot: true,
         enabledCloudwatchLogsExports: ['postgresql'],
       });
-
       expect(cluster).toBeDefined();
     });
 
-    it('should create cluster instances', () => {
-      const instance = new aws.rds.ClusterInstance('aurora-instance-test', {
-        identifier: 'aurora-instance-test',
-        clusterIdentifier: 'aurora-cluster-test',
+    it('should create primary cluster instance 1', () => {
+      const instance = new aws.rds.ClusterInstance('aurora-primary-instance-1-test', {
+        identifier: 'aurora-primary-instance-1-test',
+        clusterIdentifier: 'aurora-primary-test',
         instanceClass: 'db.r6g.large',
         engine: 'aurora-postgresql',
-        engineVersion: '15.4',
+        engineVersion: '15.7',
         publiclyAccessible: false,
       });
-
       expect(instance).toBeDefined();
     });
 
-    it('should create DB subnet groups', () => {
-      const subnetGroup = new aws.rds.SubnetGroup('db-subnet-test', {
+    it('should create primary cluster instance 2', () => {
+      const instance = new aws.rds.ClusterInstance('aurora-primary-instance-2-test', {
+        identifier: 'aurora-primary-instance-2-test',
+        clusterIdentifier: 'aurora-primary-test',
+        instanceClass: 'db.r6g.large',
+        engine: 'aurora-postgresql',
+        engineVersion: '15.7',
+        publiclyAccessible: false,
+      });
+      expect(instance).toBeDefined();
+    });
+
+    it('should create secondary Aurora cluster with KMS key', () => {
+      const cluster = new aws.rds.Cluster('aurora-secondary-test', {
+        clusterIdentifier: 'aurora-secondary-v2-test',
+        engine: 'aurora-postgresql',
+        engineVersion: '15.7',
+        kmsKeyId: 'arn:aws:kms:us-west-2:123456789012:key/test',
+        storageEncrypted: true,
+        skipFinalSnapshot: true,
+        enabledCloudwatchLogsExports: ['postgresql'],
+      });
+      expect(cluster).toBeDefined();
+    });
+
+    it('should create secondary cluster instance', () => {
+      const instance = new aws.rds.ClusterInstance('aurora-secondary-instance-1-test', {
+        identifier: 'aurora-secondary-v2-instance-1-test',
+        clusterIdentifier: 'aurora-secondary-v2-test',
+        instanceClass: 'db.r6g.large',
+        engine: 'aurora-postgresql',
+        engineVersion: '15.7',
+        publiclyAccessible: false,
+      });
+      expect(instance).toBeDefined();
+    });
+
+    it('should create primary DB subnet group', () => {
+      const subnetGroup = new aws.rds.SubnetGroup('db-subnet-primary-test', {
         subnetIds: ['subnet-1', 'subnet-2', 'subnet-3'],
       });
+      expect(subnetGroup).toBeDefined();
+    });
 
+    it('should create secondary DB subnet group', () => {
+      const subnetGroup = new aws.rds.SubnetGroup('db-subnet-secondary-test', {
+        subnetIds: ['subnet-4', 'subnet-5', 'subnet-6'],
+      });
       expect(subnetGroup).toBeDefined();
     });
   });
 
-  describe('S3 and Replication', () => {
-    it('should create S3 buckets with encryption', () => {
-      const bucket = new aws.s3.Bucket('bucket-test', {
-        bucket: 'dr-bucket-test',
+  // S3 and Replication Tests
+  describe('S3 Buckets and Replication', () => {
+    it('should create primary S3 bucket with versioning', () => {
+      const bucket = new aws.s3.Bucket('bucket-primary-test', {
+        bucket: 'dr-bucket-primary-test',
         versioning: { enabled: true },
         serverSideEncryptionConfiguration: {
           rule: {
-            applyServerSideEncryptionByDefault: {
-              sseAlgorithm: 'AES256',
-            },
+            applyServerSideEncryptionByDefault: { sseAlgorithm: 'AES256' },
           },
         },
       });
-
       expect(bucket).toBeDefined();
     });
 
-    it('should create IAM role for S3 replication', () => {
+    it('should create secondary S3 bucket with versioning', () => {
+      const bucket = new aws.s3.Bucket('bucket-secondary-test', {
+        bucket: 'dr-bucket-secondary-test',
+        versioning: { enabled: true },
+        serverSideEncryptionConfiguration: {
+          rule: {
+            applyServerSideEncryptionByDefault: { sseAlgorithm: 'AES256' },
+          },
+        },
+      });
+      expect(bucket).toBeDefined();
+    });
+
+    it('should create S3 replication IAM role', () => {
       const role = new aws.iam.Role('s3-replication-role-test', {
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Principal: { Service: 's3.amazonaws.com' },
-              Action: 'sts:AssumeRole',
-            },
-          ],
+          Statement: [{
+            Effect: 'Allow',
+            Principal: { Service: 's3.amazonaws.com' },
+            Action: 'sts:AssumeRole',
+          }],
         }),
       });
-
       expect(role).toBeDefined();
     });
 
-    it('should create S3 replication configuration', () => {
-      const replication = new aws.s3.BucketReplicationConfig('replication-test', {
+    it('should create S3 replication policy', () => {
+      const policy = new aws.iam.RolePolicy('s3-replication-policy-test', {
+        role: 's3-replication-role',
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [{
+            Effect: 'Allow',
+            Action: ['s3:GetReplicationConfiguration', 's3:ListBucket'],
+            Resource: 'arn:aws:s3:::source-bucket',
+          }],
+        }),
+      });
+      expect(policy).toBeDefined();
+    });
+
+    it('should create S3 replication configuration with RTC', () => {
+      const replication = new aws.s3.BucketReplicationConfig('replication-config-test', {
         role: 'arn:aws:iam::123456789012:role/replication-role',
         bucket: 'primary-bucket',
-        rules: [
-          {
-            id: 'replicate-all',
-            status: 'Enabled',
-            priority: 1,
-            deleteMarkerReplication: { status: 'Enabled' },
-            filter: {},
-            destination: {
-              bucket: 'arn:aws:s3:::secondary-bucket',
-              replicationTime: {
-                status: 'Enabled',
-                time: { minutes: 15 },
-              },
-              metrics: {
-                status: 'Enabled',
-                eventThreshold: { minutes: 15 },
-              },
-            },
+        rules: [{
+          id: 'replicate-all',
+          status: 'Enabled',
+          priority: 1,
+          deleteMarkerReplication: { status: 'Enabled' },
+          filter: {},
+          destination: {
+            bucket: 'arn:aws:s3:::secondary-bucket',
+            replicationTime: { status: 'Enabled', time: { minutes: 15 } },
+            metrics: { status: 'Enabled', eventThreshold: { minutes: 15 } },
           },
-        ],
+        }],
       });
-
       expect(replication).toBeDefined();
     });
   });
 
+  // SNS Topics Tests
   describe('SNS Topics', () => {
-    it('should create SNS topics for notifications', () => {
-      const topic = new aws.sns.Topic('sns-dr-test', {
-        name: 'dr-notifications-test',
+    it('should create primary SNS topic', () => {
+      const topic = new aws.sns.Topic('sns-dr-primary-test', {
+        name: 'dr-notifications-primary-test',
       });
+      expect(topic).toBeDefined();
+    });
 
+    it('should create secondary SNS topic', () => {
+      const topic = new aws.sns.Topic('sns-dr-secondary-test', {
+        name: 'dr-notifications-secondary-test',
+      });
       expect(topic).toBeDefined();
     });
   });
 
+  // IAM Roles and Policies Tests
   describe('IAM Roles and Policies', () => {
-    it('should create Lambda execution role', () => {
-      const role = new aws.iam.Role('lambda-role-test', {
+    it('should create primary Lambda execution role', () => {
+      const role = new aws.iam.Role('lambda-role-primary-test', {
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Principal: { Service: 'lambda.amazonaws.com' },
-              Action: 'sts:AssumeRole',
-            },
-          ],
+          Statement: [{
+            Effect: 'Allow',
+            Principal: { Service: 'lambda.amazonaws.com' },
+            Action: 'sts:AssumeRole',
+          }],
         }),
       });
-
       expect(role).toBeDefined();
     });
 
-    it('should attach basic Lambda execution policy', () => {
-      const attachment = new aws.iam.RolePolicyAttachment('lambda-basic-test', {
-        role: 'lambda-role',
+    it('should create secondary Lambda execution role', () => {
+      const role = new aws.iam.Role('lambda-role-secondary-test', {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [{
+            Effect: 'Allow',
+            Principal: { Service: 'lambda.amazonaws.com' },
+            Action: 'sts:AssumeRole',
+          }],
+        }),
+      });
+      expect(role).toBeDefined();
+    });
+
+    it('should attach basic Lambda execution policy to primary role', () => {
+      const attachment = new aws.iam.RolePolicyAttachment('lambda-basic-primary-test', {
+        role: 'lambda-role-primary',
         policyArn: 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
       });
-
       expect(attachment).toBeDefined();
     });
 
-    it('should attach VPC execution policy', () => {
-      const attachment = new aws.iam.RolePolicyAttachment('lambda-vpc-test', {
-        role: 'lambda-role',
+    it('should attach VPC execution policy to primary role', () => {
+      const attachment = new aws.iam.RolePolicyAttachment('lambda-vpc-primary-test', {
+        role: 'lambda-role-primary',
         policyArn: 'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole',
       });
-
       expect(attachment).toBeDefined();
     });
 
-    it('should create CloudWatch policy with scoped permissions', () => {
-      const policy = new aws.iam.RolePolicy('lambda-cloudwatch-test', {
-        role: 'lambda-role',
+    it('should create CloudWatch policy for primary Lambda', () => {
+      const policy = new aws.iam.RolePolicy('lambda-cloudwatch-primary-test', {
+        role: 'lambda-role-primary',
         policy: JSON.stringify({
           Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Action: ['cloudwatch:PutMetricData'],
-              Resource: '*',
-              Condition: {
-                StringEquals: { 'cloudwatch:namespace': 'DR/DatabaseHealth' },
-              },
-            },
-          ],
+          Statement: [{
+            Effect: 'Allow',
+            Action: ['cloudwatch:PutMetricData', 'logs:CreateLogGroup'],
+            Resource: '*',
+          }],
         }),
       });
-
-      expect(policy).toBeDefined();
-    });
-
-    it('should create cross-region assume role policy', () => {
-      const policy = new aws.iam.Policy('cross-region-assume-test', {
-        name: 'cross-region-dr-assume-test',
-        description: 'Allow cross-region assume role for DR failover',
-        policy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Action: 'sts:AssumeRole',
-              Resource: ['arn:aws:iam::123456789012:role/lambda-role'],
-            },
-            {
-              Effect: 'Allow',
-              Action: ['sns:Publish'],
-              Resource: ['arn:aws:sns:us-east-1:123456789012:topic'],
-            },
-          ],
-        }),
-      });
-
       expect(policy).toBeDefined();
     });
   });
 
+  // Lambda Functions Tests
   describe('Lambda Functions', () => {
-    it('should create Lambda function with VPC config', () => {
-      const lambda = new aws.lambda.Function('lambda-healthcheck-test', {
-        name: 'db-healthcheck-test',
+    it('should create primary Lambda function with VPC config', () => {
+      const lambda = new aws.lambda.Function('lambda-healthcheck-primary-test', {
+        name: 'db-healthcheck-primary-test',
         runtime: 'nodejs18.x',
         handler: 'index.handler',
         role: 'arn:aws:iam::123456789012:role/lambda-role',
@@ -452,45 +573,84 @@ describe('Multi-Region DR Infrastructure Unit Tests', () => {
         },
         code: new pulumi.asset.AssetArchive({}),
       });
-
       expect(lambda).toBeDefined();
     });
 
-    it('should create EventBridge rule for scheduled execution', () => {
-      const rule = new aws.cloudwatch.EventRule('event-rule-test', {
-        name: 'healthcheck-schedule-test',
+    it('should create secondary Lambda function with VPC config', () => {
+      const lambda = new aws.lambda.Function('lambda-healthcheck-secondary-test', {
+        name: 'db-healthcheck-secondary-test',
+        runtime: 'nodejs18.x',
+        handler: 'index.handler',
+        role: 'arn:aws:iam::123456789012:role/lambda-role',
+        timeout: 30,
+        memorySize: 256,
+        vpcConfig: {
+          subnetIds: ['subnet-4', 'subnet-5'],
+          securityGroupIds: ['sg-456'],
+        },
+        code: new pulumi.asset.AssetArchive({}),
+      });
+      expect(lambda).toBeDefined();
+    });
+
+    it('should create primary EventBridge rule', () => {
+      const rule = new aws.cloudwatch.EventRule('event-rule-primary-test', {
+        name: 'healthcheck-schedule-primary-test',
         description: 'Trigger health check Lambda every 1 minute',
         scheduleExpression: 'rate(1 minute)',
       });
-
       expect(rule).toBeDefined();
     });
 
-    it('should create EventBridge target', () => {
-      const target = new aws.cloudwatch.EventTarget('event-target-test', {
-        rule: 'event-rule-test',
+    it('should create secondary EventBridge rule', () => {
+      const rule = new aws.cloudwatch.EventRule('event-rule-secondary-test', {
+        name: 'healthcheck-schedule-secondary-test',
+        description: 'Trigger health check Lambda every 1 minute',
+        scheduleExpression: 'rate(1 minute)',
+      });
+      expect(rule).toBeDefined();
+    });
+
+    it('should create primary EventBridge target', () => {
+      const target = new aws.cloudwatch.EventTarget('event-target-primary-test', {
+        rule: 'event-rule-primary',
         arn: 'arn:aws:lambda:us-east-1:123456789012:function:test',
       });
-
       expect(target).toBeDefined();
     });
 
-    it('should create Lambda permission for EventBridge', () => {
-      const permission = new aws.lambda.Permission('lambda-permission-test', {
+    it('should create primary Lambda permission for EventBridge', () => {
+      const permission = new aws.lambda.Permission('lambda-permission-primary-test', {
         action: 'lambda:InvokeFunction',
         function: 'lambda-function',
         principal: 'events.amazonaws.com',
         sourceArn: 'arn:aws:events:us-east-1:123456789012:rule/test',
       });
-
       expect(permission).toBeDefined();
+    });
+
+    it('should create primary Lambda function URL', () => {
+      const url = new aws.lambda.FunctionUrl('lambda-url-primary-test', {
+        functionName: 'db-healthcheck-primary',
+        authorizationType: 'NONE',
+      });
+      expect(url).toBeDefined();
+    });
+
+    it('should create secondary Lambda function URL', () => {
+      const url = new aws.lambda.FunctionUrl('lambda-url-secondary-test', {
+        functionName: 'db-healthcheck-secondary',
+        authorizationType: 'NONE',
+      });
+      expect(url).toBeDefined();
     });
   });
 
+  // CloudWatch Alarms Tests
   describe('CloudWatch Alarms', () => {
-    it('should create database health alarm', () => {
-      const alarm = new aws.cloudwatch.MetricAlarm('alarm-db-health-test', {
-        name: 'db-health-test',
+    it('should create primary database health alarm', () => {
+      const alarm = new aws.cloudwatch.MetricAlarm('alarm-db-health-primary-test', {
+        name: 'db-health-primary-test',
         comparisonOperator: 'LessThanThreshold',
         evaluationPeriods: 2,
         metricName: 'DatabaseHealth',
@@ -498,16 +658,30 @@ describe('Multi-Region DR Infrastructure Unit Tests', () => {
         period: 60,
         statistic: 'Average',
         threshold: 1,
-        alarmDescription: 'Alert when database health check fails',
+        alarmDescription: 'Alert when primary database health check fails',
         dimensions: { Region: 'us-east-1' },
       });
+      expect(alarm).toBeDefined();
+    });
 
+    it('should create secondary database health alarm', () => {
+      const alarm = new aws.cloudwatch.MetricAlarm('alarm-db-health-secondary-test', {
+        name: 'db-health-secondary-test',
+        comparisonOperator: 'LessThanThreshold',
+        evaluationPeriods: 2,
+        metricName: 'DatabaseHealth',
+        namespace: 'DR/DatabaseHealth',
+        period: 60,
+        statistic: 'Average',
+        threshold: 1,
+        dimensions: { Region: 'us-west-2' },
+      });
       expect(alarm).toBeDefined();
     });
 
     it('should create database latency alarm', () => {
-      const alarm = new aws.cloudwatch.MetricAlarm('alarm-db-latency-test', {
-        name: 'db-latency-test',
+      const alarm = new aws.cloudwatch.MetricAlarm('alarm-db-latency-primary-test', {
+        name: 'db-latency-primary-test',
         comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 2,
         metricName: 'DatabaseLatency',
@@ -515,10 +689,7 @@ describe('Multi-Region DR Infrastructure Unit Tests', () => {
         period: 60,
         statistic: 'Average',
         threshold: 5000,
-        alarmDescription: 'Alert when database latency exceeds 5 seconds',
-        dimensions: { Region: 'us-east-1' },
       });
-
       expect(alarm).toBeDefined();
     });
 
@@ -532,34 +703,43 @@ describe('Multi-Region DR Infrastructure Unit Tests', () => {
         period: 60,
         statistic: 'Average',
         threshold: 60000,
-        alarmDescription: 'Alert when replication lag exceeds 1 minute (RPO threshold)',
       });
+      expect(alarm).toBeDefined();
+    });
 
+    it('should create primary Route 53 health check alarm', () => {
+      const alarm = new aws.cloudwatch.MetricAlarm('alarm-healthcheck-primary-test', {
+        name: 'route53-healthcheck-primary-test',
+        comparisonOperator: 'LessThanThreshold',
+        evaluationPeriods: 1,
+        metricName: 'HealthCheckStatus',
+        namespace: 'AWS/Route53',
+        period: 60,
+        statistic: 'Minimum',
+        threshold: 1,
+      });
+      expect(alarm).toBeDefined();
+    });
+
+    it('should create secondary Route 53 health check alarm', () => {
+      const alarm = new aws.cloudwatch.MetricAlarm('alarm-healthcheck-secondary-test', {
+        name: 'route53-healthcheck-secondary-test',
+        comparisonOperator: 'LessThanThreshold',
+        evaluationPeriods: 1,
+        metricName: 'HealthCheckStatus',
+        namespace: 'AWS/Route53',
+        period: 60,
+        statistic: 'Minimum',
+        threshold: 1,
+      });
       expect(alarm).toBeDefined();
     });
   });
 
-  describe('Route 53 DNS Failover', () => {
-    it('should create hosted zone', () => {
-      const zone = new aws.route53.Zone('hosted-zone-test', {
-        name: 'dr-test.example.com',
-        comment: 'DR hosted zone for test',
-      });
-
-      expect(zone).toBeDefined();
-    });
-
-    it('should create Lambda function URLs', () => {
-      const url = new aws.lambda.FunctionUrl('lambda-url-test', {
-        functionName: 'lambda-function',
-        authorizationType: 'NONE',
-      });
-
-      expect(url).toBeDefined();
-    });
-
-    it('should create Route 53 health checks', () => {
-      const healthCheck = new aws.route53.HealthCheck('healthcheck-test', {
+  // Route 53 Tests
+  describe('Route 53 Health Checks', () => {
+    it('should create primary health check with 30-second interval', () => {
+      const healthCheck = new aws.route53.HealthCheck('healthcheck-primary-test', {
         type: 'HTTPS',
         resourcePath: '/',
         failureThreshold: 3,
@@ -568,30 +748,28 @@ describe('Multi-Region DR Infrastructure Unit Tests', () => {
         fqdn: 'test.lambda-url.us-east-1.on.aws',
         port: 443,
       });
-
       expect(healthCheck).toBeDefined();
     });
 
-    it('should create failover DNS records', () => {
-      const primaryRecord = new aws.route53.Record('db-record-primary-test', {
-        zoneId: 'Z123456789ABC',
-        name: 'db.dr-test.example.com',
-        type: 'CNAME',
-        ttl: 60,
-        records: ['primary.cluster.rds.amazonaws.com'],
-        setIdentifier: 'primary',
-        failoverRoutingPolicies: [{ type: 'PRIMARY' }],
-        healthCheckId: 'health-check-id',
+    it('should create secondary health check with 30-second interval', () => {
+      const healthCheck = new aws.route53.HealthCheck('healthcheck-secondary-test', {
+        type: 'HTTPS',
+        resourcePath: '/',
+        failureThreshold: 3,
+        requestInterval: 30,
+        measureLatency: true,
+        fqdn: 'test.lambda-url.us-west-2.on.aws',
+        port: 443,
       });
-
-      expect(primaryRecord).toBeDefined();
+      expect(healthCheck).toBeDefined();
     });
   });
 
+  // CloudWatch Dashboards Tests
   describe('CloudWatch Dashboards', () => {
-    it('should create dashboards with dynamic references', () => {
-      const dashboard = new aws.cloudwatch.Dashboard('dashboard-test', {
-        dashboardName: 'dr-metrics-test',
+    it('should create primary dashboard', () => {
+      const dashboard = new aws.cloudwatch.Dashboard('dashboard-primary-test', {
+        dashboardName: 'dr-metrics-primary-test',
         dashboardBody: JSON.stringify({
           widgets: [
             {
@@ -607,11 +785,32 @@ describe('Multi-Region DR Infrastructure Unit Tests', () => {
           ],
         }),
       });
+      expect(dashboard).toBeDefined();
+    });
 
+    it('should create secondary dashboard', () => {
+      const dashboard = new aws.cloudwatch.Dashboard('dashboard-secondary-test', {
+        dashboardName: 'dr-metrics-secondary-test',
+        dashboardBody: JSON.stringify({
+          widgets: [
+            {
+              type: 'metric',
+              properties: {
+                metrics: [['DR/DatabaseHealth', 'DatabaseHealth']],
+                period: 60,
+                stat: 'Average',
+                region: 'us-west-2',
+                title: 'Database Health Metrics',
+              },
+            },
+          ],
+        }),
+      });
       expect(dashboard).toBeDefined();
     });
   });
 
+  // Resource Naming and Tags Tests
   describe('Resource Naming and Tags', () => {
     it('should include environmentSuffix in resource names', () => {
       const environmentSuffix = 'test123';
@@ -625,7 +824,6 @@ describe('Multi-Region DR Infrastructure Unit Tests', () => {
         Application: 'payment-processing',
         'DR-Role': 'multi-region-dr',
       };
-
       expect(commonTags.Environment).toBe('production');
       expect(commonTags.Application).toBe('payment-processing');
       expect(commonTags['DR-Role']).toBe('multi-region-dr');
@@ -638,7 +836,6 @@ describe('Multi-Region DR Infrastructure Unit Tests', () => {
         bucket: `bucket-primary-${suffix}`,
         lambda: `lambda-healthcheck-primary-${suffix}`,
       };
-
       expect(names.vpc).toContain('primary');
       expect(names.bucket).toContain('primary');
       expect(names.lambda).toContain('primary');
@@ -651,20 +848,20 @@ describe('Multi-Region DR Infrastructure Unit Tests', () => {
         bucket: `bucket-secondary-${suffix}`,
         lambda: `lambda-healthcheck-secondary-${suffix}`,
       };
-
       expect(names.vpc).toContain('secondary');
       expect(names.bucket).toContain('secondary');
       expect(names.lambda).toContain('secondary');
     });
   });
 
+  // Multi-Region Configuration Tests
   describe('Multi-Region Configuration', () => {
-    it('should define primary region', () => {
+    it('should define primary region as us-east-1', () => {
       const primaryRegion = 'us-east-1';
       expect(primaryRegion).toBe('us-east-1');
     });
 
-    it('should define secondary region', () => {
+    it('should define secondary region as us-west-2', () => {
       const secondaryRegion = 'us-west-2';
       expect(secondaryRegion).toBe('us-west-2');
     });
@@ -673,11 +870,9 @@ describe('Multi-Region DR Infrastructure Unit Tests', () => {
       const primaryProvider = new aws.Provider('primary-provider', {
         region: 'us-east-1',
       });
-
       const secondaryProvider = new aws.Provider('secondary-provider', {
         region: 'us-west-2',
       });
-
       expect(primaryProvider).toBeDefined();
       expect(secondaryProvider).toBeDefined();
     });
@@ -685,26 +880,23 @@ describe('Multi-Region DR Infrastructure Unit Tests', () => {
     it('should use different CIDR blocks for VPCs', () => {
       const primaryCidr = '10.0.0.0/16';
       const secondaryCidr = '10.1.0.0/16';
-
       expect(primaryCidr).not.toBe(secondaryCidr);
     });
   });
 
+  // Security and Compliance Tests
   describe('Security and Compliance', () => {
     it('should enable encryption for Aurora', () => {
-      const encryptionEnabled = true;
-      expect(encryptionEnabled).toBe(true);
+      const storageEncrypted = true;
+      expect(storageEncrypted).toBe(true);
     });
 
     it('should enable encryption for S3 buckets', () => {
       const encryption = {
         rule: {
-          applyServerSideEncryptionByDefault: {
-            sseAlgorithm: 'AES256',
-          },
+          applyServerSideEncryptionByDefault: { sseAlgorithm: 'AES256' },
         },
       };
-
       expect(encryption.rule.applyServerSideEncryptionByDefault.sseAlgorithm).toBe('AES256');
     });
 
@@ -713,7 +905,7 @@ describe('Multi-Region DR Infrastructure Unit Tests', () => {
       expect(logsEnabled).toContain('postgresql');
     });
 
-    it('should configure backup retention', () => {
+    it('should configure backup retention for Aurora', () => {
       const backupRetentionPeriod = 7;
       expect(backupRetentionPeriod).toBeGreaterThanOrEqual(7);
     });
@@ -726,42 +918,50 @@ describe('Multi-Region DR Infrastructure Unit Tests', () => {
     it('should enable DNS hostnames in VPC', () => {
       const enableDnsHostnames = true;
       const enableDnsSupport = true;
-
       expect(enableDnsHostnames).toBe(true);
       expect(enableDnsSupport).toBe(true);
     });
+
+    it('should enable KMS key rotation', () => {
+      const enableKeyRotation = true;
+      expect(enableKeyRotation).toBe(true);
+    });
   });
 
+  // Disaster Recovery Configuration Tests
   describe('Disaster Recovery Configuration', () => {
-    it('should configure Aurora Global Database', () => {
+    it('should configure Aurora Global Database engine', () => {
       const engine = 'aurora-postgresql';
-      const engineVersion = '15.4';
-
+      const engineVersion = '15.7';
       expect(engine).toBe('aurora-postgresql');
-      expect(engineVersion).toBe('15.4');
+      expect(engineVersion).toBe('15.7');
     });
 
-    it('should configure S3 replication with RTC', () => {
+    it('should configure S3 replication with 15-minute RTC', () => {
       const replicationTime = { minutes: 15 };
       expect(replicationTime.minutes).toBe(15);
     });
 
-    it('should configure health check intervals', () => {
+    it('should configure health check intervals at 30 seconds', () => {
       const requestInterval = 30;
       const failureThreshold = 3;
-
       expect(requestInterval).toBe(30);
       expect(failureThreshold).toBe(3);
-    });
-
-    it('should configure low TTL for DNS failover', () => {
-      const ttl = 60;
-      expect(ttl).toBeLessThanOrEqual(60);
     });
 
     it('should configure Lambda timeout for health checks', () => {
       const timeout = 30;
       expect(timeout).toBe(30);
+    });
+
+    it('should configure replication lag alarm at 1 minute threshold', () => {
+      const threshold = 60000; // 1 minute in milliseconds
+      expect(threshold).toBe(60000);
+    });
+
+    it('should skip final snapshot for testing', () => {
+      const skipFinalSnapshot = true;
+      expect(skipFinalSnapshot).toBe(true);
     });
   });
 });

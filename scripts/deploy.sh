@@ -95,7 +95,6 @@ if [ "$PLATFORM" = "cdk" ]; then
 
 elif [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ CDKTF project detected, running CDKTF deploy..."
-<<<<<<< HEAD
 
   # Pre-deployment cleanup: Delete orphaned AWS resources that may cause conflicts
   echo "🧹 Cleaning up orphaned resources from previous failed deployments..."
@@ -177,9 +176,6 @@ elif [ "$PLATFORM" = "cdktf" ]; then
 
   echo "✅ Orphaned resource cleanup completed"
 
-=======
-  
->>>>>>> a8714e8fbb (fix(synth-i3k9m2t1): add missing scripts/deploy.sh for pulumi deployment)
   if [ "$LANGUAGE" = "go" ]; then
     echo "🔧 Ensuring .gen exists for CDKTF Go deploy"
 
@@ -203,7 +199,6 @@ elif [ "$PLATFORM" = "cdktf" ]; then
     fi
     # Go modules are prepared during build; avoid cache-clearing and extra tidying here
   fi
-<<<<<<< HEAD
 
   # Clean up any stale resources before deploying (CDKTF uses local state)
   RESOURCE_SUFFIX="${ENVIRONMENT_SUFFIX}"
@@ -397,8 +392,6 @@ elif [ "$PLATFORM" = "cdktf" ]; then
 
   echo "✅ Stale resource cleanup completed"
 
-=======
->>>>>>> a8714e8fbb (fix(synth-i3k9m2t1): add missing scripts/deploy.sh for pulumi deployment)
   npm run cdktf:deploy
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
@@ -658,10 +651,6 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes 2>/dev/null || echo "No locks to clear or cancel failed"
 
     pulumi config set aws:defaultTags "{\"tags\":{\"Environment\":\"$ENVIRONMENT_SUFFIX\",\"Repository\":\"$REPOSITORY\",\"Author\":\"$COMMIT_AUTHOR\",\"PRNumber\":\"$PR_NUMBER\",\"Team\":\"$TEAM\",\"CreatedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"ManagedBy\":\"pulumi\"}}"
-
-    # Set dbPassword as encrypted secret (required for Pulumi stacks with secret config)
-    echo "Setting dbPassword configuration..."
-    pulumi config set TapStack:dbPassword "TempPassword123!" --secret
 
     echo "Deploying infrastructure..."
     if ! pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"; then
