@@ -405,6 +405,35 @@ export class TapStack {
       tags: resourceTags,
     });
 
+    // Bucket policy to allow ALB to write access logs
+    // ELB service account for us-east-1 is 127311923021
+    void new aws.s3.BucketPolicy(`${name}-logs-bucket-policy`, {
+      bucket: logsBucket.id,
+      policy: logsBucket.arn.apply(bucketArn =>
+        JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: {
+                AWS: 'arn:aws:iam::127311923021:root',
+              },
+              Action: 's3:PutObject',
+              Resource: `${bucketArn}/*`,
+            },
+            {
+              Effect: 'Allow',
+              Principal: {
+                Service: 'logging.s3.amazonaws.com',
+              },
+              Action: 's3:PutObject',
+              Resource: `${bucketArn}/*`,
+            },
+          ],
+        })
+      ),
+    });
+
     const appBucket = new aws.s3.Bucket(`${name}-app-bucket`, {
       versioning: {
         enabled: true,
