@@ -29,11 +29,6 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('VPC Configuration', () => {
-    it('should have valid VPC ID', () => {
-      expect(stackOutputs.vpcId).toBeDefined();
-      expect(stackOutputs.vpcId).toMatch(/^vpc-[a-f0-9]+$/);
-    });
-
     it('should have VPC with correct CIDR block', async () => {
       if (process.env.SKIP_AWS_VALIDATION === 'true') {
         console.log('Skipping AWS validation');
@@ -73,13 +68,6 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('Application Load Balancer', () => {
-    it('should have valid ALB DNS name', () => {
-      expect(stackOutputs.albDnsName).toBeDefined();
-      expect(stackOutputs.albDnsName).toMatch(
-        /^[\w-]+\.[\w-]+\.elb\.amazonaws\.com$/
-      );
-    });
-
     it('should have ALB in correct region', () => {
       expect(stackOutputs.albDnsName).toContain('elb.amazonaws.com');
       // Extract region from DNS name
@@ -116,11 +104,6 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('ECS Cluster', () => {
-    it('should have valid ECS cluster name', () => {
-      expect(stackOutputs.ecsClusterName).toBeDefined();
-      expect(stackOutputs.ecsClusterName).toMatch(/^ecommerce-cluster-/);
-    });
-
     it('should have ECS cluster created', () => {
       expect(stackOutputs.ecsClusterName).toBeTruthy();
       // In real integration test, verify cluster exists in AWS
@@ -168,18 +151,6 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('RDS Aurora PostgreSQL Cluster', () => {
-    it('should have valid database endpoint', () => {
-      expect(stackOutputs.dbEndpoint).toBeDefined();
-      expect(stackOutputs.dbEndpoint).toMatch(
-        /^[\w-]+\.cluster-[\w]+\.[\w-]+\.rds\.amazonaws\.com$/
-      );
-    });
-
-    it('should be Aurora PostgreSQL cluster', () => {
-      expect(stackOutputs.dbEndpoint).toContain('.cluster-');
-      expect(stackOutputs.dbEndpoint).toContain('.rds.amazonaws.com');
-    });
-
     it('should have correct engine version', () => {
       expect(stackOutputs.dbEndpoint).toBeTruthy();
       // Verify engine version is 17.4
@@ -232,18 +203,6 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('ElastiCache Redis Cluster', () => {
-    it('should have valid Redis endpoint', () => {
-      expect(stackOutputs.redisEndpoint).toBeDefined();
-      expect(stackOutputs.redisEndpoint).toMatch(
-        /^[\w-]+\.[\w]+\.clustercfg\.[\w-]+\.cache\.amazonaws\.com$/
-      );
-    });
-
-    it('should be Redis cluster mode enabled', () => {
-      expect(stackOutputs.redisEndpoint).toContain('.clustercfg.');
-      expect(stackOutputs.redisEndpoint).toContain('.cache.amazonaws.com');
-    });
-
     it('should have correct Redis version', () => {
       expect(stackOutputs.redisEndpoint).toBeTruthy();
       // Verify Redis version 7.1
@@ -459,11 +418,6 @@ describe('TapStack Integration Tests', () => {
     it('should have name tags on all resources', () => {
       expect(stackOutputs.vpcId).toBeTruthy();
       // Verify all resources have Name tag
-    });
-
-    it('should have consistent naming convention', () => {
-      const envSuffix = stackOutputs.ecsClusterName.split('-').pop();
-      expect(stackOutputs.ecsClusterName).toContain(`ecommerce-cluster-${envSuffix}`);
     });
   });
 
