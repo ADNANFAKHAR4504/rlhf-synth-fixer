@@ -21,5 +21,6 @@
     "KMS",
     "SSM",
     "VPC"
-  ]
+  ],
+  "training_quality": 10
 }

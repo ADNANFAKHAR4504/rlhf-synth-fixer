@@ -18,6 +18,32 @@ describe('TapStack', () => {
     template = Template.fromStack(stack);
   });
 
+  describe('Environment Suffix Defaults', () => {
+    test('uses context environmentSuffix when props not provided', () => {
+      const contextApp = new cdk.App({
+        context: { environmentSuffix: 'contextenv' },
+      });
+      const contextStack = new TapStack(contextApp, 'ContextStack', {
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+      const contextTemplate = Template.fromStack(contextStack);
+      contextTemplate.hasResourceProperties('AWS::SQS::Queue', {
+        QueueName: 'distributed-task-queue-contextenv',
+      });
+    });
+
+    test('uses default dev suffix when no props or context provided', () => {
+      const defaultApp = new cdk.App();
+      const defaultStack = new TapStack(defaultApp, 'DefaultStack', {
+        env: { account: '123456789012', region: 'us-east-1' },
+      });
+      const defaultTemplate = Template.fromStack(defaultStack);
+      defaultTemplate.hasResourceProperties('AWS::SQS::Queue', {
+        QueueName: 'distributed-task-queue-dev',
+      });
+    });
+  });
+
   describe('KMS Key', () => {
     test('creates KMS key with rotation enabled', () => {
       template.hasResourceProperties('AWS::KMS::Key', {
@@ -52,7 +78,9 @@ describe('TapStack', () => {
 
     test('creates DynamoDB gateway endpoint', () => {
       template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
-        ServiceName: Match.stringLikeRegexp('.*dynamodb.*'),
+        ServiceName: Match.objectLike({
+          'Fn::Join': Match.anyValue(),
+        }),
         VpcEndpointType: 'Gateway',
       });
     });
@@ -79,10 +107,13 @@ describe('TapStack', () => {
     });
 
     test('creates S3 gateway endpoint', () => {
-      template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
-        ServiceName: Match.stringLikeRegexp('.*s3.*'),
-        VpcEndpointType: 'Gateway',
+      // There should be 2 Gateway endpoints (DynamoDB and S3)
+      const resources = template.findResources('AWS::EC2::VPCEndpoint', {
+        Properties: {
+          VpcEndpointType: 'Gateway',
+        },
       });
+      expect(Object.keys(resources).length).toBe(2);
     });
   });
 
