@@ -120,19 +120,39 @@ elif [ "$PLATFORM" = "cdktf" ]; then
     # Go modules are prepared during build; avoid cache-clearing and extra tidying here
   fi
 
-  # CRITICAL FIX: Reduce terraform plan output to prevent GitHub Actions log truncation
-  # For large infrastructure stacks (>50 resources), terraform plan output can exceed
-  # GitHub Actions log limits (10MB) or CDKTF buffer limits, causing deployment failures
-  # with "Invoking Terraform CLI failed with exit code 1" despite no actual errors.
-  #
-  # Solution: Configure Terraform CLI to produce compact output
-  export TF_CLI_ARGS_plan="-compact-warnings -no-color"
-  export TF_CLI_ARGS_apply="-compact-warnings -no-color"
+  # CRITICAL FIX: Use terraform directly instead of cdktf deploy to avoid output buffer issues
+  # CDKTF deploy has internal buffer limits that cause "Invoking Terraform CLI failed with exit code 1"
+  # for larger infrastructure stacks even when terraform plan/apply would succeed.
+  # By running synth + terraform directly, we bypass CDKTF's process communication layer.
 
-  echo "🔧 Terraform output optimization enabled (compact-warnings, no-color)"
-  echo "   This prevents plan output truncation for large infrastructure stacks"
+  echo "🔧 Running CDKTF synth to generate Terraform configuration..."
+  npm run cdktf:synth
 
-  npm run cdktf:deploy
+  # Find the generated terraform stack directory
+  STACK_DIR=""
+  if [ -d "cdktf.out/stacks" ]; then
+    # Get first stack directory (should be TapStack<suffix>)
+    STACK_DIR=$(ls -d cdktf.out/stacks/*/ 2>/dev/null | head -1)
+  fi
+
+  if [ -z "$STACK_DIR" ] || [ ! -d "$STACK_DIR" ]; then
+    echo "❌ Could not find synthesized stack directory in cdktf.out/stacks/"
+    exit 1
+  fi
+
+  echo "📁 Found stack directory: $STACK_DIR"
+  cd "$STACK_DIR"
+
+  echo "🔧 Initializing Terraform..."
+  terraform init -input=false -no-color
+
+  echo "📋 Running Terraform plan..."
+  terraform plan -input=false -no-color -out=tfplan 2>&1 | tail -100
+
+  echo "🚀 Applying Terraform plan..."
+  terraform apply -input=false -no-color -auto-approve tfplan
+
+  cd - > /dev/null
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
   echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."

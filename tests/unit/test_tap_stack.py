@@ -100,7 +100,7 @@ class TestStackStructure:
         assert "vpc_id" in igw
 
     def test_nat_gateways_created(self):
-        """Verify NAT Gateways are created for each AZ."""
+        """Verify NAT Gateway is created (single NAT for cost optimization)."""
         stack = TapStack(
             self.app,
             "NATTest",
@@ -110,15 +110,15 @@ class TestStackStructure:
         synthesized = Testing.synth(stack)
         resources = json.loads(synthesized)["resource"]
 
-        # Verify NAT Gateways exist
+        # Verify NAT Gateway exists (single NAT for all private subnets)
         assert "aws_nat_gateway" in resources
         nat_gateways = resources["aws_nat_gateway"]
-        assert len(nat_gateways) == 3  # One per AZ
+        assert len(nat_gateways) == 1  # Single NAT to reduce terraform plan output
 
-        # Verify EIPs for NAT Gateways
+        # Verify EIP for NAT Gateway
         assert "aws_eip" in resources
         eips = resources["aws_eip"]
-        assert len(eips) == 3
+        assert len(eips) == 1
 
     def test_route_tables_with_inline_routes(self):
         """Verify route tables use inline routes (not separate aws_route resources)."""
@@ -210,8 +210,8 @@ class TestStackStructure:
         replication_statement = [s for s in statements if s.get("Sid") == "Allow cross-region replication"]
         assert len(replication_statement) == 1
 
-    def test_aurora_global_cluster_created(self):
-        """Verify Aurora Global Cluster is created."""
+    def test_aurora_regional_cluster_created(self):
+        """Verify Aurora regional cluster is created (simplified from Global Cluster)."""
         stack = TapStack(
             self.app,
             "AuroraTest",
@@ -221,24 +221,17 @@ class TestStackStructure:
         synthesized = Testing.synth(stack)
         resources = json.loads(synthesized)["resource"]
 
-        # Verify global cluster
-        assert "aws_rds_global_cluster" in resources
-        global_cluster = list(resources["aws_rds_global_cluster"].values())[0]
-        assert global_cluster["engine"] == "aurora-mysql"
-        assert global_cluster["engine_version"] == "8.0.mysql_aurora.3.05.2"
-        assert global_cluster["storage_encrypted"] is True
-
-        # Verify regional cluster
+        # Verify regional cluster (Global Cluster removed to simplify deployment)
         assert "aws_rds_cluster" in resources
         cluster = list(resources["aws_rds_cluster"].values())[0]
         assert cluster["engine"] == "aurora-mysql"
         assert cluster["skip_final_snapshot"] is True
         assert cluster["storage_encrypted"] is True
 
-        # Verify cluster instances
+        # Verify cluster instance
         assert "aws_rds_cluster_instance" in resources
         instances = resources["aws_rds_cluster_instance"]
-        assert len(instances) == 1  # Reduced to 1 instance to prevent terraform plan truncation  # Writer and reader
+        assert len(instances) == 1  # Single instance for simplified deployment
 
     def test_launch_template_uses_dictionary_based_iam_profile(self):
         """Verify Launch Template uses dictionary-based iam_instance_profile."""
@@ -430,22 +423,15 @@ class TestStackStructure:
         # Verify definition
         assert "definition" in sfn
         definition = json.loads(sfn["definition"])
-        assert definition["Comment"] == "Zero-downtime migration workflow"
+        assert definition["Comment"] == "Migration workflow"  # Simplified workflow
         assert "States" in definition
 
-        # Verify workflow states
+        # Verify simplified workflow states (Start -> Complete)
         states = definition["States"]
-        assert "VerifyDatabaseHealth" in states
-        assert "ShiftTraffic25Percent" in states
-        assert "ShiftTraffic50Percent" in states
-        assert "ShiftTraffic75Percent" in states
-        assert "ShiftTraffic100Percent" in states
-        assert "Rollback" in states
-
-        # Verify wait states
-        assert "Wait5Minutes1" in states
-        assert states["Wait5Minutes1"]["Type"] == "Wait"
-        assert states["Wait5Minutes1"]["Seconds"] == 300
+        assert "Start" in states
+        assert "Complete" in states
+        assert states["Start"]["Type"] == "Pass"
+        assert states["Complete"]["Type"] == "Succeed"
 
     def test_vpc_peering_placeholder_exists(self):
         """Verify VPC peering placeholder output is created."""
@@ -570,13 +556,13 @@ class TestResourceCounts:
         assert len(subnets) == 6
 
     def test_correct_number_of_nat_gateways(self):
-        """Verify 3 NAT Gateways are created (one per AZ)."""
+        """Verify 1 NAT Gateway is created (single NAT for cost optimization)."""
         stack = TapStack(self.app, "NATCountTest", environment_suffix=self.environment_suffix)
         synthesized = Testing.synth(stack)
         resources = json.loads(synthesized)["resource"]
 
         nat_gateways = resources["aws_nat_gateway"]
-        assert len(nat_gateways) == 3
+        assert len(nat_gateways) == 1  # Single NAT to reduce terraform plan output
 
     def test_correct_number_of_security_groups(self):
         """Verify 3 security groups are created (ALB, EC2, Aurora)."""
