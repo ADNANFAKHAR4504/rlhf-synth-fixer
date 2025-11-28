@@ -8,13 +8,39 @@ from botocore.exceptions import ClientError
 
 @pytest.fixture(scope="module")
 def outputs():
-    """Load deployment outputs from flat-outputs.json."""
+    """Load deployment outputs from flat-outputs.json.
+    
+    Handles nested format (stack name as top-level key) and flat format.
+    CDKTF outputs are typically nested: {"TapStack<ENVIRONMENT_SUFFIX>": {"VpcId": "...", ...}}
+    """
     outputs_file = "cfn-outputs/flat-outputs.json"
     if not os.path.exists(outputs_file):
         pytest.skip(f"{outputs_file} not found - deployment may not have completed")
 
     with open(outputs_file, "r", encoding="utf-8") as f:
-        return json.load(f)
+        data = json.load(f)
+    
+    # Handle nested structure: {"TapStack<ENVIRONMENT_SUFFIX>": {"VpcId": "...", ...}}
+    if isinstance(data, dict) and data:
+        # Check if data has a key starting with "TapStack" (CDKTF stack name format)
+        stack_keys = [key for key in data.keys() if key.startswith("TapStack")]
+        if stack_keys:
+            # Extract outputs from the first TapStack key found
+            stack_outputs = data[stack_keys[0]]
+            if isinstance(stack_outputs, dict):
+                return stack_outputs
+            else:
+                pytest.skip(f"Stack outputs for {stack_keys[0]} are not in expected format")
+        elif isinstance(data, dict) and len(data) == 1:
+            # Single key, might be stack name - extract its value
+            first_value = next(iter(data.values()))
+            if isinstance(first_value, dict):
+                return first_value
+        # Assume flat structure: {"VpcId": "...", ...}
+        return data
+    
+    # Not a dict or empty, return as-is
+    return data
 
 
 @pytest.fixture(scope="module")

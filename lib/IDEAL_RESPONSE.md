@@ -25,7 +25,8 @@ The solution deploys a complete migration infrastructure comprising:
 
 - **Zero-Downtime Migration**: Full-load-and-cdc replication ensures continuous data sync
 - **Automated Cutover**: EventBridge + Lambda automatically updates Route 53 weights when replication lag is acceptable
-- **Rollback Capability**: Aurora backtrack feature (72-hour window) enables quick rollback if issues arise
+- **Rollback Capability**: Point-in-time recovery (7-day retention) enables rollback if issues arise
+  - Note: Aurora backtrack is only available for Aurora MySQL, not PostgreSQL
 - **Comprehensive Monitoring**: Real-time dashboards track replication lag, database connections, CPU, and throughput
 - **Security**: KMS encryption at rest, VPC isolation, security groups, SSL/TLS in transit
 - **Compliance**: Point-in-time recovery (7-day retention), CloudWatch logs, audit trail via EventBridge
@@ -36,7 +37,7 @@ The solution deploys a complete migration infrastructure comprising:
 ```
 .
 ├── lib/
-│   ├── tap_stack.py           # Main CDKTF stack (1,138 lines)
+│   ├── tap_stack.py           # Main CDKTF stack (1,257 lines)
 │   ├── lambda/
 │   │   └── route53_updater.py # Lambda function for DNS cutover
 │   ├── PROMPT.md               # Original task requirements
@@ -72,16 +73,16 @@ The `TapStack` class in `lib/tap_stack.py` defines all infrastructure resources:
 - Internet gateway for external connectivity
 - Security groups for Aurora and DMS with appropriate ingress/egress rules
 
-**3. Aurora PostgreSQL Cluster** (Lines 355-416)
-- Engine: aurora-postgresql 15.4
+**3. Aurora PostgreSQL Cluster** (Lines 316-396)
+- Engine: aurora-postgresql 15.6
 - Mode: Serverless v2 (0.5 to 2 ACU scaling)
-- Backtrack enabled (72-hour window for rollback)
+- Note: Backtrack is NOT available for Aurora PostgreSQL (only for Aurora MySQL)
 - 7-day backup retention with point-in-time recovery
 - CloudWatch logs exported
 - Storage encrypted with KMS
 - 1 writer + 2 reader instances for high availability
 
-**4. DMS Resources** (Lines 418-542)
+**4. DMS Resources** (Lines 398-550)
 - Replication instance: dms.r5.large with 100GB storage
 - Source endpoint: On-premises PostgreSQL (onprem-postgres.example.com)
 - Target endpoint: Aurora cluster
@@ -91,7 +92,7 @@ The `TapStack` class in `lib/tap_stack.py` defines all infrastructure resources:
   - DDL change handling enabled
   - Comprehensive logging for troubleshooting
 
-**5. Route 53 Blue-Green Deployment** (Lines 561-604)
+**5. Route 53 Blue-Green Deployment** (Lines 552-598)
 - Hosted zone: migration-{environmentSuffix}.example.com
 - Weighted CNAME records:
   - On-premises: 100% weight initially
@@ -99,22 +100,23 @@ The `TapStack` class in `lib/tap_stack.py` defines all infrastructure resources:
 - TTL: 60 seconds for fast cutover
 - Lambda updates weights based on replication lag
 
-**6. SSM Parameter Store** (Lines 607-647)
+**6. SSM Parameter Store** (Lines 605-641)
 - /migration/{environmentSuffix}/config: Migration configuration (endpoints, thresholds)
 - /migration/{environmentSuffix}/state: Migration checkpoint state (current phase, weights, timestamps)
 
-**7. EventBridge Rules** (Lines 650-694)
+**7. EventBridge Rules** (Lines 750-830)
 - DMS task state change rule: Triggers Lambda on replication milestones
 - Migration milestone rule: Sends SNS notifications on failures/changes
 
-**8. Lambda Function** (Lines 722-770)
+**8. Lambda Function** (Lines 643-747)
 - Runtime: Python 3.11
 - Memory: 256 MB
 - Timeout: 5 minutes
 - Environment variables: HOSTED_ZONE_ID, DMS_TASK_ARN, AURORA_ENDPOINT, SSM parameters
 - IAM permissions: Route 53, SSM, DMS, CloudWatch
+- ZIP file path: Uses absolute path to ensure Terraform can locate the deployment package
 
-**9. CloudWatch Dashboard** (Lines 773-982)
+**9. CloudWatch Dashboard** (Lines 836-977)
 - Widgets for:
   - DMS replication lag (CDC latency source and target)
   - Database connections
@@ -122,27 +124,71 @@ The `TapStack` class in `lib/tap_stack.py` defines all infrastructure resources:
   - Aurora performance (CPU, memory)
   - Aurora replica lag
   - DMS task error logs
+- **CRITICAL FIX**: Metrics with dimensions use flat array format: `[namespace, metric, dimension_name, dimension_value, {...options}]`
+- Not nested object format (which causes validation errors)
 
-**10. CloudWatch Alarms** (Lines 982-1049)
+**10. CloudWatch Alarms** (Lines 979-1049)
 - DMS replication lag > 60 seconds
 - Aurora CPU > 80%
 - Aurora connections > 800
 
-**11. AWS Backup** (Lines 1056-1138)
+**11. AWS Backup** (Lines 1040-1126)
 - Backup vault with KMS encryption
 - Daily backup plan (cron: 0 5 ? * * *)
 - 7-day retention
 - Selection based on tag: Purpose=database-migration
 
-## Key Fix from MODEL_RESPONSE
+## Key Fixes from MODEL_RESPONSE
 
 ### 1. Route53 Weighted Routing Policy Syntax Error (CRITICAL)
 
 **Issue**: weighted_routing_policy was defined as a list instead of a dictionary.
 
-**Fix**: Changed from [{...}] to {...} (lines 581, 597 in lib/tap_stack.py)
+**Fix**: Changed from [{...}] to {...} (lines 579, 594 in lib/tap_stack.py)
 
 **Impact**: Prevented synthesis entirely - deployment was impossible without this fix.
+
+### 2. CloudWatch Dashboard Metrics Format (CRITICAL)
+
+**Issue**: Metrics with dimensions used nested object format, causing validation error: "Should NOT have more than 2 items"
+
+**Fix**: Changed from nested format to flat array format:
+```python
+# BEFORE (incorrect):
+["AWS/RDS", "DatabaseConnections", {"stat": "Sum", "dimensions": {"DBClusterIdentifier": cluster_id}}]
+
+# AFTER (correct):
+["AWS/RDS", "DatabaseConnections", "DBClusterIdentifier", cluster_id, {"stat": "Sum"}]
+```
+
+**Impact**: Dashboard creation failed without this fix.
+
+### 3. Lambda ZIP File Path (CRITICAL)
+
+**Issue**: Relative path to Lambda ZIP file not found during Terraform execution.
+
+**Fix**: Changed to absolute path using `os.path.abspath()`:
+```python
+lambda_zip_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "lambda", "route53_updater.zip"))
+```
+
+**Impact**: Lambda function deployment failed without this fix.
+
+### 4. Missing Stack Outputs (HIGH)
+
+**Issue**: No TerraformOutput definitions, resulting in empty outputs file after deployment.
+
+**Fix**: Added 33 TerraformOutput definitions for all key resources (Lines 1128-1257).
+
+**Impact**: Integration tests could not validate deployment without outputs.
+
+### 5. Aurora Backtrack Not Supported (MEDIUM)
+
+**Issue**: PROMPT mentioned Aurora backtrack feature, but it's only available for Aurora MySQL, not PostgreSQL.
+
+**Fix**: Removed backtrack_window parameter (not applicable for PostgreSQL).
+
+**Impact**: Deployment would fail with "Backtrack is not enabled for the aurora-postgresql engine" error.
 
 ## Testing Results
 
@@ -224,7 +270,7 @@ Per .claude/lessons_learnt.md Section 0.2, expert-level tasks with external depe
 - [x] Tags applied to all resources
 - [x] External dependencies documented
 - [x] Deployment instructions provided
-- [x] Rollback mechanism available (Aurora backtrack)
+- [x] Rollback mechanism available (Point-in-time recovery with 7-day retention)
 
 ## Conclusion
 

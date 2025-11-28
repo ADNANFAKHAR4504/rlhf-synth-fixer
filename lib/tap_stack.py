@@ -1,6 +1,6 @@
 """TAP Stack module for CDKTF Python infrastructure."""
 
-from cdktf import TerraformStack, S3Backend, Fn, Token
+from cdktf import TerraformStack, S3Backend, Fn, Token, TerraformOutput
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.data_aws_caller_identity import DataAwsCallerIdentity
@@ -346,7 +346,7 @@ class TapStack(TerraformStack):
         )
 
         # Aurora Writer Instance
-        RdsClusterInstance(
+        aurora_writer_instance = RdsClusterInstance(
             self,
             "aurora_writer_instance",
             identifier=f"migration-aurora-writer-{environment_suffix}",
@@ -362,7 +362,7 @@ class TapStack(TerraformStack):
         )
 
         # Aurora Reader Instance 1 (AZ a)
-        RdsClusterInstance(
+        aurora_reader_instance_1 = RdsClusterInstance(
             self,
             "aurora_reader_instance_1",
             identifier=f"migration-aurora-reader-1-{environment_suffix}",
@@ -379,7 +379,7 @@ class TapStack(TerraformStack):
         )
 
         # Aurora Reader Instance 2 (AZ b)
-        RdsClusterInstance(
+        aurora_reader_instance_2 = RdsClusterInstance(
             self,
             "aurora_reader_instance_2",
             identifier=f"migration-aurora-reader-2-{environment_suffix}",
@@ -602,7 +602,7 @@ class TapStack(TerraformStack):
         # REQUIREMENT 6: Parameter Store
         # ==========================================
 
-        SsmParameter(
+        migration_state_param = SsmParameter(
             self,
             "migration_state_param",
             name=f"/migration/{environment_suffix}/state",
@@ -621,7 +621,7 @@ class TapStack(TerraformStack):
             }
         )
 
-        SsmParameter(
+        migration_config_param = SsmParameter(
             self,
             "migration_config_param",
             name=f"/migration/{environment_suffix}/config",
@@ -833,7 +833,7 @@ class TapStack(TerraformStack):
         # REQUIREMENT 9: CloudWatch Dashboard
         # ==========================================
 
-        CloudwatchDashboard(
+        migration_dashboard = CloudwatchDashboard(
             self,
             "migration_dashboard",
             dashboard_name=f"migration-dashboard-{environment_suffix}",
@@ -1123,4 +1123,233 @@ class TapStack(TerraformStack):
                     value="database-migration"
                 )
             ]
+        )
+
+        # ==========================================
+        # Stack Outputs
+        # ==========================================
+
+        TerraformOutput(
+            self,
+            "VpcId",
+            value=migration_vpc.id,
+            description="VPC ID for migration infrastructure"
+        )
+
+        TerraformOutput(
+            self,
+            "AuroraClusterId",
+            value=aurora_cluster.cluster_identifier,
+            description="Aurora PostgreSQL cluster identifier"
+        )
+
+        TerraformOutput(
+            self,
+            "AuroraClusterEndpoint",
+            value=aurora_cluster.endpoint,
+            description="Aurora PostgreSQL cluster writer endpoint"
+        )
+
+        TerraformOutput(
+            self,
+            "AuroraClusterReaderEndpoint",
+            value=aurora_cluster.reader_endpoint,
+            description="Aurora PostgreSQL cluster reader endpoint"
+        )
+
+        TerraformOutput(
+            self,
+            "AuroraClusterPort",
+            value=aurora_cluster.port,
+            description="Aurora PostgreSQL cluster port"
+        )
+
+        TerraformOutput(
+            self,
+            "DmsReplicationInstanceId",
+            value=dms_instance.replication_instance_id,
+            description="DMS replication instance identifier"
+        )
+
+        TerraformOutput(
+            self,
+            "DmsReplicationInstanceArn",
+            value=dms_instance.replication_instance_arn,
+            description="DMS replication instance ARN"
+        )
+
+        TerraformOutput(
+            self,
+            "DmsSourceEndpointArn",
+            value=dms_source_endpoint.endpoint_arn,
+            description="DMS source endpoint ARN"
+        )
+
+        TerraformOutput(
+            self,
+            "DmsTargetEndpointArn",
+            value=dms_target_endpoint.endpoint_arn,
+            description="DMS target endpoint ARN"
+        )
+
+        TerraformOutput(
+            self,
+            "DmsMigrationTaskArn",
+            value=dms_task.replication_task_arn,
+            description="DMS replication task ARN"
+        )
+
+        TerraformOutput(
+            self,
+            "Route53HostedZoneId",
+            value=hosted_zone.zone_id,
+            description="Route 53 hosted zone ID for blue-green deployment"
+        )
+
+        TerraformOutput(
+            self,
+            "LambdaFunctionName",
+            value=route53_lambda.function_name,
+            description="Lambda function name for Route 53 cutover automation"
+        )
+
+        TerraformOutput(
+            self,
+            "LambdaFunctionArn",
+            value=route53_lambda.arn,
+            description="Lambda function ARN for Route 53 cutover automation"
+        )
+
+        TerraformOutput(
+            self,
+            "SnsTopicArn",
+            value=migration_topic.arn,
+            description="SNS topic ARN for migration notifications"
+        )
+
+        TerraformOutput(
+            self,
+            "KmsKeyId",
+            value=kms_key.key_id,
+            description="KMS key ID for encryption"
+        )
+
+        TerraformOutput(
+            self,
+            "CloudWatchDashboardName",
+            value=f"migration-dashboard-{environment_suffix}",
+            description="CloudWatch dashboard name for migration monitoring"
+        )
+
+        TerraformOutput(
+            self,
+            "CloudWatchDashboardUrl",
+            value=f"https://console.aws.amazon.com/cloudwatch/home?region={aws_region}#dashboards:name=migration-dashboard-{environment_suffix}",
+            description="CloudWatch dashboard URL"
+        )
+
+        TerraformOutput(
+            self,
+            "EventBridgeRuleName",
+            value=dms_event_rule.name,
+            description="EventBridge rule name for DMS task state changes"
+        )
+
+        # Additional outputs for integration tests
+        TerraformOutput(
+            self,
+            "SubnetIdA",
+            value=subnet_a.id,
+            description="Subnet ID for availability zone A"
+        )
+
+        TerraformOutput(
+            self,
+            "SubnetIdB",
+            value=subnet_b.id,
+            description="Subnet ID for availability zone B"
+        )
+
+        TerraformOutput(
+            self,
+            "SubnetIdC",
+            value=subnet_c.id,
+            description="Subnet ID for availability zone C"
+        )
+
+        TerraformOutput(
+            self,
+            "InternetGatewayId",
+            value=igw.id,
+            description="Internet Gateway ID"
+        )
+
+        TerraformOutput(
+            self,
+            "AuroraSecurityGroupId",
+            value=aurora_sg.id,
+            description="Aurora security group ID"
+        )
+
+        TerraformOutput(
+            self,
+            "DmsSecurityGroupId",
+            value=dms_sg.id,
+            description="DMS security group ID"
+        )
+
+        TerraformOutput(
+            self,
+            "AuroraWriterInstanceId",
+            value=aurora_writer_instance.id,
+            description="Aurora writer instance identifier"
+        )
+
+        TerraformOutput(
+            self,
+            "AuroraReaderInstanceId1",
+            value=aurora_reader_instance_1.id,
+            description="Aurora reader instance 1 identifier"
+        )
+
+        TerraformOutput(
+            self,
+            "AuroraReaderInstanceId2",
+            value=aurora_reader_instance_2.id,
+            description="Aurora reader instance 2 identifier"
+        )
+
+        TerraformOutput(
+            self,
+            "Route53DnsName",
+            value=hosted_zone.name,
+            description="Route 53 hosted zone DNS name"
+        )
+
+        TerraformOutput(
+            self,
+            "SsmConfigParameter",
+            value=migration_config_param.name,
+            description="SSM parameter name for migration configuration"
+        )
+
+        TerraformOutput(
+            self,
+            "SsmStateParameter",
+            value=migration_state_param.name,
+            description="SSM parameter name for migration state"
+        )
+
+        TerraformOutput(
+            self,
+            "BackupVaultName",
+            value=backup_vault.name,
+            description="AWS Backup vault name"
+        )
+
+        TerraformOutput(
+            self,
+            "BackupPlanId",
+            value=backup_plan.id,
+            description="AWS Backup plan ID"
         )
