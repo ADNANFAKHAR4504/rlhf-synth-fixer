@@ -358,7 +358,7 @@ class PaymentProcessingStack(TerraformStack):
             f"db_instance_{self.environment_suffix}",
             identifier=f"payment-db-{self.environment_suffix}",
             engine="postgres",
-            engine_version="15.3",  # Fixed: 15.4 doesn't exist, use 15.3
+            engine_version="15.7",  # Using stable PostgreSQL 15.7 version
             instance_class="db.t3.micro",
             allocated_storage=20,
             db_name="payments",
