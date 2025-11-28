@@ -717,11 +717,14 @@ class TapStack(TerraformStack):
         )
 
         # Lambda Function for Route 53 cutover
+        # Lambda ZIP file path - use absolute path to ensure Terraform can find it
+        lambda_zip_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "lambda", "route53_updater.zip"))
+        
         route53_lambda = LambdaFunction(
             self,
             "route53_updater_lambda",
             function_name=f"route53-updater-{environment_suffix}",
-            filename="lib/lambda/route53_updater.zip",
+            filename=lambda_zip_path,
             handler="route53_updater.handler",
             runtime="python3.11",
             role=lambda_role.arn,
@@ -860,13 +863,9 @@ class TapStack(TerraformStack):
                                 [
                                     "AWS/RDS",
                                     "DatabaseConnections",
-                                    {
-                                        "stat": "Sum",
-                                        "label": "Aurora Connections",
-                                        "dimensions": {
-                                            "DBClusterIdentifier": aurora_cluster.cluster_identifier
-                                        }
-                                    }
+                                    "DBClusterIdentifier",
+                                    aurora_cluster.cluster_identifier,
+                                    {"stat": "Sum", "label": "Aurora Connections"}
                                 ]
                             ],
                             "view": "timeSeries",
@@ -908,22 +907,16 @@ class TapStack(TerraformStack):
                                 [
                                     "AWS/RDS",
                                     "CPUUtilization",
-                                    {
-                                        "stat": "Average",
-                                        "dimensions": {
-                                            "DBClusterIdentifier": aurora_cluster.cluster_identifier
-                                        }
-                                    }
+                                    "DBClusterIdentifier",
+                                    aurora_cluster.cluster_identifier,
+                                    {"stat": "Average"}
                                 ],
                                 [
                                     ".",
                                     "FreeableMemory",
-                                    {
-                                        "stat": "Average",
-                                        "dimensions": {
-                                            "DBClusterIdentifier": aurora_cluster.cluster_identifier
-                                        }
-                                    }
+                                    ".",
+                                    ".",
+                                    {"stat": "Average"}
                                 ]
                             ],
                             "view": "timeSeries",
@@ -940,12 +933,9 @@ class TapStack(TerraformStack):
                                 [
                                     "AWS/RDS",
                                     "AuroraReplicaLag",
-                                    {
-                                        "stat": "Average",
-                                        "dimensions": {
-                                            "DBClusterIdentifier": aurora_cluster.cluster_identifier
-                                        }
-                                    }
+                                    "DBClusterIdentifier",
+                                    aurora_cluster.cluster_identifier,
+                                    {"stat": "Average"}
                                 ]
                             ],
                             "view": "timeSeries",
