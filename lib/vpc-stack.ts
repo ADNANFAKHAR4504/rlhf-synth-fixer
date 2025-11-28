@@ -47,41 +47,31 @@ export class VpcStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Get availability zones using the parent's provider to ensure correct region
-    // The provider is passed via opts from the main stack
-    const provider = opts?.provider;
-    const azs = pulumi.output(
-      aws.getAvailabilityZones(
-        {
-          state: 'available',
-        },
-        { provider: provider as aws.Provider | undefined }
-      )
-    );
+    // Use us-east-2 availability zones (matching the provider in bin/tap.ts)
+    // Hardcoded to ensure consistency with the explicit provider region
+    const availabilityZones = ['us-east-2a', 'us-east-2b', 'us-east-2c'];
 
     // Create private subnets in multiple AZs for Multi-AZ deployment
     const subnetCidrs = ['10.0.1.0/24', '10.0.2.0/24', '10.0.3.0/24'];
 
-    // Create subnets dynamically using apply
-    const privateSubnets = azs.apply(zones =>
-      zones.names.slice(0, 3).map(
-        (az, i) =>
-          new aws.ec2.Subnet(
-            `private-subnet-${i + 1}-${args.environmentSuffix}`,
-            {
-              vpcId: vpc.id,
-              cidrBlock: subnetCidrs[i],
-              availabilityZone: az,
-              mapPublicIpOnLaunch: false,
-              tags: {
-                ...tags,
-                Name: `private-subnet-${i + 1}-${args.environmentSuffix}`,
-                Tier: 'Private',
-              },
+    // Create subnets using predefined AZs
+    const privateSubnets = availabilityZones.map(
+      (az, i) =>
+        new aws.ec2.Subnet(
+          `private-subnet-${i + 1}-${args.environmentSuffix}`,
+          {
+            vpcId: vpc.id,
+            cidrBlock: subnetCidrs[i],
+            availabilityZone: az,
+            mapPublicIpOnLaunch: false,
+            tags: {
+              ...tags,
+              Name: `private-subnet-${i + 1}-${args.environmentSuffix}`,
+              Tier: 'Private',
             },
-            { parent: this }
-          )
-      )
+          },
+          { parent: this }
+        )
     );
 
     // Security group for RDS PostgreSQL
@@ -236,9 +226,7 @@ export class VpcStack extends pulumi.ComponentResource {
 
     // Export values
     this.vpcId = vpc.id;
-    this.privateSubnetIds = privateSubnets.apply((subnets: aws.ec2.Subnet[]) =>
-      pulumi.all(subnets.map(s => s.id))
-    );
+    this.privateSubnetIds = pulumi.all(privateSubnets.map(s => s.id));
     this.databaseSecurityGroupId = databaseSecurityGroup.id;
     this.dmsSecurityGroupId = dmsSecurityGroup.id;
     this.lambdaSecurityGroupId = lambdaSecurityGroup.id;
