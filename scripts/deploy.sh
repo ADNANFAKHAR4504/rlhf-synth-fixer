@@ -95,7 +95,7 @@ if [ "$PLATFORM" = "cdk" ]; then
 
 elif [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ CDKTF project detected, running CDKTF deploy..."
-  
+
   if [ "$LANGUAGE" = "go" ]; then
     echo "🔧 Ensuring .gen exists for CDKTF Go deploy"
 
@@ -119,6 +119,74 @@ elif [ "$PLATFORM" = "cdktf" ]; then
     fi
     # Go modules are prepared during build; avoid cache-clearing and extra tidying here
   fi
+
+  # Clean up any stale resources before deploying (CDKTF uses local state)
+  RESOURCE_SUFFIX="${ENVIRONMENT_SUFFIX}"
+  echo "🧹 Checking for stale AWS resources with suffix: $RESOURCE_SUFFIX"
+
+  # Clean up stale DynamoDB tables
+  echo "Cleaning up stale DynamoDB tables..."
+  for table in $(aws dynamodb list-tables --query "TableNames[?contains(@, '-${RESOURCE_SUFFIX}')]" --output text 2>/dev/null || echo ""); do
+    if [ -n "$table" ]; then
+      echo "  Deleting DynamoDB table: $table"
+      aws dynamodb delete-table --table-name "$table" 2>/dev/null || echo "  Failed to delete $table (may not exist)"
+    fi
+  done
+
+  # Clean up stale IAM roles
+  echo "Cleaning up stale IAM roles..."
+  for role in $(aws iam list-roles --query "Roles[?contains(RoleName, '-${RESOURCE_SUFFIX}')].RoleName" --output text 2>/dev/null || echo ""); do
+    if [ -n "$role" ]; then
+      echo "  Deleting IAM role: $role"
+      # First detach all policies
+      for policy_arn in $(aws iam list-attached-role-policies --role-name "$role" --query "AttachedPolicies[].PolicyArn" --output text 2>/dev/null || echo ""); do
+        aws iam detach-role-policy --role-name "$role" --policy-arn "$policy_arn" 2>/dev/null || true
+      done
+      # Then delete inline policies
+      for policy_name in $(aws iam list-role-policies --role-name "$role" --query "PolicyNames[]" --output text 2>/dev/null || echo ""); do
+        aws iam delete-role-policy --role-name "$role" --policy-name "$policy_name" 2>/dev/null || true
+      done
+      aws iam delete-role --role-name "$role" 2>/dev/null || echo "  Failed to delete $role"
+    fi
+  done
+
+  # Clean up stale IAM policies
+  echo "Cleaning up stale IAM policies..."
+  for policy_arn in $(aws iam list-policies --scope Local --query "Policies[?contains(PolicyName, '-${RESOURCE_SUFFIX}')].Arn" --output text 2>/dev/null || echo ""); do
+    if [ -n "$policy_arn" ]; then
+      echo "  Deleting IAM policy: $policy_arn"
+      # First detach from all entities
+      for role in $(aws iam list-entities-for-policy --policy-arn "$policy_arn" --query "PolicyRoles[].RoleName" --output text 2>/dev/null || echo ""); do
+        aws iam detach-role-policy --role-name "$role" --policy-arn "$policy_arn" 2>/dev/null || true
+      done
+      aws iam delete-policy --policy-arn "$policy_arn" 2>/dev/null || echo "  Failed to delete $policy_arn"
+    fi
+  done
+
+  # Clean up stale KMS aliases (keys will be scheduled for deletion)
+  echo "Cleaning up stale KMS aliases..."
+  for alias in $(aws kms list-aliases --query "Aliases[?contains(AliasName, '-${RESOURCE_SUFFIX}')].AliasName" --output text 2>/dev/null || echo ""); do
+    if [ -n "$alias" ]; then
+      echo "  Deleting KMS alias: $alias"
+      aws kms delete-alias --alias-name "$alias" 2>/dev/null || echo "  Failed to delete $alias"
+    fi
+  done
+
+  # Clean up stale S3 buckets (must empty first)
+  echo "Cleaning up stale S3 buckets..."
+  for bucket in $(aws s3api list-buckets --query "Buckets[?contains(Name, '-${RESOURCE_SUFFIX}')].Name" --output text 2>/dev/null || echo ""); do
+    if [ -n "$bucket" ]; then
+      echo "  Deleting S3 bucket: $bucket"
+      # Delete all objects and versions
+      aws s3 rm "s3://$bucket" --recursive 2>/dev/null || true
+      aws s3api delete-objects --bucket "$bucket" --delete "$(aws s3api list-object-versions --bucket "$bucket" --query '{Objects: Versions[].{Key: Key, VersionId: VersionId}}' --output json 2>/dev/null || echo '{"Objects": []}')" 2>/dev/null || true
+      aws s3api delete-objects --bucket "$bucket" --delete "$(aws s3api list-object-versions --bucket "$bucket" --query '{Objects: DeleteMarkers[].{Key: Key, VersionId: VersionId}}' --output json 2>/dev/null || echo '{"Objects": []}')" 2>/dev/null || true
+      aws s3api delete-bucket --bucket "$bucket" 2>/dev/null || echo "  Failed to delete $bucket"
+    fi
+  done
+
+  echo "✅ Stale resource cleanup completed"
+
   npm run cdktf:deploy
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
