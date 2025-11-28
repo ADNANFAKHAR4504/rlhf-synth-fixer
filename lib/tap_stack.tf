@@ -22,7 +22,7 @@ terraform {
       version = "~> 3.5"
     }
   }
-  
+
   backend "s3" {}
 }
 
@@ -752,7 +752,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "telemetry" {
 
     transition {
       days          = var.lifecycle_days
-      storage_class = "STANDARD_IA"
+      storage_class = "INTELLIGENT_TIERING"
     }
   }
 }
@@ -968,8 +968,9 @@ resource "aws_elasticache_replication_group" "redis" {
 # ============================================================================
 
 resource "random_password" "aurora" {
-  length  = 32
-  special = true
+  length           = 32
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 
 resource "aws_secretsmanager_secret" "aurora" {
@@ -2300,6 +2301,178 @@ resource "aws_athena_workgroup" "analytics" {
 }
 
 # ============================================================================
+# WAF (Web Application Firewall)
+# ============================================================================
+
+# CloudWatch Log Group for WAF
+resource "aws_cloudwatch_log_group" "waf" {
+  name              = "/aws/waf/${local.name_prefix}-webacl"
+  retention_in_days = local.current_capacity.log_retention_days
+  kms_key_id        = aws_kms_key.main.arn
+
+  tags = local.tags
+}
+
+# WAF WebACL
+resource "aws_wafv2_web_acl" "main" {
+  name        = "${local.name_prefix}-webacl"
+  description = "WAF WebACL for vehicle tracking application"
+  scope       = "REGIONAL"
+
+  default_action {
+    allow {}
+  }
+
+  # AWS Managed Rule - Core Rule Set
+  rule {
+    name     = "AWSManagedRulesCommonRuleSet"
+    priority = 1
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesCommonRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${local.name_prefix}-CommonRuleSetMetric"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # AWS Managed Rule - Known Bad Inputs
+  rule {
+    name     = "AWSManagedRulesKnownBadInputsRuleSet"
+    priority = 2
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesKnownBadInputsRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${local.name_prefix}-KnownBadInputsMetric"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # AWS Managed Rule - SQL Injection
+  rule {
+    name     = "AWSManagedRulesSQLiRuleSet"
+    priority = 3
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesSQLiRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${local.name_prefix}-SQLiRuleSetMetric"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # AWS Managed Rule - Linux Operating System
+  rule {
+    name     = "AWSManagedRulesLinuxRuleSet"
+    priority = 4
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesLinuxRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${local.name_prefix}-LinuxRuleSetMetric"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # AWS Managed Rule - Unix Operating System
+  rule {
+    name     = "AWSManagedRulesUnixRuleSet"
+    priority = 5
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesUnixRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${local.name_prefix}-UnixRuleSetMetric"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # Rate-based rule for DDoS protection
+  rule {
+    name     = "RateBasedRule"
+    priority = 6
+
+    action {
+      block {}
+    }
+
+    statement {
+      rate_based_statement {
+        limit              = 2000
+        aggregate_key_type = "IP"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${local.name_prefix}-RateBasedRuleMetric"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "${local.name_prefix}-WebACLMetric"
+    sampled_requests_enabled   = true
+  }
+
+  tags = merge(local.tags, {
+    Name = "${local.name_prefix}-webacl"
+  })
+}
+
+# ============================================================================
 # CLOUDWATCH ALARMS
 # ============================================================================
 
@@ -2524,4 +2697,57 @@ output "vpc_details" {
 output "athena_workgroup" {
   value       = aws_athena_workgroup.analytics.name
   description = "Athena workgroup name"
+}
+
+output "waf_web_acl_id" {
+  value       = aws_wafv2_web_acl.main.id
+  description = "WAF WebACL ID"
+}
+
+output "waf_web_acl_arn" {
+  value       = aws_wafv2_web_acl.main.arn
+  description = "WAF WebACL ARN"
+}
+
+output "kms_key_id" {
+  value       = aws_kms_key.main.id
+  description = "KMS key ID for encryption"
+}
+
+output "kms_key_arn" {
+  value       = aws_kms_key.main.arn
+  description = "KMS key ARN for encryption"
+}
+
+output "aurora_secret_arn" {
+  value       = aws_secretsmanager_secret.aurora.arn
+  description = "Secrets Manager secret ARN for Aurora credentials"
+  sensitive   = true
+}
+
+output "lambda_function_names" {
+  value = {
+    location_processor = aws_lambda_function.location_processor.function_name
+    geofence_checker   = aws_lambda_function.geofence_checker.function_name
+    warehouse_updater  = aws_lambda_function.warehouse_updater.function_name
+    customer_notifier  = aws_lambda_function.customer_notifier.function_name
+    telemetry_analyzer = aws_lambda_function.telemetry_analyzer.function_name
+    route_optimizer    = aws_lambda_function.route_optimizer.function_name
+  }
+  description = "Lambda function names"
+}
+
+output "kinesis_stream_name" {
+  value       = aws_kinesis_stream.gps.name
+  description = "Kinesis stream name"
+}
+
+output "dynamodb_stream_arn" {
+  value       = aws_dynamodb_table.vehicle_positions.stream_arn
+  description = "DynamoDB stream ARN for vehicle positions table"
+}
+
+output "eventbridge_rule_arn" {
+  value       = aws_cloudwatch_event_rule.route_optimization_schedule.arn
+  description = "EventBridge rule ARN for route optimization schedule"
 }

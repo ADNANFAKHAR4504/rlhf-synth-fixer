@@ -27,4 +27,4 @@ timeout_seconds                  = 120
 visibility_timeout               = 600
 retention_period                 = 1209600
 optimization_schedule_expression = "rate(1 minute)"
-pr_number                        = "pr7465"
+pr_number                        = "pr7465t"
