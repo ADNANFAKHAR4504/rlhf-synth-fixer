@@ -25,8 +25,17 @@ const environment = validEnvironments.includes(stack)
 // Get region from config
 const region = awsConfig.get('region') || process.env.AWS_REGION || 'us-east-1';
 
+// Determine if we are in CI/CD environment
+// CI/CD is detected when ENVIRONMENT_SUFFIX is set
+const isCIEnvironment = !!process.env.ENVIRONMENT_SUFFIX;
+
 // Get Docker image URI from config (with default for CI/CD)
-const defaultDockerImageUri = `${process.env.CURRENT_ACCOUNT_ID || '123456789012'}.dkr.ecr.${region}.amazonaws.com/tap-application:latest`;
+// In CI/CD, use the AWS public ECR base image for Node.js Lambda
+// This is a valid public image that exists and can be used for testing deployment
+const defaultDockerImageUri =
+  isCIEnvironment && !config.get('dockerImageUri')
+    ? 'public.ecr.aws/lambda/nodejs:20'
+    : `${process.env.CURRENT_ACCOUNT_ID || '123456789012'}.dkr.ecr.${region}.amazonaws.com/tap-application:latest`;
 const dockerImageUri = config.get('dockerImageUri') || defaultDockerImageUri;
 
 // Get networking stack reference (with default for CI/CD)
@@ -39,10 +48,9 @@ const networkingStackRef =
 // 1. ENVIRONMENT_SUFFIX is set (indicates CI/CD)
 // 2. No explicit networking stack reference was configured
 // 3. CREATE_STANDALONE_NETWORKING env var is set to 'true'
-const isCI =
-  !!process.env.ENVIRONMENT_SUFFIX && !config.get('networkingStackRef');
 const createStandaloneNetworking =
-  process.env.CREATE_STANDALONE_NETWORKING === 'true' || isCI;
+  process.env.CREATE_STANDALONE_NETWORKING === 'true' ||
+  (isCIEnvironment && !config.get('networkingStackRef'));
 
 // Environment-specific configuration
 const envConfigs: Record<string, EnvironmentConfig> = {
