@@ -326,13 +326,18 @@ export class TapStack extends pulumi.ComponentResource {
 
     const config = new pulumi.Config();
     const environment = pulumi.getStack();
-    const environmentSuffix = config.require('environmentSuffix');
-    const region = config.require('region');
-    const lambdaMemory = config.requireNumber('lambdaMemory');
-    const lambdaConcurrency = config.requireNumber('lambdaConcurrency');
-    const enablePitr = config.requireBoolean('enablePitr');
-    const dlqRetries = config.requireNumber('dlqRetries');
-    const notificationEmail = config.require('notificationEmail');
+    const environmentSuffix =
+      config.get('environmentSuffix') ||
+      process.env.ENVIRONMENT_SUFFIX ||
+      environment;
+    const region =
+      config.get('region') || process.env.AWS_REGION || 'us-east-1';
+    const lambdaMemory = config.getNumber('lambdaMemory') || 512;
+    const lambdaConcurrency = config.getNumber('lambdaConcurrency') || 1;
+    const enablePitr = config.getBoolean('enablePitr') || false;
+    const dlqRetries = config.getNumber('dlqRetries') || 2;
+    const notificationEmail =
+      config.get('notificationEmail') || 'test@example.com';
 
     const resourceOpts = { parent: this };
 
