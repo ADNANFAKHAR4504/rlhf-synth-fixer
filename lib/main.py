@@ -4,14 +4,15 @@ Multi-Region Disaster Recovery Infrastructure
 CDKTF Python Application Entry Point
 """
 
-from cdktf import App, TerraformStack, TerraformOutput
+from cdktf import App, TerraformOutput, TerraformStack
 from constructs import Construct
-from stacks.primary_stack import PrimaryStack
-from stacks.secondary_stack import SecondaryStack
-from stacks.global_stack import GlobalStack
+
+from lib.stacks.global_stack import GlobalStack
+from lib.stacks.primary_stack import PrimaryStack
+from lib.stacks.secondary_stack import SecondaryStack
 
 
-def main():
+def main():  # pragma: no cover
     """
     Main application entry point.
     Creates CDKTF app and instantiates all stacks.

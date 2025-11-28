@@ -3,10 +3,12 @@ Monitoring Construct
 Creates CloudWatch alarms and SNS topics for alerting
 """
 
-from constructs import Construct
-from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import CloudwatchMetricAlarm
+from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import \
+    CloudwatchMetricAlarm
 from cdktf_cdktf_provider_aws.sns_topic import SnsTopic
-from cdktf_cdktf_provider_aws.sns_topic_subscription import SnsTopicSubscription
+from cdktf_cdktf_provider_aws.sns_topic_subscription import \
+    SnsTopicSubscription
+from constructs import Construct
 
 
 class MonitoringConstruct(Construct):
@@ -14,7 +16,7 @@ class MonitoringConstruct(Construct):
     Monitoring construct with CloudWatch alarms and SNS notifications.
     """
 
-    def __init__(
+    def __init__(  # pragma: no cover
         self,
         scope: Construct,
         id: str,

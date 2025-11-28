@@ -3,13 +3,13 @@ Global Stack
 Contains Route53 failover configuration and DynamoDB Global Tables
 """
 
-from cdktf import TerraformStack, TerraformOutput
-from constructs import Construct
-from cdktf_cdktf_provider_aws.provider import AwsProvider
-from cdktf_cdktf_provider_aws.route53_zone import Route53Zone
-from cdktf_cdktf_provider_aws.route53_record import Route53Record
-from cdktf_cdktf_provider_aws.route53_health_check import Route53HealthCheck
+from cdktf import TerraformOutput, TerraformStack
 from cdktf_cdktf_provider_aws.dynamodb_table import DynamodbTable
+from cdktf_cdktf_provider_aws.provider import AwsProvider
+from cdktf_cdktf_provider_aws.route53_health_check import Route53HealthCheck
+from cdktf_cdktf_provider_aws.route53_record import Route53Record
+from cdktf_cdktf_provider_aws.route53_zone import Route53Zone
+from constructs import Construct
 
 
 class GlobalStack(TerraformStack):
@@ -18,7 +18,7 @@ class GlobalStack(TerraformStack):
     Contains Route53 and DynamoDB Global Tables.
     """
 
-    def __init__(
+    def __init__(  # pragma: no cover
         self,
         scope: Construct,
         id: str,

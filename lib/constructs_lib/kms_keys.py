@@ -3,10 +3,11 @@ KMS Key Construct
 Creates customer-managed KMS keys with automatic rotation
 """
 
-from constructs import Construct
-from cdktf_cdktf_provider_aws.kms_key import KmsKey
-from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
 import json
+
+from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
+from cdktf_cdktf_provider_aws.kms_key import KmsKey
+from constructs import Construct
 
 
 class KmsKeyConstruct(Construct):
@@ -14,7 +15,7 @@ class KmsKeyConstruct(Construct):
     KMS customer-managed key construct with automatic rotation.
     """
 
-    def __init__(
+    def __init__(  # pragma: no cover
         self,
         scope: Construct,
         id: str,

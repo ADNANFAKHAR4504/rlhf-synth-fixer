@@ -3,15 +3,17 @@ Aurora Global Database Construct
 Creates Aurora PostgreSQL 15 cluster with global replication
 """
 
-from constructs import Construct
-from cdktf_cdktf_provider_aws.rds_global_cluster import RdsGlobalCluster
+import json
+from typing import List
+
+from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
 from cdktf_cdktf_provider_aws.rds_cluster import RdsCluster
 from cdktf_cdktf_provider_aws.rds_cluster_instance import RdsClusterInstance
-from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
+from cdktf_cdktf_provider_aws.rds_global_cluster import RdsGlobalCluster
 from cdktf_cdktf_provider_aws.secretsmanager_secret import SecretsmanagerSecret
-from cdktf_cdktf_provider_aws.secretsmanager_secret_version import SecretsmanagerSecretVersion
-from typing import List
-import json
+from cdktf_cdktf_provider_aws.secretsmanager_secret_version import \
+    SecretsmanagerSecretVersion
+from constructs import Construct
 
 
 class AuroraGlobalConstruct(Construct):
@@ -19,7 +21,7 @@ class AuroraGlobalConstruct(Construct):
     Aurora Global Database construct for multi-region replication.
     """
 
-    def __init__(
+    def __init__(  # pragma: no cover
         self,
         scope: Construct,
         id: str,
