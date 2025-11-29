@@ -7,14 +7,35 @@ import pytest
 
 @pytest.fixture(scope="module")
 def stack_outputs():
-    """Load stack outputs from deployment."""
+    """Load stack outputs from deployment and flatten CDKTF output names."""
     outputs_file = "cfn-outputs/flat-outputs.json"
 
     if not os.path.exists(outputs_file):
         pytest.skip(f"Deployment outputs not found at {outputs_file}")
 
     with open(outputs_file, 'r', encoding='utf-8') as f:
-        return json.load(f)
+        raw_outputs = json.load(f)
+
+    # Flatten CDKTF output names
+    # Convert 'microservices_cluster_name_A6AAE71' -> 'cluster_name'
+    flattened = {}
+    for key, value in raw_outputs.items():
+        # Handle CDKTF-prefixed outputs: prefix_semantic_name_HASH
+        if key.startswith('microservices_') and '_' in key:
+            # Split and extract semantic name (between prefix and hash)
+            parts = key.split('_')
+            # Remove 'microservices' prefix and hash suffix (last part)
+            if len(parts) > 2:
+                # Join all parts except first (microservices) and last (hash)
+                semantic_name = '_'.join(parts[1:-1])
+                flattened[semantic_name] = value
+            else:
+                flattened[key] = value
+        else:
+            # Keep non-prefixed outputs as-is
+            flattened[key] = value
+
+    return flattened
 
 
 @pytest.fixture(scope="module")
