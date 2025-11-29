@@ -15,7 +15,13 @@
     "EC2",
     "EBS",
     "NAT",
-    "EIP"
+    "EIP",
+    "Security Groups",
+    "Subnets",
+    "Internet Gateway",
+    "Route Tables",
+    "AMI",
+    "Availability Zones"
   ],
   "task_config": {
     "deploy_env": "dev.tfvars"

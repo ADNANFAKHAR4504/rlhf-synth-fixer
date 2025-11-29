@@ -1,9 +1,9 @@
 Problem Context
 
-You must generate a complete, production-ready Terraform configuration in a single file (main.tf) that implements a highly available AWS VPC architecture.
-The entire solution must be implemented fully in Terraform.
+You must generate a complete, production-ready Terraform configuration that implements a highly available AWS VPC architecture.
+The entire solution must be implemented fully in Terraform using a properly organized multi-file structure.
 The environment must reside exclusively in us-west-2, support high availability, and meet all networking, security, and EC2 requirements.
-This Terraform should be clean, well-structured, readable, and ready to run.
+This Terraform should be clean, well-structured, readable, and ready to run with multi-environment support.
 
 Core Implementation Requirements
 
@@ -65,13 +65,17 @@ All subnet IDs (public + private)
 
 Ensure no resource has deletion protection enabled.
 
-Entire configuration must be delivered as one single Terraform file (main.tf) — no modules, no multi-file structure.
+Configuration must be delivered using proper multi-file structure with organized separation of concerns:
+- provider.tf: Provider configuration and versioning
+- variables.tf: Variable definitions with defaults and descriptions  
+- tap_stack.tf: Main infrastructure resources
+All resources must support multi-environment deployment using environment_suffix variable.
 
 Constraints
 
 Must be Terraform only.
 
-Entire solution must be delivered in one file only (main.tf).
+Solution must use proper multi-file structure for maintainability and organization.
 
 AWS region must be us-west-2.
 
@@ -93,30 +97,38 @@ Include Elastic IP
 
 Have encrypted EBS volume
 
+All resources must use environment_suffix variable in Name tags for multi-environment deployment support.
+
 Must output VPC + all subnet IDs.
 
 No deletion protection must be enabled on any resource.
 
 Expected Output
 
-Produce a fully working, complete main.tf file containing:
+Produce a fully working, complete multi-file Terraform configuration containing:
 
-Provider block
+provider.tf:
+- AWS provider configuration
+- Version constraints
+- Region specification
 
-Variables 
+variables.tf:
+- Variable definitions with defaults
+- Environment suffix for multi-environment support
+- SSH CIDR variable
+- Proper descriptions
 
-All resources (VPC, subnets, IGW, NAT, route tables, EC2, SG, EIPs, etc.)
+tap_stack.tf:
+- All infrastructure resources (VPC, subnets, IGW, NAT, route tables, EC2, SG, EIPs, etc.)
+- Environment-aware naming using variables
+- Outputs block
+- Comments explaining major sections
 
-Outputs block
-
-Comments explaining major sections
-
-Valid Terraform 1.5+ syntax
-
-Everything MUST be included in a single main.tf file.
+Valid Terraform 1.5+ syntax with proper file organization.
 
 Output Instructions
-Generate a single-file Terraform configuration (main.tf) implementing all requirements above.
-Ensure the output is formatted as valid Terraform HCL code 
+Generate a properly organized multi-file Terraform configuration implementing all requirements above.
+Ensure all files are formatted as valid Terraform HCL code.
 Include comments throughout explaining key security best practices.
-Do not summarize or break into sections — produce one full Terraform file as the output.
+Use environment_suffix variable consistently across all resource names for multi-environment support.
+Structure files for maintainability and clear separation of concerns.

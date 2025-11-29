@@ -331,16 +331,16 @@ describe("Terraform Infrastructure Unit Tests", () => {
 
   describe("Tagging and Naming Tests", () => {
     test("resources have appropriate Name tags", () => {
-      expect(stackContent).toMatch(/Name\s*=\s*"main-vpc"/);
-      expect(stackContent).toMatch(/Name\s*=\s*"public-subnet-1"/);
-      expect(stackContent).toMatch(/Name\s*=\s*"public-subnet-2"/);
-      expect(stackContent).toMatch(/Name\s*=\s*"private-subnet-1"/);
-      expect(stackContent).toMatch(/Name\s*=\s*"private-subnet-2"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"main-vpc-\$\{var\.environment_suffix\}"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"public-subnet-1-\$\{var\.environment_suffix\}"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"public-subnet-2-\$\{var\.environment_suffix\}"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"private-subnet-1-\$\{var\.environment_suffix\}"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"private-subnet-2-\$\{var\.environment_suffix\}"/);
     });
 
     test("EC2 instances have descriptive tags", () => {
-      expect(stackContent).toMatch(/Name\s*=\s*"ec2-instance-1"/);
-      expect(stackContent).toMatch(/Name\s*=\s*"ec2-instance-2"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"ec2-instance-1-\$\{var\.environment_suffix\}"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"ec2-instance-2-\$\{var\.environment_suffix\}"/);
       expect(stackContent).toMatch(/Zone\s*=\s*"private-subnet-1"/);
       expect(stackContent).toMatch(/Zone\s*=\s*"private-subnet-2"/);
     });
@@ -397,11 +397,11 @@ describe("Terraform Infrastructure Unit Tests", () => {
 
   describe("Detailed VPC Configuration Tests", () => {
     test("VPC has correct name prefix", () => {
-      expect(stackContent).toMatch(/Name\s*=\s*"main-vpc"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"main-vpc-\$\{var\.environment_suffix\}"/);
     });
 
     test("VPC has Environment tag", () => {
-      expect(stackContent).toMatch(/Environment\s*=\s*"production"/);
+      expect(stackContent).toMatch(/Environment\s*=\s*var\.environment_suffix/);
     });
 
     test("VPC configuration is complete", () => {
@@ -440,19 +440,19 @@ describe("Terraform Infrastructure Unit Tests", () => {
     });
 
     test("public subnet 1 has Type tag", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"public_1"[^}]*Type\s*=\s*"Public"/s);
+      expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"public_1"[\s\S]*?tags\s*=\s*\{[\s\S]*?Type\s*=\s*"Public"/);
     });
 
     test("public subnet 2 has Type tag", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"public_2"[^}]*Type\s*=\s*"Public"/s);
+      expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"public_2"[\s\S]*?tags\s*=\s*\{[\s\S]*?Type\s*=\s*"Public"/);
     });
 
     test("private subnet 1 has Type tag", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"private_1"[^}]*Type\s*=\s*"Private"/s);
+      expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"private_1"[\s\S]*?tags\s*=\s*\{[\s\S]*?Type\s*=\s*"Private"/);
     });
 
     test("private subnet 2 has Type tag", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"private_2"[^}]*Type\s*=\s*"Private"/s);
+      expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"private_2"[\s\S]*?tags\s*=\s*\{[\s\S]*?Type\s*=\s*"Private"/);
     });
 
     test("subnet CIDR blocks are within VPC range", () => {
@@ -466,7 +466,7 @@ describe("Terraform Infrastructure Unit Tests", () => {
 
   describe("Detailed Internet Gateway Tests", () => {
     test("Internet Gateway has correct name", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_internet_gateway"\s+"main"[^}]*Name\s*=\s*"main-igw"/s);
+      expect(stackContent).toMatch(/resource\s+"aws_internet_gateway"\s+"main"[^}]*Name\s*=\s*"main-igw-\$\{var\.environment_suffix\}"/s);
     });
 
     test("Internet Gateway is attached to VPC", () => {
@@ -490,11 +490,11 @@ describe("Terraform Infrastructure Unit Tests", () => {
     });
 
     test("NAT Gateway 1 has correct name tag", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_nat_gateway"\s+"nat_1"[^}]*Name\s*=\s*"nat-gateway-1"/s);
+      expect(stackContent).toMatch(/resource\s+"aws_nat_gateway"\s+"nat_1"[^}]*Name\s*=\s*"nat-gateway-1-\$\{var\.environment_suffix\}"/s);
     });
 
     test("NAT Gateway 2 has correct name tag", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_nat_gateway"\s+"nat_2"[^}]*Name\s*=\s*"nat-gateway-2"/s);
+      expect(stackContent).toMatch(/resource\s+"aws_nat_gateway"\s+"nat_2"[^}]*Name\s*=\s*"nat-gateway-2-\$\{var\.environment_suffix\}"/s);
     });
 
     test("NAT Gateway dependencies are correct", () => {
@@ -520,33 +520,33 @@ describe("Terraform Infrastructure Unit Tests", () => {
     });
 
     test("NAT EIP 1 has correct name tag", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_eip"\s+"nat_1"[^}]*Name\s*=\s*"nat-eip-1"/s);
+      expect(stackContent).toMatch(/resource\s+"aws_eip"\s+"nat_1"[^}]*Name\s*=\s*"nat-eip-1-\$\{var\.environment_suffix\}"/s);
     });
 
     test("NAT EIP 2 has correct name tag", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_eip"\s+"nat_2"[^}]*Name\s*=\s*"nat-eip-2"/s);
+      expect(stackContent).toMatch(/resource\s+"aws_eip"\s+"nat_2"[^}]*Name\s*=\s*"nat-eip-2-\$\{var\.environment_suffix\}"/s);
     });
 
     test("EC2 EIP 1 has correct name tag", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_eip"\s+"ec2_1"[^}]*Name\s*=\s*"ec2-eip-1"/s);
+      expect(stackContent).toMatch(/resource\s+"aws_eip"\s+"ec2_1"[^}]*Name\s*=\s*"ec2-eip-1-\$\{var\.environment_suffix\}"/s);
     });
 
     test("EC2 EIP 2 has correct name tag", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_eip"\s+"ec2_2"[^}]*Name\s*=\s*"ec2-eip-2"/s);
+      expect(stackContent).toMatch(/resource\s+"aws_eip"\s+"ec2_2"[^}]*Name\s*=\s*"ec2-eip-2-\$\{var\.environment_suffix\}"/s);
     });
   });
 
   describe("Detailed Route Table Tests", () => {
     test("public route table has correct name", () => {
-      expect(stackContent).toMatch(/Name\s*=\s*"public-route-table"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"public-route-table-\$\{var\.environment_suffix\}"/);
     });
 
     test("private route table 1 has correct name", () => {
-      expect(stackContent).toMatch(/Name\s*=\s*"private-route-table-1"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"private-route-table-1-\$\{var\.environment_suffix\}"/);
     });
 
     test("private route table 2 has correct name", () => {
-      expect(stackContent).toMatch(/Name\s*=\s*"private-route-table-2"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"private-route-table-2-\$\{var\.environment_suffix\}"/);
     });
 
     test("public route table routes 0.0.0.0/0 to IGW", () => {
@@ -607,7 +607,7 @@ describe("Terraform Infrastructure Unit Tests", () => {
     });
 
     test("security group has correct name tag", () => {
-      expect(stackContent).toMatch(/Name\s*=\s*"ec2-security-group"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"ec2-security-group-\$\{var\.environment_suffix\}"/);
     });
   });
 
@@ -655,35 +655,35 @@ describe("Terraform Infrastructure Unit Tests", () => {
 
   describe("Advanced Configuration Validation Tests", () => {
     test("all resources have consistent naming convention", () => {
-      expect(stackContent).toMatch(/Name\s*=\s*"main-vpc"/);
-      expect(stackContent).toMatch(/Name\s*=\s*"main-igw"/);
-      expect(stackContent).toMatch(/Name\s*=\s*"nat-gateway-1"/);
-      expect(stackContent).toMatch(/Name\s*=\s*"nat-gateway-2"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"main-vpc-\$\{var\.environment_suffix\}"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"main-igw-\$\{var\.environment_suffix\}"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"nat-gateway-1-\$\{var\.environment_suffix\}"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"nat-gateway-2-\$\{var\.environment_suffix\}"/);
     });
 
     test("subnet naming follows pattern", () => {
-      expect(stackContent).toMatch(/Name\s*=\s*"public-subnet-1"/);
-      expect(stackContent).toMatch(/Name\s*=\s*"public-subnet-2"/);
-      expect(stackContent).toMatch(/Name\s*=\s*"private-subnet-1"/);
-      expect(stackContent).toMatch(/Name\s*=\s*"private-subnet-2"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"public-subnet-1-\$\{var\.environment_suffix\}"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"public-subnet-2-\$\{var\.environment_suffix\}"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"private-subnet-1-\$\{var\.environment_suffix\}"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"private-subnet-2-\$\{var\.environment_suffix\}"/);
     });
 
     test("route table naming follows pattern", () => {
-      expect(stackContent).toMatch(/Name\s*=\s*"public-route-table"/);
-      expect(stackContent).toMatch(/Name\s*=\s*"private-route-table-1"/);
-      expect(stackContent).toMatch(/Name\s*=\s*"private-route-table-2"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"public-route-table-\$\{var\.environment_suffix\}"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"private-route-table-1-\$\{var\.environment_suffix\}"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"private-route-table-2-\$\{var\.environment_suffix\}"/);
     });
 
     test("EIP naming follows pattern", () => {
-      expect(stackContent).toMatch(/Name\s*=\s*"nat-eip-1"/);
-      expect(stackContent).toMatch(/Name\s*=\s*"nat-eip-2"/);
-      expect(stackContent).toMatch(/Name\s*=\s*"ec2-eip-1"/);
-      expect(stackContent).toMatch(/Name\s*=\s*"ec2-eip-2"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"nat-eip-1-\$\{var\.environment_suffix\}"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"nat-eip-2-\$\{var\.environment_suffix\}"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"ec2-eip-1-\$\{var\.environment_suffix\}"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"ec2-eip-2-\$\{var\.environment_suffix\}"/);
     });
 
     test("instance naming follows pattern", () => {
-      expect(stackContent).toMatch(/Name\s*=\s*"ec2-instance-1"/);
-      expect(stackContent).toMatch(/Name\s*=\s*"ec2-instance-2"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"ec2-instance-1-\$\{var\.environment_suffix\}"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"ec2-instance-2-\$\{var\.environment_suffix\}"/);
     });
   });
 

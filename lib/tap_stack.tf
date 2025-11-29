@@ -30,8 +30,8 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = {
-    Name        = "main-vpc"
-    Environment = "production"
+    Name        = "main-vpc-${var.environment_suffix}"
+    Environment = var.environment_suffix
   }
 }
 
@@ -43,7 +43,7 @@ resource "aws_subnet" "public_1" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "public-subnet-1"
+    Name = "public-subnet-1-${var.environment_suffix}"
     Type = "Public"
   }
 }
@@ -56,7 +56,7 @@ resource "aws_subnet" "public_2" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "public-subnet-2"
+    Name = "public-subnet-2-${var.environment_suffix}"
     Type = "Public"
   }
 }
@@ -68,7 +68,7 @@ resource "aws_subnet" "private_1" {
   availability_zone = data.aws_availability_zones.available.names[0]
 
   tags = {
-    Name = "private-subnet-1"
+    Name = "private-subnet-1-${var.environment_suffix}"
     Type = "Private"
   }
 }
@@ -80,7 +80,7 @@ resource "aws_subnet" "private_2" {
   availability_zone = data.aws_availability_zones.available.names[1]
 
   tags = {
-    Name = "private-subnet-2"
+    Name = "private-subnet-2-${var.environment_suffix}"
     Type = "Private"
   }
 }
@@ -90,7 +90,7 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "main-igw"
+    Name = "main-igw-${var.environment_suffix}"
   }
 }
 
@@ -99,7 +99,7 @@ resource "aws_eip" "nat_1" {
   domain = "vpc"
 
   tags = {
-    Name = "nat-eip-1"
+    Name = "nat-eip-1-${var.environment_suffix}"
   }
 
   # Ensure proper resource creation order
@@ -111,7 +111,7 @@ resource "aws_eip" "nat_2" {
   domain = "vpc"
 
   tags = {
-    Name = "nat-eip-2"
+    Name = "nat-eip-2-${var.environment_suffix}"
   }
 
   # Ensure proper resource creation order
@@ -124,7 +124,7 @@ resource "aws_nat_gateway" "nat_1" {
   subnet_id     = aws_subnet.public_1.id
 
   tags = {
-    Name = "nat-gateway-1"
+    Name = "nat-gateway-1-${var.environment_suffix}"
   }
 
   # Ensure proper resource creation order
@@ -137,7 +137,7 @@ resource "aws_nat_gateway" "nat_2" {
   subnet_id     = aws_subnet.public_2.id
 
   tags = {
-    Name = "nat-gateway-2"
+    Name = "nat-gateway-2-${var.environment_suffix}"
   }
 
   # Ensure proper resource creation order
@@ -154,7 +154,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name = "public-route-table"
+    Name = "public-route-table-${var.environment_suffix}"
   }
 }
 
@@ -168,7 +168,7 @@ resource "aws_route_table" "private_1" {
   }
 
   tags = {
-    Name = "private-route-table-1"
+    Name = "private-route-table-1-${var.environment_suffix}"
   }
 }
 
@@ -182,7 +182,7 @@ resource "aws_route_table" "private_2" {
   }
 
   tags = {
-    Name = "private-route-table-2"
+    Name = "private-route-table-2-${var.environment_suffix}"
   }
 }
 
@@ -234,7 +234,7 @@ resource "aws_security_group" "ec2_sg" {
   }
 
   tags = {
-    Name = "ec2-security-group"
+    Name = "ec2-security-group-${var.environment_suffix}"
   }
 }
 
@@ -244,7 +244,7 @@ resource "aws_eip" "ec2_1" {
   domain   = "vpc"
 
   tags = {
-    Name = "ec2-eip-1"
+    Name = "ec2-eip-1-${var.environment_suffix}"
   }
 }
 
@@ -254,7 +254,7 @@ resource "aws_eip" "ec2_2" {
   domain   = "vpc"
 
   tags = {
-    Name = "ec2-eip-2"
+    Name = "ec2-eip-2-${var.environment_suffix}"
   }
 }
 
@@ -281,7 +281,7 @@ resource "aws_instance" "ec2_1" {
   disable_api_termination = false
 
   tags = {
-    Name = "ec2-instance-1"
+    Name = "ec2-instance-1-${var.environment_suffix}"
     Zone = "private-subnet-1"
   }
 }
@@ -309,7 +309,7 @@ resource "aws_instance" "ec2_2" {
   disable_api_termination = false
 
   tags = {
-    Name = "ec2-instance-2"
+    Name = "ec2-instance-2-${var.environment_suffix}"
     Zone = "private-subnet-2"
   }
 }
