@@ -68,14 +68,29 @@ output "system_node_group_id" {
   value       = aws_eks_node_group.system.id
 }
 
+output "system_node_group_name" {
+  description = "System node group name"
+  value       = aws_eks_node_group.system.node_group_name
+}
+
 output "application_node_group_id" {
   description = "Application node group ID"
   value       = aws_eks_node_group.application.id
 }
 
+output "application_node_group_name" {
+  description = "Application node group name"
+  value       = aws_eks_node_group.application.node_group_name
+}
+
 output "spot_node_group_id" {
   description = "Spot node group ID"
   value       = aws_eks_node_group.spot.id
+}
+
+output "spot_node_group_name" {
+  description = "Spot node group name"
+  value       = aws_eks_node_group.spot.node_group_name
 }
 
 output "kms_key_id" {
@@ -93,6 +108,11 @@ output "ebs_csi_driver_role_arn" {
   value       = aws_iam_role.ebs_csi_driver.arn
 }
 
+output "ebs_csi_driver_role_name" {
+  description = "Name of IAM role for EBS CSI driver"
+  value       = aws_iam_role.ebs_csi_driver.name
+}
+
 output "ebs_csi_driver_enabled" {
   description = "Whether EBS CSI driver addon is enabled"
   value       = var.enable_ebs_csi_driver
@@ -103,9 +123,19 @@ output "aws_load_balancer_controller_role_arn" {
   value       = aws_iam_role.aws_load_balancer_controller.arn
 }
 
+output "aws_load_balancer_controller_role_name" {
+  description = "Name of IAM role for AWS Load Balancer Controller"
+  value       = aws_iam_role.aws_load_balancer_controller.name
+}
+
 output "cluster_autoscaler_role_arn" {
   description = "ARN of IAM role for cluster autoscaler"
   value       = aws_iam_role.cluster_autoscaler.arn
+}
+
+output "cluster_autoscaler_role_name" {
+  description = "Name of IAM role for cluster autoscaler"
+  value       = aws_iam_role.cluster_autoscaler.name
 }
 
 output "configure_kubectl" {

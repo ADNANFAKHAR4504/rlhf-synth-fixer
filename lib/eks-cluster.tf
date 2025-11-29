@@ -129,7 +129,7 @@ resource "aws_iam_openid_connect_provider" "eks" {
 
 # IAM role for EBS CSI driver
 resource "aws_iam_role" "ebs_csi_driver" {
-  name_prefix = "eks-ebs-csi-driver-${var.environment_suffix}-"
+  name = "eks-ebs-csi-driver-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -164,8 +164,8 @@ resource "aws_iam_role_policy_attachment" "ebs_csi_driver" {
 
 # Additional IAM policy for EBS CSI driver KMS encryption
 resource "aws_iam_role_policy" "ebs_csi_driver_kms" {
-  name_prefix = "ebs-csi-kms-${var.environment_suffix}-"
-  role        = aws_iam_role.ebs_csi_driver.id
+  name = "ebs-csi-kms-${var.environment_suffix}"
+  role = aws_iam_role.ebs_csi_driver.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -221,7 +221,7 @@ resource "aws_eks_addon" "ebs_csi_driver" {
 
 # IAM role for AWS Load Balancer Controller
 resource "aws_iam_role" "aws_load_balancer_controller" {
-  name_prefix = "eks-lb-controller-${var.environment_suffix}-"
+  name = "eks-lb-controller-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -250,7 +250,7 @@ resource "aws_iam_role" "aws_load_balancer_controller" {
 }
 
 resource "aws_iam_policy" "aws_load_balancer_controller" {
-  name_prefix = "eks-lb-controller-${var.environment_suffix}-"
+  name        = "eks-lb-controller-policy-${var.environment_suffix}"
   description = "IAM policy for AWS Load Balancer Controller"
 
   policy = jsonencode({
@@ -489,7 +489,7 @@ resource "aws_iam_role_policy_attachment" "aws_load_balancer_controller" {
 
 # IAM role for cluster autoscaler
 resource "aws_iam_role" "cluster_autoscaler" {
-  name_prefix = "eks-cluster-autoscaler-${var.environment_suffix}-"
+  name = "eks-cluster-autoscaler-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -518,7 +518,7 @@ resource "aws_iam_role" "cluster_autoscaler" {
 }
 
 resource "aws_iam_policy" "cluster_autoscaler" {
-  name_prefix = "eks-cluster-autoscaler-${var.environment_suffix}-"
+  name        = "eks-cluster-autoscaler-policy-${var.environment_suffix}"
   description = "IAM policy for cluster autoscaler"
 
   policy = jsonencode({
