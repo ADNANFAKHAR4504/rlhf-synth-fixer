@@ -613,7 +613,7 @@ export class TapStack extends pulumi.ComponentResource {
       { provider: k8sProvider, parent: this, dependsOn: [cluster] }
     );
 
-    // Install Calico using Helm
+    // Install Calico using Helm (operator only, without Installation CRD to avoid finalizer issues)
     const calicoChart = new k8s.helm.v3.Chart(
       'calico',
       {
@@ -624,9 +624,8 @@ export class TapStack extends pulumi.ComponentResource {
           repo: 'https://docs.tigera.io/calico/charts',
         },
         values: {
-          installation: {
-            kubernetesProvider: 'EKS',
-          },
+          // Don't create Installation from chart - we create it separately to control lifecycle
+          installation: null,
           tigeraOperator: {
             registry: 'quay.io/',
           },
@@ -637,6 +636,59 @@ export class TapStack extends pulumi.ComponentResource {
         provider: k8sProvider,
         parent: this,
         dependsOn: [cluster, tigeraNamespace],
+      }
+    );
+
+    // Create Calico Installation separately with retainOnDelete to prevent finalizer timeout
+    const calicoInstallation = new k8s.apiextensions.CustomResource(
+      'calico-installation',
+      {
+        apiVersion: 'operator.tigera.io/v1',
+        kind: 'Installation',
+        metadata: {
+          name: 'default',
+          namespace: 'tigera-operator',
+        },
+        spec: {
+          kubernetesProvider: 'EKS',
+          cni: {
+            type: 'Calico',
+          },
+          calicoNetwork: {
+            bgp: 'Disabled',
+            ipPools: [
+              {
+                cidr: '192.168.0.0/16',
+                encapsulation: 'VXLAN',
+              },
+            ],
+          },
+        },
+      },
+      {
+        provider: k8sProvider,
+        parent: this,
+        dependsOn: [calicoChart],
+        retainOnDelete: true, // Prevents finalizer timeout during Pulumi updates
+      }
+    );
+
+    // Create Calico APIServer separately with retainOnDelete
+    const calicoAPIServer = new k8s.apiextensions.CustomResource(
+      'calico-apiserver',
+      {
+        apiVersion: 'operator.tigera.io/v1',
+        kind: 'APIServer',
+        metadata: {
+          name: 'default',
+          namespace: 'tigera-operator',
+        },
+        spec: {},
+      },
+      {
+        provider: k8sProvider,
+        parent: this,
+        dependsOn: [calicoInstallation],
         retainOnDelete: true, // Prevents finalizer timeout during Pulumi updates
       }
     );
@@ -1103,6 +1155,8 @@ export class TapStack extends pulumi.ComponentResource {
     void virtualGateway;
     void virtualService;
     void calicoChart;
+    void calicoInstallation;
+    void calicoAPIServer;
     void fluentBitChart;
     void clusterAutoscalerDeployment;
     void sampleHPA;
