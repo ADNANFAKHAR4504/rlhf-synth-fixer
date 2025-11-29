@@ -1027,7 +1027,13 @@ export class TapStack extends pulumi.ComponentResource {
       {
         provider: k8sProvider,
         parent: this,
-        dependsOn: [clusterAutoscalerSA, managedNodeGroup, onDemandNodeGroup],
+        dependsOn: [
+          clusterAutoscalerSA,
+          managedNodeGroup,
+          onDemandNodeGroup,
+          calicoInstallation, // Wait for CNI to be ready before deploying autoscaler
+        ],
+        retainOnDelete: true, // Prevent timeout during updates
       }
     );
 
@@ -1102,7 +1108,8 @@ export class TapStack extends pulumi.ComponentResource {
       {
         provider: k8sProvider,
         parent: this,
-        dependsOn: [appNamespace, k8sServiceAccount],
+        dependsOn: [appNamespace, k8sServiceAccount, calicoInstallation],
+        retainOnDelete: true, // Prevent finalizer timeout during Pulumi updates
       }
     );
 
