@@ -33,7 +33,6 @@ resource "aws_vpc" "main" {
       Name                                                                  = "eks-vpc-${var.environment_suffix}"
       Environment                                                           = var.environment
       "kubernetes.io/cluster/${var.cluster_name}-${var.environment_suffix}" = "shared"
-      "kubernetes.io/cluster/${local.cluster_name_unique}"                  = "shared"
     }
   )
 }
