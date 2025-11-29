@@ -41,7 +41,7 @@ resource "aws_iam_role_policy_attachment" "eks_vpc_resource_controller" {
 
 # CloudWatch log group for EKS cluster
 resource "aws_cloudwatch_log_group" "eks_cluster" {
-  name              = "/aws/eks/${var.cluster_name}-${var.environment_suffix}/cluster"
+  name              = "/aws/eks/${local.cluster_name_unique}/cluster"
   retention_in_days = 7
 
   tags = merge(
@@ -59,7 +59,7 @@ resource "aws_cloudwatch_log_group" "eks_cluster" {
 
 # EKS Cluster
 resource "aws_eks_cluster" "main" {
-  name     = "${var.cluster_name}-${var.environment_suffix}"
+  name     = local.cluster_name_unique
   role_arn = aws_iam_role.eks_cluster.arn
   version  = var.cluster_version
 
@@ -98,7 +98,7 @@ resource "aws_eks_cluster" "main" {
   tags = merge(
     var.tags,
     {
-      Name        = "${var.cluster_name}-${var.environment_suffix}"
+      Name        = local.cluster_name_unique
       Environment = var.environment
     }
   )

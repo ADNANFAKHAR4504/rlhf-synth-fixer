@@ -258,7 +258,8 @@ describe('Terraform HCL Infrastructure - VPC and Networking', () => {
   });
 
   test('VPC has kubernetes.io/cluster tag', () => {
-    expect(mainContent).toMatch(/"kubernetes\.io\/cluster\/\$\{var\.cluster_name\}-\$\{var\.environment_suffix\}"\s*=\s*['"]shared['"]/);
+    // VPC tag can use either direct variables or the local.cluster_name_unique
+    expect(mainContent).toMatch(/"kubernetes\.io\/cluster\/(?:\$\{var\.cluster_name\}-\$\{var\.environment_suffix\}|\$\{local\.cluster_name_unique\})"\s*=\s*['"]shared['"]/);
   });
 
   test('declares aws_internet_gateway resource', () => {
@@ -457,7 +458,8 @@ describe('Terraform HCL Infrastructure - EKS Cluster', () => {
   });
 
   test('EKS cluster name includes environment_suffix', () => {
-    expect(eksContent).toMatch(/name\s*=\s*['"]\$\{var\.cluster_name\}-\$\{var\.environment_suffix\}['"]/);
+    // Cluster name can use either direct variables or the local.cluster_name_unique
+    expect(eksContent).toMatch(/name\s*=\s*(?:['"]\$\{var\.cluster_name\}-\$\{var\.environment_suffix\}['"]|local\.cluster_name_unique)/);
   });
 
   test('EKS cluster version uses var.cluster_version', () => {
@@ -1183,7 +1185,8 @@ describe('Terraform HCL Infrastructure - Environment Parameterization', () => {
 
   test('All resource names include environment_suffix', () => {
     const namePatternMatches = allContent.match(/name\s*=\s*['"].*\$\{var\.environment_suffix\}/g) || [];
-    expect(namePatternMatches.length).toBeGreaterThan(5);
+    // Reduced threshold because cluster name uses local.cluster_name_unique which includes environment_suffix
+    expect(namePatternMatches.length).toBeGreaterThan(3);
   });
 
   test('Tags use var.environment consistently', () => {

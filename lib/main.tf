@@ -30,9 +30,9 @@ resource "aws_vpc" "main" {
   tags = merge(
     var.tags,
     {
-      Name                                                                  = "eks-vpc-${var.environment_suffix}"
-      Environment                                                           = var.environment
-      "kubernetes.io/cluster/${var.cluster_name}-${var.environment_suffix}" = "shared"
+      Name                                                 = "eks-vpc-${var.environment_suffix}"
+      Environment                                          = var.environment
+      "kubernetes.io/cluster/${local.cluster_name_unique}" = "shared"
     }
   )
 }
