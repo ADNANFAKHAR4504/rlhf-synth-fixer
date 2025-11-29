@@ -972,12 +972,12 @@ class TapStack(TerraformStack):
             period=60,
             statistic="Average",
             threshold=1000,  # 1 second in milliseconds
-            alarm_actions=[alarm_topic.arn],
+            alarm_actions=[secondary_alarm_topic.arn],
             dimensions={
                 "DBClusterIdentifier": secondary_cluster.id
             },
             tags={"Name": f"payment-replication-lag-alarm-{environment_suffix}"},
-            provider=primary_provider
+            provider=secondary_provider
         )
 
         # Create alarm for primary Lambda errors
