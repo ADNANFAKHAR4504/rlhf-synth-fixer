@@ -1,6 +1,8 @@
 # Local variables for unique naming
+# Note: Using fixed timestamp "2511271329" to match existing cluster in AWS
+# This prevents Terraform from destroying and recreating the cluster
 locals {
-  cluster_name_unique = "${var.cluster_name}-${var.environment_suffix}"
+  cluster_name_unique = "${var.cluster_name}-${var.environment_suffix}-2511271329"
 }
 
 # IAM role for EKS cluster
