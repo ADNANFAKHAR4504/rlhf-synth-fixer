@@ -621,7 +621,7 @@ export class TapStack extends pulumi.ComponentResource {
         version: '3.27.0',
         namespace: 'tigera-operator',
         fetchOpts: {
-          repo: 'https://docs.tigera.io/calico/charts',
+          repo: 'https://projectcalico.docs.tigera.io/charts',
         },
         values: {
           // Don't create Installation from chart - we create it separately to control lifecycle
