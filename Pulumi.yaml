@@ -1,5 +1,0 @@
-name: TapStack
-runtime:
-  name: nodejs
-description: Pulumi TypeScript infrastructure for serverless cryptocurrency price alert system
-main: bin/tap.ts
