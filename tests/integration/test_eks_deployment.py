@@ -16,10 +16,22 @@ def stack_outputs():
     with open(outputs_file, 'r', encoding='utf-8') as f:
         raw_outputs = json.load(f)
 
-    # Flatten CDKTF output names
-    # Convert 'microservices_cluster_name_A6AAE71' -> 'cluster_name'
+    # Step 1: Flatten nested structure
+    # CDKTF outputs are nested: {'TapStackpr7284': {'output_key': 'value'}}
+    # We need to extract the inner dictionary
+    nested_outputs = {}
+    for stack_name, outputs in raw_outputs.items():
+        if isinstance(outputs, dict):
+            # This is a nested structure - extract all outputs
+            nested_outputs.update(outputs)
+        else:
+            # This is already flat - keep as is
+            nested_outputs[stack_name] = outputs
+
+    # Step 2: Convert CDKTF prefixed names to simple names
+    # 'microservices_cluster_name_A6AAE71' -> 'cluster_name'
     flattened = {}
-    for key, value in raw_outputs.items():
+    for key, value in nested_outputs.items():
         # Handle CDKTF-prefixed outputs: prefix_semantic_name_HASH
         if key.startswith('microservices_') and '_' in key:
             # Split and extract semantic name (between prefix and hash)
