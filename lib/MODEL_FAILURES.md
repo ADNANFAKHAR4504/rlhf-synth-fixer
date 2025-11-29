@@ -242,18 +242,81 @@ Remove trailing newlines - file should end with exactly one newline.
 
 ---
 
+### 9. Cross-Region SNS Topic Reference in CloudWatch Alarm
+
+**Impact Level**: Critical
+
+**MODEL_RESPONSE Issue**:
+```python
+# Single SNS topic created in primary region
+alarm_topic = SnsTopic(
+    self,
+    "alarm_topic",
+    name=f"payment-alarms-{environment_suffix}",
+    provider=primary_provider
+)
+
+# Secondary CloudWatch alarm tries to reference primary region SNS topic
+CloudwatchMetricAlarm(
+    self,
+    "secondary_lambda_error_alarm",
+    alarm_actions=[alarm_topic.arn],  # Primary region SNS topic
+    provider=secondary_provider  # Secondary region provider
+)
+```
+
+CloudWatch alarms in us-west-2 cannot reference SNS topics in us-east-1.
+
+**IDEAL_RESPONSE Fix**:
+```python
+# Create separate SNS topic in secondary region
+secondary_alarm_topic = SnsTopic(
+    self,
+    "secondary_alarm_topic",
+    name=f"payment-alarms-usw2-{environment_suffix}",
+    provider=secondary_provider
+)
+
+# Use secondary region SNS topic for secondary region alarms
+CloudwatchMetricAlarm(
+    self,
+    "secondary_lambda_error_alarm",
+    alarm_actions=[secondary_alarm_topic.arn],  # Secondary region SNS topic
+    provider=secondary_provider
+)
+```
+
+CloudWatch alarms must reference SNS topics in the same region.
+
+**Root Cause**: The model created a single SNS topic in the primary region and tried to use it for alarms in both regions. AWS CloudWatch alarms require SNS topics to be in the same region as the alarm.
+
+**AWS Documentation Reference**: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/AlarmThatSendsEmail.html
+
+**Error Message**:
+```
+Error: creating CloudWatch Metric Alarm
+ValidationError: Invalid region us-east-1 specified. Only us-west-2 is supported.
+```
+
+**Cost/Security/Performance Impact**: Deployment blocker - prevents infrastructure from deploying to secondary region.
+
+---
+
 ## Summary
 
-- **Total failures**: 3 Critical, 2 High, 1 Medium, 3 Low
+- **Total failures**: 4 Critical, 2 High, 1 Medium, 3 Low
 - **Primary knowledge gaps**:
   1. CDKTF provider-specific class names and resource interfaces differ from AWS CDK
   2. Nested dictionary configurations in CDKTF require camelCase, not snake_case
   3. Provider-specific parameters don't always match CloudFormation resource properties
+  4. Multi-region deployments require regional resources (SNS topics) to be created in each region for regional services (CloudWatch alarms)
 
 - **Training value**: This task demonstrates critical differences between AWS CDK and CDKTF that models need to understand:
   - CDKTF AWS provider has different class names (e.g., `VpcPeeringConnectionAccepterA`)
   - CDKTF uses camelCase for nested configuration objects (Python dictionaries)
   - Not all CloudFormation/CDK parameters are available in CDKTF (e.g., `replica_region` on Secrets)
+  - Multi-region architectures require regional resources (SNS topics, alarms) in each region
+  - CloudWatch alarms cannot reference SNS topics across regions
   - Models need to verify class names and parameter names against the actual provider documentation
 
-The model demonstrated good understanding of multi-region disaster recovery architecture but struggled with CDKTF-specific syntax and naming conventions. These are fixable code-level issues that don't affect the architectural design.
+The model demonstrated good understanding of multi-region disaster recovery architecture but struggled with CDKTF-specific syntax, naming conventions, and cross-region resource constraints. These are fixable code-level issues that don't affect the architectural design.

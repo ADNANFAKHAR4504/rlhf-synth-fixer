@@ -919,7 +919,7 @@ class TapStack(TerraformStack):
 
         # ===== SNS TOPIC FOR ALARMS =====
 
-        # Create SNS topic for CloudWatch alarms
+        # Create SNS topic for CloudWatch alarms in primary region
         alarm_topic = SnsTopic(
             self,
             "alarm_topic",
@@ -936,6 +936,25 @@ class TapStack(TerraformStack):
             protocol="email",
             endpoint="admin@example.com",  # Replace with actual email
             provider=primary_provider
+        )
+
+        # Create SNS topic for CloudWatch alarms in secondary region
+        secondary_alarm_topic = SnsTopic(
+            self,
+            "secondary_alarm_topic",
+            name=f"payment-alarms-usw2-{environment_suffix}",
+            tags={"Name": f"payment-alarms-usw2-{environment_suffix}"},
+            provider=secondary_provider
+        )
+
+        # Subscribe email to secondary SNS topic
+        SnsTopicSubscription(
+            self,
+            "secondary_alarm_email_subscription",
+            topic_arn=secondary_alarm_topic.arn,
+            protocol="email",
+            endpoint="admin@example.com",  # Replace with actual email
+            provider=secondary_provider
         )
 
         # ===== CLOUDWATCH ALARMS =====
@@ -995,7 +1014,7 @@ class TapStack(TerraformStack):
             period=300,
             statistic="Sum",
             threshold=5,
-            alarm_actions=[alarm_topic.arn],
+            alarm_actions=[secondary_alarm_topic.arn],
             dimensions={
                 "FunctionName": secondary_lambda.function_name
             },
@@ -1156,5 +1175,12 @@ class TapStack(TerraformStack):
             self,
             "alarm_topic_arn",
             value=alarm_topic.arn,
-            description="SNS topic ARN for alarms"
+            description="SNS topic ARN for alarms in primary region"
+        )
+
+        TerraformOutput(
+            self,
+            "secondary_alarm_topic_arn",
+            value=secondary_alarm_topic.arn,
+            description="SNS topic ARN for alarms in secondary region"
         )
