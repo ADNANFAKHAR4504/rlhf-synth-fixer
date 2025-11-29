@@ -625,7 +625,10 @@ export class TapStack extends pulumi.ComponentResource {
         },
         values: {
           // Don't create Installation from chart - we create it separately to control lifecycle
-          installation: null,
+          installation: {
+            enabled: false,
+            kubernetesProvider: 'EKS',
+          },
           tigeraOperator: {
             registry: 'quay.io/',
           },
