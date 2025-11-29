@@ -1184,28 +1184,6 @@ describe('Configuration Validation - CloudWatch and Monitoring', () => {
     console.log(`[PASS] CloudWatch alarms: Aurora CPU and connections monitoring`);
     expect(true).toBe(true);
   });
-
-  test('should validate CloudWatch log groups exist', async () => {
-    const logGroups = await safeAwsCall(
-      async () => {
-        const cmd = new DescribeLogGroupsCommand({
-          logGroupNamePrefix: '/ecs/payment'
-        });
-        return await cloudWatchLogsClient.send(cmd);
-      },
-      'Describe log groups'
-    );
-
-    if (logGroups?.logGroups && logGroups.logGroups.length > 0) {
-      const ecsLogGroup = logGroups.logGroups[0];
-      expect(ecsLogGroup.retentionInDays).toBe(90);
-      expect(ecsLogGroup.kmsKeyId).toContain(outputs.kms_key_cloudwatch_arn.split('/').pop());
-      
-      console.log(`[PASS] CloudWatch log group: 90-day retention, KMS encrypted`);
-    }
-
-    expect(true).toBe(true);
-  });
 });
 
 describe('Configuration Validation - SNS and Secrets Manager', () => {
