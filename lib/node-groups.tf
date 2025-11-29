@@ -1,6 +1,6 @@
 # IAM role for EKS node groups
 resource "aws_iam_role" "eks_nodes" {
-  name_prefix = "eks-nodes-role-${var.environment_suffix}-"
+  name = "eks-nodes-role-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"

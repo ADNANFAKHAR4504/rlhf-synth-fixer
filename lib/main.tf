@@ -284,7 +284,7 @@ resource "aws_route_table_association" "spot_private" {
 
 # Security group for EKS cluster
 resource "aws_security_group" "eks_cluster" {
-  name_prefix = "eks-cluster-sg-${var.environment_suffix}-"
+  name        = "eks-cluster-sg-${var.environment_suffix}"
   description = "Security group for EKS cluster control plane"
   vpc_id      = aws_vpc.main.id
 
@@ -309,7 +309,7 @@ resource "aws_security_group_rule" "cluster_egress" {
 
 # Security group for EKS nodes
 resource "aws_security_group" "eks_nodes" {
-  name_prefix = "eks-nodes-sg-${var.environment_suffix}-"
+  name        = "eks-nodes-sg-${var.environment_suffix}"
   description = "Security group for EKS worker nodes"
   vpc_id      = aws_vpc.main.id
 

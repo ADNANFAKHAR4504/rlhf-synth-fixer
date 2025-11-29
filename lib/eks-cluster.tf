@@ -7,7 +7,7 @@ locals {
 
 # IAM role for EKS cluster
 resource "aws_iam_role" "eks_cluster" {
-  name_prefix = "eks-cluster-role-${var.environment_suffix}-"
+  name = "eks-cluster-role-${var.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"

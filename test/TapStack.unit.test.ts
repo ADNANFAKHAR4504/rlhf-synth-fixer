@@ -366,8 +366,9 @@ describe('Terraform HCL Infrastructure - Security Groups', () => {
     expect(mainContent).toMatch(/resource\s+['"]aws_security_group['"]\s+['"]eks_cluster['"]/);
   });
 
-  test('EKS cluster security group uses name_prefix with environment_suffix', () => {
-    expect(mainContent).toMatch(/name_prefix\s*=\s*['"]eks-cluster-sg-\$\{var\.environment_suffix\}-['"]/);
+  test('EKS cluster security group uses name with environment_suffix', () => {
+    // Changed from name_prefix to name to prevent forced replacement on every apply
+    expect(mainContent).toMatch(/name\s*=\s*['"]eks-cluster-sg-\$\{var\.environment_suffix\}['"]/);
   });
 
   test('EKS cluster security group has description', () => {
@@ -387,8 +388,9 @@ describe('Terraform HCL Infrastructure - Security Groups', () => {
     expect(mainContent).toMatch(/resource\s+['"]aws_security_group['"]\s+['"]eks_nodes['"]/);
   });
 
-  test('EKS nodes security group uses name_prefix with environment_suffix', () => {
-    expect(mainContent).toMatch(/name_prefix\s*=\s*['"]eks-nodes-sg-\$\{var\.environment_suffix\}-['"]/);
+  test('EKS nodes security group uses name with environment_suffix', () => {
+    // Changed from name_prefix to name to prevent forced replacement on every apply
+    expect(mainContent).toMatch(/name\s*=\s*['"]eks-nodes-sg-\$\{var\.environment_suffix\}['"]/);
   });
 
   test('declares aws_security_group_rule.nodes_internal', () => {
