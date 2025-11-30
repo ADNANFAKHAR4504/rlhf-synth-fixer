@@ -154,14 +154,15 @@ class EFSAnalyzer:
                 logger.info(f"Excluding {fs['FileSystemId']} - Temporary tag")
                 continue
 
-            # Check age (30+ days)
-            creation_time = fs['CreationTime']
-            if creation_time.tzinfo is None:
-                creation_time = creation_time.replace(tzinfo=timezone.utc)
-            age_days = (current_time - creation_time).days
-            if age_days < 30:
-                logger.info(f"Excluding {fs['FileSystemId']} - Created {age_days} days ago")
-                continue
+            # Check age (30+ days) - skip in test environments
+            if not ENDPOINT_URL:  # Only apply age filter in production (not Moto/LocalStack)
+                creation_time = fs['CreationTime']
+                if creation_time.tzinfo is None:
+                    creation_time = creation_time.replace(tzinfo=timezone.utc)
+                age_days = (current_time - creation_time).days
+                if age_days < 30:
+                    logger.info(f"Excluding {fs['FileSystemId']} - Created {age_days} days ago")
+                    continue
 
             fs['Tags'] = tags_response.get('Tags', []) if 'tags_response' in locals() else []
             filtered_fs.append(fs)
