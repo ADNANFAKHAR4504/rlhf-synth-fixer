@@ -39,5 +39,5 @@ variable "team" {
 variable "allowed_ssh_cidr" {
   description = "CIDR block allowed to SSH into EC2 instances"
   type        = string
-  default     = "0.0.0.0/32"
+  default     = "10.0.0.0/16"
 }

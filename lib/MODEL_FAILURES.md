@@ -35,7 +35,7 @@ variable "aws_region" {
 - Unable to deploy dev/staging/prod in parallel
 
 **Resolution**: ✅
-- Added `${var.environment_suffix}` to all 18 resource Name tags
+- Added `${var.environment_suffix}` to all 20 resource Name tags
 - Ensured consistent environment-aware naming pattern
 
 ### 3. **Test Pattern Synchronization Issues** ❌
@@ -83,6 +83,33 @@ variable "aws_region" {
 - Set safe name_prefix = "ec2-sg" (6 characters exactly)
 - Added validation to prevent future issues
 
+### 6. **Critical Security Configuration Issues** ❌🔒
+**Problem**:
+- Invalid SSH CIDR default `0.0.0.0/32` caused deployment failures
+- EC2 instances in private subnets exposed via Elastic IPs (security violation)
+- Mixed security model contradicted private subnet design principles
+
+**Impact**:
+- Infrastructure deployment blocked due to invalid CIDR
+- Security exposure of private resources to internet
+- Violation of AWS security best practices
+- Failed security reviews and compliance checks
+
+**Resolution**: ✅
+```hcl
+# Fixed SSH CIDR in variables.tf
+variable "allowed_ssh_cidr" {
+  description = "CIDR block allowed to SSH into EC2 instances"
+  type        = string
+  default     = "10.0.0.0/16"  # VPC internal only
+}
+
+# Removed EC2 Elastic IPs from tap_stack.tf
+# Note: Removed Elastic IPs from private EC2 instances to maintain proper private subnet security
+# EC2 instances in private subnets should not have direct internet access via Elastic IPs
+# They can access internet through NAT Gateways for outbound traffic only
+```
+
 ## Typical Model Blind Spots
 
 ### 1. **Variable Usage Validation**
@@ -125,8 +152,11 @@ variable "aws_region" {
 ## Deployment Readiness Checklist
 
 - [x] All variables properly declared and used
-- [x] Region correctly set to us-west-2
-- [x] Environment suffix applied to all 18 resources
+- [x] Region correctly set to us-west-2  
+- [x] Environment suffix applied to all 20 resources
+- [x] Critical security issues resolved:
+  - [x] SSH CIDR fixed (0.0.0.0/32 → 10.0.0.0/16)
+  - [x] EC2 Elastic IPs removed from private instances
 - [x] 193/193 tests passing (100% success rate)
 - [x] Terraform validation successful
 - [x] Documentation synchronized

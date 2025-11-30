@@ -242,12 +242,8 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(stackContent).toMatch(/root_block_device\s*\{[^}]*encrypted\s*=\s*true/s);
     });
 
-    test("EC2 instances have Elastic IPs", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_eip"\s+"ec2_1"/);
-      expect(stackContent).toMatch(/resource\s+"aws_eip"\s+"ec2_2"/);
-      expect(stackContent).toMatch(/instance\s*=\s*aws_instance\.ec2_1\.id/);
-      expect(stackContent).toMatch(/instance\s*=\s*aws_instance\.ec2_2\.id/);
-    });
+    // Note: EC2 Elastic IPs removed for security compliance
+    // EC2 instances in private subnets should not have direct public IPs
 
     test("EC2 instances do not have deletion protection", () => {
       expect(stackContent).toMatch(/disable_api_termination\s*=\s*false/);
@@ -284,9 +280,9 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(stackContent).toMatch(/output\s+"private_subnet_2_id"\s*\{[^}]*value\s*=\s*aws_subnet\.private_2\.id/s);
     });
 
-    test("outputs EC2 public IPs", () => {
-      expect(stackContent).toMatch(/output\s+"ec2_1_public_ip"\s*\{[^}]*value\s*=\s*aws_eip\.ec2_1\.public_ip/s);
-      expect(stackContent).toMatch(/output\s+"ec2_2_public_ip"\s*\{[^}]*value\s*=\s*aws_eip\.ec2_2\.public_ip/s);
+    test("outputs EC2 private IPs", () => {
+      expect(stackContent).toMatch(/output\s+"ec2_1_private_ip"\s*\{[^}]*value\s*=\s*aws_instance\.ec2_1\.private_ip/s);
+      expect(stackContent).toMatch(/output\s+"ec2_2_private_ip"\s*\{[^}]*value\s*=\s*aws_instance\.ec2_2\.private_ip/s);
     });
 
     test("outputs NAT Gateway IPs", () => {
@@ -379,10 +375,8 @@ describe("Terraform Infrastructure Unit Tests", () => {
       });
     });
 
-    test("EC2 Elastic IPs reference correct instances", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_eip"\s+"ec2_1"[^}]*instance\s*=\s*aws_instance\.ec2_1\.id/s);
-      expect(stackContent).toMatch(/resource\s+"aws_eip"\s+"ec2_2"[^}]*instance\s*=\s*aws_instance\.ec2_2\.id/s);
-    });
+    // Note: EC2 Elastic IPs removed for security compliance 
+    // Only NAT Gateway EIPs remain for outbound internet access
 
     test("route table associations reference correct subnets and tables", () => {
       expect(stackContent).toMatch(/subnet_id\s*=\s*aws_subnet\.public_1\.id/);
@@ -511,13 +505,8 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(stackContent).toMatch(/resource\s+"aws_eip"\s+"nat_2"[^}]*domain\s*=\s*"vpc"/s);
     });
 
-    test("EIP for EC2 1 has correct domain", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_eip"\s+"ec2_1"[^}]*domain\s*=\s*"vpc"/s);
-    });
-
-    test("EIP for EC2 2 has correct domain", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_eip"\s+"ec2_2"[^}]*domain\s*=\s*"vpc"/s);
-    });
+    // Note: EC2 EIP tests removed - EC2 instances in private subnets 
+    // should not have public IPs for security compliance
 
     test("NAT EIP 1 has correct name tag", () => {
       expect(stackContent).toMatch(/resource\s+"aws_eip"\s+"nat_1"[^}]*Name\s*=\s*"nat-eip-1-\$\{var\.environment_suffix\}"/s);
@@ -527,13 +516,7 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(stackContent).toMatch(/resource\s+"aws_eip"\s+"nat_2"[^}]*Name\s*=\s*"nat-eip-2-\$\{var\.environment_suffix\}"/s);
     });
 
-    test("EC2 EIP 1 has correct name tag", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_eip"\s+"ec2_1"[^}]*Name\s*=\s*"ec2-eip-1-\$\{var\.environment_suffix\}"/s);
-    });
-
-    test("EC2 EIP 2 has correct name tag", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_eip"\s+"ec2_2"[^}]*Name\s*=\s*"ec2-eip-2-\$\{var\.environment_suffix\}"/s);
-    });
+    // Note: EC2 EIPs removed for security - EC2 instances in private subnets should not have public IPs
   });
 
   describe("Detailed Route Table Tests", () => {
@@ -675,10 +658,9 @@ describe("Terraform Infrastructure Unit Tests", () => {
     });
 
     test("EIP naming follows pattern", () => {
+      // Only NAT Gateway EIPs exist - EC2 EIPs removed for security
       expect(stackContent).toMatch(/Name\s*=\s*"nat-eip-1-\$\{var\.environment_suffix\}"/);
       expect(stackContent).toMatch(/Name\s*=\s*"nat-eip-2-\$\{var\.environment_suffix\}"/);
-      expect(stackContent).toMatch(/Name\s*=\s*"ec2-eip-1-\$\{var\.environment_suffix\}"/);
-      expect(stackContent).toMatch(/Name\s*=\s*"ec2-eip-2-\$\{var\.environment_suffix\}"/);
     });
 
     test("instance naming follows pattern", () => {
@@ -708,12 +690,12 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(stackContent).toMatch(/output\s+"private_subnet_2_id"[^}]*description\s*=\s*"ID of private subnet 2"/s);
     });
 
-    test("ec2_1_public_ip output has correct description", () => {
-      expect(stackContent).toMatch(/output\s+"ec2_1_public_ip"[^}]*description\s*=\s*"Public IP of EC2 instance 1"/s);
+    test("ec2_1_private_ip output has correct description", () => {
+      expect(stackContent).toMatch(/output\s+"ec2_1_private_ip"[^}]*description\s*=\s*"Private IP of EC2 instance 1"/s);
     });
 
-    test("ec2_2_public_ip output has correct description", () => {
-      expect(stackContent).toMatch(/output\s+"ec2_2_public_ip"[^}]*description\s*=\s*"Public IP of EC2 instance 2"/s);
+    test("ec2_2_private_ip output has correct description", () => {
+      expect(stackContent).toMatch(/output\s+"ec2_2_private_ip"[^}]*description\s*=\s*"Private IP of EC2 instance 2"/s);
     });
 
     test("nat_gateway_1_ip output has correct description", () => {

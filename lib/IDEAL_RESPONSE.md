@@ -256,25 +256,9 @@ resource "aws_security_group" "ec2_sg" {
   }
 }
 
-# Elastic IP for EC2 Instance 1
-resource "aws_eip" "ec2_1" {
-  instance = aws_instance.ec2_1.id
-  domain   = "vpc"
-
-  tags = {
-    Name = "ec2-eip-1-${var.environment_suffix}"
-  }
-}
-
-# Elastic IP for EC2 Instance 2
-resource "aws_eip" "ec2_2" {
-  instance = aws_instance.ec2_2.id
-  domain   = "vpc"
-
-  tags = {
-    Name = "ec2-eip-2-${var.environment_suffix}"
-  }
-}
+# Note: Removed Elastic IPs from private EC2 instances to maintain proper private subnet security
+# EC2 instances in private subnets should not have direct internet access via Elastic IPs
+# They can access internet through NAT Gateways for outbound traffic only
 
 # EC2 Instance 1 in Private Subnet 1
 resource "aws_instance" "ec2_1" {
@@ -358,14 +342,14 @@ output "private_subnet_2_id" {
   value       = aws_subnet.private_2.id
 }
 
-output "ec2_1_public_ip" {
-  description = "Public IP of EC2 instance 1"
-  value       = aws_eip.ec2_1.public_ip
+output "ec2_1_private_ip" {
+  description = "Private IP of EC2 instance 1"
+  value       = aws_instance.ec2_1.private_ip
 }
 
-output "ec2_2_public_ip" {
-  description = "Public IP of EC2 instance 2"
-  value       = aws_eip.ec2_2.public_ip
+output "ec2_2_private_ip" {
+  description = "Private IP of EC2 instance 2"
+  value       = aws_instance.ec2_2.private_ip
 }
 
 output "nat_gateway_1_ip" {

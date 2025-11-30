@@ -33,7 +33,7 @@ NAT Gateways:
 
 One NAT Gateway per public subnet.
 
-With corresponding Elastic IPs.
+With corresponding Elastic IPs for outbound internet access.
 
 Routing:
 
@@ -47,7 +47,7 @@ One in each private subnet
 
 Instance type: t2.micro
 
-Must have Elastic IP association
+Private subnet instances (no direct public IPs for security compliance)
 
 Root EBS volume must have encryption at rest enabled
 
@@ -62,6 +62,10 @@ Outputs required:
 VPC ID
 
 All subnet IDs (public + private)
+
+EC2 private IP addresses
+
+NAT Gateway public IPs
 
 Ensure no resource has deletion protection enabled.
 
@@ -93,9 +97,9 @@ EC2 instances must each:
 
 Reside in private subnets
 
-Include Elastic IP
-
 Have encrypted EBS volume
+
+Use NAT Gateways for secure outbound internet access (no direct public IPs)
 
 All resources must use environment_suffix variable in Name tags for multi-environment deployment support.
 

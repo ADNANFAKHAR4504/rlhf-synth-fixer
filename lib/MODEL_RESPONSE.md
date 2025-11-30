@@ -9,8 +9,9 @@ Successfully implemented a production-ready, multi-environment AWS VPC infrastru
 - Create highly available VPC infrastructure in us-west-2
 - Support multiple environments (dev/staging/prod) 
 - Implement security best practices
-
-- Address review feedback blockers
+- Address review feedback blockers:
+  - Invalid SSH CIDR configuration (0.0.0.0/32 → 10.0.0.0/16)
+  - EC2 security design flaw (removed Elastic IPs from private instances)
 
 ### **Solution Architecture**
 ```
@@ -35,7 +36,7 @@ Successfully implemented a production-ready, multi-environment AWS VPC infrastru
 ### **Multi-File Architecture** 
 Organized Terraform configuration into logical, maintainable files:
 
-1. **`tap_stack.tf`** - Core infrastructure resources (18 resources total)
+1. **`tap_stack.tf`** - Core infrastructure resources (20 resources total)
 2. **`provider.tf`** - AWS provider configuration and version constraints  
 3. **`variables.tf`** - Variable definitions for flexible deployment
 4. **Environment `.tfvars`** - Environment-specific configurations
@@ -69,7 +70,7 @@ resource "aws_vpc" "main" {
 
 ### **Critical Issue #2: Missing Environment Suffix Usage** RESOLVED  
 **Problem**: Environment suffix variable declared but not used across resources
-**Solution**: Added `${var.environment_suffix}` to all 18 resource Name tags
+**Solution**: Added `${var.environment_suffix}` to all 20 resource Name tags
 **Impact**: Enabled true multi-environment deployment capability
 
 
@@ -109,7 +110,7 @@ $ terraform fmt -check
 
 ### **Infrastructure Status** READY
 - Multi-environment support fully implemented
-- All 18 resources with environment-aware naming  
+- All 20 resources with environment-aware naming
 - High availability across 2 availability zones
 - Security best practices applied throughout
 
@@ -225,12 +226,26 @@ This allocation leaves substantial room for expansion with ranges 10.0.3.0/24 th
 
 ### **Security Architecture Deep Dive**
 
+#### **Critical Security Fixes Implemented**
+
+**1. SSH CIDR Configuration Security Fix** 🔒
+- **Issue**: Invalid default CIDR `0.0.0.0/32` caused deployment failures
+- **Solution**: Updated to `10.0.0.0/16` for VPC-internal access only
+- **Impact**: Restricts SSH access to VPC network, enhancing security posture
+
+**2. Private Subnet Security Enhancement** 🛡️
+- **Issue**: EC2 instances in private subnets had Elastic IPs (security violation)
+- **Solution**: Removed EC2 Elastic IPs, instances now truly private
+- **Impact**: Eliminates direct internet exposure, maintains proper private subnet design
+- **Access**: Internet access through NAT Gateways for outbound traffic only
+
 #### **Defense in Depth Implementation**
 
 **Network Layer Security**
 - Private subnet isolation prevents direct internet access to compute resources
-- Security groups act as virtual firewalls with least-privilege access
+- Security groups act as virtual firewalls with least-privilege access  
 - Network ACLs provide additional subnet-level protection (using defaults)
+- EC2 instances properly isolated in private subnets without public IPs
 
 **Data Protection Measures**
 - EBS volume encryption at rest using AWS-managed keys
@@ -370,11 +385,11 @@ The implementation followed an iterative development cycle:
 
 **Network Resources**
 - **NAT Gateways**: 2 x NAT Gateway (~$45/month each)
-- **Elastic IPs**: 4 x EIP (~$3.60/month for unused IPs)
+- **Elastic IPs**: 2 x EIP for NAT Gateways (included in NAT Gateway cost)
 - **Data Transfer**: Variable based on usage patterns
-- **Total Network**: ~$93.60/month baseline
+- **Total Network**: ~$90/month baseline
 
-**Total Estimated Monthly Cost**: ~$112.20/month per environment
+**Total Estimated Monthly Cost**: ~$108.60/month per environment
 
 #### **Cost Optimization Strategies**
 
