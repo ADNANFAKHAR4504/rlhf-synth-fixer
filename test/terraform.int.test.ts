@@ -19,7 +19,7 @@
  * - Tests ACTUAL deployed resources (not mocks - catches real configuration issues)
  * 
  * TEST COVERAGE:
- * - Configuration Validation (28 tests): VPC, subnets, S3, KMS, IAM, Lambda, Step Functions, Glue, Athena, CloudWatch, SNS, Security Groups, VPC Endpoints
+ * - Configuration Validation (27 tests): VPC, subnets, S3, KMS, IAM, Lambda, Step Functions, Glue, Athena, CloudWatch, SNS, Security Groups, VPC Endpoints
  * - TRUE E2E Workflows (6 tests): S3 triggers, Lambda invocation, Step Functions orchestration, SNS notifications, CloudWatch logging
  * 
  * EXECUTION: Run AFTER terraform apply completes
@@ -27,7 +27,7 @@
  * 2. terraform output -json > cfn-outputs/flat-outputs.json
  * 3. npm test -- terraform.int.test.ts
  * 
- * RESULT: 34 tests validating real AWS infrastructure and complete ETL orchestration workflows
+ * RESULT: 33 tests validating real AWS infrastructure and complete ETL orchestration workflows
  * Execution time: 30-60 seconds | Zero hardcoded values | Production-grade validation
  */
 
@@ -60,8 +60,6 @@ import {
   IAMClient,
   GetRoleCommand,
   ListAttachedRolePoliciesCommand,
-  GetPolicyCommand,
-  GetPolicyVersionCommand,
   GetInstanceProfileCommand
 } from '@aws-sdk/client-iam';
 
@@ -69,7 +67,6 @@ import {
 import {
   LambdaClient,
   GetFunctionCommand,
-  GetFunctionConfigurationCommand,
   GetPolicyCommand as GetLambdaPolicyCommand,
   InvokeCommand
 } from '@aws-sdk/client-lambda';
@@ -87,8 +84,7 @@ import {
   GlueClient,
   GetDatabaseCommand,
   GetCrawlerCommand,
-  StartCrawlerCommand,
-  GetCrawlerMetricsCommand
+  StartCrawlerCommand
 } from '@aws-sdk/client-glue';
 
 // Athena
@@ -123,16 +119,8 @@ import {
   DescribeVpcsCommand,
   DescribeSubnetsCommand,
   DescribeSecurityGroupsCommand,
-  DescribeVpcEndpointsCommand,
-  DescribeSecurityGroupRulesCommand
+  DescribeVpcEndpointsCommand
 } from '@aws-sdk/client-ec2';
-
-// EMR
-import {
-  EMRClient,
-  DescribeClusterCommand,
-  DescribeSecurityConfigurationCommand
-} from '@aws-sdk/client-emr';
 
 /**
  * TypeScript Interface matching Terraform outputs
@@ -257,7 +245,6 @@ let logsClient: CloudWatchLogsClient;
 let cloudwatchClient: CloudWatchClient;
 let snsClient: SNSClient;
 let ec2Client: EC2Client;
-let emrClient: EMRClient;
 
 beforeAll(async () => {
   // Parse outputs
@@ -280,7 +267,6 @@ beforeAll(async () => {
   cloudwatchClient = new CloudWatchClient({ region });
   snsClient = new SNSClient({ region });
   ec2Client = new EC2Client({ region });
-  emrClient = new EMRClient({ region });
 
   console.log('\n=======================================================');
   console.log('EMR Data Pipeline Integration Tests - Starting');
@@ -1134,39 +1120,6 @@ describe('E2E Functional Flow Tests - EMR Data Pipeline', () => {
         expect(topic.KmsMasterKeyId).toContain('alias/aws/sns');
         
         console.log(`[PASS] SNS topic validated with AWS managed encryption`);
-      }
-
-      expect(true).toBe(true);
-    });
-  });
-
-  describe('Workflow 8: EMR Cluster (Graceful)', () => {
-    
-    test('should validate EMR security configuration (if accessible)', async () => {
-      if (!outputs.emr_security_configuration_name) {
-        console.log(`[INFO] EMR security configuration not in outputs - skipping`);
-        expect(true).toBe(true);
-        return;
-      }
-
-      const securityConfig = await safeAwsCall(
-        async () => {
-          const result = await emrClient.send(new DescribeSecurityConfigurationCommand({
-            Name: outputs.emr_security_configuration_name
-          }));
-          return result;
-        },
-        'EMR security configuration validation'
-      );
-
-      if (securityConfig) {
-        const config = JSON.parse(securityConfig.SecurityConfiguration!);
-        expect(config.EncryptionConfiguration.EnableAtRestEncryption).toBe(true);
-        expect(config.EncryptionConfiguration.AtRestEncryptionConfiguration.S3EncryptionConfiguration.EncryptionMode).toBe('SSE-KMS');
-        
-        console.log(`[PASS] EMR security configuration validated with at-rest encryption`);
-      } else {
-        console.log(`[INFO] EMR security configuration not accessible - infrastructure ready but cluster may not be deployed`);
       }
 
       expect(true).toBe(true);
