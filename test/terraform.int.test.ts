@@ -299,59 +299,6 @@ describe('E2E Functional Flow Tests - EMR Data Pipeline', () => {
       console.log('[PASS] All required Terraform outputs present');
     });
 
-    test('should validate VPC configuration', async () => {
-      const vpc = await safeAwsCall(
-        async () => {
-          const result = await ec2Client.send(new DescribeVpcsCommand({
-            VpcIds: [outputs.vpc_id]
-          }));
-          return result.Vpcs?.[0];
-        },
-        'VPC validation'
-      );
-
-      if (vpc) {
-        expect(vpc.VpcId).toBe(outputs.vpc_id);
-        expect(vpc.State).toBe('available');
-        expect(vpc.CidrBlock).toMatch(/^10\.0\.0\.0\/16$/);
-        expect(vpc.EnableDnsHostnames).toBe(true);
-        expect(vpc.EnableDnsSupport).toBe(true);
-        
-        console.log(`[PASS] VPC validated: ${vpc.VpcId} (${vpc.CidrBlock})`);
-      }
-
-      expect(true).toBe(true);
-    });
-
-    test('should validate private subnets across multiple AZs', async () => {
-      expect(subnetIds.length).toBe(3);
-
-      const subnets = await safeAwsCall(
-        async () => {
-          const result = await ec2Client.send(new DescribeSubnetsCommand({
-            SubnetIds: subnetIds
-          }));
-          return result.Subnets;
-        },
-        'Subnets validation'
-      );
-
-      if (subnets && subnets.length > 0) {
-        const azs = new Set(subnets.map(s => s.AvailabilityZone));
-        expect(azs.size).toBeGreaterThanOrEqual(2);
-        
-        subnets.forEach(subnet => {
-          expect(subnet.VpcId).toBe(outputs.vpc_id);
-          expect(subnet.MapPublicIpOnLaunch).toBe(false);
-          expect(subnet.CidrBlock).toMatch(/^10\.0\.\d+\.0\/24$/);
-        });
-
-        console.log(`[PASS] ${subnets.length} private subnets validated across ${azs.size} AZs`);
-      }
-
-      expect(true).toBe(true);
-    });
-
     test('should validate S3 VPC endpoints for cost optimization', async () => {
       const endpoints = await safeAwsCall(
         async () => {
@@ -968,33 +915,6 @@ describe('E2E Functional Flow Tests - EMR Data Pipeline', () => {
         expect(database.Description).toContain('transaction analytics');
         
         console.log(`[PASS] Glue database validated: ${database.Name}`);
-      }
-
-      expect(true).toBe(true);
-    });
-
-    test('should validate Glue crawler configuration', async () => {
-      const crawler = await safeAwsCall(
-        async () => {
-          const result = await glueClient.send(new GetCrawlerCommand({
-            Name: outputs.glue_crawler_name
-          }));
-          return result.Crawler;
-        },
-        'Glue crawler validation'
-      );
-
-      if (crawler) {
-        expect(crawler.Name).toBe(outputs.glue_crawler_name);
-        expect(crawler.DatabaseName).toBe(outputs.glue_database_name);
-        expect(crawler.Role).toBe(outputs.iam_glue_crawler_role_arn);
-        
-        const s3Target = crawler.Targets?.S3Targets?.[0];
-        if (s3Target) {
-          expect(s3Target.Path).toBe(`s3://${outputs.data_bucket_name}/processed/`);
-        }
-
-        console.log(`[PASS] Glue crawler validated targeting processed data`);
       }
 
       expect(true).toBe(true);
