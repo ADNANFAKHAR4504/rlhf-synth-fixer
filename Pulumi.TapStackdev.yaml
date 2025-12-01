@@ -1,0 +1,17 @@
+config:
+  TapStack:environmentSuffix: dev
+  TapStack:environment: production
+  TapStack:project: tap-infrastructure
+  TapStack:costCenter: engineering
+  TapStack:enableDeletionProtection: "false"
+  TapStack:dbPassword:
+    secure: v1:Wo9TSSmV0+pATrRb:vSXryfjWXRPX0c/2g6I4Ik2Om4ULlQaNZxhL
+  aws:defaultTags: '{"tags":{"Environment":"dev","Repository":"synth-p2f3s8f8","Author":"mayanksethi-turing","PRNumber":"unknown","Team":"synth","CreatedAt":"2025-12-01T15:06:54Z","ManagedBy":"pulumi"}}'
+  pulumi-infra:environmentSuffix: dev
+  pulumi-infra:environment: production
+  pulumi-infra:project: tap-infrastructure
+  pulumi-infra:costCenter: engineering
+  pulumi-infra:enableDeletionProtection: "false"
+  pulumi-infra:dbPassword:
+    secure: v1:pRSFSDOWcRnkdffI:Cb3+uD7RUsxwS4qoVs5MTuuXgGYXdFWsVUiD
+encryptionsalt: v1:gvU/6xwni4g=:v1:BwgWCzjwOI5V8Bpi:8nVaDO6+cTuN3L79+4125MdXvxyPaQ==
