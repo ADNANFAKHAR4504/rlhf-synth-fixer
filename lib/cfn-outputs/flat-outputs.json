@@ -1,0 +1,14 @@
+{
+  "api_gateway_id": "cdlpwqf3kb",
+  "api_gateway_url": "https://cdlpwqf3kb.execute-api.us-east-1.amazonaws.com/prod/webhook/{provider}",
+  "cloudwatch_dashboard_name": "webhook-monitoring-synth101912391",
+  "dlq_arn": "arn:aws:sqs:us-east-1:342597974367:webhook-processor-dlq-synth101912391",
+  "dlq_url": "https://sqs.us-east-1.amazonaws.com/342597974367/webhook-processor-dlq-synth101912391",
+  "dynamodb_table_arn": "arn:aws:dynamodb:us-east-1:342597974367:table/webhooks-synth101912391",
+  "dynamodb_table_name": "webhooks-synth101912391",
+  "kms_key_cloudwatch_logs_id": "f5686721-2302-49d8-b0bc-b65bbe11d017",
+  "kms_key_lambda_env_id": "78010ec7-a76d-43e7-83d2-61309f91f5e3",
+  "lambda_function_arn": "arn:aws:lambda:us-east-1:342597974367:function:webhook-processor-synth101912391",
+  "lambda_function_name": "webhook-processor-synth101912391",
+  "step_functions_arn": "arn:aws:states:us-east-1:342597974367:stateMachine:webhook-orchestration-synth101912391"
+}
