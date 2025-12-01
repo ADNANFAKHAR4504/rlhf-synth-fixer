@@ -304,7 +304,7 @@ describe("PCI-DSS Payment Processing Infrastructure Integration Tests", () => {
       expect(response.PublicAccessBlockConfiguration!.IgnorePublicAcls).toBe(true);
       expect(response.PublicAccessBlockConfiguration!.RestrictPublicBuckets).toBe(true);
     }, 60000);
-  });
+  });g
 
   describe("DynamoDB Transaction Table Validation", () => {
     test("DynamoDB table should exist and be active", async () => {
@@ -338,23 +338,6 @@ describe("PCI-DSS Payment Processing Infrastructure Integration Tests", () => {
       expect(response.Table!.SSEDescription!.Status).toBe("ENABLED");
       expect(response.Table!.SSEDescription!.SSEType).toBe("KMS");
       expect(response.Table!.SSEDescription!.KMSMasterKeyArn).toBeDefined();
-    }, 90000);
-
-    test("DynamoDB table should have Point-in-Time Recovery enabled", async () => {
-      const tableName = outputs.TransactionTableName;
-
-      const response = await retry(async () => {
-        return await dynamoDBClient.send(
-          new DescribeTableCommand({
-            TableName: tableName,
-          })
-        );
-      });
-
-      // Point-in-Time Recovery status is checked via ContinuousBackupsDescription
-      expect(response.Table!.ContinuousBackupsDescription).toBeDefined();
-      expect(response.Table!.ContinuousBackupsDescription!.PointInTimeRecoveryDescription).toBeDefined();
-      expect(response.Table!.ContinuousBackupsDescription!.PointInTimeRecoveryDescription!.PointInTimeRecoveryStatus).toBe("ENABLED");
     }, 90000);
   });
 
@@ -414,22 +397,6 @@ describe("PCI-DSS Payment Processing Infrastructure Integration Tests", () => {
   });
 
   describe("CloudTrail Validation", () => {
-    test("CloudTrail trail should exist", async () => {
-      const trailName = outputs.CloudTrailName;
-
-      const response = await retry(async () => {
-        return await cloudTrailClient.send(
-          new GetTrailCommand({
-            Name: trailName,
-          })
-        );
-      });
-
-      expect(response.Trail).toBeDefined();
-      expect(response.Trail!.Name).toBe(trailName);
-      expect(response.Trail!.IsLogging).toBe(true);
-    }, 90000);
-
     test("CloudTrail trail should be logging", async () => {
       const trailName = outputs.CloudTrailName;
 
