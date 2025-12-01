@@ -1,0 +1,35 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-12-01T10:41:00+05:30",
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "ALB",
+    "StepFunctions",
+    "CloudWatch",
+    "SNS",
+    "VPC",
+    "IAM"
+  ],
+  "po_id": "101912929",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Consistency and Replication"
+  ],
+  "technical_constraints": [
+    "Use CloudFormation StackSets to deploy identical stacks across 3 AWS accounts",
+    "Parameter overrides must be limited to environment-specific values only (account IDs, domain names)",
+    "All Lambda functions must use identical runtime versions and memory allocations",
+    "DynamoDB tables must have identical capacity settings and GSI configurations",
+    "Use CloudFormation Conditions to handle environment-specific tagging requirements",
+    "Implement drift detection using CloudFormation drift detection APIs",
+    "Stack update operations must validate consistency before deployment",
+    "Use nested stacks for modular resource organization",
+    "All IAM roles must reference resources using CloudFormation intrinsic functions only"
+  ],
+  "training_quality": 10
+}

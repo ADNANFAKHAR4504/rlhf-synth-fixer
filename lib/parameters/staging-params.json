@@ -1,0 +1,50 @@
+[
+  {
+    "ParameterKey": "EnvironmentName",
+    "ParameterValue": "staging"
+  },
+  {
+    "ParameterKey": "AccountId",
+    "ParameterValue": "234567890123"
+  },
+  {
+    "ParameterKey": "DomainName",
+    "ParameterValue": "staging.payments.example.com"
+  },
+  {
+    "ParameterKey": "SnsEmail",
+    "ParameterValue": "staging-team@example.com"
+  },
+  {
+    "ParameterKey": "VpcCidr",
+    "ParameterValue": "10.1.0.0/16"
+  },
+  {
+    "ParameterKey": "AvailabilityZone1",
+    "ParameterValue": "us-east-1a"
+  },
+  {
+    "ParameterKey": "AvailabilityZone2",
+    "ParameterValue": "us-east-1b"
+  },
+  {
+    "ParameterKey": "AvailabilityZone3",
+    "ParameterValue": "us-east-1c"
+  },
+  {
+    "ParameterKey": "NetworkStackTemplateUrl",
+    "ParameterValue": "https://s3.amazonaws.com/your-bucket/nested/NetworkStack.json"
+  },
+  {
+    "ParameterKey": "ComputeStackTemplateUrl",
+    "ParameterValue": "https://s3.amazonaws.com/your-bucket/nested/ComputeStack.json"
+  },
+  {
+    "ParameterKey": "StorageStackTemplateUrl",
+    "ParameterValue": "https://s3.amazonaws.com/your-bucket/nested/StorageStack.json"
+  },
+  {
+    "ParameterKey": "MonitoringStackTemplateUrl",
+    "ParameterValue": "https://s3.amazonaws.com/your-bucket/nested/MonitoringStack.json"
+  }
+]
