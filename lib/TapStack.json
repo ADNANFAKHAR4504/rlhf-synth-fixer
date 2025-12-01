@@ -20,8 +20,7 @@
             "default": "KMS Encryption Keys"
           },
           "Parameters": [
-            "PrimaryKMSKeyArn",
-            "SecondaryKMSKeyArn"
+            "PrimaryKMSKeyArn"
           ]
         },
         {
@@ -97,14 +96,7 @@
     "PrimaryKMSKeyArn": {
       "Type": "String",
       "Default": "",
-      "Description": "ARN of the KMS key in primary region (us-east-1) for CloudWatch Logs encryption (optional - leave empty to disable encryption)",
-      "AllowedPattern": "^(arn:aws:kms:[a-z0-9-]+:[0-9]{12}:key/[a-f0-9-]+)?$",
-      "ConstraintDescription": "Must be a valid KMS key ARN or empty"
-    },
-    "SecondaryKMSKeyArn": {
-      "Type": "String",
-      "Default": "",
-      "Description": "ARN of the KMS key in secondary region (eu-west-1) for CloudWatch Logs encryption (optional - leave empty to disable encryption)",
+      "Description": "ARN of the KMS key for CloudWatch Logs encryption (optional - leave empty to disable encryption)",
       "AllowedPattern": "^(arn:aws:kms:[a-z0-9-]+:[0-9]{12}:key/[a-f0-9-]+)?$",
       "ConstraintDescription": "Must be a valid KMS key ARN or empty"
     },
