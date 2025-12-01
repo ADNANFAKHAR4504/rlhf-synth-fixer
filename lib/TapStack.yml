@@ -824,9 +824,9 @@ Resources:
         - !Sub 'www.${DomainName}'
       DomainValidationOptions:
         - DomainName: !Ref DomainName
-          ValidationDomain: !Ref DomainName
+          HostedZoneId: !If [CreateHostedZone, !Ref HostedZone, !Ref ExistingHostedZoneId]
         - DomainName: !Sub '*.${DomainName}'
-          ValidationDomain: !Ref DomainName
+          HostedZoneId: !If [CreateHostedZone, !Ref HostedZone, !Ref ExistingHostedZoneId]
       ValidationMethod: DNS
       Tags:
         - Key: Name
@@ -847,7 +847,7 @@ Resources:
         - !Sub 'app.${DomainName}'
       DomainValidationOptions:
         - DomainName: !Sub 'api.${DomainName}'
-          ValidationDomain: !Ref DomainName
+          HostedZoneId: !If [CreateHostedZone, !Ref HostedZone, !Ref ExistingHostedZoneId]
       ValidationMethod: DNS
       Tags:
         - Key: Name
