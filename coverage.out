@@ -1,0 +1,6 @@
+mode: set
+github.com/TuringGpt/iac-test-automations/lib/tap_stack.go:28.90,30.18 2 1
+github.com/TuringGpt/iac-test-automations/lib/tap_stack.go:30.18,32.3 1 1
+github.com/TuringGpt/iac-test-automations/lib/tap_stack.go:33.2,37.52 3 1
+github.com/TuringGpt/iac-test-automations/lib/tap_stack.go:37.52,39.3 1 1
+github.com/TuringGpt/iac-test-automations/lib/tap_stack.go:41.2,241.17 21 1
