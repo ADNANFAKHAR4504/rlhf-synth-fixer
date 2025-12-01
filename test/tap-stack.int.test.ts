@@ -43,7 +43,7 @@ describe('EKS Cluster Integration Tests', () => {
 
       expect(response.Stacks).toBeDefined();
       expect(response.Stacks!.length).toBe(1);
-      expect(response.Stacks![0].StackStatus).toBe('CREATE_COMPLETE');
+      expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(response.Stacks![0].StackStatus);
     }, 30000);
 
     test('should have all required outputs', () => {
@@ -154,8 +154,8 @@ describe('EKS Cluster Integration Tests', () => {
     test('should have general node group created', async () => {
       expect(outputs.GeneralNodeGroupArn).toBeDefined();
 
-      // Extract node group name from ARN
-      const nodeGroupName = outputs.GeneralNodeGroupArn.split('/').pop()!;
+      // Extract node group name from ARN (format: arn:aws:eks:...:nodegroup/cluster-name/nodegroup-name/uuid)
+      const nodeGroupName = outputs.GeneralNodeGroupArn.split('/')[2];
 
       const command = new DescribeNodegroupCommand({
         clusterName: outputs.ClusterName,
@@ -169,7 +169,7 @@ describe('EKS Cluster Integration Tests', () => {
     }, 30000);
 
     test('should have general node group with correct instance types', async () => {
-      const nodeGroupName = outputs.GeneralNodeGroupArn.split('/').pop()!;
+      const nodeGroupName = outputs.GeneralNodeGroupArn.split('/')[2];
 
       const command = new DescribeNodegroupCommand({
         clusterName: outputs.ClusterName,
@@ -181,7 +181,7 @@ describe('EKS Cluster Integration Tests', () => {
     }, 30000);
 
     test('should have general node group with correct scaling config', async () => {
-      const nodeGroupName = outputs.GeneralNodeGroupArn.split('/').pop()!;
+      const nodeGroupName = outputs.GeneralNodeGroupArn.split('/')[2];
 
       const command = new DescribeNodegroupCommand({
         clusterName: outputs.ClusterName,
@@ -199,7 +199,7 @@ describe('EKS Cluster Integration Tests', () => {
     test('should have compute node group created', async () => {
       expect(outputs.ComputeNodeGroupArn).toBeDefined();
 
-      const nodeGroupName = outputs.ComputeNodeGroupArn.split('/').pop()!;
+      const nodeGroupName = outputs.ComputeNodeGroupArn.split('/')[2];
 
       const command = new DescribeNodegroupCommand({
         clusterName: outputs.ClusterName,
@@ -213,7 +213,7 @@ describe('EKS Cluster Integration Tests', () => {
     }, 30000);
 
     test('should have compute node group with correct instance types', async () => {
-      const nodeGroupName = outputs.ComputeNodeGroupArn.split('/').pop()!;
+      const nodeGroupName = outputs.ComputeNodeGroupArn.split('/')[2];
 
       const command = new DescribeNodegroupCommand({
         clusterName: outputs.ClusterName,
@@ -225,7 +225,7 @@ describe('EKS Cluster Integration Tests', () => {
     }, 30000);
 
     test('should have compute node group with correct scaling config', async () => {
-      const nodeGroupName = outputs.ComputeNodeGroupArn.split('/').pop()!;
+      const nodeGroupName = outputs.ComputeNodeGroupArn.split('/')[2];
 
       const command = new DescribeNodegroupCommand({
         clusterName: outputs.ClusterName,
@@ -241,8 +241,8 @@ describe('EKS Cluster Integration Tests', () => {
     }, 30000);
 
     test('should have both node groups using Amazon Linux 2', async () => {
-      const generalNodeGroupName = outputs.GeneralNodeGroupArn.split('/').pop()!;
-      const computeNodeGroupName = outputs.ComputeNodeGroupArn.split('/').pop()!;
+      const generalNodeGroupName = outputs.GeneralNodeGroupArn.split('/')[2];
+      const computeNodeGroupName = outputs.ComputeNodeGroupArn.split('/')[2];
 
       const generalCommand = new DescribeNodegroupCommand({
         clusterName: outputs.ClusterName,
