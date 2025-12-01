@@ -168,7 +168,7 @@ export class TapStack extends pulumi.ComponentResource {
       `tap-ecr-policy-${environmentSuffix}`,
       {
         role: taskExecutionRole.id,
-        policy: JSON.stringify({
+        policy: pulumi.jsonStringify({
           Version: '2012-10-17',
           Statement: [
             {
@@ -241,7 +241,7 @@ export class TapStack extends pulumi.ComponentResource {
         memory: containerMemory.toString(),
         executionRoleArn: taskExecutionRole.arn,
         taskRoleArn: taskRole.arn,
-        containerDefinitions: JSON.stringify([
+        containerDefinitions: pulumi.jsonStringify([
           {
             name: containerName,
             image: containerImage,
