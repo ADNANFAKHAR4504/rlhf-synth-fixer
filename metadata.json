@@ -11,11 +11,35 @@
     "Web Application Deployment"
   ],
   "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Table",
+    "Security Group",
+    "Elastic IP",
     "S3 Bucket",
-    "CloudFormation",
-    "Lambda",
-    "EventBridge",
-    "CloudWatch LogGroup",
-    "VPC"
-  ]
+    "CloudFront",
+    "ACM Certificate",
+    "WAF",
+    "ALB",
+    "Target Group",
+    "Launch Template",
+    "ASG",
+    "EC2",
+    "RDS",
+    "Route53",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "Secrets Manager",
+    "SSM Parameter"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mikiaszerihun",
+  "dockerS3Location": ""
 }
