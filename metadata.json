@@ -20,6 +20,7 @@
     "RDS",
     "Route 53"
   ],
+  "training_quality": 9,
   "author": "iamarpit-turing",
   "reviewer": "balasl342"
 }
