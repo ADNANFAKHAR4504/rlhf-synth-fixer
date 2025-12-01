@@ -69,7 +69,7 @@ export class TapStack extends pulumi.ComponentResource {
     const complianceBucket = new aws.s3.Bucket(
       `compliance-data-${environmentSuffix}`,
       {
-        bucket: `compliance-data-${environmentSuffix}`,
+        bucket: `compliance-data-${environmentSuffix}-342597974367`,
         forceDestroy: true, // Allows bucket destruction even with objects
         serverSideEncryptionConfiguration: {
           rule: {
@@ -95,7 +95,7 @@ export class TapStack extends pulumi.ComponentResource {
         ],
         tags: {
           ...tags,
-          Name: `compliance-data-${environmentSuffix}`,
+          Name: `compliance-data-${environmentSuffix}-342597974367`,
         },
       },
       { parent: this }
