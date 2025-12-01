@@ -304,7 +304,7 @@ describe("PCI-DSS Payment Processing Infrastructure Integration Tests", () => {
       expect(response.PublicAccessBlockConfiguration!.IgnorePublicAcls).toBe(true);
       expect(response.PublicAccessBlockConfiguration!.RestrictPublicBuckets).toBe(true);
     }, 60000);
-  });g
+  });
 
   describe("DynamoDB Transaction Table Validation", () => {
     test("DynamoDB table should exist and be active", async () => {
