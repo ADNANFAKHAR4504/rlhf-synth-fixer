@@ -215,12 +215,6 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-logs-kms'
 
-  LogsKmsAlias:
-    Type: AWS::KMS::Alias
-    Properties:
-      AliasName: !Sub 'alias/${ProjectName}-${EnvironmentSuffix}-logs'
-      TargetKeyId: !Ref LogsKmsKey
-
   DataKmsKey:
     Type: AWS::KMS::Key
     Properties:
@@ -267,16 +261,9 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-data-kms'
 
-  DataKmsAlias:
-    Type: AWS::KMS::Alias
-    Properties:
-      AliasName: !Sub 'alias/${ProjectName}-${EnvironmentSuffix}-data'
-      TargetKeyId: !Ref DataKmsKey
-
   ArtifactBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${ProjectName}-${EnvironmentSuffix}-artifacts-${AWS::AccountId}'
       VersioningConfiguration:
         Status: Enabled
       PublicAccessBlockConfiguration:
@@ -304,7 +291,6 @@ Resources:
   CloudTrailBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${ProjectName}-${EnvironmentSuffix}-trail-${AWS::AccountId}'
       VersioningConfiguration:
         Status: Enabled
       PublicAccessBlockConfiguration:
@@ -336,6 +322,7 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
+          # Allow CloudTrail to verify bucket ACL ownership
           - Sid: AWSCloudTrailAclCheck
             Effect: Allow
             Principal:
@@ -345,6 +332,8 @@ Resources:
             Condition:
               StringEquals:
                 aws:SourceAccount: !Ref AWS::AccountId
+
+          # Allow CloudTrail to deliver log files into this bucket
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
@@ -353,7 +342,10 @@ Resources:
             Resource: !Sub '${CloudTrailBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
             Condition:
               StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
                 s3:x-amz-acl: bucket-owner-full-control
+
+
 
   VPC:
     Type: AWS::EC2::VPC
@@ -610,18 +602,8 @@ Resources:
   VpcFlowLogsGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/vpc/flowlogs/${ProjectName}-${EnvironmentSuffix}'
       KmsKeyId: !GetAtt LogsKmsKey.Arn
       RetentionInDays: 90
-
-
-  AppLogGroup:
-    Type: AWS::Logs::LogGroup
-    #DependsOn: LogsKmsKey
-    Properties:
-      LogGroupName: !Sub '/${ProjectName}/${EnvironmentSuffix}/app'
-      KmsKeyId: !GetAtt LogsKmsKey.Arn
-      RetentionInDays: 14
 
 
   VpcFlowLogs:
@@ -705,7 +687,6 @@ Resources:
   AppAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: !Sub '${ProjectName}-${EnvironmentSuffix}-asg'
       VPCZoneIdentifier:
         - !Ref PrivateSubnetA
         - !Ref PrivateSubnetB
@@ -750,7 +731,6 @@ Resources:
       SubnetIds:
         - !Ref PrivateSubnetA
         - !Ref PrivateSubnetB
-      DBSubnetGroupName: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-subnetgrp'
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-subnetgrp'
@@ -758,7 +738,6 @@ Resources:
   RdsInstance:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceIdentifier: !Sub '${ProjectName}-${EnvironmentSuffix}-db'
       Engine: !Ref RdsEngine
       # Include EngineVersion only when provided, otherwise let RDS pick the correct regional default
       EngineVersion:
@@ -807,9 +786,7 @@ Resources:
 
   TrailLogsGroup:
     Type: AWS::Logs::LogGroup
-    #DependsOn: LogsKmsKey
     Properties:
-      LogGroupName: !Sub '/aws/cloudtrail/${ProjectName}-${EnvironmentSuffix}'
       KmsKeyId: !GetAtt LogsKmsKey.Arn
       RetentionInDays: 90
 
@@ -842,8 +819,8 @@ Resources:
 
   CloudTrailTrail:
     Type: AWS::CloudTrail::Trail
+    DependsOn: CloudTrailBucketPolicy
     Properties:
-      TrailName: !Sub '${ProjectName}-${EnvironmentSuffix}-trail'
       S3BucketName: !Ref CloudTrailBucket
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true
@@ -858,6 +835,8 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-trail'
+
+
 
   ExampleLambdaRole:
     Type: AWS::IAM::Role
@@ -880,7 +859,6 @@ Resources:
   ExampleLambda:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${ProjectName}-${EnvironmentSuffix}-hello'
       Runtime: python3.12
       Handler: index.handler
       Role: !GetAtt ExampleLambdaRole.Arn
@@ -904,19 +882,9 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-lambda'
 
-  ExampleLambdaLogGroup:
-    Type: AWS::Logs::LogGroup
-    #DependsOn: LogsKmsKey
-    Properties:
-      LogGroupName: !Sub '/aws/lambda/${ProjectName}-${EnvironmentSuffix}-hello'
-      KmsKeyId: !GetAtt LogsKmsKey.Arn
-      RetentionInDays: 14
-
-
   NotificationsTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub '${ProjectName}-${EnvironmentSuffix}-alerts'
       KmsMasterKeyId: !Ref DataKmsKey
       Tags:
         - Key: Name
@@ -932,7 +900,6 @@ Resources:
   Alb5xxAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${ProjectName}-${EnvironmentSuffix}-alb-5xx'
       AlarmDescription: ALB 5xx spike
       Namespace: AWS/ApplicationELB
       MetricName: HTTPCode_ELB_5XX_Count
@@ -954,7 +921,6 @@ Resources:
   TgUnhealthyHostsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${ProjectName}-${EnvironmentSuffix}-tg-unhealthy'
       AlarmDescription: Target group unhealthy host count > 0
       Namespace: AWS/ApplicationELB
       MetricName: UnHealthyHostCount
@@ -978,7 +944,6 @@ Resources:
   RdsCpuAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-cpu'
       AlarmDescription: RDS CPU > 80%
       Namespace: AWS/RDS
       MetricName: CPUUtilization
@@ -1029,7 +994,6 @@ Resources:
   ManagerLambda:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${ProjectName}-${EnvironmentSuffix}-manager'
       Runtime: python3.12
       Handler: index.handler
       Role: !GetAtt ManagerLambdaRole.Arn
@@ -1151,15 +1115,6 @@ Resources:
               except Exception as e:
                   log.exception("Manager error")
                   send_cfn_response(event,context,'FAILED',reason=str(e))
-
-  ManagerLambdaLogGroup:
-    Type: AWS::Logs::LogGroup
-    #DependsOn: LogsKmsKey
-    Properties:
-      LogGroupName: !Sub '/aws/lambda/${ProjectName}-${EnvironmentSuffix}-manager'
-      KmsKeyId: !GetAtt LogsKmsKey.Arn
-      RetentionInDays: 30
-
 
   PostDeployVerifier:
     Type: AWS::CloudFormation::CustomResource
