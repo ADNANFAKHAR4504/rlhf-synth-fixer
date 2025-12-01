@@ -1077,7 +1077,6 @@ Resources:
       AllocatedStorage: !Ref DBAllocatedStorage
       StorageType: gp3
       StorageEncrypted: true
-      Iops: 3000  # gp3 baseline
       MasterUsername: !Ref DBUsername
       ManageMasterUserPassword: true
       VPCSecurityGroups:
