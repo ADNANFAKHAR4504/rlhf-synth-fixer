@@ -156,17 +156,6 @@ describe('Terraform EKS Integration Tests', () => {
     }, 30000);
   });
 
-  describe('Node Groups Verification', () => {
-    let clients: ReturnType<typeof initializeClients>;
-    let clusterName: string;
-
-    beforeAll(() => {
-      const { clusterName: name, region } = getClusterNameAndRegion();
-      clusterName = name;
-      clients = initializeClients(region);
-    });
-  });
-
   describe('VPC and Networking Verification', () => {
     let clients: ReturnType<typeof initializeClients>;
 
@@ -230,15 +219,6 @@ describe('Terraform EKS Integration Tests', () => {
 
       expect(response.KeyRotationEnabled).toBe(true);
     }, 30000);
-  });
-
-  describe('IAM Roles Verification', () => {
-    let clients: ReturnType<typeof initializeClients>;
-
-    beforeAll(() => {
-      const { region } = getClusterNameAndRegion();
-      clients = initializeClients(region);
-    });
   });
 
   describe('EKS Addons Verification', () => {
