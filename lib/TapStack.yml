@@ -83,6 +83,14 @@ Parameters:
     AllowedPattern: '^$|^Z[A-Z0-9]+$'
     ConstraintDescription: Must be a valid Route53 hosted zone ID or empty if creating new zone
 
+  CreateCertificates:
+    Description: Create ACM certificates (set to false for testing with dummy domains)
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
   InstanceType:
     Description: EC2 instance type for web servers
     Type: String
@@ -186,6 +194,7 @@ Conditions:
   UseDetailedMonitoring: !Equals [!Ref EnableDetailedMonitoring, 'true']
   IsProduction: !Equals [!Ref EnvironmentName, 'production']
   IsUsEast1: !Equals [!Ref 'AWS::Region', 'us-east-1']
+  ShouldCreateCertificates: !Equals [!Ref CreateCertificates, 'true']
 
 # ==========================================
 # Mappings Section
@@ -815,8 +824,10 @@ Resources:
         Comment: !Sub OAI for ${EnvironmentName} static content
 
   # ACM Certificate for CloudFront (must be in us-east-1)
+  # Note: Only created if CreateCertificates is true (skip for dummy domains)
   ACMCertificate:
     Type: AWS::CertificateManager::Certificate
+    Condition: ShouldCreateCertificates
     Properties:
       DomainName: !Ref DomainName
       SubjectAlternativeNames:
@@ -839,8 +850,10 @@ Resources:
           Value: 'true'
 
   # ALB Certificate (region-specific)
+  # Note: Only created if CreateCertificates is true (skip for dummy domains)
   ALBCertificate:
     Type: AWS::CertificateManager::Certificate
+    Condition: ShouldCreateCertificates
     Properties:
       DomainName: !Sub 'api.${DomainName}'
       SubjectAlternativeNames:
@@ -869,10 +882,12 @@ Resources:
         Aliases:
           - !Ref DomainName
           - !Sub 'www.${DomainName}'
-        ViewerCertificate:
-          AcmCertificateArn: !Ref ACMCertificate
-          MinimumProtocolVersion: TLSv1.2_2021
-          SslSupportMethod: sni-only
+        ViewerCertificate: !If
+          - ShouldCreateCertificates
+          - AcmCertificateArn: !Ref ACMCertificate
+            MinimumProtocolVersion: TLSv1.2_2021
+            SslSupportMethod: sni-only
+          - CloudFrontDefaultCertificate: true
         Origins:
           - Id: S3Origin
             DomainName: !GetAtt StaticContentBucket.RegionalDomainName
@@ -1221,6 +1236,7 @@ Resources:
 
   ALBListenerHTTPS:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: ShouldCreateCertificates
     Properties:
       DefaultActions:
         - Type: forward
@@ -1981,12 +1997,14 @@ Outputs:
       Name: !Sub ${EnvironmentName}-WAF-WebACL-ARN
 
   ACMCertificateArn:
+    Condition: ShouldCreateCertificates
     Description: ACM Certificate ARN for CloudFront
     Value: !Ref ACMCertificate
     Export:
       Name: !Sub ${EnvironmentName}-ACM-Certificate-ARN
 
   ALBCertificateArn:
+    Condition: ShouldCreateCertificates
     Description: ACM Certificate ARN for ALB
     Value: !Ref ALBCertificate
     Export:
