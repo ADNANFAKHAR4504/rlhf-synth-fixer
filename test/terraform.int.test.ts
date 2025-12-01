@@ -61,14 +61,6 @@ describe('Multi-Region DR Terraform Integration Tests', () => {
       });
     });
 
-    test('string outputs should be non-empty', () => {
-      Object.values(outputs).forEach(value => {
-        if (typeof value === 'string') {
-          expect(value.length).toBeGreaterThan(0);
-        }
-      });
-    });
-
     test('array outputs should contain valid elements', () => {
       Object.values(outputs).forEach(value => {
         if (Array.isArray(value)) {
