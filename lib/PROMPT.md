@@ -2,18 +2,18 @@
 
 Hey team,
 
-We have a critical issue with our production CloudFormation stack for a financial services application. The current template has grown to over 3000 lines and is causing deployment failures. Management needs us to optimize this immediately to reduce costs and improve reliability. I need to create an optimized version using **CloudFormation with JSON** that addresses all the structural problems while maintaining full functionality.
+We have a critical issue with our production CloudFormation stack for a financial services application. The current template has significant technical debt and maintenance issues. Management needs us to optimize this immediately to reduce costs and improve reliability. I need to create an optimized version using **CloudFormation with JSON** that addresses all the structural problems while maintaining full functionality.
 
 The existing stack has been running for six months and powers our three-tier web application in us-east-1. It works, but it's become a maintenance nightmare. Deployments take 45+ minutes, we have circular dependencies, hardcoded values everywhere, and it's violating several AWS best practices. The template needs refactoring but we cannot break any existing functionality or require infrastructure replacement.
 
 ## What we need to build
 
-Create an optimized CloudFormation template using **CloudFormation with JSON** that refactors a poorly-structured 3000+ line template for a three-tier web application while fixing all architectural issues and reducing complexity by at least 40%.
+Create an optimized CloudFormation template using **CloudFormation with JSON** that refactors the poorly-structured baseline template for a three-tier web application while fixing all architectural issues and reducing complexity.
 
 ### Core Requirements
 
 1. **Template Optimization**
-   - Reduce template from 3000+ lines to under 1800 lines
+   - Create a well-structured, maintainable template
    - Preserve all existing functionality completely
    - Maintain backward compatibility with current deployment
    - Support multi-environment deployments (dev/staging/prod)
@@ -37,7 +37,7 @@ Create an optimized CloudFormation template using **CloudFormation with JSON** t
    - Validate dependency graph has no cycles
 
 5. **Security Group Consolidation**
-   - Consolidate 15 separate security group resources into 3 logical groups
+   - Consolidate separate security group resources into 3 logical groups
    - Use dynamic rule generation patterns
    - Group by function: web tier, app tier, data tier
    - Eliminate duplicate rules
@@ -99,7 +99,6 @@ Create an optimized CloudFormation template using **CloudFormation with JSON** t
 
 ### Constraints
 
-- Template size must be under 1800 lines (40% reduction from 3000)
 - No breaking changes to existing infrastructure
 - Must support rolling updates without downtime
 - Maintain all current security configurations
@@ -111,7 +110,6 @@ Create an optimized CloudFormation template using **CloudFormation with JSON** t
 ## Success Criteria
 
 - **Functionality**: All 12 optimization requirements implemented correctly
-- **Size**: Template reduced from 3000+ to under 1800 lines
 - **Validation**: Passes cfn-lint with zero errors
 - **Dependencies**: No circular dependencies, proper DependsOn usage
 - **Security**: IMDSv2 enabled, security groups consolidated
@@ -133,17 +131,28 @@ Create an optimized CloudFormation template using **CloudFormation with JSON** t
 ## What to deliver
 
 - Complete CloudFormation JSON implementation
-- Optimized template under 1800 lines
+- Optimized template (TapStack.json)
 - VPC with multi-AZ networking
 - Application Load Balancer configuration
 - Auto Scaling Group with launch configuration
 - RDS Aurora MySQL cluster
 - ElastiCache Redis cluster
-- Consolidated security groups (3 groups instead of 15)
+- Consolidated security groups (3 groups)
 - Parameters section with all extracted values
 - Mappings section for environment configurations
 - Conditions section for environment-specific resources
 - Outputs section with key resource identifiers
 - Unit tests validating template structure
 - Integration tests with deployment validation
-- Documentation and deployment instructions
+
+## File Structure
+
+```
+lib/
+├── TapStack.json           # Optimized CloudFormation template
+├── PROMPT.md               # This task description
+├── IDEAL_RESPONSE.md       # Documentation of ideal solution
+├── MODEL_FAILURES.md       # Analysis of optimization requirements
+├── MODEL_RESPONSE.md       # Initial implementation example
+└── README.md               # Project documentation
+```
