@@ -6,7 +6,7 @@
   "po_id": "101912945",
   "team": "synth",
   "startedAt": "2025-12-01T00:00:00.000Z",
-  "subtask": "",
+  "subtask": "CloudFormation Template Optimization",
   "subject_labels": [
     "Preserve all existing functionality while reducing template size by at least 40%",
     "Convert all hardcoded values to parameters with proper validation rules",
@@ -29,5 +29,7 @@
     "S3",
     "IAM"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing"
 }
