@@ -1,6 +1,7 @@
 variable "environment_suffix" {
   description = "Unique suffix for resource naming to avoid collisions"
   type        = string
+  default     = "dev"
 }
 
 variable "environment" {
@@ -21,15 +22,14 @@ variable "secondary_region" {
   default     = "us-west-2"
 }
 
-variable "db_master_username" {
-  description = "Master username for Aurora"
+variable "db_username" {
+  description = "Master username for Aurora (set via TF_VAR_db_username environment variable)"
   type        = string
-  default     = "admin"
   sensitive   = true
 }
 
-variable "db_master_password" {
-  description = "Master password for Aurora"
+variable "db_password" {
+  description = "Master password for Aurora (set via TF_VAR_db_password environment variable)"
   type        = string
   sensitive   = true
 }

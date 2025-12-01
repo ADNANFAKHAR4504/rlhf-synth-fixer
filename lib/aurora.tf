@@ -20,8 +20,8 @@ resource "aws_rds_cluster" "primary" {
   engine                    = aws_rds_global_cluster.main.engine
   engine_version            = aws_rds_global_cluster.main.engine_version
   database_name             = aws_rds_global_cluster.main.database_name
-  master_username           = var.db_master_username
-  master_password           = var.db_master_password
+  master_username           = var.db_username
+  master_password           = var.db_password
   backup_retention_period   = var.backup_retention_days
   preferred_backup_window   = "03:00-04:00"
   skip_final_snapshot       = true

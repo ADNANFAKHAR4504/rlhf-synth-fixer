@@ -8,9 +8,9 @@ environment        = "production"
 primary_region   = "us-east-1"
 secondary_region = "us-west-2"
 
-# Database Configuration
-db_master_username = "admin"
-db_master_password = "ChangeMe123!"  # Use secure password
+# Database Configuration (credentials should be set via TF_VAR_db_username and TF_VAR_db_password environment variables)
+# db_username = "admin"
+# db_password = "ChangeMe123!"  # Use secure password - NEVER commit real credentials
 db_instance_class  = "db.r5.large"
 
 # Compute Configuration
