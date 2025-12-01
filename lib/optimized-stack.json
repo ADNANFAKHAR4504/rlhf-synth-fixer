@@ -108,11 +108,32 @@
       "us-east-1": {
         "HVM64": "ami-0c55b159cbfafe1f0"
       },
+      "us-east-2": {
+        "HVM64": "ami-0731ca98d8c4a1c8d"
+      },
+      "us-west-1": {
+        "HVM64": "ami-09a7fe78668f1e2c0"
+      },
       "us-west-2": {
         "HVM64": "ami-0d1cd67c26f5fca19"
       },
       "eu-west-1": {
         "HVM64": "ami-0bbc25e23a7640b9b"
+      },
+      "eu-west-2": {
+        "HVM64": "ami-0d26eb3972b7f8c96"
+      },
+      "eu-central-1": {
+        "HVM64": "ami-0cc293023f983ed53"
+      },
+      "ap-northeast-1": {
+        "HVM64": "ami-0c3fd0f5d33134a76"
+      },
+      "ap-southeast-1": {
+        "HVM64": "ami-01f7527546b557442"
+      },
+      "ap-southeast-2": {
+        "HVM64": "ami-0d8b7c1b8a8b8c1b8"
       }
     }
   },
@@ -550,7 +571,7 @@
       "Type": "AWS::RDS::DBClusterParameterGroup",
       "Properties": {
         "Description": {"Fn::Sub": "Cluster parameter group for Aurora MySQL - ${EnvironmentSuffix}"},
-        "Family": "aurora-mysql5.7",
+        "Family": "aurora-mysql8.0",
         "Parameters": {
           "character_set_server": "utf8mb4",
           "collation_server": "utf8mb4_unicode_ci"
@@ -567,7 +588,7 @@
       "Type": "AWS::RDS::DBParameterGroup",
       "Properties": {
         "Description": {"Fn::Sub": "Parameter group for Aurora MySQL instances - ${EnvironmentSuffix}"},
-        "Family": "aurora-mysql5.7",
+        "Family": "aurora-mysql8.0",
         "Parameters": {
           "max_connections": "150",
           "slow_query_log": "1"
@@ -674,7 +695,7 @@
         "CacheSubnetGroupName": {"Ref": "CacheSubnetGroup"},
         "SecurityGroupIds": [{"Ref": "DataSecurityGroup"}],
         "AtRestEncryptionEnabled": true,
-        "TransitEncryptionEnabled": false,
+        "TransitEncryptionEnabled": true,
         "Tags": [
           {
             "Key": "Name",
@@ -742,8 +763,8 @@
           }
         ]
       },
-      "DeletionPolicy": "Retain",
-      "UpdateReplacePolicy": "Retain"
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete"
     }
   },
   "Outputs": {
