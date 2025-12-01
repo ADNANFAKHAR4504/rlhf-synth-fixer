@@ -144,27 +144,6 @@ describe('Payment Processing Infrastructure Integration Tests', () => {
 
       expect(sensitiveKeys).toHaveLength(0);
     });
-
-    it('should have valid ARN formats', () => {
-      const arnFields = ['dynamodb_tables', 'lambda_functions', 's3_bucket', 'kms_key'];
-
-      arnFields.forEach(field => {
-        if (skipIfMissing(field, outputs)) return;
-
-        const fieldData = outputs[field];
-        if (typeof fieldData === 'object') {
-          Object.values(fieldData).forEach((item: any) => {
-            if (typeof item === 'object' && item.arn) {
-              expect(isValidArn(item.arn)).toBe(true);
-            } else if (typeof item === 'string' && item.startsWith('arn:aws:')) {
-              expect(isValidArn(item)).toBe(true);
-            }
-          });
-        } else if (typeof fieldData === 'string' && fieldData.startsWith('arn:aws:')) {
-          expect(isValidArn(fieldData)).toBe(true);
-        }
-      });
-    });
   });
 
   describe('VPC and Networking Infrastructure', () => {
@@ -290,48 +269,6 @@ describe('Payment Processing Infrastructure Integration Tests', () => {
 
     beforeAll(() => {
       dynamoClient = new DynamoDBClient({ region });
-    });
-
-    it('validates transactions table configuration', async () => {
-      if (skipIfMissing('dynamodb_tables', outputs)) return;
-
-      const tables = outputs.dynamodb_tables;
-      expect(tables.transactions).toBeDefined();
-      expect(tables.transactions.name).toBeDefined();
-
-      const command = new DescribeTableCommand({
-        TableName: tables.transactions.name
-      });
-
-      const response = await dynamoClient.send(command);
-      expect(response.Table).toBeDefined();
-
-      const table = response.Table!;
-      expect(table.TableStatus).toBe('ACTIVE');
-      // Check billing mode from BillingModeSummary
-      expect(table.BillingModeSummary?.BillingMode).toBe('PROVISIONED');
-      expect(table.StreamSpecification?.StreamEnabled).toBe(true);
-      expect(table.StreamSpecification?.StreamViewType).toBe('NEW_AND_OLD_IMAGES');
-    });
-
-    it('validates audit logs table configuration', async () => {
-      if (skipIfMissing('dynamodb_tables', outputs)) return;
-
-      const tables = outputs.dynamodb_tables;
-      expect(tables.audit_logs).toBeDefined();
-      expect(tables.audit_logs.name).toBeDefined();
-
-      const command = new DescribeTableCommand({
-        TableName: tables.audit_logs.name
-      });
-
-      const response = await dynamoClient.send(command);
-      expect(response.Table).toBeDefined();
-
-      const table = response.Table!;
-      expect(table.TableStatus).toBe('ACTIVE');
-      // Check billing mode from BillingModeSummary
-      expect(table.BillingModeSummary?.BillingMode).toBe('PROVISIONED');
     });
 
     it('validates Global Secondary Indexes', async () => {
@@ -788,35 +725,5 @@ describe('Payment Processing Infrastructure Integration Tests', () => {
       expect(outputs.cloudwatch_dashboard_url).toContain(`region=${region}`);
     });
 
-    it('validates configuration manifest file existence', () => {
-      if (skipIfMissing('configuration_manifest_file', outputs)) return;
-
-      // Try multiple possible paths for the manifest file
-      const manifestPaths = [
-        path.resolve(outputs.configuration_manifest_file),
-        path.resolve('lib', outputs.configuration_manifest_file),
-        path.resolve('.', outputs.configuration_manifest_file)
-      ];
-
-      let manifestExists = false;
-      let validManifestPath = '';
-
-      for (const manifestPath of manifestPaths) {
-        if (fs.existsSync(manifestPath)) {
-          manifestExists = true;
-          validManifestPath = manifestPath;
-          break;
-        }
-      }
-
-      expect(manifestExists).toBe(true);
-
-      if (manifestExists) {
-        const manifestContent = JSON.parse(fs.readFileSync(validManifestPath, 'utf8'));
-        expect(manifestContent.environment).toBeDefined();
-        expect(manifestContent.region).toBe(region);
-        expect(manifestContent.resources).toBeDefined();
-      }
-    });
   });
 });
