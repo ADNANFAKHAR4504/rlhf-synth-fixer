@@ -1209,20 +1209,13 @@ Resources:
                 Value: 'true'
         UserData:
           Fn::Base64: !Sub |
-            #!/bin/bash -xe
-            # Update system
+            #!/bin/bash
             yum update -y
-            
-            # Install required packages
-            yum install -y httpd mysql amazon-cloudwatch-agent aws-cfn-bootstrap
+            yum install -y httpd mysql amazon-cloudwatch-agent
             
             # Configure CloudWatch agent
             cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
             {
-              "agent": {
-                "metrics_collection_interval": 60,
-                "run_as_user": "cwagent"
-              },
               "logs": {
                 "logs_collected": {
                   "files": {
@@ -1230,56 +1223,12 @@ Resources:
                       {
                         "file_path": "/var/log/httpd/access_log",
                         "log_group_name": "${ApplicationLogGroup}",
-                        "log_stream_name": "{instance_id}/apache_access",
-                        "timezone": "UTC"
+                        "log_stream_name": "{instance_id}/apache_access"
                       },
                       {
                         "file_path": "/var/log/httpd/error_log",
                         "log_group_name": "${ApplicationLogGroup}",
-                        "log_stream_name": "{instance_id}/apache_error",
-                        "timezone": "UTC"
-                      },
-                      {
-                        "file_path": "/var/log/messages",
-                        "log_group_name": "${SystemLogGroup}",
-                        "log_stream_name": "{instance_id}/messages",
-                        "timezone": "UTC"
-                      }
-                    ]
-                  }
-                }
-              },
-              "metrics": {
-                "namespace": "WebApp/Production",
-                "metrics_collected": {
-                  "cpu": {
-                    "measurement": [
-                      {
-                        "name": "cpu_usage_idle",
-                        "rename": "CPU_IDLE",
-                        "unit": "Percent"
-                      }
-                    ],
-                    "totalcpu": false
-                  },
-                  "disk": {
-                    "measurement": [
-                      {
-                        "name": "used_percent",
-                        "rename": "DISK_USED",
-                        "unit": "Percent"
-                      }
-                    ],
-                    "resources": [
-                      "*"
-                    ]
-                  },
-                  "mem": {
-                    "measurement": [
-                      {
-                        "name": "mem_used_percent",
-                        "rename": "MEM_USED",
-                        "unit": "Percent"
+                        "log_stream_name": "{instance_id}/apache_error"
                       }
                     ]
                   }
@@ -1293,72 +1242,22 @@ Resources:
               -a query -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
             
             # Configure web server
-            cat > /var/www/html/index.html <<EOF
-            <!DOCTYPE html>
-            <html>
-            <head><title>WebApp Production</title></head>
-            <body>
-              <h1>WebApp Production Server</h1>
-              <p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
-              <p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>
-            </body>
-            </html>
-            EOF
-            
-            # Create health check endpoint
+            echo "<h1>WebApp Production Server</h1>" > /var/www/html/index.html
             echo "OK" > /var/www/html/health
             
             # Store database endpoint in SSM Parameter Store
-            aws ssm put-parameter \
-              --name /webapp/prod/db/endpoint \
-              --value "${DatabaseInstance.Endpoint.Address}" \
-              --type String \
-              --overwrite \
-              --region ${AWS::Region} || true
+            aws ssm put-parameter --name /webapp/prod/db/endpoint --value ${DatabaseInstance.Endpoint.Address} --type String --region ${AWS::Region}
             
-            # Get database credentials from Secrets Manager (RDS-managed secret)
-            # Wait for RDS instance to be available and get the secret ARN
-            SECRET_ARN=$(aws rds describe-db-instances \
-              --db-instance-identifier webapp-prod-database \
-              --region ${AWS::Region} \
-              --query 'DBInstances[0].MasterUserSecret.SecretArn' \
-              --output text 2>/dev/null || echo '')
-            
-            if [ -n "$SECRET_ARN" ]; then
-              DB_SECRET=$(aws secretsmanager get-secret-value \
-                --secret-id "$SECRET_ARN" \
-                --region ${AWS::Region} \
-                --query 'SecretString' --output text)
-            fi
-            
-            # Store connection info securely
-            aws ssm put-parameter \
-              --name /webapp/prod/db/connection \
-              --value "$DB_SECRET" \
-              --type SecureString \
-              --overwrite \
-              --region ${AWS::Region} || true
-            
-            # Start and enable httpd
             systemctl start httpd
             systemctl enable httpd
-            
-            # Signal CloudFormation
-            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} \
-              --resource AutoScalingGroup --region ${AWS::Region}
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
-    CreationPolicy:
-      ResourceSignal:
-        Count: !Ref DesiredCapacity
-        Timeout: PT15M
     UpdatePolicy:
       AutoScalingRollingUpdate:
         MinInstancesInService: 1
         MaxBatchSize: 2
         PauseTime: PT5M
-        WaitOnResourceSignals: true
     Properties:
       AutoScalingGroupName: webapp-prod-asg
       LaunchTemplate:
