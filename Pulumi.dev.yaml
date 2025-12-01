@@ -1,0 +1,6 @@
+encryptionsalt: v1:pDF+ki7VvHI=:v1:s+rSgFTrDWH2JnfM:rhyzIRSJHpkicQetXDEw2i9JrSjUbg==
+config:
+  TapStack:environmentSuffix: synths5g3e4n4
+  aws:region: us-east-1
+  TapStack:githubToken:
+    secure: v1:J+2v1o+hiPKIeG57:rTZiD6osJ/cjziczF7z7h+Ccz8T48Zq9fChgmcjhMNlLu+S7EE9JVD2NuG79
