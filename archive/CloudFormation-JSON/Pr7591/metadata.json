@@ -1,6 +1,6 @@
 {
-  "platform": "CloudFormation",
-  "language": "JSON",
+  "platform": "cfn",
+  "language": "json",
   "complexity": "medium",
   "team": "synth",
   "turn_type": "single",
@@ -19,9 +19,6 @@
   "subtask": "CI/CD Pipeline Integration",
   "subject_labels": [
     "CI/CD Pipeline",
-    "aws",
-    "infrastructure",
-    "ci-cd"
   ],
   "training_quality": 10,
   "coverage": {
