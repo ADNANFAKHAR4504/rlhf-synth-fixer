@@ -638,8 +638,8 @@ describe('Multi-Region DR Terraform Configuration - Unit Tests', () => {
         const content = readTerraformFile(file);
         expect(content.toLowerCase()).not.toMatch(/deletion_protection\s*=\s*true/);
         expect(content.toLowerCase()).not.toMatch(/prevent_destroy\s*=\s*true/);
-        // Allow skip_final_snapshot = true (for destroyability)
-        if (content.includes('final_snapshot') && !content.includes('skip_final_snapshot = true')) {
+        // Allow skip_final_snapshot = true (for destroyability) - use regex for flexible whitespace
+        if (content.includes('final_snapshot') && !content.match(/skip_final_snapshot\s*=\s*true/)) {
           throw new Error(`File ${file} has final_snapshot without skip_final_snapshot = true`);
         }
       });
