@@ -274,6 +274,12 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // Ensure PULUMI_K8S_DELETE_UNREACHABLE is set for EKS internal provider
+    // This allows the EKS module's internal K8s provider to handle unreachable clusters
+    if (!process.env.PULUMI_K8S_DELETE_UNREACHABLE) {
+      process.env.PULUMI_K8S_DELETE_UNREACHABLE = 'true';
+    }
+
     // Create EKS cluster with @pulumi/eks
     const cluster = new eks.Cluster(
       `eks-cluster-${environmentSuffix}`,
