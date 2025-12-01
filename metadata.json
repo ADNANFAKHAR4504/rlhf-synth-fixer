@@ -7,7 +7,20 @@
   "team": "synth",
   "startedAt": "2025-12-01T13:02:34.800474Z",
   "subtask": "CI/CD Pipeline Integration",
-  "subject_labels": ["CI/CD Pipeline"],
-  "aws_services": ["VPC", "EC2", "RDS", "SecretsManager", "ECS", "CloudWatch", "IAM", "S3", "CodePipeline", "CodeBuild"],
-  "training_quality": 9
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "SecretsManager",
+    "ECS",
+    "CloudWatch",
+    "IAM",
+    "S3",
+    "CodePipeline",
+    "CodeBuild"
+  ],
+  "training_quality": 10
 }
