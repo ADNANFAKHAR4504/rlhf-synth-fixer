@@ -1,4 +1,0 @@
-name: TapStack
-runtime:
-  name: go
-description: Pulumi infrastructure for TAP
