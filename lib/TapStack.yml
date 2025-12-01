@@ -184,7 +184,8 @@ Parameters:
 Conditions:
   CreateHostedZone: !Equals [!Ref CreateNewHostedZone, 'true']
   UseDetailedMonitoring: !Equals [!Ref EnableDetailedMonitoring, 'true']
-  IsProduction: !Equals [!Ref EnvironmentName, 'Production']
+  IsProduction: !Equals [!Ref EnvironmentName, 'production']
+  IsUsEast1: !Equals [!Ref 'AWS::Region', 'us-east-1']
 
 # ==========================================
 # Mappings Section
@@ -975,7 +976,7 @@ Resources:
         PriceClass: !If [IsProduction, PriceClass_All, PriceClass_100]
         HttpVersion: http2and3
         IPV6Enabled: true
-        WebACLId: !GetAtt WAFWebACL.Arn
+        WebACLId: !If [IsUsEast1, !GetAtt WAFWebACL.Arn, !Ref 'AWS::NoValue']
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-CloudFront
@@ -991,6 +992,7 @@ Resources:
   # ==========================================
   WAFWebACL:
     Type: AWS::WAFv2::WebACL
+    Condition: IsUsEast1
     Properties:
       Name: !Sub ${EnvironmentName}-WebACL
       Scope: CLOUDFRONT
@@ -1973,7 +1975,8 @@ Outputs:
       Name: !Sub ${EnvironmentName}-Database-SG
 
   WAFWebACLArn:
-    Description: WAF WebACL ARN for CloudFront protection
+    Description: WAF WebACL ARN for CloudFront protection (only created in us-east-1)
+    Condition: IsUsEast1
     Value: !GetAtt WAFWebACL.Arn
     Export:
       Name: !Sub ${EnvironmentName}-WAF-WebACL-ARN
