@@ -263,7 +263,6 @@ Resources:
   VPCFlowLogRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: webapp-prod-vpc-flow-log-role
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -801,7 +800,6 @@ Resources:
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: webapp-prod-ec2-role
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -886,7 +884,6 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: webapp-prod-ec2-profile
       Roles:
         - !Ref EC2Role
 
