@@ -89,13 +89,7 @@ jobs:
         continue-on-error: true
 
       - name: Encrypt artifacts with KMS
-        run: |
-          tar -czf cdktf-outputs.tar.gz -C cdktf.out .
-          aws kms encrypt \
-            --key-id alias/github-actions-artifacts \
-            --plaintext fileb://cdktf-outputs.tar.gz \
-            --output text \
-            --query CiphertextBlob > cdktf-outputs.tar.gz.encrypted
+        run: ./scripts/encrypt-artifacts.sh
 
       - name: Upload encrypted artifacts
         uses: actions/upload-artifact@v4
