@@ -122,6 +122,8 @@
     "@aws-sdk/client-lambda": "^3.901.0",
     "@aws-sdk/client-location": "^3.901.0",
     "@aws-sdk/client-macie2": "^3.864.0",
+    "@aws-sdk/client-medialive": "^3.940.0",
+    "@aws-sdk/client-mediapackage": "^3.940.0",
     "@aws-sdk/client-network-firewall": "^3.862.0",
     "@aws-sdk/client-opensearchserverless": "^3.846.0",
     "@aws-sdk/client-quicksight": "^3.901.0",
