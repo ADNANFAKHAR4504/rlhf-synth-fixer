@@ -36,5 +36,5 @@
     "tests",
     "**/*.d.ts"
   ],
-  "include": ["index.ts", "lib/**/*.ts", "bin/**/*.ts", "cli/**/*.ts"]
+  "include": ["index.ts", "lib/**/*.ts", "cli/**/*.ts"]
 }

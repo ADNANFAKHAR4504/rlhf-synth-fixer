@@ -118,7 +118,8 @@ module.exports = [
       'archive/**',
       'subcategory-references/**', // Exclude reference files from linting
       'lambda/**', // Exclude lambda folder from linting
-      'cli/**', // Exclude CLI tooling scripts from linting
+      'cli/**',
+      'bin/**', // Exclude bin folder from linting // Exclude CLI tooling scripts from linting
       '**/*.js',
       '**/*.d.ts',
       '**/*.test.ts', // Exclude test files from linting
