@@ -26,12 +26,14 @@ variable "db_username" {
   description = "Master username for Aurora (set via TF_VAR_db_username environment variable)"
   type        = string
   sensitive   = true
+  default     = "admin"
 }
 
 variable "db_password" {
   description = "Master password for Aurora (set via TF_VAR_db_password environment variable)"
   type        = string
   sensitive   = true
+  default     = "ChangeMeInProduction123!"
 }
 
 variable "instance_type" {
