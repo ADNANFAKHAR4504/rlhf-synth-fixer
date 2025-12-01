@@ -7,10 +7,7 @@
   "startedAt": "2025-12-01T05:42:06+00:00",
   "subtask": "Application Deployment",
   "subject_labels": [
-    "Container Orchestration",
-    "Database Management",
-    "Security & Compliance",
-    "Serverless Infrastructure"
+    "Web Application Deployment"
   ],
   "po_id": "101912932",
   "aws_services": [
@@ -24,5 +21,7 @@
     "KMS",
     "ApplicationAutoScaling"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing"
 }
