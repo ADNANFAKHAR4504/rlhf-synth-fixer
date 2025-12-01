@@ -257,7 +257,7 @@
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupName": {
-          "Fn::Sub": "sg-aurora-${EnvironmentSuffix}"
+          "Fn::Sub": "aurora-db-sg-${EnvironmentSuffix}"
         },
         "GroupDescription": "Security group for Aurora database",
         "VpcId": {
@@ -418,7 +418,7 @@
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupName": {
-          "Fn::Sub": "sg-lambda-${EnvironmentSuffix}"
+          "Fn::Sub": "lambda-fn-sg-${EnvironmentSuffix}"
         },
         "GroupDescription": "Security group for Lambda functions",
         "VpcId": {
@@ -578,7 +578,7 @@
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupName": {
-          "Fn::Sub": "sg-alb-${EnvironmentSuffix}"
+          "Fn::Sub": "alb-sg-${EnvironmentSuffix}"
         },
         "GroupDescription": "Security group for Application Load Balancer",
         "VpcId": {

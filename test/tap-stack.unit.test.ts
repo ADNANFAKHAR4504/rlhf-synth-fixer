@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const EnvironmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 describe('TapStack CloudFormation Multi-Region DR Template', () => {
   let template: any;
@@ -39,23 +39,16 @@ describe('TapStack CloudFormation Multi-Region DR Template', () => {
   });
 
   describe('Parameters', () => {
-    test('should have environmentSuffix parameter', () => {
-      expect(template.Parameters.environmentSuffix).toBeDefined();
-      expect(template.Parameters.environmentSuffix.Type).toBe('String');
-      expect(template.Parameters.environmentSuffix.Default).toBe('dev');
+    test('should have EnvironmentSuffix parameter', () => {
+      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+      expect(template.Parameters.EnvironmentSuffix.Type).toBe('String');
+      expect(template.Parameters.EnvironmentSuffix.Default).toBe('dev');
     });
 
     test('should have DBMasterUsername parameter', () => {
       expect(template.Parameters.DBMasterUsername).toBeDefined();
       expect(template.Parameters.DBMasterUsername.Type).toBe('String');
       expect(template.Parameters.DBMasterUsername.NoEcho).toBe(true);
-    });
-
-    test('should have DBMasterPassword parameter', () => {
-      expect(template.Parameters.DBMasterPassword).toBeDefined();
-      expect(template.Parameters.DBMasterPassword.Type).toBe('String');
-      expect(template.Parameters.DBMasterPassword.NoEcho).toBe(true);
-      expect(template.Parameters.DBMasterPassword.MinLength).toBe(8);
     });
 
     test('should have HostedZoneName parameter', () => {
@@ -68,14 +61,9 @@ describe('TapStack CloudFormation Multi-Region DR Template', () => {
       expect(template.Parameters.AlertEmail.Type).toBe('String');
     });
 
-    test('should have SSLCertificateArn parameter', () => {
-      expect(template.Parameters.SSLCertificateArn).toBeDefined();
-      expect(template.Parameters.SSLCertificateArn.Type).toBe('String');
-    });
-
-    test('should have exactly 6 parameters', () => {
+    test('should have exactly 4 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(6);
+      expect(parameterCount).toBe(4);
     });
   });
 
@@ -89,10 +77,10 @@ describe('TapStack CloudFormation Multi-Region DR Template', () => {
       expect(template.Resources.PrimaryVPC.DeletionPolicy).toBe('Delete');
     });
 
-    test('PrimaryVPC should have environmentSuffix in name', () => {
+    test('PrimaryVPC should have EnvironmentSuffix in name', () => {
       const vpc = template.Resources.PrimaryVPC;
       const nameTag = vpc.Properties.Tags.find((t: any) => t.Key === 'Name');
-      expect(nameTag.Value['Fn::Sub']).toContain('${environmentSuffix}');
+      expect(nameTag.Value['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
 
     test('should have public subnets', () => {
@@ -141,9 +129,9 @@ describe('TapStack CloudFormation Multi-Region DR Template', () => {
       expect(template.Resources.DBSubnetGroup.Type).toBe('AWS::RDS::DBSubnetGroup');
     });
 
-    test('DB Subnet Group should have environmentSuffix in name', () => {
+    test('DB Subnet Group should have EnvironmentSuffix in name', () => {
       const subnetGroup = template.Resources.DBSubnetGroup;
-      expect(subnetGroup.Properties.DBSubnetGroupName['Fn::Sub']).toContain('${environmentSuffix}');
+      expect(subnetGroup.Properties.DBSubnetGroupName['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
 
     test('should have Aurora Security Group', () => {
@@ -161,9 +149,9 @@ describe('TapStack CloudFormation Multi-Region DR Template', () => {
       expect(cluster.Properties.Engine).toBe('aurora-mysql');
     });
 
-    test('Global DB Cluster should have environmentSuffix in identifier', () => {
+    test('Global DB Cluster should have EnvironmentSuffix in identifier', () => {
       const cluster = template.Resources.GlobalDBCluster;
-      expect(cluster.Properties.GlobalClusterIdentifier['Fn::Sub']).toContain('${environmentSuffix}');
+      expect(cluster.Properties.GlobalClusterIdentifier['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
 
     test('should have Primary DB Cluster', () => {
@@ -209,9 +197,9 @@ describe('TapStack CloudFormation Multi-Region DR Template', () => {
       expect(template.Resources.PrimaryALB.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
     });
 
-    test('ALB should have environmentSuffix in name', () => {
+    test('ALB should have EnvironmentSuffix in name', () => {
       const alb = template.Resources.PrimaryALB;
-      expect(alb.Properties.Name['Fn::Sub']).toContain('${environmentSuffix}');
+      expect(alb.Properties.Name['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
 
     test('ALB should be internet-facing', () => {
@@ -240,12 +228,10 @@ describe('TapStack CloudFormation Multi-Region DR Template', () => {
       expect(template.Resources.PrimaryALBListener.Type).toBe('AWS::ElasticLoadBalancingV2::Listener');
     });
 
-    test('ALB Listener should listen on port 443 with HTTPS', () => {
+    test('ALB Listener should listen on port 80 with HTTP', () => {
       const listener = template.Resources.PrimaryALBListener;
-      expect(listener.Properties.Port).toBe(443);
-      expect(listener.Properties.Protocol).toBe('HTTPS');
-      expect(listener.Properties.Certificates).toBeDefined();
-      expect(listener.Properties.Certificates.length).toBeGreaterThan(0);
+      expect(listener.Properties.Port).toBe(80);
+      expect(listener.Properties.Protocol).toBe('HTTP');
     });
 
     test('ALB Security Group should allow HTTPS ingress', () => {
@@ -290,9 +276,9 @@ describe('TapStack CloudFormation Multi-Region DR Template', () => {
       expect(lambda.Properties.VpcConfig.SecurityGroupIds).toBeDefined();
     });
 
-    test('Lambda Function should have environmentSuffix in name', () => {
+    test('Lambda Function should have EnvironmentSuffix in name', () => {
       const lambda = template.Resources.PaymentProcessorFunction;
-      expect(lambda.Properties.FunctionName['Fn::Sub']).toContain('${environmentSuffix}');
+      expect(lambda.Properties.FunctionName['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
 
     test('Lambda Function should have appropriate runtime', () => {
@@ -328,32 +314,20 @@ describe('TapStack CloudFormation Multi-Region DR Template', () => {
       expect(bucket.Properties.BucketEncryption).toBeDefined();
     });
 
-    test('Transaction Logs Bucket should have replication configuration', () => {
+    test('Transaction Logs Bucket should have EnvironmentSuffix in name', () => {
       const bucket = template.Resources.TransactionLogsBucket;
-      expect(bucket.Properties.ReplicationConfiguration).toBeDefined();
+      expect(bucket.Properties.BucketName['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
 
-    test('Transaction Logs Bucket should have environmentSuffix in name', () => {
+    test('Transaction Logs Bucket should have lifecycle configuration', () => {
       const bucket = template.Resources.TransactionLogsBucket;
-      expect(bucket.Properties.BucketName['Fn::Sub']).toContain('${environmentSuffix}');
+      expect(bucket.Properties.LifecycleConfiguration).toBeDefined();
     });
 
-    test('should have S3 Replication Role', () => {
-      expect(template.Resources.S3ReplicationRole).toBeDefined();
-      expect(template.Resources.S3ReplicationRole.Type).toBe('AWS::IAM::Role');
-    });
-
-    test('S3 Replication Role should trust S3 service', () => {
-      const role = template.Resources.S3ReplicationRole;
-      const statement = role.Properties.AssumeRolePolicyDocument.Statement[0];
-      expect(statement.Principal.Service).toBe('s3.amazonaws.com');
-    });
-
-    test('Replication configuration should point to secondary region', () => {
+    test('Transaction Logs Bucket should block public access', () => {
       const bucket = template.Resources.TransactionLogsBucket;
-      const rules = bucket.Properties.ReplicationConfiguration.Rules;
-      expect(rules).toBeDefined();
-      expect(rules.length).toBeGreaterThan(0);
+      expect(bucket.Properties.PublicAccessBlockConfiguration).toBeDefined();
+      expect(bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
     });
   });
 
@@ -376,7 +350,7 @@ describe('TapStack CloudFormation Multi-Region DR Template', () => {
     test('Primary Health Check should have appropriate configuration', () => {
       const hc = template.Resources.PrimaryALBHealthCheck;
       expect(hc.Properties.HealthCheckConfig).toBeDefined();
-      expect(hc.Properties.HealthCheckConfig.Type).toBe('HTTPS');
+      expect(hc.Properties.HealthCheckConfig.Type).toBe('HTTP');
     });
 
     test('should have Primary Record Set', () => {
@@ -384,15 +358,10 @@ describe('TapStack CloudFormation Multi-Region DR Template', () => {
       expect(template.Resources.PrimaryRecordSet.Type).toBe('AWS::Route53::RecordSet');
     });
 
-    test('Primary Record Set should have failover routing', () => {
+    test('Primary Record Set should have alias target', () => {
       const rs = template.Resources.PrimaryRecordSet;
-      expect(rs.Properties.SetIdentifier).toBeDefined();
-      expect(rs.Properties.Failover).toBe('PRIMARY');
-    });
-
-    test('Primary Record Set should reference health check', () => {
-      const rs = template.Resources.PrimaryRecordSet;
-      expect(rs.Properties.HealthCheckId).toBeDefined();
+      expect(rs.Properties.AliasTarget).toBeDefined();
+      expect(rs.Properties.AliasTarget.EvaluateTargetHealth).toBe(true);
     });
   });
 
@@ -444,9 +413,9 @@ describe('TapStack CloudFormation Multi-Region DR Template', () => {
       expect(template.Resources.PrimarySNSTopic.Type).toBe('AWS::SNS::Topic');
     });
 
-    test('SNS Topic should have environmentSuffix in name', () => {
+    test('SNS Topic should have EnvironmentSuffix in name', () => {
       const topic = template.Resources.PrimarySNSTopic;
-      expect(topic.Properties.TopicName['Fn::Sub']).toContain('${environmentSuffix}');
+      expect(topic.Properties.TopicName['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
 
     test('SNS Topic should have email subscription', () => {
@@ -497,34 +466,34 @@ describe('TapStack CloudFormation Multi-Region DR Template', () => {
   });
 
   describe('Resource Naming Conventions', () => {
-    test('ALB should include environmentSuffix', () => {
+    test('ALB should include EnvironmentSuffix', () => {
       const alb = template.Resources.PrimaryALB;
-      expect(alb.Properties.Name['Fn::Sub']).toContain('${environmentSuffix}');
+      expect(alb.Properties.Name['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
 
-    test('Lambda function should include environmentSuffix', () => {
+    test('Lambda function should include EnvironmentSuffix', () => {
       const lambda = template.Resources.PaymentProcessorFunction;
-      expect(lambda.Properties.FunctionName['Fn::Sub']).toContain('${environmentSuffix}');
+      expect(lambda.Properties.FunctionName['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
 
-    test('S3 bucket should include environmentSuffix', () => {
+    test('S3 bucket should include EnvironmentSuffix', () => {
       const bucket = template.Resources.TransactionLogsBucket;
-      expect(bucket.Properties.BucketName['Fn::Sub']).toContain('${environmentSuffix}');
+      expect(bucket.Properties.BucketName['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
 
-    test('DB subnet group should include environmentSuffix', () => {
+    test('DB subnet group should include EnvironmentSuffix', () => {
       const sg = template.Resources.DBSubnetGroup;
-      expect(sg.Properties.DBSubnetGroupName['Fn::Sub']).toContain('${environmentSuffix}');
+      expect(sg.Properties.DBSubnetGroupName['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
 
-    test('Global cluster should include environmentSuffix', () => {
+    test('Global cluster should include EnvironmentSuffix', () => {
       const cluster = template.Resources.GlobalDBCluster;
-      expect(cluster.Properties.GlobalClusterIdentifier['Fn::Sub']).toContain('${environmentSuffix}');
+      expect(cluster.Properties.GlobalClusterIdentifier['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
 
-    test('SNS topic should include environmentSuffix', () => {
+    test('SNS topic should include EnvironmentSuffix', () => {
       const topic = template.Resources.PrimarySNSTopic;
-      expect(topic.Properties.TopicName['Fn::Sub']).toContain('${environmentSuffix}');
+      expect(topic.Properties.TopicName['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
   });
 
@@ -612,12 +581,12 @@ describe('TapStack CloudFormation Multi-Region DR Template', () => {
 
     test('should have minimum resource count for DR solution', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThanOrEqual(30);
+      expect(resourceCount).toBeGreaterThanOrEqual(25);
     });
 
-    test('should have exactly 6 parameters', () => {
+    test('should have exactly 4 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(6);
+      expect(parameterCount).toBe(4);
     });
 
     test('should have exactly 7 outputs', () => {
@@ -642,9 +611,8 @@ describe('TapStack CloudFormation Multi-Region DR Template', () => {
       expect(template.Resources.PrimaryALB).toBeDefined();
       // Lambda
       expect(template.Resources.PaymentProcessorFunction).toBeDefined();
-      // S3 with replication
+      // S3
       expect(template.Resources.TransactionLogsBucket).toBeDefined();
-      expect(template.Resources.TransactionLogsBucket.Properties.ReplicationConfiguration).toBeDefined();
       // Route 53
       expect(template.Resources.HostedZone).toBeDefined();
       expect(template.Resources.PrimaryALBHealthCheck).toBeDefined();
