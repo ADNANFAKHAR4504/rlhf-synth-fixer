@@ -145,15 +145,17 @@ This document details the optimization requirements for CloudFormation templates
 **Requirement**: Enforce IMDSv2 on all EC2 instances
 
 **Common Issues**:
-- No MetadataOptions in LaunchConfiguration
+- No MetadataOptions in LaunchTemplate/LaunchConfiguration
 - EC2 instances would use IMDSv1 (security vulnerability)
 
 **Solution in TapStack.json**:
 ```json
-"MetadataOptions": {
-  "HttpTokens": "required",
-  "HttpPutResponseHopLimit": 1,
-  "HttpEndpoint": "enabled"
+"LaunchTemplateData": {
+  "MetadataOptions": {
+    "HttpTokens": "required",
+    "HttpPutResponseHopLimit": 1,
+    "HttpEndpoint": "enabled"
+  }
 }
 ```
 

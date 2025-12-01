@@ -486,28 +486,46 @@
         "Protocol": "HTTP"
       }
     },
-    "LaunchConfiguration": {
-      "Type": "AWS::AutoScaling::LaunchConfiguration",
+    "LaunchTemplate": {
+      "Type": "AWS::EC2::LaunchTemplate",
       "Properties": {
-        "ImageId": {"Fn::FindInMap": ["RegionAMI", {"Ref": "AWS::Region"}, "HVM64"]},
-        "InstanceType": {"Fn::FindInMap": ["EnvironmentConfig", {"Ref": "Environment"}, "InstanceType"]},
-        "SecurityGroups": [{"Ref": "AppSecurityGroup"}],
-        "MetadataOptions": {
-          "HttpTokens": "required",
-          "HttpPutResponseHopLimit": 1,
-          "HttpEndpoint": "enabled"
-        },
-        "UserData": {
-          "Fn::Base64": {
-            "Fn::Sub": [
-              "#!/bin/bash\nyum update -y\nyum install -y java-11-openjdk\necho 'Instance in ${ENV} environment' > /var/www/html/index.html\necho 'Region: ${REGION}' >> /var/www/html/index.html\necho 'Account: ${ACCOUNT}' >> /var/www/html/index.html\n",
-              {
-                "ENV": {"Ref": "Environment"},
-                "REGION": {"Ref": "AWS::Region"},
-                "ACCOUNT": {"Ref": "AWS::AccountId"}
-              }
-            ]
-          }
+        "LaunchTemplateName": {"Fn::Sub": "lt-${EnvironmentSuffix}"},
+        "LaunchTemplateData": {
+          "ImageId": {"Fn::FindInMap": ["RegionAMI", {"Ref": "AWS::Region"}, "HVM64"]},
+          "InstanceType": {"Fn::FindInMap": ["EnvironmentConfig", {"Ref": "Environment"}, "InstanceType"]},
+          "SecurityGroupIds": [{"Ref": "AppSecurityGroup"}],
+          "MetadataOptions": {
+            "HttpTokens": "required",
+            "HttpPutResponseHopLimit": 1,
+            "HttpEndpoint": "enabled"
+          },
+          "UserData": {
+            "Fn::Base64": {
+              "Fn::Sub": [
+                "#!/bin/bash\nyum update -y\nyum install -y java-11-openjdk\necho 'Instance in ${ENV} environment' > /var/www/html/index.html\necho 'Region: ${REGION}' >> /var/www/html/index.html\necho 'Account: ${ACCOUNT}' >> /var/www/html/index.html\n",
+                {
+                  "ENV": {"Ref": "Environment"},
+                  "REGION": {"Ref": "AWS::Region"},
+                  "ACCOUNT": {"Ref": "AWS::AccountId"}
+                }
+              ]
+            }
+          },
+          "TagSpecifications": [
+            {
+              "ResourceType": "instance",
+              "Tags": [
+                {
+                  "Key": "Name",
+                  "Value": {"Fn::Sub": "app-instance-${EnvironmentSuffix}"}
+                },
+                {
+                  "Key": "Environment",
+                  "Value": {"Ref": "Environment"}
+                }
+              ]
+            }
+          ]
         }
       }
     },
@@ -515,7 +533,10 @@
       "Type": "AWS::AutoScaling::AutoScalingGroup",
       "Properties": {
         "AutoScalingGroupName": {"Fn::Sub": "asg-${EnvironmentSuffix}"},
-        "LaunchConfigurationName": {"Ref": "LaunchConfiguration"},
+        "LaunchTemplate": {
+          "LaunchTemplateId": {"Ref": "LaunchTemplate"},
+          "Version": {"Fn::GetAtt": ["LaunchTemplate", "LatestVersionNumber"]}
+        },
         "MinSize": {"Fn::FindInMap": ["EnvironmentConfig", {"Ref": "Environment"}, "MinSize"]},
         "MaxSize": {"Fn::FindInMap": ["EnvironmentConfig", {"Ref": "Environment"}, "MaxSize"]},
         "DesiredCapacity": {"Fn::FindInMap": ["EnvironmentConfig", {"Ref": "Environment"}, "DesiredCapacity"]},

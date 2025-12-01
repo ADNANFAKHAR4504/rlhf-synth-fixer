@@ -139,12 +139,12 @@ describe('CloudFormation Template Optimization Tests', () => {
   });
 
   describe('IMDSv2 Configuration', () => {
-    test('LaunchConfiguration should have MetadataOptions with HttpTokens required', () => {
-      const launchConfig = tapStackTemplate.Resources.LaunchConfiguration;
-      expect(launchConfig.Properties.MetadataOptions).toBeDefined();
-      expect(launchConfig.Properties.MetadataOptions.HttpTokens).toBe('required');
-      expect(launchConfig.Properties.MetadataOptions.HttpEndpoint).toBe('enabled');
-      expect(launchConfig.Properties.MetadataOptions.HttpPutResponseHopLimit).toBe(1);
+    test('LaunchTemplate should have MetadataOptions with HttpTokens required', () => {
+      const launchTemplate = tapStackTemplate.Resources.LaunchTemplate;
+      expect(launchTemplate.Properties.LaunchTemplateData.MetadataOptions).toBeDefined();
+      expect(launchTemplate.Properties.LaunchTemplateData.MetadataOptions.HttpTokens).toBe('required');
+      expect(launchTemplate.Properties.LaunchTemplateData.MetadataOptions.HttpEndpoint).toBe('enabled');
+      expect(launchTemplate.Properties.LaunchTemplateData.MetadataOptions.HttpPutResponseHopLimit).toBe(1);
     });
   });
 
@@ -222,7 +222,7 @@ describe('CloudFormation Template Optimization Tests', () => {
       expect(tapStackTemplate.Resources.ApplicationLoadBalancer).toBeDefined();
       expect(tapStackTemplate.Resources.TargetGroup).toBeDefined();
       expect(tapStackTemplate.Resources.AutoScalingGroup).toBeDefined();
-      expect(tapStackTemplate.Resources.LaunchConfiguration).toBeDefined();
+      expect(tapStackTemplate.Resources.LaunchTemplate).toBeDefined();
     });
 
     test('should have all required data tier resources', () => {

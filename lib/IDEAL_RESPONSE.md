@@ -60,7 +60,7 @@ The TapStack.json file contains the complete optimized CloudFormation template i
 - No hardcoded region or account values
 
 ### 10. IMDSv2 Configuration
-- LaunchConfiguration includes MetadataOptions
+- LaunchTemplate includes MetadataOptions in LaunchTemplateData
 - HttpTokens set to "required" (enforces IMDSv2)
 - HttpPutResponseHopLimit: 1
 - HttpEndpoint: enabled
@@ -116,7 +116,7 @@ The TapStack.json file contains the complete optimized CloudFormation template i
 - Route Tables and Associations
 - 3 Security Groups
 - Application Load Balancer with Target Group
-- Auto Scaling Group with Launch Configuration
+- Auto Scaling Group with Launch Template
 - RDS Aurora MySQL Cluster with instances
 - ElastiCache Redis (Replication Group for prod, Cluster for non-prod)
 - S3 Log Bucket
