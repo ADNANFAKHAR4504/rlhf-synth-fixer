@@ -6,6 +6,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    external = {
+      source  = "hashicorp/external"
+      version = "~> 2.3"
+    }
   }
 
   backend "s3" {
@@ -21,7 +25,7 @@ provider "aws" {
     tags = {
       Environment = var.environment
       ManagedBy   = "terraform"
-      Project     = "eks-cluster-${var.environment_suffix}"
+      Project     = "eks-cluster-${local.environment_suffix}"
     }
   }
 }

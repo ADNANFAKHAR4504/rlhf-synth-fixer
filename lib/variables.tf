@@ -18,11 +18,12 @@ variable "environment" {
 variable "environment_suffix" {
   description = "Unique suffix for resource naming to ensure uniqueness across deployments"
   type        = string
-  default     = "dev"
+  default     = ""
 
+  # Allow empty here so pipeline ENV can be used via local.environment_suffix
   validation {
-    condition     = length(var.environment_suffix) > 0 && length(var.environment_suffix) <= 8
-    error_message = "Environment suffix must be between 1 and 8 characters."
+    condition     = var.environment_suffix == "" || (length(var.environment_suffix) > 0 && length(var.environment_suffix) <= 8)
+    error_message = "Environment suffix must be empty (to use pipeline ENV) or 1-8 characters when provided."
   }
 }
 

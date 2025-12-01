@@ -3,21 +3,21 @@ data "aws_caller_identity" "current" {}
 
 # KMS key for EKS cluster encryption
 resource "aws_kms_key" "eks" {
-  description             = "KMS key for EKS cluster ${var.cluster_name}-${var.environment_suffix} encryption"
+  description             = "KMS key for EKS cluster ${var.cluster_name}-${local.environment_suffix} encryption"
   deletion_window_in_days = var.kms_key_deletion_window
   enable_key_rotation     = true
 
   tags = merge(
     var.tags,
     {
-      Name        = "eks-kms-${var.environment_suffix}"
+      Name        = "eks-kms-${local.environment_suffix}"
       Environment = var.environment
     }
   )
 }
 
 resource "aws_kms_alias" "eks" {
-  name          = "alias/eks-${var.environment_suffix}"
+  name          = "alias/eks-${local.environment_suffix}"
   target_key_id = aws_kms_key.eks.key_id
 }
 
@@ -30,7 +30,7 @@ resource "aws_vpc" "main" {
   tags = merge(
     var.tags,
     {
-      Name                                                 = "eks-vpc-${var.environment_suffix}"
+      Name                                                 = "eks-vpc-${local.environment_suffix}"
       Environment                                          = var.environment
       "kubernetes.io/cluster/${local.cluster_name_unique}" = "shared"
     }
@@ -44,7 +44,7 @@ resource "aws_internet_gateway" "main" {
   tags = merge(
     var.tags,
     {
-      Name        = "eks-igw-${var.environment_suffix}"
+      Name        = "eks-igw-${local.environment_suffix}"
       Environment = var.environment
     }
   )
@@ -61,7 +61,7 @@ resource "aws_subnet" "system_private" {
   tags = merge(
     var.tags,
     {
-      Name                                                 = "eks-system-private-${var.availability_zones[count.index]}-${var.environment_suffix}"
+      Name                                                 = "eks-system-private-${var.availability_zones[count.index]}-${local.environment_suffix}"
       Environment                                          = var.environment
       Type                                                 = "private"
       NodeGroup                                            = "system"
@@ -82,7 +82,7 @@ resource "aws_subnet" "application_private" {
   tags = merge(
     var.tags,
     {
-      Name                                                 = "eks-app-private-${var.availability_zones[count.index]}-${var.environment_suffix}"
+      Name                                                 = "eks-app-private-${var.availability_zones[count.index]}-${local.environment_suffix}"
       Environment                                          = var.environment
       Type                                                 = "private"
       NodeGroup                                            = "application"
@@ -103,7 +103,7 @@ resource "aws_subnet" "spot_private" {
   tags = merge(
     var.tags,
     {
-      Name                                                 = "eks-spot-private-${var.availability_zones[count.index]}-${var.environment_suffix}"
+      Name                                                 = "eks-spot-private-${var.availability_zones[count.index]}-${local.environment_suffix}"
       Environment                                          = var.environment
       Type                                                 = "private"
       NodeGroup                                            = "spot"
@@ -125,7 +125,7 @@ resource "aws_subnet" "public" {
   tags = merge(
     var.tags,
     {
-      Name                                                 = "eks-public-${var.availability_zones[count.index]}-${var.environment_suffix}"
+      Name                                                 = "eks-public-${var.availability_zones[count.index]}-${local.environment_suffix}"
       Environment                                          = var.environment
       Type                                                 = "public"
       "kubernetes.io/cluster/${local.cluster_name_unique}" = "shared"
@@ -142,7 +142,7 @@ resource "aws_eip" "nat" {
   tags = merge(
     var.tags,
     {
-      Name        = "eks-nat-eip-${var.availability_zones[count.index]}-${var.environment_suffix}"
+      Name        = "eks-nat-eip-${var.availability_zones[count.index]}-${local.environment_suffix}"
       Environment = var.environment
     }
   )
@@ -160,7 +160,7 @@ resource "aws_nat_gateway" "main" {
   tags = merge(
     var.tags,
     {
-      Name        = "eks-nat-${var.availability_zones[count.index]}-${var.environment_suffix}"
+      Name        = "eks-nat-${var.availability_zones[count.index]}-${local.environment_suffix}"
       Environment = var.environment
     }
   )
@@ -180,7 +180,7 @@ resource "aws_route_table" "public" {
   tags = merge(
     var.tags,
     {
-      Name        = "eks-public-rt-${var.environment_suffix}"
+      Name        = "eks-public-rt-${local.environment_suffix}"
       Environment = var.environment
       Type        = "public"
     }
@@ -209,7 +209,7 @@ resource "aws_route_table" "system_private" {
   tags = merge(
     var.tags,
     {
-      Name        = "eks-system-private-rt-${var.availability_zones[count.index]}-${var.environment_suffix}"
+      Name        = "eks-system-private-rt-${var.availability_zones[count.index]}-${local.environment_suffix}"
       Environment = var.environment
       Type        = "private"
       NodeGroup   = "system"
@@ -238,7 +238,7 @@ resource "aws_route_table" "application_private" {
   tags = merge(
     var.tags,
     {
-      Name        = "eks-app-private-rt-${var.availability_zones[count.index]}-${var.environment_suffix}"
+      Name        = "eks-app-private-rt-${var.availability_zones[count.index]}-${local.environment_suffix}"
       Environment = var.environment
       Type        = "private"
       NodeGroup   = "application"
@@ -267,7 +267,7 @@ resource "aws_route_table" "spot_private" {
   tags = merge(
     var.tags,
     {
-      Name        = "eks-spot-private-rt-${var.availability_zones[count.index]}-${var.environment_suffix}"
+      Name        = "eks-spot-private-rt-${var.availability_zones[count.index]}-${local.environment_suffix}"
       Environment = var.environment
       Type        = "private"
       NodeGroup   = "spot"
@@ -284,14 +284,14 @@ resource "aws_route_table_association" "spot_private" {
 
 # Security group for EKS cluster
 resource "aws_security_group" "eks_cluster" {
-  name        = "eks-cluster-sg-${var.environment_suffix}"
+  name        = "eks-cluster-sg-${local.environment_suffix}"
   description = "Security group for EKS cluster control plane"
   vpc_id      = aws_vpc.main.id
 
   tags = merge(
     var.tags,
     {
-      Name        = "eks-cluster-sg-${var.environment_suffix}"
+      Name        = "eks-cluster-sg-${local.environment_suffix}"
       Environment = var.environment
     }
   )
@@ -309,14 +309,14 @@ resource "aws_security_group_rule" "cluster_egress" {
 
 # Security group for EKS nodes
 resource "aws_security_group" "eks_nodes" {
-  name        = "eks-nodes-sg-${var.environment_suffix}"
+  name        = "eks-nodes-sg-${local.environment_suffix}"
   description = "Security group for EKS worker nodes"
   vpc_id      = aws_vpc.main.id
 
   tags = merge(
     var.tags,
     {
-      Name        = "eks-nodes-sg-${var.environment_suffix}"
+      Name        = "eks-nodes-sg-${local.environment_suffix}"
       Environment = var.environment
     }
   )

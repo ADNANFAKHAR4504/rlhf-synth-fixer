@@ -1,6 +1,6 @@
 # IAM role for EKS node groups
 resource "aws_iam_role" "eks_nodes" {
-  name = "eks-nodes-role-${var.environment_suffix}"
+  name = "eks-nodes-role-${local.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -16,7 +16,7 @@ resource "aws_iam_role" "eks_nodes" {
   tags = merge(
     var.tags,
     {
-      Name        = "eks-nodes-role-${var.environment_suffix}"
+      Name        = "eks-nodes-role-${local.environment_suffix}"
       Environment = var.environment
     }
   )
@@ -40,7 +40,7 @@ resource "aws_iam_role_policy_attachment" "eks_container_registry_policy" {
 # System node group - for core cluster services
 resource "aws_eks_node_group" "system" {
   cluster_name    = aws_eks_cluster.main.name
-  node_group_name = "system-${var.environment_suffix}"
+  node_group_name = "system-${local.environment_suffix}"
   node_role_arn   = aws_iam_role.eks_nodes.arn
   subnet_ids      = aws_subnet.system_private[*].id
   instance_types  = var.system_node_group_config.instance_types
@@ -71,7 +71,7 @@ resource "aws_eks_node_group" "system" {
   tags = merge(
     var.tags,
     {
-      Name                                                     = "eks-system-nodegroup-${var.environment_suffix}"
+      Name                                                     = "eks-system-nodegroup-${local.environment_suffix}"
       Environment                                              = var.environment
       NodeGroup                                                = "system"
       "k8s.io/cluster-autoscaler/${local.cluster_name_unique}" = var.enable_cluster_autoscaler ? "owned" : ""
@@ -89,7 +89,7 @@ resource "aws_eks_node_group" "system" {
 # Application node group - for application workloads
 resource "aws_eks_node_group" "application" {
   cluster_name    = aws_eks_cluster.main.name
-  node_group_name = "application-${var.environment_suffix}"
+  node_group_name = "application-${local.environment_suffix}"
   node_role_arn   = aws_iam_role.eks_nodes.arn
   subnet_ids      = aws_subnet.application_private[*].id
   instance_types  = var.application_node_group_config.instance_types
@@ -120,7 +120,7 @@ resource "aws_eks_node_group" "application" {
   tags = merge(
     var.tags,
     {
-      Name                                                     = "eks-application-nodegroup-${var.environment_suffix}"
+      Name                                                     = "eks-application-nodegroup-${local.environment_suffix}"
       Environment                                              = var.environment
       NodeGroup                                                = "application"
       "k8s.io/cluster-autoscaler/${local.cluster_name_unique}" = var.enable_cluster_autoscaler ? "owned" : ""
@@ -138,7 +138,7 @@ resource "aws_eks_node_group" "application" {
 # Spot node group - for batch processing and cost optimization
 resource "aws_eks_node_group" "spot" {
   cluster_name    = aws_eks_cluster.main.name
-  node_group_name = "spot-${var.environment_suffix}"
+  node_group_name = "spot-${local.environment_suffix}"
   node_role_arn   = aws_iam_role.eks_nodes.arn
   subnet_ids      = aws_subnet.spot_private[*].id
   instance_types  = var.spot_node_group_config.instance_types
@@ -170,7 +170,7 @@ resource "aws_eks_node_group" "spot" {
   tags = merge(
     var.tags,
     {
-      Name                                                     = "eks-spot-nodegroup-${var.environment_suffix}"
+      Name                                                     = "eks-spot-nodegroup-${local.environment_suffix}"
       Environment                                              = var.environment
       NodeGroup                                                = "spot"
       "k8s.io/cluster-autoscaler/${local.cluster_name_unique}" = var.enable_cluster_autoscaler ? "owned" : ""

@@ -2,12 +2,12 @@
 # Note: Using fixed timestamp "2511271329" to match existing cluster in AWS
 # This prevents Terraform from destroying and recreating the cluster
 locals {
-  cluster_name_unique = "${var.cluster_name}-${var.environment_suffix}-2511271329"
+  cluster_name_unique = "${var.cluster_name}-${local.environment_suffix}-2511271329"
 }
 
 # IAM role for EKS cluster
 resource "aws_iam_role" "eks_cluster" {
-  name = "eks-cluster-role-${var.environment_suffix}"
+  name = "eks-cluster-role-${local.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -23,7 +23,7 @@ resource "aws_iam_role" "eks_cluster" {
   tags = merge(
     var.tags,
     {
-      Name        = "eks-cluster-role-${var.environment_suffix}"
+      Name        = "eks-cluster-role-${local.environment_suffix}"
       Environment = var.environment
     }
   )
@@ -47,7 +47,7 @@ resource "aws_cloudwatch_log_group" "eks_cluster" {
   tags = merge(
     var.tags,
     {
-      Name        = "eks-cluster-logs-${var.environment_suffix}"
+      Name        = "eks-cluster-logs-${local.environment_suffix}"
       Environment = var.environment
     }
   )
@@ -121,7 +121,7 @@ resource "aws_iam_openid_connect_provider" "eks" {
   tags = merge(
     var.tags,
     {
-      Name        = "eks-oidc-${var.environment_suffix}"
+      Name        = "eks-oidc-${local.environment_suffix}"
       Environment = var.environment
     }
   )
@@ -129,7 +129,7 @@ resource "aws_iam_openid_connect_provider" "eks" {
 
 # IAM role for EBS CSI driver
 resource "aws_iam_role" "ebs_csi_driver" {
-  name = "eks-ebs-csi-driver-${var.environment_suffix}"
+  name = "eks-ebs-csi-driver-${local.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -151,7 +151,7 @@ resource "aws_iam_role" "ebs_csi_driver" {
   tags = merge(
     var.tags,
     {
-      Name        = "eks-ebs-csi-driver-${var.environment_suffix}"
+      Name        = "eks-ebs-csi-driver-${local.environment_suffix}"
       Environment = var.environment
     }
   )
@@ -164,7 +164,7 @@ resource "aws_iam_role_policy_attachment" "ebs_csi_driver" {
 
 # Additional IAM policy for EBS CSI driver KMS encryption
 resource "aws_iam_role_policy" "ebs_csi_driver_kms" {
-  name = "ebs-csi-kms-${var.environment_suffix}"
+  name = "ebs-csi-kms-${local.environment_suffix}"
   role = aws_iam_role.ebs_csi_driver.id
 
   policy = jsonencode({
@@ -208,7 +208,7 @@ resource "aws_eks_addon" "ebs_csi_driver" {
   tags = merge(
     var.tags,
     {
-      Name        = "ebs-csi-driver-${var.environment_suffix}"
+      Name        = "ebs-csi-driver-${local.environment_suffix}"
       Environment = var.environment
     }
   )
@@ -221,7 +221,7 @@ resource "aws_eks_addon" "ebs_csi_driver" {
 
 # IAM role for AWS Load Balancer Controller
 resource "aws_iam_role" "aws_load_balancer_controller" {
-  name = "eks-lb-controller-${var.environment_suffix}"
+  name = "eks-lb-controller-${local.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -243,14 +243,14 @@ resource "aws_iam_role" "aws_load_balancer_controller" {
   tags = merge(
     var.tags,
     {
-      Name        = "eks-lb-controller-${var.environment_suffix}"
+      Name        = "eks-lb-controller-${local.environment_suffix}"
       Environment = var.environment
     }
   )
 }
 
 resource "aws_iam_policy" "aws_load_balancer_controller" {
-  name        = "eks-lb-controller-policy-${var.environment_suffix}"
+  name        = "eks-lb-controller-policy-${local.environment_suffix}"
   description = "IAM policy for AWS Load Balancer Controller"
 
   policy = jsonencode({
@@ -476,7 +476,7 @@ resource "aws_iam_policy" "aws_load_balancer_controller" {
   tags = merge(
     var.tags,
     {
-      Name        = "eks-lb-controller-policy-${var.environment_suffix}"
+      Name        = "eks-lb-controller-policy-${local.environment_suffix}"
       Environment = var.environment
     }
   )
@@ -489,7 +489,7 @@ resource "aws_iam_role_policy_attachment" "aws_load_balancer_controller" {
 
 # IAM role for cluster autoscaler
 resource "aws_iam_role" "cluster_autoscaler" {
-  name = "eks-cluster-autoscaler-${var.environment_suffix}"
+  name = "eks-cluster-autoscaler-${local.environment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -511,14 +511,14 @@ resource "aws_iam_role" "cluster_autoscaler" {
   tags = merge(
     var.tags,
     {
-      Name        = "eks-cluster-autoscaler-${var.environment_suffix}"
+      Name        = "eks-cluster-autoscaler-${local.environment_suffix}"
       Environment = var.environment
     }
   )
 }
 
 resource "aws_iam_policy" "cluster_autoscaler" {
-  name        = "eks-cluster-autoscaler-policy-${var.environment_suffix}"
+  name        = "eks-cluster-autoscaler-policy-${local.environment_suffix}"
   description = "IAM policy for cluster autoscaler"
 
   policy = jsonencode({
@@ -559,7 +559,7 @@ resource "aws_iam_policy" "cluster_autoscaler" {
   tags = merge(
     var.tags,
     {
-      Name        = "eks-cluster-autoscaler-policy-${var.environment_suffix}"
+      Name        = "eks-cluster-autoscaler-policy-${local.environment_suffix}"
       Environment = var.environment
     }
   )
