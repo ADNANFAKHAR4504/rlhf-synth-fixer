@@ -18,6 +18,7 @@ variable "environment" {
 variable "environment_suffix" {
   description = "Unique suffix for resource naming to ensure uniqueness across deployments"
   type        = string
+  default     = "dev"
 
   validation {
     condition     = length(var.environment_suffix) > 0 && length(var.environment_suffix) <= 8

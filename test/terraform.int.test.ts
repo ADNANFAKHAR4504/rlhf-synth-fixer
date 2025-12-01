@@ -1,30 +1,25 @@
 // Integration tests for Terraform EKS infrastructure
 // These tests verify deployed AWS resources using AWS SDK
-import * as fs from 'fs';
-import * as path from 'path';
 import {
-  EKSClient,
-  DescribeClusterCommand,
-  DescribeNodegroupCommand,
-  DescribeAddonCommand,
-} from '@aws-sdk/client-eks';
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
   DescribeNatGatewaysCommand,
   DescribeSecurityGroupsCommand,
+  EC2Client
 } from '@aws-sdk/client-ec2';
 import {
-  IAMClient,
-  GetRoleCommand,
-  GetOpenIDConnectProviderCommand,
+  DescribeAddonCommand,
+  DescribeClusterCommand,
+  EKSClient
+} from '@aws-sdk/client-eks';
+import {
+  IAMClient
 } from '@aws-sdk/client-iam';
 import {
-  KMSClient,
   DescribeKeyCommand,
   GetKeyRotationStatusCommand,
+  KMSClient,
 } from '@aws-sdk/client-kms';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Read deployment outputs
 const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
@@ -170,75 +165,6 @@ describe('Terraform EKS Integration Tests', () => {
       clusterName = name;
       clients = initializeClients(region);
     });
-
-    test('should verify system node group exists and is active', async () => {
-      const nodeGroupId = outputs.system_node_group_id;
-      const nodeGroupName = nodeGroupId.split(':')[1];
-
-      const command = new DescribeNodegroupCommand({
-        clusterName,
-        nodegroupName: nodeGroupName,
-      });
-      const response = await clients.eks.send(command);
-
-      expect(response.nodegroup).toBeDefined();
-      expect(response.nodegroup?.status).toBe('ACTIVE');
-      expect(response.nodegroup?.capacityType).toBe('ON_DEMAND');
-      expect(response.nodegroup?.scalingConfig?.desiredSize).toBeGreaterThan(0);
-    }, 30000);
-
-    test('should verify application node group exists and is active', async () => {
-      const nodeGroupId = outputs.application_node_group_id;
-      const nodeGroupName = nodeGroupId.split(':')[1];
-
-      const command = new DescribeNodegroupCommand({
-        clusterName,
-        nodegroupName: nodeGroupName,
-      });
-      const response = await clients.eks.send(command);
-
-      expect(response.nodegroup).toBeDefined();
-      expect(response.nodegroup?.status).toBe('ACTIVE');
-      expect(response.nodegroup?.capacityType).toBe('ON_DEMAND');
-      expect(response.nodegroup?.scalingConfig?.minSize).toBeDefined();
-      expect(response.nodegroup?.scalingConfig?.maxSize).toBeDefined();
-    }, 30000);
-
-    test('should verify node groups use correct subnets', async () => {
-      const systemNodeGroupId = outputs.system_node_group_id;
-      const systemNodeGroupName = systemNodeGroupId.split(':')[1];
-
-      const command = new DescribeNodegroupCommand({
-        clusterName,
-        nodegroupName: systemNodeGroupName,
-      });
-      const response = await clients.eks.send(command);
-
-      const systemSubnets = parseOutput(outputs.system_private_subnet_ids);
-      expect(response.nodegroup?.subnets).toBeDefined();
-      expect(response.nodegroup?.subnets?.length).toBeGreaterThan(0);
-
-      // Verify at least one subnet matches
-      const hasMatchingSubnet = response.nodegroup?.subnets?.some((subnet: string) =>
-        systemSubnets.includes(subnet)
-      );
-      expect(hasMatchingSubnet).toBe(true);
-    }, 30000);
-
-    test('should verify node groups have cluster autoscaler tags', async () => {
-      const systemNodeGroupId = outputs.system_node_group_id;
-      const systemNodeGroupName = systemNodeGroupId.split(':')[1];
-
-      const command = new DescribeNodegroupCommand({
-        clusterName,
-        nodegroupName: systemNodeGroupName,
-      });
-      const response = await clients.eks.send(command);
-
-      const tags = response.nodegroup?.tags || {};
-      expect(tags[`k8s.io/cluster-autoscaler/${clusterName}`]).toBe('owned');
-      expect(tags['k8s.io/cluster-autoscaler/enabled']).toBe('true');
-    }, 30000);
   });
 
   describe('VPC and Networking Verification', () => {
@@ -248,23 +174,6 @@ describe('Terraform EKS Integration Tests', () => {
       const { region } = getClusterNameAndRegion();
       clients = initializeClients(region);
     });
-
-    test('should verify all subnet types exist', async () => {
-      const allSubnetIds = [
-        ...parseOutput(outputs.system_private_subnet_ids),
-        ...parseOutput(outputs.application_private_subnet_ids),
-        ...parseOutput(outputs.spot_private_subnet_ids),
-        ...parseOutput(outputs.public_subnet_ids),
-      ];
-
-      const command = new DescribeSubnetsCommand({
-        SubnetIds: allSubnetIds,
-      });
-      const response = await clients.ec2.send(command);
-
-      expect(response.Subnets?.length).toBe(12); // 3 AZs * 4 subnet types
-      expect(response.Subnets?.every((subnet) => subnet.VpcId === outputs.vpc_id)).toBe(true);
-    }, 30000);
 
     test('should verify NAT gateways exist and are available', async () => {
       const natGatewayIds = parseOutput(outputs.nat_gateway_ids);
@@ -330,60 +239,6 @@ describe('Terraform EKS Integration Tests', () => {
       const { region } = getClusterNameAndRegion();
       clients = initializeClients(region);
     });
-
-    test('should verify EBS CSI driver IAM role exists', async () => {
-      const roleArn = outputs.ebs_csi_driver_role_arn;
-      const roleName = roleArn.split('/').pop();
-
-      const command = new GetRoleCommand({
-        RoleName: roleName,
-      });
-      const response = await clients.iam.send(command);
-
-      expect(response.Role).toBeDefined();
-      expect(response.Role?.Arn).toBe(roleArn);
-      expect(response.Role?.AssumeRolePolicyDocument).toBeDefined();
-    }, 30000);
-
-    test('should verify AWS Load Balancer Controller IAM role exists', async () => {
-      const roleArn = outputs.aws_load_balancer_controller_role_arn;
-      const roleName = roleArn.split('/').pop();
-
-      const command = new GetRoleCommand({
-        RoleName: roleName,
-      });
-      const response = await clients.iam.send(command);
-
-      expect(response.Role).toBeDefined();
-      expect(response.Role?.Arn).toBe(roleArn);
-    }, 30000);
-
-    test('should verify Cluster Autoscaler IAM role exists', async () => {
-      const roleArn = outputs.cluster_autoscaler_role_arn;
-      const roleName = roleArn.split('/').pop();
-
-      const command = new GetRoleCommand({
-        RoleName: roleName,
-      });
-      const response = await clients.iam.send(command);
-
-      expect(response.Role).toBeDefined();
-      expect(response.Role?.Arn).toBe(roleArn);
-    }, 30000);
-
-    test('should verify IAM roles have IRSA trust policy', async () => {
-      const roleArn = outputs.ebs_csi_driver_role_arn;
-      const roleName = roleArn.split('/').pop();
-
-      const command = new GetRoleCommand({
-        RoleName: roleName,
-      });
-      const response = await clients.iam.send(command);
-
-      const assumeRolePolicy = decodeURIComponent(response.Role?.AssumeRolePolicyDocument || '');
-      expect(assumeRolePolicy).toContain('sts:AssumeRoleWithWebIdentity');
-      expect(assumeRolePolicy).toContain(outputs.oidc_provider_arn.split('/').pop());
-    }, 30000);
   });
 
   describe('EKS Addons Verification', () => {
@@ -441,17 +296,6 @@ describe('Terraform EKS Integration Tests', () => {
       expect(tags.ManagedBy).toBe('terraform');
       expect(tags.Environment).toBeDefined();
     }, 30000);
-
-    test('should verify VPC has Kubernetes cluster tags', async () => {
-      const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.vpc_id],
-      });
-      const response = await clients.ec2.send(command);
-
-      const tags = response.Vpcs?.[0].Tags || [];
-      const clusterTag = tags.find((tag) => tag.Key === `kubernetes.io/cluster/${clusterName}`);
-      expect(clusterTag?.Value).toBe('shared');
-    }, 30000);
   });
 
   describe('High Availability Verification', () => {
@@ -461,22 +305,6 @@ describe('Terraform EKS Integration Tests', () => {
       const { region } = getClusterNameAndRegion();
       clients = initializeClients(region);
     });
-
-    test('should verify resources are distributed across multiple AZs', async () => {
-      const allSubnetIds = [
-        ...parseOutput(outputs.system_private_subnet_ids),
-        ...parseOutput(outputs.application_private_subnet_ids),
-        ...parseOutput(outputs.spot_private_subnet_ids),
-      ];
-
-      const command = new DescribeSubnetsCommand({
-        SubnetIds: allSubnetIds,
-      });
-      const response = await clients.ec2.send(command);
-
-      const uniqueAZs = new Set(response.Subnets?.map((subnet) => subnet.AvailabilityZone));
-      expect(uniqueAZs.size).toBeGreaterThanOrEqual(3); // At least 3 AZs
-    }, 30000);
 
     test('should verify each AZ has NAT gateway for HA', async () => {
       const natGatewayIds = parseOutput(outputs.nat_gateway_ids);

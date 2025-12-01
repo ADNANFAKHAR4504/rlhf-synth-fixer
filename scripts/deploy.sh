@@ -547,9 +547,6 @@ elif [ "$PLATFORM" = "tf" ]; then
 
   cd lib
 
-  # Export Terraform variables
-  export TF_VAR_environment_suffix="${ENVIRONMENT_SUFFIX}"
-
   # Determine var-file to use based on metadata.json
   VAR_FILE=""
   if [ "$(jq -r '.subtask // ""' ../metadata.json)" = "IaC-Multi-Environment-Management" ]; then
