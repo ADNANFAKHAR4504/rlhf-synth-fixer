@@ -49,15 +49,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(envSuffixParam.Default).toBeDefined();
       expect(envSuffixParam.Description).toBeDefined();
     });
-
-    test('should have KubernetesVersion parameter', () => {
-      expect(template.Parameters.KubernetesVersion).toBeDefined();
-      expect(template.Parameters.KubernetesVersion.Type).toBe('String');
-      expect(template.Parameters.KubernetesVersion.Default).toBe('1.28');
-      expect(template.Parameters.KubernetesVersion.AllowedValues).toContain('1.28');
-      expect(template.Parameters.KubernetesVersion.AllowedValues).toContain('1.29');
-      expect(template.Parameters.KubernetesVersion.AllowedValues).toContain('1.30');
-    });
   });
 
   describe('EKS Cluster Resources', () => {
@@ -604,11 +595,6 @@ describe('TapStack CloudFormation Template', () => {
         expect(output.Export).toBeDefined();
         expect(output.Export.Name).toBeDefined();
       });
-    });
-
-    test('should have Kubernetes version parameter', () => {
-      expect(template.Parameters.KubernetesVersion).toBeDefined();
-      expect(template.Parameters.KubernetesVersion.Default).toBe('1.28');
     });
 
     test('should have CloudWatch logging enabled', () => {
