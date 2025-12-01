@@ -45,12 +45,6 @@ describe('TapStack CloudFormation Multi-Region DR Template', () => {
       expect(template.Parameters.EnvironmentSuffix.Default).toBe('dev');
     });
 
-    test('should have DBMasterUsername parameter', () => {
-      expect(template.Parameters.DBMasterUsername).toBeDefined();
-      expect(template.Parameters.DBMasterUsername.Type).toBe('String');
-      expect(template.Parameters.DBMasterUsername.NoEcho).toBe(true);
-    });
-
     test('should have HostedZoneName parameter', () => {
       expect(template.Parameters.HostedZoneName).toBeDefined();
       expect(template.Parameters.HostedZoneName.Type).toBe('String');
@@ -61,9 +55,9 @@ describe('TapStack CloudFormation Multi-Region DR Template', () => {
       expect(template.Parameters.AlertEmail.Type).toBe('String');
     });
 
-    test('should have exactly 5 parameters', () => {
+    test('should have exactly 3 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(5);
+      expect(parameterCount).toBe(3);
     });
   });
 
@@ -331,6 +325,24 @@ describe('TapStack CloudFormation Multi-Region DR Template', () => {
     });
   });
 
+  describe('Secrets Manager Resources', () => {
+    test('should have DB Master Password Secret', () => {
+      expect(template.Resources.DBMasterPasswordSecret).toBeDefined();
+      expect(template.Resources.DBMasterPasswordSecret.Type).toBe('AWS::SecretsManager::Secret');
+    });
+
+    test('DB Master Password Secret should have EnvironmentSuffix in name', () => {
+      const secret = template.Resources.DBMasterPasswordSecret;
+      expect(secret.Properties.Name['Fn::Sub']).toContain('${EnvironmentSuffix}');
+    });
+
+    test('DB Master Password Secret should generate secret string', () => {
+      const secret = template.Resources.DBMasterPasswordSecret;
+      expect(secret.Properties.GenerateSecretString).toBeDefined();
+      expect(secret.Properties.GenerateSecretString.GenerateStringKey).toBe('password');
+    });
+  });
+
   describe('Route 53 Resources', () => {
     test('should have Hosted Zone', () => {
       expect(template.Resources.HostedZone).toBeDefined();
@@ -584,9 +596,9 @@ describe('TapStack CloudFormation Multi-Region DR Template', () => {
       expect(resourceCount).toBeGreaterThanOrEqual(25);
     });
 
-    test('should have exactly 5 parameters', () => {
+    test('should have exactly 3 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(5);
+      expect(parameterCount).toBe(3);
     });
 
     test('should have exactly 7 outputs', () => {

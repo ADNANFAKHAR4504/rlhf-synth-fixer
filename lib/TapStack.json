@@ -9,12 +9,6 @@
       "AllowedPattern": "[a-z0-9-]+",
       "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
     },
-    "DBMasterUsername": {
-      "Type": "String",
-      "Description": "Master username for Aurora database",
-      "Default": "admin",
-      "NoEcho": true
-    },
     "HostedZoneName": {
       "Type": "String",
       "Description": "Route 53 hosted zone name (e.g., example.com)",
@@ -24,16 +18,33 @@
       "Type": "String",
       "Description": "Email address for CloudWatch alarm notifications",
       "Default": "alerts@example.com"
-    },
-    "DBMasterPassword": {
-      "Type": "String",
-      "Description": "Master password for Aurora database",
-      "NoEcho": true,
-      "MinLength": 8,
-      "Default": "ChangeMe123!"
     }
   },
   "Resources": {
+    "DBMasterPasswordSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "aurora-master-password-${EnvironmentSuffix}"
+        },
+        "Description": "Master password for Aurora database",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-master-password-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
     "PrimaryVPC": {
       "Type": "AWS::EC2::VPC",
       "Properties": {
@@ -321,10 +332,10 @@
         "Engine": "aurora-mysql",
         "EngineVersion": "8.0.mysql_aurora.3.04.0",
         "MasterUsername": {
-          "Ref": "DBMasterUsername"
+          "Fn::Sub": "{{resolve:secretsmanager:${DBMasterPasswordSecret}:SecretString:username}}"
         },
         "MasterUserPassword": {
-          "Ref": "DBMasterPassword"
+          "Fn::Sub": "{{resolve:secretsmanager:${DBMasterPasswordSecret}:SecretString:password}}"
         },
         "DBSubnetGroupName": {
           "Ref": "DBSubnetGroup"
@@ -653,8 +664,22 @@
       },
       "DeletionPolicy": "Delete"
     },
+    "LambdaInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "PaymentProcessorFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "elasticloadbalancing.amazonaws.com",
+        "SourceAccount": {
+          "Ref": "AWS::AccountId"
+        }
+      }
+    },
     "PrimaryTargetGroup": {
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "DependsOn": "LambdaInvokePermission",
       "Properties": {
         "Name": {
           "Fn::Sub": "tg-primary-${EnvironmentSuffix}"
@@ -686,19 +711,6 @@
         ]
       },
       "DeletionPolicy": "Delete"
-    },
-    "LambdaInvokePermission": {
-      "Type": "AWS::Lambda::Permission",
-      "Properties": {
-        "FunctionName": {
-          "Ref": "PaymentProcessorFunction"
-        },
-        "Action": "lambda:InvokeFunction",
-        "Principal": "elasticloadbalancing.amazonaws.com",
-        "SourceArn": {
-          "Ref": "PrimaryTargetGroup"
-        }
-      }
     },
     "PrimaryALBListener": {
       "Type": "AWS::ElasticLoadBalancingV2::Listener",
