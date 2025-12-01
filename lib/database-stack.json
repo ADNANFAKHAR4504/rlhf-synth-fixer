@@ -20,10 +20,9 @@
       "Default": "admin",
       "Description": "Master username for Aurora database"
     },
-    "DatabaseMasterPassword": {
+    "DatabasePasswordSecretArn": {
       "Type": "String",
-      "NoEcho": true,
-      "Description": "Master password for Aurora database"
+      "Description": "ARN of the Secrets Manager secret containing the database password"
     }
   },
   "Resources": {
@@ -51,7 +50,7 @@
         "EngineMode": "provisioned",
         "DatabaseName": { "Fn::Sub": "transactiondb${EnvironmentSuffix}" },
         "MasterUsername": { "Ref": "DatabaseMasterUsername" },
-        "MasterUserPassword": { "Ref": "DatabaseMasterPassword" },
+        "MasterUserPassword": { "Fn::Sub": "{{resolve:secretsmanager:${DatabasePasswordSecretArn}:SecretString:password}}" },
         "DBSubnetGroupName": { "Ref": "DBSubnetGroup" },
         "VpcSecurityGroupIds": [
           { "Ref": "DatabaseSecurityGroupId" }
