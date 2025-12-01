@@ -277,17 +277,106 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Get default VPC
-    const defaultVpc = aws.ec2.getVpc({ default: true });
-    const defaultSubnets = defaultVpc.then(vpc =>
-      aws.ec2.getSubnets({
-        filters: [
-          {
-            name: 'vpc-id',
-            values: [vpc.id],
-          },
-        ],
-      })
+    // Create VPC for ECS Service
+    const vpc = new aws.ec2.Vpc(
+      `tap-vpc-${environmentSuffix}`,
+      {
+        cidrBlock: '10.0.0.0/16',
+        enableDnsHostnames: true,
+        enableDnsSupport: true,
+        tags: {
+          ...tags,
+          Name: `tap-vpc-${environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
+
+    // Create Internet Gateway
+    const internetGateway = new aws.ec2.InternetGateway(
+      `tap-igw-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        tags: {
+          ...tags,
+          Name: `tap-igw-${environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
+
+    // Create public subnets in two availability zones
+    const subnet1 = new aws.ec2.Subnet(
+      `tap-subnet-1-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        cidrBlock: '10.0.1.0/24',
+        availabilityZone: 'us-east-1a',
+        mapPublicIpOnLaunch: true,
+        tags: {
+          ...tags,
+          Name: `tap-subnet-1-${environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
+
+    const subnet2 = new aws.ec2.Subnet(
+      `tap-subnet-2-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        cidrBlock: '10.0.2.0/24',
+        availabilityZone: 'us-east-1b',
+        mapPublicIpOnLaunch: true,
+        tags: {
+          ...tags,
+          Name: `tap-subnet-2-${environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
+
+    // Create route table for public subnets
+    const routeTable = new aws.ec2.RouteTable(
+      `tap-rt-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        tags: {
+          ...tags,
+          Name: `tap-rt-${environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
+
+    // Add route to internet gateway
+    new aws.ec2.Route(
+      `tap-route-${environmentSuffix}`,
+      {
+        routeTableId: routeTable.id,
+        destinationCidrBlock: '0.0.0.0/0',
+        gatewayId: internetGateway.id,
+      },
+      { parent: this }
+    );
+
+    // Associate route table with subnets
+    new aws.ec2.RouteTableAssociation(
+      `tap-rta-1-${environmentSuffix}`,
+      {
+        subnetId: subnet1.id,
+        routeTableId: routeTable.id,
+      },
+      { parent: this }
+    );
+
+    new aws.ec2.RouteTableAssociation(
+      `tap-rta-2-${environmentSuffix}`,
+      {
+        subnetId: subnet2.id,
+        routeTableId: routeTable.id,
+      },
+      { parent: this }
     );
 
     // Security Group for ECS Service
@@ -296,7 +385,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         name: `tap-service-sg-${environmentSuffix}`,
         description: 'Security group for ECS Fargate service',
-        vpcId: defaultVpc.then(vpc => vpc.id),
+        vpcId: vpc.id,
         ingress: [
           {
             protocol: 'tcp',
@@ -330,7 +419,7 @@ export class TapStack extends pulumi.ComponentResource {
         desiredCount: 1,
         launchType: 'FARGATE',
         networkConfiguration: {
-          subnets: defaultSubnets.then(subnets => subnets.ids),
+          subnets: [subnet1.id, subnet2.id],
           securityGroups: [securityGroup.id],
           assignPublicIp: true,
         },
