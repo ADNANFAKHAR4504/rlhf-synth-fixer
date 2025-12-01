@@ -26,24 +26,28 @@ The solution consists of two CloudFormation stacks:
     },
     "VpcId": {
       "Type": "AWS::EC2::VPC::Id",
-      "Default": "vpc-09c4bdbdfef55e103",
+      "Default": "vpc-067bafc779849aa02",
       "Description": "VPC ID where the EKS cluster will be deployed"
     },
     "PrivateSubnetIds": {
       "Type": "List<AWS::EC2::Subnet::Id>",
-      "Default": "subnet-0db236470c68dc5d6,subnet-001318554ecc56aca,subnet-0baa670c5a4b71373",
+      "Default": "subnet-0d20975a6f3be9d96,subnet-0eb6c0eddee716e2b,subnet-05f2efd59a3070926",
       "Description": "List of exactly 3 private subnet IDs across different AZs for EKS nodes"
     },
     "ControlPlaneSubnetIds": {
       "Type": "List<AWS::EC2::Subnet::Id>",
-      "Default": "subnet-0db236470c68dc5d6,subnet-001318554ecc56aca,subnet-0baa670c5a4b71373",
+      "Default": "subnet-0d20975a6f3be9d96,subnet-0eb6c0eddee716e2b,subnet-05f2efd59a3070926",
       "Description": "List of private subnet IDs for EKS control plane"
     },
     "Environment": {
       "Type": "String",
       "Description": "Environment tag value",
       "Default": "production",
-      "AllowedValues": ["development", "staging", "production"]
+      "AllowedValues": [
+        "development",
+        "staging",
+        "production"
+      ]
     },
     "Owner": {
       "Type": "String",
@@ -153,7 +157,10 @@ The solution consists of two CloudFormation stacks:
         },
         "Version": "1.28",
         "RoleArn": {
-          "Fn::GetAtt": ["EKSClusterRole", "Arn"]
+          "Fn::GetAtt": [
+            "EKSClusterRole",
+            "Arn"
+          ]
         },
         "ResourcesVpcConfig": {
           "SecurityGroupIds": [
@@ -223,10 +230,17 @@ The solution consists of two CloudFormation stacks:
       "Type": "AWS::IAM::OIDCProvider",
       "Properties": {
         "Url": {
-          "Fn::GetAtt": ["EKSCluster", "OpenIdConnectIssuerUrl"]
+          "Fn::GetAtt": [
+            "EKSCluster",
+            "OpenIdConnectIssuerUrl"
+          ]
         },
-        "ClientIdList": ["sts.amazonaws.com"],
-        "ThumbprintList": ["9e99a48a9960b14926bb7f3b02e22da2b0ab7280"]
+        "ClientIdList": [
+          "sts.amazonaws.com"
+        ],
+        "ThumbprintList": [
+          "9e99a48a9960b14926bb7f3b02e22da2b0ab7280"
+        ]
       }
     },
     "NodeInstanceRole": {
@@ -285,7 +299,10 @@ The solution consists of two CloudFormation stacks:
           "Ref": "EKSCluster"
         },
         "NodeRole": {
-          "Fn::GetAtt": ["NodeInstanceRole", "Arn"]
+          "Fn::GetAtt": [
+            "NodeInstanceRole",
+            "Arn"
+          ]
         },
         "Subnets": {
           "Ref": "PrivateSubnetIds"
@@ -295,7 +312,9 @@ The solution consists of two CloudFormation stacks:
           "MaxSize": 10,
           "DesiredSize": 4
         },
-        "InstanceTypes": ["t3.large"],
+        "InstanceTypes": [
+          "t3.large"
+        ],
         "AmiType": "AL2_x86_64",
         "Tags": {
           "Environment": {
@@ -329,7 +348,10 @@ The solution consists of two CloudFormation stacks:
     "ClusterEndpoint": {
       "Description": "Endpoint for the EKS cluster API server",
       "Value": {
-        "Fn::GetAtt": ["EKSCluster", "Endpoint"]
+        "Fn::GetAtt": [
+          "EKSCluster",
+          "Endpoint"
+        ]
       },
       "Export": {
         "Name": {
@@ -340,7 +362,10 @@ The solution consists of two CloudFormation stacks:
     "ClusterArn": {
       "Description": "ARN of the EKS cluster",
       "Value": {
-        "Fn::GetAtt": ["EKSCluster", "Arn"]
+        "Fn::GetAtt": [
+          "EKSCluster",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
@@ -351,7 +376,10 @@ The solution consists of two CloudFormation stacks:
     "OIDCIssuerURL": {
       "Description": "OIDC issuer URL for IAM Roles for Service Accounts",
       "Value": {
-        "Fn::GetAtt": ["EKSCluster", "OpenIdConnectIssuerUrl"]
+        "Fn::GetAtt": [
+          "EKSCluster",
+          "OpenIdConnectIssuerUrl"
+        ]
       },
       "Export": {
         "Name": {
@@ -373,7 +401,10 @@ The solution consists of two CloudFormation stacks:
     "NodeGroupArn": {
       "Description": "ARN of the EKS managed node group",
       "Value": {
-        "Fn::GetAtt": ["NodeGroup", "Arn"]
+        "Fn::GetAtt": [
+          "NodeGroup",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
@@ -384,7 +415,10 @@ The solution consists of two CloudFormation stacks:
     "NodeInstanceRoleArn": {
       "Description": "ARN of the node instance IAM role",
       "Value": {
-        "Fn::GetAtt": ["NodeInstanceRole", "Arn"]
+        "Fn::GetAtt": [
+          "NodeInstanceRole",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {

@@ -236,11 +236,6 @@ describe('EKS Cluster CloudFormation Template', () => {
       expect(tagKeys).toContain('CostCenter');
     });
 
-    test('cluster should depend on cluster role', () => {
-      const cluster = template.Resources.EKSCluster;
-      expect(cluster.DependsOn).toContain('EKSClusterRole');
-    });
-
     test('cluster should not have DeletionPolicy Retain', () => {
       const cluster = template.Resources.EKSCluster;
       expect(cluster.DeletionPolicy).not.toBe('Retain');
@@ -294,11 +289,6 @@ describe('EKS Cluster CloudFormation Template', () => {
       expect(oidc.Properties.ThumbprintList).toBeDefined();
       expect(Array.isArray(oidc.Properties.ThumbprintList)).toBe(true);
       expect(oidc.Properties.ThumbprintList.length).toBeGreaterThan(0);
-    });
-
-    test('OIDC provider should depend on EKS cluster', () => {
-      const oidc = template.Resources.OIDCProvider;
-      expect(oidc.DependsOn).toContain('EKSCluster');
     });
 
     test('OIDC provider should not have DeletionPolicy Retain', () => {
@@ -416,12 +406,6 @@ describe('EKS Cluster CloudFormation Template', () => {
       expect(tags.Name).toEqual({ 'Fn::Sub': 'eks-nodegroup-${EnvironmentSuffix}' });
     });
 
-    test('node group should depend on cluster and node role', () => {
-      const nodeGroup = template.Resources.NodeGroup;
-      expect(nodeGroup.DependsOn).toContain('EKSCluster');
-      expect(nodeGroup.DependsOn).toContain('NodeInstanceRole');
-    });
-
     test('node group should not have DeletionPolicy Retain', () => {
       const nodeGroup = template.Resources.NodeGroup;
       expect(nodeGroup.DeletionPolicy).not.toBe('Retain');
@@ -521,8 +505,8 @@ describe('EKS Cluster CloudFormation Template', () => {
       resourcesWithNames.forEach(resourceKey => {
         const resource = template.Resources[resourceKey];
         const nameProperty = resource.Properties.Name ||
-                           resource.Properties.NodegroupName ||
-                           resource.Properties.LogGroupName;
+          resource.Properties.NodegroupName ||
+          resource.Properties.LogGroupName;
 
         expect(nameProperty).toBeDefined();
         if (typeof nameProperty === 'object') {

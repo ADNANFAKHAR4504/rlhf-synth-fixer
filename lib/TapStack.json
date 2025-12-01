@@ -12,17 +12,17 @@
     },
     "VpcId": {
       "Type": "AWS::EC2::VPC::Id",
-      "Default": "vpc-09c4bdbdfef55e103",
+      "Default": "vpc-067bafc779849aa02",
       "Description": "VPC ID where the EKS cluster will be deployed"
     },
     "PrivateSubnetIds": {
       "Type": "List<AWS::EC2::Subnet::Id>",
-      "Default": "subnet-0db236470c68dc5d6,subnet-001318554ecc56aca,subnet-0baa670c5a4b71373",
+      "Default": "subnet-0d20975a6f3be9d96,subnet-0eb6c0eddee716e2b,subnet-05f2efd59a3070926",
       "Description": "List of exactly 3 private subnet IDs across different AZs for EKS nodes"
     },
     "ControlPlaneSubnetIds": {
       "Type": "List<AWS::EC2::Subnet::Id>",
-      "Default": "subnet-0db236470c68dc5d6,subnet-001318554ecc56aca,subnet-0baa670c5a4b71373",
+      "Default": "subnet-0d20975a6f3be9d96,subnet-0eb6c0eddee716e2b,subnet-05f2efd59a3070926",
       "Description": "List of private subnet IDs for EKS control plane"
     },
     "Environment": {
