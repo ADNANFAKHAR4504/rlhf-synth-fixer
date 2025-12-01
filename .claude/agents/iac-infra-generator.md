@@ -82,6 +82,76 @@ echo "Target region: $REGION"
 
 ---
 
+### PHASE 0.5: Detect Special Subtask Requirements
+
+**⚠️ CRITICAL**: Some subtasks require special files or different workflows.
+
+**Check for Special Subtasks**:
+```bash
+SUBTASK=$(jq -r '.subtask' metadata.json)
+SUBJECT_LABELS=$(jq -r '.subject_labels[]? // empty' metadata.json)
+
+# Detect special task types
+IS_CICD_TASK=false
+IS_OPTIMIZATION_TASK=false
+IS_ANALYSIS_TASK=false
+
+if [ "$SUBTASK" = "CI/CD Pipeline Integration" ]; then
+  IS_CICD_TASK=true
+  echo "🔄 CI/CD Pipeline Integration task detected"
+fi
+
+if echo "$SUBJECT_LABELS" | grep -q "IaC Optimization"; then
+  IS_OPTIMIZATION_TASK=true
+  echo "📊 IaC Optimization task detected"
+fi
+
+if [ "$SUBTASK" = "Infrastructure QA and Management" ]; then
+  IS_ANALYSIS_TASK=true
+  echo "🔍 Infrastructure Analysis task detected"
+fi
+```
+
+**Verify Required Special Files Exist**:
+
+```bash
+# For CI/CD tasks - must have ci-cd.yml reference file
+if [ "$IS_CICD_TASK" = true ] && [ ! -f "lib/ci-cd.yml" ]; then
+  echo "❌ BLOCKED: lib/ci-cd.yml missing for CI/CD Pipeline Integration task"
+  echo "📖 This file should have been auto-created during task setup"
+  echo "📖 See: .claude/docs/references/special-subtask-requirements.md"
+  exit 1
+fi
+
+# For Optimization tasks - must have optimize.py script
+if [ "$IS_OPTIMIZATION_TASK" = true ] && [ ! -f "lib/optimize.py" ]; then
+  echo "❌ BLOCKED: lib/optimize.py missing for IaC Optimization task"
+  echo "📖 This file should have been auto-created during task setup"
+  echo "📖 See: .claude/docs/references/special-subtask-requirements.md"
+  exit 1
+fi
+
+# For Analysis tasks - must have analyse script
+if [ "$IS_ANALYSIS_TASK" = true ]; then
+  if [ ! -f "lib/analyse.py" ] && [ ! -f "lib/analyse.sh" ]; then
+    echo "❌ BLOCKED: lib/analyse.py or lib/analyse.sh missing for Analysis task"
+    echo "📖 Analysis tasks require an analysis script, not infrastructure code"
+    echo "📖 See: .claude/docs/references/special-subtask-requirements.md"
+    exit 1
+  fi
+fi
+```
+
+**Special Task Workflow Notes**:
+
+- **CI/CD Pipeline Integration**: Include CI/CD workflow requirements in PROMPT.md, reference `lib/ci-cd.yml`
+- **IaC Optimization**: PROMPT.md should explain baseline infrastructure + optimization script approach
+- **Infrastructure Analysis**: PROMPT.md should focus on analysis script, NOT infrastructure deployment
+
+**Reference**: See `.claude/docs/references/special-subtask-requirements.md` for complete details on each special subtask type.
+
+---
+
 ### PHASE 1: Analyze Configuration
 
 1. **Extract Platform and Language**:

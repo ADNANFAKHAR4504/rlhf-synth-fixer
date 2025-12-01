@@ -992,6 +992,24 @@ if [ "$SUBTASK" = "CI/CD Pipeline Integration" ]; then
     fi
 fi
 
+# Copy optimize.py script for IaC Optimization tasks
+# Check if subject_labels contains "IaC Optimization"
+if echo "$SUBJECT_LABELS" | grep -q "IaC Optimization"; then
+    OPTIMIZE_TEMPLATE="$(dirname "$0")/../../templates/optimize/optimize.py"
+    OPTIMIZE_DEST="$OUTPUT_DIR/lib/optimize.py"
+    
+    if [ -f "$OPTIMIZE_TEMPLATE" ]; then
+        # Ensure lib directory exists
+        mkdir -p "$OUTPUT_DIR/lib"
+        
+        # Copy the optimize.py file
+        cp "$OPTIMIZE_TEMPLATE" "$OPTIMIZE_DEST"
+        log_info "Copied optimize.py optimization script to lib/"
+    else
+        log_error "Warning: optimize.py template not found at $OPTIMIZE_TEMPLATE"
+    fi
+fi
+
 # Validate metadata
 REQUIRED=("platform" "language" "complexity" "turn_type" "team" "startedAt" "subtask" "po_id")
 MISSING=()
