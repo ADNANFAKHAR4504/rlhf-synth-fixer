@@ -102,12 +102,7 @@ elif [ "$PLATFORM" = "tf" ]; then
 
 elif [ "$PLATFORM" = "pulumi" ]; then
   echo "✅ Pulumi project detected, running Pulumi destroy..."
-
-  # Set PULUMI_K8S_DELETE_UNREACHABLE before running Pulumi to handle unreachable clusters
-  # This ensures the EKS module's internal Kubernetes provider can delete unreachable resources
-  export PULUMI_K8S_DELETE_UNREACHABLE=true
-  echo "🔧 Set PULUMI_K8S_DELETE_UNREACHABLE=true to handle unreachable cluster cleanup"
-
+  
   if [ "$LANGUAGE" = "go" ]; then
     echo "🔧 Go Pulumi project detected"
     cd lib
@@ -118,14 +113,6 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     echo "Removing Pulumi stack..."
     pulumi stack rm "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes --force || echo "Stack removal failed or stack doesn't exist"
     cd ..
-  elif [ "$LANGUAGE" = "ts" ] || [ "$LANGUAGE" = "js" ]; then
-    echo "🔧 TypeScript/JavaScript Pulumi project detected"
-    echo "Selecting stack..."
-    pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create || echo "Stack selection failed"
-    echo "Destroying Pulumi infrastructure..."
-    pulumi destroy --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" || echo "No resources to destroy or destruction failed"
-    echo "Removing Pulumi stack..."
-    pulumi stack rm "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes --force || echo "Stack removal failed or stack doesn't exist"
   else
     echo "🔧 Python Pulumi project detected"
     echo "Selecting dev stack..."
