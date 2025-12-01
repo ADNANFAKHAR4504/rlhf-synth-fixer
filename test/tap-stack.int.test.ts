@@ -124,7 +124,7 @@ async function executeSSMCommand(
   throw new Error('SSM command timed out');
 }
 
-// Make HTTP/HTTPS request and return response
+// Make HTTP/HTTPS request and return response with timeout
 async function httpRequest(
   hostname: string,
   port: number,
@@ -135,7 +135,7 @@ async function httpRequest(
 ): Promise<{ statusCode: number; body: string }> {
   const protocol = isHttps ? https : http;
   return new Promise((resolve, reject) => {
-    const options: any = { hostname, port, path, method };
+    const options: any = { hostname, port, path, method, timeout: 10000 };
     if (body) {
       options.headers = {
         'Content-Type': 'application/json',
@@ -148,6 +148,10 @@ async function httpRequest(
       res.on('end', () => resolve({ statusCode: res.statusCode || 0, body: data }));
     });
     req.on('error', reject);
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Request timeout'));
+    });
     if (body) req.write(body);
     req.end();
   });
@@ -274,10 +278,10 @@ describe('TapStack CloudFormation Template - Integration Tests', () => {
       const secretResponse = await secretsClient.send(new GetSecretValueCommand({ SecretId: secretArn }));
       const secret = JSON.parse(secretResponse.SecretString || '{}');
 
-      // Execute MySQL queries via SSM to test database connection
+      // Execute MySQL queries via SSM to test database connection (using mariadb client)
       const testTable = `test_${Date.now()}`;
       const commands = [
-        `mysql -h ${dbEndpoint} -u ${secret.username} -p'${secret.password}' -e "CREATE TABLE ${testTable} (id INT); INSERT INTO ${testTable} VALUES (1); SELECT * FROM ${testTable}; DROP TABLE ${testTable};"`,
+        `mariadb -h ${dbEndpoint} -u ${secret.username} -p'${secret.password}' -e "CREATE TABLE ${testTable} (id INT); INSERT INTO ${testTable} VALUES (1); SELECT * FROM ${testTable}; DROP TABLE ${testTable};"`,
       ];
 
       const result = await executeSSMCommand(instanceId, commands);
