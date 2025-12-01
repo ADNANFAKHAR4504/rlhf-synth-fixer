@@ -13,22 +13,6 @@
       "Description": "Email address for critical alerts",
       "Default": "ops@example.com"
     },
-    "DBMasterUsername": {
-      "Type": "String",
-      "Description": "Master username for Aurora PostgreSQL",
-      "Default": "dbadmin",
-      "MinLength": 1,
-      "MaxLength": 16,
-      "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
-    },
-    "DBMasterPassword": {
-      "Type": "String",
-      "Description": "Master password for Aurora PostgreSQL",
-      "NoEcho": true,
-      "MinLength": 8,
-      "MaxLength": 41,
-      "Default": "TempPassword123!"
-    },
     "ContainerImage": {
       "Type": "String",
       "Description": "Docker image for ECS tasks",
@@ -83,6 +67,29 @@
         "TargetKeyId": {
           "Ref": "EncryptionKey"
         }
+      }
+    },
+    "DBCredentialsSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "payment-db-credentials-${EnvironmentSuffix}"
+        },
+        "Description": "Master credentials for Aurora PostgreSQL",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"dbadmin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-db-credentials-${EnvironmentSuffix}"
+            }
+          }
+        ]
       }
     },
     "VPC": {
@@ -586,12 +593,12 @@
           "Fn::Sub": "payment-aurora-cluster-${EnvironmentSuffix}"
         },
         "Engine": "aurora-postgresql",
-        "EngineVersion": "15.4",
+        "EngineVersion": "15.8",
         "MasterUsername": {
-          "Ref": "DBMasterUsername"
+          "Fn::Sub": "{{resolve:secretsmanager:${DBCredentialsSecret}:SecretString:username}}"
         },
         "MasterUserPassword": {
-          "Ref": "DBMasterPassword"
+          "Fn::Sub": "{{resolve:secretsmanager:${DBCredentialsSecret}:SecretString:password}}"
         },
         "DatabaseName": "paymentdb",
         "BackupRetentionPeriod": 1,
@@ -1354,16 +1361,16 @@
         }
       }
     },
-    "SSMParameterDBPassword": {
+    "SSMParameterDBCredentialsSecret": {
       "Type": "AWS::SSM::Parameter",
       "Properties": {
         "Name": {
-          "Fn::Sub": "/payment/${EnvironmentSuffix}/db/password"
+          "Fn::Sub": "/payment/${EnvironmentSuffix}/db/credentials-secret-arn"
         },
-        "Description": "Aurora master password",
+        "Description": "ARN of the Secrets Manager secret containing Aurora credentials",
         "Type": "String",
         "Value": {
-          "Ref": "DBMasterPassword"
+          "Ref": "DBCredentialsSecret"
         }
       }
     }

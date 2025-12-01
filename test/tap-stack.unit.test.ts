@@ -41,16 +41,6 @@ describe('TapStack CloudFormation Template - Payment Processing Infrastructure',
       expect(template.Parameters.AlertEmail.Default).toBe('ops@example.com');
     });
 
-    test('should have DBMasterUsername parameter', () => {
-      expect(template.Parameters.DBMasterUsername).toBeDefined();
-      expect(template.Parameters.DBMasterUsername.Default).toBe('dbadmin');
-    });
-
-    test('should have DBMasterPassword parameter', () => {
-      expect(template.Parameters.DBMasterPassword).toBeDefined();
-      expect(template.Parameters.DBMasterPassword.NoEcho).toBe(true);
-    });
-
     test('should have ContainerImage parameter', () => {
       expect(template.Parameters.ContainerImage).toBeDefined();
       expect(template.Parameters.ContainerImage.Default).toBe('nginx:latest');
@@ -78,6 +68,24 @@ describe('TapStack CloudFormation Template - Payment Processing Infrastructure',
       expect(alias.Properties.AliasName).toEqual({
         'Fn::Sub': 'alias/payment-processing-${EnvironmentSuffix}'
       });
+    });
+  });
+
+  describe('Secrets Manager Resources', () => {
+    test('should have DB credentials secret', () => {
+      expect(template.Resources.DBCredentialsSecret).toBeDefined();
+      expect(template.Resources.DBCredentialsSecret.Type).toBe('AWS::SecretsManager::Secret');
+    });
+
+    test('DB credentials secret should generate password', () => {
+      const secret = template.Resources.DBCredentialsSecret;
+      expect(secret.Properties.GenerateSecretString).toBeDefined();
+      expect(secret.Properties.GenerateSecretString.GenerateStringKey).toBe('password');
+    });
+
+    test('DB credentials secret should have environmentSuffix in name', () => {
+      const secret = template.Resources.DBCredentialsSecret;
+      expect(secret.Properties.Name['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
   });
 
@@ -479,9 +487,9 @@ describe('TapStack CloudFormation Template - Payment Processing Infrastructure',
       expect(template.Resources.SSMParameterDBReaderEndpoint.Type).toBe('AWS::SSM::Parameter');
     });
 
-    test('should have SSM parameter for DB password', () => {
-      expect(template.Resources.SSMParameterDBPassword).toBeDefined();
-      expect(template.Resources.SSMParameterDBPassword.Type).toBe('AWS::SSM::Parameter');
+    test('should have SSM parameter for DB credentials secret ARN', () => {
+      expect(template.Resources.SSMParameterDBCredentialsSecret).toBeDefined();
+      expect(template.Resources.SSMParameterDBCredentialsSecret.Type).toBe('AWS::SSM::Parameter');
     });
   });
 
