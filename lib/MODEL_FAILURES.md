@@ -34,7 +34,7 @@ The target groups (BlueTargetGroup and GreenTargetGroup) used `DeregistrationDel
       "HealthCheckEnabled": true,
       "HealthCheckIntervalSeconds": 15,
       "HealthCheckPath": "/",
-      "DeregistrationDelay": 30,    // ❌ WRONG - This is not a valid property
+      "DeregistrationDelay": 30,    // WRONG - This is not a valid property
       "Tags": [...]
     }
   }
