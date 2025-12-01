@@ -14,10 +14,6 @@
       "Description": "CIDR block of primary VPC for peering",
       "Default": "10.0.0.0/16"
     },
-    "PrimaryVPCId": {
-      "Type": "String",
-      "Description": "VPC ID from primary region for peering"
-    },
     "GlobalClusterIdentifier": {
       "Type": "String",
       "Description": "Global cluster identifier from primary region"
@@ -507,7 +503,7 @@
         "FunctionName": {
           "Fn::Sub": "payment-processor-secondary-${environmentSuffix}"
         },
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [
@@ -652,11 +648,10 @@
         ],
         "HealthCheckEnabled": true,
         "HealthCheckPath": "/health",
-        "HealthCheckProtocol": "HTTPS",
-        "HealthCheckIntervalSeconds": 30,
-        "HealthCheckTimeoutSeconds": 5,
-        "HealthyThresholdCount": 2,
-        "UnhealthyThresholdCount": 3,
+        "HealthCheckIntervalSeconds": 35,
+        "HealthCheckTimeoutSeconds": 30,
+        "HealthyThresholdCount": 5,
+        "UnhealthyThresholdCount": 2,
         "Tags": [
           {
             "Key": "Name",

@@ -68,15 +68,14 @@ describe('TapStack CloudFormation Multi-Region DR Template', () => {
       expect(template.Parameters.AlertEmail.Type).toBe('String');
     });
 
-    test('should have SecondaryRegion parameter', () => {
-      expect(template.Parameters.SecondaryRegion).toBeDefined();
-      expect(template.Parameters.SecondaryRegion.Type).toBe('String');
-      expect(template.Parameters.SecondaryRegion.Default).toBe('us-west-2');
+    test('should have SSLCertificateArn parameter', () => {
+      expect(template.Parameters.SSLCertificateArn).toBeDefined();
+      expect(template.Parameters.SSLCertificateArn.Type).toBe('String');
     });
 
-    test('should have exactly 7 parameters', () => {
+    test('should have exactly 6 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(7);
+      expect(parameterCount).toBe(6);
     });
   });
 
@@ -616,9 +615,9 @@ describe('TapStack CloudFormation Multi-Region DR Template', () => {
       expect(resourceCount).toBeGreaterThanOrEqual(30);
     });
 
-    test('should have exactly 7 parameters', () => {
+    test('should have exactly 6 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(7);
+      expect(parameterCount).toBe(6);
     });
 
     test('should have exactly 7 outputs', () => {

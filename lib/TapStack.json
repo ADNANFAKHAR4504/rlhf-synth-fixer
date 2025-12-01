@@ -19,7 +19,8 @@
       "Type": "String",
       "Description": "Master password for Aurora database",
       "NoEcho": true,
-      "MinLength": 8
+      "MinLength": 8,
+      "Default": "ChangeMe123456!"
     },
     "HostedZoneName": {
       "Type": "String",
@@ -30,11 +31,6 @@
       "Type": "String",
       "Description": "Email address for CloudWatch alarm notifications",
       "Default": "alerts@example.com"
-    },
-    "SecondaryRegion": {
-      "Type": "String",
-      "Description": "Secondary DR region",
-      "Default": "us-west-2"
     },
     "SSLCertificateArn": {
       "Type": "String",
@@ -502,10 +498,7 @@
                     "s3:ListBucket"
                   ],
                   "Resource": {
-                    "Fn::GetAtt": [
-                      "TransactionLogsBucket",
-                      "Arn"
-                    ]
+                    "Fn::Sub": "arn:aws:s3:::transaction-logs-primary-${environmentSuffix}-${AWS::AccountId}"
                   }
                 },
                 {
@@ -516,7 +509,7 @@
                     "s3:GetObjectVersionTagging"
                   ],
                   "Resource": {
-                    "Fn::Sub": "${TransactionLogsBucket.Arn}/*"
+                    "Fn::Sub": "arn:aws:s3:::transaction-logs-primary-${environmentSuffix}-${AWS::AccountId}/*"
                   }
                 },
                 {
@@ -649,7 +642,7 @@
         "FunctionName": {
           "Fn::Sub": "payment-processor-${environmentSuffix}"
         },
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [
@@ -794,11 +787,10 @@
         ],
         "HealthCheckEnabled": true,
         "HealthCheckPath": "/health",
-        "HealthCheckProtocol": "HTTPS",
-        "HealthCheckIntervalSeconds": 30,
-        "HealthCheckTimeoutSeconds": 5,
-        "HealthyThresholdCount": 2,
-        "UnhealthyThresholdCount": 3,
+        "HealthCheckIntervalSeconds": 35,
+        "HealthCheckTimeoutSeconds": 30,
+        "HealthyThresholdCount": 5,
+        "UnhealthyThresholdCount": 2,
         "Tags": [
           {
             "Key": "Name",
