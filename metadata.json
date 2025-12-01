@@ -1,0 +1,22 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912948",
+  "team": "synth",
+  "startedAt": "2025-12-01T07:29:38.811190Z",
+  "subtask": "",
+  "subject_labels": [],
+  "aws_services": [
+    "Config",
+    "Lambda",
+    "S3",
+    "EventBridge",
+    "SNS",
+    "CloudWatch",
+    "SSM Parameter Store",
+    "IAM"
+  ],
+  "training_quality": 9
+}
