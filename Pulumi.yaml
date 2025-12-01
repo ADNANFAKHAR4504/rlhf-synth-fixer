@@ -1,0 +1,3 @@
+name: tap-z9h0j5r1
+runtime: python
+description: Multi-AZ data processing infrastructure with Kinesis, ElastiCache Redis, and RDS PostgreSQL
