@@ -28,6 +28,7 @@
     "DBMasterPassword": {
       "Type": "String",
       "Description": "Master password for Aurora PostgreSQL (min 8 characters)",
+      "Default": "TempPassword123!",
       "NoEcho": true,
       "MinLength": 8
     },
