@@ -12,13 +12,6 @@
       "Default": "10.0.0.0/16",
       "Description": "CIDR block for VPC",
       "AllowedPattern": "^(10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}/\\d{1,2})$"
-    },
-    "AvailabilityZoneCount": {
-      "Type": "Number",
-      "Default": 3,
-      "Description": "Number of AZs to use",
-      "AllowedValues": [2, 3],
-      "ConstraintDescription": "Must be 2 or 3"
     }
   },
   "Resources": {
@@ -234,14 +227,6 @@
         "GroupName": { "Fn::Sub": "database-sg-${EnvironmentSuffix}" },
         "GroupDescription": "Security group for RDS Aurora database",
         "VpcId": { "Ref": "VPC" },
-        "SecurityGroupIngress": [
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 3306,
-            "ToPort": 3306,
-            "SourceSecurityGroupId": { "Ref": "LambdaSecurityGroup" }
-          }
-        ],
         "Tags": [
           {
             "Key": "Name",
@@ -262,12 +247,6 @@
             "FromPort": 443,
             "ToPort": 443,
             "CidrIp": "0.0.0.0/0"
-          },
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 3306,
-            "ToPort": 3306,
-            "DestinationSecurityGroupId": { "Ref": "DatabaseSecurityGroup" }
           }
         ],
         "Tags": [
@@ -276,6 +255,26 @@
             "Value": { "Fn::Sub": "lambda-sg-${EnvironmentSuffix}" }
           }
         ]
+      }
+    },
+    "DatabaseSecurityGroupIngress": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": { "Ref": "DatabaseSecurityGroup" },
+        "IpProtocol": "tcp",
+        "FromPort": 3306,
+        "ToPort": 3306,
+        "SourceSecurityGroupId": { "Ref": "LambdaSecurityGroup" }
+      }
+    },
+    "LambdaSecurityGroupEgress": {
+      "Type": "AWS::EC2::SecurityGroupEgress",
+      "Properties": {
+        "GroupId": { "Ref": "LambdaSecurityGroup" },
+        "IpProtocol": "tcp",
+        "FromPort": 3306,
+        "ToPort": 3306,
+        "DestinationSecurityGroupId": { "Ref": "DatabaseSecurityGroup" }
       }
     },
     "S3VPCEndpoint": {

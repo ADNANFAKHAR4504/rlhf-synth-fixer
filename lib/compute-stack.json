@@ -7,10 +7,6 @@
       "Description": "Unique suffix for resource names",
       "AllowedPattern": "^[a-z0-9]{6,12}$"
     },
-    "VpcId": {
-      "Type": "String",
-      "Description": "VPC ID from Network Stack"
-    },
     "PrivateSubnetIds": {
       "Type": "CommaDelimitedList",
       "Description": "Comma-separated list of private subnet IDs"
