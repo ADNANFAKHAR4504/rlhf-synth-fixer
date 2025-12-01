@@ -1,0 +1,89 @@
+# CI/CD Pipeline Configuration
+# This file defines the CI/CD pipeline stages and configuration for the infrastructure deployment
+
+version: 1.0
+
+pipeline:
+  name: cicd-pipeline-integration
+  description: Automated CI/CD pipeline for containerized application deployment
+
+stages:
+  - name: Source
+    type: source
+    provider: S3
+    configuration:
+      bucket_key: source.zip
+      poll_for_changes: true
+
+  - name: Build
+    type: build
+    provider: CodeBuild
+    configuration:
+      project: docker-build
+      compute_type: BUILD_GENERAL1_SMALL
+      image: aws/codebuild/standard:7.0
+      privileged_mode: true
+      environment_variables:
+        - name: AWS_DEFAULT_REGION
+          type: PLAINTEXT
+        - name: AWS_ACCOUNT_ID
+          type: PLAINTEXT
+        - name: ECR_REPOSITORY_URI
+          type: PLAINTEXT
+        - name: IMAGE_TAG
+          value: latest
+          type: PLAINTEXT
+
+  - name: Approval
+    type: approval
+    provider: Manual
+    configuration:
+      custom_data: Please review the build artifacts before Pulumi deployment
+
+  - name: Deploy
+    type: build
+    provider: CodeBuild
+    configuration:
+      project: pulumi-deploy
+      compute_type: BUILD_GENERAL1_SMALL
+      image: aws/codebuild/standard:7.0
+      environment_variables:
+        - name: AWS_DEFAULT_REGION
+          type: PLAINTEXT
+        - name: PULUMI_ACCESS_TOKEN
+          type: PLAINTEXT
+
+artifacts:
+  type: S3
+  encryption: aws:kms
+  versioning: true
+  lifecycle:
+    expiration_days: 30
+
+container_registry:
+  type: ECR
+  scan_on_push: true
+  image_tag_mutability: MUTABLE
+  lifecycle:
+    max_image_count: 10
+
+notifications:
+  type: SNS
+  events:
+    - pipeline_execution_failed
+    - pipeline_execution_succeeded
+  format: json
+
+iam:
+  least_privilege: true
+  no_wildcard_permissions: true
+  roles:
+    - codebuild_docker_build
+    - codebuild_pulumi_deploy
+    - codepipeline_service
+
+tags:
+  Environment: ${environmentSuffix}
+  Project: cicd-pipeline
+  ManagedBy: pulumi
+  AutomationType: CI/CD
