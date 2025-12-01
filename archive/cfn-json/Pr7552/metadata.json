@@ -19,6 +19,11 @@
     "EC2"
   ],
   "training_quality": 8,
-  "author": "mayanksethi-turing",
-  "reviewer": "balasl342"
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
