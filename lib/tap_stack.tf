@@ -711,7 +711,6 @@ resource "aws_api_gateway_deployment" "payment_deployment" {
   ]
 
   rest_api_id = aws_api_gateway_rest_api.payment_api.id
-  stage_name  = var.environment_suffix
 
   lifecycle {
     create_before_destroy = true
