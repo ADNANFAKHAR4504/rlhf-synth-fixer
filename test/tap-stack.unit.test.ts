@@ -61,9 +61,9 @@ describe('TapStack CloudFormation Multi-Region DR Template', () => {
       expect(template.Parameters.AlertEmail.Type).toBe('String');
     });
 
-    test('should have exactly 4 parameters', () => {
+    test('should have exactly 5 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(4);
+      expect(parameterCount).toBe(5);
     });
   });
 
@@ -584,9 +584,9 @@ describe('TapStack CloudFormation Multi-Region DR Template', () => {
       expect(resourceCount).toBeGreaterThanOrEqual(25);
     });
 
-    test('should have exactly 4 parameters', () => {
+    test('should have exactly 5 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(4);
+      expect(parameterCount).toBe(5);
     });
 
     test('should have exactly 7 outputs', () => {

@@ -24,6 +24,13 @@
       "Type": "String",
       "Description": "Email address for CloudWatch alarm notifications",
       "Default": "alerts@example.com"
+    },
+    "DBMasterPassword": {
+      "Type": "String",
+      "Description": "Master password for Aurora database",
+      "NoEcho": true,
+      "MinLength": 8,
+      "Default": "ChangeMe123!"
     }
   },
   "Resources": {
@@ -316,7 +323,9 @@
         "MasterUsername": {
           "Ref": "DBMasterUsername"
         },
-        "ManageMasterUserPassword": true,
+        "MasterUserPassword": {
+          "Ref": "DBMasterPassword"
+        },
         "DBSubnetGroupName": {
           "Ref": "DBSubnetGroup"
         },
