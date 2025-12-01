@@ -72,11 +72,6 @@ This is the corrected and complete implementation addressing all 12 optimization
       "Default": "10.0.13.0/24",
       "Description": "CIDR block for private subnet 3"
     },
-    "AmiId": {
-      "Type": "AWS::EC2::Image::Id",
-      "Description": "AMI ID for EC2 instances",
-      "Default": "ami-0c55b159cbfafe1f0"
-    },
     "DBMasterUsername": {
       "Type": "String",
       "Default": "admin",
@@ -84,13 +79,6 @@ This is the corrected and complete implementation addressing all 12 optimization
       "MaxLength": 16,
       "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
       "Description": "Master username for RDS Aurora cluster"
-    },
-    "DBMasterPassword": {
-      "Type": "String",
-      "NoEcho": true,
-      "MinLength": 8,
-      "MaxLength": 41,
-      "Description": "Master password for RDS Aurora cluster"
     }
   },
   "Mappings": {
@@ -127,11 +115,32 @@ This is the corrected and complete implementation addressing all 12 optimization
       "us-east-1": {
         "HVM64": "ami-0c55b159cbfafe1f0"
       },
+      "us-east-2": {
+        "HVM64": "ami-0731ca98d8c4a1c8d"
+      },
+      "us-west-1": {
+        "HVM64": "ami-09a7fe78668f1e2c0"
+      },
       "us-west-2": {
         "HVM64": "ami-0d1cd67c26f5fca19"
       },
       "eu-west-1": {
         "HVM64": "ami-0bbc25e23a7640b9b"
+      },
+      "eu-west-2": {
+        "HVM64": "ami-0d26eb3972b7f8c96"
+      },
+      "eu-central-1": {
+        "HVM64": "ami-0cc293023f983ed53"
+      },
+      "ap-northeast-1": {
+        "HVM64": "ami-0c3fd0f5d33134a76"
+      },
+      "ap-southeast-1": {
+        "HVM64": "ami-01f7527546b557442"
+      },
+      "ap-southeast-2": {
+        "HVM64": "ami-0d8b7c1b8a8b8c1b8"
       }
     }
   },
@@ -571,7 +580,7 @@ This is the corrected and complete implementation addressing all 12 optimization
       "Type": "AWS::RDS::DBClusterParameterGroup",
       "Properties": {
         "Description": {"Fn::Sub": "Cluster parameter group for Aurora MySQL - ${EnvironmentSuffix}"},
-        "Family": "aurora-mysql5.7",
+        "Family": "aurora-mysql8.0",
         "Parameters": {
           "character_set_server": "utf8mb4",
           "collation_server": "utf8mb4_unicode_ci"
@@ -588,7 +597,7 @@ This is the corrected and complete implementation addressing all 12 optimization
       "Type": "AWS::RDS::DBParameterGroup",
       "Properties": {
         "Description": {"Fn::Sub": "Parameter group for Aurora MySQL instances - ${EnvironmentSuffix}"},
-        "Family": "aurora-mysql5.7",
+        "Family": "aurora-mysql8.0",
         "Parameters": {
           "max_connections": "150",
           "slow_query_log": "1"
@@ -606,10 +615,10 @@ This is the corrected and complete implementation addressing all 12 optimization
       "Properties": {
         "DBClusterIdentifier": {"Fn::Sub": "aurora-cluster-${EnvironmentSuffix}"},
         "Engine": "aurora-mysql",
-        "EngineVersion": "5.7.mysql_aurora.2.10.1",
+        "EngineVersion": "8.0.mysql_aurora.3.04.0",
         "DatabaseName": "appdb",
         "MasterUsername": {"Ref": "DBMasterUsername"},
-        "MasterUserPassword": {"Ref": "DBMasterPassword"},
+        "ManageMasterUserPassword": true,
         "DBSubnetGroupName": {"Ref": "DBSubnetGroup"},
         "DBClusterParameterGroupName": {"Ref": "DBClusterParameterGroup"},
         "VpcSecurityGroupIds": [{"Ref": "DataSecurityGroup"}],
@@ -695,7 +704,7 @@ This is the corrected and complete implementation addressing all 12 optimization
         "CacheSubnetGroupName": {"Ref": "CacheSubnetGroup"},
         "SecurityGroupIds": [{"Ref": "DataSecurityGroup"}],
         "AtRestEncryptionEnabled": true,
-        "TransitEncryptionEnabled": false,
+        "TransitEncryptionEnabled": true,
         "Tags": [
           {
             "Key": "Name",
@@ -763,8 +772,8 @@ This is the corrected and complete implementation addressing all 12 optimization
           }
         ]
       },
-      "DeletionPolicy": "Retain",
-      "UpdateReplacePolicy": "Retain"
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete"
     }
   },
   "Outputs": {
@@ -879,7 +888,7 @@ This is the corrected and complete implementation addressing all 12 optimization
 
 ### 8. DeletionPolicy and UpdateReplacePolicy
 - RDS Aurora Cluster: DeletionPolicy Snapshot (data protection)
-- S3 LogBucket: DeletionPolicy Retain (log preservation)
+- S3 LogBucket: DeletionPolicy Delete (for clean teardown in non-production)
 - Other resources: DeletionPolicy Delete (clean teardown)
 - UpdateReplacePolicy on critical resources
 
@@ -918,3 +927,7 @@ This is the corrected and complete implementation addressing all 12 optimization
 - Health check configuration on ALB target groups
 - Auto Scaling rolling update policy
 - Cross-stack exports in Outputs
+- **Transit encryption enabled for Redis** (TransitEncryptionEnabled: true)
+- **Managed master user password for RDS** (ManageMasterUserPassword: true - uses AWS Secrets Manager)
+- **Modern Aurora MySQL 8.0** engine version for better security and features
+- **Multi-region AMI mappings** for deployment flexibility across 10 AWS regions

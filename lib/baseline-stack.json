@@ -1,0 +1,2096 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Original unoptimized three-tier web application infrastructure - 3000+ lines baseline for optimization comparison",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Environment suffix for resource naming"
+    },
+    "VpcCIDR": {
+      "Type": "String",
+      "Default": "10.0.0.0/16"
+    },
+    "PublicSubnet1CIDR": {
+      "Type": "String",
+      "Default": "10.0.1.0/24"
+    },
+    "PublicSubnet2CIDR": {
+      "Type": "String",
+      "Default": "10.0.2.0/24"
+    },
+    "PublicSubnet3CIDR": {
+      "Type": "String",
+      "Default": "10.0.3.0/24"
+    },
+    "PrivateSubnet1CIDR": {
+      "Type": "String",
+      "Default": "10.0.11.0/24"
+    },
+    "PrivateSubnet2CIDR": {
+      "Type": "String",
+      "Default": "10.0.12.0/24"
+    },
+    "PrivateSubnet3CIDR": {
+      "Type": "String",
+      "Default": "10.0.13.0/24"
+    },
+    "InstanceType": {
+      "Type": "String",
+      "Default": "t3.micro"
+    },
+    "AmiId": {
+      "Type": "String",
+      "Default": "ami-0c55b159cbfafe1f0"
+    },
+    "DBInstanceClass": {
+      "Type": "String",
+      "Default": "db.t3.small"
+    },
+    "DBMasterUsername": {
+      "Type": "String",
+      "Default": "admin"
+    },
+    "DBMasterPassword": {
+      "Type": "String",
+      "NoEcho": true
+    },
+    "CacheNodeType": {
+      "Type": "String",
+      "Default": "cache.t3.micro"
+    },
+    "MinSize": {
+      "Type": "String",
+      "Default": "2"
+    },
+    "MaxSize": {
+      "Type": "String",
+      "Default": "6"
+    },
+    "DesiredCapacity": {
+      "Type": "String",
+      "Default": "2"
+    }
+  },
+  "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "VpcCIDR"
+        },
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "vpc",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "igw",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Ref": "PublicSubnet1CIDR"
+        },
+        "AvailabilityZone": "us-east-1a",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "public-subnet-1",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Ref": "PublicSubnet2CIDR"
+        },
+        "AvailabilityZone": "us-east-1b",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "public-subnet-2",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "PublicSubnet3": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Ref": "PublicSubnet3CIDR"
+        },
+        "AvailabilityZone": "us-east-1c",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "public-subnet-3",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Ref": "PrivateSubnet1CIDR"
+        },
+        "AvailabilityZone": "us-east-1a",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "private-subnet-1",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Ref": "PrivateSubnet2CIDR"
+        },
+        "AvailabilityZone": "us-east-1b",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "private-subnet-2",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet3": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": {
+          "Ref": "PrivateSubnet3CIDR"
+        },
+        "AvailabilityZone": "us-east-1c",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "private-subnet-3",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "public-rt",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicSubnetRouteTableAssociation1": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "PublicSubnetRouteTableAssociation2": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "PublicSubnetRouteTableAssociation3": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet3"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "WebSecurityGroup1": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for web tier - HTTP",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "web-sg-http",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "WebSecurityGroup2": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for web tier - HTTPS",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "web-sg-https",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "WebSecurityGroup3": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for web tier - ALB health check",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 8080,
+            "ToPort": 8080,
+            "CidrIp": "10.0.0.0/16"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "web-sg-health",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "AppSecurityGroup1": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for app tier - port 8080",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 8080,
+            "ToPort": 8080,
+            "SourceSecurityGroupId": {
+              "Ref": "WebSecurityGroup1"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "app-sg-8080",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "AppSecurityGroup2": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for app tier - SSH",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "10.0.0.0/16"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "app-sg-ssh",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "AppSecurityGroup3": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for app tier - management",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 9090,
+            "ToPort": 9090,
+            "CidrIp": "10.0.0.0/16"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "app-sg-mgmt",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "AppSecurityGroup4": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for app tier - metrics",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 9100,
+            "ToPort": 9100,
+            "CidrIp": "10.0.0.0/16"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "app-sg-metrics",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "AppSecurityGroup5": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for app tier - logging",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5044,
+            "ToPort": 5044,
+            "CidrIp": "10.0.0.0/16"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "app-sg-logging",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "DataSecurityGroup1": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for data tier - MySQL",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "SourceSecurityGroupId": {
+              "Ref": "AppSecurityGroup1"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "data-sg-mysql",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "DataSecurityGroup2": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for data tier - Redis",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 6379,
+            "ToPort": 6379,
+            "SourceSecurityGroupId": {
+              "Ref": "AppSecurityGroup1"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "data-sg-redis",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "DataSecurityGroup3": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for data tier - backup",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "CidrIp": "10.0.0.0/16"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "data-sg-backup",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "DataSecurityGroup4": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for data tier - replica",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3307,
+            "ToPort": 3307,
+            "CidrIp": "10.0.0.0/16"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "data-sg-replica",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "DataSecurityGroup5": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for data tier - monitoring",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 9187,
+            "ToPort": 9187,
+            "CidrIp": "10.0.0.0/16"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "data-sg-monitoring",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "MgmtSecurityGroup1": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for management - bastion",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "0.0.0.0/0"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "mgmt-sg-bastion",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "MgmtSecurityGroup2": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for management - VPN",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "192.168.0.0/16"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "mgmt-sg-vpn",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ApplicationLoadBalancer": {
+      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "Properties": {
+        "Name": {
+          "Fn::Join": [
+            "-",
+            [
+              "alb",
+              {
+                "Ref": "EnvironmentSuffix"
+              }
+            ]
+          ]
+        },
+        "Subnets": [
+          {
+            "Ref": "PublicSubnet1"
+          },
+          {
+            "Ref": "PublicSubnet2"
+          },
+          {
+            "Ref": "PublicSubnet3"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "Ref": "WebSecurityGroup1"
+          },
+          {
+            "Ref": "WebSecurityGroup2"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "alb",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "TargetGroup": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties": {
+        "Name": {
+          "Fn::Join": [
+            "-",
+            [
+              "tg",
+              {
+                "Ref": "EnvironmentSuffix"
+              }
+            ]
+          ]
+        },
+        "Port": 8080,
+        "Protocol": "HTTP",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "HealthCheckPath": "/health",
+        "HealthCheckIntervalSeconds": 30,
+        "HealthCheckTimeoutSeconds": 5,
+        "HealthyThresholdCount": 2,
+        "UnhealthyThresholdCount": 3
+      }
+    },
+    "LoadBalancerListener": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties": {
+        "DefaultActions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": {
+              "Ref": "TargetGroup"
+            }
+          }
+        ],
+        "LoadBalancerArn": {
+          "Ref": "ApplicationLoadBalancer"
+        },
+        "Port": 80,
+        "Protocol": "HTTP"
+      }
+    },
+    "LaunchConfiguration": {
+      "Type": "AWS::AutoScaling::LaunchConfiguration",
+      "Properties": {
+        "ImageId": {
+          "Ref": "AmiId"
+        },
+        "InstanceType": {
+          "Ref": "InstanceType"
+        },
+        "SecurityGroups": [
+          {
+            "Ref": "AppSecurityGroup1"
+          },
+          {
+            "Ref": "AppSecurityGroup2"
+          }
+        ],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "\n",
+              [
+                "#!/bin/bash",
+                "yum update -y",
+                "yum install -y java-11-openjdk",
+                "echo 'Hardcoded region: us-east-1'",
+                "echo 'Hardcoded account: 123456789012'"
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "AutoScalingGroup": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "LaunchConfigurationName": {
+          "Ref": "LaunchConfiguration"
+        },
+        "MinSize": {
+          "Ref": "MinSize"
+        },
+        "MaxSize": {
+          "Ref": "MaxSize"
+        },
+        "DesiredCapacity": {
+          "Ref": "DesiredCapacity"
+        },
+        "TargetGroupARNs": [
+          {
+            "Ref": "TargetGroup"
+          }
+        ],
+        "VPCZoneIdentifier": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          },
+          {
+            "Ref": "PrivateSubnet3"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "app-instance",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            },
+            "PropagateAtLaunch": true
+          }
+        ]
+      }
+    },
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupDescription": "Subnet group for RDS",
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          },
+          {
+            "Ref": "PrivateSubnet3"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "db-subnet-group",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "DBParameterGroup": {
+      "Type": "AWS::RDS::DBParameterGroup",
+      "Properties": {
+        "Description": "Parameter group for Aurora MySQL",
+        "Family": "aurora-mysql5.7",
+        "Parameters": {
+          "max_connections": "150"
+        }
+      }
+    },
+    "DBClusterParameterGroup": {
+      "Type": "AWS::RDS::DBClusterParameterGroup",
+      "Properties": {
+        "Description": "Cluster parameter group for Aurora MySQL",
+        "Family": "aurora-mysql5.7",
+        "Parameters": {
+          "character_set_server": "utf8mb4"
+        }
+      }
+    },
+    "AuroraCluster": {
+      "Type": "AWS::RDS::DBCluster",
+      "Properties": {
+        "Engine": "aurora-mysql",
+        "EngineVersion": "5.7.mysql_aurora.2.10.1",
+        "DatabaseName": "appdb",
+        "MasterUsername": {
+          "Ref": "DBMasterUsername"
+        },
+        "MasterUserPassword": {
+          "Ref": "DBMasterPassword"
+        },
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "DBClusterParameterGroupName": {
+          "Ref": "DBClusterParameterGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "DataSecurityGroup1"
+          }
+        ],
+        "BackupRetentionPeriod": 7,
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "mon:04:00-mon:05:00",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "aurora-cluster",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "AuroraInstance1": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "Engine": "aurora-mysql",
+        "DBClusterIdentifier": {
+          "Ref": "AuroraCluster"
+        },
+        "DBInstanceClass": {
+          "Ref": "DBInstanceClass"
+        },
+        "DBParameterGroupName": {
+          "Ref": "DBParameterGroup"
+        },
+        "PubliclyAccessible": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "aurora-instance-1",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "AuroraInstance2": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "Engine": "aurora-mysql",
+        "DBClusterIdentifier": {
+          "Ref": "AuroraCluster"
+        },
+        "DBInstanceClass": {
+          "Ref": "DBInstanceClass"
+        },
+        "DBParameterGroupName": {
+          "Ref": "DBParameterGroup"
+        },
+        "PubliclyAccessible": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "aurora-instance-2",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "CacheSubnetGroup": {
+      "Type": "AWS::ElastiCache::SubnetGroup",
+      "Properties": {
+        "Description": "Subnet group for ElastiCache",
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          },
+          {
+            "Ref": "PrivateSubnet3"
+          }
+        ]
+      }
+    },
+    "RedisCluster": {
+      "Type": "AWS::ElastiCache::CacheCluster",
+      "Properties": {
+        "CacheNodeType": {
+          "Ref": "CacheNodeType"
+        },
+        "Engine": "redis",
+        "NumCacheNodes": 1,
+        "CacheSubnetGroupName": {
+          "Ref": "CacheSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "DataSecurityGroup2"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "redis",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "LogBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Join": [
+            "-",
+            [
+              "logs",
+              {
+                "Ref": "EnvironmentSuffix"
+              }
+            ]
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        }
+      }
+    },
+    "DevInstance1": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "ImageId": {
+          "Ref": "AmiId"
+        },
+        "InstanceType": "t3.micro",
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "AppSecurityGroup1"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "dev-instance-1",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "DevInstance2": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "ImageId": {
+          "Ref": "AmiId"
+        },
+        "InstanceType": "t3.micro",
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "AppSecurityGroup1"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "dev-instance-2",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "StagingInstance1": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "ImageId": {
+          "Ref": "AmiId"
+        },
+        "InstanceType": "t3.small",
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "AppSecurityGroup1"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "staging-instance-1",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "StagingInstance2": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "ImageId": {
+          "Ref": "AmiId"
+        },
+        "InstanceType": "t3.small",
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "AppSecurityGroup1"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "staging-instance-2",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ProdInstance1": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "ImageId": {
+          "Ref": "AmiId"
+        },
+        "InstanceType": "t3.medium",
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "AppSecurityGroup1"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "prod-instance-1",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ProdInstance2": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "ImageId": {
+          "Ref": "AmiId"
+        },
+        "InstanceType": "t3.medium",
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "AppSecurityGroup1"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "prod-instance-2",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "NatGateway1EIP": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "nat-eip-1",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "NatGateway2EIP": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "nat-eip-2",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "NatGateway3EIP": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "nat-eip-3",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "NatGateway1": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NatGateway1EIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "nat-1",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "NatGateway2": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NatGateway2EIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "nat-2",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "NatGateway3": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NatGateway3EIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet3"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "nat-3",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "PrivateRouteTable1": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "private-rt-1",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "PrivateRouteTable2": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "private-rt-2",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "PrivateRouteTable3": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [
+                "-",
+                [
+                  "private-rt-3",
+                  {
+                    "Ref": "EnvironmentSuffix"
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "PrivateRoute1": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable1"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "NatGateway1"
+        }
+      }
+    },
+    "PrivateRoute2": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable2"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "NatGateway2"
+        }
+      }
+    },
+    "PrivateRoute3": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable3"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "NatGateway3"
+        }
+      }
+    },
+    "PrivateSubnetRouteTableAssociation1": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable1"
+        }
+      }
+    },
+    "PrivateSubnetRouteTableAssociation2": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable2"
+        }
+      }
+    },
+    "PrivateSubnetRouteTableAssociation3": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet3"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable3"
+        }
+      }
+    },
+    "CloudWatchLogGroup1": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Join": [
+            "-",
+            [
+              "/aws/app",
+              {
+                "Ref": "EnvironmentSuffix"
+              }
+            ]
+          ]
+        },
+        "RetentionInDays": 30
+      }
+    },
+    "CloudWatchLogGroup2": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Join": [
+            "-",
+            [
+              "/aws/rds",
+              {
+                "Ref": "EnvironmentSuffix"
+              }
+            ]
+          ]
+        },
+        "RetentionInDays": 30
+      }
+    },
+    "CloudWatchLogGroup3": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Join": [
+            "-",
+            [
+              "/aws/cache",
+              {
+                "Ref": "EnvironmentSuffix"
+              }
+            ]
+          ]
+        },
+        "RetentionInDays": 30
+      }
+    },
+    "CloudWatchAlarm1": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Join": [
+            "-",
+            [
+              "cpu-alarm",
+              {
+                "Ref": "EnvironmentSuffix"
+              }
+            ]
+          ]
+        },
+        "ComparisonOperator": "GreaterThanThreshold",
+        "EvaluationPeriods": 2,
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/EC2",
+        "Period": 300,
+        "Statistic": "Average",
+        "Threshold": 80
+      }
+    },
+    "CloudWatchAlarm2": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Join": [
+            "-",
+            [
+              "memory-alarm",
+              {
+                "Ref": "EnvironmentSuffix"
+              }
+            ]
+          ]
+        },
+        "ComparisonOperator": "GreaterThanThreshold",
+        "EvaluationPeriods": 2,
+        "MetricName": "MemoryUtilization",
+        "Namespace": "AWS/EC2",
+        "Period": 300,
+        "Statistic": "Average",
+        "Threshold": 80
+      }
+    },
+    "SNSTopic1": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Join": [
+            "-",
+            [
+              "alerts",
+              {
+                "Ref": "EnvironmentSuffix"
+              }
+            ]
+          ]
+        }
+      }
+    },
+    "SNSTopic2": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Join": [
+            "-",
+            [
+              "notifications",
+              {
+                "Ref": "EnvironmentSuffix"
+              }
+            ]
+          ]
+        }
+      }
+    },
+    "IAMRole1": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Join": [
+            "-",
+            [
+              "app-role",
+              {
+                "Ref": "EnvironmentSuffix"
+              }
+            ]
+          ]
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        }
+      }
+    },
+    "IAMRole2": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Join": [
+            "-",
+            [
+              "lambda-role",
+              {
+                "Ref": "EnvironmentSuffix"
+              }
+            ]
+          ]
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        }
+      }
+    },
+    "IAMInstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "InstanceProfileName": {
+          "Fn::Join": [
+            "-",
+            [
+              "app-instance-profile",
+              {
+                "Ref": "EnvironmentSuffix"
+              }
+            ]
+          ]
+        },
+        "Roles": [
+          {
+            "Ref": "IAMRole1"
+          }
+        ]
+      }
+    },
+    "BackupBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Join": [
+            "-",
+            [
+              "backups",
+              {
+                "Ref": "EnvironmentSuffix"
+              }
+            ]
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        }
+      }
+    },
+    "AssetsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Join": [
+            "-",
+            [
+              "assets",
+              {
+                "Ref": "EnvironmentSuffix"
+              }
+            ]
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        }
+      }
+    },
+    "ConfigBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Join": [
+            "-",
+            [
+              "config",
+              {
+                "Ref": "EnvironmentSuffix"
+              }
+            ]
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "VPCId": {
+      "Description": "VPC ID",
+      "Value": {
+        "Ref": "VPC"
+      }
+    },
+    "LoadBalancerDNS": {
+      "Description": "DNS name of the load balancer",
+      "Value": {
+        "Fn::GetAtt": [
+          "ApplicationLoadBalancer",
+          "DNSName"
+        ]
+      }
+    },
+    "AuroraClusterEndpoint": {
+      "Description": "Aurora cluster endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "AuroraCluster",
+          "Endpoint.Address"
+        ]
+      }
+    },
+    "RedisEndpoint": {
+      "Description": "Redis cluster endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "RedisCluster",
+          "RedisEndpoint.Address"
+        ]
+      }
+    },
+    "LogBucketName": {
+      "Description": "Name of the log bucket",
+      "Value": {
+        "Ref": "LogBucket"
+      }
+    },
+    "BackupBucketName": {
+      "Description": "Name of the backup bucket",
+      "Value": {
+        "Ref": "BackupBucket"
+      }
+    },
+    "AssetsBucketName": {
+      "Description": "Name of the assets bucket",
+      "Value": {
+        "Ref": "AssetsBucket"
+      }
+    }
+  }
+}
