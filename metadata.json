@@ -10,7 +10,6 @@
   "subject_labels": [
     "CI/CD Pipeline Integration"
   ],
-  "training_quality": 8,
   "dockerS3Location": "",
   "coverage": {
     "lines": 100,
@@ -32,5 +31,6 @@
     "NAT Gateway",
     "Internet Gateway"
   ],
-  "author": "claude-code"
+  "training_quality": 10,
+  "author": "mayanksethi-turing"
 }
