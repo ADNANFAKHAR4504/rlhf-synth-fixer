@@ -158,8 +158,8 @@ function discoverEnvironmentSuffix(outputs: TerraformOutputs): string {
     return process.env.ENVIRONMENT_SUFFIX;
   }
   
-  // Default fallback
-  return 'dev';
+  // Default fallback (matches variables.tf default)
+  return 'default';
 }
 
 /**
@@ -730,6 +730,10 @@ describe('Terraform Webhook Infrastructure - Integration Tests', () => {
       // deployment used a different suffix than the current ENVIRONMENT_SUFFIX env var
       const actualSuffix = discoverEnvironmentSuffix(outputs);
       
+      // Ensure we extracted a valid suffix
+      expect(actualSuffix).toBeDefined();
+      expect(actualSuffix.length).toBeGreaterThan(0);
+      
       // Validate that all resources use the same suffix pattern
       expect(outputs.lambda_function_name).toContain(actualSuffix);
       expect(outputs.dynamodb_table_name).toContain(actualSuffix);
@@ -739,6 +743,23 @@ describe('Terraform Webhook Infrastructure - Integration Tests', () => {
       expect(outputs.lambda_function_name).toMatch(/^webhook-processor-.+$/);
       expect(outputs.dynamodb_table_name).toMatch(/^webhooks-.+$/);
       expect(outputs.cloudwatch_dashboard_name).toMatch(/^webhook-monitoring-.+$/);
+      
+      // Warn if suffix doesn't match environment variable (but don't fail the test)
+      // This helps identify cases where deployment script didn't pass the variable correctly
+      if (process.env.ENVIRONMENT_SUFFIX && actualSuffix !== process.env.ENVIRONMENT_SUFFIX) {
+        console.warn(
+          `⚠️ Deployed resources use suffix "${actualSuffix}" but ENVIRONMENT_SUFFIX is "${process.env.ENVIRONMENT_SUFFIX}". ` +
+          `This may indicate the deployment script didn't pass the environment_suffix variable to Terraform.`
+        );
+      }
+      
+      // Warn if default "default" suffix is used when environment variable is set (likely misconfiguration)
+      if (actualSuffix === 'default' && process.env.ENVIRONMENT_SUFFIX && process.env.ENVIRONMENT_SUFFIX !== 'default') {
+        console.warn(
+          `⚠️ Resources were deployed with default suffix "default" instead of "${process.env.ENVIRONMENT_SUFFIX}". ` +
+          `The deployment script should pass -var="environment_suffix=${process.env.ENVIRONMENT_SUFFIX}" to Terraform.`
+        );
+      }
     });
   });
 });

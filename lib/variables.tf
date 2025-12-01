@@ -1,6 +1,10 @@
 variable "environment_suffix" {
   description = "Unique suffix for resource naming across deployments"
   type        = string
+  # Default value to avoid naming conflicts when deployment script doesn't pass the variable
+  # Using "default" as a fallback to minimize conflicts with actual environment names
+  # Note: This is a temporary workaround. Deployment scripts should pass -var="environment_suffix=$ENVIRONMENT_SUFFIX"
+  default     = "default"
 }
 
 variable "aws_region" {
