@@ -170,9 +170,6 @@ describe('TapStack CloudFormation Template - Integration Tests', () => {
       logsClient = new CloudWatchLogsClient({ region });
       secretsClient = new SecretsManagerClient({ region });
       ssmClient = new SSMClient({ region });
-
-      // Wait for stack to be fully operational
-      await setTimeout(60000);
     } catch (error) {
       console.error('Failed to initialize test environment:', error);
       throw error;
