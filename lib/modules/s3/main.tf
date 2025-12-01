@@ -30,7 +30,7 @@ variable "common_tags" {
 
 # S3 Bucket
 resource "aws_s3_bucket" "main" {
-  bucket = "${var.project_name}-${var.region}-data-${var.environment}"
+  bucket = "${var.project_name}-${var.region}-data-log-${var.environment}"
 
   tags = var.common_tags
 }
