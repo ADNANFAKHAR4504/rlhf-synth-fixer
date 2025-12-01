@@ -133,24 +133,29 @@ function parseTerraformOutputs(): TerraformOutputs {
 
 /**
  * Discover environment suffix dynamically
+ * Priority: 1) Extract from deployed resource names (most reliable)
+ *           2) From outputs
+ *           3) From environment variable
+ *           4) Default fallback
  */
 function discoverEnvironmentSuffix(outputs: TerraformOutputs): string {
-  // Try from outputs
-  if (outputs.environment_suffix) {
-    return outputs.environment_suffix;
-  }
-  
-  // Try from environment variable
-  if (process.env.ENVIRONMENT_SUFFIX) {
-    return process.env.ENVIRONMENT_SUFFIX;
-  }
-  
-  // Extract from resource names (e.g., "webhook-processor-synth101912391" -> "synth101912391")
+  // First, try to extract from actual deployed resource names
+  // This is the most reliable since it reflects what was actually deployed
   if (outputs.lambda_function_name) {
     const match = outputs.lambda_function_name.match(/webhook-processor-(.+)$/);
     if (match) {
       return match[1];
     }
+  }
+  
+  // Try from outputs
+  if (outputs.environment_suffix) {
+    return outputs.environment_suffix;
+  }
+  
+  // Try from environment variable (lowest priority since it may not match deployed resources)
+  if (process.env.ENVIRONMENT_SUFFIX) {
+    return process.env.ENVIRONMENT_SUFFIX;
   }
   
   // Default fallback
