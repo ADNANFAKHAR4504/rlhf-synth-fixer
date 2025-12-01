@@ -27,7 +27,6 @@ Metadata:
         Parameters:
           - DBInstanceClass
           - DBUsername
-          - DBPassword
           - DBAllocatedStorage
           - DBBackupRetentionPeriod
       - Label:
@@ -151,16 +150,6 @@ Parameters:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     Description: Database master username
     ConstraintDescription: Must begin with a letter and contain only alphanumeric characters
-
-  DBPassword:
-    Type: String
-    Default: ChangeMe123!@$
-    NoEcho: true
-    MinLength: 12
-    MaxLength: 41
-    AllowedPattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$'
-    Description: Database master password (min 12 chars, must include uppercase, lowercase, number, and special character)
-    ConstraintDescription: Must be at least 12 characters and include uppercase, lowercase, number, and special character
 
   DBAllocatedStorage:
     Type: Number
@@ -898,7 +887,7 @@ Resources:
                 Action:
                   - 'secretsmanager:GetSecretValue'
                 Resource:
-                  - !Ref DBPasswordSecret
+                  - !GetAtt DatabaseInstance.MasterUserSecret.SecretArn
         - PolicyName: webapp-prod-rds-policy
           PolicyDocument:
             Version: '2012-10-17'
@@ -926,21 +915,6 @@ Resources:
   # SECRETS MANAGEMENT
   # ========================================
 
-  DBPasswordSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: webapp-prod-db-password
-      Description: Database master password for webapp production
-      SecretString: !Sub |
-        {
-          "username": "${DBUsername}",
-          "password": "${DBPassword}"
-        }
-      Tags:
-        - Key: Name
-          Value: webapp-prod-db-secret
-        - Key: iac-rlhf-amazon
-          Value: 'true'
 
   # ========================================
   # S3 BUCKETS
@@ -1106,7 +1080,7 @@ Resources:
       StorageEncrypted: true
       Iops: 3000  # gp3 baseline
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: '{{resolve:secretsmanager:webapp-prod-db-password:SecretString:password}}'
+      ManageMasterUserPassword: true
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
@@ -1395,11 +1369,20 @@ Resources:
               --overwrite \
               --region ${AWS::Region} || true
             
-            # Get database credentials from Secrets Manager
-            DB_SECRET=$(aws secretsmanager get-secret-value \
-              --secret-id ${DBPasswordSecret} \
+            # Get database credentials from Secrets Manager (RDS-managed secret)
+            # Wait for RDS instance to be available and get the secret ARN
+            SECRET_ARN=$(aws rds describe-db-instances \
+              --db-instance-identifier webapp-prod-database \
               --region ${AWS::Region} \
-              --query 'SecretString' --output text)
+              --query 'DBInstances[0].MasterUserSecret.SecretArn' \
+              --output text 2>/dev/null || echo '')
+            
+            if [ -n "$SECRET_ARN" ]; then
+              DB_SECRET=$(aws secretsmanager get-secret-value \
+                --secret-id "$SECRET_ARN" \
+                --region ${AWS::Region} \
+                --query 'SecretString' --output text)
+            fi
             
             # Store connection info securely
             aws ssm put-parameter \
@@ -1680,8 +1663,8 @@ Outputs:
       Name: !Sub '${AWS::StackName}-db-port'
 
   DatabaseSecretArn:
-    Description: ARN of the database credentials secret
-    Value: !Ref DBPasswordSecret
+    Description: ARN of the database credentials secret (RDS-managed)
+    Value: !GetAtt DatabaseInstance.MasterUserSecret.SecretArn
     Export:
       Name: !Sub '${AWS::StackName}-db-secret-arn'
 
