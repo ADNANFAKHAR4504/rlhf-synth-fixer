@@ -247,8 +247,8 @@ resource "aws_dynamodb_table" "transactions" {
   }
 
   server_side_encryption {
-    enabled    = true
-    kms_key_id = aws_kms_key.payment_key.arn
+    enabled     = true
+    kms_key_id  = aws_kms_key.payment_key.arn
   }
 
   point_in_time_recovery {
@@ -294,8 +294,8 @@ resource "aws_dynamodb_table" "audit_logs" {
   }
 
   server_side_encryption {
-    enabled    = true
-    kms_key_id = aws_kms_key.payment_key.arn
+    enabled     = true
+    kms_key_id  = aws_kms_key.payment_key.arn
   }
 
   point_in_time_recovery {
@@ -326,15 +326,13 @@ resource "aws_s3_bucket_versioning" "payment_logs" {
   }
 }
 
-resource "aws_s3_bucket_encryption" "payment_logs" {
+resource "aws_s3_bucket_server_side_encryption_configuration" "payment_logs" {
   bucket = aws_s3_bucket.payment_logs.id
 
-  server_side_encryption_configuration {
-    rule {
-      apply_server_side_encryption_by_default {
-        kms_master_key_id = aws_kms_key.payment_key.arn
-        sse_algorithm     = "aws:kms"
-      }
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.payment_key.arn
+      sse_algorithm     = "aws:kms"
     }
   }
 }
