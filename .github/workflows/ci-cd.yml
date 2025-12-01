@@ -321,7 +321,7 @@ jobs:
     name: CICD Pipeline Optimization
     runs-on: ubuntu-24.04
     needs: detect-metadata
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') && contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.platform == 'cicd-yml' }}
     environment: dev
     permissions:
       contents: write
