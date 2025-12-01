@@ -133,33 +133,33 @@ EOF
 # Generate compliance report
 resource "local_file" "compliance_report" {
   content = jsonencode({
-    timestamp = timestamp()
+    timestamp   = timestamp()
     environment = var.environment_suffix
     compliance_checks = {
-      configuration_validation = "passed"
-      drift_detection = "completed"
-      tagging_compliance = "enforced"
-      encryption_compliance = "enforced"
+      configuration_validation    = "passed"
+      drift_detection             = "completed"
+      tagging_compliance          = "enforced"
+      encryption_compliance       = "enforced"
       retention_policy_compliance = "enforced"
     }
     resource_inventory = {
-      dynamodb_tables = 2
-      lambda_functions = 3
-      s3_buckets = 1
-      kms_keys = 1
+      dynamodb_tables   = 2
+      lambda_functions  = 3
+      s3_buckets        = 1
+      kms_keys          = 1
       cloudwatch_alarms = 5
-      api_gateway_apis = 1
+      api_gateway_apis  = 1
     }
     security_measures = {
-      kms_encryption = true
-      vpc_isolation = true
+      kms_encryption      = true
+      vpc_isolation       = true
       iam_least_privilege = true
-      private_subnets = true
+      private_subnets     = true
     }
     monitoring = {
       cloudwatch_dashboards = 1
-      cloudwatch_alarms = 5
-      log_retention_days = local.current_config.logs_retention_days
+      cloudwatch_alarms     = 5
+      log_retention_days    = local.current_config.logs_retention_days
     }
     configuration_hash = data.external.environment_comparison.result.configuration_hash
   })

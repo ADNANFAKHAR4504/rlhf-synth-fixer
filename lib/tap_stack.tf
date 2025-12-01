@@ -25,22 +25,22 @@ locals {
       transactions_write_capacity = 5
       audit_read_capacity         = 5
       audit_write_capacity        = 5
-      
+
       # Lambda memory allocations
       validation_memory   = 512
       processing_memory   = 512
       notification_memory = 512
-      
+
       # API Gateway throttling
       api_throttle_rate  = 100
       api_throttle_burst = 200
-      
+
       # S3 lifecycle - retention days
       s3_retention_days = 30
-      
+
       # CloudWatch logs retention
       logs_retention_days = 30
-      
+
       # Region
       region = "eu-west-1"
     }
@@ -50,22 +50,22 @@ locals {
       transactions_write_capacity = 25
       audit_read_capacity         = 25
       audit_write_capacity        = 25
-      
+
       # Lambda memory allocations
       validation_memory   = 1024
       processing_memory   = 1024
       notification_memory = 1024
-      
+
       # API Gateway throttling
       api_throttle_rate  = 500
       api_throttle_burst = 1000
-      
+
       # S3 lifecycle - retention days
       s3_retention_days = 90
-      
+
       # CloudWatch logs retention
       logs_retention_days = 90
-      
+
       # Region
       region = "us-west-2"
     }
@@ -75,22 +75,22 @@ locals {
       transactions_write_capacity = 100
       audit_read_capacity         = 100
       audit_write_capacity        = 100
-      
+
       # Lambda memory allocations
       validation_memory   = 2048
       processing_memory   = 2048
       notification_memory = 2048
-      
+
       # API Gateway throttling
       api_throttle_rate  = 2000
       api_throttle_burst = 4000
-      
+
       # S3 lifecycle - retention days
       s3_retention_days = 365
-      
+
       # CloudWatch logs retention
       logs_retention_days = 365
-      
+
       # Region
       region = "us-east-1"
     }
@@ -98,7 +98,7 @@ locals {
 
   # Current environment configuration
   current_config = local.environment_config[var.environment_suffix]
-  
+
   # Common tags
   common_tags = {
     Environment = var.environment_suffix
@@ -247,8 +247,8 @@ resource "aws_dynamodb_table" "transactions" {
   }
 
   server_side_encryption {
-    enabled     = true
-    kms_key_id  = aws_kms_key.payment_key.arn
+    enabled    = true
+    kms_key_id = aws_kms_key.payment_key.arn
   }
 
   point_in_time_recovery {
@@ -294,8 +294,8 @@ resource "aws_dynamodb_table" "audit_logs" {
   }
 
   server_side_encryption {
-    enabled     = true
-    kms_key_id  = aws_kms_key.payment_key.arn
+    enabled    = true
+    kms_key_id = aws_kms_key.payment_key.arn
   }
 
   point_in_time_recovery {
@@ -460,11 +460,11 @@ resource "aws_iam_role_policy" "lambda_execution_policy" {
 # Payment Validation Lambda
 resource "aws_lambda_function" "payment_validation" {
   function_name = "${local.name_prefix}-payment-validation"
-  role         = aws_iam_role.lambda_execution_role.arn
-  handler      = "index.handler"
-  runtime      = "python3.11"
-  timeout      = 30
-  memory_size  = local.current_config.validation_memory
+  role          = aws_iam_role.lambda_execution_role.arn
+  handler       = "index.handler"
+  runtime       = "python3.11"
+  timeout       = 30
+  memory_size   = local.current_config.validation_memory
 
   filename         = "${path.module}/lambda_placeholder.zip"
   source_code_hash = filebase64sha256("${path.module}/lambda_placeholder.zip")
@@ -491,11 +491,11 @@ resource "aws_lambda_function" "payment_validation" {
 # Payment Processing Lambda
 resource "aws_lambda_function" "payment_processing" {
   function_name = "${local.name_prefix}-payment-processing"
-  role         = aws_iam_role.lambda_execution_role.arn
-  handler      = "index.handler"
-  runtime      = "python3.11"
-  timeout      = 30
-  memory_size  = local.current_config.processing_memory
+  role          = aws_iam_role.lambda_execution_role.arn
+  handler       = "index.handler"
+  runtime       = "python3.11"
+  timeout       = 30
+  memory_size   = local.current_config.processing_memory
 
   filename         = "${path.module}/lambda_placeholder.zip"
   source_code_hash = filebase64sha256("${path.module}/lambda_placeholder.zip")
@@ -523,11 +523,11 @@ resource "aws_lambda_function" "payment_processing" {
 # Payment Notification Lambda
 resource "aws_lambda_function" "payment_notification" {
   function_name = "${local.name_prefix}-payment-notification"
-  role         = aws_iam_role.lambda_execution_role.arn
-  handler      = "index.handler"
-  runtime      = "python3.11"
-  timeout      = 30
-  memory_size  = local.current_config.notification_memory
+  role          = aws_iam_role.lambda_execution_role.arn
+  handler       = "index.handler"
+  runtime       = "python3.11"
+  timeout       = 30
+  memory_size   = local.current_config.notification_memory
 
   filename         = "${path.module}/lambda_placeholder.zip"
   source_code_hash = filebase64sha256("${path.module}/lambda_placeholder.zip")
@@ -640,10 +640,10 @@ resource "aws_api_gateway_resource" "process" {
 }
 
 resource "aws_api_gateway_method" "process_post" {
-  rest_api_id      = aws_api_gateway_rest_api.payment_api.id
-  resource_id      = aws_api_gateway_resource.process.id
-  http_method      = "POST"
-  authorization    = "NONE"
+  rest_api_id          = aws_api_gateway_rest_api.payment_api.id
+  resource_id          = aws_api_gateway_resource.process.id
+  http_method          = "POST"
+  authorization        = "NONE"
   request_validator_id = aws_api_gateway_request_validator.payment_validator.id
 }
 
@@ -653,8 +653,8 @@ resource "aws_api_gateway_integration" "process_integration" {
   http_method = aws_api_gateway_method.process_post.http_method
 
   integration_http_method = "POST"
-  type                   = "AWS_PROXY"
-  uri                    = aws_lambda_function.payment_processing.invoke_arn
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.payment_processing.invoke_arn
 }
 
 # /validate resource
@@ -665,10 +665,10 @@ resource "aws_api_gateway_resource" "validate" {
 }
 
 resource "aws_api_gateway_method" "validate_post" {
-  rest_api_id      = aws_api_gateway_rest_api.payment_api.id
-  resource_id      = aws_api_gateway_resource.validate.id
-  http_method      = "POST"
-  authorization    = "NONE"
+  rest_api_id          = aws_api_gateway_rest_api.payment_api.id
+  resource_id          = aws_api_gateway_resource.validate.id
+  http_method          = "POST"
+  authorization        = "NONE"
   request_validator_id = aws_api_gateway_request_validator.payment_validator.id
 }
 
@@ -678,8 +678,8 @@ resource "aws_api_gateway_integration" "validate_integration" {
   http_method = aws_api_gateway_method.validate_post.http_method
 
   integration_http_method = "POST"
-  type                   = "AWS_PROXY"
-  uri                    = aws_lambda_function.payment_validation.invoke_arn
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.payment_validation.invoke_arn
 }
 
 # /status resource
@@ -702,8 +702,8 @@ resource "aws_api_gateway_integration" "status_integration" {
   http_method = aws_api_gateway_method.status_get.http_method
 
   integration_http_method = "POST"
-  type                   = "AWS_PROXY"
-  uri                    = aws_lambda_function.payment_notification.invoke_arn
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.payment_notification.invoke_arn
 }
 
 # API Gateway Deployment
@@ -741,9 +741,9 @@ resource "aws_api_gateway_method_settings" "payment_settings" {
   settings {
     throttling_rate_limit  = local.current_config.api_throttle_rate
     throttling_burst_limit = local.current_config.api_throttle_burst
-    logging_level         = "INFO"
-    data_trace_enabled    = true
-    metrics_enabled       = true
+    logging_level          = "INFO"
+    data_trace_enabled     = true
+    metrics_enabled        = true
   }
 }
 
@@ -899,8 +899,8 @@ resource "aws_cloudwatch_metric_alarm" "api_gateway_4xx" {
   treat_missing_data  = "notBreaching"
 
   dimensions = {
-    ApiName   = aws_api_gateway_rest_api.payment_api.name
-    Stage     = aws_api_gateway_stage.payment_stage.stage_name
+    ApiName = aws_api_gateway_rest_api.payment_api.name
+    Stage   = aws_api_gateway_stage.payment_stage.stage_name
   }
 
   tags = merge(local.common_tags, {
@@ -921,8 +921,8 @@ resource "aws_cloudwatch_metric_alarm" "api_gateway_5xx" {
   treat_missing_data  = "notBreaching"
 
   dimensions = {
-    ApiName   = aws_api_gateway_rest_api.payment_api.name
-    Stage     = aws_api_gateway_stage.payment_stage.stage_name
+    ApiName = aws_api_gateway_rest_api.payment_api.name
+    Stage   = aws_api_gateway_stage.payment_stage.stage_name
   }
 
   tags = merge(local.common_tags, {
@@ -1018,33 +1018,33 @@ resource "aws_cloudwatch_dashboard" "payment_dashboard" {
 # Configuration manifest to document environment-specific values
 resource "local_file" "configuration_manifest" {
   content = jsonencode({
-    environment = var.environment_suffix
-    region = var.aws_region
+    environment   = var.environment_suffix
+    region        = var.aws_region
     configuration = local.current_config
     resources = {
       vpc_id = aws_vpc.payment_vpc.id
       dynamodb_tables = {
         transactions = aws_dynamodb_table.transactions.name
-        audit_logs = aws_dynamodb_table.audit_logs.name
+        audit_logs   = aws_dynamodb_table.audit_logs.name
       }
       lambda_functions = {
-        validation = aws_lambda_function.payment_validation.function_name
-        processing = aws_lambda_function.payment_processing.function_name
+        validation   = aws_lambda_function.payment_validation.function_name
+        processing   = aws_lambda_function.payment_processing.function_name
         notification = aws_lambda_function.payment_notification.function_name
       }
       api_gateway = {
         api_id = aws_api_gateway_rest_api.payment_api.id
-        stage = aws_api_gateway_stage.payment_stage.stage_name
+        stage  = aws_api_gateway_stage.payment_stage.stage_name
         endpoints = {
-          process = "${aws_api_gateway_rest_api.payment_api.execution_arn}/*/POST/process"
+          process  = "${aws_api_gateway_rest_api.payment_api.execution_arn}/*/POST/process"
           validate = "${aws_api_gateway_rest_api.payment_api.execution_arn}/*/POST/validate"
-          status = "${aws_api_gateway_rest_api.payment_api.execution_arn}/*/GET/status"
+          status   = "${aws_api_gateway_rest_api.payment_api.execution_arn}/*/GET/status"
         }
       }
       s3_bucket = aws_s3_bucket.payment_logs.bucket
-      kms_key = aws_kms_key.payment_key.key_id
+      kms_key   = aws_kms_key.payment_key.key_id
     }
-    tags = local.common_tags
+    tags       = local.common_tags
     created_at = timestamp()
   })
 
