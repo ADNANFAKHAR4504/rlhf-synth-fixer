@@ -1,0 +1,19 @@
+AWS Infrastructure Compliance Analysis Report
+============================================================
+
+Scan ID: scan-20251201215525
+Timestamp: 2025-12-01T21:55:25.767297Z
+Environment: dev
+
+Overall Compliance Score: 79.5%
+Total Violations: 9
+
+Service Scores:
+  ec2: 60.0%
+  securityGroups: 75.0%
+  s3: 83.3%
+  iam: 66.7%
+  ebs: 90.0%
+  vpc: 100.0%
+
+============================================================
