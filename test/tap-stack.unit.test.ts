@@ -1,12 +1,15 @@
-import * as EKSTemplate from '../lib/eks-cluster';
+import fs from 'fs';
+import path from 'path';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-describe('EKS Cluster CloudFormation Template', () => {
+describe('TapStack CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    template = EKSTemplate.getTemplate();
+    const templatePath = path.join(__dirname, '../lib/TapStack.json');
+    const templateContent = fs.readFileSync(templatePath, 'utf8');
+    template = JSON.parse(templateContent);
   });
 
   describe('Template Structure', () => {
