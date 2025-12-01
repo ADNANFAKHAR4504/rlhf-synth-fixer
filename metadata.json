@@ -7,7 +7,9 @@
   "team": "synth",
   "startedAt": "2025-12-01T04:19:38+00:00",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": [],
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
   "aws_services": [
     "CloudWatch",
     "EC2",
@@ -16,5 +18,7 @@
     "SSM",
     "VPC"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342"
 }
