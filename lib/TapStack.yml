@@ -195,6 +195,9 @@ Conditions:
   IsProduction: !Equals [!Ref EnvironmentName, 'production']
   IsUsEast1: !Equals [!Ref 'AWS::Region', 'us-east-1']
   ShouldCreateCertificates: !Equals [!Ref CreateCertificates, 'true']
+  HasHostedZone: !Or
+    - !Condition CreateHostedZone
+    - !Not [!Equals [!Ref ExistingHostedZoneId, '']]
 
 # ==========================================
 # Mappings Section
@@ -1754,6 +1757,7 @@ Resources:
 
   DNSRecord:
     Type: AWS::Route53::RecordSetGroup
+    Condition: HasHostedZone
     Properties:
       HostedZoneId: !If [CreateHostedZone, !Ref HostedZone, !Ref ExistingHostedZoneId]
       RecordSets:
