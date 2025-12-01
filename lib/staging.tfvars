@@ -3,6 +3,7 @@ aws_region   = "us-east-1"
 project_name = "tap-stream"
 owner        = "platform-team"
 cost_center  = "engineering"
+pr_number    = "pr1234"
 
 # Moderate capacity for staging environment
 throttle_rate_limit     = 500

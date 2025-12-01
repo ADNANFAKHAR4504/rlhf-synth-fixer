@@ -19,13 +19,14 @@ terraform {
       version = "~> 2.4"
     }
   }
+
+  backend "s3" {}
 }
 
 # =============================================================================
 # VARIABLES
 # =============================================================================
 
-# General Configuration
 variable "env" {
   description = "Environment name (dev, staging, prod)"
   type        = string
@@ -33,12 +34,6 @@ variable "env" {
     condition     = contains(["dev", "staging", "prod"], var.env)
     error_message = "Environment must be dev, staging, or prod."
   }
-}
-
-variable "aws_region" {
-  description = "AWS region for deployment"
-  type        = string
-  default     = "us-east-1"
 }
 
 variable "project_name" {
@@ -403,7 +398,7 @@ variable "alarm_latency_threshold" {
 
 locals {
   # Common naming prefix
-  resource_prefix = "${var.project_name}-${var.env}"
+  resource_prefix = "${var.project_name}-${var.env}-${var.pr_number}"
 
   # Common tags
   default_tags = merge(
@@ -412,6 +407,7 @@ locals {
       Project     = var.project_name
       Owner       = var.owner
       CostCenter  = var.cost_center
+      PrNumber    = var.pr_number
       ManagedBy   = "terraform"
     },
     var.common_tags
@@ -804,8 +800,9 @@ resource "aws_security_group" "redis" {
 
 # Aurora DB Password
 resource "random_password" "aurora" {
-  length  = 32
-  special = true
+  length           = 32
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 
 resource "aws_secretsmanager_secret" "aurora_credentials" {
@@ -847,10 +844,42 @@ resource "aws_secretsmanager_secret_version" "redis_auth" {
 # S3 BUCKETS
 # =============================================================================
 
+# KMS Policy for S3 Key
+data "aws_iam_policy_document" "s3_kms" {
+  statement {
+    sid    = "Enable IAM User Permissions"
+    effect = "Allow"
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+    actions   = ["kms:*"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "Allow Services"
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["s3.amazonaws.com", "rds.amazonaws.com", "lambda.amazonaws.com"]
+    }
+    actions = [
+      "kms:Encrypt",
+      "kms:Decrypt",
+      "kms:ReEncrypt*",
+      "kms:GenerateDataKey*",
+      "kms:DescribeKey"
+    ]
+    resources = ["*"]
+  }
+}
+
 # KMS Key for S3 Encryption
 resource "aws_kms_key" "s3" {
   description             = "${local.resource_prefix} S3 encryption key"
   deletion_window_in_days = 10
+  policy                  = data.aws_iam_policy_document.s3_kms.json
 
   tags = local.default_tags
 }
@@ -892,6 +921,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "archive" {
   rule {
     id     = "transition-to-glacier"
     status = "Enabled"
+
+    filter {}
 
     transition {
       days          = var.lifecycle_glacier_days
@@ -972,6 +1003,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "athena_results" {
   rule {
     id     = "cleanup-old-results"
     status = "Enabled"
+
+    filter {}
 
     expiration {
       days = 7
@@ -1162,18 +1195,38 @@ resource "aws_db_subnet_group" "aurora" {
   tags = local.default_tags
 }
 
+# Aurora Cluster Parameter Group
+resource "aws_rds_cluster_parameter_group" "aurora" {
+  name_prefix = "${local.resource_prefix}-aurora-pg-"
+  family      = "aurora-postgresql15"
+  description = "Aurora PostgreSQL 15 cluster parameter group"
+
+  parameter {
+    name  = "log_statement"
+    value = "ddl"
+  }
+
+  parameter {
+    name  = "effective_cache_size"
+    value = "393216"
+  }
+
+  tags = local.default_tags
+}
+
 # Aurora Cluster
 resource "aws_rds_cluster" "aurora" {
   cluster_identifier = "${local.resource_prefix}-aurora"
   engine             = "aurora-postgresql"
   engine_mode        = "provisioned"
-  engine_version     = "15.3"
+  engine_version     = "15.14"
   database_name      = var.db_name
   master_username    = var.master_username
   master_password    = random_password.aurora.result
 
-  db_subnet_group_name   = aws_db_subnet_group.aurora.name
-  vpc_security_group_ids = [aws_security_group.aurora.id]
+  db_subnet_group_name            = aws_db_subnet_group.aurora.name
+  db_cluster_parameter_group_name = aws_rds_cluster_parameter_group.aurora.name
+  vpc_security_group_ids          = [aws_security_group.aurora.id]
 
   backup_retention_period      = var.backup_retention_days
   preferred_backup_window      = "02:00-03:00"
@@ -1242,16 +1295,16 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring" {
 
 # ElastiCache Subnet Group
 resource "aws_elasticache_subnet_group" "redis" {
-  name_prefix = "${local.resource_prefix}-redis-"
-  subnet_ids  = aws_subnet.private[*].id
+  name       = "${local.resource_prefix}-redis"
+  subnet_ids = aws_subnet.private[*].id
 
   tags = local.default_tags
 }
 
 # ElastiCache Parameter Group
 resource "aws_elasticache_parameter_group" "redis" {
-  family      = "redis7"
-  name_prefix = "${local.resource_prefix}-redis-"
+  family = "redis7"
+  name   = "${local.resource_prefix}-redis"
 
   parameter {
     name  = "maxmemory-policy"
@@ -1306,10 +1359,42 @@ resource "aws_elasticache_replication_group" "redis" {
 # SNS TOPICS
 # =============================================================================
 
+# KMS Policy for SNS Key
+data "aws_iam_policy_document" "sns_kms" {
+  statement {
+    sid    = "Enable IAM User Permissions"
+    effect = "Allow"
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+    actions   = ["kms:*"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "Allow Services"
+    effect = "Allow"
+    principals {
+      type        = "Service"
+      identifiers = ["cloudwatch.amazonaws.com", "events.amazonaws.com", "sns.amazonaws.com", "sqs.amazonaws.com", "lambda.amazonaws.com"]
+    }
+    actions = [
+      "kms:Encrypt",
+      "kms:Decrypt",
+      "kms:ReEncrypt*",
+      "kms:GenerateDataKey*",
+      "kms:DescribeKey"
+    ]
+    resources = ["*"]
+  }
+}
+
 # KMS Key for SNS
 resource "aws_kms_key" "sns" {
   description             = "${local.resource_prefix} SNS encryption key"
   deletion_window_in_days = 10
+  policy                  = data.aws_iam_policy_document.sns_kms.json
 
   tags = local.default_tags
 }
@@ -1321,8 +1406,10 @@ resource "aws_kms_alias" "sns" {
 
 # Watch Complete Topic
 resource "aws_sns_topic" "watched_complete" {
-  name_prefix       = "${local.resource_prefix}-${var.complete_topic}-"
-  kms_master_key_id = aws_kms_key.sns.id
+  name                        = "${local.resource_prefix}-${var.complete_topic}.fifo"
+  kms_master_key_id           = aws_kms_key.sns.id
+  fifo_topic                  = true
+  content_based_deduplication = true
 
   tags = local.default_tags
 }
@@ -1598,11 +1685,14 @@ resource "aws_iam_policy" "lambda_policy" {
           "sqs:ReceiveMessage",
           "sqs:DeleteMessage",
           "sqs:GetQueueAttributes",
-          "sqs:ChangeMessageVisibility"
+          "sqs:ChangeMessageVisibility",
+          "sqs:SendMessage"
         ]
         Resource = [
           aws_sqs_queue.analytics_queue.arn,
-          aws_sqs_queue.achievements_queue.arn
+          aws_sqs_queue.achievements_queue.arn,
+          aws_sqs_queue.analytics_dlq.arn,
+          aws_sqs_queue.achievements_dlq.arn
         ]
       },
       {
@@ -1986,7 +2076,7 @@ resource "aws_lambda_event_source_mapping" "kinesis_to_event_processor" {
   event_source_arn                   = aws_kinesis_stream.activity_stream.arn
   function_name                      = aws_lambda_function.event_processor.arn
   starting_position                  = "LATEST"
-  parallelization_factor             = 10
+  parallelization_factor             = 1
   maximum_batching_window_in_seconds = 5
 
   tumbling_window_in_seconds = 60 # For aggregation
@@ -2207,6 +2297,8 @@ resource "aws_api_gateway_stage" "main" {
     })
   }
 
+  depends_on = [aws_api_gateway_account.main]
+
   variables = local.api_stage_variables
 
   tags = local.default_tags
@@ -2233,6 +2325,239 @@ resource "aws_cloudwatch_log_group" "api_gateway_access" {
   retention_in_days = var.log_retention_days
 
   tags = local.default_tags
+}
+
+# API Gateway Account Settings (Global)
+resource "aws_api_gateway_account" "main" {
+  cloudwatch_role_arn = aws_iam_role.api_gateway_cloudwatch.arn
+}
+
+resource "aws_iam_role" "api_gateway_cloudwatch" {
+  name_prefix = "${local.resource_prefix}-apigw-cw-"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "apigateway.amazonaws.com"
+      }
+    }]
+  })
+
+  tags = local.default_tags
+}
+
+resource "aws_iam_role_policy_attachment" "api_gateway_cloudwatch" {
+  role       = aws_iam_role.api_gateway_cloudwatch.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+}
+
+# =============================================================================
+# WAF (WEB APPLICATION FIREWALL)
+# =============================================================================
+
+# WAF Web ACL
+resource "aws_wafv2_web_acl" "api_gateway" {
+  name        = "${local.resource_prefix}-apigw-waf"
+  description = "WAF for API Gateway protection"
+  scope       = "REGIONAL"
+
+  default_action {
+    allow {}
+  }
+
+  rule {
+    name     = "AWSManagedRulesCommonRuleSet"
+    priority = 1
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesCommonRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${local.resource_prefix}-CommonRuleSetMetric"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  rule {
+    name     = "AWSManagedRulesKnownBadInputsRuleSet"
+    priority = 2
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesKnownBadInputsRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${local.resource_prefix}-KnownBadInputsMetric"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  rule {
+    name     = "AWSManagedRulesSQLiRuleSet"
+    priority = 3
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesSQLiRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${local.resource_prefix}-SQLiRuleSetMetric"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  rule {
+    name     = "AWSManagedRulesLinuxRuleSet"
+    priority = 4
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesLinuxRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${local.resource_prefix}-LinuxRuleSetMetric"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  rule {
+    name     = "AWSManagedRulesUnixRuleSet"
+    priority = 5
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesUnixRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${local.resource_prefix}-UnixRuleSetMetric"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  rule {
+    name     = "RateLimitRule"
+    priority = 10
+
+    action {
+      block {}
+    }
+
+    statement {
+      rate_based_statement {
+        limit              = 2000
+        aggregate_key_type = "IP"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${local.resource_prefix}-RateLimitRuleMetric"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "${local.resource_prefix}-WebACLMetric"
+    sampled_requests_enabled   = true
+  }
+
+  tags = local.default_tags
+}
+
+# WAF Log Group
+resource "aws_cloudwatch_log_group" "waf" {
+  name              = "aws-waf-logs-${local.resource_prefix}-apigw"
+  retention_in_days = var.log_retention_days
+
+  tags = local.default_tags
+}
+
+# CloudWatch Log Resource Policy for WAF Logging
+resource "aws_cloudwatch_log_resource_policy" "waf_logging" {
+  policy_name = "${local.resource_prefix}-waf-logging-policy"
+
+  policy_document = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "wafv2.amazonaws.com"
+        }
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "${aws_cloudwatch_log_group.waf.arn}:*"
+        Condition = {
+          ArnLike = {
+            "aws:SourceArn" = "arn:aws:wafv2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*/webacl/*"
+          }
+        }
+      }
+    ]
+  })
+}
+
+# WAF Logging Configuration
+resource "aws_wafv2_web_acl_logging_configuration" "api_gateway" {
+  resource_arn = aws_wafv2_web_acl.api_gateway.arn
+  log_destination_configs = [
+    "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:${aws_cloudwatch_log_group.waf.name}:*"
+  ]
+
+  depends_on = [aws_cloudwatch_log_resource_policy.waf_logging]
+}
+
+# WAF Association with API Gateway
+resource "aws_wafv2_web_acl_association" "api_gateway" {
+  resource_arn = aws_api_gateway_stage.main.arn
+  web_acl_arn  = aws_wafv2_web_acl.api_gateway.arn
 }
 
 # =============================================================================
@@ -2278,11 +2603,16 @@ resource "aws_iam_policy" "step_functions" {
       {
         Effect = "Allow"
         Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
+          "logs:CreateLogDelivery",
+          "logs:GetLogDelivery",
+          "logs:UpdateLogDelivery",
+          "logs:DeleteLogDelivery",
+          "logs:ListLogDeliveries",
+          "logs:PutResourcePolicy",
+          "logs:DescribeResourcePolicies",
+          "logs:DescribeLogGroups"
         ]
-        Resource = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
+        Resource = "*"
       }
     ]
   })
@@ -2726,4 +3056,107 @@ output "security_group_ids" {
     aurora = aws_security_group.aurora.id
     redis  = aws_security_group.redis.id
   }
+}
+
+output "waf_web_acl_id" {
+  description = "WAF Web ACL ID"
+  value       = aws_wafv2_web_acl.api_gateway.id
+}
+
+output "waf_web_acl_arn" {
+  description = "WAF Web ACL ARN"
+  value       = aws_wafv2_web_acl.api_gateway.arn
+}
+
+output "api_gateway_rest_api_id" {
+  description = "API Gateway REST API ID"
+  value       = aws_api_gateway_rest_api.main.id
+}
+
+output "api_gateway_stage_name" {
+  description = "API Gateway stage name"
+  value       = aws_api_gateway_stage.main.stage_name
+}
+
+output "aurora_cluster_identifier" {
+  description = "Aurora cluster identifier"
+  value       = aws_rds_cluster.aurora.cluster_identifier
+}
+
+output "aurora_port" {
+  description = "Aurora database port"
+  value       = 5432
+}
+
+output "redis_port" {
+  description = "Redis port"
+  value       = 6379
+}
+
+output "redis_configuration_endpoint_address" {
+  description = "Redis configuration endpoint address (for cluster mode)"
+  value       = try(aws_elasticache_replication_group.redis.configuration_endpoint_address, null)
+}
+
+output "secrets_manager_secrets" {
+  description = "Secrets Manager secret ARNs"
+  value = {
+    aurora_credentials = aws_secretsmanager_secret.aurora_credentials.arn
+    redis_auth         = aws_secretsmanager_secret.redis_auth.arn
+  }
+}
+
+output "kms_key_ids" {
+  description = "KMS key IDs"
+  value = {
+    s3  = aws_kms_key.s3.id
+    sns = aws_kms_key.sns.id
+  }
+}
+
+output "kms_key_arns" {
+  description = "KMS key ARNs"
+  value = {
+    s3  = aws_kms_key.s3.arn
+    sns = aws_kms_key.sns.arn
+  }
+}
+
+output "kinesis_stream_name" {
+  description = "Kinesis stream name"
+  value       = aws_kinesis_stream.activity_stream.name
+}
+
+output "lambda_function_names" {
+  description = "Lambda function names"
+  value = {
+    event_processor        = aws_lambda_function.event_processor.function_name
+    recommendations_engine = aws_lambda_function.recommendations_engine.function_name
+    analytics_consumer     = aws_lambda_function.analytics_consumer.function_name
+    achievements_consumer  = aws_lambda_function.achievements_consumer.function_name
+    expiration_check       = aws_lambda_function.expiration_check.function_name
+    expiration_update      = aws_lambda_function.expiration_update.function_name
+    expiration_cleanup     = aws_lambda_function.expiration_cleanup.function_name
+    thumbnail_processor    = aws_lambda_function.thumbnail_processor.function_name
+  }
+}
+
+output "step_functions_state_machine_name" {
+  description = "Step Functions state machine name"
+  value       = aws_sfn_state_machine.content_expiration.name
+}
+
+output "eventbridge_rule_name" {
+  description = "EventBridge rule name"
+  value       = aws_cloudwatch_event_rule.content_expiration.name
+}
+
+output "vpc_cidr" {
+  description = "VPC CIDR block"
+  value       = aws_vpc.main.cidr_block
+}
+
+output "internet_gateway_id" {
+  description = "Internet Gateway ID"
+  value       = aws_internet_gateway.main.id
 }

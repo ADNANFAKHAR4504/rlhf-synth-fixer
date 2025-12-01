@@ -3,6 +3,7 @@ aws_region   = "us-east-1"
 project_name = "tap-stream"
 owner        = "platform-team"
 cost_center  = "engineering"
+pr_number    = "pr1234"
 
 # Full capacity for production environment
 throttle_rate_limit     = 1000
