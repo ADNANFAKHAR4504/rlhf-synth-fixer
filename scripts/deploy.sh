@@ -544,9 +544,9 @@ elif [ "$PLATFORM" = "tf" ]; then
   
   STATE_KEY="prs/${ENVIRONMENT_SUFFIX}/terraform.tfstate"
   echo "Using state key: $STATE_KEY"
-
+  
   cd lib
-
+  
   # Determine var-file to use based on metadata.json
   VAR_FILE=""
   if [ "$(jq -r '.subtask // ""' ../metadata.json)" = "IaC-Multi-Environment-Management" ]; then
