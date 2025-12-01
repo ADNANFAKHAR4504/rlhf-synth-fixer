@@ -11,11 +11,11 @@
     "IaC Optimization"
   ],
   "aws_services": [
-    "Lambda",
-    "IAM",
-    "SQS",
-    "CloudWatch",
-    "X-Ray"
+    "AWS Lambda",
+    "Amazon SQS",
+    "Amazon CloudWatch",
+    "AWS IAM",
+    "AWS X-Ray"
   ],
-  "training_quality": 9
+  "training_quality": 10
 }
