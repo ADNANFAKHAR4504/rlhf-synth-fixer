@@ -879,9 +879,11 @@ Resources:
         Enabled: true
         Comment: !Sub ${EnvironmentName} CloudFront Distribution for E-commerce Platform
         DefaultRootObject: index.html
-        Aliases:
-          - !Ref DomainName
-          - !Sub 'www.${DomainName}'
+        Aliases: !If
+          - ShouldCreateCertificates
+          - - !Ref DomainName
+            - !Sub 'www.${DomainName}'
+          - !Ref 'AWS::NoValue'
         ViewerCertificate: !If
           - ShouldCreateCertificates
           - AcmCertificateArn: !Ref ACMCertificate
