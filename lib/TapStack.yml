@@ -290,7 +290,7 @@ Resources:
   VPCFlowLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: /aws/vpc/webapp-prod-flow-logs
+      LogGroupName: !Sub '/aws/vpc/${AWS::StackName}-flow-logs'
       RetentionInDays: !Ref LogRetentionDays
 
   VPCFlowLog:
@@ -899,7 +899,7 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'webapp-prod-storage-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${AWS::StackName}-storage-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -935,7 +935,7 @@ Resources:
   S3LogBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'webapp-prod-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${AWS::StackName}-logs-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -969,19 +969,19 @@ Resources:
   ApplicationLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: /aws/webapp/prod/application
+      LogGroupName: !Sub '/aws/${AWS::StackName}/application'
       RetentionInDays: !Ref LogRetentionDays
 
   ALBLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: /aws/webapp/prod/alb
+      LogGroupName: !Sub '/aws/${AWS::StackName}/alb'
       RetentionInDays: !Ref LogRetentionDays
 
   SystemLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: /aws/webapp/prod/system
+      LogGroupName: !Sub '/aws/${AWS::StackName}/system'
       RetentionInDays: !Ref LogRetentionDays
 
   # ========================================
