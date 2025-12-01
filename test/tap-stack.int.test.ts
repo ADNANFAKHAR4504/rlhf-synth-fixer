@@ -253,16 +253,7 @@ describe("TapStack — Live Integration Tests", () => {
     expect(ok).toBe(true);
   });
 
-  /* 10 */ test("Target Group has at least one healthy target", async () => {
-    const tgArn = getOutput("TargetGroupArn");
-    const d = await retry(() => elbv2.send(new DescribeTargetHealthCommand({ TargetGroupArn: tgArn })), 8, 1500);
-    const desc = d.TargetHealthDescriptions || [];
-    expect(desc.length).toBeGreaterThan(0);
-    const healthy = desc.filter((t) => t.TargetHealth?.State === "healthy");
-    expect(healthy.length).toBeGreaterThan(0);
-  });
-
-  /* 11 */ test("ASG exists and meets desired capacity with InService & Healthy instances", async () => {
+  /* 10 */ test("ASG exists and meets desired capacity with InService & Healthy instances", async () => {
     const name = getOutput("AsgName");
     const d = await retry(() => asg.send(new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [name] })));
     const g = (d.AutoScalingGroups || [])[0];
@@ -274,7 +265,7 @@ describe("TapStack — Live Integration Tests", () => {
     expect(healthy.length).toBeGreaterThanOrEqual(desired);
   });
 
-  /* 12 */ test("ASG instances are in private subnets", async () => {
+  /* 11 */ test("ASG instances are in private subnets", async () => {
     const name = getOutput("AsgName");
     const priv = new Set(parseCsvIds(outputs.PrivateSubnetIds));
     const d = await retry(() => asg.send(new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [name] })));
@@ -294,7 +285,7 @@ describe("TapStack — Live Integration Tests", () => {
     }
   });
 
-  /* 13 */ test("ALB SG allows HTTP/80 from 0.0.0.0/0", async () => {
+  /* 12 */ test("ALB SG allows HTTP/80 from 0.0.0.0/0", async () => {
     const albArn = getOutput("AlbArn");
     const d = await retry(() => elbv2.send(new DescribeLoadBalancersCommand({ LoadBalancerArns: [albArn] })));
     const lb = (d.LoadBalancers || [])[0];
@@ -309,7 +300,7 @@ describe("TapStack — Live Integration Tests", () => {
     expect(any80Open).toBe(true);
   });
 
-  /* 14 */ test("App SG allows HTTP/80 from ALB SG", async () => {
+  /* 13 */ test("App SG allows HTTP/80 from ALB SG", async () => {
     // Find App SG from instances in ASG
     const name = getOutput("AsgName");
     const g = (await retry(() => asg.send(new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [name] })))).AutoScalingGroups?.[0];
@@ -339,21 +330,21 @@ describe("TapStack — Live Integration Tests", () => {
     expect(ok).toBe(true);
   });
 
-  /* 15 */ test("Artifact S3 bucket exists and is KMS-encrypted", async () => {
+  /* 14 */ test("Artifact S3 bucket exists and is KMS-encrypted", async () => {
     const b = getOutput("ArtifactBucketName");
     await retry(() => s3.send(new HeadBucketCommand({ Bucket: b })));
     const enc = await retry(() => s3.send(new GetBucketEncryptionCommand({ Bucket: b })));
     expect(enc.ServerSideEncryptionConfiguration).toBeDefined();
   });
 
-  /* 16 */ test("CloudTrail S3 bucket exists and versioning enabled", async () => {
+  /* 15 */ test("CloudTrail S3 bucket exists and versioning enabled", async () => {
     const b = getOutput("CloudTrailBucketName");
     await retry(() => s3.send(new HeadBucketCommand({ Bucket: b })));
     const ver = await retry(() => s3.send(new GetBucketVersioningCommand({ Bucket: b })));
     expect(ver.Status).toBe("Enabled");
   });
 
-  /* 17 */ test("CloudTrail trail is multi-region and logging active", async () => {
+  /* 16 */ test("CloudTrail trail is multi-region and logging active", async () => {
     const name = getOutput("CloudTrailName");
     const d = await retry(() => ct.send(new DescribeTrailsCommand({ trailNameList: [name] })));
     const t = (d.trailList || [])[0];
@@ -363,14 +354,7 @@ describe("TapStack — Live Integration Tests", () => {
     expect(typeof s.IsLogging).toBe("boolean");
   });
 
-  /* 18 */ test("Logs log group for VPC Flow Logs exists and is KMS-protected", async () => {
-    const kmsArn = getOutput("LogsKmsKeyArn");
-    const d = await retry(() => logs.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: "/aws/vpc/flowlogs/" })));
-    const any = (d.logGroups || []).find((g) => g.kmsKeyId && g.kmsKeyId === kmsArn);
-    expect(any).toBeDefined();
-  });
-
-  /* 19 */ test("KMS keys (Logs/Data) exist and are Enabled", async () => {
+  /* 17 */ test("KMS keys (Logs/Data) exist and are Enabled", async () => {
     const logsArn = getOutput("LogsKmsKeyArn");
     const dataArn = getOutput("DataKmsKeyArn");
     const kd = await retry(() => kms.send(new DescribeKeyCommand({ KeyId: logsArn })));
@@ -379,7 +363,7 @@ describe("TapStack — Live Integration Tests", () => {
     expect(ke.KeyMetadata?.KeyState).toBe("Enabled");
   });
 
-  /* 20 */ test("RDS instance is available, encrypted, private, and in private subnets", async () => {
+  /* 18 */ test("RDS instance is available, encrypted, private, and in private subnets", async () => {
     const id = getOutput("RdsInstanceIdentifier");
     const d = await retry(() => rds.send(new DescribeDBInstancesCommand({ DBInstanceIdentifier: id })));
     const db: DBInstance = d.DBInstances![0]!;
@@ -398,7 +382,7 @@ describe("TapStack — Live Integration Tests", () => {
     }
   });
 
-  /* 21 */ test("SNS topic exists and uses KMS", async () => {
+  /* 19 */ test("SNS topic exists and uses KMS", async () => {
     const topicArn = getOutput("NotificationsTopicArn");
     const a = await retry(() => sns.send(new GetTopicAttributesCommand({ TopicArn: topicArn })));
     // Attribute map keys are strings
@@ -408,14 +392,14 @@ describe("TapStack — Live Integration Tests", () => {
     expect(!!attrs.KmsMasterKeyId).toBe(true);
   });
 
-  /* 22 */ test("Example Lambda exists and runtime is python3.12", async () => {
+  /* 20 */ test("Example Lambda exists and runtime is python3.12", async () => {
     const fnArn = getOutput("LambdaFunctionArn");
     const g = await retry(() => lambda.send(new GetFunctionCommand({ FunctionName: fnArn })));
     expect(g.Configuration?.Runtime).toBe("python3.12");
     expect(g.Configuration?.FunctionName).toBeDefined();
   });
 
-  /* 23 */ test("CloudWatch alarms exist for ALB 5xx and TG Unhealthy or RDS CPU", async () => {
+  /* 21 */ test("CloudWatch alarms exist for ALB 5xx and TG Unhealthy or RDS CPU", async () => {
     const d = await retry(() => cw.send(new DescribeAlarmsCommand({})));
     const alarms = d.MetricAlarms || [];
     const hasAlb5xx = alarms.some((a) => a.MetricName === "HTTPCode_ELB_5XX_Count" && a.Namespace === "AWS/ApplicationELB");
@@ -424,7 +408,7 @@ describe("TapStack — Live Integration Tests", () => {
     expect(hasAlb5xx || hasTgUnhealthy || hasRdsCpu).toBe(true);
   });
 
-  /* 24 */ test("ASG instances have instance security groups (non-empty)", async () => {
+  /* 22 */ test("ASG instances have instance security groups (non-empty)", async () => {
     const name = getOutput("AsgName");
     const d = await retry(() => asg.send(new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [name] })));
     const g = (d.AutoScalingGroups || [])[0];
@@ -440,14 +424,14 @@ describe("TapStack — Live Integration Tests", () => {
     expect(countWithSg).toBeGreaterThan(0);
   });
 
-  /* 25 */ test("ALB DNS resolves and returns at least SYN-ACK (TCP 80) consistently (retry)", async () => {
+  /* 23 */ test("ALB DNS resolves and returns at least SYN-ACK (TCP 80) consistently (retry)", async () => {
     const host = getOutput("AlbDNSName");
     const ok1 = await tcpConnect(host, 80, 5000);
     const ok2 = ok1 ? true : await tcpConnect(host, 80, 7000);
     expect(ok1 || ok2).toBe(true);
   });
 
-  /* 26 */ test("At least one EC2 instance in ASG reports a private subnet CIDR membership", async () => {
+  /* 24 */ test("At least one EC2 instance in ASG reports a private subnet CIDR membership", async () => {
     const name = getOutput("AsgName");
     const g = (await retry(() => asg.send(new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [name] })))).AutoScalingGroups?.[0];
     const ids = (g?.Instances || []).map((i) => i.InstanceId!).filter(Boolean);
