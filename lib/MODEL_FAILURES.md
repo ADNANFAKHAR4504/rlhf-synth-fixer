@@ -26,15 +26,11 @@ This file documents the issues found in MODEL_RESPONSE.md and the corrections ap
 
 **Fix Applied**:
 ```yaml
-# Added KMS encryption step before upload
+# Added KMS encryption step before upload (kept under 5 lines per best practices)
 - name: Encrypt artifacts with KMS
   run: |
     tar -czf cdk-outputs.tar.gz -C cdk.out .
-    aws kms encrypt \
-      --key-id alias/github-actions-artifacts \
-      --plaintext fileb://cdk-outputs.tar.gz \
-      --output text \
-      --query CiphertextBlob > cdk-outputs.tar.gz.encrypted
+    aws kms encrypt --key-id alias/github-actions-artifacts --plaintext fileb://cdk-outputs.tar.gz --output text --query CiphertextBlob > cdk-outputs.tar.gz.encrypted
 
 - name: Upload encrypted artifacts
   uses: actions/upload-artifact@v4
