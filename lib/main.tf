@@ -1,33 +1,5 @@
-terraform {
-  required_version = ">= 1.5.0"
-
-  backend "local" {
-    path = "terraform.tfstate"
-  }
-
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-    archive = {
-      source  = "hashicorp/archive"
-      version = "~> 2.4"
-    }
-  }
-}
-
-provider "aws" {
-  region = var.aws_region
-
-  default_tags {
-    tags = {
-      Environment = var.environment_suffix
-      Project     = "webhook-processing"
-      ManagedBy   = "Terraform"
-    }
-  }
-}
+# main.tf
+# Data sources and main infrastructure resources
 
 data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
