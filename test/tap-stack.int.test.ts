@@ -269,7 +269,7 @@ describe('Cross-Region Trading Analytics Migration - Integration Tests', () => {
       const response = await lambdaClient.send(command);
 
       expect(response.Configuration?.FunctionName).toBe(functionName);
-      expect(response.Configuration?.Runtime).toBe('nodejs18.x');
+      expect(response.Configuration?.Runtime).toBe('nodejs22.x');
     });
 
     test('dashboard API Lambda function should exist', async () => {
@@ -279,7 +279,7 @@ describe('Cross-Region Trading Analytics Migration - Integration Tests', () => {
       const response = await lambdaClient.send(command);
 
       expect(response.Configuration?.FunctionName).toBe(functionName);
-      expect(response.Configuration?.Runtime).toBe('nodejs18.x');
+      expect(response.Configuration?.Runtime).toBe('nodejs22.x');
     });
 
     test('should be able to invoke dashboard API Lambda', async () => {
