@@ -975,6 +975,23 @@ fi
 
 log_info "Created PROMPT.md"
 
+# Copy ci-cd.yml reference file for CI/CD Pipeline Integration tasks
+if [ "$SUBTASK" = "CI/CD Pipeline Integration" ]; then
+    CICD_YML_TEMPLATE="$(dirname "$0")/../../templates/cicd-yml/lib/ci-cd.yml"
+    CICD_YML_DEST="$OUTPUT_DIR/lib/ci-cd.yml"
+    
+    if [ -f "$CICD_YML_TEMPLATE" ]; then
+        # Ensure lib directory exists
+        mkdir -p "$OUTPUT_DIR/lib"
+        
+        # Copy the ci-cd.yml file
+        cp "$CICD_YML_TEMPLATE" "$CICD_YML_DEST"
+        log_info "Copied ci-cd.yml reference file to lib/"
+    else
+        log_error "Warning: ci-cd.yml template not found at $CICD_YML_TEMPLATE"
+    fi
+fi
+
 # Validate metadata
 REQUIRED=("platform" "language" "complexity" "turn_type" "team" "startedAt" "subtask" "po_id")
 MISSING=()

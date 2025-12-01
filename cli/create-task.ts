@@ -343,18 +343,18 @@ async function main(): Promise<void> {
       ...(taskSubCategory ? { subject_labels: [taskSubCategory] } : {}),
       ...(resourcesText && resourcesText.trim().length > 0
         ? {
-            aws_services: resourcesText
-              .split(',')
-              .map(s => s.trim())
-              .filter(s => s.length > 0),
-          }
+          aws_services: resourcesText
+            .split(',')
+            .map(s => s.trim())
+            .filter(s => s.length > 0),
+        }
         : {}),
       ...(deployEnv
         ? {
-            task_config: {
-              deploy_env: deployEnv,
-            },
-          }
+          task_config: {
+            deploy_env: deployEnv,
+          },
+        }
         : {}),
     };
 
@@ -401,6 +401,28 @@ async function main(): Promise<void> {
           }
         } catch (err: unknown) {
           console.error('Error copying optimize.py:', err);
+        }
+      }
+
+      // Copy ci-cd.yml if CI/CD Pipeline subtask is selected
+      // This file serves as a reference workflow for CI/CD integration tasks
+      if (taskSubCategory === 'CI/CD Pipeline' && templateName !== 'cicd-yml') {
+        const cicdYmlPath = path.join(
+          __dirname,
+          '..',
+          'templates',
+          'cicd-yml',
+          'lib',
+          'ci-cd.yml'
+        );
+        const destPath = path.join(__dirname, '..', 'lib', 'ci-cd.yml');
+        try {
+          if (await fs.pathExists(cicdYmlPath)) {
+            await fs.copy(cicdYmlPath, destPath, { overwrite: true });
+            console.log('✓ Copied ci-cd.yml to lib/');
+          }
+        } catch (err: unknown) {
+          console.error('Error copying ci-cd.yml:', err);
         }
       }
 
