@@ -1074,7 +1074,6 @@ Resources:
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceIdentifier: webapp-prod-database
       Engine: mysql
       EngineVersion: '8.0.43'
       DBInstanceClass: !Ref DBInstanceClass
