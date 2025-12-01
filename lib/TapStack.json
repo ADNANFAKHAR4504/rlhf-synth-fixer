@@ -531,11 +531,14 @@
             {
               "Id": "DeleteOldLogs",
               "Status": "Enabled",
-              "ExpirationInDays": 90,
+              "ExpirationInDays": 90
+            },
+            {
+              "Id": "DeleteNoncurrentVersions",
+              "Status": "Enabled",
               "NoncurrentVersionExpiration": {
                 "NoncurrentDays": 1
-              },
-              "ExpiredObjectDeleteMarker": true
+              }
             }
           ]
         },
@@ -643,11 +646,14 @@
                   "TransitionInDays": 30,
                   "StorageClass": "STANDARD_IA"
                 }
-              ],
+              ]
+            },
+            {
+              "Id": "DeleteNoncurrentVersions",
+              "Status": "Enabled",
               "NoncurrentVersionExpiration": {
                 "NoncurrentDays": 1
-              },
-              "ExpiredObjectDeleteMarker": true
+              }
             }
           ]
         },
