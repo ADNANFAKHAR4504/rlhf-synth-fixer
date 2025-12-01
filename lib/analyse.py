@@ -324,9 +324,12 @@ class EFSAnalyzer:
         """Get lifecycle management configuration"""
         try:
             response = self.efs.describe_lifecycle_configuration(FileSystemId=fs_id)
-            return response.get('LifecyclePolicies', [])
+            policies = response.get('LifecyclePolicies', [])
+            # Return None if empty to distinguish from configured but empty
+            return policies if policies else None
         except ClientError as e:
-            if e.response['Error']['Code'] == 'FileSystemNotFound':
+            error_code = e.response.get('Error', {}).get('Code', '')
+            if error_code in ['FileSystemNotFound', 'LifecycleConfigurationNotFound']:
                 return None
             logger.error(f"Error getting lifecycle config for {fs_id}: {e}")
             return None
