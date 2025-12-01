@@ -1,4 +1,4 @@
-// Loan Processing Application Integration Tests
+// PCI-DSS Payment Processing Infrastructure Integration Tests
 // These tests validate the deployed infrastructure using actual AWS resources
 
 import * as fs from "fs";
@@ -10,29 +10,31 @@ import {
   DescribeSecurityGroupsCommand,
 } from "@aws-sdk/client-ec2";
 import {
-  ECSClient,
-  DescribeClustersCommand,
-  DescribeServicesCommand,
-  ListTasksCommand,
-} from "@aws-sdk/client-ecs";
-import {
-  RDSClient,
-  DescribeDBClustersCommand,
-  DescribeDBInstancesCommand,
-} from "@aws-sdk/client-rds";
-import {
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-  DescribeListenersCommand,
-} from "@aws-sdk/client-elastic-load-balancing-v2";
-import {
   S3Client,
   HeadBucketCommand,
   GetBucketVersioningCommand,
   GetBucketEncryptionCommand,
   GetPublicAccessBlockCommand,
 } from "@aws-sdk/client-s3";
+import {
+  DynamoDBClient,
+  DescribeTableCommand,
+} from "@aws-sdk/client-dynamodb";
+import {
+  LambdaClient,
+  GetFunctionCommand,
+  GetFunctionConfigurationCommand,
+} from "@aws-sdk/client-lambda";
+import {
+  KMSClient,
+  DescribeKeyCommand,
+  GetKeyRotationStatusCommand,
+} from "@aws-sdk/client-kms";
+import {
+  CloudTrailClient,
+  GetTrailCommand,
+  GetTrailStatusCommand,
+} from "@aws-sdk/client-cloudtrail";
 import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
@@ -74,16 +76,11 @@ function readStructuredOutputs(): Record<string, string> {
   const outputs: Record<string, string> = {};
   const envVars = [
     "VPCId",
-    "PublicSubnets",
-    "PrivateSubnets",
-    "ECSClusterName",
-    "ECSServiceName",
-    "AuroraClusterEndpoint",
-    "AuroraClusterReadEndpoint",
-    "DocumentBucketName",
-    "ApplicationLoadBalancerDNS",
-    "ApplicationLoadBalancerURL",
-    "LogGroupName",
+    "PaymentBucketName",
+    "TransactionTableName",
+    "PaymentProcessorFunctionArn",
+    "KMSKeyId",
+    "CloudTrailName",
   ];
 
   for (const key of envVars) {
@@ -96,7 +93,7 @@ function readStructuredOutputs(): Record<string, string> {
   if (Object.keys(outputs).length === 0) {
     throw new Error(
       `Outputs file not found. Tried: ${possiblePaths.join(", ")}\n` +
-      "Set environment variables (CFN_VPC_ID, CFN_ECS_CLUSTER_NAME, etc.) or ensure CloudFormation outputs are available."
+      "Set environment variables (CFN_VPC_ID, CFN_PAYMENT_BUCKET_NAME, etc.) or ensure CloudFormation outputs are available."
     );
   }
 
@@ -134,33 +131,29 @@ const region = process.env.AWS_REGION || "us-east-1";
 
 // AWS clients
 const ec2Client = new EC2Client({ region });
-const ecsClient = new ECSClient({ region });
-const rdsClient = new RDSClient({ region });
-const elbClient = new ElasticLoadBalancingV2Client({ region });
 const s3Client = new S3Client({ region });
+const dynamoDBClient = new DynamoDBClient({ region });
+const lambdaClient = new LambdaClient({ region });
+const kmsClient = new KMSClient({ region });
+const cloudTrailClient = new CloudTrailClient({ region });
 const logsClient = new CloudWatchLogsClient({ region });
 
-describe("Loan Processing Application Integration Tests", () => {
+describe("PCI-DSS Payment Processing Infrastructure Integration Tests", () => {
   describe("CloudFormation Outputs Validation", () => {
     test("should have all required outputs", () => {
       expect(outputs.VPCId).toBeTruthy();
-      expect(outputs.PublicSubnets).toBeTruthy();
-      expect(outputs.PrivateSubnets).toBeTruthy();
-      expect(outputs.ECSClusterName).toBeTruthy();
-      expect(outputs.ECSServiceName).toBeTruthy();
-      expect(outputs.AuroraClusterEndpoint).toBeTruthy();
-      expect(outputs.AuroraClusterReadEndpoint).toBeTruthy();
-      expect(outputs.DocumentBucketName).toBeTruthy();
-      expect(outputs.ApplicationLoadBalancerDNS).toBeTruthy();
-      expect(outputs.LogGroupName).toBeTruthy();
+      expect(outputs.PaymentBucketName).toBeTruthy();
+      expect(outputs.TransactionTableName).toBeTruthy();
+      expect(outputs.PaymentProcessorFunctionArn).toBeTruthy();
+      expect(outputs.KMSKeyId).toBeTruthy();
+      expect(outputs.CloudTrailName).toBeTruthy();
     });
 
     test("outputs should include environment suffix", () => {
       const envSuffix = process.env.ENVIRONMENT_SUFFIX || "pr7571";
-      expect(outputs.ECSClusterName).toContain(envSuffix);
-      expect(outputs.ECSServiceName).toContain(envSuffix);
-      expect(outputs.DocumentBucketName).toContain(envSuffix);
-      expect(outputs.LogGroupName).toContain(envSuffix);
+      expect(outputs.PaymentBucketName).toContain(envSuffix);
+      expect(outputs.TransactionTableName).toContain(envSuffix);
+      expect(outputs.CloudTrailName).toContain(envSuffix);
     });
   });
 
@@ -180,46 +173,24 @@ describe("Loan Processing Application Integration Tests", () => {
       expect(response.Vpcs![0].CidrBlock).toBe("10.0.0.0/16");
     }, 90000);
 
-    test("should have 3 public subnets", async () => {
-      const publicSubnetIds = outputs.PublicSubnets.split(",").map((s) => s.trim());
-      expect(publicSubnetIds.length).toBe(3);
-
+    test("VPC should have subnets", async () => {
       const response = await retry(async () => {
         return await ec2Client.send(
           new DescribeSubnetsCommand({
-            SubnetIds: publicSubnetIds,
+            Filters: [
+              {
+                Name: "vpc-id",
+                Values: [outputs.VPCId],
+              },
+            ],
           })
         );
       });
 
       expect(response.Subnets).toBeDefined();
-      expect(response.Subnets!.length).toBe(3);
-      response.Subnets!.forEach((subnet) => {
-        expect(subnet.State).toBe("available");
-      });
+      expect(response.Subnets!.length).toBeGreaterThan(0);
     }, 90000);
 
-    test("should have 3 private subnets", async () => {
-      const privateSubnetIds = outputs.PrivateSubnets.split(",").map((s) => s.trim());
-      expect(privateSubnetIds.length).toBe(3);
-
-      const response = await retry(async () => {
-        return await ec2Client.send(
-          new DescribeSubnetsCommand({
-            SubnetIds: privateSubnetIds,
-          })
-        );
-      });
-
-      expect(response.Subnets).toBeDefined();
-      expect(response.Subnets!.length).toBe(3);
-      response.Subnets!.forEach((subnet) => {
-        expect(subnet.State).toBe("available");
-      });
-    }, 90000);
-  });
-
-  describe("Security Groups Validation", () => {
     test("should have security groups in VPC", async () => {
       const response = await retry(async () => {
         return await ec2Client.send(
@@ -239,220 +210,40 @@ describe("Loan Processing Application Integration Tests", () => {
     }, 90000);
   });
 
-  describe("ECS Fargate Cluster Validation", () => {
-    test("ECS cluster should exist and be active", async () => {
+  describe("KMS Encryption Key Validation", () => {
+    test("KMS key should exist and be enabled", async () => {
       const response = await retry(async () => {
-        return await ecsClient.send(
-          new DescribeClustersCommand({
-            clusters: [outputs.ECSClusterName],
+        return await kmsClient.send(
+          new DescribeKeyCommand({
+            KeyId: outputs.KMSKeyId,
           })
         );
       });
 
-      expect(response.clusters).toBeDefined();
-      expect(response.clusters!.length).toBe(1);
-      expect(response.clusters![0].status).toBe("ACTIVE");
-      expect(response.clusters![0].clusterName).toBe(outputs.ECSClusterName);
+      expect(response.KeyMetadata).toBeDefined();
+      expect(response.KeyMetadata!.KeyId).toBe(outputs.KMSKeyId);
+      expect(response.KeyMetadata!.KeyState).toBe("Enabled");
+      expect(response.KeyMetadata!.KeyUsage).toBe("ENCRYPT_DECRYPT");
     }, 90000);
 
-    test("ECS service should exist and be active", async () => {
+    test("KMS key should have automatic rotation enabled", async () => {
       const response = await retry(async () => {
-        return await ecsClient.send(
-          new DescribeServicesCommand({
-            cluster: outputs.ECSClusterName,
-            services: [outputs.ECSServiceName],
+        return await kmsClient.send(
+          new GetKeyRotationStatusCommand({
+            KeyId: outputs.KMSKeyId,
           })
         );
       });
 
-      expect(response.services).toBeDefined();
-      expect(response.services!.length).toBe(1);
-      expect(response.services![0].status).toBe("ACTIVE");
-      expect(response.services![0].launchType).toBe("FARGATE");
-    }, 90000);
-
-    test("ECS service should have running tasks", async () => {
-      const response = await retry(async () => {
-        return await ecsClient.send(
-          new ListTasksCommand({
-            cluster: outputs.ECSClusterName,
-            serviceName: outputs.ECSServiceName,
-            desiredStatus: "RUNNING",
-          })
-        );
-      }, 15, 3000, "ECS tasks");
-
-      expect(response.taskArns).toBeDefined();
-      // Tasks might take time to start, so we just verify the API call works
-      expect(Array.isArray(response.taskArns)).toBe(true);
-    }, 120000);
-
-    test("ECS service should use load balancer", async () => {
-      const response = await retry(async () => {
-        return await ecsClient.send(
-          new DescribeServicesCommand({
-            cluster: outputs.ECSClusterName,
-            services: [outputs.ECSServiceName],
-          })
-        );
-      });
-
-      expect(response.services![0].loadBalancers).toBeDefined();
-      expect(response.services![0].loadBalancers!.length).toBeGreaterThan(0);
+      expect(response.KeyRotationEnabled).toBe(true);
     }, 90000);
   });
 
-  describe("Aurora PostgreSQL Serverless v2 Validation", () => {
-    test("Aurora cluster should exist and be available", async () => {
-      // Extract cluster identifier from endpoint
-      const clusterIdentifier = outputs.AuroraClusterEndpoint.split(".")[0];
-
-      const response = await retry(async () => {
-        return await rdsClient.send(new DescribeDBClustersCommand({}));
-      });
-
-      const cluster = response.DBClusters?.find(
-        (c) => c.DBClusterIdentifier === clusterIdentifier || c.Endpoint === outputs.AuroraClusterEndpoint
-      );
-
-      expect(cluster).toBeDefined();
-      expect(cluster?.Status).toBe("available");
-      expect(cluster?.Engine).toBe("aurora-postgresql");
-    }, 120000);
-
-    test("Aurora cluster should have Serverless v2 scaling configuration", async () => {
-      const clusterIdentifier = outputs.AuroraClusterEndpoint.split(".")[0];
-
-      const response = await retry(async () => {
-        return await rdsClient.send(new DescribeDBClustersCommand({}));
-      });
-
-      const cluster = response.DBClusters?.find(
-        (c) => c.DBClusterIdentifier === clusterIdentifier || c.Endpoint === outputs.AuroraClusterEndpoint
-      );
-
-      expect(cluster?.ServerlessV2ScalingConfiguration).toBeDefined();
-      expect(cluster?.ServerlessV2ScalingConfiguration?.MinCapacity).toBe(0.5);
-      expect(cluster?.ServerlessV2ScalingConfiguration?.MaxCapacity).toBe(4);
-    }, 120000);
-
-    test("Aurora cluster should use encryption", async () => {
-      const clusterIdentifier = outputs.AuroraClusterEndpoint.split(".")[0];
-
-      const response = await retry(async () => {
-        return await rdsClient.send(new DescribeDBClustersCommand({}));
-      });
-
-      const cluster = response.DBClusters?.find(
-        (c) => c.DBClusterIdentifier === clusterIdentifier || c.Endpoint === outputs.AuroraClusterEndpoint
-      );
-
-      expect(cluster?.StorageEncrypted).toBe(true);
-      expect(cluster?.KmsKeyId).toBeDefined();
-    }, 120000);
-
-    test("Aurora cluster should have two instances for Multi-AZ", async () => {
-      const clusterIdentifier = outputs.AuroraClusterEndpoint.split(".")[0];
-
-      const response = await retry(async () => {
-        return await rdsClient.send(new DescribeDBClustersCommand({}));
-      });
-
-      const cluster = response.DBClusters?.find(
-        (c) => c.DBClusterIdentifier === clusterIdentifier || c.Endpoint === outputs.AuroraClusterEndpoint
-      );
-
-      expect(cluster?.DBClusterMembers).toBeDefined();
-      expect(cluster?.DBClusterMembers!.length).toBe(2);
-    }, 120000);
-
-    test("Aurora instances should use db.serverless class", async () => {
-      const clusterIdentifier = outputs.AuroraClusterEndpoint.split(".")[0];
-
-      const response = await retry(async () => {
-        return await rdsClient.send(new DescribeDBInstancesCommand({}));
-      });
-
-      const instances = response.DBInstances?.filter(
-        (i) => i.DBClusterIdentifier === clusterIdentifier
-      );
-
-      expect(instances).toBeDefined();
-      expect(instances!.length).toBeGreaterThanOrEqual(2);
-      instances!.forEach((instance) => {
-        expect(instance.DBInstanceClass).toBe("db.serverless");
-      });
-    }, 120000);
-  });
-
-  describe("Application Load Balancer Validation", () => {
-    test("ALB should exist and be active", async () => {
-      const response = await retry(async () => {
-        return await elbClient.send(new DescribeLoadBalancersCommand({}));
-      });
-
-      const alb = response.LoadBalancers?.find(
-        (lb) => lb.DNSName === outputs.ApplicationLoadBalancerDNS
-      );
-
-      expect(alb).toBeDefined();
-      expect(alb?.State?.Code).toBe("active");
-      expect(alb?.Scheme).toBe("internet-facing");
-      expect(alb?.Type).toBe("application");
-    }, 90000);
-
-    test("ALB should have HTTP listener", async () => {
-      const lbResponse = await retry(async () => {
-        return await elbClient.send(new DescribeLoadBalancersCommand({}));
-      });
-
-      const alb = lbResponse.LoadBalancers?.find(
-        (lb) => lb.DNSName === outputs.ApplicationLoadBalancerDNS
-      );
-
-      expect(alb?.LoadBalancerArn).toBeDefined();
-
-      const listenerResponse = await retry(async () => {
-        return await elbClient.send(
-          new DescribeListenersCommand({
-            LoadBalancerArn: alb!.LoadBalancerArn,
-          })
-        );
-      });
-
-      const httpListener = listenerResponse.Listeners?.find((l) => l.Port === 80);
-      expect(httpListener).toBeDefined();
-      expect(httpListener?.Protocol).toBe("HTTP");
-    }, 90000);
-
-    test("ALB should have target groups", async () => {
-      const lbResponse = await retry(async () => {
-        return await elbClient.send(new DescribeLoadBalancersCommand({}));
-      });
-
-      const alb = lbResponse.LoadBalancers?.find(
-        (lb) => lb.DNSName === outputs.ApplicationLoadBalancerDNS
-      );
-
-      const tgResponse = await retry(async () => {
-        return await elbClient.send(
-          new DescribeTargetGroupsCommand({
-            LoadBalancerArn: alb!.LoadBalancerArn,
-          })
-        );
-      });
-
-      expect(tgResponse.TargetGroups).toBeDefined();
-      expect(tgResponse.TargetGroups!.length).toBeGreaterThan(0);
-      // Target type should be 'ip' for Fargate
-      expect(tgResponse.TargetGroups![0].TargetType).toBe("ip");
-    }, 90000);
-  });
-
-  describe("S3 Document Bucket Validation", () => {
+  describe("S3 Payment Bucket Validation", () => {
     test("S3 bucket should exist", async () => {
-      const bucketName = outputs.DocumentBucketName;
-      
+      const bucketName = outputs.PaymentBucketName;
+      expect(bucketName).toBeTruthy();
+
       await retry(async () => {
         return await s3Client.send(
           new HeadBucketCommand({
@@ -463,8 +254,8 @@ describe("Loan Processing Application Integration Tests", () => {
     }, 60000);
 
     test("S3 bucket should have versioning enabled", async () => {
-      const bucketName = outputs.DocumentBucketName;
-      
+      const bucketName = outputs.PaymentBucketName;
+
       const response = await retry(async () => {
         return await s3Client.send(
           new GetBucketVersioningCommand({
@@ -476,9 +267,9 @@ describe("Loan Processing Application Integration Tests", () => {
       expect(response.Status).toBe("Enabled");
     }, 60000);
 
-    test("S3 bucket should have encryption enabled", async () => {
-      const bucketName = outputs.DocumentBucketName;
-      
+    test("S3 bucket should have KMS encryption enabled", async () => {
+      const bucketName = outputs.PaymentBucketName;
+
       const response = await retry(async () => {
         return await s3Client.send(
           new GetBucketEncryptionCommand({
@@ -490,11 +281,15 @@ describe("Loan Processing Application Integration Tests", () => {
       expect(response.ServerSideEncryptionConfiguration).toBeDefined();
       expect(response.ServerSideEncryptionConfiguration?.Rules).toBeDefined();
       expect(response.ServerSideEncryptionConfiguration!.Rules!.length).toBeGreaterThan(0);
+      
+      const encryptionRule = response.ServerSideEncryptionConfiguration!.Rules![0];
+      expect(encryptionRule.ApplyServerSideEncryptionByDefault).toBeDefined();
+      expect(encryptionRule.ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe("aws:kms");
     }, 60000);
 
     test("S3 bucket should have public access blocked", async () => {
-      const bucketName = outputs.DocumentBucketName;
-      
+      const bucketName = outputs.PaymentBucketName;
+
       const response = await retry(async () => {
         return await s3Client.send(
           new GetPublicAccessBlockCommand({
@@ -511,37 +306,213 @@ describe("Loan Processing Application Integration Tests", () => {
     }, 60000);
   });
 
+  describe("DynamoDB Transaction Table Validation", () => {
+    test("DynamoDB table should exist and be active", async () => {
+      const tableName = outputs.TransactionTableName;
+
+      const response = await retry(async () => {
+        return await dynamoDBClient.send(
+          new DescribeTableCommand({
+            TableName: tableName,
+          })
+        );
+      });
+
+      expect(response.Table).toBeDefined();
+      expect(response.Table!.TableName).toBe(tableName);
+      expect(response.Table!.TableStatus).toBe("ACTIVE");
+    }, 90000);
+
+    test("DynamoDB table should have KMS encryption enabled", async () => {
+      const tableName = outputs.TransactionTableName;
+
+      const response = await retry(async () => {
+        return await dynamoDBClient.send(
+          new DescribeTableCommand({
+            TableName: tableName,
+          })
+        );
+      });
+
+      expect(response.Table!.SSEDescription).toBeDefined();
+      expect(response.Table!.SSEDescription!.Status).toBe("ENABLED");
+      expect(response.Table!.SSEDescription!.SSEType).toBe("KMS");
+      expect(response.Table!.SSEDescription!.KMSMasterKeyArn).toBeDefined();
+    }, 90000);
+
+    test("DynamoDB table should have Point-in-Time Recovery enabled", async () => {
+      const tableName = outputs.TransactionTableName;
+
+      const response = await retry(async () => {
+        return await dynamoDBClient.send(
+          new DescribeTableCommand({
+            TableName: tableName,
+          })
+        );
+      });
+
+      // Point-in-Time Recovery status is checked via ContinuousBackupsDescription
+      expect(response.Table!.ContinuousBackupsDescription).toBeDefined();
+      expect(response.Table!.ContinuousBackupsDescription!.PointInTimeRecoveryDescription).toBeDefined();
+      expect(response.Table!.ContinuousBackupsDescription!.PointInTimeRecoveryDescription!.PointInTimeRecoveryStatus).toBe("ENABLED");
+    }, 90000);
+  });
+
+  describe("Lambda Payment Processor Function Validation", () => {
+    test("Lambda function should exist", async () => {
+      const functionArn = outputs.PaymentProcessorFunctionArn;
+      const functionName = functionArn.split(":function:")[1];
+
+      const response = await retry(async () => {
+        return await lambdaClient.send(
+          new GetFunctionCommand({
+            FunctionName: functionName,
+          })
+        );
+      });
+
+      expect(response.Configuration).toBeDefined();
+      expect(response.Configuration!.FunctionName).toBe(functionName);
+      expect(response.Configuration!.State).toBe("Active");
+    }, 90000);
+
+    test("Lambda function should be in VPC", async () => {
+      const functionArn = outputs.PaymentProcessorFunctionArn;
+      const functionName = functionArn.split(":function:")[1];
+
+      const response = await retry(async () => {
+        return await lambdaClient.send(
+          new GetFunctionConfigurationCommand({
+            FunctionName: functionName,
+          })
+        );
+      });
+
+      expect(response.VpcConfig).toBeDefined();
+      expect(response.VpcConfig!.SubnetIds).toBeDefined();
+      expect(response.VpcConfig!.SubnetIds!.length).toBeGreaterThan(0);
+      expect(response.VpcConfig!.SecurityGroupIds).toBeDefined();
+      expect(response.VpcConfig!.SecurityGroupIds!.length).toBeGreaterThan(0);
+    }, 90000);
+
+    test("Lambda function should have correct runtime and timeout", async () => {
+      const functionArn = outputs.PaymentProcessorFunctionArn;
+      const functionName = functionArn.split(":function:")[1];
+
+      const response = await retry(async () => {
+        return await lambdaClient.send(
+          new GetFunctionConfigurationCommand({
+            FunctionName: functionName,
+          })
+        );
+      });
+
+      expect(response.Runtime).toBe("python3.11");
+      expect(response.Timeout).toBe(300);
+      expect(response.MemorySize).toBe(512);
+    }, 90000);
+  });
+
+  describe("CloudTrail Validation", () => {
+    test("CloudTrail trail should exist", async () => {
+      const trailName = outputs.CloudTrailName;
+
+      const response = await retry(async () => {
+        return await cloudTrailClient.send(
+          new GetTrailCommand({
+            Name: trailName,
+          })
+        );
+      });
+
+      expect(response.Trail).toBeDefined();
+      expect(response.Trail!.Name).toBe(trailName);
+      expect(response.Trail!.IsLogging).toBe(true);
+    }, 90000);
+
+    test("CloudTrail trail should be logging", async () => {
+      const trailName = outputs.CloudTrailName;
+
+      const statusResponse = await retry(async () => {
+        return await cloudTrailClient.send(
+          new GetTrailStatusCommand({
+            Name: trailName,
+          })
+        );
+      });
+
+      expect(statusResponse.IsLogging).toBe(true);
+    }, 90000);
+
+    test("CloudTrail trail should use KMS encryption", async () => {
+      const trailName = outputs.CloudTrailName;
+
+      const response = await retry(async () => {
+        return await cloudTrailClient.send(
+          new GetTrailCommand({
+            Name: trailName,
+          })
+        );
+      });
+
+      expect(response.Trail!.KmsKeyId).toBeDefined();
+    }, 90000);
+
+    test("CloudTrail trail should have S3 bucket configured", async () => {
+      const trailName = outputs.CloudTrailName;
+
+      const response = await retry(async () => {
+        return await cloudTrailClient.send(
+          new GetTrailCommand({
+            Name: trailName,
+          })
+        );
+      });
+
+      expect(response.Trail!.S3BucketName).toBeDefined();
+      expect(response.Trail!.S3BucketName).toContain("cloudtrail");
+    }, 90000);
+  });
+
   describe("CloudWatch Logs Validation", () => {
-    test("CloudWatch log group should exist", async () => {
+    test("Lambda log group should exist", async () => {
+      const functionArn = outputs.PaymentProcessorFunctionArn;
+      const functionName = functionArn.split(":function:")[1];
+      const logGroupName = `/aws/lambda/${functionName}`;
+
       const response = await retry(async () => {
         return await logsClient.send(
           new DescribeLogGroupsCommand({
-            logGroupNamePrefix: outputs.LogGroupName,
+            logGroupNamePrefix: logGroupName,
           })
         );
       });
 
       const logGroup = response.logGroups?.find(
-        (lg) => lg.logGroupName === outputs.LogGroupName
+        (lg) => lg.logGroupName === logGroupName
       );
       expect(logGroup).toBeDefined();
     }, 90000);
 
-    test("CloudWatch log group should have 365-day retention", async () => {
+    test("Lambda log group should have retention configured", async () => {
+      const functionArn = outputs.PaymentProcessorFunctionArn;
+      const functionName = functionArn.split(":function:")[1];
+      const logGroupName = `/aws/lambda/${functionName}`;
+
       const response = await retry(async () => {
         return await logsClient.send(
           new DescribeLogGroupsCommand({
-            logGroupNamePrefix: outputs.LogGroupName,
+            logGroupNamePrefix: logGroupName,
           })
         );
       });
 
       const logGroup = response.logGroups?.find(
-        (lg) => lg.logGroupName === outputs.LogGroupName
+        (lg) => lg.logGroupName === logGroupName
       );
       expect(logGroup).toBeDefined();
       if (logGroup?.retentionInDays) {
-        expect(logGroup.retentionInDays).toBe(365);
+        expect(logGroup.retentionInDays).toBe(30);
       }
     }, 90000);
   });
@@ -550,24 +521,28 @@ describe("Loan Processing Application Integration Tests", () => {
     test("complete infrastructure stack should be operational", () => {
       // Verify all critical components are present
       expect(outputs.VPCId).toBeTruthy();
-      expect(outputs.ECSClusterName).toBeTruthy();
-      expect(outputs.AuroraClusterEndpoint).toBeTruthy();
-      expect(outputs.ApplicationLoadBalancerDNS).toBeTruthy();
-      expect(outputs.DocumentBucketName).toBeTruthy();
-      expect(outputs.LogGroupName).toBeTruthy();
-    });
-
-    test("ALB URL should be publicly accessible", () => {
-      expect(outputs.ApplicationLoadBalancerURL).toBeDefined();
-      expect(outputs.ApplicationLoadBalancerURL).toMatch(/^http:\/\//);
-      expect(outputs.ApplicationLoadBalancerURL).toContain(outputs.ApplicationLoadBalancerDNS);
+      expect(outputs.PaymentBucketName).toBeTruthy();
+      expect(outputs.TransactionTableName).toBeTruthy();
+      expect(outputs.PaymentProcessorFunctionArn).toBeTruthy();
+      expect(outputs.KMSKeyId).toBeTruthy();
+      expect(outputs.CloudTrailName).toBeTruthy();
     });
 
     test("all resource names should follow naming convention", () => {
-      expect(outputs.ECSClusterName).toMatch(/loan-processing-cluster-/);
-      expect(outputs.ECSServiceName).toMatch(/loan-processing-service-/);
-      expect(outputs.DocumentBucketName).toMatch(/loan-documents-/);
-      expect(outputs.LogGroupName).toMatch(/\/ecs\/loan-processing-/);
+      expect(outputs.PaymentBucketName).toMatch(/payment-files-/);
+      expect(outputs.TransactionTableName).toMatch(/payment-transactions-/);
+      expect(outputs.CloudTrailName).toMatch(/payment-trail-/);
+    });
+
+    test("output values should have correct formats", () => {
+      // VPC ID format
+      expect(outputs.VPCId).toMatch(/^vpc-[a-z0-9]+$/);
+
+      // Lambda ARN format
+      expect(outputs.PaymentProcessorFunctionArn).toMatch(/^arn:aws:lambda:.*:function:.*$/);
+
+      // KMS Key ID format (UUID)
+      expect(outputs.KMSKeyId).toMatch(/^[a-f0-9-]{36}$/);
     });
   });
 });
