@@ -29,14 +29,14 @@ describe('TapStack CloudFormation Template - Loan Processing Application', () =>
       expect(template.Outputs).toBeDefined();
     });
 
-    test('should have exactly 51 resources', () => {
+    test('should have exactly 52 resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(51);
+      expect(resourceCount).toBe(52);
     });
 
-    test('should have exactly 8 parameters', () => {
+    test('should have exactly 9 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(8);
+      expect(parameterCount).toBe(9);
     });
 
     test('should have exactly 11 outputs', () => {
