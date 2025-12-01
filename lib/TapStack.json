@@ -44,6 +44,32 @@
       ]
     }
   },
+  "Conditions": {
+    "HasPrimaryKMSKey": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "PrimaryKMSKeyArn"
+            },
+            ""
+          ]
+        }
+      ]
+    },
+    "HasAlertEmail": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "AlertEmailAddress"
+            },
+            ""
+          ]
+        }
+      ]
+    }
+  },
   "Parameters": {
     "EnvironmentSuffix": {
       "Type": "String",
@@ -70,15 +96,17 @@
     },
     "PrimaryKMSKeyArn": {
       "Type": "String",
-      "Description": "ARN of the KMS key in primary region (us-east-1) for CloudWatch Logs encryption",
-      "AllowedPattern": "^arn:aws:kms:[a-z0-9-]+:[0-9]{12}:key/[a-f0-9-]+$",
-      "ConstraintDescription": "Must be a valid KMS key ARN"
+      "Default": "",
+      "Description": "ARN of the KMS key in primary region (us-east-1) for CloudWatch Logs encryption (optional - leave empty to disable encryption)",
+      "AllowedPattern": "^(arn:aws:kms:[a-z0-9-]+:[0-9]{12}:key/[a-f0-9-]+)?$",
+      "ConstraintDescription": "Must be a valid KMS key ARN or empty"
     },
     "SecondaryKMSKeyArn": {
       "Type": "String",
-      "Description": "ARN of the KMS key in secondary region (eu-west-1) for CloudWatch Logs encryption",
-      "AllowedPattern": "^arn:aws:kms:[a-z0-9-]+:[0-9]{12}:key/[a-f0-9-]+$",
-      "ConstraintDescription": "Must be a valid KMS key ARN"
+      "Default": "",
+      "Description": "ARN of the KMS key in secondary region (eu-west-1) for CloudWatch Logs encryption (optional - leave empty to disable encryption)",
+      "AllowedPattern": "^(arn:aws:kms:[a-z0-9-]+:[0-9]{12}:key/[a-f0-9-]+)?$",
+      "ConstraintDescription": "Must be a valid KMS key ARN or empty"
     },
     "LambdaFunctionName": {
       "Type": "String",
@@ -92,9 +120,10 @@
     },
     "AlertEmailAddress": {
       "Type": "String",
-      "Description": "Email address for critical alerts",
-      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
-      "ConstraintDescription": "Must be a valid email address"
+      "Default": "",
+      "Description": "Email address for critical alerts (optional - leave empty to disable email notifications)",
+      "AllowedPattern": "^([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})?$",
+      "ConstraintDescription": "Must be a valid email address or empty"
     }
   },
   "Resources": {
@@ -108,7 +137,15 @@
         },
         "RetentionInDays": 30,
         "KmsKeyId": {
-          "Ref": "PrimaryKMSKeyArn"
+          "Fn::If": [
+            "HasPrimaryKMSKey",
+            {
+              "Ref": "PrimaryKMSKeyArn"
+            },
+            {
+              "Ref": "AWS::NoValue"
+            }
+          ]
         },
         "Tags": [
           {
@@ -142,7 +179,15 @@
         },
         "RetentionInDays": 30,
         "KmsKeyId": {
-          "Ref": "PrimaryKMSKeyArn"
+          "Fn::If": [
+            "HasPrimaryKMSKey",
+            {
+              "Ref": "PrimaryKMSKeyArn"
+            },
+            {
+              "Ref": "AWS::NoValue"
+            }
+          ]
         },
         "Tags": [
           {
@@ -176,7 +221,15 @@
         },
         "RetentionInDays": 30,
         "KmsKeyId": {
-          "Ref": "PrimaryKMSKeyArn"
+          "Fn::If": [
+            "HasPrimaryKMSKey",
+            {
+              "Ref": "PrimaryKMSKeyArn"
+            },
+            {
+              "Ref": "AWS::NoValue"
+            }
+          ]
         },
         "Tags": [
           {
@@ -410,6 +463,7 @@
     },
     "CriticalAlertEmailSubscription": {
       "Type": "AWS::SNS::Subscription",
+      "Condition": "HasAlertEmail",
       "Properties": {
         "Protocol": "email",
         "TopicArn": {
