@@ -432,7 +432,7 @@ The solution implements:
           "Fn::Sub": "aurora-cluster-${EnvironmentSuffix}"
         },
         "Engine": "aurora-postgresql",
-        "EngineVersion": "15.14",
+        "EngineVersion": "15.13",
         "EngineMode": "provisioned",
         "MasterUsername": {
           "Ref": "DatabaseMasterUsername"

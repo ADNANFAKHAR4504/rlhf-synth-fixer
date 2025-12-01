@@ -77,7 +77,7 @@ Line 434 of MODEL_RESPONSE.md (AuroraCluster resource):
 
 **IDEAL_RESPONSE Fix**:
 ```json
-"EngineVersion": "15.14",
+"EngineVersion": "15.13",
 ```
 
 **Root Cause**: The model used an Aurora PostgreSQL engine version (`15.3`) that is not available in AWS. When attempting to deploy, CloudFormation returned:
@@ -88,7 +88,7 @@ Resource handler returned message: "Cannot find version 15.3 for aurora-postgres
 
 **Deployment Impact**: Stack creation would fail with `CREATE_FAILED` status, causing a rollback of all resources. The stack would be in `ROLLBACK_COMPLETE` state and require manual deletion before retrying.
 
-**AWS API Verification**: Available Aurora PostgreSQL 15.x versions include `15.12`, `15.13`, and `15.14`. Version `15.3` does not exist.
+**AWS API Verification**: Available Aurora PostgreSQL 15.x versions include `15.12` and `15.13`. Version `15.3` does not exist. Note: While `15.14` may be available in AWS, cfn-lint validation requires using `15.13` which is the highest version in the allowed list.
 
 **Training Value**: This teaches the model to verify AWS service versions against actual available versions, either by checking AWS documentation or querying the AWS API before hardcoding version numbers.
 
@@ -394,7 +394,7 @@ All failures have been corrected in the IDEAL_RESPONSE:
 
 1. ✅ **File name corrected**: Changed from `dr-stack.json` to `TapStack.json`
 2. ✅ **Stack name pattern corrected**: Changed from `dr-stack-${environmentSuffix}` to `TapStack${environmentSuffix}`
-3. ✅ **Aurora engine version corrected**: Changed from `15.3` to `15.14` (available version)
+3. ✅ **Aurora engine version corrected**: Changed from `15.3` to `15.13` (available version that passes cfn-lint validation)
 4. ✅ **Default password added**: Added `"Default": "TempPassword123!"` to DatabaseMasterPassword parameter
 5. ✅ **Dynamic stack discovery**: Implemented `discoverStackName()` function that tries multiple discovery methods
 6. ✅ **Dynamic resource discovery**: Implemented `discoverStackResources()` function that discovers all resources from stack with pagination support
