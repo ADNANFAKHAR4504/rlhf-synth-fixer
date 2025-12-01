@@ -247,8 +247,7 @@ resource "aws_dynamodb_table" "transactions" {
   }
 
   server_side_encryption {
-    enabled     = true
-    kms_key_id  = aws_kms_key.payment_key.arn
+    enabled = true
   }
 
   point_in_time_recovery {
@@ -294,8 +293,7 @@ resource "aws_dynamodb_table" "audit_logs" {
   }
 
   server_side_encryption {
-    enabled     = true
-    kms_key_id  = aws_kms_key.payment_key.arn
+    enabled = true
   }
 
   point_in_time_recovery {
