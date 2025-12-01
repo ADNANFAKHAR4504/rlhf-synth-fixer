@@ -2,7 +2,7 @@
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "Multi-Region Disaster Recovery Solution for Payment Processing - Secondary Region (us-west-2)",
   "Parameters": {
-    "environmentSuffix": {
+    "EnvironmentSuffix": {
       "Type": "String",
       "Description": "Unique suffix for resource naming to enable multiple deployments",
       "Default": "dev",
@@ -36,6 +36,10 @@
       "Type": "String",
       "Description": "ARN of ACM SSL certificate for HTTPS listener",
       "Default": "arn:aws:acm:us-west-2:123456789012:certificate/12345678-1234-1234-1234-123456789012"
+    },
+    "DBMasterPasswordSecretArn": {
+      "Type": "String",
+      "Description": "ARN of the Secrets Manager secret containing database credentials from primary region"
     }
   },
   "Resources": {
@@ -49,7 +53,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "vpc-secondary-${environmentSuffix}"
+              "Fn::Sub": "vpc-secondary-${EnvironmentSuffix}"
             }
           }
         ]
@@ -76,7 +80,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "subnet-secondary-public-1-${environmentSuffix}"
+              "Fn::Sub": "subnet-secondary-public-1-${EnvironmentSuffix}"
             }
           }
         ]
@@ -103,7 +107,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "subnet-secondary-public-2-${environmentSuffix}"
+              "Fn::Sub": "subnet-secondary-public-2-${EnvironmentSuffix}"
             }
           }
         ]
@@ -129,7 +133,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "subnet-secondary-private-1-${environmentSuffix}"
+              "Fn::Sub": "subnet-secondary-private-1-${EnvironmentSuffix}"
             }
           }
         ]
@@ -155,7 +159,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "subnet-secondary-private-2-${environmentSuffix}"
+              "Fn::Sub": "subnet-secondary-private-2-${EnvironmentSuffix}"
             }
           }
         ]
@@ -169,7 +173,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "igw-secondary-${environmentSuffix}"
+              "Fn::Sub": "igw-secondary-${EnvironmentSuffix}"
             }
           }
         ]
@@ -197,7 +201,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "rt-secondary-public-${environmentSuffix}"
+              "Fn::Sub": "rt-secondary-public-${EnvironmentSuffix}"
             }
           }
         ]
@@ -243,7 +247,7 @@
       "Type": "AWS::RDS::DBSubnetGroup",
       "Properties": {
         "DBSubnetGroupName": {
-          "Fn::Sub": "aurora-subnet-group-secondary-${environmentSuffix}"
+          "Fn::Sub": "aurora-subnet-group-secondary-${EnvironmentSuffix}"
         },
         "DBSubnetGroupDescription": "Subnet group for Aurora secondary cluster",
         "SubnetIds": [
@@ -258,7 +262,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "aurora-subnet-group-secondary-${environmentSuffix}"
+              "Fn::Sub": "aurora-subnet-group-secondary-${EnvironmentSuffix}"
             }
           }
         ]
@@ -269,7 +273,7 @@
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupName": {
-          "Fn::Sub": "sg-aurora-secondary-${environmentSuffix}"
+          "Fn::Sub": "sg-aurora-secondary-${EnvironmentSuffix}"
         },
         "GroupDescription": "Security group for Aurora secondary database",
         "VpcId": {
@@ -299,7 +303,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "sg-aurora-secondary-${environmentSuffix}"
+              "Fn::Sub": "sg-aurora-secondary-${EnvironmentSuffix}"
             }
           }
         ]
@@ -310,7 +314,7 @@
       "Type": "AWS::RDS::DBCluster",
       "Properties": {
         "DBClusterIdentifier": {
-          "Fn::Sub": "secondary-payment-cluster-${environmentSuffix}"
+          "Fn::Sub": "secondary-payment-cluster-${EnvironmentSuffix}"
         },
         "Engine": "aurora-mysql",
         "EngineVersion": "8.0.mysql_aurora.3.04.0",
@@ -334,7 +338,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "secondary-payment-cluster-${environmentSuffix}"
+              "Fn::Sub": "secondary-payment-cluster-${EnvironmentSuffix}"
             }
           }
         ]
@@ -345,7 +349,7 @@
       "Type": "AWS::RDS::DBInstance",
       "Properties": {
         "DBInstanceIdentifier": {
-          "Fn::Sub": "secondary-payment-instance-${environmentSuffix}"
+          "Fn::Sub": "secondary-payment-instance-${EnvironmentSuffix}"
         },
         "DBClusterIdentifier": {
           "Ref": "SecondaryDBCluster"
@@ -357,7 +361,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "secondary-payment-instance-${environmentSuffix}"
+              "Fn::Sub": "secondary-payment-instance-${EnvironmentSuffix}"
             }
           }
         ]
@@ -368,7 +372,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "transaction-logs-secondary-${environmentSuffix}-${AWS::AccountId}"
+          "Fn::Sub": "transaction-logs-secondary-${EnvironmentSuffix}-${AWS::AccountId}"
         },
         "VersioningConfiguration": {
           "Status": "Enabled"
@@ -401,7 +405,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "transaction-logs-secondary-${environmentSuffix}"
+              "Fn::Sub": "transaction-logs-secondary-${EnvironmentSuffix}"
             }
           }
         ]
@@ -412,7 +416,7 @@
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupName": {
-          "Fn::Sub": "sg-lambda-secondary-${environmentSuffix}"
+          "Fn::Sub": "sg-lambda-secondary-${EnvironmentSuffix}"
         },
         "GroupDescription": "Security group for Lambda functions in secondary region",
         "VpcId": {
@@ -429,7 +433,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "sg-lambda-secondary-${environmentSuffix}"
+              "Fn::Sub": "sg-lambda-secondary-${EnvironmentSuffix}"
             }
           }
         ]
@@ -440,7 +444,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "lambda-execution-role-secondary-${environmentSuffix}"
+          "Fn::Sub": "lambda-execution-role-secondary-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -481,6 +485,15 @@
                     "logs:PutLogEvents"
                   ],
                   "Resource": "arn:aws:logs:*:*:*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue"
+                  ],
+                  "Resource": {
+                    "Ref": "DBMasterPasswordSecretArn"
+                  }
                 }
               ]
             }
@@ -490,7 +503,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "lambda-execution-role-secondary-${environmentSuffix}"
+              "Fn::Sub": "lambda-execution-role-secondary-${EnvironmentSuffix}"
             }
           }
         ]
@@ -501,9 +514,9 @@
       "Type": "AWS::Lambda::Function",
       "Properties": {
         "FunctionName": {
-          "Fn::Sub": "payment-processor-secondary-${environmentSuffix}"
+          "Fn::Sub": "payment-processor-secondary-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs22.x",
+        "Runtime": "nodejs20.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [
@@ -552,7 +565,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-processor-secondary-${environmentSuffix}"
+              "Fn::Sub": "payment-processor-secondary-${EnvironmentSuffix}"
             }
           }
         ]
@@ -563,7 +576,7 @@
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupName": {
-          "Fn::Sub": "sg-alb-secondary-${environmentSuffix}"
+          "Fn::Sub": "sg-alb-secondary-${EnvironmentSuffix}"
         },
         "GroupDescription": "Security group for Application Load Balancer in secondary region",
         "VpcId": {
@@ -589,7 +602,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "sg-alb-secondary-${environmentSuffix}"
+              "Fn::Sub": "sg-alb-secondary-${EnvironmentSuffix}"
             }
           }
         ]
@@ -600,7 +613,7 @@
       "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
       "Properties": {
         "Name": {
-          "Fn::Sub": "alb-secondary-${environmentSuffix}"
+          "Fn::Sub": "alb-secondary-${EnvironmentSuffix}"
         },
         "Type": "application",
         "Scheme": "internet-facing",
@@ -622,7 +635,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "alb-secondary-${environmentSuffix}"
+              "Fn::Sub": "alb-secondary-${EnvironmentSuffix}"
             }
           }
         ]
@@ -633,7 +646,7 @@
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
       "Properties": {
         "Name": {
-          "Fn::Sub": "tg-secondary-${environmentSuffix}"
+          "Fn::Sub": "tg-secondary-${EnvironmentSuffix}"
         },
         "TargetType": "lambda",
         "Targets": [
@@ -656,7 +669,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "tg-secondary-${environmentSuffix}"
+              "Fn::Sub": "tg-secondary-${EnvironmentSuffix}"
             }
           }
         ]
@@ -721,7 +734,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "health-check-secondary-${environmentSuffix}"
+              "Fn::Sub": "health-check-secondary-${EnvironmentSuffix}"
             }
           }
         ]
@@ -764,7 +777,7 @@
       "Type": "AWS::SNS::Topic",
       "Properties": {
         "TopicName": {
-          "Fn::Sub": "payment-alerts-secondary-${environmentSuffix}"
+          "Fn::Sub": "payment-alerts-secondary-${EnvironmentSuffix}"
         },
         "DisplayName": "Payment Processing Alerts - Secondary Region",
         "Subscription": [
@@ -779,7 +792,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-alerts-secondary-${environmentSuffix}"
+              "Fn::Sub": "payment-alerts-secondary-${EnvironmentSuffix}"
             }
           }
         ]
@@ -790,7 +803,7 @@
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": {
-          "Fn::Sub": "lambda-errors-secondary-${environmentSuffix}"
+          "Fn::Sub": "lambda-errors-secondary-${EnvironmentSuffix}"
         },
         "AlarmDescription": "Alert when Lambda function has errors in secondary region",
         "MetricName": "Errors",
@@ -819,7 +832,7 @@
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": {
-          "Fn::Sub": "route53-health-check-secondary-${environmentSuffix}"
+          "Fn::Sub": "route53-health-check-secondary-${EnvironmentSuffix}"
         },
         "AlarmDescription": "Alert when Route 53 health check fails in secondary region",
         "MetricName": "HealthCheckStatus",
