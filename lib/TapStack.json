@@ -518,6 +518,7 @@
     },
     "FlowLogsBucket": {
       "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Delete",
       "Properties": {
         "BucketName": {
           "Fn::Sub": "payment-flow-logs-${EnvironmentSuffix}-${AWS::AccountId}"
@@ -530,7 +531,11 @@
             {
               "Id": "DeleteOldLogs",
               "Status": "Enabled",
-              "ExpirationInDays": 90
+              "ExpirationInDays": 90,
+              "NoncurrentVersionExpiration": {
+                "NoncurrentDays": 1
+              },
+              "ExpiredObjectDeleteMarker": true
             }
           ]
         },
@@ -620,6 +625,7 @@
     },
     "StaticAssetsBucket": {
       "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Delete",
       "Properties": {
         "BucketName": {
           "Fn::Sub": "payment-static-assets-${EnvironmentSuffix}-${AWS::AccountId}"
@@ -637,7 +643,11 @@
                   "TransitionInDays": 30,
                   "StorageClass": "STANDARD_IA"
                 }
-              ]
+              ],
+              "NoncurrentVersionExpiration": {
+                "NoncurrentDays": 1
+              },
+              "ExpiredObjectDeleteMarker": true
             }
           ]
         },
