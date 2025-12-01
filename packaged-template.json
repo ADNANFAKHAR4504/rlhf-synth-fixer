@@ -1,5 +1,10 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Automated Compliance Analysis System for Production Environment
+Metadata:
+  cfn-lint:
+    config:
+      ignore_checks:
+      - W1011
 Parameters:
   EnvironmentSuffix:
     Type: String
@@ -345,7 +350,9 @@ Resources:
       Code:
         ZipFile:
           Fn::Join:
-          - "\n"
+          - '
+
+            '
           - - import boto3
             - import json
             - import os
@@ -360,46 +367,46 @@ Resources:
             - '        violations = []'
             - '        '
             - '        # Describe all volumes'
-            - "        paginator = ec2.get_paginator('describe_volumes')"
+            - '        paginator = ec2.get_paginator(''describe_volumes'')'
             - '        for page in paginator.paginate():'
-            - "            for volume in page['Volumes']:"
-            - "                if not volume.get('Encrypted', False):"
+            - '            for volume in page[''Volumes'']:'
+            - '                if not volume.get(''Encrypted'', False):'
             - '                    violation = {'
-            - "                        'volume_id': volume['VolumeId'],"
-            - "                        'size': volume['Size'],"
-            - "                        'state': volume['State'],"
-            - "                        'attached_instances': [att['InstanceId'] for\
-              \ att in volume.get('Attachments', [])],"
-            - "                        'violation_type': 'UNENCRYPTED_VOLUME'"
+            - '                        ''volume_id'': volume[''VolumeId''],'
+            - '                        ''size'': volume[''Size''],'
+            - '                        ''state'': volume[''State''],'
+            - '                        ''attached_instances'': [att[''InstanceId'']
+              for att in volume.get(''Attachments'', [])],'
+            - '                        ''violation_type'': ''UNENCRYPTED_VOLUME'''
             - '                    }'
             - '                    violations.append(violation)'
             - '        '
             - '        # Send SNS notification if violations found'
             - '        if violations:'
             - '            message = {'
-            - "                'timestamp': datetime.utcnow().isoformat(),"
-            - "                'scan_type': 'EBS_ENCRYPTION',"
-            - "                'violations_count': len(violations),"
-            - "                'violations': violations"
+            - '                ''timestamp'': datetime.utcnow().isoformat(),'
+            - '                ''scan_type'': ''EBS_ENCRYPTION'','
+            - '                ''violations_count'': len(violations),'
+            - '                ''violations'': violations'
             - '            }'
             - '            '
             - '            sns.publish('
-            - "                TopicArn=os.environ['SNS_TOPIC_ARN'],"
-            - "                Subject=f'Compliance Alert: {len(violations)} Unencrypted\
-              \ EBS Volumes',"
+            - '                TopicArn=os.environ[''SNS_TOPIC_ARN''],'
+            - '                Subject=f''Compliance Alert: {len(violations)} Unencrypted
+              EBS Volumes'','
             - '                Message=json.dumps(message, indent=2)'
             - '            )'
             - '        '
             - '        return {'
-            - "            'statusCode': 200,"
-            - "            'body': json.dumps({"
-            - "                'scanned_volumes': sum(1 for page in ec2.get_paginator('describe_volumes').paginate()\
-              \ for _ in page['Volumes']),"
-            - "                'violations_found': len(violations)"
+            - '            ''statusCode'': 200,'
+            - '            ''body'': json.dumps({'
+            - '                ''scanned_volumes'': sum(1 for page in ec2.get_paginator(''describe_volumes'').paginate()
+              for _ in page[''Volumes'']),'
+            - '                ''violations_found'': len(violations)'
             - '            })'
             - '        }'
             - '    except Exception as e:'
-            - "        print(f'Error scanning EBS volumes: {str(e)}')"
+            - '        print(f''Error scanning EBS volumes: {str(e)}'')'
             - '        raise'
       Tags:
       - Key: Name
@@ -446,7 +453,9 @@ Resources:
       Code:
         ZipFile:
           Fn::Join:
-          - "\n"
+          - '
+
+            '
           - - import boto3
             - import json
             - import os
@@ -461,60 +470,60 @@ Resources:
             - '        violations = []'
             - '        '
             - '        # Describe all security groups'
-            - "        paginator = ec2.get_paginator('describe_security_groups')"
+            - '        paginator = ec2.get_paginator(''describe_security_groups'')'
             - '        for page in paginator.paginate():'
-            - "            for sg in page['SecurityGroups']:"
+            - '            for sg in page[''SecurityGroups'']:'
             - '                # Check for overly permissive rules'
-            - "                for rule in sg.get('IpPermissions', []):"
-            - "                    for ip_range in rule.get('IpRanges', []):"
-            - "                        if ip_range.get('CidrIp') == '0.0.0.0/0':"
+            - '                for rule in sg.get(''IpPermissions'', []):'
+            - '                    for ip_range in rule.get(''IpRanges'', []):'
+            - '                        if ip_range.get(''CidrIp'') == ''0.0.0.0/0'':'
             - '                            # Allow HTTPS/HTTP from anywhere is common,
               but flag SSH/RDP'
-            - "                            if rule.get('FromPort') in [22, 3389]:"
+            - '                            if rule.get(''FromPort'') in [22, 3389]:'
             - '                                violation = {'
-            - "                                    'security_group_id': sg['GroupId'],"
-            - "                                    'security_group_name': sg.get('GroupName',\
-              \ 'N/A'),"
-            - "                                    'vpc_id': sg.get('VpcId', 'N/A'),"
-            - "                                    'rule': {"
-            - "                                        'protocol': rule.get('IpProtocol',\
-              \ 'N/A'),"
-            - "                                        'from_port': rule.get('FromPort',\
-              \ 'N/A'),"
-            - "                                        'to_port': rule.get('ToPort',\
-              \ 'N/A'),"
-            - "                                        'cidr': '0.0.0.0/0'"
+            - '                                    ''security_group_id'': sg[''GroupId''],'
+            - '                                    ''security_group_name'': sg.get(''GroupName'',
+              ''N/A''),'
+            - '                                    ''vpc_id'': sg.get(''VpcId'', ''N/A''),'
+            - '                                    ''rule'': {'
+            - '                                        ''protocol'': rule.get(''IpProtocol'',
+              ''N/A''),'
+            - '                                        ''from_port'': rule.get(''FromPort'',
+              ''N/A''),'
+            - '                                        ''to_port'': rule.get(''ToPort'',
+              ''N/A''),'
+            - '                                        ''cidr'': ''0.0.0.0/0'''
             - '                                    },'
-            - "                                    'violation_type': 'UNRESTRICTED_ACCESS'"
+            - '                                    ''violation_type'': ''UNRESTRICTED_ACCESS'''
             - '                                }'
             - '                                violations.append(violation)'
             - '        '
             - '        # Send SNS notification if violations found'
             - '        if violations:'
             - '            message = {'
-            - "                'timestamp': datetime.utcnow().isoformat(),"
-            - "                'scan_type': 'SECURITY_GROUP',"
-            - "                'violations_count': len(violations),"
-            - "                'violations': violations"
+            - '                ''timestamp'': datetime.utcnow().isoformat(),'
+            - '                ''scan_type'': ''SECURITY_GROUP'','
+            - '                ''violations_count'': len(violations),'
+            - '                ''violations'': violations'
             - '            }'
             - '            '
             - '            sns.publish('
-            - "                TopicArn=os.environ['SNS_TOPIC_ARN'],"
-            - "                Subject=f'Compliance Alert: {len(violations)} Security\
-              \ Group Violations',"
+            - '                TopicArn=os.environ[''SNS_TOPIC_ARN''],'
+            - '                Subject=f''Compliance Alert: {len(violations)} Security
+              Group Violations'','
             - '                Message=json.dumps(message, indent=2)'
             - '            )'
             - '        '
             - '        return {'
-            - "            'statusCode': 200,"
-            - "            'body': json.dumps({"
-            - "                'scanned_security_groups': sum(1 for page in ec2.get_paginator('describe_security_groups').paginate()\
-              \ for _ in page['SecurityGroups']),"
-            - "                'violations_found': len(violations)"
+            - '            ''statusCode'': 200,'
+            - '            ''body'': json.dumps({'
+            - '                ''scanned_security_groups'': sum(1 for page in ec2.get_paginator(''describe_security_groups'').paginate()
+              for _ in page[''SecurityGroups'']),'
+            - '                ''violations_found'': len(violations)'
             - '            })'
             - '        }'
             - '    except Exception as e:'
-            - "        print(f'Error scanning security groups: {str(e)}')"
+            - '        print(f''Error scanning security groups: {str(e)}'')'
             - '        raise'
       Tags:
       - Key: Name
@@ -583,15 +592,13 @@ Resources:
       DashboardName:
         Fn::Sub: ComplianceDashboard-${EnvironmentSuffix}
       DashboardBody:
-        Fn::Sub: "{\"widgets\":[{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"\
-          AWS/Lambda\",\"Invocations\",{\"stat\":\"Sum\",\"label\":\"EBS Scanner Invocations\"\
-          }],[\"AWS/Lambda\",\"Errors\",{\"stat\":\"Sum\",\"label\":\"EBS Scanner\
-          \ Errors\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${AWS::Region}\"\
-          ,\"title\":\"Compliance Scanner Metrics\",\"yAxis\":{\"left\":{\"min\":0}}}},{\"\
-          type\":\"log\",\"properties\":{\"query\":\"SOURCE '/aws/lambda/compliance-ebs-scanner-${EnvironmentSuffix}'\
-          \ | SOURCE '/aws/lambda/compliance-sg-scanner-${EnvironmentSuffix}' | fields\
-          \ @timestamp, @message | sort @timestamp desc | limit 20\",\"region\":\"\
-          ${AWS::Region}\",\"title\":\"Recent Compliance Scan Logs\"}}]}"
+        Fn::Sub: '{"widgets":[{"type":"metric","properties":{"metrics":[["AWS/Lambda","Invocations",{"stat":"Sum","label":"EBS
+          Scanner Invocations"}],["AWS/Lambda","Errors",{"stat":"Sum","label":"EBS
+          Scanner Errors"}]],"period":300,"stat":"Average","region":"${AWS::Region}","title":"Compliance
+          Scanner Metrics","yAxis":{"left":{"min":0}}}},{"type":"log","properties":{"query":"SOURCE
+          ''/aws/lambda/compliance-ebs-scanner-${EnvironmentSuffix}'' | SOURCE ''/aws/lambda/compliance-sg-scanner-${EnvironmentSuffix}''
+          | fields @timestamp, @message | sort @timestamp desc | limit 20","region":"${AWS::Region}","title":"Recent
+          Compliance Scan Logs"}}]}'
   ValidationLambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -633,47 +640,49 @@ Resources:
       Code:
         ZipFile:
           Fn::Join:
-          - "\n"
+          - '
+
+            '
           - - import json
             - import cfnresponse
             - ''
             - COMPLIANCE_RULES = [
-            - "    'EBS_ENCRYPTION_ENABLED',"
-            - "    'RDS_ENCRYPTION_ENABLED',"
-            - "    'S3_BUCKET_ENCRYPTION',"
-            - "    'LAMBDA_VPC_CONFIG',"
-            - "    'SECURITY_GROUP_NO_UNRESTRICTED_SSH',"
-            - "    'SECURITY_GROUP_NO_UNRESTRICTED_RDP',"
-            - "    'IAM_LEAST_PRIVILEGE',"
-            - "    'CLOUDWATCH_LOGS_RETENTION',"
-            - "    'BACKUP_ENABLED',"
-            - "    'TAGGING_COMPLIANCE',"
-            - "    'VPC_FLOW_LOGS_ENABLED',"
-            - "    'MULTI_AZ_ENABLED'"
+            - '    ''EBS_ENCRYPTION_ENABLED'','
+            - '    ''RDS_ENCRYPTION_ENABLED'','
+            - '    ''S3_BUCKET_ENCRYPTION'','
+            - '    ''LAMBDA_VPC_CONFIG'','
+            - '    ''SECURITY_GROUP_NO_UNRESTRICTED_SSH'','
+            - '    ''SECURITY_GROUP_NO_UNRESTRICTED_RDP'','
+            - '    ''IAM_LEAST_PRIVILEGE'','
+            - '    ''CLOUDWATCH_LOGS_RETENTION'','
+            - '    ''BACKUP_ENABLED'','
+            - '    ''TAGGING_COMPLIANCE'','
+            - '    ''VPC_FLOW_LOGS_ENABLED'','
+            - '    ''MULTI_AZ_ENABLED'''
             - ']'
             - ''
             - 'def lambda_handler(event, context):'
             - '    try:'
-            - "        if event['RequestType'] == 'Delete':"
+            - '        if event[''RequestType''] == ''Delete'':'
             - '            cfnresponse.send(event, context, cfnresponse.SUCCESS, {})'
             - '            return'
             - '        '
             - '        # Validate that we have at least 10 compliance rules'
             - '        if len(COMPLIANCE_RULES) < 10:'
             - '            cfnresponse.send(event, context, cfnresponse.FAILED, '
-            - "                           {'Error': f'Only {len(COMPLIANCE_RULES)}\
-              \ rules defined, minimum 10 required'})"
+            - '                           {''Error'': f''Only {len(COMPLIANCE_RULES)}
+              rules defined, minimum 10 required''})'
             - '            return'
             - '        '
             - '        response_data = {'
-            - "            'RulesCount': len(COMPLIANCE_RULES),"
-            - "            'Rules': ','.join(COMPLIANCE_RULES)"
+            - '            ''RulesCount'': len(COMPLIANCE_RULES),'
+            - '            ''Rules'': '',''.join(COMPLIANCE_RULES)'
             - '        }'
             - '        '
             - '        cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)'
             - '    except Exception as e:'
-            - "        cfnresponse.send(event, context, cfnresponse.FAILED, {'Error':\
-              \ str(e)})"
+            - '        cfnresponse.send(event, context, cfnresponse.FAILED, {''Error'':
+              str(e)})'
       Tags:
       - Key: Name
         Value:

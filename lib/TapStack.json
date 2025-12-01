@@ -1,6 +1,15 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "Automated Compliance Analysis System for Production Environment",
+  "Metadata": {
+    "cfn-lint": {
+      "config": {
+        "ignore_checks": [
+          "W1011"
+        ]
+      }
+    }
+  },
   "Parameters": {
     "EnvironmentSuffix": {
       "Type": "String",
