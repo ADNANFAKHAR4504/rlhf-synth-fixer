@@ -1,10 +1,3 @@
-# Infrastructure Compliance Monitoring System - CloudFormation Implementation
-
-This implementation provides a complete automated infrastructure compliance analysis system using CloudFormation with JSON. The solution monitors CloudFormation stack drift, validates security policies, and alerts on non-compliant resources.
-
-## File: TapStack.json
-
-```json
 {
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "Automated Infrastructure Compliance Monitoring System with AWS Config, Lambda, S3, EventBridge, SNS, CloudWatch, and Systems Manager",
@@ -671,4 +664,3 @@ This implementation provides a complete automated infrastructure compliance anal
     }
   }
 }
-```

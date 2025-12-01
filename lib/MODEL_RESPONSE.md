@@ -2,7 +2,7 @@
 
 This implementation provides a complete automated infrastructure compliance analysis system using CloudFormation with JSON. The solution monitors CloudFormation stack drift, validates security policies, and alerts on non-compliant resources.
 
-## File: template.json
+## File: TapStack.json
 
 ```json
 {
