@@ -2,7 +2,7 @@
 
 Global e-commerce platform requires consistent, high-availability infrastructure across three AWS regions: **us-east-1**, **eu-west-1**, **ap-southeast-1**. Provision a brand-new, self-contained stack per region—no references to pre-existing resources.
 
-# Functional scope:
+# Functional scope (build everything new):
 
 * Produce a single **TapStack.yml** (pure YAML, not JSON) CloudFormation template that provisions, from scratch, for the active deployment region:
 
