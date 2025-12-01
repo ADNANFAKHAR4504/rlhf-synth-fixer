@@ -1,50 +1,54 @@
-[
-  {
-    "ParameterKey": "EnvironmentName",
-    "ParameterValue": "prod"
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Parameters": {
+    "EnvironmentName": {
+      "Type": "String",
+      "Default": "prod"
+    },
+    "AccountId": {
+      "Type": "String",
+      "Default": "345678901234"
+    },
+    "DomainName": {
+      "Type": "String",
+      "Default": "payments.example.com"
+    },
+    "SnsEmail": {
+      "Type": "String",
+      "Default": "ops-team@example.com"
+    },
+    "VpcCidr": {
+      "Type": "String",
+      "Default": "10.2.0.0/16"
+    },
+    "AvailabilityZone1": {
+      "Type": "AWS::EC2::AvailabilityZone::Name",
+      "Default": "us-east-1a"
+    },
+    "AvailabilityZone2": {
+      "Type": "AWS::EC2::AvailabilityZone::Name",
+      "Default": "us-east-1b"
+    },
+    "AvailabilityZone3": {
+      "Type": "AWS::EC2::AvailabilityZone::Name",
+      "Default": "us-east-1c"
+    },
+    "NetworkStackTemplateUrl": {
+      "Type": "String",
+      "Default": "https://s3.amazonaws.com/your-bucket/nested/NetworkStack.json"
+    },
+    "ComputeStackTemplateUrl": {
+      "Type": "String",
+      "Default": "https://s3.amazonaws.com/your-bucket/nested/ComputeStack.json"
+    },
+    "StorageStackTemplateUrl": {
+      "Type": "String",
+      "Default": "https://s3.amazonaws.com/your-bucket/nested/StorageStack.json"
+    },
+    "MonitoringStackTemplateUrl": {
+      "Type": "String",
+      "Default": "https://s3.amazonaws.com/your-bucket/nested/MonitoringStack.json"
+    }
   },
-  {
-    "ParameterKey": "AccountId",
-    "ParameterValue": "345678901234"
-  },
-  {
-    "ParameterKey": "DomainName",
-    "ParameterValue": "payments.example.com"
-  },
-  {
-    "ParameterKey": "SnsEmail",
-    "ParameterValue": "ops-team@example.com"
-  },
-  {
-    "ParameterKey": "VpcCidr",
-    "ParameterValue": "10.2.0.0/16"
-  },
-  {
-    "ParameterKey": "AvailabilityZone1",
-    "ParameterValue": "us-east-1a"
-  },
-  {
-    "ParameterKey": "AvailabilityZone2",
-    "ParameterValue": "us-east-1b"
-  },
-  {
-    "ParameterKey": "AvailabilityZone3",
-    "ParameterValue": "us-east-1c"
-  },
-  {
-    "ParameterKey": "NetworkStackTemplateUrl",
-    "ParameterValue": "https://s3.amazonaws.com/your-bucket/nested/NetworkStack.json"
-  },
-  {
-    "ParameterKey": "ComputeStackTemplateUrl",
-    "ParameterValue": "https://s3.amazonaws.com/your-bucket/nested/ComputeStack.json"
-  },
-  {
-    "ParameterKey": "StorageStackTemplateUrl",
-    "ParameterValue": "https://s3.amazonaws.com/your-bucket/nested/StorageStack.json"
-  },
-  {
-    "ParameterKey": "MonitoringStackTemplateUrl",
-    "ParameterValue": "https://s3.amazonaws.com/your-bucket/nested/MonitoringStack.json"
-  }
-]
+  "Resources": {}
+}

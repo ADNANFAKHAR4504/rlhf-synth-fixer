@@ -5,16 +5,35 @@
     "AWS::CloudFormation::Interface": {
       "ParameterGroups": [
         {
-          "Label": { "default": "Environment Configuration" },
-          "Parameters": ["EnvironmentName", "AccountId", "DomainName", "SnsEmail"]
+          "Label": {
+            "default": "Environment Configuration"
+          },
+          "Parameters": [
+            "EnvironmentName",
+            "SnsEmail"
+          ]
         },
         {
-          "Label": { "default": "Network Configuration" },
-          "Parameters": ["VpcCidr", "AvailabilityZone1", "AvailabilityZone2", "AvailabilityZone3"]
+          "Label": {
+            "default": "Network Configuration"
+          },
+          "Parameters": [
+            "VpcCidr",
+            "AvailabilityZone1",
+            "AvailabilityZone2",
+            "AvailabilityZone3"
+          ]
         },
         {
-          "Label": { "default": "Nested Stack Templates" },
-          "Parameters": ["NetworkStackTemplateUrl", "ComputeStackTemplateUrl", "StorageStackTemplateUrl", "MonitoringStackTemplateUrl"]
+          "Label": {
+            "default": "Nested Stack Templates"
+          },
+          "Parameters": [
+            "NetworkStackTemplateUrl",
+            "ComputeStackTemplateUrl",
+            "StorageStackTemplateUrl",
+            "MonitoringStackTemplateUrl"
+          ]
         }
       ]
     }
@@ -23,18 +42,12 @@
     "EnvironmentName": {
       "Type": "String",
       "Default": "dev",
-      "AllowedValues": ["dev", "staging", "prod"],
+      "AllowedValues": [
+        "dev",
+        "staging",
+        "prod"
+      ],
       "Description": "Environment name for resource naming and conditional logic"
-    },
-    "AccountId": {
-      "Type": "String",
-      "Description": "AWS Account ID for this environment",
-      "AllowedPattern": "^[0-9]{12}$"
-    },
-    "DomainName": {
-      "Type": "String",
-      "Description": "Domain name for this environment (e.g., dev.example.com)",
-      "Default": "dev.payments.local"
     },
     "SnsEmail": {
       "Type": "String",
@@ -77,81 +90,225 @@
     }
   },
   "Conditions": {
-    "IsProduction": { "Fn::Equals": [{ "Ref": "EnvironmentName" }, "prod"] }
+    "IsProduction": {
+      "Fn::Equals": [
+        {
+          "Ref": "EnvironmentName"
+        },
+        "prod"
+      ]
+    }
   },
   "Resources": {
     "NetworkStack": {
       "Type": "AWS::CloudFormation::Stack",
       "Properties": {
-        "TemplateURL": { "Ref": "NetworkStackTemplateUrl" },
+        "TemplateURL": {
+          "Ref": "NetworkStackTemplateUrl"
+        },
         "Parameters": {
-          "EnvironmentName": { "Ref": "EnvironmentName" },
-          "VpcCidr": { "Ref": "VpcCidr" },
-          "AvailabilityZone1": { "Ref": "AvailabilityZone1" },
-          "AvailabilityZone2": { "Ref": "AvailabilityZone2" },
-          "AvailabilityZone3": { "Ref": "AvailabilityZone3" }
+          "EnvironmentName": {
+            "Ref": "EnvironmentName"
+          },
+          "VpcCidr": {
+            "Ref": "VpcCidr"
+          },
+          "AvailabilityZone1": {
+            "Ref": "AvailabilityZone1"
+          },
+          "AvailabilityZone2": {
+            "Ref": "AvailabilityZone2"
+          },
+          "AvailabilityZone3": {
+            "Ref": "AvailabilityZone3"
+          }
         },
         "Tags": [
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentName" } },
-          { "Key": "StackType", "Value": "Network" }
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          },
+          {
+            "Key": "StackType",
+            "Value": "Network"
+          }
         ]
       }
     },
     "StorageStack": {
       "Type": "AWS::CloudFormation::Stack",
       "Properties": {
-        "TemplateURL": { "Ref": "StorageStackTemplateUrl" },
+        "TemplateURL": {
+          "Ref": "StorageStackTemplateUrl"
+        },
         "Parameters": {
-          "EnvironmentName": { "Ref": "EnvironmentName" }
+          "EnvironmentName": {
+            "Ref": "EnvironmentName"
+          }
         },
         "Tags": [
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentName" } },
-          { "Key": "StackType", "Value": "Storage" }
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          },
+          {
+            "Key": "StackType",
+            "Value": "Storage"
+          }
         ]
       }
     },
     "ComputeStack": {
       "Type": "AWS::CloudFormation::Stack",
-      "DependsOn": ["NetworkStack", "StorageStack"],
       "Properties": {
-        "TemplateURL": { "Ref": "ComputeStackTemplateUrl" },
+        "TemplateURL": {
+          "Ref": "ComputeStackTemplateUrl"
+        },
         "Parameters": {
-          "EnvironmentName": { "Ref": "EnvironmentName" },
-          "VpcId": { "Fn::GetAtt": ["NetworkStack", "Outputs.VpcId"] },
-          "PrivateSubnet1": { "Fn::GetAtt": ["NetworkStack", "Outputs.PrivateSubnet1Id"] },
-          "PrivateSubnet2": { "Fn::GetAtt": ["NetworkStack", "Outputs.PrivateSubnet2Id"] },
-          "PrivateSubnet3": { "Fn::GetAtt": ["NetworkStack", "Outputs.PrivateSubnet3Id"] },
-          "PublicSubnet1": { "Fn::GetAtt": ["NetworkStack", "Outputs.PublicSubnet1Id"] },
-          "PublicSubnet2": { "Fn::GetAtt": ["NetworkStack", "Outputs.PublicSubnet2Id"] },
-          "PublicSubnet3": { "Fn::GetAtt": ["NetworkStack", "Outputs.PublicSubnet3Id"] },
-          "LambdaSecurityGroup": { "Fn::GetAtt": ["NetworkStack", "Outputs.LambdaSecurityGroupId"] },
-          "AlbSecurityGroup": { "Fn::GetAtt": ["NetworkStack", "Outputs.AlbSecurityGroupId"] },
-          "PaymentTableName": { "Fn::GetAtt": ["StorageStack", "Outputs.PaymentTableName"] },
-          "PaymentTableArn": { "Fn::GetAtt": ["StorageStack", "Outputs.PaymentTableArn"] },
-          "IsProduction": { "Fn::If": ["IsProduction", "true", "false"] }
+          "EnvironmentName": {
+            "Ref": "EnvironmentName"
+          },
+          "VpcId": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.VpcId"
+            ]
+          },
+          "PrivateSubnet1": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.PrivateSubnet1Id"
+            ]
+          },
+          "PrivateSubnet2": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.PrivateSubnet2Id"
+            ]
+          },
+          "PrivateSubnet3": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.PrivateSubnet3Id"
+            ]
+          },
+          "PublicSubnet1": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.PublicSubnet1Id"
+            ]
+          },
+          "PublicSubnet2": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.PublicSubnet2Id"
+            ]
+          },
+          "PublicSubnet3": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.PublicSubnet3Id"
+            ]
+          },
+          "LambdaSecurityGroup": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.LambdaSecurityGroupId"
+            ]
+          },
+          "AlbSecurityGroup": {
+            "Fn::GetAtt": [
+              "NetworkStack",
+              "Outputs.AlbSecurityGroupId"
+            ]
+          },
+          "PaymentTableName": {
+            "Fn::GetAtt": [
+              "StorageStack",
+              "Outputs.PaymentTableName"
+            ]
+          },
+          "PaymentTableArn": {
+            "Fn::GetAtt": [
+              "StorageStack",
+              "Outputs.PaymentTableArn"
+            ]
+          },
+          "IsProduction": {
+            "Fn::If": [
+              "IsProduction",
+              "true",
+              "false"
+            ]
+          }
         },
         "Tags": [
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentName" } },
-          { "Key": "StackType", "Value": "Compute" }
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          },
+          {
+            "Key": "StackType",
+            "Value": "Compute"
+          }
         ]
       }
     },
     "MonitoringStack": {
       "Type": "AWS::CloudFormation::Stack",
-      "DependsOn": ["ComputeStack", "StorageStack"],
       "Properties": {
-        "TemplateURL": { "Ref": "MonitoringStackTemplateUrl" },
+        "TemplateURL": {
+          "Ref": "MonitoringStackTemplateUrl"
+        },
         "Parameters": {
-          "EnvironmentName": { "Ref": "EnvironmentName" },
-          "SnsEmail": { "Ref": "SnsEmail" },
-          "ValidationFunctionName": { "Fn::GetAtt": ["ComputeStack", "Outputs.ValidationFunctionName"] },
-          "ProcessingFunctionName": { "Fn::GetAtt": ["ComputeStack", "Outputs.ProcessingFunctionName"] },
-          "PaymentTableName": { "Fn::GetAtt": ["StorageStack", "Outputs.PaymentTableName"] },
-          "StateMachineArn": { "Fn::GetAtt": ["ComputeStack", "Outputs.StateMachineArn"] }
+          "EnvironmentName": {
+            "Ref": "EnvironmentName"
+          },
+          "SnsEmail": {
+            "Ref": "SnsEmail"
+          },
+          "ValidationFunctionName": {
+            "Fn::GetAtt": [
+              "ComputeStack",
+              "Outputs.ValidationFunctionName"
+            ]
+          },
+          "ProcessingFunctionName": {
+            "Fn::GetAtt": [
+              "ComputeStack",
+              "Outputs.ProcessingFunctionName"
+            ]
+          },
+          "PaymentTableName": {
+            "Fn::GetAtt": [
+              "StorageStack",
+              "Outputs.PaymentTableName"
+            ]
+          },
+          "StateMachineArn": {
+            "Fn::GetAtt": [
+              "ComputeStack",
+              "Outputs.StateMachineArn"
+            ]
+          }
         },
         "Tags": [
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentName" } },
-          { "Key": "StackType", "Value": "Monitoring" }
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentName"
+            }
+          },
+          {
+            "Key": "StackType",
+            "Value": "Monitoring"
+          }
         ]
       }
     }
@@ -159,33 +316,81 @@
   "Outputs": {
     "StackName": {
       "Description": "Name of the main CloudFormation stack",
-      "Value": { "Ref": "AWS::StackName" },
-      "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-StackName" } }
+      "Value": {
+        "Ref": "AWS::StackName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StackName"
+        }
+      }
     },
     "EnvironmentName": {
       "Description": "Environment name for this deployment",
-      "Value": { "Ref": "EnvironmentName" },
-      "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-EnvironmentName" } }
+      "Value": {
+        "Ref": "EnvironmentName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentName"
+        }
+      }
     },
     "VpcId": {
       "Description": "VPC ID from Network stack",
-      "Value": { "Fn::GetAtt": ["NetworkStack", "Outputs.VpcId"] },
-      "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-VpcId" } }
+      "Value": {
+        "Fn::GetAtt": [
+          "NetworkStack",
+          "Outputs.VpcId"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VpcId"
+        }
+      }
     },
     "AlbDnsName": {
       "Description": "DNS name of the Application Load Balancer",
-      "Value": { "Fn::GetAtt": ["ComputeStack", "Outputs.AlbDnsName"] },
-      "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-AlbDnsName" } }
+      "Value": {
+        "Fn::GetAtt": [
+          "ComputeStack",
+          "Outputs.AlbDnsName"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AlbDnsName"
+        }
+      }
     },
     "StateMachineArn": {
       "Description": "ARN of the payment processing state machine",
-      "Value": { "Fn::GetAtt": ["ComputeStack", "Outputs.StateMachineArn"] },
-      "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-StateMachineArn" } }
+      "Value": {
+        "Fn::GetAtt": [
+          "ComputeStack",
+          "Outputs.StateMachineArn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StateMachineArn"
+        }
+      }
     },
     "PaymentTableName": {
       "Description": "Name of the payment transactions table",
-      "Value": { "Fn::GetAtt": ["StorageStack", "Outputs.PaymentTableName"] },
-      "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-PaymentTableName" } }
+      "Value": {
+        "Fn::GetAtt": [
+          "StorageStack",
+          "Outputs.PaymentTableName"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PaymentTableName"
+        }
+      }
     }
   }
 }
