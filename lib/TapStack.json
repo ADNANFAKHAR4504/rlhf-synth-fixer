@@ -1392,7 +1392,8 @@
                                     "Effect": "Allow",
                                     "Action": [
                                         "ssm:GetParameter",
-                                        "ssm:GetParameters"
+                                        "ssm:GetParameters",
+                                        "ssm:PutParameter"
                                     ],
                                     "Resource": [
                                         {
@@ -1985,7 +1986,7 @@
                     ],
                     "UserData": {
                         "Fn::Base64": {
-                            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd mysql amazon-cloudwatch-agent\n\n# Configure CloudWatch agent\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF\n{\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/httpd/access_log\",\n            \"log_group_name\": \"${ApplicationLogGroup}\",\n            \"log_stream_name\": \"{instance_id}/apache_access\"\n          },\n          {\n            \"file_path\": \"/var/log/httpd/error_log\",\n            \"log_group_name\": \"${ApplicationLogGroup}\",\n            \"log_stream_name\": \"{instance_id}/apache_error\"\n          }\n        ]\n      }\n    }\n  }\n}\nEOF\n\n# Start CloudWatch agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n  -a query -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s\n\n# Configure web server\necho \"<h1>WebApp Production Server</h1>\" > /var/www/html/index.html\necho \"OK\" > /var/www/html/health\n\n# Store database endpoint in SSM Parameter Store\naws ssm put-parameter --name /webapp/prod/db/endpoint --value ${DatabaseInstance.Endpoint.Address} --type String --region ${AWS::Region}\n\nsystemctl start httpd\nsystemctl enable httpd\n"
+                            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd mariadb105 amazon-cloudwatch-agent aws-cli\n\n# Configure CloudWatch agent\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF\n{\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/httpd/access_log\",\n            \"log_group_name\": \"${ApplicationLogGroup}\",\n            \"log_stream_name\": \"{instance_id}/apache_access\"\n          },\n          {\n            \"file_path\": \"/var/log/httpd/error_log\",\n            \"log_group_name\": \"${ApplicationLogGroup}\",\n            \"log_stream_name\": \"{instance_id}/apache_error\"\n          }\n        ]\n      }\n    }\n  }\n}\nEOF\n\n# Start CloudWatch agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n  -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s\n\n# Configure web server\necho \"<h1>WebApp Production Server</h1>\" > /var/www/html/index.html\necho \"OK\" > /var/www/html/health\n\n# Start Apache first to pass health checks\nsystemctl start httpd\nsystemctl enable httpd\n\n# Store database endpoint in SSM Parameter Store (after httpd is running)\naws ssm put-parameter --name /webapp/prod/db/endpoint --value ${DatabaseInstance.Endpoint.Address} --type String --overwrite --region ${AWS::Region} || true\n"
                         }
                     }
                 }

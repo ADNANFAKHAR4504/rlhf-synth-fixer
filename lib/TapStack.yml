@@ -854,6 +854,7 @@ Resources:
                 Action:
                   - 'ssm:GetParameter'
                   - 'ssm:GetParameters'
+                  - 'ssm:PutParameter'
                 Resource:
                   - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/webapp/prod/*'
         - PolicyName: webapp-prod-secrets-policy
@@ -1195,7 +1196,7 @@ Resources:
           Fn::Base64: !Sub |
             #!/bin/bash
             yum update -y
-            yum install -y httpd mysql amazon-cloudwatch-agent
+            yum install -y httpd mariadb105 amazon-cloudwatch-agent aws-cli
             
             # Configure CloudWatch agent
             cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
@@ -1223,17 +1224,18 @@ Resources:
             
             # Start CloudWatch agent
             /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-              -a query -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+              -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
             
             # Configure web server
             echo "<h1>WebApp Production Server</h1>" > /var/www/html/index.html
             echo "OK" > /var/www/html/health
             
-            # Store database endpoint in SSM Parameter Store
-            aws ssm put-parameter --name /webapp/prod/db/endpoint --value ${DatabaseInstance.Endpoint.Address} --type String --region ${AWS::Region}
-            
+            # Start Apache first to pass health checks
             systemctl start httpd
             systemctl enable httpd
+            
+            # Store database endpoint in SSM Parameter Store (after httpd is running)
+            aws ssm put-parameter --name /webapp/prod/db/endpoint --value ${DatabaseInstance.Endpoint.Address} --type String --overwrite --region ${AWS::Region} || true
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
