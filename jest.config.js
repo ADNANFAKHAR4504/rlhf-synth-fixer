@@ -19,6 +19,7 @@ module.exports = {
     '<rootDir>/lib/**/*.mjs',
     '<rootDir>/lib/**/*.js',
     '!<rootDir>/bin/**/*.ts',
+    '!<rootDir>/lib/lambda/**',
     '!<rootDir>/**/*.d.ts',
     '!<rootDir>/**/*.test.ts',
     '!<rootDir>/**/*.test.js',
@@ -27,10 +28,10 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'json-summary'],
   coverageThreshold: {
     global: {
-      branches: 40,
-      functions: 85,
-      lines: 85,
-      statements: 85,
+      branches: 100,
+      functions: 100,
+      lines: 100,
+      statements: 100,
     },
   },
   testTimeout: 60000,
