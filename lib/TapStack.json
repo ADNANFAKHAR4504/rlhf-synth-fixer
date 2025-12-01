@@ -7,12 +7,19 @@
       "MinLength": 4,
       "MaxLength": 20,
       "AllowedPattern": "[a-z0-9-]+",
-      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens",
+      "Default": "dev-pr7576"
     },
     "LatestAmiId": {
       "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
       "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
       "Description": "Latest Amazon Linux 2 AMI ID"
+    },
+    "DBPassword": {
+      "Type": "String",
+      "NoEcho": true,
+      "Description": "Database master password",
+      "Default": "TempPassword123!"
     }
   },
   "Resources": {
@@ -26,7 +33,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-vpc-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-vpc"
             }
           },
           {
@@ -51,7 +58,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-igw-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-igw"
             }
           }
         ]
@@ -88,7 +95,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-public-subnet-1-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-public-subnet-1"
             }
           }
         ]
@@ -114,7 +121,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-public-subnet-2-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-public-subnet-2"
             }
           }
         ]
@@ -140,7 +147,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-public-subnet-3-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-public-subnet-3"
             }
           }
         ]
@@ -165,7 +172,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-private-subnet-1-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-private-subnet-1"
             }
           }
         ]
@@ -190,7 +197,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-private-subnet-2-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-private-subnet-2"
             }
           }
         ]
@@ -215,7 +222,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-private-subnet-3-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-private-subnet-3"
             }
           }
         ]
@@ -240,7 +247,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-database-subnet-1-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-database-subnet-1"
             }
           }
         ]
@@ -265,7 +272,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-database-subnet-2-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-database-subnet-2"
             }
           }
         ]
@@ -290,7 +297,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-database-subnet-3-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-database-subnet-3"
             }
           }
         ]
@@ -306,7 +313,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-public-rt-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-public-rt"
             }
           }
         ]
@@ -367,7 +374,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-nat-eip-1-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-nat-eip-1"
             }
           }
         ]
@@ -382,7 +389,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-nat-eip-2-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-nat-eip-2"
             }
           }
         ]
@@ -397,7 +404,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-nat-eip-3-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-nat-eip-3"
             }
           }
         ]
@@ -419,7 +426,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-nat-1-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-nat-1"
             }
           }
         ]
@@ -441,7 +448,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-nat-2-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-nat-2"
             }
           }
         ]
@@ -463,7 +470,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-nat-3-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-nat-3"
             }
           }
         ]
@@ -479,7 +486,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-private-rt-1-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-private-rt-1"
             }
           }
         ]
@@ -518,7 +525,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-private-rt-2-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-private-rt-2"
             }
           }
         ]
@@ -557,7 +564,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-private-rt-3-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-private-rt-3"
             }
           }
         ]
@@ -628,7 +635,18 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "payment-flow-logs-${EnvironmentSuffix}"
+          "Fn::Join": [
+            "-",
+            [
+              {
+                "Fn::GetAtt": [
+                  "LowercaseStackNameResource",
+                  "LowercaseStackName"
+                ]
+              },
+              "flow-logs"
+            ]
+          ]
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -658,7 +676,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-flow-logs-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-flow-logs"
             }
           }
         ]
@@ -683,7 +701,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-flow-log-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-flow-log"
             }
           }
         ]
@@ -693,7 +711,7 @@
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupName": {
-          "Fn::Sub": "payment-alb-sg-${EnvironmentSuffix}"
+          "Fn::Sub": "${AWS::StackName}-alb-sg"
         },
         "GroupDescription": "Security group for Application Load Balancer",
         "VpcId": {
@@ -702,10 +720,10 @@
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
-            "FromPort": 443,
-            "ToPort": 443,
+            "FromPort": 80,
+            "ToPort": 80,
             "CidrIp": "0.0.0.0/0",
-            "Description": "Allow HTTPS from internet"
+            "Description": "Allow HTTP from internet"
           }
         ],
         "SecurityGroupEgress": [
@@ -719,7 +737,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-alb-sg-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-alb-sg"
             }
           }
         ]
@@ -729,7 +747,7 @@
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupName": {
-          "Fn::Sub": "payment-ec2-sg-${EnvironmentSuffix}"
+          "Fn::Sub": "${AWS::StackName}-ec2-sg"
         },
         "GroupDescription": "Security group for EC2 instances",
         "VpcId": {
@@ -757,7 +775,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-ec2-sg-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-ec2-sg"
             }
           }
         ]
@@ -767,7 +785,7 @@
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupName": {
-          "Fn::Sub": "payment-rds-sg-${EnvironmentSuffix}"
+          "Fn::Sub": "${AWS::StackName}-rds-sg"
         },
         "GroupDescription": "Security group for RDS Aurora cluster",
         "VpcId": {
@@ -788,7 +806,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-rds-sg-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-rds-sg"
             }
           }
         ]
@@ -833,7 +851,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-kms-key-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-kms-key"
             }
           }
         ]
@@ -843,7 +861,7 @@
       "Type": "AWS::KMS::Alias",
       "Properties": {
         "AliasName": {
-          "Fn::Sub": "alias/payment-rds-${EnvironmentSuffix}"
+          "Fn::Sub": "alias/${AWS::StackName}-rds"
         },
         "TargetKeyId": {
           "Ref": "KMSKey"
@@ -854,7 +872,7 @@
       "Type": "AWS::RDS::DBSubnetGroup",
       "Properties": {
         "DBSubnetGroupName": {
-          "Fn::Sub": "payment-db-subnet-group-${EnvironmentSuffix}"
+          "Fn::Sub": "${AWS::StackName}-db-subnet-group"
         },
         "DBSubnetGroupDescription": "Subnet group for RDS Aurora cluster",
         "SubnetIds": [
@@ -872,7 +890,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-db-subnet-group-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-db-subnet-group"
             }
           }
         ]
@@ -883,13 +901,13 @@
       "DeletionPolicy": "Delete",
       "Properties": {
         "DBClusterIdentifier": {
-          "Fn::Sub": "payment-aurora-cluster-${EnvironmentSuffix}"
+          "Fn::Sub": "${AWS::StackName}-aurora-cluster"
         },
         "Engine": "aurora-mysql",
         "EngineVersion": "5.7.mysql_aurora.2.11.2",
         "MasterUsername": "admin",
         "MasterUserPassword": {
-          "Fn::Sub": "{{resolve:ssm-secure:/payment/${EnvironmentSuffix}/db/password}}"
+          "Ref": "DBPassword"
         },
         "DatabaseName": "paymentdb",
         "BackupRetentionPeriod": 7,
@@ -916,7 +934,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-aurora-cluster-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-aurora-cluster"
             }
           },
           {
@@ -934,7 +952,7 @@
       "Type": "AWS::RDS::DBInstance",
       "Properties": {
         "DBInstanceIdentifier": {
-          "Fn::Sub": "payment-aurora-writer-${EnvironmentSuffix}"
+          "Fn::Sub": "${AWS::StackName}-aurora-writer"
         },
         "DBClusterIdentifier": {
           "Ref": "AuroraCluster"
@@ -946,7 +964,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-aurora-writer-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-aurora-writer"
             }
           }
         ]
@@ -956,7 +974,7 @@
       "Type": "AWS::RDS::DBInstance",
       "Properties": {
         "DBInstanceIdentifier": {
-          "Fn::Sub": "payment-aurora-reader-${EnvironmentSuffix}"
+          "Fn::Sub": "${AWS::StackName}-aurora-reader"
         },
         "DBClusterIdentifier": {
           "Ref": "AuroraCluster"
@@ -968,7 +986,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-aurora-reader-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-aurora-reader"
             }
           }
         ]
@@ -978,7 +996,7 @@
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": {
-          "Fn::Sub": "payment-db-connections-${EnvironmentSuffix}"
+          "Fn::Sub": "${AWS::StackName}-db-connections"
         },
         "AlarmDescription": "Alert when database connections exceed 100",
         "MetricName": "DatabaseConnections",
@@ -1002,7 +1020,18 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "payment-artifacts-${EnvironmentSuffix}"
+          "Fn::Join": [
+            "-",
+            [
+              {
+                "Fn::GetAtt": [
+                  "LowercaseStackNameResource",
+                  "LowercaseStackName"
+                ]
+              },
+              "artifacts"
+            ]
+          ]
         },
         "VersioningConfiguration": {
           "Status": "Enabled"
@@ -1026,7 +1055,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-artifacts-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-artifacts"
             }
           }
         ]
@@ -1036,7 +1065,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "payment-ec2-role-${EnvironmentSuffix}"
+          "Fn::Sub": "${AWS::StackName}-ec2-role"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -1067,7 +1096,7 @@
                     "ssm:GetParametersByPath"
                   ],
                   "Resource": {
-                    "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/payment/${EnvironmentSuffix}/*"
+                    "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/*"
                   }
                 }
               ]
@@ -1104,7 +1133,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-ec2-role-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-ec2-role"
             }
           }
         ]
@@ -1114,7 +1143,7 @@
       "Type": "AWS::IAM::InstanceProfile",
       "Properties": {
         "InstanceProfileName": {
-          "Fn::Sub": "payment-ec2-profile-${EnvironmentSuffix}"
+          "Fn::Sub": "${AWS::StackName}-ec2-profile"
         },
         "Roles": [
           {
@@ -1123,11 +1152,64 @@
         ]
       }
     },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ]
+      }
+    },
+    "LowercaseStackNameFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${AWS::StackName}-lowercase-function"
+        },
+        "Runtime": "python3.9",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "ZipFile": "import cfnresponse\ndef handler(event, context):\n    if event['RequestType'] in ['Create', 'Update']:\n        stack_name = event['ResourceProperties']['StackName']\n        lowercase = stack_name.lower()\n        cfnresponse.send(event, context, cfnresponse.SUCCESS, {'LowercaseStackName': lowercase})\n    elif event['RequestType'] == 'Delete':\n        cfnresponse.send(event, context, cfnresponse.SUCCESS, {})\n"
+        }
+      }
+    },
+    "LowercaseStackNameResource": {
+      "Type": "AWS::CloudFormation::CustomResource",
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "LowercaseStackNameFunction",
+            "Arn"
+          ]
+        },
+        "StackName": {
+          "Ref": "AWS::StackName"
+        }
+      }
+    },
     "ApplicationLogGroup": {
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
         "LogGroupName": {
-          "Fn::Sub": "/aws/payment/application-${EnvironmentSuffix}"
+          "Fn::Sub": "/aws/payment/${AWS::StackName}"
         },
         "RetentionInDays": 30
       }
@@ -1136,7 +1218,7 @@
       "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
       "Properties": {
         "Name": {
-          "Fn::Sub": "payment-alb-${EnvironmentSuffix}"
+          "Fn::Sub": "${AWS::StackName}-alb"
         },
         "Type": "application",
         "Scheme": "internet-facing",
@@ -1161,7 +1243,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-alb-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-alb"
             }
           }
         ]
@@ -1171,7 +1253,7 @@
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
       "Properties": {
         "Name": {
-          "Fn::Sub": "payment-tg-${EnvironmentSuffix}"
+          "Fn::Sub": "${AWS::StackName}-tg"
         },
         "Port": 80,
         "Protocol": "HTTP",
@@ -1190,7 +1272,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-tg-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-tg"
             }
           }
         ]
@@ -1210,23 +1292,15 @@
         "LoadBalancerArn": {
           "Ref": "ApplicationLoadBalancer"
         },
-        "Port": 443,
-        "Protocol": "HTTPS",
-        "SslPolicy": "ELBSecurityPolicy-TLS-1-2-2017-01",
-        "Certificates": [
-          {
-            "CertificateArn": {
-              "Fn::Sub": "{{resolve:ssm:/payment/${EnvironmentSuffix}/alb/certificate-arn}}"
-            }
-          }
-        ]
+        "Port": 80,
+        "Protocol": "HTTP"
       }
     },
     "WebACL": {
       "Type": "AWS::WAFv2::WebACL",
       "Properties": {
         "Name": {
-          "Fn::Sub": "payment-waf-${EnvironmentSuffix}"
+          "Fn::Sub": "${AWS::StackName}-waf"
         },
         "Scope": "REGIONAL",
         "DefaultAction": {
@@ -1256,14 +1330,14 @@
           "SampledRequestsEnabled": true,
           "CloudWatchMetricsEnabled": true,
           "MetricName": {
-            "Fn::Sub": "payment-waf-${EnvironmentSuffix}"
+            "Fn::Sub": "${AWS::StackName}-waf"
           }
         },
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-waf-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-waf"
             }
           }
         ]
@@ -1287,7 +1361,7 @@
       "Type": "AWS::EC2::LaunchTemplate",
       "Properties": {
         "LaunchTemplateName": {
-          "Fn::Sub": "payment-launch-template-${EnvironmentSuffix}"
+          "Fn::Sub": "${AWS::StackName}-launch-template"
         },
         "LaunchTemplateData": {
           "ImageId": {
@@ -1329,7 +1403,7 @@
                 {
                   "Key": "Name",
                   "Value": {
-                    "Fn::Sub": "payment-instance-${EnvironmentSuffix}"
+                    "Fn::Sub": "${AWS::StackName}-instance"
                   }
                 },
                 {
@@ -1354,7 +1428,7 @@
       "Type": "AWS::AutoScaling::AutoScalingGroup",
       "Properties": {
         "AutoScalingGroupName": {
-          "Fn::Sub": "payment-asg-${EnvironmentSuffix}"
+          "Fn::Sub": "${AWS::StackName}-asg"
         },
         "LaunchTemplate": {
           "LaunchTemplateId": {
@@ -1392,7 +1466,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "payment-asg-instance-${EnvironmentSuffix}"
+              "Fn::Sub": "${AWS::StackName}-asg-instance"
             },
             "PropagateAtLaunch": true
           }
@@ -1418,7 +1492,7 @@
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": {
-          "Fn::Sub": "payment-cpu-high-${EnvironmentSuffix}"
+          "Fn::Sub": "${AWS::StackName}-cpu-high"
         },
         "AlarmDescription": "Alert when CPU exceeds 80%",
         "MetricName": "CPUUtilization",

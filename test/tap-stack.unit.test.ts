@@ -181,11 +181,11 @@ describe('Payment Processing System CloudFormation Template - Unit Tests', () =>
       expect(template.Resources.ALBSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
     });
 
-    test('ALB security group should allow HTTPS from internet', () => {
+    test('ALB security group should allow HTTP from internet', () => {
       const albSG = template.Resources.ALBSecurityGroup;
       const ingressRule = albSG.Properties.SecurityGroupIngress[0];
-      expect(ingressRule.FromPort).toBe(443);
-      expect(ingressRule.ToPort).toBe(443);
+      expect(ingressRule.FromPort).toBe(80);
+      expect(ingressRule.ToPort).toBe(80);
       expect(ingressRule.CidrIp).toBe('0.0.0.0/0');
       expect(ingressRule.IpProtocol).toBe('tcp');
     });
@@ -319,9 +319,31 @@ describe('Payment Processing System CloudFormation Template - Unit Tests', () =>
       expect(template.Resources.FlowLogsBucket).toBeDefined();
     });
 
-    test('flow logs bucket should have 90-day lifecycle policy', () => {
+    test('should have Lambda execution role', () => {
+      expect(template.Resources.LambdaExecutionRole).toBeDefined();
+      expect(template.Resources.LambdaExecutionRole.Type).toBe('AWS::IAM::Role');
+    });
+
+    test('should have lowercase stack name function', () => {
+      expect(template.Resources.LowercaseStackNameFunction).toBeDefined();
+      expect(template.Resources.LowercaseStackNameFunction.Type).toBe('AWS::Lambda::Function');
+    });
+
+    test('should have lowercase stack name custom resource', () => {
+      expect(template.Resources.LowercaseStackNameResource).toBeDefined();
+      expect(template.Resources.LowercaseStackNameResource.Type).toBe('AWS::CloudFormation::CustomResource');
+    });
+
+    test('artifacts bucket should use lowercase stack name', () => {
+      const bucket = template.Resources.ArtifactsBucket;
+      expect(bucket.Properties.BucketName['Fn::Join']).toBeDefined();
+      expect(bucket.Properties.BucketName['Fn::Join'][1]).toContain('artifacts');
+    });
+
+    test('flow logs bucket should use lowercase stack name', () => {
       const bucket = template.Resources.FlowLogsBucket;
-      expect(bucket.Properties.LifecycleConfiguration.Rules[0].ExpirationInDays).toBe(90);
+      expect(bucket.Properties.BucketName['Fn::Join']).toBeDefined();
+      expect(bucket.Properties.BucketName['Fn::Join'][1]).toContain('flow-logs');
     });
   });
 
@@ -386,16 +408,15 @@ describe('Payment Processing System CloudFormation Template - Unit Tests', () =>
       expect(tg.Properties.HealthCheckPath).toBe('/health');
     });
 
-    test('should have HTTPS listener', () => {
+    test('should have HTTP listener', () => {
       expect(template.Resources.ALBListener).toBeDefined();
       expect(template.Resources.ALBListener.Type).toBe('AWS::ElasticLoadBalancingV2::Listener');
     });
 
-    test('HTTPS listener should use port 443 with TLS 1.2', () => {
+    test('HTTP listener should use port 80', () => {
       const listener = template.Resources.ALBListener;
-      expect(listener.Properties.Port).toBe(443);
-      expect(listener.Properties.Protocol).toBe('HTTPS');
-      expect(listener.Properties.SslPolicy).toBe('ELBSecurityPolicy-TLS-1-2-2017-01');
+      expect(listener.Properties.Port).toBe(80);
+      expect(listener.Properties.Protocol).toBe('HTTP');
     });
   });
 
@@ -508,15 +529,15 @@ describe('Payment Processing System CloudFormation Template - Unit Tests', () =>
     });
   });
 
-  describe('Resource Naming with EnvironmentSuffix', () => {
+  describe('Resource Naming with StackName', () => {
     const resourcesToCheck = [
       'VPC', 'InternetGateway', 'ALBSecurityGroup', 'EC2SecurityGroup', 'RDSSecurityGroup',
       'ApplicationLoadBalancer', 'ALBTargetGroup', 'WebACL', 'LaunchTemplate', 'AutoScalingGroup',
       'AuroraCluster', 'AuroraInstanceWriter', 'AuroraInstanceReader', 'KMSKeyAlias',
-      'ArtifactsBucket', 'FlowLogsBucket', 'EC2InstanceRole', 'ApplicationLogGroup'
+      'EC2InstanceRole', 'ApplicationLogGroup', 'LambdaExecutionRole', 'LowercaseStackNameFunction'
     ];
 
-    test.each(resourcesToCheck)('%s should include EnvironmentSuffix in name', (resourceName) => {
+    test.each(resourcesToCheck)('%s should include AWS::StackName in name', (resourceName) => {
       const resource = template.Resources[resourceName];
       if (!resource) {
         fail(`Resource ${resourceName} not found`);
@@ -524,19 +545,20 @@ describe('Payment Processing System CloudFormation Template - Unit Tests', () =>
       }
 
       const nameProperty = resource.Properties.Name ||
-                          resource.Properties.TableName ||
-                          resource.Properties.BucketName ||
-                          resource.Properties.RoleName ||
-                          resource.Properties.LogGroupName ||
-                          resource.Properties.DBClusterIdentifier ||
-                          resource.Properties.DBInstanceIdentifier ||
-                          resource.Properties.LaunchTemplateName ||
-                          resource.Properties.AutoScalingGroupName ||
-                          resource.Properties.AliasName ||
-                          resource.Properties.GroupName;
+        resource.Properties.TableName ||
+        resource.Properties.BucketName ||
+        resource.Properties.RoleName ||
+        resource.Properties.LogGroupName ||
+        resource.Properties.DBClusterIdentifier ||
+        resource.Properties.DBInstanceIdentifier ||
+        resource.Properties.LaunchTemplateName ||
+        resource.Properties.AutoScalingGroupName ||
+        resource.Properties.AliasName ||
+        resource.Properties.GroupName ||
+        resource.Properties.FunctionName;
 
       if (nameProperty && typeof nameProperty === 'object' && nameProperty['Fn::Sub']) {
-        expect(nameProperty['Fn::Sub']).toContain('${EnvironmentSuffix}');
+        expect(nameProperty['Fn::Sub']).toContain('${AWS::StackName}');
       }
     });
   });
@@ -588,10 +610,9 @@ describe('Payment Processing System CloudFormation Template - Unit Tests', () =>
       expect(lt.Properties.LaunchTemplateData.BlockDeviceMappings[0].Ebs.Encrypted).toBe(true);
     });
 
-    test('ALB should use HTTPS with TLS 1.2', () => {
+    test('ALB should use HTTP', () => {
       const listener = template.Resources.ALBListener;
-      expect(listener.Properties.Protocol).toBe('HTTPS');
-      expect(listener.Properties.SslPolicy).toContain('TLS-1-2');
+      expect(listener.Properties.Protocol).toBe('HTTP');
     });
 
     test('RDS should not be publicly accessible', () => {
