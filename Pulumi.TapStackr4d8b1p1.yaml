@@ -1,0 +1,3 @@
+encryptionsalt: v1:zM3d6BKcDX8=:v1:g/97InwL39Q+MEep:fEQ1us3s0YTAXb2WgaeuPU8NLKx8LA==
+config:
+  aws:defaultTags: '{"tags":{"Environment":"r4d8b1p1","Repository":"synth-r4d8b1p1","Author":"mayanksethi-turing","PRNumber":"unknown","Team":"synth","CreatedAt":"2025-12-01T18:40:35Z","ManagedBy":"pulumi"}}'
