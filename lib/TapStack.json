@@ -1,66 +1,30 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "Payment Processing Infrastructure - Flattened Stack for Multi-Account Deployment",
-  "Metadata": {
-    "AWS::CloudFormation::Interface": {
-      "ParameterGroups": [
-        {
-          "Label": { "default": "Environment Configuration" },
-          "Parameters": ["EnvironmentName", "SnsEmail"]
-        },
-        {
-          "Label": { "default": "Network Configuration" },
-          "Parameters": ["VpcCidr", "AvailabilityZone1", "AvailabilityZone2", "AvailabilityZone3"]
-        }
-      ]
-    }
-  },
   "Parameters": {
-    "EnvironmentName": {
+    "EnvironmentSuffix": {
       "Type": "String",
       "Default": "dev",
-      "AllowedValues": ["dev", "staging", "prod"],
-      "Description": "Environment name for resource naming and conditional logic"
-    },
-    "SnsEmail": {
-      "Type": "String",
-      "Description": "Email address for SNS alarm notifications",
-      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
-    },
-    "VpcCidr": {
-      "Type": "String",
-      "Default": "10.0.0.0/16",
-      "Description": "CIDR block for VPC",
-      "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$"
-    },
-    "AvailabilityZone1": {
-      "Type": "AWS::EC2::AvailabilityZone::Name",
-      "Description": "First Availability Zone"
-    },
-    "AvailabilityZone2": {
-      "Type": "AWS::EC2::AvailabilityZone::Name",
-      "Description": "Second Availability Zone"
-    },
-    "AvailabilityZone3": {
-      "Type": "AWS::EC2::AvailabilityZone::Name",
-      "Description": "Third Availability Zone"
+      "Description": "Environment suffix for resource naming",
+      "AllowedPattern": "[a-zA-Z0-9-]+",
+      "ConstraintDescription": "Must contain only alphanumeric characters and hyphens"
     }
   },
   "Conditions": {
     "IsProduction": {
-      "Fn::Equals": [{ "Ref": "EnvironmentName" }, "prod"]
+      "Fn::Equals": [{ "Ref": "EnvironmentSuffix" }, "prod"]
     }
   },
   "Resources": {
     "VPC": {
       "Type": "AWS::EC2::VPC",
       "Properties": {
-        "CidrBlock": { "Ref": "VpcCidr" },
+        "CidrBlock": "10.0.0.0/16",
         "EnableDnsHostnames": true,
         "EnableDnsSupport": true,
         "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "payment-vpc-${EnvironmentName}" } },
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentName" } }
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-vpc-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
         ]
       }
     },
@@ -68,8 +32,8 @@
       "Type": "AWS::EC2::InternetGateway",
       "Properties": {
         "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "payment-igw-${EnvironmentName}" } },
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentName" } }
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-igw-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
         ]
       }
     },
@@ -84,12 +48,12 @@
       "Type": "AWS::EC2::Subnet",
       "Properties": {
         "VpcId": { "Ref": "VPC" },
-        "CidrBlock": { "Fn::Select": [0, { "Fn::Cidr": [{ "Ref": "VpcCidr" }, 6, 8] }] },
-        "AvailabilityZone": { "Ref": "AvailabilityZone1" },
+        "CidrBlock": "10.0.0.0/24",
+        "AvailabilityZone": { "Fn::Select": [0, { "Fn::GetAZs": { "Ref": "AWS::Region" } }] },
         "MapPublicIpOnLaunch": true,
         "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "payment-public-subnet-1-${EnvironmentName}" } },
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentName" } }
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-public-subnet-1-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
         ]
       }
     },
@@ -97,25 +61,12 @@
       "Type": "AWS::EC2::Subnet",
       "Properties": {
         "VpcId": { "Ref": "VPC" },
-        "CidrBlock": { "Fn::Select": [1, { "Fn::Cidr": [{ "Ref": "VpcCidr" }, 6, 8] }] },
-        "AvailabilityZone": { "Ref": "AvailabilityZone2" },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": { "Fn::Select": [1, { "Fn::GetAZs": { "Ref": "AWS::Region" } }] },
         "MapPublicIpOnLaunch": true,
         "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "payment-public-subnet-2-${EnvironmentName}" } },
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentName" } }
-        ]
-      }
-    },
-    "PublicSubnet3": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": { "Ref": "VPC" },
-        "CidrBlock": { "Fn::Select": [2, { "Fn::Cidr": [{ "Ref": "VpcCidr" }, 6, 8] }] },
-        "AvailabilityZone": { "Ref": "AvailabilityZone3" },
-        "MapPublicIpOnLaunch": true,
-        "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "payment-public-subnet-3-${EnvironmentName}" } },
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentName" } }
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-public-subnet-2-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
         ]
       }
     },
@@ -123,11 +74,11 @@
       "Type": "AWS::EC2::Subnet",
       "Properties": {
         "VpcId": { "Ref": "VPC" },
-        "CidrBlock": { "Fn::Select": [3, { "Fn::Cidr": [{ "Ref": "VpcCidr" }, 6, 8] }] },
-        "AvailabilityZone": { "Ref": "AvailabilityZone1" },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": { "Fn::Select": [0, { "Fn::GetAZs": { "Ref": "AWS::Region" } }] },
         "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "payment-private-subnet-1-${EnvironmentName}" } },
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentName" } }
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-private-subnet-1-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
         ]
       }
     },
@@ -135,23 +86,11 @@
       "Type": "AWS::EC2::Subnet",
       "Properties": {
         "VpcId": { "Ref": "VPC" },
-        "CidrBlock": { "Fn::Select": [4, { "Fn::Cidr": [{ "Ref": "VpcCidr" }, 6, 8] }] },
-        "AvailabilityZone": { "Ref": "AvailabilityZone2" },
+        "CidrBlock": "10.0.3.0/24",
+        "AvailabilityZone": { "Fn::Select": [1, { "Fn::GetAZs": { "Ref": "AWS::Region" } }] },
         "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "payment-private-subnet-2-${EnvironmentName}" } },
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentName" } }
-        ]
-      }
-    },
-    "PrivateSubnet3": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": { "Ref": "VPC" },
-        "CidrBlock": { "Fn::Select": [5, { "Fn::Cidr": [{ "Ref": "VpcCidr" }, 6, 8] }] },
-        "AvailabilityZone": { "Ref": "AvailabilityZone3" },
-        "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "payment-private-subnet-3-${EnvironmentName}" } },
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentName" } }
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-private-subnet-2-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
         ]
       }
     },
@@ -160,8 +99,8 @@
       "Properties": {
         "VpcId": { "Ref": "VPC" },
         "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "payment-public-rt-${EnvironmentName}" } },
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentName" } }
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-public-rt-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
         ]
       }
     },
@@ -188,20 +127,13 @@
         "RouteTableId": { "Ref": "PublicRouteTable" }
       }
     },
-    "PublicSubnet3RouteTableAssociation": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "SubnetId": { "Ref": "PublicSubnet3" },
-        "RouteTableId": { "Ref": "PublicRouteTable" }
-      }
-    },
     "PrivateRouteTable": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
         "VpcId": { "Ref": "VPC" },
         "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "payment-private-rt-${EnvironmentName}" } },
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentName" } }
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-private-rt-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
         ]
       }
     },
@@ -219,17 +151,10 @@
         "RouteTableId": { "Ref": "PrivateRouteTable" }
       }
     },
-    "PrivateSubnet3RouteTableAssociation": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "SubnetId": { "Ref": "PrivateSubnet3" },
-        "RouteTableId": { "Ref": "PrivateRouteTable" }
-      }
-    },
     "LambdaSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupName": { "Fn::Sub": "payment-lambda-sg-${EnvironmentName}" },
+        "GroupName": { "Fn::Sub": "payment-lambda-sg-${EnvironmentSuffix}" },
         "GroupDescription": "Security group for payment processing Lambda functions",
         "VpcId": { "Ref": "VPC" },
         "SecurityGroupEgress": [
@@ -240,15 +165,15 @@
           }
         ],
         "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "payment-lambda-sg-${EnvironmentName}" } },
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentName" } }
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-lambda-sg-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
         ]
       }
     },
     "AlbSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupName": { "Fn::Sub": "payment-alb-sg-${EnvironmentName}" },
+        "GroupName": { "Fn::Sub": "payment-alb-sg-${EnvironmentSuffix}" },
         "GroupDescription": "Security group for Application Load Balancer",
         "VpcId": { "Ref": "VPC" },
         "SecurityGroupIngress": [
@@ -275,8 +200,8 @@
           }
         ],
         "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "payment-alb-sg-${EnvironmentName}" } },
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentName" } }
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-alb-sg-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
         ]
       }
     },
@@ -294,7 +219,7 @@
       "DeletionPolicy": "Delete",
       "UpdateReplacePolicy": "Delete",
       "Properties": {
-        "TableName": { "Fn::Sub": "payment-transactions-${EnvironmentName}" },
+        "TableName": { "Fn::Sub": "payment-transactions-${EnvironmentSuffix}" },
         "BillingMode": "PAY_PER_REQUEST",
         "AttributeDefinitions": [
           { "AttributeName": "transactionId", "AttributeType": "S" },
@@ -328,15 +253,15 @@
           "PointInTimeRecoveryEnabled": true
         },
         "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "payment-transactions-${EnvironmentName}" } },
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentName" } }
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-transactions-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
         ]
       }
     },
     "LambdaExecutionRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": { "Fn::Sub": "payment-lambda-role-${EnvironmentName}" },
+        "RoleName": { "Fn::Sub": "payment-lambda-role-${EnvironmentSuffix}" },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -392,14 +317,14 @@
           }
         ],
         "Tags": [
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentName" } }
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
         ]
       }
     },
     "ValidationFunction": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
-        "FunctionName": { "Fn::Sub": "payment-validation-${EnvironmentName}" },
+        "FunctionName": { "Fn::Sub": "payment-validation-${EnvironmentSuffix}" },
         "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": { "Fn::GetAtt": ["LambdaExecutionRole", "Arn"] },
@@ -410,7 +335,7 @@
         },
         "Environment": {
           "Variables": {
-            "ENVIRONMENT": { "Ref": "EnvironmentName" },
+            "ENVIRONMENT": { "Ref": "EnvironmentSuffix" },
             "PAYMENT_TABLE": { "Ref": "PaymentTransactionsTable" }
           }
         },
@@ -418,23 +343,22 @@
           "SecurityGroupIds": [{ "Ref": "LambdaSecurityGroup" }],
           "SubnetIds": [
             { "Ref": "PrivateSubnet1" },
-            { "Ref": "PrivateSubnet2" },
-            { "Ref": "PrivateSubnet3" }
+            { "Ref": "PrivateSubnet2" }
           ]
         },
         "Code": {
           "ZipFile": "const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');\nconst { DynamoDBDocumentClient, GetItemCommand } = require('@aws-sdk/lib-dynamodb');\n\nconst client = new DynamoDBClient({});\nconst ddbDocClient = DynamoDBDocumentClient.from(client);\n\nexports.handler = async (event) => {\n  console.log('Validation event:', JSON.stringify(event));\n  \n  const body = typeof event.body === 'string' ? JSON.parse(event.body) : event;\n  const { transactionId, amount, customerId } = body;\n  \n  if (!transactionId || !amount || !customerId) {\n    return {\n      statusCode: 400,\n      body: JSON.stringify({ error: 'Missing required fields' })\n    };\n  }\n  \n  if (amount <= 0 || amount > 10000) {\n    return {\n      statusCode: 400,\n      body: JSON.stringify({ error: 'Invalid amount' })\n    };\n  }\n  \n  return {\n    statusCode: 200,\n    body: JSON.stringify({\n      valid: true,\n      transactionId,\n      customerId,\n      amount\n    })\n  };\n};\n"
         },
         "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "payment-validation-${EnvironmentName}" } },
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentName" } }
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-validation-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
         ]
       }
     },
     "ProcessingFunction": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
-        "FunctionName": { "Fn::Sub": "payment-processing-${EnvironmentName}" },
+        "FunctionName": { "Fn::Sub": "payment-processing-${EnvironmentSuffix}" },
         "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": { "Fn::GetAtt": ["LambdaExecutionRole", "Arn"] },
@@ -445,7 +369,7 @@
         },
         "Environment": {
           "Variables": {
-            "ENVIRONMENT": { "Ref": "EnvironmentName" },
+            "ENVIRONMENT": { "Ref": "EnvironmentSuffix" },
             "PAYMENT_TABLE": { "Ref": "PaymentTransactionsTable" }
           }
         },
@@ -453,16 +377,15 @@
           "SecurityGroupIds": [{ "Ref": "LambdaSecurityGroup" }],
           "SubnetIds": [
             { "Ref": "PrivateSubnet1" },
-            { "Ref": "PrivateSubnet2" },
-            { "Ref": "PrivateSubnet3" }
+            { "Ref": "PrivateSubnet2" }
           ]
         },
         "Code": {
           "ZipFile": "const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');\nconst { DynamoDBDocumentClient, PutItemCommand } = require('@aws-sdk/lib-dynamodb');\n\nconst client = new DynamoDBClient({});\nconst ddbDocClient = DynamoDBDocumentClient.from(client);\n\nexports.handler = async (event) => {\n  console.log('Processing event:', JSON.stringify(event));\n  \n  const body = typeof event.body === 'string' ? JSON.parse(event.body) : event;\n  const { transactionId, amount, customerId } = body;\n  \n  const timestamp = Date.now();\n  \n  const params = {\n    TableName: process.env.PAYMENT_TABLE,\n    Item: {\n      transactionId,\n      timestamp,\n      customerId,\n      amount,\n      paymentStatus: 'COMPLETED',\n      processedAt: new Date().toISOString()\n    }\n  };\n  \n  try {\n    await ddbDocClient.send(new PutItemCommand(params));\n    \n    return {\n      statusCode: 200,\n      body: JSON.stringify({\n        success: true,\n        transactionId,\n        timestamp,\n        status: 'COMPLETED'\n      })\n    };\n  } catch (error) {\n    console.error('Error processing payment:', error);\n    throw error;\n  }\n};\n"
         },
         "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "payment-processing-${EnvironmentName}" } },
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentName" } }
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-processing-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
         ]
       }
     },
@@ -501,19 +424,18 @@
     "ApplicationLoadBalancer": {
       "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
       "Properties": {
-        "Name": { "Fn::Sub": "payment-alb-${EnvironmentName}" },
+        "Name": { "Fn::Sub": "payment-alb-${EnvironmentSuffix}" },
         "Type": "application",
         "Scheme": "internet-facing",
         "IpAddressType": "ipv4",
         "Subnets": [
           { "Ref": "PublicSubnet1" },
-          { "Ref": "PublicSubnet2" },
-          { "Ref": "PublicSubnet3" }
+          { "Ref": "PublicSubnet2" }
         ],
         "SecurityGroups": [{ "Ref": "AlbSecurityGroup" }],
         "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "payment-alb-${EnvironmentName}" } },
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentName" } }
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-alb-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
         ]
       }
     },
@@ -521,7 +443,7 @@
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
       "DependsOn": "ValidationFunctionPermission",
       "Properties": {
-        "Name": { "Fn::Sub": "payment-validation-tg-${EnvironmentName}" },
+        "Name": { "Fn::Sub": "payment-validation-tg-${EnvironmentSuffix}" },
         "TargetType": "lambda",
         "Targets": [
           { "Id": { "Fn::GetAtt": ["ValidationFunction", "Arn"] } }
@@ -533,7 +455,7 @@
         "HealthyThresholdCount": 2,
         "UnhealthyThresholdCount": 2,
         "Tags": [
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentName" } }
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
         ]
       }
     },
@@ -541,7 +463,7 @@
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
       "DependsOn": "ProcessingFunctionPermission",
       "Properties": {
-        "Name": { "Fn::Sub": "payment-processing-tg-${EnvironmentName}" },
+        "Name": { "Fn::Sub": "payment-processing-tg-${EnvironmentSuffix}" },
         "TargetType": "lambda",
         "Targets": [
           { "Id": { "Fn::GetAtt": ["ProcessingFunction", "Arn"] } }
@@ -553,7 +475,7 @@
         "HealthyThresholdCount": 2,
         "UnhealthyThresholdCount": 2,
         "Tags": [
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentName" } }
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
         ]
       }
     },
@@ -593,7 +515,7 @@
     "StepFunctionsRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": { "Fn::Sub": "payment-stepfunctions-role-${EnvironmentName}" },
+        "RoleName": { "Fn::Sub": "payment-stepfunctions-role-${EnvironmentSuffix}" },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -623,14 +545,14 @@
           }
         ],
         "Tags": [
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentName" } }
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
         ]
       }
     },
     "PaymentStateMachine": {
       "Type": "AWS::StepFunctions::StateMachine",
       "Properties": {
-        "StateMachineName": { "Fn::Sub": "payment-workflow-${EnvironmentName}" },
+        "StateMachineName": { "Fn::Sub": "payment-workflow-${EnvironmentSuffix}" },
         "RoleArn": { "Fn::GetAtt": ["StepFunctionsRole", "Arn"] },
         "DefinitionString": {
           "Fn::Sub": [
@@ -642,31 +564,25 @@
           ]
         },
         "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "payment-workflow-${EnvironmentName}" } },
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentName" } }
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-workflow-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
         ]
       }
     },
     "AlarmTopic": {
       "Type": "AWS::SNS::Topic",
       "Properties": {
-        "TopicName": { "Fn::Sub": "payment-alarms-${EnvironmentName}" },
-        "DisplayName": { "Fn::Sub": "Payment Processing Alarms - ${EnvironmentName}" },
-        "Subscription": [
-          {
-            "Endpoint": { "Ref": "SnsEmail" },
-            "Protocol": "email"
-          }
-        ],
+        "TopicName": { "Fn::Sub": "payment-alarms-${EnvironmentSuffix}" },
+        "DisplayName": { "Fn::Sub": "Payment Processing Alarms - ${EnvironmentSuffix}" },
         "Tags": [
-          { "Key": "Environment", "Value": { "Ref": "EnvironmentName" } }
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
         ]
       }
     },
     "ValidationFunctionErrorAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": { "Fn::Sub": "payment-validation-errors-${EnvironmentName}" },
+        "AlarmName": { "Fn::Sub": "payment-validation-errors-${EnvironmentSuffix}" },
         "AlarmDescription": "Alarm when validation function has errors",
         "MetricName": "Errors",
         "Namespace": "AWS/Lambda",
@@ -688,7 +604,7 @@
     "ProcessingFunctionErrorAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": { "Fn::Sub": "payment-processing-errors-${EnvironmentName}" },
+        "AlarmName": { "Fn::Sub": "payment-processing-errors-${EnvironmentSuffix}" },
         "AlarmDescription": "Alarm when processing function has errors",
         "MetricName": "Errors",
         "Namespace": "AWS/Lambda",
@@ -710,7 +626,7 @@
     "DynamoDBThrottleAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": { "Fn::Sub": "payment-dynamodb-throttle-${EnvironmentName}" },
+        "AlarmName": { "Fn::Sub": "payment-dynamodb-throttle-${EnvironmentSuffix}" },
         "AlarmDescription": "Alarm when DynamoDB requests are throttled",
         "MetricName": "UserErrors",
         "Namespace": "AWS/DynamoDB",
@@ -732,7 +648,7 @@
     "StateMachineFailureAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": { "Fn::Sub": "payment-workflow-failures-${EnvironmentName}" },
+        "AlarmName": { "Fn::Sub": "payment-workflow-failures-${EnvironmentSuffix}" },
         "AlarmDescription": "Alarm when state machine executions fail",
         "MetricName": "ExecutionsFailed",
         "Namespace": "AWS/States",
@@ -754,7 +670,7 @@
     "ValidationFunctionDurationAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": { "Fn::Sub": "payment-validation-duration-${EnvironmentName}" },
+        "AlarmName": { "Fn::Sub": "payment-validation-duration-${EnvironmentSuffix}" },
         "AlarmDescription": "Alarm when validation function duration is high",
         "MetricName": "Duration",
         "Namespace": "AWS/Lambda",
@@ -782,7 +698,7 @@
     },
     "EnvironmentName": {
       "Description": "Environment name for this deployment",
-      "Value": { "Ref": "EnvironmentName" },
+      "Value": { "Ref": "EnvironmentSuffix" },
       "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-EnvironmentName" } }
     },
     "VpcId": {

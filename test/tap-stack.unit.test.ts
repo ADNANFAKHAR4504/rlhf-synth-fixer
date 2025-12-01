@@ -20,11 +20,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(typeof template.Description).toBe('string');
     });
 
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
-    });
-
     test('should have parameters section', () => {
       expect(template.Parameters).toBeDefined();
     });
@@ -43,38 +38,19 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentName parameter', () => {
-      expect(template.Parameters.EnvironmentName).toBeDefined();
+    test('should have EnvironmentSuffix parameter', () => {
+      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
     });
 
-    test('EnvironmentName parameter should have correct properties', () => {
-      const envParam = template.Parameters.EnvironmentName;
+    test('EnvironmentSuffix parameter should have correct properties', () => {
+      const envParam = template.Parameters.EnvironmentSuffix;
       expect(envParam.Type).toBe('String');
       expect(envParam.Default).toBe('dev');
-      expect(envParam.AllowedValues).toEqual(['dev', 'staging', 'prod']);
     });
 
-    test('should have SnsEmail parameter', () => {
-      expect(template.Parameters.SnsEmail).toBeDefined();
-      expect(template.Parameters.SnsEmail.Type).toBe('String');
-    });
-
-    test('should have VpcCidr parameter', () => {
-      expect(template.Parameters.VpcCidr).toBeDefined();
-      expect(template.Parameters.VpcCidr.Type).toBe('String');
-      expect(template.Parameters.VpcCidr.Default).toBe('10.0.0.0/16');
-    });
-
-    test('should have AvailabilityZone parameters', () => {
-      expect(template.Parameters.AvailabilityZone1).toBeDefined();
-      expect(template.Parameters.AvailabilityZone2).toBeDefined();
-      expect(template.Parameters.AvailabilityZone3).toBeDefined();
-    });
-
-    test('AvailabilityZone parameters should have correct type', () => {
-      expect(template.Parameters.AvailabilityZone1.Type).toBe('AWS::EC2::AvailabilityZone::Name');
-      expect(template.Parameters.AvailabilityZone2.Type).toBe('AWS::EC2::AvailabilityZone::Name');
-      expect(template.Parameters.AvailabilityZone3.Type).toBe('AWS::EC2::AvailabilityZone::Name');
+    test('should have exactly 1 parameter', () => {
+      const parameterCount = Object.keys(template.Parameters).length;
+      expect(parameterCount).toBe(1);
     });
   });
 
@@ -103,13 +79,11 @@ describe('TapStack CloudFormation Template', () => {
     test('should have public subnets', () => {
       expect(template.Resources.PublicSubnet1).toBeDefined();
       expect(template.Resources.PublicSubnet2).toBeDefined();
-      expect(template.Resources.PublicSubnet3).toBeDefined();
     });
 
     test('should have private subnets', () => {
       expect(template.Resources.PrivateSubnet1).toBeDefined();
       expect(template.Resources.PrivateSubnet2).toBeDefined();
-      expect(template.Resources.PrivateSubnet3).toBeDefined();
     });
 
     test('should have route tables', () => {
@@ -272,7 +246,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have expected number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(6);
+      expect(parameterCount).toBe(1);
     });
 
     test('should have expected number of outputs', () => {
@@ -282,22 +256,22 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Resource Naming Convention', () => {
-    test('resources should use EnvironmentName in naming', () => {
+    test('resources should use EnvironmentSuffix in naming', () => {
       const vpcTags = template.Resources.VPC.Properties.Tags;
       const nameTag = vpcTags.find((tag: any) => tag.Key === 'Name');
-      expect(nameTag.Value['Fn::Sub']).toContain('${EnvironmentName}');
+      expect(nameTag.Value['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
 
     test('DynamoDB table name should include environment', () => {
       const tableName = template.Resources.PaymentTransactionsTable.Properties.TableName;
-      expect(tableName['Fn::Sub']).toContain('${EnvironmentName}');
+      expect(tableName['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
 
     test('Lambda function names should include environment', () => {
       const validationName = template.Resources.ValidationFunction.Properties.FunctionName;
       const processingName = template.Resources.ProcessingFunction.Properties.FunctionName;
-      expect(validationName['Fn::Sub']).toContain('${EnvironmentName}');
-      expect(processingName['Fn::Sub']).toContain('${EnvironmentName}');
+      expect(validationName['Fn::Sub']).toContain('${EnvironmentSuffix}');
+      expect(processingName['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
   });
 
