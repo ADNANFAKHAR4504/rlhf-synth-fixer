@@ -1,8 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
 describe('TapStack CloudFormation Template - Payment Processing Infrastructure', () => {
   let template: any;
 
