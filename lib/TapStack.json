@@ -1,0 +1,258 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Transaction Processing Infrastructure - Standalone Deployable Version (QA Simplified)",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource names to avoid conflicts",
+      "AllowedPattern": "^[a-z0-9]{6,12}$",
+      "ConstraintDescription": "Must be 6-12 lowercase alphanumeric characters"
+    }
+  },
+  "Resources": {
+    "SessionTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "TableName": { "Fn::Sub": "sessions-${EnvironmentSuffix}" },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "session_id",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "user_id",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "session_id",
+            "KeyType": "HASH"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "UserIdIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "user_id",
+                "KeyType": "HASH"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "DeletionProtectionEnabled": false,
+        "SSESpecification": {
+          "SSEEnabled": true
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "sessions-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "TransactionTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "TableName": { "Fn::Sub": "transactions-${EnvironmentSuffix}" },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "transaction_id",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "timestamp",
+            "AttributeType": "N"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "transaction_id",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "timestamp",
+            "KeyType": "RANGE"
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "DeletionProtectionEnabled": false,
+        "SSESpecification": {
+          "SSEEnabled": true
+        },
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "transactions-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "AuditLogBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "BucketName": { "Fn::Sub": "audit-logs-${EnvironmentSuffix}-${AWS::AccountId}" },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldVersions",
+              "Status": "Enabled",
+              "NoncurrentVersionExpirationInDays": 30
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "audit-logs-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "TemplatesBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "BucketName": { "Fn::Sub": "cfn-templates-${EnvironmentSuffix}-${AWS::AccountId}" },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": false,
+          "BlockPublicPolicy": false,
+          "IgnorePublicAcls": false,
+          "RestrictPublicBuckets": false
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "templates-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "TemplatesBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": { "Ref": "TemplatesBucket" },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AllowCloudFormationRead",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudformation.amazonaws.com"
+              },
+              "Action": "s3:GetObject",
+              "Resource": {
+                "Fn::Sub": "${TemplatesBucket.Arn}/*"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "TransactionValidatorECRRepository": {
+      "Type": "AWS::ECR::Repository",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "RepositoryName": { "Fn::Sub": "transaction-validator-${EnvironmentSuffix}" },
+        "ImageScanningConfiguration": {
+          "ScanOnPush": true
+        },
+        "LifecyclePolicy": {
+          "LifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"description\":\"Keep last 5 images\",\"selection\":{\"tagStatus\":\"any\",\"countType\":\"imageCountMoreThan\",\"countNumber\":5},\"action\":{\"type\":\"expire\"}}]}"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "transaction-validator-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "SessionTableName": {
+      "Description": "DynamoDB Session Table Name",
+      "Value": { "Ref": "SessionTable" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-SessionTableName" }
+      }
+    },
+    "TransactionTableName": {
+      "Description": "DynamoDB Transaction Table Name",
+      "Value": { "Ref": "TransactionTable" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-TransactionTableName" }
+      }
+    },
+    "TransactionTableStreamArn": {
+      "Description": "DynamoDB Transaction Table Stream ARN",
+      "Value": { "Fn::GetAtt": ["TransactionTable", "StreamArn"] },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-TransactionTableStreamArn" }
+      }
+    },
+    "AuditLogBucketName": {
+      "Description": "S3 Audit Log Bucket Name",
+      "Value": { "Ref": "AuditLogBucket" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-AuditLogBucketName" }
+      }
+    },
+    "TemplatesBucketName": {
+      "Description": "S3 Templates Bucket Name",
+      "Value": { "Ref": "TemplatesBucket" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-TemplatesBucketName" }
+      }
+    },
+    "TransactionValidatorECRRepositoryUri": {
+      "Description": "ECR Repository URI for Transaction Validator",
+      "Value": { "Fn::GetAtt": ["TransactionValidatorECRRepository", "RepositoryUri"] },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-TransactionValidatorECRUri" }
+      }
+    }
+  }
+}
