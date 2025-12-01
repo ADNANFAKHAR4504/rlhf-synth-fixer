@@ -9,6 +9,6 @@ data "external" "pipeline_env" {
 locals {
   # Prefer explicitly provided variable if set; otherwise use pipeline ENVIRONMENT_SUFFIX
   environment_suffix = (
-    length(trim(var.environment_suffix)) > 0
-  ) ? trim(var.environment_suffix) : trim(try(data.external.pipeline_env.result.environment_suffix, ""))
+    length(trimspace(var.environment_suffix)) > 0
+  ) ? trimspace(var.environment_suffix) : trimspace(try(data.external.pipeline_env.result.environment_suffix, ""))
 }
