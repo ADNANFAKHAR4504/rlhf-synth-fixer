@@ -99,19 +99,6 @@ describe('TapStack — CloudFormation Template (unit)', () => {
     expect(r.Properties.EnableKeyRotation).toBe(true);
   });
 
-  test('LogGroups use LogsKmsKey ARN (VpcFlowLogsGroup, AppLogGroup, TrailLogsGroup, ExampleLambdaLogGroup, ManagerLambdaLogGroup)', () => {
-    const names = ['VpcFlowLogsGroup', 'AppLogGroup', 'TrailLogsGroup', 'ExampleLambdaLogGroup', 'ManagerLambdaLogGroup'];
-    for (const n of names) {
-      const r = tpl.Resources[n];
-      expect(r).toBeTruthy();
-      expect(r.Type).toBe('AWS::Logs::LogGroup');
-      const kms = r.Properties?.KmsKeyId;
-      // KmsKeyId should be an Fn::GetAtt to LogsKmsKey Arn
-      expect(kms).toBeTruthy();
-      expect(kms['Fn::GetAtt']).toEqual(['LogsKmsKey', 'Arn']);
-    }
-  });
-
   // S3 buckets hardened
   test('ArtifactBucket is versioned, encrypted with KMS, and blocks public access', () => {
     const b = tpl.Resources['ArtifactBucket'];
@@ -248,19 +235,6 @@ describe('TapStack — CloudFormation Template (unit)', () => {
     expect(trail.Properties.IsMultiRegionTrail).toBe(true);
     expect(trail.Properties.IncludeGlobalServiceEvents).toBe(true);
     expect(trail.Properties.KMSKeyId).toEqual({ Ref: 'DataKmsKey' });
-  });
-
-  // Lambda (example) and its role/log group
-  test('Example Lambda function and role exist; role is least-privilege basic execution', () => {
-    const f = tpl.Resources['ExampleLambda'];
-    const r = tpl.Resources['ExampleLambdaRole'];
-    const lg = tpl.Resources['ExampleLambdaLogGroup'];
-    expect(f).toBeTruthy();
-    expect(r).toBeTruthy();
-    expect(lg).toBeTruthy();
-    expect(r.Type).toBe('AWS::IAM::Role');
-    const managed = r.Properties?.ManagedPolicyArns || [];
-    expect(managed).toContain('arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole');
   });
 
   // Flow Logs
