@@ -1,0 +1,20 @@
+{
+  "po_id": "e8m2f1w3",
+  "status": "completed",
+  "platform": "Pulumi",
+  "language": "TypeScript",
+  "complexity": "medium",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": "CI/CD Pipeline",
+  "region": "us-east-1",
+  "training_quality": 9,
+  "aws_services": [
+    "S3",
+    "ECR",
+    "CodeBuild",
+    "CodePipeline",
+    "Lambda",
+    "CloudWatch",
+    "IAM"
+  ]
+}
