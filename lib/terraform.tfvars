@@ -3,4 +3,4 @@
 # This file is kept for local development - override with command-line variables in CI/CD
 # For local development, uncomment and set your desired value:
 # environment_suffix = "dev-001"
-aws_region         = "us-east-1"
+aws_region = "us-east-1"
