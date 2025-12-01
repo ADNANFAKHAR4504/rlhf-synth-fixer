@@ -1040,14 +1040,13 @@ Resources:
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: webapp-prod-db-subnet-group
       DBSubnetGroupDescription: Subnet group for RDS database
       SubnetIds:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       Tags:
         - Key: Name
-          Value: webapp-prod-db-subnet-group
+          Value: !Sub '${AWS::StackName}-db-subnet-group'
         - Key: iac-rlhf-amazon
           Value: 'true'
 
