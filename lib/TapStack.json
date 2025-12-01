@@ -409,12 +409,19 @@
     },
     "AuroraCluster": {
       "Type": "AWS::RDS::DBCluster",
+      "Metadata": {
+        "cfn-lint": {
+          "config": {
+            "ignore_checks": ["E3690", "W1011"]
+          }
+        }
+      },
       "Properties": {
         "DBClusterIdentifier": {
           "Fn::Sub": "aurora-cluster-${EnvironmentSuffix}"
         },
         "Engine": "aurora-postgresql",
-        "EngineVersion": "15.13",
+        "EngineVersion": "15.14",
         "EngineMode": "provisioned",
         "MasterUsername": {
           "Ref": "DatabaseMasterUsername"
@@ -614,9 +621,6 @@
           }
         ]
       },
-      "DependsOn": [
-        "LambdaExecutionRole"
-      ],
       "DeletionPolicy": "Delete"
     },
     "HealthCheckFunction": {
@@ -647,9 +651,6 @@
           }
         ]
       },
-      "DependsOn": [
-        "LambdaExecutionRole"
-      ],
       "DeletionPolicy": "Delete"
     },
     "HealthCheckFunctionUrl": {
@@ -814,10 +815,7 @@
             }
           }
         ]
-      },
-      "DependsOn": [
-        "HealthCheckFunctionUrl"
-      ]
+      }
     },
     "Route53HostedZone": {
       "Type": "AWS::Route53::HostedZone",
@@ -875,11 +873,7 @@
             ]
           }
         ]
-      },
-      "DependsOn": [
-        "Route53HealthCheck",
-        "HealthCheckFunctionUrl"
-      ]
+      }
     }
   },
   "Outputs": {

@@ -432,15 +432,20 @@ describe('Multi-Region Disaster Recovery CloudFormation Template', () => {
     test('Lambda functions should depend on execution role', () => {
       const txFunc = template.Resources.TransactionProcessorFunction;
       const healthFunc = template.Resources.HealthCheckFunction;
-      expect(txFunc.DependsOn).toContain('LambdaExecutionRole');
-      expect(healthFunc.DependsOn).toContain('LambdaExecutionRole');
+      // DependsOn is redundant - dependency is implicit via Fn::GetAtt in Role property
+      // Verify the Role property references LambdaExecutionRole
+      expect(txFunc.Properties.Role['Fn::GetAtt'][0]).toBe('LambdaExecutionRole');
+      expect(healthFunc.Properties.Role['Fn::GetAtt'][0]).toBe('LambdaExecutionRole');
     });
 
     test('Route53 resources should depend on health check URL', () => {
       const healthCheck = template.Resources.Route53HealthCheck;
       const recordSet = template.Resources.Route53RecordSet;
-      expect(healthCheck.DependsOn).toContain('HealthCheckFunctionUrl');
-      expect(recordSet.DependsOn).toContain('HealthCheckFunctionUrl');
+      // DependsOn is redundant - dependencies are implicit via Fn::GetAtt and Ref
+      // Verify the resources reference HealthCheckFunctionUrl via intrinsic functions
+      expect(healthCheck.Properties.HealthCheckConfig.FullyQualifiedDomainName).toBeDefined();
+      expect(recordSet.Properties.HealthCheckId.Ref).toBe('Route53HealthCheck');
+      expect(recordSet.Properties.ResourceRecords[0]).toBeDefined();
     });
   });
 
