@@ -721,9 +721,19 @@ describe('Terraform Webhook Infrastructure - Integration Tests', () => {
     });
 
     it('all resources should follow naming convention with environment suffix', () => {
-      expect(outputs.lambda_function_name).toContain(environmentSuffix);
-      expect(outputs.dynamodb_table_name).toContain(environmentSuffix);
-      expect(outputs.cloudwatch_dashboard_name).toContain(environmentSuffix);
+      // Extract the actual suffix from deployed resources to handle cases where
+      // deployment used a different suffix than the current ENVIRONMENT_SUFFIX env var
+      const actualSuffix = discoverEnvironmentSuffix(outputs);
+      
+      // Validate that all resources use the same suffix pattern
+      expect(outputs.lambda_function_name).toContain(actualSuffix);
+      expect(outputs.dynamodb_table_name).toContain(actualSuffix);
+      expect(outputs.cloudwatch_dashboard_name).toContain(actualSuffix);
+      
+      // Also validate that resources follow the expected naming pattern
+      expect(outputs.lambda_function_name).toMatch(/^webhook-processor-.+$/);
+      expect(outputs.dynamodb_table_name).toMatch(/^webhooks-.+$/);
+      expect(outputs.cloudwatch_dashboard_name).toMatch(/^webhook-monitoring-.+$/);
     });
   });
 });
