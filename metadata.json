@@ -8,7 +8,7 @@
   "po_id": "s1e5p7m1",
   "subtask": "Infrastructure QA and Management",
   "subject_labels": [
-    "Infrastructure Analysis/Monitoring"
+    "General Infrastructure Tooling QA"
   ],
   "aws_services": [
     "AWS Lambda",
