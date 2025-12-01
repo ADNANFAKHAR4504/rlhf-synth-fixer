@@ -1000,10 +1000,6 @@ resource "aws_cloudwatch_dashboard" "payment_dashboard" {
       }
     ]
   })
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-payment-dashboard"
-  })
 }
 
 # ================================
