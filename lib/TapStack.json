@@ -10,8 +10,8 @@
     "KubernetesVersion": {
       "Type": "String",
       "Description": "Kubernetes version for EKS cluster",
-      "Default": "1.28",
-      "AllowedValues": ["1.28", "1.29", "1.30"]
+      "Default": "1.32",
+      "AllowedValues": ["1.33", "1.32", "1.34"]
     }
   },
   "Resources": {
