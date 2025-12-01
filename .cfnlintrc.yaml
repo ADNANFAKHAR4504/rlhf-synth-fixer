@@ -1,3 +1,0 @@
-ignore_checks:
-  - E1040  # MediaLive InputSecurityGroup ID format - deployment verified
-  - E1041  # MediaLive InputSecurityGroup ID format - deployment verified
