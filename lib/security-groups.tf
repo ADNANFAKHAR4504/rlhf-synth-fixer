@@ -1,7 +1,7 @@
 # Primary Region Security Groups
 resource "aws_security_group" "primary_alb" {
   provider    = aws.primary
-  name        = "sg-alb-primary-${var.environment_suffix}"
+  name        = "alb-primary-${var.environment_suffix}"
   description = "Security group for primary ALB"
   vpc_id      = aws_vpc.primary.id
 
@@ -20,13 +20,13 @@ resource "aws_security_group" "primary_alb" {
   }
 
   tags = {
-    Name = "sg-alb-primary-${var.environment_suffix}"
+    Name = "alb-primary-${var.environment_suffix}"
   }
 }
 
 resource "aws_security_group" "primary_instances" {
   provider    = aws.primary
-  name        = "sg-instances-primary-${var.environment_suffix}"
+  name        = "instances-primary-${var.environment_suffix}"
   description = "Security group for primary EC2 instances"
   vpc_id      = aws_vpc.primary.id
 
@@ -45,13 +45,13 @@ resource "aws_security_group" "primary_instances" {
   }
 
   tags = {
-    Name = "sg-instances-primary-${var.environment_suffix}"
+    Name = "instances-primary-${var.environment_suffix}"
   }
 }
 
 resource "aws_security_group" "primary_database" {
   provider    = aws.primary
-  name        = "sg-database-primary-${var.environment_suffix}"
+  name        = "database-primary-${var.environment_suffix}"
   description = "Security group for primary Aurora cluster"
   vpc_id      = aws_vpc.primary.id
 
@@ -70,14 +70,14 @@ resource "aws_security_group" "primary_database" {
   }
 
   tags = {
-    Name = "sg-database-primary-${var.environment_suffix}"
+    Name = "database-primary-${var.environment_suffix}"
   }
 }
 
 # Secondary Region Security Groups
 resource "aws_security_group" "secondary_alb" {
   provider    = aws.secondary
-  name        = "sg-alb-secondary-${var.environment_suffix}"
+  name        = "alb-secondary-${var.environment_suffix}"
   description = "Security group for secondary ALB"
   vpc_id      = aws_vpc.secondary.id
 
@@ -96,13 +96,13 @@ resource "aws_security_group" "secondary_alb" {
   }
 
   tags = {
-    Name = "sg-alb-secondary-${var.environment_suffix}"
+    Name = "alb-secondary-${var.environment_suffix}"
   }
 }
 
 resource "aws_security_group" "secondary_instances" {
   provider    = aws.secondary
-  name        = "sg-instances-secondary-${var.environment_suffix}"
+  name        = "instances-secondary-${var.environment_suffix}"
   description = "Security group for secondary EC2 instances"
   vpc_id      = aws_vpc.secondary.id
 
@@ -121,13 +121,13 @@ resource "aws_security_group" "secondary_instances" {
   }
 
   tags = {
-    Name = "sg-instances-secondary-${var.environment_suffix}"
+    Name = "instances-secondary-${var.environment_suffix}"
   }
 }
 
 resource "aws_security_group" "secondary_database" {
   provider    = aws.secondary
-  name        = "sg-database-secondary-${var.environment_suffix}"
+  name        = "database-secondary-${var.environment_suffix}"
   description = "Security group for secondary Aurora cluster"
   vpc_id      = aws_vpc.secondary.id
 
@@ -146,6 +146,6 @@ resource "aws_security_group" "secondary_database" {
   }
 
   tags = {
-    Name = "sg-database-secondary-${var.environment_suffix}"
+    Name = "database-secondary-${var.environment_suffix}"
   }
 }

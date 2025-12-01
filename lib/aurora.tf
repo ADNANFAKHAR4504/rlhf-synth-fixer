@@ -24,7 +24,7 @@ resource "aws_rds_cluster" "primary" {
   master_password           = var.db_password
   backup_retention_period   = var.backup_retention_days
   preferred_backup_window   = "03:00-04:00"
-  skip_final_snapshot       = true
+  skip_final_snapshot = true
   storage_encrypted         = true
   db_subnet_group_name      = aws_db_subnet_group.primary.name
   vpc_security_group_ids    = [aws_security_group.primary_database.id]
@@ -58,7 +58,7 @@ resource "aws_rds_cluster" "secondary" {
   cluster_identifier        = "aurora-secondary-${var.environment_suffix}"
   engine                    = aws_rds_global_cluster.main.engine
   engine_version            = aws_rds_global_cluster.main.engine_version
-  skip_final_snapshot       = true
+  skip_final_snapshot = true
   storage_encrypted         = true
   db_subnet_group_name      = aws_db_subnet_group.secondary.name
   vpc_security_group_ids    = [aws_security_group.secondary_database.id]
