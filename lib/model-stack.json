@@ -2,12 +2,6 @@
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "Optimized three-tier web application infrastructure",
   "Parameters": {
-    "Environment": {
-      "Type": "String",
-      "Default": "dev",
-      "AllowedValues": ["dev", "staging", "prod"],
-      "Description": "Environment name"
-    },
     "EnvironmentSuffix": {
       "Type": "String",
       "Description": "Unique suffix for resource naming",
@@ -23,16 +17,12 @@
       "Default": "t3.micro"
     },
     "AmiId": {
-      "Type": "String",
-      "Default": "ami-0c55b159cbfafe1f0"
+      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+      "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
     },
     "DBMasterUsername": {
       "Type": "String",
       "Default": "admin"
-    },
-    "DBMasterPassword": {
-      "Type": "String",
-      "NoEcho": true
     }
   },
   "Resources": {
@@ -73,7 +63,7 @@
       "Properties": {
         "VpcId": {"Ref": "VPC"},
         "CidrBlock": "10.0.1.0/24",
-        "AvailabilityZone": "us-east-1a",
+        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
@@ -88,7 +78,7 @@
       "Properties": {
         "VpcId": {"Ref": "VPC"},
         "CidrBlock": "10.0.2.0/24",
-        "AvailabilityZone": "us-east-1b",
+        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
@@ -103,7 +93,7 @@
       "Properties": {
         "VpcId": {"Ref": "VPC"},
         "CidrBlock": "10.0.3.0/24",
-        "AvailabilityZone": "us-east-1c",
+        "AvailabilityZone": {"Fn::Select": [2, {"Fn::GetAZs": ""}]},
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
@@ -118,7 +108,7 @@
       "Properties": {
         "VpcId": {"Ref": "VPC"},
         "CidrBlock": "10.0.11.0/24",
-        "AvailabilityZone": "us-east-1a",
+        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
         "Tags": [
           {
             "Key": "Name",
@@ -132,7 +122,7 @@
       "Properties": {
         "VpcId": {"Ref": "VPC"},
         "CidrBlock": "10.0.12.0/24",
-        "AvailabilityZone": "us-east-1b",
+        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
         "Tags": [
           {
             "Key": "Name",
@@ -146,7 +136,7 @@
       "Properties": {
         "VpcId": {"Ref": "VPC"},
         "CidrBlock": "10.0.13.0/24",
-        "AvailabilityZone": "us-east-1c",
+        "AvailabilityZone": {"Fn::Select": [2, {"Fn::GetAZs": ""}]},
         "Tags": [
           {
             "Key": "Name",
@@ -401,10 +391,10 @@
       "Type": "AWS::RDS::DBCluster",
       "Properties": {
         "Engine": "aurora-mysql",
-        "EngineVersion": "5.7.mysql_aurora.2.10.1",
+        "EngineVersion": "8.0.mysql_aurora.3.04.0",
         "DatabaseName": "appdb",
         "MasterUsername": {"Ref": "DBMasterUsername"},
-        "MasterUserPassword": {"Ref": "DBMasterPassword"},
+        "ManageMasterUserPassword": true,
         "DBSubnetGroupName": {"Ref": "DBSubnetGroup"},
         "DBClusterParameterGroupName": {"Ref": "DBClusterParameterGroup"},
         "VpcSecurityGroupIds": [{"Ref": "DataSecurityGroup"}],
