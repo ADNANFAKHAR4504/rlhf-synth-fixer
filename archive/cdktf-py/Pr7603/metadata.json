@@ -16,5 +16,11 @@
     "SecretsManager"
   ],
   "po_id": "x3r5r7p2",
-  "training_quality": 10
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
