@@ -1,0 +1,5 @@
+name: TapStack
+runtime:
+  name: nodejs
+description: Pulumi TypeScript infrastructure for EKS with Advanced Container Orchestration
+main: bin/tap.ts
