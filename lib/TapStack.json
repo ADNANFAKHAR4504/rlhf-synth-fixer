@@ -106,34 +106,34 @@
     },
     "RegionAMI": {
       "us-east-1": {
-        "HVM64": "ami-0c55b159cbfafe1f0"
+        "HVM64": "ami-0453ec754f44f9a4a"
       },
       "us-east-2": {
-        "HVM64": "ami-0731ca98d8c4a1c8d"
+        "HVM64": "ami-0c20d88b0021158c6"
       },
       "us-west-1": {
-        "HVM64": "ami-09a7fe78668f1e2c0"
+        "HVM64": "ami-0f50b947eed049732"
       },
       "us-west-2": {
-        "HVM64": "ami-0d1cd67c26f5fca19"
+        "HVM64": "ami-0b6edd8449255b799"
       },
       "eu-west-1": {
-        "HVM64": "ami-0bbc25e23a7640b9b"
+        "HVM64": "ami-0dfdc165e7af15242"
       },
       "eu-west-2": {
-        "HVM64": "ami-0d26eb3972b7f8c96"
+        "HVM64": "ami-0acc77abdfc7ed5a6"
       },
       "eu-central-1": {
-        "HVM64": "ami-0cc293023f983ed53"
+        "HVM64": "ami-0a628e1e89aaedf80"
       },
       "ap-northeast-1": {
-        "HVM64": "ami-0c3fd0f5d33134a76"
+        "HVM64": "ami-0599b6e53ca798bb2"
       },
       "ap-southeast-1": {
-        "HVM64": "ami-01f7527546b557442"
+        "HVM64": "ami-0497a974f8d5dcef8"
       },
       "ap-southeast-2": {
-        "HVM64": "ami-0d8b7c1b8a8b8c1b8"
+        "HVM64": "ami-0375ab65ee943a2a6"
       }
     }
   },
