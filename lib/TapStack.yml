@@ -1195,13 +1195,13 @@ Resources:
           - Sid: AllowALBLogDeliveryAclCheck
             Effect: Allow
             Principal:
-              Service: delivery.logs.amazonaws.com
+              Service: logdelivery.elasticloadbalancing.amazonaws.com
             Action: s3:GetBucketAcl
             Resource: !GetAtt ALBAccessLogsBucket.Arn
           - Sid: AllowALBLogDelivery
             Effect: Allow
             Principal:
-              Service: delivery.logs.amazonaws.com
+              Service: logdelivery.elasticloadbalancing.amazonaws.com
             Action: s3:PutObject
             Resource: !Sub '${ALBAccessLogsBucket.Arn}/alb-logs/AWSLogs/${AWS::AccountId}/*'
             Condition:
