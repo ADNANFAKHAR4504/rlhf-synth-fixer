@@ -52,6 +52,26 @@
                   }
                 }
               }
+            },
+            {
+              "Sid": "Allow CloudTrail",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "AWS:SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
+                }
+              }
             }
           ]
         }
