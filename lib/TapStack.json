@@ -780,10 +780,10 @@
       "DeletionPolicy": "Delete",
       "Properties": {
         "Engine": "aurora-postgresql",
-        "EngineVersion": "15.4",
+        "EngineVersion": "15.10",
         "DatabaseName": "paymentdb",
         "MasterUsername": "dbadmin",
-        "MasterUserPassword": "ChangeMe123456!",
+        "ManageMasterUserPassword": true,
         "DBSubnetGroupName": {
           "Ref": "DBSubnetGroup"
         },
@@ -1133,9 +1133,7 @@
             "HttpPutResponseHopLimit": 1
           },
           "UserData": {
-            "Fn::Base64": {
-              "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\n"
-            }
+            "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\n"
           },
           "TagSpecifications": [
             {
