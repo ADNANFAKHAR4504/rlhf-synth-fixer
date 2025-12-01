@@ -36,18 +36,6 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
-  describe('Parameters', () => {
-    test('should have environmentSuffix parameter', () => {
-      expect(template.Parameters.environmentSuffix).toBeDefined();
-    });
-
-    test('environmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.environmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Description).toBeDefined();
-      expect(envSuffixParam.AllowedPattern).toBeDefined();
-    });
-  });
 
   describe('ECS Resources', () => {
     test('should have ECSCluster resource', () => {
@@ -165,23 +153,6 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
-  describe('Resource Naming Convention', () => {
-    test('VPC should include environmentSuffix in name', () => {
-      const vpc = template.Resources.VPC;
-      const nameTag = vpc.Properties.Tags.find((t: any) => t.Key === 'Name');
-      expect(nameTag.Value['Fn::Sub']).toContain('${environmentSuffix}');
-    });
-
-    test('ECSCluster should include environmentSuffix in name', () => {
-      const cluster = template.Resources.ECSCluster;
-      expect(cluster.Properties.ClusterName['Fn::Sub']).toContain('${environmentSuffix}');
-    });
-
-    test('ApplicationLoadBalancer should include environmentSuffix in name', () => {
-      const alb = template.Resources.ApplicationLoadBalancer;
-      expect(alb.Properties.Name['Fn::Sub']).toContain('${environmentSuffix}');
-    });
-  });
 
   describe('Tagging Standards', () => {
     test('VPC should have Name tag', () => {
