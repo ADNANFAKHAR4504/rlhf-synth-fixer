@@ -801,6 +801,9 @@
           "EngineMode": "provisioned",
           "EngineVersion": "15.13",
           "DatabaseName": "loanprocessing",
+          "MasterUsername": {
+            "Ref": "DBMasterUsername"
+          },
           "MasterUserSecret": {
             "Fn::If": [
               "UseSecretsManager",
