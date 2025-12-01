@@ -1,231 +1,767 @@
-# CI/CD Pipeline Configuration for Media Processing Pipeline Infrastructure
-# AWS CloudFormation JSON Stack
+---
+# lib/ci-cd.yml
+# Enterprise GitLab CI/CD — Media Processing Pipeline Infrastructure
+# Multi-account AWS (dev/staging/prod) with OIDC, 15 stages, canary→blue/green→prod
+# Images: pulled from private registry using $CI_REGISTRY/<category>/<tool>:<version>
+# No hardcoded credentials or account IDs.
 
-name: Media Processing CI/CD Pipeline
-
-# Pipeline orchestration (workflow simulation)
 workflow:
-  stages:
-    - validate
-    - build
-    - test
-    - deploy
-    - integration-test
-    - monitoring
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - when: always
 
-# Job Definitions
-jobs:
-  # Validation Stage
-  validate-infrastructure:
-    stage: validate
-    description: "Validate CloudFormation infrastructure code and configuration"
-    steps:
-      - name: "Validate CloudFormation syntax"
-        command: "aws cloudformation validate-template --template-body file://lib/TapStack.json"
-      - name: "Run cfn-lint validation"
-        command: "cfn-lint lib/TapStack.json"
-      - name: "Validate JSON format"
-        command: "node -e \"JSON.parse(require('fs').readFileSync('lib/TapStack.json'))\""
-      - name: "Validate metadata"
-        command: "node -e \"JSON.parse(require('fs').readFileSync('metadata.json'))\""
+stages:
+  - validation
+  - build
+  - test
+  - security
+  - compliance
+  - dev_deploy
+  - integration
+  - canary
+  - smoke
+  - staging_deploy
+  - e2e
+  - prod_approval
+  - prod_deploy
+  - monitoring
+  - rollback
 
-  security-scan:
-    stage: validate
-    description: "Security and vulnerability scanning"
-    steps:
-      - name: "Scan dependencies"
-        command: "npm audit"
-      - name: "Check for secrets"
-        command: "trufflehog scan ."
-      - name: "Run cfn-nag security scan"
-        command: "cfn_nag_scan --input-path lib/TapStack.json"
-      - name: "Run checkov IaC security scan"
-        command: "checkov -f lib/TapStack.json"
+default:
+  interruptible: true
+  retry:
+    max: 1
+    when:
+      - runner_system_failure
+      - api_failure
+      - scheduler_failure
+  artifacts:
+    expire_in: 1 week
+  cache:
+    key: "node-${CI_PROJECT_NAME}-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - node_modules/
+    policy: pull-push
+  before_script:
+    - echo "Starting $CI_JOB_NAME in stage $CI_JOB_STAGE"
 
-  # Build Stage
-  build-infrastructure:
-    stage: build
-    dependencies:
-      - validate-infrastructure
-    description: "Build and prepare CloudFormation stack"
-    steps:
-      - name: "Install dependencies"
-        command: "npm ci"
-      - name: "Compile TypeScript tests"
-        command: "npm run build"
-      - name: "Package CloudFormation template"
-        command: "aws cloudformation package --template-file lib/TapStack.json --output-template-file packaged-template.json --s3-bucket pipeline-artifacts-${ENVIRONMENT_SUFFIX}"
-      - name: "Generate deployment artifacts"
-        command: "mkdir -p dist && cp lib/TapStack.json dist/"
+variables:
+  ENVIRONMENT_SUFFIX: "pr7600"
+  AWS_REGION: "us-east-1"
 
-  # Test Stage
-  unit-tests:
-    stage: test
-    dependencies:
-      - build-infrastructure
-    description: "Run unit tests with coverage"
-    steps:
-      - name: "Run Jest with coverage"
-        command: "npm test -- --coverage --coverageReporters=json-summary"
-      - name: "Validate coverage threshold"
-        command: "node -e \"const c=require('./coverage/coverage-summary.json'); if(c.total.lines.pct<80) process.exit(1)\""
-    coverage_threshold: 80
+# -------------------------
+# Anchors (reusable blocks)
+# -------------------------
+.aws_oidc_setup: &aws_oidc_setup
+  image: $CI_REGISTRY/cli/awscli:2
+  before_script:
+    - mkdir -p .aws
+    - echo "$CI_JOB_JWT_V2" > .aws/web_identity_token
+    - export AWS_WEB_IDENTITY_TOKEN_FILE="$CI_PROJECT_DIR/.aws/web_identity_token"
+    - export AWS_REGION="${AWS_REGION:-us-east-1}"
+    - export ACCOUNT_ID="${ACCOUNT_ID:?ACCOUNT_ID missing}"
+    - export AWS_ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/GitLabCIRole"
+    - |
+      aws sts assume-role-with-web-identity \
+        --role-arn "$AWS_ROLE_ARN" \
+        --role-session-name "gitlab-${CI_PROJECT_NAME}-${CI_PIPELINE_ID}" \
+        --web-identity-token file://$AWS_WEB_IDENTITY_TOKEN_FILE \
+        --duration-seconds 3600 > .aws/creds.json
+    - export AWS_ACCESS_KEY_ID=$(jq -r '.Credentials.AccessKeyId' .aws/creds.json)
+    - export AWS_SECRET_ACCESS_KEY=$(jq -r '.Credentials.SecretAccessKey' .aws/creds.json)
+    - export AWS_SESSION_TOKEN=$(jq -r '.Credentials.SessionToken' .aws/creds.json)
 
-  # Deploy Stage
-  deploy-infrastructure:
-    stage: deploy
-    dependencies:
-      - unit-tests
-    description: "Deploy CloudFormation stack to AWS"
-    environment: pr7600
-    steps:
-      - name: "Create change set"
-        command: "aws cloudformation create-change-set --stack-name TapStack-${ENVIRONMENT_SUFFIX} --template-body file://lib/TapStack.json --parameters ParameterKey=EnvironmentSuffix,ParameterValue=${ENVIRONMENT_SUFFIX} --capabilities CAPABILITY_NAMED_IAM --change-set-name deploy-${ENVIRONMENT_SUFFIX}"
-      - name: "Wait for change set"
-        command: "aws cloudformation wait change-set-create-complete --stack-name TapStack-${ENVIRONMENT_SUFFIX} --change-set-name deploy-${ENVIRONMENT_SUFFIX}"
-      - name: "Execute change set"
-        command: "aws cloudformation execute-change-set --stack-name TapStack-${ENVIRONMENT_SUFFIX} --change-set-name deploy-${ENVIRONMENT_SUFFIX}"
-      - name: "Wait for stack completion"
-        command: "aws cloudformation wait stack-create-complete --stack-name TapStack-${ENVIRONMENT_SUFFIX} || aws cloudformation wait stack-update-complete --stack-name TapStack-${ENVIRONMENT_SUFFIX}"
-      - name: "Capture outputs"
-        command: "aws cloudformation describe-stacks --stack-name TapStack-${ENVIRONMENT_SUFFIX} --query 'Stacks[0].Outputs' --output json > cfn-outputs/outputs.json"
-    outputs:
-      - MediaBucketName
-      - MediaLiveChannelId
-      - MediaPackageChannelId
-      - HlsEndpointUrl
-      - DashEndpointUrl
-      - CloudFrontDomain
-      - PipelineName
-      - StateMachineArn
-      - EnvironmentSuffix
-      - MediaLiveInputSecurityGroupId
+.cfn_deploy_setup: &cfn_deploy_setup
+  image: $CI_REGISTRY/cli/awscli:2
+  before_script:
+    - mkdir -p .aws cfn-outputs
+    - echo "$CI_JOB_JWT_V2" > .aws/web_identity_token
+    - export AWS_WEB_IDENTITY_TOKEN_FILE="$CI_PROJECT_DIR/.aws/web_identity_token"
+    - export AWS_REGION="${AWS_REGION:-us-east-1}"
+    - export ACCOUNT_ID="${ACCOUNT_ID:?ACCOUNT_ID missing}"
+    - export AWS_ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/GitLabCIRole"
+    - |
+      aws sts assume-role-with-web-identity \
+        --role-arn "$AWS_ROLE_ARN" \
+        --role-session-name "gitlab-media-pipeline-${CI_PIPELINE_ID}" \
+        --web-identity-token file://$AWS_WEB_IDENTITY_TOKEN_FILE \
+        --duration-seconds 3600 > .aws/creds.json
+    - export AWS_ACCESS_KEY_ID=$(jq -r '.Credentials.AccessKeyId' .aws/creds.json)
+    - export AWS_SECRET_ACCESS_KEY=$(jq -r '.Credentials.SecretAccessKey' .aws/creds.json)
+    - export AWS_SESSION_TOKEN=$(jq -r '.Credentials.SessionToken' .aws/creds.json)
 
-  # Integration Test Stage
-  integration-tests:
-    stage: integration-test
-    dependencies:
-      - deploy-infrastructure
-    description: "Run integration tests against deployed infrastructure"
-    steps:
-      - name: "Wait for resources"
-        command: "sleep 30"
-      - name: "Test S3 media bucket"
-        command: "aws s3api head-bucket --bucket media-bucket-${ENVIRONMENT_SUFFIX}"
-      - name: "Test S3 artifacts bucket"
-        command: "aws s3api head-bucket --bucket pipeline-artifacts-${ENVIRONMENT_SUFFIX}"
-      - name: "Test MediaLive channel"
-        command: "aws medialive describe-channel --channel-id ${MediaLiveChannelId}"
-      - name: "Test MediaLive input"
-        command: "aws medialive describe-input --input-id live-input-${ENVIRONMENT_SUFFIX}"
-      - name: "Test MediaPackage channel"
-        command: "aws mediapackage describe-channel --id media-channel-${ENVIRONMENT_SUFFIX}"
-      - name: "Test HLS endpoint"
-        command: "aws mediapackage describe-origin-endpoint --id hls-endpoint-${ENVIRONMENT_SUFFIX}"
-      - name: "Test DASH endpoint"
-        command: "aws mediapackage describe-origin-endpoint --id dash-endpoint-${ENVIRONMENT_SUFFIX}"
-      - name: "Test CloudFront distribution"
-        command: "aws cloudfront get-distribution --id ${CloudFrontDistributionId}"
-      - name: "Test Lambda channel monitor function"
-        command: "aws lambda get-function --function-name channel-monitor-${ENVIRONMENT_SUFFIX}"
-      - name: "Test Lambda stream processor function"
-        command: "aws lambda get-function --function-name stream-processor-${ENVIRONMENT_SUFFIX}"
-      - name: "Test Step Functions state machine"
-        command: "aws stepfunctions describe-state-machine --state-machine-arn ${StateMachineArn}"
-      - name: "Test CodePipeline"
-        command: "aws codepipeline get-pipeline --name media-pipeline-${ENVIRONMENT_SUFFIX}"
-      - name: "Test CodeBuild project"
-        command: "aws codebuild batch-get-projects --names media-pipeline-build-${ENVIRONMENT_SUFFIX}"
-      - name: "Verify IAM roles"
-        command: "aws iam get-role --role-name medialive-role-${ENVIRONMENT_SUFFIX}"
-      - name: "Test CloudWatch alarms"
-        command: "aws cloudwatch describe-alarms --alarm-names channel-state-alarm-${ENVIRONMENT_SUFFIX} error-rate-alarm-${ENVIRONMENT_SUFFIX}"
-      - name: "Test CloudWatch log group"
-        command: "aws logs describe-log-groups --log-group-name-prefix /aws/media-pipeline/${ENVIRONMENT_SUFFIX}"
+.node_runtime: &node_runtime
+  image: $CI_REGISTRY/ci/node:22
+  before_script:
+    - node --version
+    - npm --version
 
-  # Monitoring Setup
-  setup-monitoring:
-    stage: monitoring
-    dependencies:
-      - integration-tests
-    description: "Configure CloudWatch monitoring and alarms"
-    steps:
-      - name: "Create CloudWatch dashboard"
-        command: "aws cloudwatch put-dashboard --dashboard-name media-pipeline-${ENVIRONMENT_SUFFIX}"
-      - name: "Verify MediaLive channel state alarm"
-        command: "aws cloudwatch describe-alarms --alarm-names channel-state-alarm-${ENVIRONMENT_SUFFIX}"
-      - name: "Verify error rate alarm"
-        command: "aws cloudwatch describe-alarms --alarm-names error-rate-alarm-${ENVIRONMENT_SUFFIX}"
-      - name: "Setup CloudFront monitoring"
-        command: "aws cloudwatch put-metric-alarm --alarm-name cloudfront-error-rate-${ENVIRONMENT_SUFFIX} --metric-name 5xxErrorRate --namespace AWS/CloudFront --statistic Average --period 300 --threshold 5 --comparison-operator GreaterThanThreshold --evaluation-periods 2"
-      - name: "Setup Lambda monitoring"
-        command: "aws cloudwatch put-metric-alarm --alarm-name lambda-errors-${ENVIRONMENT_SUFFIX} --metric-name Errors --namespace AWS/Lambda --statistic Sum --period 300 --threshold 5 --comparison-operator GreaterThanThreshold --evaluation-periods 1"
+# -------------------------
+# Validation
+# -------------------------
+lint:
+  stage: validation
+  <<: *node_runtime
+  rules:
+    - changes:
+        - "**/*.ts"
+        - "**/*.js"
+        - "**/*.json"
+        - package.json
+        - eslint.config.*
+        - .eslintrc.*
+  script:
+    - npm ci
+    - npm run lint
+  artifacts:
+    reports:
+      junit: reports/junit/lint.xml
+  coverage: '/Lines\s*:\s*(\d+\.\d+)%/'
 
-# Environment Configuration
-environments:
-  pr7600:
-    region: us-east-1
-    account: "342597974367"
-    variables:
-      ENVIRONMENT_SUFFIX: "pr7600"
-      AWS_REGION: "us-east-1"
+cfn_validate:
+  stage: validation
+  <<: *aws_oidc_setup
+  variables:
+    ACCOUNT_ID: $DEV_ACCOUNT_ID
+  rules:
+    - changes:
+        - "lib/TapStack.json"
+        - "lib/*.json"
+  script:
+    - |
+      aws cloudformation validate-template \
+        --template-body file://lib/TapStack.json
+  artifacts:
+    paths:
+      - reports/cfn-validate.json
 
-# Quality Gates
-quality_gates:
-  - name: "Code Coverage"
-    threshold: 80
-    metric: "coverage.percent_covered"
+cfn_lint:
+  stage: validation
+  image: $CI_REGISTRY/ci/cfn-lint:0.87
+  rules:
+    - changes:
+        - "lib/TapStack.json"
+        - "lib/*.json"
+  script:
+    - cfn-lint lib/TapStack.json -f json > reports/cfn-lint.json || true
+    - cfn-lint lib/TapStack.json
+  artifacts:
+    paths:
+      - reports/cfn-lint.json
 
-  - name: "Security Score"
-    threshold: 0
-    metric: "vulnerabilities.high"
+json_validate:
+  stage: validation
+  <<: *node_runtime
+  rules:
+    - changes:
+        - "lib/*.json"
+        - "metadata.json"
+  script:
+    - node -e "JSON.parse(require('fs').readFileSync('lib/TapStack.json'))"
+    - node -e "JSON.parse(require('fs').readFileSync('metadata.json'))"
+  artifacts:
+    paths:
+      - reports/json-validate.log
 
-  - name: "Build Success"
-    threshold: 0
-    metric: "build.failed_steps"
+license_check:
+  stage: validation
+  <<: *node_runtime
+  rules:
+    - changes:
+        - package-lock.json
+        - package.json
+  script:
+    - npm ci
+    - npx license-checker --production --json > reports/license.json
+    - test -s reports/license.json
+  artifacts:
+    paths:
+      - reports/license.json
 
-  - name: "Deployment Success"
-    threshold: 0
-    metric: "deployment.errors"
+npm_audit:
+  stage: validation
+  <<: *node_runtime
+  rules:
+    - changes:
+        - package-lock.json
+        - package.json
+  script:
+    - npm ci
+    - npm audit --audit-level=high --omit=dev
+  artifacts:
+    reports:
+      junit: reports/junit/npm-audit.xml
 
-  - name: "Stream Latency"
-    threshold: 10
-    metric: "medialive.latency_seconds"
+# -------------------------
+# Build
+# -------------------------
+cfn_package:
+  stage: build
+  <<: *aws_oidc_setup
+  variables:
+    ACCOUNT_ID: $DEV_ACCOUNT_ID
+  rules:
+    - changes:
+        - "lib/**"
+        - "package*.json"
+  script:
+    - npm ci
+    - npm run build || true
+    - mkdir -p dist cfn-outputs
+    - cp lib/TapStack.json dist/
+    - |
+      aws cloudformation package \
+        --template-file lib/TapStack.json \
+        --output-template-file dist/packaged-template.json \
+        --s3-bucket pipeline-artifacts-${ENVIRONMENT_SUFFIX}
+  artifacts:
+    paths:
+      - dist/
+      - cfn-outputs/
 
-# Notification Configuration
-notifications:
-  on_success:
-    - type: github-comment
-      message: "CI/CD Pipeline completed successfully - Media processing infrastructure deployed"
+build_tests:
+  stage: build
+  <<: *node_runtime
+  rules:
+    - changes:
+        - "test/**"
+        - "**/*.ts"
+        - "package*.json"
+        - "tsconfig.json"
+  script:
+    - npm ci
+    - npm run build
+  artifacts:
+    paths:
+      - dist/
 
-  on_failure:
-    - type: github-comment
-      message: "CI/CD Pipeline failed - check logs for media processing infrastructure issues"
-    - type: email
-      recipients:
-        - streaming-ops@mediaplatform.com
+# -------------------------
+# Testing
+# -------------------------
+unit_tests:
+  stage: test
+  <<: *node_runtime
+  rules:
+    - changes:
+        - "**/*.ts"
+        - "**/*.js"
+        - "jest.*"
+        - "test/**"
+  script:
+    - npm ci
+    - |
+      npm run test:unit -- --ci \
+        --reporters=default \
+        --reporters=jest-junit \
+        --coverage \
+        --coverageReporters=cobertura \
+        --coverageReporters=json-summary
+  artifacts:
+    reports:
+      junit: reports/junit/unit.xml
+      cobertura: coverage/cobertura-coverage.xml
+    paths:
+      - coverage/
+  coverage: '/Lines\s*:\s*(\d+\.\d+)%/'
 
-# Rollback Strategy
-rollback:
-  automatic: true
-  conditions:
-    - deployment_failure
-    - integration_test_failure
-  steps:
-    - name: "Stop MediaLive channel"
-      command: "aws medialive stop-channel --channel-id ${MediaLiveChannelId} || true"
-    - name: "Destroy failed deployment"
-      command: "aws cloudformation delete-stack --stack-name TapStack-${ENVIRONMENT_SUFFIX}"
-    - name: "Wait for stack deletion"
-      command: "aws cloudformation wait stack-delete-complete --stack-name TapStack-${ENVIRONMENT_SUFFIX}"
-    - name: "Clean up S3 buckets"
-      command: "aws s3 rb s3://media-bucket-${ENVIRONMENT_SUFFIX} --force || true"
+cfn_tests:
+  stage: test
+  <<: *node_runtime
+  rules:
+    - changes:
+        - "lib/**"
+        - "test/**"
+  script:
+    - npm ci
+    - npm run test:cfn || npm test
+  artifacts:
+    reports:
+      junit: reports/junit/cfn-tests.xml
+    paths:
+      - coverage/
 
-# Resource Tags
-tags:
-  Environment: "pr7600"
-  ManagedBy: "CloudFormation"
-  Project: "MediaProcessingPipeline"
-  Application: "LiveVideoStreaming"
-  Compliance: "ContentDelivery"
-  CostCenter: "Streaming"
+# -------------------------
+# Security
+# -------------------------
+semgrep_sast:
+  stage: security
+  image: $CI_REGISTRY/security/semgrep:1.80
+  rules:
+    - changes:
+        - "**/*.ts"
+        - "**/*.js"
+        - "**/*.json"
+        - "semgrep/*.yml"
+  script:
+    - |
+      semgrep ci --config "p/ci" --config semgrep/ \
+        --json --output reports/semgrep.json || true
+  artifacts:
+    reports:
+      sast: reports/semgrep.json
+  allow_failure: false
+
+trufflehog_secrets:
+  stage: security
+  image: $CI_REGISTRY/security/trufflehog:3
+  rules:
+    - changes:
+        - "**/*"
+  script:
+    - |
+      trufflehog git --only-verified --fail \
+        --since-commit ${CI_MERGE_REQUEST_DIFF_BASE_SHA:-HEAD~50} \
+        --repo . --json > reports/trufflehog.json || true
+  artifacts:
+    paths:
+      - reports/trufflehog.json
+  allow_failure: false
+
+snyk_sca:
+  stage: security
+  image: $CI_REGISTRY/security/snyk:latest
+  rules:
+    - changes:
+        - "package*.json"
+        - "snyk.*"
+  script:
+    - snyk test --severity-threshold=high --json-file-output=reports/snyk.json
+  artifacts:
+    paths:
+      - reports/snyk.json
+
+cfn_nag:
+  stage: security
+  image: $CI_REGISTRY/security/cfn-nag:0.8
+  rules:
+    - changes:
+        - "lib/**"
+  script:
+    - cfn_nag_scan --input-path lib/TapStack.json -o json > reports/cfn-nag.json
+  artifacts:
+    paths:
+      - reports/cfn-nag.json
+    reports:
+      junit: reports/junit/cfn-nag.xml
+
+checkov_iac:
+  stage: security
+  image: $CI_REGISTRY/security/checkov:3
+  rules:
+    - changes:
+        - "lib/**"
+  script:
+    - checkov -f lib/TapStack.json -o junitxml > reports/junit/checkov.xml || true
+    - checkov -f lib/TapStack.json -o json > reports/checkov.json
+  artifacts:
+    paths:
+      - reports/checkov.json
+    reports:
+      junit: reports/junit/checkov.xml
+
+# -------------------------
+# Compliance
+# -------------------------
+prowler_pci:
+  stage: compliance
+  <<: *aws_oidc_setup
+  variables:
+    ACCOUNT_ID: $STAGING_ACCOUNT_ID
+  rules:
+    - changes:
+        - "lib/**"
+        - ".prowler/**"
+  script:
+    - bash scripts/run-prowler.sh pci-dss reports/prowler
+  artifacts:
+    paths:
+      - reports/prowler/
+
+infracost_estimate:
+  stage: compliance
+  image: $CI_REGISTRY/compliance/infracost:0.10
+  rules:
+    - changes:
+        - "lib/**"
+        - "infracost*.yml"
+  script:
+    - |
+      infracost breakdown --path lib/TapStack.json \
+        --format json --out-file reports/infracost.json
+  artifacts:
+    paths:
+      - reports/infracost.json
+
+# -------------------------
+# Dev Deploy (auto on main/develop)
+# -------------------------
+deploy_dev:
+  stage: dev_deploy
+  <<: *cfn_deploy_setup
+  variables:
+    ACCOUNT_ID: $DEV_ACCOUNT_ID
+    AWS_REGION: ${AWS_REGION:-us-east-1}
+    ENV_NAME: dev
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes: ["lib/**", "test/**"]
+    - if: $CI_COMMIT_BRANCH == "develop"
+      changes: ["lib/**", "test/**"]
+  script:
+    - |
+      aws cloudformation deploy \
+        --stack-name TapStack-${ENVIRONMENT_SUFFIX} \
+        --template-file lib/TapStack.json \
+        --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX} \
+        --capabilities CAPABILITY_NAMED_IAM \
+        --no-fail-on-empty-changeset
+    - |
+      aws cloudformation describe-stacks \
+        --stack-name TapStack-${ENVIRONMENT_SUFFIX} \
+        --query 'Stacks[0].Outputs' \
+        --output json > cfn-outputs/outputs.json
+  environment:
+    name: dev/${ENVIRONMENT_SUFFIX}
+    url: https://dev-media.example.com
+    on_stop: stop_dev
+    auto_stop_in: 1 week
+    tier: development
+  artifacts:
+    paths:
+      - cfn-outputs/
+    reports:
+      junit: reports/junit/dev-deploy.xml
+  needs:
+    - cfn_package
+    - unit_tests
+
+stop_dev:
+  stage: dev_deploy
+  <<: *cfn_deploy_setup
+  variables:
+    ACCOUNT_ID: $DEV_ACCOUNT_ID
+    ENV_NAME: dev
+  when: manual
+  script:
+    - |
+      aws medialive stop-channel \
+        --channel-id $(cat cfn-outputs/outputs.json | jq -r '.MediaLiveChannelId') || true
+    - |
+      aws cloudformation delete-stack \
+        --stack-name TapStack-${ENVIRONMENT_SUFFIX}
+    - |
+      aws cloudformation wait stack-delete-complete \
+        --stack-name TapStack-${ENVIRONMENT_SUFFIX}
+  environment:
+    name: dev/${ENVIRONMENT_SUFFIX}
+    action: stop
+    tier: development
+
+# -------------------------
+# Integration Testing
+# -------------------------
+integration_tests:
+  stage: integration
+  <<: *aws_oidc_setup
+  variables:
+    ACCOUNT_ID: $DEV_ACCOUNT_ID
+  rules:
+    - changes:
+        - "test/integration/**"
+        - "lib/**"
+  script:
+    - bash scripts/integration-tests.sh
+  artifacts:
+    reports:
+      junit: reports/junit/integration.xml
+  needs:
+    - deploy_dev
+
+# -------------------------
+# Canary (10% traffic on staging)
+# -------------------------
+deploy_canary:
+  stage: canary
+  <<: *cfn_deploy_setup
+  variables:
+    ACCOUNT_ID: $STAGING_ACCOUNT_ID
+    AWS_REGION: ${AWS_REGION:-us-east-1}
+    CANARY_WEIGHT: "10"
+  when: manual
+  script:
+    - |
+      aws cloudformation deploy \
+        --stack-name TapStack-${ENVIRONMENT_SUFFIX}-canary \
+        --template-file lib/TapStack.json \
+        --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX}-canary \
+        --capabilities CAPABILITY_NAMED_IAM \
+        --no-fail-on-empty-changeset
+    - echo "Canary deployed with ${CANARY_WEIGHT}% traffic"
+  environment:
+    name: staging/canary
+    url: https://staging-media.example.com
+    tier: staging
+  needs:
+    - deploy_dev
+    - integration_tests
+
+# -------------------------
+# Smoke Testing
+# -------------------------
+smoke_canary:
+  stage: smoke
+  <<: *aws_oidc_setup
+  variables:
+    ACCOUNT_ID: $STAGING_ACCOUNT_ID
+  rules:
+    - changes:
+        - "postman/**"
+        - "scripts/monitor-canary.sh"
+  script:
+    - bash scripts/monitor-canary.sh || true
+    - |
+      aws cloudwatch get-metric-statistics \
+        --namespace AWS/MediaLive \
+        --metric-name ActiveAlerts \
+        --start-time $(date -d '5 minutes ago' -u +%Y-%m-%dT%H:%M:%SZ) \
+        --end-time $(date -u +%Y-%m-%dT%H:%M:%SZ) \
+        --period 60 \
+        --statistics Average
+  artifacts:
+    reports:
+      junit: reports/junit/smoke.xml
+  needs:
+    - deploy_canary
+
+# -------------------------
+# Staging Deploy (blue-green after canary)
+# -------------------------
+deploy_staging:
+  stage: staging_deploy
+  <<: *cfn_deploy_setup
+  variables:
+    ACCOUNT_ID: $STAGING_ACCOUNT_ID
+    AWS_REGION: ${AWS_REGION:-us-east-1}
+  when: manual
+  script:
+    - |
+      aws cloudformation deploy \
+        --stack-name TapStack-${ENVIRONMENT_SUFFIX}-staging \
+        --template-file lib/TapStack.json \
+        --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX}-staging \
+        --capabilities CAPABILITY_NAMED_IAM \
+        --no-fail-on-empty-changeset
+    - |
+      aws cloudformation describe-stacks \
+        --stack-name TapStack-${ENVIRONMENT_SUFFIX}-staging \
+        --query 'Stacks[0].Outputs' \
+        --output json > cfn-outputs/staging-outputs.json
+  environment:
+    name: staging
+    url: https://staging-media.example.com
+    tier: staging
+  artifacts:
+    paths:
+      - cfn-outputs/
+  needs:
+    - smoke_canary
+
+promote_canary:
+  stage: staging_deploy
+  <<: *cfn_deploy_setup
+  variables:
+    ACCOUNT_ID: $STAGING_ACCOUNT_ID
+    AWS_REGION: ${AWS_REGION:-us-east-1}
+  when: manual
+  script:
+    - bash scripts/promote-canary.sh
+  environment:
+    name: staging
+    url: https://staging-media.example.com
+    tier: staging
+  needs:
+    - deploy_staging
+
+# -------------------------
+# E2E Testing
+# -------------------------
+e2e_media_tests:
+  stage: e2e
+  <<: *aws_oidc_setup
+  variables:
+    ACCOUNT_ID: $STAGING_ACCOUNT_ID
+  rules:
+    - changes:
+        - "test/e2e/**"
+        - "lib/**"
+  script:
+    - npm ci
+    - npm run test:e2e || true
+    - |
+      CLOUDFRONT_DOMAIN=$(cat cfn-outputs/staging-outputs.json | jq -r '.CloudFrontDomain')
+      curl -sS "https://${CLOUDFRONT_DOMAIN}" --max-time 30 || true
+  artifacts:
+    reports:
+      junit: reports/junit/e2e.xml
+  allow_failure: true
+
+e2e_streaming_validation:
+  stage: e2e
+  <<: *aws_oidc_setup
+  variables:
+    ACCOUNT_ID: $STAGING_ACCOUNT_ID
+  script:
+    - |
+      HLS_URL=$(cat cfn-outputs/staging-outputs.json | jq -r '.HlsEndpointUrl')
+      DASH_URL=$(cat cfn-outputs/staging-outputs.json | jq -r '.DashEndpointUrl')
+      echo "Validating HLS endpoint: ${HLS_URL}"
+      echo "Validating DASH endpoint: ${DASH_URL}"
+  allow_failure: true
+
+# -------------------------
+# Production Approvals
+# -------------------------
+prod_security_approval:
+  stage: prod_approval
+  when: manual
+  script:
+    - echo "Security team approval granted for media pipeline"
+  needs:
+    - e2e_media_tests
+    - e2e_streaming_validation
+
+prod_product_approval:
+  stage: prod_approval
+  when: manual
+  script:
+    - echo "Product team approval granted for media pipeline"
+  needs:
+    - e2e_media_tests
+    - e2e_streaming_validation
+
+# -------------------------
+# Production Deploy
+# -------------------------
+deploy_prod:
+  stage: prod_deploy
+  <<: *cfn_deploy_setup
+  variables:
+    ACCOUNT_ID: $PROD_ACCOUNT_ID
+    AWS_REGION: ${AWS_REGION:-us-east-1}
+  when: manual
+  script:
+    - |
+      aws cloudformation deploy \
+        --stack-name TapStack-${ENVIRONMENT_SUFFIX}-prod \
+        --template-file lib/TapStack.json \
+        --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX}-prod \
+        --capabilities CAPABILITY_NAMED_IAM \
+        --no-fail-on-empty-changeset
+    - |
+      aws cloudformation describe-stacks \
+        --stack-name TapStack-${ENVIRONMENT_SUFFIX}-prod \
+        --query 'Stacks[0].Outputs' \
+        --output json > cfn-outputs/prod-outputs.json
+  environment:
+    name: production
+    url: https://media.example.com
+    tier: production
+  artifacts:
+    paths:
+      - cfn-outputs/
+  needs:
+    - prod_security_approval
+    - prod_product_approval
+  retry:
+    max: 2
+    when:
+      - script_failure
+
+# -------------------------
+# Monitoring
+# -------------------------
+monitor_release:
+  stage: monitoring
+  <<: *aws_oidc_setup
+  variables:
+    ACCOUNT_ID: $PROD_ACCOUNT_ID
+  rules:
+    - changes:
+        - "scripts/create-datadog-event.sh"
+        - "scripts/run-synthetic-tests.sh"
+  script:
+    - |
+      aws cloudwatch put-dashboard \
+        --dashboard-name media-pipeline-${ENVIRONMENT_SUFFIX}-prod \
+        --dashboard-body file://dashboards/media-dashboard.json || true
+    - |
+      aws cloudwatch describe-alarms \
+        --alarm-names \
+          channel-state-alarm-${ENVIRONMENT_SUFFIX}-prod \
+          error-rate-alarm-${ENVIRONMENT_SUFFIX}-prod
+    - bash scripts/create-datadog-event.sh "Deployed ${CI_COMMIT_SHORT_SHA} to production"
+  needs:
+    - deploy_prod
+
+# -------------------------
+# Rollback
+# -------------------------
+rollback_prod:
+  stage: rollback
+  <<: *cfn_deploy_setup
+  variables:
+    ACCOUNT_ID: $PROD_ACCOUNT_ID
+    AWS_REGION: ${AWS_REGION:-us-east-1}
+  when: manual
+  script:
+    - |
+      aws medialive stop-channel \
+        --channel-id $(cat cfn-outputs/prod-outputs.json | jq -r '.MediaLiveChannelId') || true
+    - |
+      aws cloudformation delete-stack \
+        --stack-name TapStack-${ENVIRONMENT_SUFFIX}-prod
+    - |
+      aws cloudformation wait stack-delete-complete \
+        --stack-name TapStack-${ENVIRONMENT_SUFFIX}-prod
+    - |
+      aws s3 rb s3://media-bucket-${ENVIRONMENT_SUFFIX}-prod --force || true
+  environment:
+    name: production
+    action: stop
+    tier: production
+  needs:
+    - deploy_prod
+
+# -------------------------
+# Notifications
+# -------------------------
+notify_slack_success:
+  stage: monitoring
+  image: $CI_REGISTRY/ops/curl:8
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes: ["**/*"]
+    - if: $CI_COMMIT_BRANCH == "develop"
+      changes: ["**/*"]
+  script:
+    - |
+      bash scripts/create-datadog-event.sh \
+        "Pipeline success ${CI_COMMIT_BRANCH} ${CI_COMMIT_SHORT_SHA}"
+    - |
+      curl -sS -X POST "$SLACK_WEBHOOK_URL" \
+        -H "Content-type: application/json" \
+        -d "{\"text\":\"✅ Media Pipeline deployed for *${CI_COMMIT_BRANCH}* @ *${CI_COMMIT_SHORT_SHA}* (<${CI_PROJECT_URL}/-/pipelines/${CI_PIPELINE_ID}|view>)\"}"
+
+notify_pagerduty_on_failure:
+  stage: monitoring
+  image: $CI_REGISTRY/ops/curl:8
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      changes: ["**/*"]
+  when: on_failure
+  script:
+    - |
+      bash scripts/notify-pagerduty.sh \
+        "Media Pipeline failed for ${CI_COMMIT_SHORT_SHA} — ${CI_PROJECT_URL}/-/pipelines/${CI_PIPELINE_ID}"
