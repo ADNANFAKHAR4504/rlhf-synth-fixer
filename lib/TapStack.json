@@ -888,10 +888,7 @@
         ],
         "Selectors": [
           {
-            "Namespace": "kube-system",
-            "Labels": {
-              "k8s-app": "kube-dns"
-            }
+            "Namespace": "kube-system"
           }
         ],
         "Tags": [
