@@ -39,7 +39,7 @@
       "Default": "t3.micro"
     },
     "AmiId": {
-      "Type": "String",
+      "Type": "AWS::EC2::Image::Id",
       "Default": "ami-0c55b159cbfafe1f0"
     },
     "DBInstanceClass": {
@@ -49,10 +49,6 @@
     "DBMasterUsername": {
       "Type": "String",
       "Default": "admin"
-    },
-    "DBMasterPassword": {
-      "Type": "String",
-      "NoEcho": true
     },
     "CacheNodeType": {
       "Type": "String",
@@ -139,7 +135,7 @@
         "CidrBlock": {
           "Ref": "PublicSubnet1CIDR"
         },
-        "AvailabilityZone": "us-east-1a",
+        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": {"Ref": "AWS::Region"}}]},
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
@@ -168,7 +164,7 @@
         "CidrBlock": {
           "Ref": "PublicSubnet2CIDR"
         },
-        "AvailabilityZone": "us-east-1b",
+        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": {"Ref": "AWS::Region"}}]},
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
@@ -197,7 +193,7 @@
         "CidrBlock": {
           "Ref": "PublicSubnet3CIDR"
         },
-        "AvailabilityZone": "us-east-1c",
+        "AvailabilityZone": {"Fn::Select": [2, {"Fn::GetAZs": {"Ref": "AWS::Region"}}]},
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
@@ -226,7 +222,7 @@
         "CidrBlock": {
           "Ref": "PrivateSubnet1CIDR"
         },
-        "AvailabilityZone": "us-east-1a",
+        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": {"Ref": "AWS::Region"}}]},
         "Tags": [
           {
             "Key": "Name",
@@ -254,7 +250,7 @@
         "CidrBlock": {
           "Ref": "PrivateSubnet2CIDR"
         },
-        "AvailabilityZone": "us-east-1b",
+        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": {"Ref": "AWS::Region"}}]},
         "Tags": [
           {
             "Key": "Name",
@@ -282,7 +278,7 @@
         "CidrBlock": {
           "Ref": "PrivateSubnet3CIDR"
         },
-        "AvailabilityZone": "us-east-1c",
+        "AvailabilityZone": {"Fn::Select": [2, {"Fn::GetAZs": {"Ref": "AWS::Region"}}]},
         "Tags": [
           {
             "Key": "Name",
@@ -1087,7 +1083,7 @@
       "Type": "AWS::RDS::DBParameterGroup",
       "Properties": {
         "Description": "Parameter group for Aurora MySQL",
-        "Family": "aurora-mysql5.7",
+        "Family": "aurora-mysql8.0",
         "Parameters": {
           "max_connections": "150"
         }
@@ -1097,7 +1093,7 @@
       "Type": "AWS::RDS::DBClusterParameterGroup",
       "Properties": {
         "Description": "Cluster parameter group for Aurora MySQL",
-        "Family": "aurora-mysql5.7",
+        "Family": "aurora-mysql8.0",
         "Parameters": {
           "character_set_server": "utf8mb4"
         }
@@ -1107,14 +1103,12 @@
       "Type": "AWS::RDS::DBCluster",
       "Properties": {
         "Engine": "aurora-mysql",
-        "EngineVersion": "5.7.mysql_aurora.2.10.1",
+        "EngineVersion": "8.0.mysql_aurora.3.04.0",
         "DatabaseName": "appdb",
         "MasterUsername": {
           "Ref": "DBMasterUsername"
         },
-        "MasterUserPassword": {
-          "Ref": "DBMasterPassword"
-        },
+        "ManageMasterUserPassword": true,
         "DBSubnetGroupName": {
           "Ref": "DBSubnetGroup"
         },
