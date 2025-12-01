@@ -804,6 +804,7 @@
           "MasterUsername": {
             "Ref": "DBMasterUsername"
           },
+          "ManageMasterUserPassword": true,
           "MasterUserSecret": {
             "Fn::If": [
               "UseSecretsManager",

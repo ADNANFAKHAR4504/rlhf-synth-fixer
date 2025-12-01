@@ -256,6 +256,11 @@ describe('TapStack CloudFormation Template - Loan Processing Application', () =>
       expect(cluster.Properties.MasterUsername.Ref).toBe('DBMasterUsername');
     });
 
+    test('Aurora cluster should have ManageMasterUserPassword enabled', () => {
+      const cluster = template.Resources.AuroraCluster;
+      expect(cluster.Properties.ManageMasterUserPassword).toBe(true);
+    });
+
     test('Aurora cluster should have MasterUserSecret configured', () => {
       const cluster = template.Resources.AuroraCluster;
       expect(cluster.Properties.MasterUserSecret).toBeDefined();
