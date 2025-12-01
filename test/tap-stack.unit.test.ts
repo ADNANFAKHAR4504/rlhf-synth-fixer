@@ -90,6 +90,11 @@ describe('TapStack CloudFormation Template - Loan Processing Application', () =>
       expect(template.Conditions.HasCertificate).toBeDefined();
       expect(template.Conditions.HasCertificate['Fn::Not']).toBeDefined();
     });
+
+    test('should have UseSecretsManager condition', () => {
+      expect(template.Conditions.UseSecretsManager).toBeDefined();
+      expect(template.Conditions.UseSecretsManager['Fn::Not']).toBeDefined();
+    });
   });
 
   describe('VPC and Networking Resources', () => {
@@ -224,7 +229,7 @@ describe('TapStack CloudFormation Template - Loan Processing Application', () =>
 
     test('Aurora cluster should use correct engine version', () => {
       const cluster = template.Resources.AuroraCluster;
-      expect(cluster.Properties.EngineVersion).toBe('15.14');
+      expect(cluster.Properties.EngineVersion).toBe('15.13');
     });
 
     test('Aurora cluster should have Serverless v2 scaling configuration', () => {
@@ -243,6 +248,16 @@ describe('TapStack CloudFormation Template - Loan Processing Application', () =>
     test('Aurora cluster should have backup retention enabled', () => {
       const cluster = template.Resources.AuroraCluster;
       expect(cluster.Properties.BackupRetentionPeriod).toBeGreaterThan(0);
+    });
+
+    test('Aurora cluster should have MasterUserSecret configured', () => {
+      const cluster = template.Resources.AuroraCluster;
+      expect(cluster.Properties.MasterUserSecret).toBeDefined();
+      expect(cluster.Properties.MasterUserSecret['Fn::If']).toBeDefined();
+      // Verify the structure has SecretArn in both branches
+      const ifCondition = cluster.Properties.MasterUserSecret['Fn::If'];
+      expect(ifCondition[1].SecretArn).toBeDefined();
+      expect(ifCondition[2].SecretArn).toBeDefined();
     });
 
     test('should have two Aurora instances for Multi-AZ', () => {

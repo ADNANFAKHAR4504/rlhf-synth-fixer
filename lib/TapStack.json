@@ -805,13 +805,14 @@
             "Fn::If": [
               "UseSecretsManager",
               {
-                "Fn::Sub": "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${DBSecretName}"
+                "SecretArn": {
+                  "Fn::Sub": "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${DBSecretName}"
+                }
               },
               {
-                "Fn::GetAtt": [
-                  "DBSecret",
-                  "Arn"
-                ]
+                "SecretArn": {
+                  "Ref": "DBSecret"
+                }
               }
             ]
           },
