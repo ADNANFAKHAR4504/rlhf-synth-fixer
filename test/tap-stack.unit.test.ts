@@ -184,28 +184,33 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('Lambda security group should have egress rule to KMS endpoint', () => {
-      const egress = template.Resources.LambdaSecurityGroup.Properties.SecurityGroupEgress;
-      expect(egress).toBeDefined();
-      expect(egress).toHaveLength(1);
-      expect(egress[0].IpProtocol).toBe('tcp');
-      expect(egress[0].FromPort).toBe(443);
-      expect(egress[0].ToPort).toBe(443);
+      const egressRule = template.Resources.LambdaSecurityGroupEgress;
+      expect(egressRule).toBeDefined();
+      expect(egressRule.Type).toBe('AWS::EC2::SecurityGroupEgress');
+      expect(egressRule.Properties.IpProtocol).toBe('tcp');
+      expect(egressRule.Properties.FromPort).toBe(443);
+      expect(egressRule.Properties.ToPort).toBe(443);
+      expect(egressRule.Properties.GroupId).toEqual({ 'Ref': 'LambdaSecurityGroup' });
+      expect(egressRule.Properties.DestinationSecurityGroupId).toEqual({ 'Ref': 'KMSEndpointSecurityGroup' });
     });
 
     test('Lambda security group should not have 0.0.0.0/0 egress', () => {
-      const egress = template.Resources.LambdaSecurityGroup.Properties.SecurityGroupEgress;
-      egress.forEach((rule: any) => {
-        expect(rule.CidrIp).not.toBe('0.0.0.0/0');
-      });
+      // Lambda security group only has one specific egress rule to KMS endpoint
+      const egressRule = template.Resources.LambdaSecurityGroupEgress;
+      expect(egressRule).toBeDefined();
+      // Ensure no other egress rules exist by checking that SecurityGroupEgress property doesn't exist
+      expect(template.Resources.LambdaSecurityGroup.Properties.SecurityGroupEgress).toBeUndefined();
     });
 
     test('KMS endpoint security group should have ingress rule from Lambda', () => {
-      const ingress = template.Resources.KMSEndpointSecurityGroup.Properties.SecurityGroupIngress;
-      expect(ingress).toBeDefined();
-      expect(ingress).toHaveLength(1);
-      expect(ingress[0].IpProtocol).toBe('tcp');
-      expect(ingress[0].FromPort).toBe(443);
-      expect(ingress[0].ToPort).toBe(443);
+      const ingressRule = template.Resources.KMSEndpointSecurityGroupIngress;
+      expect(ingressRule).toBeDefined();
+      expect(ingressRule.Type).toBe('AWS::EC2::SecurityGroupIngress');
+      expect(ingressRule.Properties.IpProtocol).toBe('tcp');
+      expect(ingressRule.Properties.FromPort).toBe(443);
+      expect(ingressRule.Properties.ToPort).toBe(443);
+      expect(ingressRule.Properties.GroupId).toEqual({ 'Ref': 'KMSEndpointSecurityGroup' });
+      expect(ingressRule.Properties.SourceSecurityGroupId).toEqual({ 'Ref': 'LambdaSecurityGroup' });
     });
 
     test('KMS endpoint security group should have no egress rules', () => {
@@ -377,8 +382,8 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.DataValidationFunction.Properties.Timeout).toBe(60);
     });
 
-    test('Lambda function should have nodejs16.x runtime', () => {
-      expect(template.Resources.DataValidationFunction.Properties.Runtime).toBe('nodejs16.x');
+    test('Lambda function should have nodejs22.x runtime', () => {
+      expect(template.Resources.DataValidationFunction.Properties.Runtime).toBe('nodejs22.x');
     });
 
     test('Lambda function should be in VPC', () => {
@@ -486,28 +491,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(managedPolicies).toContain('arn:aws:iam::aws:policy/service-role/AWS_ConfigRole');
     });
 
-    test('should have Config recorder', () => {
-      expect(template.Resources.ConfigRecorder).toBeDefined();
-      expect(template.Resources.ConfigRecorder.Type).toBe('AWS::Config::ConfigurationRecorder');
-    });
-
-    test('Config recorder should record all resources', () => {
-      const recordingGroup = template.Resources.ConfigRecorder.Properties.RecordingGroup;
-      expect(recordingGroup.AllSupported).toBe(true);
-      expect(recordingGroup.IncludeGlobalResourceTypes).toBe(true);
-    });
-
-    test('should have Config delivery channel', () => {
-      expect(template.Resources.ConfigDeliveryChannel).toBeDefined();
-      expect(template.Resources.ConfigDeliveryChannel.Type).toBe('AWS::Config::DeliveryChannel');
-    });
-
-    test('Config delivery channel should use S3 and SNS', () => {
-      const props = template.Resources.ConfigDeliveryChannel.Properties;
-      expect(props.S3BucketName).toBeDefined();
-      expect(props.SnsTopicARN).toBeDefined();
-    });
-
     test('should have encrypted volumes Config rule', () => {
       expect(template.Resources.EncryptedVolumesConfigRule).toBeDefined();
       expect(template.Resources.EncryptedVolumesConfigRule.Type).toBe('AWS::Config::ConfigRule');
@@ -517,10 +500,6 @@ describe('TapStack CloudFormation Template', () => {
       const source = template.Resources.EncryptedVolumesConfigRule.Properties.Source;
       expect(source.Owner).toBe('AWS');
       expect(source.SourceIdentifier).toBe('ENCRYPTED_VOLUMES');
-    });
-
-    test('encrypted volumes Config rule should depend on ConfigRecorder', () => {
-      expect(template.Resources.EncryptedVolumesConfigRule.DependsOn).toBe('ConfigRecorder');
     });
 
     test('should have S3 SSL Config rule', () => {
@@ -594,9 +573,9 @@ describe('TapStack CloudFormation Template', () => {
     test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
       // VPC(1) + Subnets(3) + RouteTable(1) + RouteTableAssocs(3) + VPCEndpoints(2) +
-      // SecurityGroups(2) + KMS(2) + S3Buckets(2) + S3BucketPolicies(1) +
-      // Lambda(1) + IAMRoles(3) + VPCFlowLogs(3) + Config(6) + SNS(1) + SSM(2) = 33
-      expect(resourceCount).toBe(33);
+      // SecurityGroups(2) + SecurityGroupRules(2) + KMS(2) + S3Buckets(2) + S3BucketPolicies(2) +
+      // Lambda(1) + IAMRoles(3) + VPCFlowLogs(3) + Config(4) + SNS(1) + SSM(2) = 32
+      expect(resourceCount).toBe(32);
     });
   });
 

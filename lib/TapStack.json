@@ -1,7 +1,6 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "PCI-DSS compliant secure data processing pipeline with encryption, network isolation, and comprehensive audit logging",
-
   "Parameters": {
     "EnvironmentSuffix": {
       "Type": "String",
@@ -9,7 +8,6 @@
       "Default": "dev"
     }
   },
-
   "Resources": {
     "VPC": {
       "Type": "AWS::EC2::VPC",
@@ -20,7 +18,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "vpc-${EnvironmentSuffix}" }
+            "Value": {
+              "Fn::Sub": "vpc-v2-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "DataClassification",
@@ -33,18 +33,28 @@
         ]
       }
     },
-
     "PrivateSubnet1": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": { "Ref": "VPC" },
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.0.1.0/24",
-        "AvailabilityZone": { "Fn::Select": ["0", { "Fn::GetAZs": "" }] },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "0",
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "private-subnet-1-${EnvironmentSuffix}" }
+            "Value": {
+              "Fn::Sub": "private-subnet-1-v2-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "DataClassification",
@@ -57,18 +67,28 @@
         ]
       }
     },
-
     "PrivateSubnet2": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": { "Ref": "VPC" },
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.0.2.0/24",
-        "AvailabilityZone": { "Fn::Select": ["1", { "Fn::GetAZs": "" }] },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "1",
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "private-subnet-2-${EnvironmentSuffix}" }
+            "Value": {
+              "Fn::Sub": "private-subnet-2-v2-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "DataClassification",
@@ -81,18 +101,28 @@
         ]
       }
     },
-
     "PrivateSubnet3": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": { "Ref": "VPC" },
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "CidrBlock": "10.0.3.0/24",
-        "AvailabilityZone": { "Fn::Select": ["2", { "Fn::GetAZs": "" }] },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            "2",
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "private-subnet-3-${EnvironmentSuffix}" }
+            "Value": {
+              "Fn::Sub": "private-subnet-3-v2-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "DataClassification",
@@ -105,15 +135,18 @@
         ]
       }
     },
-
     "PrivateRouteTable": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": { "Ref": "VPC" },
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "private-rt-${EnvironmentSuffix}" }
+            "Value": {
+              "Fn::Sub": "private-rt-v2-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "DataClassification",
@@ -126,39 +159,53 @@
         ]
       }
     },
-
     "PrivateSubnet1RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "SubnetId": { "Ref": "PrivateSubnet1" },
-        "RouteTableId": { "Ref": "PrivateRouteTable" }
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
       }
     },
-
     "PrivateSubnet2RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "SubnetId": { "Ref": "PrivateSubnet2" },
-        "RouteTableId": { "Ref": "PrivateRouteTable" }
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
       }
     },
-
     "PrivateSubnet3RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "SubnetId": { "Ref": "PrivateSubnet3" },
-        "RouteTableId": { "Ref": "PrivateRouteTable" }
+        "SubnetId": {
+          "Ref": "PrivateSubnet3"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
       }
     },
-
     "S3VPCEndpoint": {
       "Type": "AWS::EC2::VPCEndpoint",
       "Properties": {
-        "VpcId": { "Ref": "VPC" },
-        "ServiceName": { "Fn::Sub": "com.amazonaws.${AWS::Region}.s3" },
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
+        },
         "VpcEndpointType": "Gateway",
         "RouteTableIds": [
-          { "Ref": "PrivateRouteTable" }
+          {
+            "Ref": "PrivateRouteTable"
+          }
         ],
         "PolicyDocument": {
           "Version": "2012-10-17",
@@ -177,36 +224,52 @@
         }
       }
     },
-
     "KMSVPCEndpoint": {
       "Type": "AWS::EC2::VPCEndpoint",
       "Properties": {
-        "VpcId": { "Ref": "VPC" },
-        "ServiceName": { "Fn::Sub": "com.amazonaws.${AWS::Region}.kms" },
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.kms"
+        },
         "VpcEndpointType": "Interface",
         "PrivateDnsEnabled": true,
         "SubnetIds": [
-          { "Ref": "PrivateSubnet1" },
-          { "Ref": "PrivateSubnet2" },
-          { "Ref": "PrivateSubnet3" }
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          },
+          {
+            "Ref": "PrivateSubnet3"
+          }
         ],
         "SecurityGroupIds": [
-          { "Ref": "KMSEndpointSecurityGroup" }
+          {
+            "Ref": "KMSEndpointSecurityGroup"
+          }
         ]
       }
     },
-
     "KMSEndpointSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupDescription": "Security group for KMS VPC endpoint",
-        "GroupName": { "Fn::Sub": "kms-endpoint-sg-${EnvironmentSuffix}" },
-        "VpcId": { "Ref": "VPC" },
+        "GroupName": {
+          "Fn::Sub": "kms-endpoint-sg-v2-${EnvironmentSuffix}"
+        },
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "SecurityGroupEgress": [],
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "kms-endpoint-sg-${EnvironmentSuffix}" }
+            "Value": {
+              "Fn::Sub": "kms-endpoint-sg-v2-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "DataClassification",
@@ -219,17 +282,22 @@
         ]
       }
     },
-
     "LambdaSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupDescription": "Security group for Lambda function",
-        "GroupName": { "Fn::Sub": "lambda-sg-${EnvironmentSuffix}" },
-        "VpcId": { "Ref": "VPC" },
+        "GroupName": {
+          "Fn::Sub": "lambda-sg-v2-${EnvironmentSuffix}"
+        },
+        "VpcId": {
+          "Ref": "VPC"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "lambda-sg-${EnvironmentSuffix}" }
+            "Value": {
+              "Fn::Sub": "lambda-sg-v2-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "DataClassification",
@@ -242,35 +310,43 @@
         ]
       }
     },
-
     "KMSEndpointSecurityGroupIngress": {
       "Type": "AWS::EC2::SecurityGroupIngress",
       "Properties": {
-        "GroupId": { "Ref": "KMSEndpointSecurityGroup" },
+        "GroupId": {
+          "Ref": "KMSEndpointSecurityGroup"
+        },
         "IpProtocol": "tcp",
         "FromPort": 443,
         "ToPort": 443,
-        "SourceSecurityGroupId": { "Ref": "LambdaSecurityGroup" }
+        "SourceSecurityGroupId": {
+          "Ref": "LambdaSecurityGroup"
+        }
       }
     },
-
     "LambdaSecurityGroupEgress": {
       "Type": "AWS::EC2::SecurityGroupEgress",
       "Properties": {
-        "GroupId": { "Ref": "LambdaSecurityGroup" },
+        "GroupId": {
+          "Ref": "LambdaSecurityGroup"
+        },
         "IpProtocol": "tcp",
         "FromPort": 443,
         "ToPort": 443,
-        "DestinationSecurityGroupId": { "Ref": "KMSEndpointSecurityGroup" },
+        "DestinationSecurityGroupId": {
+          "Ref": "KMSEndpointSecurityGroup"
+        },
         "Description": "Allow HTTPS to KMS endpoint"
       }
     },
-
     "KMSKey": {
       "Type": "AWS::KMS::Key",
       "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
       "Properties": {
-        "Description": { "Fn::Sub": "Customer-managed KMS key for PCI data encryption - ${EnvironmentSuffix}" },
+        "Description": {
+          "Fn::Sub": "Customer-managed KMS key for PCI data encryption - ${EnvironmentSuffix}"
+        },
         "KeyPolicy": {
           "Version": "2012-10-17",
           "Statement": [
@@ -278,7 +354,9 @@
               "Sid": "Enable IAM User Permissions",
               "Effect": "Allow",
               "Principal": {
-                "AWS": { "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root" }
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
               },
               "Action": "kms:*",
               "Resource": "*"
@@ -299,7 +377,9 @@
               "Sid": "Allow CloudWatch Logs to use the key",
               "Effect": "Allow",
               "Principal": {
-                "Service": { "Fn::Sub": "logs.${AWS::Region}.amazonaws.com" }
+                "Service": {
+                  "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+                }
               },
               "Action": [
                 "kms:Encrypt",
@@ -312,7 +392,9 @@
               "Resource": "*",
               "Condition": {
                 "ArnLike": {
-                  "kms:EncryptionContext:aws:logs:arn": { "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*" }
+                  "kms:EncryptionContext:aws:logs:arn": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                  }
                 }
               }
             }
@@ -321,7 +403,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "kms-key-${EnvironmentSuffix}" }
+            "Value": {
+              "Fn::Sub": "kms-key-v2-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "DataClassification",
@@ -334,26 +418,36 @@
         ]
       }
     },
-
     "KMSKeyAlias": {
       "Type": "AWS::KMS::Alias",
       "Properties": {
-        "AliasName": { "Fn::Sub": "alias/pci-data-key-${EnvironmentSuffix}" },
-        "TargetKeyId": { "Ref": "KMSKey" }
+        "AliasName": {
+          "Fn::Sub": "alias/pci-data-key-v2-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "KMSKey"
+        }
       }
     },
-
     "DataBucket": {
       "Type": "AWS::S3::Bucket",
       "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
       "Properties": {
-        "BucketName": { "Fn::Sub": "pci-data-bucket-${EnvironmentSuffix}-${AWS::AccountId}" },
+        "BucketName": {
+          "Fn::Sub": "pci-data-bucket-v2-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
             {
               "ServerSideEncryptionByDefault": {
                 "SSEAlgorithm": "aws:kms",
-                "KMSMasterKeyID": { "Fn::GetAtt": ["KMSKey", "Arn"] }
+                "KMSMasterKeyID": {
+                  "Fn::GetAtt": [
+                    "KMSKey",
+                    "Arn"
+                  ]
+                }
               },
               "BucketKeyEnabled": true
             }
@@ -380,7 +474,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "pci-data-bucket-${EnvironmentSuffix}" }
+            "Value": {
+              "Fn::Sub": "pci-data-bucket-v2-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "DataClassification",
@@ -393,11 +489,12 @@
         ]
       }
     },
-
     "DataBucketPolicy": {
       "Type": "AWS::S3::BucketPolicy",
       "Properties": {
-        "Bucket": { "Ref": "DataBucket" },
+        "Bucket": {
+          "Ref": "DataBucket"
+        },
         "PolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -406,7 +503,9 @@
               "Effect": "Deny",
               "Principal": "*",
               "Action": "s3:PutObject",
-              "Resource": { "Fn::Sub": "${DataBucket.Arn}/*" },
+              "Resource": {
+                "Fn::Sub": "${DataBucket.Arn}/*"
+              },
               "Condition": {
                 "StringNotEquals": {
                   "s3:x-amz-server-side-encryption": "aws:kms"
@@ -419,8 +518,15 @@
               "Principal": "*",
               "Action": "s3:*",
               "Resource": [
-                { "Fn::GetAtt": ["DataBucket", "Arn"] },
-                { "Fn::Sub": "${DataBucket.Arn}/*" }
+                {
+                  "Fn::GetAtt": [
+                    "DataBucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${DataBucket.Arn}/*"
+                }
               ],
               "Condition": {
                 "Bool": {
@@ -432,17 +538,25 @@
         }
       }
     },
-
     "VPCFlowLogsLogGroup": {
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
-        "LogGroupName": { "Fn::Sub": "/aws/vpc/flowlogs-${EnvironmentSuffix}" },
+        "LogGroupName": {
+          "Fn::Sub": "/aws/vpc/flowlogs-v2-${EnvironmentSuffix}"
+        },
         "RetentionInDays": 90,
-        "KmsKeyId": { "Fn::GetAtt": ["KMSKey", "Arn"] },
+        "KmsKeyId": {
+          "Fn::GetAtt": [
+            "KMSKey",
+            "Arn"
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "vpc-flowlogs-${EnvironmentSuffix}" }
+            "Value": {
+              "Fn::Sub": "vpc-flowlogs-v2-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "DataClassification",
@@ -455,11 +569,12 @@
         ]
       }
     },
-
     "VPCFlowLogsRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": { "Fn::Sub": "vpc-flowlogs-role-${EnvironmentSuffix}" },
+        "RoleName": {
+          "Fn::Sub": "vpc-flowlogs-role-v2-${EnvironmentSuffix}"
+        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -487,7 +602,12 @@
                     "logs:DescribeLogGroups",
                     "logs:DescribeLogStreams"
                   ],
-                  "Resource": { "Fn::GetAtt": ["VPCFlowLogsLogGroup", "Arn"] }
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "VPCFlowLogsLogGroup",
+                      "Arn"
+                    ]
+                  }
                 }
               ]
             }
@@ -505,20 +625,30 @@
         ]
       }
     },
-
     "VPCFlowLog": {
       "Type": "AWS::EC2::FlowLog",
       "Properties": {
         "ResourceType": "VPC",
-        "ResourceId": { "Ref": "VPC" },
+        "ResourceId": {
+          "Ref": "VPC"
+        },
         "TrafficType": "ALL",
         "LogDestinationType": "cloud-watch-logs",
-        "LogGroupName": { "Ref": "VPCFlowLogsLogGroup" },
-        "DeliverLogsPermissionArn": { "Fn::GetAtt": ["VPCFlowLogsRole", "Arn"] },
+        "LogGroupName": {
+          "Ref": "VPCFlowLogsLogGroup"
+        },
+        "DeliverLogsPermissionArn": {
+          "Fn::GetAtt": [
+            "VPCFlowLogsRole",
+            "Arn"
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "vpc-flowlog-${EnvironmentSuffix}" }
+            "Value": {
+              "Fn::Sub": "vpc-flowlog-v2-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "DataClassification",
@@ -531,11 +661,12 @@
         ]
       }
     },
-
     "LambdaExecutionRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": { "Fn::Sub": "lambda-execution-role-${EnvironmentSuffix}" },
+        "RoleName": {
+          "Fn::Sub": "lambda-execution-role-v2-${EnvironmentSuffix}"
+        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -563,14 +694,21 @@
                     "s3:GetObject",
                     "s3:PutObject"
                   ],
-                  "Resource": { "Fn::Sub": "${DataBucket.Arn}/*" }
+                  "Resource": {
+                    "Fn::Sub": "${DataBucket.Arn}/*"
+                  }
                 },
                 {
                   "Effect": "Allow",
                   "Action": [
                     "s3:ListBucket"
                   ],
-                  "Resource": { "Fn::GetAtt": ["DataBucket", "Arn"] }
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "DataBucket",
+                      "Arn"
+                    ]
+                  }
                 }
               ]
             }
@@ -588,7 +726,12 @@
                     "kms:GenerateDataKey",
                     "kms:DescribeKey"
                   ],
-                  "Resource": { "Fn::GetAtt": ["KMSKey", "Arn"] }
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "KMSKey",
+                      "Arn"
+                    ]
+                  }
                 }
               ]
             }
@@ -606,30 +749,48 @@
         ]
       }
     },
-
     "DataValidationFunction": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
-        "FunctionName": { "Fn::Sub": "data-validation-${EnvironmentSuffix}" },
-        "Runtime": "nodejs16.x",
+        "FunctionName": {
+          "Fn::Sub": "data-validation-v2-${EnvironmentSuffix}"
+        },
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
-        "Role": { "Fn::GetAtt": ["LambdaExecutionRole", "Arn"] },
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
         "MemorySize": 1024,
         "Timeout": 60,
         "VpcConfig": {
           "SecurityGroupIds": [
-            { "Ref": "LambdaSecurityGroup" }
+            {
+              "Ref": "LambdaSecurityGroup"
+            }
           ],
           "SubnetIds": [
-            { "Ref": "PrivateSubnet1" },
-            { "Ref": "PrivateSubnet2" },
-            { "Ref": "PrivateSubnet3" }
+            {
+              "Ref": "PrivateSubnet1"
+            },
+            {
+              "Ref": "PrivateSubnet2"
+            },
+            {
+              "Ref": "PrivateSubnet3"
+            }
           ]
         },
         "Environment": {
           "Variables": {
-            "DATA_BUCKET": { "Ref": "DataBucket" },
-            "KMS_KEY_ID": { "Ref": "KMSKey" }
+            "DATA_BUCKET": {
+              "Ref": "DataBucket"
+            },
+            "KMS_KEY_ID": {
+              "Ref": "KMSKey"
+            }
           }
         },
         "Code": {
@@ -638,7 +799,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "data-validation-${EnvironmentSuffix}" }
+            "Value": {
+              "Fn::Sub": "data-validation-v2-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "DataClassification",
@@ -651,17 +814,22 @@
         ]
       }
     },
-
     "SecurityAlertTopic": {
       "Type": "AWS::SNS::Topic",
       "Properties": {
-        "TopicName": { "Fn::Sub": "security-alerts-${EnvironmentSuffix}" },
+        "TopicName": {
+          "Fn::Sub": "security-alerts-v2-${EnvironmentSuffix}"
+        },
         "DisplayName": "PCI Security Alerts",
-        "KmsMasterKeyId": { "Ref": "KMSKey" },
+        "KmsMasterKeyId": {
+          "Ref": "KMSKey"
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "security-alerts-${EnvironmentSuffix}" }
+            "Value": {
+              "Fn::Sub": "security-alerts-v2-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "DataClassification",
@@ -674,11 +842,12 @@
         ]
       }
     },
-
     "ConfigRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": { "Fn::Sub": "config-role-${EnvironmentSuffix}" },
+        "RoleName": {
+          "Fn::Sub": "config-role-v2-${EnvironmentSuffix}"
+        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -692,9 +861,25 @@
           ]
         },
         "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
+          "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
         ],
         "Policies": [
+          {
+            "PolicyName": "ConfigPermissions",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "config:*",
+                    "sns:Publish"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          },
           {
             "PolicyName": "ConfigBucketAccess",
             "PolicyDocument": {
@@ -708,9 +893,37 @@
                     "s3:GetObject"
                   ],
                   "Resource": [
-                    { "Fn::GetAtt": ["ConfigBucket", "Arn"] },
-                    { "Fn::Sub": "${ConfigBucket.Arn}/*" }
+                    {
+                      "Fn::GetAtt": [
+                        "ConfigBucket",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${ConfigBucket.Arn}/*"
+                    }
                   ]
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "ConfigKMSAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:GenerateDataKey",
+                    "kms:DescribeKey"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "KMSKey",
+                      "Arn"
+                    ]
+                  }
                 }
               ]
             }
@@ -728,17 +941,23 @@
         ]
       }
     },
-
     "ConfigBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "BucketName": { "Fn::Sub": "config-bucket-${EnvironmentSuffix}-${AWS::AccountId}" },
+        "BucketName": {
+          "Fn::Sub": "config-bucket-v2-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
             {
               "ServerSideEncryptionByDefault": {
                 "SSEAlgorithm": "aws:kms",
-                "KMSMasterKeyID": { "Fn::GetAtt": ["KMSKey", "Arn"] }
+                "KMSMasterKeyID": {
+                  "Fn::GetAtt": [
+                    "KMSKey",
+                    "Arn"
+                  ]
+                }
               }
             }
           ]
@@ -752,7 +971,9 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": { "Fn::Sub": "config-bucket-${EnvironmentSuffix}" }
+            "Value": {
+              "Fn::Sub": "config-bucket-v2-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "DataClassification",
@@ -765,33 +986,52 @@
         ]
       }
     },
-
-    "ConfigRecorder": {
-      "Type": "AWS::Config::ConfigurationRecorder",
+    "ConfigBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
       "Properties": {
-        "Name": { "Fn::Sub": "config-recorder-${EnvironmentSuffix}" },
-        "RoleArn": { "Fn::GetAtt": ["ConfigRole", "Arn"] },
-        "RecordingGroup": {
-          "AllSupported": true,
-          "IncludeGlobalResourceTypes": true
+        "Bucket": {
+          "Ref": "ConfigBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AWSConfigBucketPermissionsCheck",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "config.amazonaws.com"
+              },
+              "Action": "s3:GetBucketAcl",
+              "Resource": {
+                "Fn::Sub": "arn:aws:s3:::${ConfigBucket}"
+              }
+            },
+            {
+              "Sid": "AWSConfigBucketDelivery",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "config.amazonaws.com"
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "arn:aws:s3:::${ConfigBucket}/AWSLogs/${AWS::AccountId}/Config/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control"
+                }
+              }
+            }
+          ]
         }
       }
     },
-
-    "ConfigDeliveryChannel": {
-      "Type": "AWS::Config::DeliveryChannel",
-      "Properties": {
-        "Name": { "Fn::Sub": "config-delivery-${EnvironmentSuffix}" },
-        "S3BucketName": { "Ref": "ConfigBucket" },
-        "SnsTopicARN": { "Ref": "SecurityAlertTopic" }
-      }
-    },
-
     "EncryptedVolumesConfigRule": {
       "Type": "AWS::Config::ConfigRule",
-      "DependsOn": "ConfigRecorder",
       "Properties": {
-        "ConfigRuleName": { "Fn::Sub": "encrypted-volumes-${EnvironmentSuffix}" },
+        "ConfigRuleName": {
+          "Fn::Sub": "encrypted-volumes-v2-${EnvironmentSuffix}"
+        },
         "Description": "Checks that EBS volumes are encrypted",
         "Source": {
           "Owner": "AWS",
@@ -799,12 +1039,12 @@
         }
       }
     },
-
     "S3BucketSSLRequestsOnlyConfigRule": {
       "Type": "AWS::Config::ConfigRule",
-      "DependsOn": "ConfigRecorder",
       "Properties": {
-        "ConfigRuleName": { "Fn::Sub": "s3-bucket-ssl-requests-only-${EnvironmentSuffix}" },
+        "ConfigRuleName": {
+          "Fn::Sub": "s3-bucket-ssl-requests-only-v2-${EnvironmentSuffix}"
+        },
         "Description": "Checks that S3 buckets have policies requiring SSL",
         "Source": {
           "Owner": "AWS",
@@ -812,12 +1052,12 @@
         }
       }
     },
-
     "IAMPasswordPolicyConfigRule": {
       "Type": "AWS::Config::ConfigRule",
-      "DependsOn": "ConfigRecorder",
       "Properties": {
-        "ConfigRuleName": { "Fn::Sub": "iam-password-policy-${EnvironmentSuffix}" },
+        "ConfigRuleName": {
+          "Fn::Sub": "iam-password-policy-v2-${EnvironmentSuffix}"
+        },
         "Description": "Checks that the account password policy meets PCI DSS requirements",
         "Source": {
           "Owner": "AWS",
@@ -825,28 +1065,34 @@
         }
       }
     },
-
     "ConfigParameter": {
       "Type": "AWS::SSM::Parameter",
       "Properties": {
-        "Name": { "Fn::Sub": "/pci/config/${EnvironmentSuffix}/data-bucket" },
+        "Name": {
+          "Fn::Sub": "/pci/config/${EnvironmentSuffix}/data-bucket"
+        },
         "Description": "S3 bucket name for PCI data storage",
         "Type": "String",
-        "Value": { "Ref": "DataBucket" },
+        "Value": {
+          "Ref": "DataBucket"
+        },
         "Tags": {
           "DataClassification": "PCI",
           "ComplianceScope": "Payment"
         }
       }
     },
-
     "KMSKeyParameter": {
       "Type": "AWS::SSM::Parameter",
       "Properties": {
-        "Name": { "Fn::Sub": "/pci/config/${EnvironmentSuffix}/kms-key-id" },
+        "Name": {
+          "Fn::Sub": "/pci/config/${EnvironmentSuffix}/kms-key-id"
+        },
         "Description": "KMS key ID for PCI data encryption",
         "Type": "String",
-        "Value": { "Ref": "KMSKey" },
+        "Value": {
+          "Ref": "KMSKey"
+        },
         "Tags": {
           "DataClassification": "PCI",
           "ComplianceScope": "Payment"
@@ -854,58 +1100,89 @@
       }
     }
   },
-
   "Outputs": {
     "VPCId": {
       "Description": "VPC ID",
-      "Value": { "Ref": "VPC" },
+      "Value": {
+        "Ref": "VPC"
+      },
       "Export": {
-        "Name": { "Fn::Sub": "${AWS::StackName}-VPCId" }
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPCId"
+        }
       }
     },
     "PrivateSubnet1Id": {
       "Description": "Private Subnet 1 ID",
-      "Value": { "Ref": "PrivateSubnet1" }
+      "Value": {
+        "Ref": "PrivateSubnet1"
+      }
     },
     "PrivateSubnet2Id": {
       "Description": "Private Subnet 2 ID",
-      "Value": { "Ref": "PrivateSubnet2" }
+      "Value": {
+        "Ref": "PrivateSubnet2"
+      }
     },
     "PrivateSubnet3Id": {
       "Description": "Private Subnet 3 ID",
-      "Value": { "Ref": "PrivateSubnet3" }
+      "Value": {
+        "Ref": "PrivateSubnet3"
+      }
     },
     "DataBucketName": {
       "Description": "S3 bucket name for PCI data",
-      "Value": { "Ref": "DataBucket" }
+      "Value": {
+        "Ref": "DataBucket"
+      }
     },
     "KMSKeyId": {
       "Description": "KMS key ID for encryption",
-      "Value": { "Ref": "KMSKey" }
+      "Value": {
+        "Ref": "KMSKey"
+      }
     },
     "KMSKeyArn": {
       "Description": "KMS key ARN",
-      "Value": { "Fn::GetAtt": ["KMSKey", "Arn"] }
+      "Value": {
+        "Fn::GetAtt": [
+          "KMSKey",
+          "Arn"
+        ]
+      }
     },
     "DataValidationFunctionArn": {
       "Description": "Lambda function ARN",
-      "Value": { "Fn::GetAtt": ["DataValidationFunction", "Arn"] }
+      "Value": {
+        "Fn::GetAtt": [
+          "DataValidationFunction",
+          "Arn"
+        ]
+      }
     },
     "DataValidationFunctionName": {
       "Description": "Lambda function name",
-      "Value": { "Ref": "DataValidationFunction" }
+      "Value": {
+        "Ref": "DataValidationFunction"
+      }
     },
     "SecurityAlertTopicArn": {
       "Description": "SNS topic ARN for security alerts",
-      "Value": { "Ref": "SecurityAlertTopic" }
+      "Value": {
+        "Ref": "SecurityAlertTopic"
+      }
     },
     "VPCFlowLogsLogGroup": {
       "Description": "CloudWatch Logs log group for VPC flow logs",
-      "Value": { "Ref": "VPCFlowLogsLogGroup" }
+      "Value": {
+        "Ref": "VPCFlowLogsLogGroup"
+      }
     },
     "ConfigBucketName": {
       "Description": "S3 bucket for AWS Config",
-      "Value": { "Ref": "ConfigBucket" }
+      "Value": {
+        "Ref": "ConfigBucket"
+      }
     }
   }
 }

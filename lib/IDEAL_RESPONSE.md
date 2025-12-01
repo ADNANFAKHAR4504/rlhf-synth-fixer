@@ -403,34 +403,6 @@ All resources include both tags:
 
 ## Optional Enhancements Implemented
 
-### AWS Config for Compliance Monitoring
-
-**Configuration Recorder**:
-```json
-"ConfigRecorder": {
-  "RecordingGroup": {
-    "AllSupported": true,
-    "IncludeGlobalResourceTypes": true
-  }
-}
-```
-
-**Why AllSupported**:
-- Monitors all resource types (EC2, S3, Lambda, KMS, etc.)
-- Automatic support for new AWS services
-- Complete compliance audit trail
-
-**Config Rules Implemented**:
-
-1. **ENCRYPTED_VOLUMES**: Ensures all EBS volumes are encrypted
-2. **S3_BUCKET_SSL_REQUESTS_ONLY**: Verifies S3 buckets deny HTTP requests
-3. **IAM_PASSWORD_POLICY**: Checks password policy meets PCI DSS requirements
-
-**Compliance Automation Benefit**:
-- Continuous monitoring (not point-in-time checks)
-- Automatic alerts via SNS on non-compliance
-- Historical compliance data for audits
-
 ### SNS Topic for Security Alerts
 
 **SNS Configuration**:

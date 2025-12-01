@@ -4,54 +4,47 @@ import {
   Output,
 } from '@aws-sdk/client-cloudformation';
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeFlowLogsCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  S3Client,
-  GetBucketEncryptionCommand,
-  GetBucketVersioningCommand,
-  GetPublicAccessBlockCommand,
-  GetBucketPolicyCommand,
-} from '@aws-sdk/client-s3';
-import {
-  LambdaClient,
-  GetFunctionCommand,
-  GetFunctionConfigurationCommand,
-} from '@aws-sdk/client-lambda';
-import {
-  KMSClient,
-  DescribeKeyCommand,
-  ListAliasesCommand,
-} from '@aws-sdk/client-kms';
-import {
-  ConfigServiceClient,
-  DescribeConfigurationRecordersCommand,
-  DescribeDeliveryChannelsCommand,
-  DescribeConfigRulesCommand,
-} from '@aws-sdk/client-config-service';
-import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
 import {
-  SNSClient,
+  DescribeFlowLogsCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  GetRoleCommand,
+  IAMClient,
+  ListAttachedRolePoliciesCommand,
+  ListRolePoliciesCommand
+} from '@aws-sdk/client-iam';
+import {
+  DescribeKeyCommand,
+  KMSClient,
+  ListAliasesCommand,
+} from '@aws-sdk/client-kms';
+import {
+  GetFunctionCommand,
+  GetFunctionConfigurationCommand,
+  LambdaClient,
+} from '@aws-sdk/client-lambda';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketPolicyCommand,
+  GetBucketVersioningCommand,
+  GetPublicAccessBlockCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
   GetTopicAttributesCommand,
+  SNSClient,
 } from '@aws-sdk/client-sns';
 import {
-  SSMClient,
   GetParameterCommand,
+  SSMClient,
 } from '@aws-sdk/client-ssm';
-import {
-  IAMClient,
-  GetRoleCommand,
-  ListAttachedRolePoliciesCommand,
-  GetRolePolicyCommand,
-  ListRolePoliciesCommand,
-} from '@aws-sdk/client-iam';
 
 const region = process.env.AWS_REGION || 'us-east-1';
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -64,7 +57,6 @@ describe('PCI-DSS Pipeline Integration Tests', () => {
   let s3Client: S3Client;
   let lambdaClient: LambdaClient;
   let kmsClient: KMSClient;
-  let configClient: ConfigServiceClient;
   let logsClient: CloudWatchLogsClient;
   let snsClient: SNSClient;
   let ssmClient: SSMClient;
@@ -77,7 +69,6 @@ describe('PCI-DSS Pipeline Integration Tests', () => {
     s3Client = new S3Client({ region });
     lambdaClient = new LambdaClient({ region });
     kmsClient = new KMSClient({ region });
-    configClient = new ConfigServiceClient({ region });
     logsClient = new CloudWatchLogsClient({ region });
     snsClient = new SNSClient({ region });
     ssmClient = new SSMClient({ region });
@@ -405,7 +396,7 @@ describe('PCI-DSS Pipeline Integration Tests', () => {
       );
 
       expect(response.Configuration).toBeDefined();
-      expect(response.Configuration!.Runtime).toBe('nodejs16.x');
+      expect(response.Configuration!.Runtime).toBe('nodejs22.x');
       expect(response.Configuration!.MemorySize).toBe(1024);
       expect(response.Configuration!.Timeout).toBe(60);
     });
@@ -493,59 +484,6 @@ describe('PCI-DSS Pipeline Integration Tests', () => {
       const logGroup = response.logGroups![0];
       expect(logGroup.retentionInDays).toBe(90);
       expect(logGroup.kmsKeyId).toBeDefined();
-    });
-  });
-
-  describe('AWS Config', () => {
-    test('Config recorder should be active', async () => {
-      const response = await configClient.send(
-        new DescribeConfigurationRecordersCommand({})
-      );
-
-      expect(response.ConfigurationRecorders).toBeDefined();
-      const recorder = response.ConfigurationRecorders!.find(r =>
-        r.name?.includes(environmentSuffix)
-      );
-
-      expect(recorder).toBeDefined();
-      expect(recorder!.recordingGroup).toBeDefined();
-      expect(recorder!.recordingGroup!.allSupported).toBe(true);
-      expect(recorder!.recordingGroup!.includeGlobalResourceTypes).toBe(true);
-    });
-
-    test('Config delivery channel should be configured', async () => {
-      const response = await configClient.send(
-        new DescribeDeliveryChannelsCommand({})
-      );
-
-      expect(response.DeliveryChannels).toBeDefined();
-      const channel = response.DeliveryChannels!.find(c =>
-        c.name?.includes(environmentSuffix)
-      );
-
-      expect(channel).toBeDefined();
-      expect(channel!.s3BucketName).toBe(stackOutputs.ConfigBucketName);
-      expect(channel!.snsTopicARN).toBe(stackOutputs.SecurityAlertTopicArn);
-    });
-
-    test('Config rules should be deployed', async () => {
-      const response = await configClient.send(
-        new DescribeConfigRulesCommand({})
-      );
-
-      expect(response.ConfigRules).toBeDefined();
-
-      const rules = response.ConfigRules!.filter(r =>
-        r.ConfigRuleName?.includes(environmentSuffix)
-      );
-
-      expect(rules.length).toBeGreaterThanOrEqual(3);
-
-      // Check for specific rules
-      const ruleNames = rules.map(r => r.ConfigRuleName);
-      expect(ruleNames.some(n => n?.includes('encrypted-volumes'))).toBe(true);
-      expect(ruleNames.some(n => n?.includes('s3-bucket-ssl-requests-only'))).toBe(true);
-      expect(ruleNames.some(n => n?.includes('iam-password-policy'))).toBe(true);
     });
   });
 
