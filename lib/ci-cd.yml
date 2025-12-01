@@ -1,0 +1,231 @@
+# CI/CD Pipeline Configuration for Media Processing Pipeline Infrastructure
+# AWS CloudFormation JSON Stack
+
+name: Media Processing CI/CD Pipeline
+
+# Pipeline orchestration (workflow simulation)
+workflow:
+  stages:
+    - validate
+    - build
+    - test
+    - deploy
+    - integration-test
+    - monitoring
+
+# Job Definitions
+jobs:
+  # Validation Stage
+  validate-infrastructure:
+    stage: validate
+    description: "Validate CloudFormation infrastructure code and configuration"
+    steps:
+      - name: "Validate CloudFormation syntax"
+        command: "aws cloudformation validate-template --template-body file://lib/TapStack.json"
+      - name: "Run cfn-lint validation"
+        command: "cfn-lint lib/TapStack.json"
+      - name: "Validate JSON format"
+        command: "node -e \"JSON.parse(require('fs').readFileSync('lib/TapStack.json'))\""
+      - name: "Validate metadata"
+        command: "node -e \"JSON.parse(require('fs').readFileSync('metadata.json'))\""
+
+  security-scan:
+    stage: validate
+    description: "Security and vulnerability scanning"
+    steps:
+      - name: "Scan dependencies"
+        command: "npm audit"
+      - name: "Check for secrets"
+        command: "trufflehog scan ."
+      - name: "Run cfn-nag security scan"
+        command: "cfn_nag_scan --input-path lib/TapStack.json"
+      - name: "Run checkov IaC security scan"
+        command: "checkov -f lib/TapStack.json"
+
+  # Build Stage
+  build-infrastructure:
+    stage: build
+    dependencies:
+      - validate-infrastructure
+    description: "Build and prepare CloudFormation stack"
+    steps:
+      - name: "Install dependencies"
+        command: "npm ci"
+      - name: "Compile TypeScript tests"
+        command: "npm run build"
+      - name: "Package CloudFormation template"
+        command: "aws cloudformation package --template-file lib/TapStack.json --output-template-file packaged-template.json --s3-bucket pipeline-artifacts-${ENVIRONMENT_SUFFIX}"
+      - name: "Generate deployment artifacts"
+        command: "mkdir -p dist && cp lib/TapStack.json dist/"
+
+  # Test Stage
+  unit-tests:
+    stage: test
+    dependencies:
+      - build-infrastructure
+    description: "Run unit tests with coverage"
+    steps:
+      - name: "Run Jest with coverage"
+        command: "npm test -- --coverage --coverageReporters=json-summary"
+      - name: "Validate coverage threshold"
+        command: "node -e \"const c=require('./coverage/coverage-summary.json'); if(c.total.lines.pct<80) process.exit(1)\""
+    coverage_threshold: 80
+
+  # Deploy Stage
+  deploy-infrastructure:
+    stage: deploy
+    dependencies:
+      - unit-tests
+    description: "Deploy CloudFormation stack to AWS"
+    environment: pr7600
+    steps:
+      - name: "Create change set"
+        command: "aws cloudformation create-change-set --stack-name TapStack-${ENVIRONMENT_SUFFIX} --template-body file://lib/TapStack.json --parameters ParameterKey=EnvironmentSuffix,ParameterValue=${ENVIRONMENT_SUFFIX} --capabilities CAPABILITY_NAMED_IAM --change-set-name deploy-${ENVIRONMENT_SUFFIX}"
+      - name: "Wait for change set"
+        command: "aws cloudformation wait change-set-create-complete --stack-name TapStack-${ENVIRONMENT_SUFFIX} --change-set-name deploy-${ENVIRONMENT_SUFFIX}"
+      - name: "Execute change set"
+        command: "aws cloudformation execute-change-set --stack-name TapStack-${ENVIRONMENT_SUFFIX} --change-set-name deploy-${ENVIRONMENT_SUFFIX}"
+      - name: "Wait for stack completion"
+        command: "aws cloudformation wait stack-create-complete --stack-name TapStack-${ENVIRONMENT_SUFFIX} || aws cloudformation wait stack-update-complete --stack-name TapStack-${ENVIRONMENT_SUFFIX}"
+      - name: "Capture outputs"
+        command: "aws cloudformation describe-stacks --stack-name TapStack-${ENVIRONMENT_SUFFIX} --query 'Stacks[0].Outputs' --output json > cfn-outputs/outputs.json"
+    outputs:
+      - MediaBucketName
+      - MediaLiveChannelId
+      - MediaPackageChannelId
+      - HlsEndpointUrl
+      - DashEndpointUrl
+      - CloudFrontDomain
+      - PipelineName
+      - StateMachineArn
+      - EnvironmentSuffix
+      - MediaLiveInputSecurityGroupId
+
+  # Integration Test Stage
+  integration-tests:
+    stage: integration-test
+    dependencies:
+      - deploy-infrastructure
+    description: "Run integration tests against deployed infrastructure"
+    steps:
+      - name: "Wait for resources"
+        command: "sleep 30"
+      - name: "Test S3 media bucket"
+        command: "aws s3api head-bucket --bucket media-bucket-${ENVIRONMENT_SUFFIX}"
+      - name: "Test S3 artifacts bucket"
+        command: "aws s3api head-bucket --bucket pipeline-artifacts-${ENVIRONMENT_SUFFIX}"
+      - name: "Test MediaLive channel"
+        command: "aws medialive describe-channel --channel-id ${MediaLiveChannelId}"
+      - name: "Test MediaLive input"
+        command: "aws medialive describe-input --input-id live-input-${ENVIRONMENT_SUFFIX}"
+      - name: "Test MediaPackage channel"
+        command: "aws mediapackage describe-channel --id media-channel-${ENVIRONMENT_SUFFIX}"
+      - name: "Test HLS endpoint"
+        command: "aws mediapackage describe-origin-endpoint --id hls-endpoint-${ENVIRONMENT_SUFFIX}"
+      - name: "Test DASH endpoint"
+        command: "aws mediapackage describe-origin-endpoint --id dash-endpoint-${ENVIRONMENT_SUFFIX}"
+      - name: "Test CloudFront distribution"
+        command: "aws cloudfront get-distribution --id ${CloudFrontDistributionId}"
+      - name: "Test Lambda channel monitor function"
+        command: "aws lambda get-function --function-name channel-monitor-${ENVIRONMENT_SUFFIX}"
+      - name: "Test Lambda stream processor function"
+        command: "aws lambda get-function --function-name stream-processor-${ENVIRONMENT_SUFFIX}"
+      - name: "Test Step Functions state machine"
+        command: "aws stepfunctions describe-state-machine --state-machine-arn ${StateMachineArn}"
+      - name: "Test CodePipeline"
+        command: "aws codepipeline get-pipeline --name media-pipeline-${ENVIRONMENT_SUFFIX}"
+      - name: "Test CodeBuild project"
+        command: "aws codebuild batch-get-projects --names media-pipeline-build-${ENVIRONMENT_SUFFIX}"
+      - name: "Verify IAM roles"
+        command: "aws iam get-role --role-name medialive-role-${ENVIRONMENT_SUFFIX}"
+      - name: "Test CloudWatch alarms"
+        command: "aws cloudwatch describe-alarms --alarm-names channel-state-alarm-${ENVIRONMENT_SUFFIX} error-rate-alarm-${ENVIRONMENT_SUFFIX}"
+      - name: "Test CloudWatch log group"
+        command: "aws logs describe-log-groups --log-group-name-prefix /aws/media-pipeline/${ENVIRONMENT_SUFFIX}"
+
+  # Monitoring Setup
+  setup-monitoring:
+    stage: monitoring
+    dependencies:
+      - integration-tests
+    description: "Configure CloudWatch monitoring and alarms"
+    steps:
+      - name: "Create CloudWatch dashboard"
+        command: "aws cloudwatch put-dashboard --dashboard-name media-pipeline-${ENVIRONMENT_SUFFIX}"
+      - name: "Verify MediaLive channel state alarm"
+        command: "aws cloudwatch describe-alarms --alarm-names channel-state-alarm-${ENVIRONMENT_SUFFIX}"
+      - name: "Verify error rate alarm"
+        command: "aws cloudwatch describe-alarms --alarm-names error-rate-alarm-${ENVIRONMENT_SUFFIX}"
+      - name: "Setup CloudFront monitoring"
+        command: "aws cloudwatch put-metric-alarm --alarm-name cloudfront-error-rate-${ENVIRONMENT_SUFFIX} --metric-name 5xxErrorRate --namespace AWS/CloudFront --statistic Average --period 300 --threshold 5 --comparison-operator GreaterThanThreshold --evaluation-periods 2"
+      - name: "Setup Lambda monitoring"
+        command: "aws cloudwatch put-metric-alarm --alarm-name lambda-errors-${ENVIRONMENT_SUFFIX} --metric-name Errors --namespace AWS/Lambda --statistic Sum --period 300 --threshold 5 --comparison-operator GreaterThanThreshold --evaluation-periods 1"
+
+# Environment Configuration
+environments:
+  pr7600:
+    region: us-east-1
+    account: "342597974367"
+    variables:
+      ENVIRONMENT_SUFFIX: "pr7600"
+      AWS_REGION: "us-east-1"
+
+# Quality Gates
+quality_gates:
+  - name: "Code Coverage"
+    threshold: 80
+    metric: "coverage.percent_covered"
+
+  - name: "Security Score"
+    threshold: 0
+    metric: "vulnerabilities.high"
+
+  - name: "Build Success"
+    threshold: 0
+    metric: "build.failed_steps"
+
+  - name: "Deployment Success"
+    threshold: 0
+    metric: "deployment.errors"
+
+  - name: "Stream Latency"
+    threshold: 10
+    metric: "medialive.latency_seconds"
+
+# Notification Configuration
+notifications:
+  on_success:
+    - type: github-comment
+      message: "CI/CD Pipeline completed successfully - Media processing infrastructure deployed"
+
+  on_failure:
+    - type: github-comment
+      message: "CI/CD Pipeline failed - check logs for media processing infrastructure issues"
+    - type: email
+      recipients:
+        - streaming-ops@mediaplatform.com
+
+# Rollback Strategy
+rollback:
+  automatic: true
+  conditions:
+    - deployment_failure
+    - integration_test_failure
+  steps:
+    - name: "Stop MediaLive channel"
+      command: "aws medialive stop-channel --channel-id ${MediaLiveChannelId} || true"
+    - name: "Destroy failed deployment"
+      command: "aws cloudformation delete-stack --stack-name TapStack-${ENVIRONMENT_SUFFIX}"
+    - name: "Wait for stack deletion"
+      command: "aws cloudformation wait stack-delete-complete --stack-name TapStack-${ENVIRONMENT_SUFFIX}"
+    - name: "Clean up S3 buckets"
+      command: "aws s3 rb s3://media-bucket-${ENVIRONMENT_SUFFIX} --force || true"
+
+# Resource Tags
+tags:
+  Environment: "pr7600"
+  ManagedBy: "CloudFormation"
+  Project: "MediaProcessingPipeline"
+  Application: "LiveVideoStreaming"
+  Compliance: "ContentDelivery"
+  CostCenter: "Streaming"
