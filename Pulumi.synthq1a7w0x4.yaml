@@ -1,0 +1,8 @@
+encryptionsalt: v1:ELnRv81GwRo=:v1:sxZeiqxZcfE3/bNA:/c+hsFABfsTuhSXh6EqWhtNXVkud8g==
+config:
+  cicd-pipeline:environmentSuffix: synthq1a7w0x4
+  cicd-pipeline:githubOwner: example-org
+  cicd-pipeline:githubRepo: example-app
+  cicd-pipeline:githubBranch: main
+  cicd-pipeline:githubToken:
+    secure: v1:X11rox+U84DzM3ly:oo5BE3sYSQwqcQ8VQNW0G8cCxWL/6VGqf39QpPfunUWyD0Q6c+RI
