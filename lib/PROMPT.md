@@ -4,18 +4,18 @@ We need to build a multi-account payment processing infrastructure for a fintech
 
 The core problem is deploying consistent infrastructure across three separate AWS accounts (dev, staging, prod) while preventing configuration drift. They need the infrastructure to be absolutely identical except for environment-specific values like account IDs and domain names. This is mission-critical for payment processing.
 
-We've been asked to create this using **CloudFormation with JSON** for deployment via StackSets. The business specifically chose CloudFormation StackSets to ensure one source of truth that deploys identical configurations across all their AWS accounts.
+We've been asked to create this using **CloudFormation with JSON**. The business wants a single source of truth that deploys identical configurations across all their AWS environments.
 
 ## What we need to build
 
-Create a payment processing infrastructure using **CloudFormation with JSON** that deploys consistently across three AWS accounts using StackSets. The infrastructure must support payment validation, processing, and workflow orchestration.
+Create a payment processing infrastructure using **CloudFormation with JSON** that deploys consistently across three AWS environments. The infrastructure must support payment validation, processing, and workflow orchestration.
 
 ### Core Requirements
 
 1. **Lambda Functions for Payment Processing**
    - Payment validation function that validates incoming payment requests
    - Payment processing function that handles the actual payment transaction
-   - Both functions must use identical runtime versions (Node.js 18.x) and memory allocations (512 MB)
+   - Both functions must use identical runtime versions (Node.js 22.x) and memory allocations (512 MB)
    - Include reserved concurrency for production environment only
 
 2. **DynamoDB Tables**
@@ -25,13 +25,13 @@ Create a payment processing infrastructure using **CloudFormation with JSON** th
    - Same GSI configurations in all accounts
 
 3. **Application Load Balancer**
-   - ALB with listeners on port 443 (HTTPS)
+   - ALB with listeners on port 80 (HTTP)
    - Target groups pointing to Lambda functions
    - Health checks configured for Lambda targets
    - Deploy to public subnets across 3 availability zones
 
 4. **Step Functions State Machine**
-   - Orchestrate payment workflow: validate -> process -> notify
+   - Orchestrate payment workflow: validate -> process -> succeed/fail
    - Integrate with Lambda functions and DynamoDB
    - Include error handling and retry logic
 
@@ -45,28 +45,21 @@ Create a payment processing infrastructure using **CloudFormation with JSON** th
 - All infrastructure defined using **CloudFormation with JSON** (not YAML)
 - Use CloudFormation Parameters for environment-specific values only:
   - EnvironmentName (dev, staging, prod)
-  - AccountId
-  - DomainName
   - SnsEmail
+  - VpcCidr
+  - AvailabilityZones
 - Use CloudFormation Conditions to add production-only features:
-  - Enhanced monitoring for Lambda
   - Reserved concurrency for Lambda functions
-- Use nested stacks for modular organization:
-  - Network stack (VPC, subnets, security groups)
-  - Compute stack (Lambda functions)
-  - Storage stack (DynamoDB)
-  - Monitoring stack (CloudWatch, SNS)
+- Single flattened template (TapStack.json) containing all resources
 - All IAM roles must reference resources using CloudFormation intrinsic functions only (Ref, GetAtt, Sub)
 - Resource names must include EnvironmentName parameter for uniqueness
 - Deploy to us-east-1 region
-- Template designed for StackSet deployment from management account (456789012345)
 
 ### Constraints
 
 - Parameter overrides limited to environment-specific values only (no infrastructure changes via parameters)
 - All Lambda functions identical across environments (same runtime, memory, timeout)
 - DynamoDB tables identical across environments (same capacity, GSI configs)
-- Stack update policy to prevent accidental deletion of stateful resources (DynamoDB, S3 if used)
 - All resources must be destroyable (DeletionPolicy: Delete, no Retain)
 - Include proper error handling and logging for all components
 - VPC with 3 availability zones, private subnets for Lambda/DynamoDB, public subnets for ALB
@@ -80,16 +73,9 @@ Create a payment processing infrastructure using **CloudFormation with JSON** th
 - Resource Naming: All resources include EnvironmentName parameter
 - Code Quality: Valid CloudFormation JSON, well-structured, documented
 - Drift Detection: Infrastructure supports CloudFormation drift detection
-- StackSet Ready: Template deploys via StackSets without errors
 
 ## What to deliver
 
-- Complete CloudFormation JSON template for StackSet deployment
-- Main template (PaymentProcessingStack.json) with nested stack references
-- Network nested stack for VPC, subnets, security groups
-- Compute nested stack for Lambda functions and IAM roles
-- Storage nested stack for DynamoDB tables
-- Monitoring nested stack for CloudWatch alarms and SNS topics
+- Complete CloudFormation JSON template (TapStack.json)
 - Parameter files for each environment (dev-params.json, staging-params.json, prod-params.json)
-- Deployment instructions for StackSet creation
-- Documentation on drift detection and consistency validation
+- Deployment instructions

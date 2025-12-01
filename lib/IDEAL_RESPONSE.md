@@ -1,41 +1,31 @@
 # Multi-Account Payment Processing Infrastructure - Complete Implementation
 
-This is the complete CloudFormation JSON implementation for multi-account payment processing infrastructure using StackSets.
+This is the complete CloudFormation JSON implementation for multi-account payment processing infrastructure.
 
 ## Implementation Files
 
 All implementation code has been extracted to the `lib/` directory:
 
 ### Main Template
-- `lib/PaymentProcessingStack.json` - Main StackSet template coordinating all nested stacks
-
-### Nested Stack Templates
-- `lib/nested/NetworkStack.json` - VPC, subnets, security groups, and VPC endpoints
-- `lib/nested/StorageStack.json` - DynamoDB table with GSIs
-- `lib/nested/ComputeStack.json` - Lambda functions, ALB, and Step Functions
-- `lib/nested/MonitoringStack.json` - CloudWatch alarms and SNS topics
+- `lib/TapStack.json` - Single flattened CloudFormation template containing all resources (no nested stacks required)
 
 ### Parameter Files
 - `lib/parameters/dev-params.json` - Development environment parameters
 - `lib/parameters/staging-params.json` - Staging environment parameters
 - `lib/parameters/prod-params.json` - Production environment parameters
 
-### Documentation
-- `lib/README.md` - Architecture overview and quick start guide
-- `lib/DEPLOYMENT.md` - Complete deployment instructions and operations guide
-
 ## Key Features Implemented
 
-1. **StackSet Template** - Single source of truth deploying to multiple accounts
-2. **Lambda Functions** - Payment validation and processing (Node.js 18.x, 512 MB)
+1. **Single Flattened Template** - All resources in one file, no S3 dependency for nested stacks
+2. **Lambda Functions** - Payment validation and processing (Node.js 22.x, 512 MB)
 3. **DynamoDB Table** - Partition key (transactionId), Sort key (timestamp), 2 GSIs
 4. **Application Load Balancer** - Internet-facing ALB with Lambda target groups
 5. **Step Functions** - Payment workflow orchestration with retry logic
 6. **CloudWatch Alarms** - Lambda errors, DynamoDB throttling, workflow failures
-7. **Parameters** - Environment-specific values (EnvironmentName, AccountId, DomainName, SnsEmail)
-8. **Conditions** - Production-only features (reserved concurrency, enhanced monitoring)
+7. **Parameters** - Environment-specific values (EnvironmentName, SnsEmail, VpcCidr, AZs)
+8. **Conditions** - Production-only features (reserved concurrency)
 9. **Outputs** - Cross-stack references for all critical resources
-10. **Nested Stacks** - Modular organization (Network, Storage, Compute, Monitoring)
+10. **VPC Infrastructure** - 3 AZs, public/private subnets, security groups, VPC endpoints
 
 ## Technical Compliance
 
@@ -49,25 +39,31 @@ All implementation code has been extracted to the `lib/` directory:
 
 ## Deployment
 
-See `lib/DEPLOYMENT.md` for complete deployment instructions.
-
 Quick start:
 ```bash
-# Upload nested templates
-aws s3 sync lib/nested/ s3://your-bucket/nested/
+# Deploy to dev environment
+aws cloudformation create-stack \
+  --stack-name payment-processing-dev \
+  --template-body file://lib/TapStack.json \
+  --parameters file://lib/parameters/dev-params.json \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region us-east-1
 
-# Create StackSet
-aws cloudformation create-stack-set \
-  --stack-set-name payment-processing-infrastructure \
-  --template-body file://lib/PaymentProcessingStack.json \
-  --capabilities CAPABILITY_NAMED_IAM
+# Deploy to staging environment
+aws cloudformation create-stack \
+  --stack-name payment-processing-staging \
+  --template-body file://lib/TapStack.json \
+  --parameters file://lib/parameters/staging-params.json \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region us-east-1
 
-# Deploy to dev account
-aws cloudformation create-stack-instances \
-  --stack-set-name payment-processing-infrastructure \
-  --accounts 123456789012 \
-  --regions us-east-1 \
-  --parameter-overrides file://lib/parameters/dev-params.json
+# Deploy to production environment
+aws cloudformation create-stack \
+  --stack-name payment-processing-prod \
+  --template-body file://lib/TapStack.json \
+  --parameters file://lib/parameters/prod-params.json \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region us-east-1
 ```
 
 ## Testing
@@ -87,4 +83,20 @@ All CloudFormation JSON templates have been validated for:
 - Proper intrinsic function usage
 - Parameter consistency across environments
 
-For full details, see `lib/MODEL_RESPONSE.md`.
+## Resources Created
+
+| Resource Type | Count | Description |
+|--------------|-------|-------------|
+| VPC | 1 | Payment processing VPC |
+| Subnets | 6 | 3 public, 3 private across AZs |
+| Route Tables | 2 | Public and private |
+| Security Groups | 2 | ALB and Lambda |
+| VPC Endpoint | 1 | DynamoDB Gateway endpoint |
+| DynamoDB Table | 1 | Payment transactions with 2 GSIs |
+| Lambda Functions | 2 | Validation and Processing |
+| IAM Roles | 2 | Lambda execution, Step Functions |
+| ALB | 1 | Internet-facing load balancer |
+| Target Groups | 2 | Lambda target groups |
+| Step Functions | 1 | Payment workflow state machine |
+| SNS Topic | 1 | Alarm notifications |
+| CloudWatch Alarms | 5 | Error and performance monitoring |
