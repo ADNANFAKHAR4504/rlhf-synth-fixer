@@ -16,5 +16,11 @@
     "EC2",
     "IAM",
     "KMS"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "kanishkah-turing",
+  "dockerS3Location": ""
 }
