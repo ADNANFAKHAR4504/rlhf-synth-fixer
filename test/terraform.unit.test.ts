@@ -50,20 +50,20 @@ describe('Terraform Stack Unit Tests: tap_stack.tf', () => {
     });
 
     test('AWS provider is required', () => {
-      expect(stackContent).toMatch(/aws\s*\{/);
+      expect(stackContent).toMatch(/aws\s*=?\s*\{/);
       expect(stackContent).toMatch(/source\s*=\s*["']hashicorp\/aws["']/);
       expect(stackContent).toMatch(/version\s*=\s*["']~>\s*5/);
     });
 
     test('Random provider is required', () => {
-      expect(stackContent).toMatch(/random\s*\{/);
-      const randomProviderMatch = stackContent.match(/random\s*\{[\s\S]*?source[\s\S]*?hashicorp\/random/);
+      expect(stackContent).toMatch(/random\s*=?\s*\{/);
+      const randomProviderMatch = stackContent.match(/random\s*=?\s*\{[\s\S]*?source[\s\S]*?hashicorp\/random/);
       expect(randomProviderMatch).toBeTruthy();
     });
 
     test('Archive provider is required', () => {
-      expect(stackContent).toMatch(/archive\s*\{/);
-      const archiveProviderMatch = stackContent.match(/archive\s*\{[\s\S]*?source[\s\S]*?hashicorp\/archive/);
+      expect(stackContent).toMatch(/archive\s*=?\s*\{/);
+      const archiveProviderMatch = stackContent.match(/archive\s*=?\s*\{[\s\S]*?source[\s\S]*?hashicorp\/archive/);
       expect(archiveProviderMatch).toBeTruthy();
     });
   });
@@ -143,9 +143,9 @@ describe('Terraform Stack Unit Tests: tap_stack.tf', () => {
 
     test('capacity_map is defined in locals', () => {
       expect(stackContent).toMatch(/capacity_map\s*=/);
-      expect(stackContent).toMatch(/capacity_map\s*=[\s\S]*?dev\s*\{/);
-      expect(stackContent).toMatch(/capacity_map\s*=[\s\S]*?staging\s*\{/);
-      expect(stackContent).toMatch(/capacity_map\s*=[\s\S]*?prod\s*\{/);
+      expect(stackContent).toMatch(/capacity_map\s*=[\s\S]*?dev\s*=?\s*\{/);
+      expect(stackContent).toMatch(/capacity_map\s*=[\s\S]*?staging\s*=?\s*\{/);
+      expect(stackContent).toMatch(/capacity_map\s*=[\s\S]*?prod\s*=?\s*\{/);
     });
 
     test('lambda_env_vars are defined in locals', () => {
