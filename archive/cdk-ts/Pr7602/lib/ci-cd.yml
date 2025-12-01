@@ -1,0 +1,197 @@
+# CI/CD Pipeline Configuration for HealthTech Patient Management Infrastructure
+# AWS CDK TypeScript Stack
+
+name: Healthcare CI/CD Pipeline
+
+# Pipeline orchestration (workflow simulation)
+workflow:
+  stages:
+    - validate
+    - build
+    - test
+    - deploy
+    - integration-test
+    - monitoring
+
+# Job Definitions
+jobs:
+  # Validation Stage
+  validate-infrastructure:
+    stage: validate
+    description: "Validate CDK infrastructure code and configuration"
+    steps:
+      - name: "Validate CDK syntax"
+        command: "cdk synth --validate-only"
+      - name: "Run TypeScript linting"
+        command: "npm run lint"
+      - name: "Run type checking"
+        command: "npx tsc --noEmit"
+      - name: "Validate metadata"
+        command: "node -e \"JSON.parse(require('fs').readFileSync('metadata.json'))\""
+
+  security-scan:
+    stage: validate
+    description: "Security and vulnerability scanning"
+    steps:
+      - name: "Scan dependencies"
+        command: "npm audit"
+      - name: "Check for secrets"
+        command: "trufflehog scan ."
+      - name: "Run container security scan"
+        command: "trivy fs --security-checks vuln,config ."
+
+  # Build Stage
+  build-infrastructure:
+    stage: build
+    dependencies:
+      - validate-infrastructure
+    description: "Build and synthesize CDK stack"
+    steps:
+      - name: "Install dependencies"
+        command: "npm ci"
+      - name: "Compile TypeScript"
+        command: "npm run build"
+      - name: "Synthesize CDK stack"
+        command: "cdk synth"
+      - name: "Generate CloudFormation template"
+        command: "cdk synth > cdk.out/template.yaml"
+
+  # Test Stage
+  unit-tests:
+    stage: test
+    dependencies:
+      - build-infrastructure
+    description: "Run unit tests with coverage"
+    steps:
+      - name: "Run Jest with coverage"
+        command: "npm test -- --coverage --coverageReporters=json-summary"
+      - name: "Validate coverage threshold"
+        command: "node -e \"const c=require('./coverage/coverage-summary.json'); if(c.total.lines.pct<80) process.exit(1)\""
+    coverage_threshold: 80
+
+  # Deploy Stage
+  deploy-infrastructure:
+    stage: deploy
+    dependencies:
+      - unit-tests
+    description: "Deploy CDK stack to AWS"
+    environment: pr7602
+    steps:
+      - name: "CDK bootstrap (if needed)"
+        command: "cdk bootstrap"
+      - name: "Deploy stack"
+        command: "cdk deploy --require-approval never --context environmentSuffix=pr7602"
+      - name: "Capture outputs"
+        command: "cdk deploy --outputs-file cfn-outputs/outputs.json"
+    outputs:
+      - VpcId
+      - ClusterName
+      - ServiceName
+      - LoadBalancerDns
+      - DatabaseEndpoint
+      - DatabaseSecretArn
+      - FileSystemId
+      - PipelineArn
+
+  # Integration Test Stage
+  integration-tests:
+    stage: integration-test
+    dependencies:
+      - deploy-infrastructure
+    description: "Run integration tests against deployed infrastructure"
+    steps:
+      - name: "Wait for resources"
+        command: "sleep 30"
+      - name: "Test VPC connectivity"
+        command: "aws ec2 describe-vpcs --vpc-ids ${VpcId}"
+      - name: "Test RDS accessibility"
+        command: "aws rds describe-db-instances --query 'DBInstances[?DBInstanceIdentifier==`healthcare-db-pr7602`]'"
+      - name: "Test ECS cluster"
+        command: "aws ecs describe-clusters --clusters ${ClusterName}"
+      - name: "Test ECS service"
+        command: "aws ecs describe-services --cluster ${ClusterName} --services ${ServiceName}"
+      - name: "Test EFS file system"
+        command: "aws efs describe-file-systems --file-system-id ${FileSystemId}"
+      - name: "Test Load Balancer health"
+        command: "curl -s http://${LoadBalancerDns}/health | jq"
+      - name: "Verify secrets in Secrets Manager"
+        command: "aws secretsmanager describe-secret --secret-id ${DatabaseSecretArn}"
+      - name: "Test CodePipeline status"
+        command: "aws codepipeline get-pipeline-state --name healthcare-pipeline-pr7602"
+
+  # Monitoring Setup
+  setup-monitoring:
+    stage: monitoring
+    dependencies:
+      - integration-tests
+    description: "Configure CloudWatch monitoring and alarms"
+    steps:
+      - name: "Create CloudWatch dashboards"
+        command: "aws cloudwatch put-dashboard --dashboard-name healthcare-pr7602"
+      - name: "Setup RDS alarms"
+        command: "aws cloudwatch put-metric-alarm --alarm-name rds-cpu-high-pr7602"
+      - name: "Setup ECS alarms"
+        command: "aws cloudwatch put-metric-alarm --alarm-name ecs-task-count-pr7602"
+      - name: "Setup ALB alarms"
+        command: "aws cloudwatch put-metric-alarm --alarm-name alb-unhealthy-hosts-pr7602"
+
+# Environment Configuration
+environments:
+  pr7602:
+    region: us-east-1
+    account: "342597974367"
+    variables:
+      ENVIRONMENT_SUFFIX: "pr7602"
+      AWS_REGION: "us-east-1"
+
+# Quality Gates
+quality_gates:
+  - name: "Code Coverage"
+    threshold: 80
+    metric: "coverage.percent_covered"
+
+  - name: "Security Score"
+    threshold: 0
+    metric: "vulnerabilities.high"
+
+  - name: "Build Success"
+    threshold: 0
+    metric: "build.failed_steps"
+
+  - name: "Deployment Success"
+    threshold: 0
+    metric: "deployment.errors"
+
+# Notification Configuration
+notifications:
+  on_success:
+    - type: github-comment
+      message: "CI/CD Pipeline completed successfully"
+
+  on_failure:
+    - type: github-comment
+      message: "CI/CD Pipeline failed - check logs"
+    - type: email
+      recipients:
+        - ops-team@healthtech.com
+
+# Rollback Strategy
+rollback:
+  automatic: true
+  conditions:
+    - deployment_failure
+    - integration_test_failure
+  steps:
+    - name: "Destroy failed deployment"
+      command: "cdk destroy --force"
+    - name: "Clean up resources"
+      command: "aws cloudformation delete-stack --stack-name TapStack-pr7602"
+
+# Resource Tags
+tags:
+  Environment: "pr7602"
+  ManagedBy: "CDK"
+  Project: "HealthTechSolutions"
+  Application: "PatientManagement"
+  Compliance: "HIPAA"
+  CostCenter: "Engineering"
