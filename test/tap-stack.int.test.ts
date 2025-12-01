@@ -295,11 +295,12 @@ describe('TapStack Infrastructure Integration Tests - Data Flow', () => {
       expect(secretResponse.SecretString).toBeDefined();
       const secret = JSON.parse(secretResponse.SecretString!);
       
-      // Verify credential structure
+      // RDS managed secrets contain username and password
+      // Host and port are retrieved from RDS endpoint outputs
       expect(secret.username).toBeDefined();
       expect(secret.password).toBeDefined();
-      expect(secret.host).toBeDefined();
-      expect(secret.port).toBeDefined();
+      expect(typeof secret.username).toBe('string');
+      expect(typeof secret.password).toBe('string');
     });
 
     test('should verify database endpoint is configured', async () => {
