@@ -7,7 +7,7 @@ Produce a single `TapStack.yml` that provisions a brand-new, production-ready AW
 * Create a **new** dedicated VPC (do not point to an existing VPC ID).
 * All logical and physical resource names use the pattern `projectname-resource-type-ENVIRONMENT_SUFFIX`.
 * Every resource name in the stack **must** include `ENVIRONMENT_SUFFIX` to prevent collisions across deployments.
-* Enforce a safe naming regex for `EnvironmentSuffix` instead of hardcoded `AllowedValues`.
+* Enforce a safe naming regex for `EnvironmentSuffix` instead of hardcoded `AllowedValues.
 
   * Example: `AllowedPattern: '^[a-z0-9-]{3,32}$'` with a helpful `ConstraintDescription`.
 * Use parameters for project-wide naming and CIDRs (e.g., `ProjectName`, `EnvironmentSuffix`, `VpcCidr`, etc.), with secure, sensible defaults.
