@@ -1001,15 +1001,19 @@ Resources:
             Resource: !Sub '${S3LogBucket.Arn}/alb-access-logs/AWSLogs/${AWS::AccountId}/*'
             Condition:
               StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
                 aws:SourceAccount: !Ref AWS::AccountId
               ArnLike:
                 aws:SourceArn: !Sub 'arn:aws:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:loadbalancer/*'
           - Sid: AllowALBAccessLogsBucketAcl
             Effect: Allow
             Principal:
-              Service: elasticloadbalancing.amazonaws.com
+              Service: delivery.logs.elb.amazonaws.com
             Action: 's3:GetBucketAcl'
             Resource: !GetAtt S3LogBucket.Arn
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
 
   # ========================================
   # CLOUDWATCH LOG GROUPS
