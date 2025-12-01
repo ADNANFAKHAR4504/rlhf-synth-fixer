@@ -13,5 +13,13 @@
     "Data Replication",
     "Disaster Recovery"
   ],
-  "aws_services": []
+  "aws_services": [
+    "CloudFormation",
+    "S3",
+    "DynamoDB",
+    "RDS",
+    "Route 53"
+  ],
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342"
 }

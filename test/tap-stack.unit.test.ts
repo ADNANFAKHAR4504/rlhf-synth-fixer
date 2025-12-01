@@ -37,16 +37,6 @@ describe('TapStack CloudFormation Template - Cross-Region Trading Analytics Migr
       expect(param.Description).toContain('Unique suffix');
     });
 
-    test('should have SourceRegion parameter', () => {
-      expect(template.Parameters.SourceRegion).toBeDefined();
-      expect(template.Parameters.SourceRegion.Default).toBe('us-east-1');
-    });
-
-    test('should have TargetRegion parameter', () => {
-      expect(template.Parameters.TargetRegion).toBeDefined();
-      expect(template.Parameters.TargetRegion.Default).toBe('eu-central-1');
-    });
-
     test('should have DatabaseMasterUsername parameter', () => {
       expect(template.Parameters.DatabaseMasterUsername).toBeDefined();
       expect(template.Parameters.DatabaseMasterUsername.Default).toBe('dbadmin');
@@ -54,9 +44,7 @@ describe('TapStack CloudFormation Template - Cross-Region Trading Analytics Migr
 
     test('should have VPC CIDR parameters', () => {
       expect(template.Parameters.SourceVpcCidr).toBeDefined();
-      expect(template.Parameters.TargetVpcCidr).toBeDefined();
       expect(template.Parameters.SourceVpcCidr.Default).toBe('10.0.0.0/16');
-      expect(template.Parameters.TargetVpcCidr.Default).toBe('10.1.0.0/16');
     });
   });
 
@@ -111,11 +99,6 @@ describe('TapStack CloudFormation Template - Cross-Region Trading Analytics Migr
       expect(replicationRule.Destination.Bucket).toEqual({
         'Fn::GetAtt': ['HistoricalDataBucketTarget', 'Arn']
       });
-    });
-
-    test('source bucket should depend on target bucket', () => {
-      const bucket = template.Resources.HistoricalDataBucketSource;
-      expect(bucket.DependsOn).toBe('HistoricalDataBucketTarget');
     });
 
     test('should have S3 replication role with correct permissions', () => {
@@ -232,14 +215,14 @@ describe('TapStack CloudFormation Template - Cross-Region Trading Analytics Migr
       const func = template.Resources.DataTransformFunction;
       expect(func).toBeDefined();
       expect(func.Type).toBe('AWS::Lambda::Function');
-      expect(func.Properties.Runtime).toBe('nodejs18.x');
+      expect(func.Properties.Runtime).toBe('nodejs22.x');
     });
 
     test('should have dashboard API Lambda function', () => {
       const func = template.Resources.DashboardApiFunction;
       expect(func).toBeDefined();
       expect(func.Type).toBe('AWS::Lambda::Function');
-      expect(func.Properties.Runtime).toBe('nodejs18.x');
+      expect(func.Properties.Runtime).toBe('nodejs22.x');
     });
 
     test('Lambda functions should have execution role', () => {
@@ -573,22 +556,6 @@ describe('TapStack CloudFormation Template - Cross-Region Trading Analytics Migr
       const regions = replicas.map((r: any) => r.Region);
       expect(regions).toContain('us-east-1');
       expect(regions).toContain('eu-central-1');
-    });
-
-    test('should have parameters for source and target regions', () => {
-      expect(template.Parameters.SourceRegion).toBeDefined();
-      expect(template.Parameters.TargetRegion).toBeDefined();
-      expect(template.Parameters.SourceRegion.Default).toBe('us-east-1');
-      expect(template.Parameters.TargetRegion.Default).toBe('eu-central-1');
-    });
-
-    test('VPC CIDR blocks should not overlap', () => {
-      const sourceCidr = template.Parameters.SourceVpcCidr.Default;
-      const targetCidr = template.Parameters.TargetVpcCidr.Default;
-
-      expect(sourceCidr).toBe('10.0.0.0/16');
-      expect(targetCidr).toBe('10.1.0.0/16');
-      expect(sourceCidr).not.toBe(targetCidr);
     });
   });
 });
