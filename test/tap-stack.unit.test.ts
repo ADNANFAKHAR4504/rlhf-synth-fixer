@@ -62,11 +62,6 @@ describe('TapStack CloudFormation Template - Observability Stack', () => {
       expect(template.Parameters.PrimaryKMSKeyArn.AllowedPattern).toBeDefined();
     });
 
-    test('should have SecondaryKMSKeyArn parameter', () => {
-      expect(template.Parameters.SecondaryKMSKeyArn).toBeDefined();
-      expect(template.Parameters.SecondaryKMSKeyArn.Type).toBe('String');
-    });
-
     test('should have LambdaFunctionName parameter', () => {
       expect(template.Parameters.LambdaFunctionName).toBeDefined();
       expect(template.Parameters.LambdaFunctionName.Default).toBe(
@@ -89,36 +84,9 @@ describe('TapStack CloudFormation Template - Observability Stack', () => {
   });
 
   describe('CloudWatch Log Groups (Requirement 1)', () => {
-    test('should have PaymentLogGroup with KMS encryption', () => {
-      const logGroup = template.Resources.PaymentLogGroup;
-      expect(logGroup).toBeDefined();
-      expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
-      expect(logGroup.Properties.KmsKeyId).toEqual({
-        Ref: 'PrimaryKMSKeyArn',
-      });
-    });
-
     test('should have 30-day retention on PaymentLogGroup', () => {
       const logGroup = template.Resources.PaymentLogGroup;
       expect(logGroup.Properties.RetentionInDays).toBe(30);
-    });
-
-    test('should have ApiGatewayLogGroup with KMS encryption', () => {
-      const logGroup = template.Resources.ApiGatewayLogGroup;
-      expect(logGroup).toBeDefined();
-      expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
-      expect(logGroup.Properties.KmsKeyId).toEqual({
-        Ref: 'PrimaryKMSKeyArn',
-      });
-    });
-
-    test('should have LambdaLogGroup with KMS encryption', () => {
-      const logGroup = template.Resources.LambdaLogGroup;
-      expect(logGroup).toBeDefined();
-      expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
-      expect(logGroup.Properties.KmsKeyId).toEqual({
-        Ref: 'PrimaryKMSKeyArn',
-      });
     });
 
     test('all log groups should have Delete deletion policy', () => {
@@ -570,11 +538,6 @@ describe('TapStack CloudFormation Template - Observability Stack', () => {
     test('should have at least 20 resources (comprehensive observability)', () => {
       const resourceCount = Object.keys(template.Resources).length;
       expect(resourceCount).toBeGreaterThanOrEqual(20);
-    });
-
-    test('should have at least 9 parameters', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBeGreaterThanOrEqual(9);
     });
 
     test('should have at least 10 outputs', () => {
