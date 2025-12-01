@@ -1,0 +1,24 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-12-01T00:33:56.290097",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "Aurora",
+    "Route53",
+    "Lambda",
+    "VPC",
+    "CloudWatch",
+    "SNS",
+    "Secrets Manager",
+    "IAM"
+  ],
+  "po_id": "101912899",
+  "training_quality": 10
+}
