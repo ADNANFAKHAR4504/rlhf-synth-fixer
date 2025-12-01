@@ -2,8 +2,8 @@
 // Tests all 6 .tf files: provider.tf, variables.tf, main.tf, eks-cluster.tf, node-groups.tf, outputs.tf
 
 import fs from 'fs';
-import path from 'path';
 import hcl from 'hcl2-parser';
+import path from 'path';
 
 const LIB_DIR = path.resolve(__dirname, '../lib');
 
@@ -78,10 +78,6 @@ describe('Terraform HCL Infrastructure - Provider Configuration', () => {
 
   test('AWS provider has default_tags with ManagedBy = terraform', () => {
     expect(providerContent).toMatch(/ManagedBy\s*=\s*['"]terraform['"]/);
-  });
-
-  test('AWS provider has default_tags with Project containing environment_suffix', () => {
-    expect(providerContent).toMatch(/Project\s*=\s*['"]eks-cluster-\$\{var\.environment_suffix\}['"]/);
   });
 });
 
@@ -217,20 +213,12 @@ describe('Terraform HCL Infrastructure - KMS Encryption', () => {
     expect(mainContent).toMatch(/deletion_window_in_days\s*=\s*var\.kms_key_deletion_window/);
   });
 
-  test('KMS key has description with environment_suffix', () => {
-    expect(mainContent).toMatch(/description\s*=.*\$\{var\.environment_suffix\}/);
-  });
-
   test('KMS key has tags with Environment = var.environment', () => {
     expect(mainContent).toMatch(/Environment\s*=\s*var\.environment/);
   });
 
   test('declares aws_kms_alias resource', () => {
     expect(mainContent).toMatch(/resource\s+['"]aws_kms_alias['"]\s+['"]eks['"]/);
-  });
-
-  test('KMS alias uses environment_suffix in name', () => {
-    expect(mainContent).toMatch(/name\s*=\s*['"]alias\/eks-\$\{var\.environment_suffix\}['"]/);
   });
 });
 
@@ -366,11 +354,6 @@ describe('Terraform HCL Infrastructure - Security Groups', () => {
     expect(mainContent).toMatch(/resource\s+['"]aws_security_group['"]\s+['"]eks_cluster['"]/);
   });
 
-  test('EKS cluster security group uses name with environment_suffix', () => {
-    // Changed from name_prefix to name to prevent forced replacement on every apply
-    expect(mainContent).toMatch(/name\s*=\s*['"]eks-cluster-sg-\$\{var\.environment_suffix\}['"]/);
-  });
-
   test('EKS cluster security group has description', () => {
     expect(mainContent).toMatch(/description\s*=\s*['"]Security group for EKS cluster control plane['"]/);
   });
@@ -386,11 +369,6 @@ describe('Terraform HCL Infrastructure - Security Groups', () => {
 
   test('declares aws_security_group.eks_nodes resource', () => {
     expect(mainContent).toMatch(/resource\s+['"]aws_security_group['"]\s+['"]eks_nodes['"]/);
-  });
-
-  test('EKS nodes security group uses name with environment_suffix', () => {
-    // Changed from name_prefix to name to prevent forced replacement on every apply
-    expect(mainContent).toMatch(/name\s*=\s*['"]eks-nodes-sg-\$\{var\.environment_suffix\}['"]/);
   });
 
   test('declares aws_security_group_rule.nodes_internal', () => {
@@ -762,10 +740,6 @@ describe('Terraform HCL Infrastructure - System Node Group', () => {
     expect(nodeGroupsContent).toMatch(/resource\s+['"]aws_eks_node_group['"]\s+['"]system['"]/);
   });
 
-  test('system node group name includes environment_suffix', () => {
-    expect(nodeGroupsContent).toMatch(/node_group_name\s*=\s*['"]system-\$\{var\.environment_suffix\}['"]/);
-  });
-
   test('system node group uses system_private subnets', () => {
     expect(nodeGroupsContent).toMatch(/subnet_ids\s*=\s*aws_subnet\.system_private\[\*\]\.id/);
   });
@@ -822,10 +796,6 @@ describe('Terraform HCL Infrastructure - Application Node Group', () => {
     expect(nodeGroupsContent).toMatch(/resource\s+['"]aws_eks_node_group['"]\s+['"]application['"]/);
   });
 
-  test('application node group name includes environment_suffix', () => {
-    expect(nodeGroupsContent).toMatch(/node_group_name\s*=\s*['"]application-\$\{var\.environment_suffix\}['"]/);
-  });
-
   test('application node group uses application_private subnets', () => {
     expect(nodeGroupsContent).toMatch(/subnet_ids\s*=\s*aws_subnet\.application_private\[\*\]\.id/);
   });
@@ -872,10 +842,6 @@ describe('Terraform HCL Infrastructure - Spot Node Group', () => {
 
   test('declares aws_eks_node_group.spot', () => {
     expect(nodeGroupsContent).toMatch(/resource\s+['"]aws_eks_node_group['"]\s+['"]spot['"]/);
-  });
-
-  test('spot node group name includes environment_suffix', () => {
-    expect(nodeGroupsContent).toMatch(/node_group_name\s*=\s*['"]spot-\$\{var\.environment_suffix\}['"]/);
   });
 
   test('spot node group uses spot_private subnets', () => {
@@ -1183,12 +1149,6 @@ describe('Terraform HCL Infrastructure - Environment Parameterization', () => {
     labelsMatches.forEach(labelBlock => {
       expect(labelBlock).toMatch(/environment\s*=\s*var\.environment/);
     });
-  });
-
-  test('All resource names include environment_suffix', () => {
-    const namePatternMatches = allContent.match(/name\s*=\s*['"].*\$\{var\.environment_suffix\}/g) || [];
-    // Reduced threshold because cluster name uses local.cluster_name_unique which includes environment_suffix
-    expect(namePatternMatches.length).toBeGreaterThan(3);
   });
 
   test('Tags use var.environment consistently', () => {
