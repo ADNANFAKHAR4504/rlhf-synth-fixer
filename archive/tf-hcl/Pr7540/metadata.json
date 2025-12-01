@@ -11,6 +11,30 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": ["VPC", "ECS", "Fargate", "Aurora", "RDS", "ALB", "WAF", "CloudFront", "S3", "KMS", "Secrets Manager", "CloudWatch", "Auto Scaling", "SNS", "IAM", "NAT Gateway", "Internet Gateway"],
-  "training_quality": 9.5
+  "aws_services": [
+    "VPC",
+    "ECS",
+    "Fargate",
+    "Aurora",
+    "RDS",
+    "ALB",
+    "WAF",
+    "CloudFront",
+    "S3",
+    "KMS",
+    "Secrets Manager",
+    "CloudWatch",
+    "Auto Scaling",
+    "SNS",
+    "IAM",
+    "NAT Gateway",
+    "Internet Gateway"
+  ],
+  "training_quality": 9.5,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
 }
