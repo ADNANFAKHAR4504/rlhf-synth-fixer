@@ -2,9 +2,10 @@
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "ECS Blue-Green Deployment with Auto-Scaling and Circuit Breaker",
   "Parameters": {
-    "environmentSuffix": {
+    "EnvironmentSuffix": {
       "Type": "String",
       "Description": "Environment suffix for resource naming to support multiple PR environments",
+      "Default": "dev",
       "AllowedPattern": "^[a-z0-9-]+$",
       "ConstraintDescription": "Must contain only lowercase alphanumeric characters and hyphens"
     },
@@ -49,7 +50,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "vpc-${environmentSuffix}"
+              "Fn::Sub": "vpc-${EnvironmentSuffix}"
             }
           }
         ]
@@ -62,7 +63,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "igw-${environmentSuffix}"
+              "Fn::Sub": "igw-${EnvironmentSuffix}"
             }
           }
         ]
@@ -99,7 +100,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "public-subnet-1-${environmentSuffix}"
+              "Fn::Sub": "public-subnet-1-${EnvironmentSuffix}"
             }
           }
         ]
@@ -125,7 +126,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "public-subnet-2-${environmentSuffix}"
+              "Fn::Sub": "public-subnet-2-${EnvironmentSuffix}"
             }
           }
         ]
@@ -151,7 +152,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "public-subnet-3-${environmentSuffix}"
+              "Fn::Sub": "public-subnet-3-${EnvironmentSuffix}"
             }
           }
         ]
@@ -176,7 +177,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-subnet-1-${environmentSuffix}"
+              "Fn::Sub": "private-subnet-1-${EnvironmentSuffix}"
             }
           }
         ]
@@ -201,7 +202,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-subnet-2-${environmentSuffix}"
+              "Fn::Sub": "private-subnet-2-${EnvironmentSuffix}"
             }
           }
         ]
@@ -226,7 +227,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-subnet-3-${environmentSuffix}"
+              "Fn::Sub": "private-subnet-3-${EnvironmentSuffix}"
             }
           }
         ]
@@ -241,7 +242,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "nat-eip-${environmentSuffix}"
+              "Fn::Sub": "nat-eip-${EnvironmentSuffix}"
             }
           }
         ]
@@ -263,7 +264,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "nat-gateway-${environmentSuffix}"
+              "Fn::Sub": "nat-gateway-${EnvironmentSuffix}"
             }
           }
         ]
@@ -279,7 +280,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "public-rt-${environmentSuffix}"
+              "Fn::Sub": "public-rt-${EnvironmentSuffix}"
             }
           }
         ]
@@ -341,7 +342,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-rt-${environmentSuffix}"
+              "Fn::Sub": "private-rt-${EnvironmentSuffix}"
             }
           }
         ]
@@ -402,7 +403,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "public-nacl-${environmentSuffix}"
+              "Fn::Sub": "public-nacl-${EnvironmentSuffix}"
             }
           }
         ]
@@ -523,7 +524,7 @@
       "Properties": {
         "GroupDescription": "Security group for Application Load Balancer",
         "GroupName": {
-          "Fn::Sub": "alb-sg-${environmentSuffix}"
+          "Fn::Sub": "alb-sg-${EnvironmentSuffix}"
         },
         "VpcId": {
           "Ref": "VPC"
@@ -558,7 +559,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "alb-sg-${environmentSuffix}"
+              "Fn::Sub": "alb-sg-${EnvironmentSuffix}"
             }
           }
         ]
@@ -569,7 +570,7 @@
       "Properties": {
         "GroupDescription": "Security group for ECS tasks",
         "GroupName": {
-          "Fn::Sub": "ecs-task-sg-${environmentSuffix}"
+          "Fn::Sub": "ecs-task-sg-${EnvironmentSuffix}"
         },
         "VpcId": {
           "Ref": "VPC"
@@ -598,7 +599,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "ecs-task-sg-${environmentSuffix}"
+              "Fn::Sub": "ecs-task-sg-${EnvironmentSuffix}"
             }
           }
         ]
@@ -608,7 +609,7 @@
       "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
       "Properties": {
         "Name": {
-          "Fn::Sub": "app-alb-${environmentSuffix}"
+          "Fn::Sub": "app-alb-${EnvironmentSuffix}"
         },
         "Type": "application",
         "Scheme": "internet-facing",
@@ -633,7 +634,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "app-alb-${environmentSuffix}"
+              "Fn::Sub": "app-alb-${EnvironmentSuffix}"
             }
           }
         ]
@@ -643,7 +644,7 @@
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
       "Properties": {
         "Name": {
-          "Fn::Sub": "tg-blue-${environmentSuffix}"
+          "Fn::Sub": "tg-blue-${EnvironmentSuffix}"
         },
         "Port": {
           "Ref": "ContainerPort"
@@ -670,7 +671,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "tg-blue-${environmentSuffix}"
+              "Fn::Sub": "tg-blue-${EnvironmentSuffix}"
             }
           }
         ]
@@ -680,7 +681,7 @@
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
       "Properties": {
         "Name": {
-          "Fn::Sub": "tg-green-${environmentSuffix}"
+          "Fn::Sub": "tg-green-${EnvironmentSuffix}"
         },
         "Port": {
           "Ref": "ContainerPort"
@@ -707,7 +708,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "tg-green-${environmentSuffix}"
+              "Fn::Sub": "tg-green-${EnvironmentSuffix}"
             }
           }
         ]
@@ -789,7 +790,7 @@
       "Type": "AWS::ECS::Cluster",
       "Properties": {
         "ClusterName": {
-          "Fn::Sub": "ecs-cluster-${environmentSuffix}"
+          "Fn::Sub": "ecs-cluster-${EnvironmentSuffix}"
         },
         "ClusterSettings": [
           {
@@ -817,7 +818,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "ecs-cluster-${environmentSuffix}"
+              "Fn::Sub": "ecs-cluster-${EnvironmentSuffix}"
             }
           }
         ]
@@ -827,7 +828,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "ecs-task-execution-role-${environmentSuffix}"
+          "Fn::Sub": "ecs-task-execution-role-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -866,7 +867,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "ecs-task-execution-role-${environmentSuffix}"
+              "Fn::Sub": "ecs-task-execution-role-${EnvironmentSuffix}"
             }
           }
         ]
@@ -876,7 +877,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "ecs-task-role-${environmentSuffix}"
+          "Fn::Sub": "ecs-task-role-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -894,7 +895,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "ecs-task-role-${environmentSuffix}"
+              "Fn::Sub": "ecs-task-role-${EnvironmentSuffix}"
             }
           }
         ]
@@ -904,7 +905,7 @@
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
         "LogGroupName": {
-          "Fn::Sub": "/ecs/app-${environmentSuffix}"
+          "Fn::Sub": "/ecs/app-${EnvironmentSuffix}"
         },
         "RetentionInDays": 30
       }
@@ -913,7 +914,7 @@
       "Type": "AWS::ECS::TaskDefinition",
       "Properties": {
         "Family": {
-          "Fn::Sub": "app-task-${environmentSuffix}"
+          "Fn::Sub": "app-task-${EnvironmentSuffix}"
         },
         "NetworkMode": "awsvpc",
         "RequiresCompatibilities": [
@@ -952,7 +953,7 @@
               {
                 "Name": "ENVIRONMENT",
                 "Value": {
-                  "Ref": "environmentSuffix"
+                  "Ref": "EnvironmentSuffix"
                 }
               }
             ],
@@ -990,7 +991,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "app-task-${environmentSuffix}"
+              "Fn::Sub": "app-task-${EnvironmentSuffix}"
             }
           }
         ]
@@ -1000,7 +1001,7 @@
       "Type": "AWS::ServiceDiscovery::PrivateDnsNamespace",
       "Properties": {
         "Name": {
-          "Fn::Sub": "services-${environmentSuffix}.local"
+          "Fn::Sub": "services-${EnvironmentSuffix}.local"
         },
         "Vpc": {
           "Ref": "VPC"
@@ -1009,7 +1010,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "sd-namespace-${environmentSuffix}"
+              "Fn::Sub": "sd-namespace-${EnvironmentSuffix}"
             }
           }
         ]
@@ -1040,7 +1041,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "blue-sd-${environmentSuffix}"
+              "Fn::Sub": "blue-sd-${EnvironmentSuffix}"
             }
           }
         ]
@@ -1071,7 +1072,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "green-sd-${environmentSuffix}"
+              "Fn::Sub": "green-sd-${EnvironmentSuffix}"
             }
           }
         ]
@@ -1084,7 +1085,7 @@
       ],
       "Properties": {
         "ServiceName": {
-          "Fn::Sub": "blue-service-${environmentSuffix}"
+          "Fn::Sub": "blue-service-${EnvironmentSuffix}"
         },
         "Cluster": {
           "Ref": "ECSCluster"
@@ -1149,7 +1150,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "blue-service-${environmentSuffix}"
+              "Fn::Sub": "blue-service-${EnvironmentSuffix}"
             }
           }
         ]
@@ -1162,7 +1163,7 @@
       ],
       "Properties": {
         "ServiceName": {
-          "Fn::Sub": "green-service-${environmentSuffix}"
+          "Fn::Sub": "green-service-${EnvironmentSuffix}"
         },
         "Cluster": {
           "Ref": "ECSCluster"
@@ -1227,7 +1228,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "green-service-${environmentSuffix}"
+              "Fn::Sub": "green-service-${EnvironmentSuffix}"
             }
           }
         ]
@@ -1239,7 +1240,7 @@
         "MaxCapacity": 10,
         "MinCapacity": 3,
         "ResourceId": {
-          "Fn::Sub": "service/${ECSCluster}/blue-service-${environmentSuffix}"
+          "Fn::Sub": "service/${ECSCluster}/blue-service-${EnvironmentSuffix}"
         },
         "RoleARN": {
           "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService"
@@ -1253,7 +1254,7 @@
       "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
       "Properties": {
         "PolicyName": {
-          "Fn::Sub": "blue-cpu-scaling-${environmentSuffix}"
+          "Fn::Sub": "blue-cpu-scaling-${EnvironmentSuffix}"
         },
         "PolicyType": "TargetTrackingScaling",
         "ScalingTargetId": {
@@ -1273,7 +1274,7 @@
       "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
       "Properties": {
         "PolicyName": {
-          "Fn::Sub": "blue-memory-scaling-${environmentSuffix}"
+          "Fn::Sub": "blue-memory-scaling-${EnvironmentSuffix}"
         },
         "PolicyType": "TargetTrackingScaling",
         "ScalingTargetId": {
@@ -1295,7 +1296,7 @@
         "MaxCapacity": 10,
         "MinCapacity": 3,
         "ResourceId": {
-          "Fn::Sub": "service/${ECSCluster}/green-service-${environmentSuffix}"
+          "Fn::Sub": "service/${ECSCluster}/green-service-${EnvironmentSuffix}"
         },
         "RoleARN": {
           "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService"
@@ -1309,7 +1310,7 @@
       "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
       "Properties": {
         "PolicyName": {
-          "Fn::Sub": "green-cpu-scaling-${environmentSuffix}"
+          "Fn::Sub": "green-cpu-scaling-${EnvironmentSuffix}"
         },
         "PolicyType": "TargetTrackingScaling",
         "ScalingTargetId": {
@@ -1329,7 +1330,7 @@
       "Type": "AWS::ApplicationAutoScaling::ScalingPolicy",
       "Properties": {
         "PolicyName": {
-          "Fn::Sub": "green-memory-scaling-${environmentSuffix}"
+          "Fn::Sub": "green-memory-scaling-${EnvironmentSuffix}"
         },
         "PolicyType": "TargetTrackingScaling",
         "ScalingTargetId": {
@@ -1349,14 +1350,14 @@
       "Type": "AWS::SNS::Topic",
       "Properties": {
         "TopicName": {
-          "Fn::Sub": "ecs-alarms-${environmentSuffix}"
+          "Fn::Sub": "ecs-alarms-${EnvironmentSuffix}"
         },
         "DisplayName": "ECS Unhealthy Target Alarms",
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "ecs-alarms-${environmentSuffix}"
+              "Fn::Sub": "ecs-alarms-${EnvironmentSuffix}"
             }
           }
         ]
@@ -1366,7 +1367,7 @@
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": {
-          "Fn::Sub": "blue-unhealthy-targets-${environmentSuffix}"
+          "Fn::Sub": "blue-unhealthy-targets-${EnvironmentSuffix}"
         },
         "AlarmDescription": "Alarm when blue target group has 2 or more unhealthy targets",
         "MetricName": "UnHealthyHostCount",
@@ -1408,7 +1409,7 @@
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": {
-          "Fn::Sub": "green-unhealthy-targets-${environmentSuffix}"
+          "Fn::Sub": "green-unhealthy-targets-${EnvironmentSuffix}"
         },
         "AlarmDescription": "Alarm when green target group has 2 or more unhealthy targets",
         "MetricName": "UnHealthyHostCount",
