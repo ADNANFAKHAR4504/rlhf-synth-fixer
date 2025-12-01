@@ -1,6 +1,6 @@
 {
-  "platform": "CloudFormation",
-  "language": "JSON",
+  "platform": "cfn",
+  "language": "json",
   "complexity": "expert",
   "team": "synth",
   "turn_type": "single",
@@ -18,5 +18,7 @@
     "CloudWatch",
     "EC2"
   ],
-  "training_quality": 8
+  "training_quality": 8,
+  "author": "mayanksethi-turing",
+  "reviewer": "balasl342"
 }
