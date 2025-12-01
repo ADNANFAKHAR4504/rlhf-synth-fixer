@@ -770,7 +770,7 @@
       "DeletionPolicy": "Delete",
       "Properties": {
         "Engine": "aurora-postgresql",
-        "EngineVersion": "14.7",
+        "EngineVersion": "15.4",
         "DatabaseName": "paymentdb",
         "MasterUsername": "dbadmin",
         "MasterUserPassword": "ChangeMe123456!",
