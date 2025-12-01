@@ -1,0 +1,15 @@
+env                  = "dev"
+aws_region           = "us-east-1"
+project_name         = "tap-logistics"
+vpc_cidr             = "10.0.0.0/16"
+public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
+private_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
+enable_nat           = true
+stream_mode          = "ON_DEMAND"
+billing_mode         = "PAY_PER_REQUEST"
+cache_node_type      = "cache.t3.micro"
+instance_class       = "db.t3.medium"
+log_retention_days   = 3
+lifecycle_days       = 7
+backup_retention     = 3
+pr_number            = "pr7512"
