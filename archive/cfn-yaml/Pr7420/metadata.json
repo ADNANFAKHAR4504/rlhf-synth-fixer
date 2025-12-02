@@ -47,5 +47,11 @@
     "AlarmRdsCpuHigh",
     "SNSTopicAlarms",
     "SNSSubscription"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
 }
