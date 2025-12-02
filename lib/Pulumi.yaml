@@ -1,4 +1,4 @@
-name: ecs-optimization-p8y1m9z7
+name: TapStack
 runtime:
   name: nodejs
   options:
