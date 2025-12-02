@@ -1,7 +1,7 @@
 import * as pulumi from '@pulumi/pulumi';
 
 describe('AWS Compliance Scanner Infrastructure', () => {
-  let stack: typeof import('../tap-stack');
+  let stack: typeof import('../lib/tap-stack');
 
   beforeAll(async () => {
     // Mock Pulumi runtime
@@ -11,9 +11,14 @@ describe('AWS Compliance Scanner Infrastructure', () => {
           id: string;
           state: any;
         } {
+          const state = { ...args.inputs };
+          // Add ARN for Lambda functions
+          if (args.type === 'aws:lambda/function:Function') {
+            state.arn = `arn:aws:lambda:us-east-1:123456789012:function:${args.inputs.name}`;
+          }
           return {
             id: args.inputs.name ? `${args.name}_id` : args.name,
-            state: args.inputs,
+            state: state,
           };
         },
         call: function (args: pulumi.runtime.MockCallArgs) {
@@ -30,19 +35,19 @@ describe('AWS Compliance Scanner Infrastructure', () => {
     pulumi.runtime.setConfig('TapStack:awsRegion', 'us-east-1');
 
     // Import the stack
-    stack = require('../tap-stack');
+    stack = require('../lib/tap-stack');
   });
 
   describe('S3 Compliance Report Bucket', () => {
-    it('should create S3 bucket with correct naming', (done) => {
-      stack.complianceReportBucketName.apply((bucketName) => {
+    it('should create S3 bucket with correct naming', done => {
+      stack.complianceReportBucketName.apply(bucketName => {
         expect(bucketName).toBe('compliance-reports-test');
         done();
       });
     });
 
-    it('should export bucket name', (done) => {
-      stack.complianceReportBucketName.apply((bucketName) => {
+    it('should export bucket name', done => {
+      stack.complianceReportBucketName.apply(bucketName => {
         expect(bucketName).toBeDefined();
         done();
       });
@@ -50,16 +55,16 @@ describe('AWS Compliance Scanner Infrastructure', () => {
   });
 
   describe('Lambda Function', () => {
-    it('should export Lambda function name', (done) => {
-      stack.complianceScannerLambdaName.apply((lambdaName) => {
+    it('should export Lambda function name', done => {
+      stack.complianceScannerLambdaName.apply(lambdaName => {
         expect(lambdaName).toBeDefined();
         expect(lambdaName).toBe('compliance-scanner-test');
         done();
       });
     });
 
-    it('should export Lambda ARN', (done) => {
-      stack.complianceScannerLambdaArn.apply((lambdaArn) => {
+    it('should export Lambda ARN', done => {
+      stack.complianceScannerLambdaArn.apply(lambdaArn => {
         expect(lambdaArn).toBeDefined();
         done();
       });
@@ -67,8 +72,8 @@ describe('AWS Compliance Scanner Infrastructure', () => {
   });
 
   describe('CloudWatch Dashboard', () => {
-    it('should export dashboard URL', (done) => {
-      stack.complianceDashboardUrl.apply((dashboardUrl) => {
+    it('should export dashboard URL', done => {
+      stack.complianceDashboardUrl.apply(dashboardUrl => {
         expect(dashboardUrl).toBeDefined();
         expect(dashboardUrl).toContain('cloudwatch');
         expect(dashboardUrl).toContain('compliance-dashboard-test');
@@ -78,8 +83,8 @@ describe('AWS Compliance Scanner Infrastructure', () => {
   });
 
   describe('CloudWatch Log Group', () => {
-    it('should export log group name', (done) => {
-      stack.lambdaLogGroupName.apply((logGroupName) => {
+    it('should export log group name', done => {
+      stack.lambdaLogGroupName.apply(logGroupName => {
         expect(logGroupName).toBeDefined();
         expect(logGroupName).toBe('/aws/lambda/compliance-scanner-test');
         done();
@@ -88,7 +93,7 @@ describe('AWS Compliance Scanner Infrastructure', () => {
   });
 
   describe('Resource Tagging', () => {
-    it('should have environment suffix in all resource names', (done) => {
+    it('should have environment suffix in all resource names', done => {
       let count = 0;
       const checkDone = () => {
         count++;
@@ -111,8 +116,8 @@ describe('AWS Compliance Scanner Infrastructure', () => {
   });
 
   describe('Configuration', () => {
-    it('should use correct AWS region', (done) => {
-      stack.complianceDashboardUrl.apply((dashboardUrl) => {
+    it('should use correct AWS region', done => {
+      stack.complianceDashboardUrl.apply(dashboardUrl => {
         expect(dashboardUrl).toContain('us-east-1');
         done();
       });

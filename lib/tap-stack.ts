@@ -6,27 +6,31 @@ const environmentSuffix = config.require('environmentSuffix');
 const awsRegion = config.get('awsRegion') || 'us-east-1';
 
 // S3 Bucket for Compliance Reports
-const complianceReportBucket = new aws.s3.BucketV2(`compliance-reports-${environmentSuffix}`, {
-  bucket: `compliance-reports-${environmentSuffix}`,
-  tags: {
-    Name: `compliance-reports-${environmentSuffix}`,
-    Environment: environmentSuffix,
-    ManagedBy: 'Pulumi',
-  },
-});
+const complianceReportBucket = new aws.s3.BucketV2(
+  `compliance-reports-${environmentSuffix}`,
+  {
+    bucket: `compliance-reports-${environmentSuffix}`,
+    tags: {
+      Name: `compliance-reports-${environmentSuffix}`,
+      Environment: environmentSuffix,
+      ManagedBy: 'Pulumi',
+    },
+  }
+);
 
 // Block public access to compliance reports bucket
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const complianceReportBucketPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(
-  `compliance-reports-public-access-block-${environmentSuffix}`,
-  {
-    bucket: complianceReportBucket.id,
-    blockPublicAcls: true,
-    blockPublicPolicy: true,
-    ignorePublicAcls: true,
-    restrictPublicBuckets: true,
-  }
-);
+const complianceReportBucketPublicAccessBlock =
+  new aws.s3.BucketPublicAccessBlock(
+    `compliance-reports-public-access-block-${environmentSuffix}`,
+    {
+      bucket: complianceReportBucket.id,
+      blockPublicAcls: true,
+      blockPublicPolicy: true,
+      ignorePublicAcls: true,
+      restrictPublicBuckets: true,
+    }
+  );
 
 // Enable versioning for compliance reports
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -42,41 +46,45 @@ const complianceReportBucketVersioning = new aws.s3.BucketVersioningV2(
 
 // Enable server-side encryption for compliance reports
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const complianceReportBucketEncryption = new aws.s3.BucketServerSideEncryptionConfigurationV2(
-  `compliance-reports-encryption-${environmentSuffix}`,
-  {
-    bucket: complianceReportBucket.id,
-    rules: [
-      {
-        applyServerSideEncryptionByDefault: {
-          sseAlgorithm: 'AES256',
+const complianceReportBucketEncryption =
+  new aws.s3.BucketServerSideEncryptionConfigurationV2(
+    `compliance-reports-encryption-${environmentSuffix}`,
+    {
+      bucket: complianceReportBucket.id,
+      rules: [
+        {
+          applyServerSideEncryptionByDefault: {
+            sseAlgorithm: 'AES256',
+          },
+          bucketKeyEnabled: true,
         },
-        bucketKeyEnabled: true,
-      },
-    ],
-  }
-);
+      ],
+    }
+  );
 
 // IAM Role for Lambda
-const lambdaRole = new aws.iam.Role(`compliance-scanner-role-${environmentSuffix}`, {
-  assumeRolePolicy: JSON.stringify({
-    Version: '2012-10-17',
-    Statement: [
-      {
-        Action: 'sts:AssumeRole',
-        Effect: 'Allow',
-        Principal: {
-          Service: 'lambda.amazonaws.com',
+const lambdaRole = new aws.iam.Role(
+  `compliance-scanner-role-${environmentSuffix}`,
+  {
+    assumeRolePolicy: JSON.stringify({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Action: 'sts:AssumeRole',
+          Effect: 'Allow',
+          Principal: {
+            Service: 'lambda.amazonaws.com',
+          },
         },
-      },
-    ],
-  }),
-  tags: {
-    Name: `compliance-scanner-role-${environmentSuffix}`,
-    Environment: environmentSuffix,
-    ManagedBy: 'Pulumi',
-  },
-});
+      ],
+    }),
+    tags: {
+      Name: `compliance-scanner-role-${environmentSuffix}`,
+      Environment: environmentSuffix,
+      ManagedBy: 'Pulumi',
+    },
+  }
+);
 
 // Attach basic Lambda execution policy
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -84,7 +92,8 @@ const lambdaBasicExecutionAttachment = new aws.iam.RolePolicyAttachment(
   `compliance-scanner-basic-execution-${environmentSuffix}`,
   {
     role: lambdaRole.name,
-    policyArn: 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+    policyArn:
+      'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
   }
 );
 
@@ -172,15 +181,18 @@ const lambdaPolicyAttachment = new aws.iam.RolePolicyAttachment(
 );
 
 // CloudWatch Log Group for Lambda
-const lambdaLogGroup = new aws.cloudwatch.LogGroup(`compliance-scanner-logs-${environmentSuffix}`, {
-  name: `/aws/lambda/compliance-scanner-${environmentSuffix}`,
-  retentionInDays: 30,
-  tags: {
-    Name: `compliance-scanner-logs-${environmentSuffix}`,
-    Environment: environmentSuffix,
-    ManagedBy: 'Pulumi',
-  },
-});
+const lambdaLogGroup = new aws.cloudwatch.LogGroup(
+  `compliance-scanner-logs-${environmentSuffix}`,
+  {
+    name: `/aws/lambda/compliance-scanner-${environmentSuffix}`,
+    retentionInDays: 30,
+    tags: {
+      Name: `compliance-scanner-logs-${environmentSuffix}`,
+      Environment: environmentSuffix,
+      ManagedBy: 'Pulumi',
+    },
+  }
+);
 
 // Lambda Function for Compliance Scanning
 const complianceScannerLambda = new aws.lambda.Function(
@@ -687,7 +699,9 @@ async function publishMetrics(findings) {
       ManagedBy: 'Pulumi',
     },
   },
-  { dependsOn: [lambdaLogGroup, lambdaPolicyAttachment, complianceReportBucket] }
+  {
+    dependsOn: [lambdaLogGroup, lambdaPolicyAttachment, complianceReportBucket],
+  }
 );
 
 // EventBridge Rule to trigger Lambda daily
