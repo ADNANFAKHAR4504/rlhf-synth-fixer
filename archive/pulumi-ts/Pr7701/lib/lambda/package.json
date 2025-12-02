@@ -1,0 +1,14 @@
+{
+  "name": "webhook-unified-handler",
+  "version": "1.0.0",
+  "description": "Unified webhook processing handler for Lambda",
+  "main": "webhook-unified.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.400.0",
+    "@aws-sdk/lib-dynamodb": "^3.400.0",
+    "@aws-sdk/client-sqs": "^3.400.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
