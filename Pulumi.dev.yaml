@@ -1,0 +1,4 @@
+config:
+  aws:region: us-east-1
+  pulumi-infra:environmentSuffix: dev-test
+  pulumi-infra:availabilityZones: us-east-1a,us-east-1b,us-east-1c

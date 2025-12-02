@@ -1,0 +1,11 @@
+name: pulumi-infra
+runtime:
+  name: python
+  options:
+    virtualenv: venv
+description: Multi-VPC Transit Gateway Architecture for Payment Platform
+main: tap.py
+config:
+  pulumi:tags:
+    value:
+      Project: payment-platform
