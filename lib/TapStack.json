@@ -8,40 +8,6 @@
       "AllowedPattern": "^[a-zA-Z0-9-]+$",
       "ConstraintDescription": "Must contain only alphanumeric characters and hyphens"
     },
-    "VpcId": {
-      "Type": "AWS::EC2::VPC::Id",
-      "Description": "VPC ID where the Aurora cluster will be deployed"
-    },
-    "PrivateSubnet1": {
-      "Type": "AWS::EC2::Subnet::Id",
-      "Description": "First private subnet ID for Aurora deployment"
-    },
-    "PrivateSubnet2": {
-      "Type": "AWS::EC2::Subnet::Id",
-      "Description": "Second private subnet ID for Aurora deployment"
-    },
-    "PrivateSubnet3": {
-      "Type": "AWS::EC2::Subnet::Id",
-      "Description": "Third private subnet ID for Aurora deployment"
-    },
-    "ApplicationSubnetCidr1": {
-      "Type": "String",
-      "Description": "First application subnet CIDR block allowed to access database",
-      "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$",
-      "ConstraintDescription": "Must be a valid CIDR range"
-    },
-    "ApplicationSubnetCidr2": {
-      "Type": "String",
-      "Description": "Second application subnet CIDR block allowed to access database",
-      "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$",
-      "ConstraintDescription": "Must be a valid CIDR range"
-    },
-    "ApplicationSubnetCidr3": {
-      "Type": "String",
-      "Description": "Third application subnet CIDR block allowed to access database",
-      "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$",
-      "ConstraintDescription": "Must be a valid CIDR range"
-    },
     "MasterUsername": {
       "Type": "String",
       "Description": "Master username for the Aurora cluster",
@@ -54,6 +20,7 @@
     "MasterPassword": {
       "Type": "String",
       "Description": "Master password for the Aurora cluster (minimum 8 characters)",
+      "Default": "TempPassword123!",
       "NoEcho": true,
       "MinLength": 8,
       "MaxLength": 41,
@@ -61,6 +28,121 @@
     }
   },
   "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-vpc-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-private-subnet-1-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-private-subnet-2-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet3": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.3.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-private-subnet-3-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
     "DatabaseEncryptionKey": {
       "Type": "AWS::KMS::Key",
       "Properties": {
@@ -140,34 +222,28 @@
         },
         "GroupDescription": "Security group for Aurora MySQL cluster allowing access from application subnets",
         "VpcId": {
-          "Ref": "VpcId"
+          "Ref": "VPC"
         },
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
             "FromPort": 3306,
             "ToPort": 3306,
-            "CidrIp": {
-              "Ref": "ApplicationSubnetCidr1"
-            },
+            "CidrIp": "10.0.1.0/24",
             "Description": "MySQL access from application subnet 1"
           },
           {
             "IpProtocol": "tcp",
             "FromPort": 3306,
             "ToPort": 3306,
-            "CidrIp": {
-              "Ref": "ApplicationSubnetCidr2"
-            },
+            "CidrIp": "10.0.2.0/24",
             "Description": "MySQL access from application subnet 2"
           },
           {
             "IpProtocol": "tcp",
             "FromPort": 3306,
             "ToPort": 3306,
-            "CidrIp": {
-              "Ref": "ApplicationSubnetCidr3"
-            },
+            "CidrIp": "10.0.3.0/24",
             "Description": "MySQL access from application subnet 3"
           }
         ],
