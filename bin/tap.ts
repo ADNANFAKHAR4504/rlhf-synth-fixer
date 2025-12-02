@@ -54,7 +54,7 @@ const stack = new TapStack(
 );
 
 // Export stack outputs
-export const vpcId = stack.vpcId;
-export const ec2InstanceId = stack.ec2InstanceId;
-export const snsTopicArn = stack.snsTopicArn;
-export const s3BucketName = stack.s3BucketName;
+export const VpcId = stack.vpcId;
+export const Ec2InstanceId = stack.ec2InstanceId;
+export const SnsTopicArn = stack.snsTopicArn;
+export const S3BucketName = stack.s3BucketName;
