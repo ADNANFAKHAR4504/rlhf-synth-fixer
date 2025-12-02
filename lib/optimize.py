@@ -270,7 +270,7 @@ class ECSFargateOptimizer:
                 waiter.wait(
                     cluster=cluster_arn,
                     services=[service_arn],
-                    WaiterConfig={'Delay': 15, 'MaxAttempts': 40}
+                    WaiterConfig={'Delay': 15, 'MaxAttempts': 80}
                 )
                 logger.info("Service stabilized successfully")
 
