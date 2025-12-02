@@ -27,7 +27,7 @@
     "IAM",
     "KMS"
   ],
-  "region": "eu-west-2",
+  "region": "eu-west-1",
   "training_quality": 10,
   "author": "iamarpit-turing",
   "reviewer": "adnan-turing"

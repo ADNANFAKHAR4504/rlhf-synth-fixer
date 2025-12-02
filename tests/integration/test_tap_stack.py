@@ -19,7 +19,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     def setUpClass(cls):
         """Set up integration test with live stack."""
         cls.environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
-        cls.region = os.getenv('AWS_REGION', 'eu-west-2')
+        cls.region = os.getenv('AWS_REGION', 'eu-west-1')
 
         # Initialize AWS clients
         cls.ec2_client = boto3.client('ec2', region_name=cls.region)
