@@ -281,23 +281,23 @@ class TestTapStackResources(unittest.TestCase):
         self.assertTrue(hasattr(stack, 'config_bucket_policy'))
         self.assertIsNotNone(stack.config_bucket_policy)
 
-    def test_tap_stack_creates_config_recorder(self):
-        """Test that AWS Config recorder is created."""
+    def test_tap_stack_skips_config_recorder_by_default(self):
+        """Test that AWS Config recorder is skipped by default to avoid AWS limit."""
         stack = TapStack('test-stack', TapStackArgs(environment_suffix='test'))
         self.assertTrue(hasattr(stack, 'config_recorder'))
-        self.assertIsNotNone(stack.config_recorder)
+        self.assertIsNone(stack.config_recorder)
 
-    def test_tap_stack_creates_config_delivery_channel(self):
-        """Test that AWS Config delivery channel is created."""
+    def test_tap_stack_skips_config_delivery_channel_by_default(self):
+        """Test that AWS Config delivery channel is skipped by default."""
         stack = TapStack('test-stack', TapStackArgs(environment_suffix='test'))
         self.assertTrue(hasattr(stack, 'config_delivery_channel'))
-        self.assertIsNotNone(stack.config_delivery_channel)
+        self.assertIsNone(stack.config_delivery_channel)
 
-    def test_tap_stack_creates_config_recorder_status(self):
-        """Test that AWS Config recorder status is created."""
+    def test_tap_stack_skips_config_recorder_status_by_default(self):
+        """Test that AWS Config recorder status is skipped by default."""
         stack = TapStack('test-stack', TapStackArgs(environment_suffix='test'))
         self.assertTrue(hasattr(stack, 'config_recorder_status'))
-        self.assertIsNotNone(stack.config_recorder_status)
+        self.assertIsNone(stack.config_recorder_status)
 
     def test_tap_stack_creates_vpc_endpoint_security_group(self):
         """Test that VPC endpoint security group is created."""
@@ -379,9 +379,10 @@ class TestTapStackResources(unittest.TestCase):
 
         # Monitoring and compliance
         self.assertIsNotNone(stack.log_group)
-        self.assertIsNotNone(stack.config_recorder)
-        self.assertIsNotNone(stack.config_delivery_channel)
-        self.assertIsNotNone(stack.config_recorder_status)
+        # Config recorder is skipped by default to avoid AWS limit of 1 per region
+        self.assertIsNone(stack.config_recorder)
+        self.assertIsNone(stack.config_delivery_channel)
+        self.assertIsNone(stack.config_recorder_status)
         self.assertIsNotNone(stack.config_role)
         self.assertIsNotNone(stack.config_bucket)
         self.assertIsNotNone(stack.config_bucket_policy)
@@ -389,6 +390,29 @@ class TestTapStackResources(unittest.TestCase):
         # VPC Endpoints
         self.assertIsNotNone(stack.s3_vpc_endpoint)
         self.assertIsNotNone(stack.dynamodb_vpc_endpoint)
+
+
+class TestTapStackWithConfigRecorder(unittest.TestCase):
+    """Test cases for TapStack with config recorder enabled."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        pulumi.runtime.set_mocks(MyMocks())
+
+    @patch('lib.tap_stack.pulumi.Config')
+    def test_tap_stack_creates_config_recorder_when_enabled(self, mock_config_class):
+        """Test that AWS Config recorder is created when enabled via config."""
+        mock_config = MagicMock()
+        mock_config.get_bool.return_value = True
+        mock_config.get.return_value = "us-east-1"
+        mock_config_class.return_value = mock_config
+
+        stack = TapStack('test-stack', TapStackArgs(environment_suffix='test'))
+
+        self.assertTrue(hasattr(stack, 'config_recorder'))
+        self.assertIsNotNone(stack.config_recorder)
+        self.assertIsNotNone(stack.config_delivery_channel)
+        self.assertIsNotNone(stack.config_recorder_status)
 
 
 if __name__ == '__main__':
