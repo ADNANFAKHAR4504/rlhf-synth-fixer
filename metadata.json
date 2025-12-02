@@ -1,5 +1,5 @@
 {
-  "platform": "Pulumi",
+  "platform": "pulumi",
   "language": "ts",
   "complexity": "hard",
   "turn_type": "single",
