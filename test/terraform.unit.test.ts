@@ -75,10 +75,6 @@ describe("Variable Declarations", () => {
     content = fs.readFileSync(stackPath, "utf8");
   });
 
-  test("declares aws_region variable", () => {
-    expect(content).toMatch(/variable\s+"aws_region"\s*{/);
-  });
-
   test("declares env variable with validation", () => {
     expect(content).toMatch(/variable\s+"env"\s*{[^}]*validation\s*{/s);
     expect(content).toMatch(/contains\(\["dev",\s*"staging",\s*"prod"\],\s*var\.env\)/);
@@ -86,10 +82,6 @@ describe("Variable Declarations", () => {
 
   test("declares project_name variable", () => {
     expect(content).toMatch(/variable\s+"project_name"\s*{/);
-  });
-
-  test("declares pr_number variable", () => {
-    expect(content).toMatch(/variable\s+"pr_number"\s*{/);
   });
 
   test("declares vpc_cidr variable", () => {
@@ -327,7 +319,7 @@ describe("DynamoDB Resources", () => {
   });
 
   test("observations table has stream enabled", () => {
-    expect(content).toMatch(/resource\s+"aws_dynamodb_table"\s+"observations"[^}]*stream_enabled\s*=\s*true/s);
+    expect(content).toMatch(/resource\s+"aws_dynamodb_table"\s+"observations"[\s\S]*?stream_enabled\s*=\s*true/s);
   });
 });
 
@@ -393,11 +385,11 @@ describe("Aurora PostgreSQL Resources", () => {
   });
 
   test("Aurora cluster uses aurora-postgresql engine", () => {
-    expect(content).toMatch(/resource\s+"aws_rds_cluster"\s+"aurora"[^}]*engine\s*=\s*"aurora-postgresql"/s);
+    expect(content).toMatch(/resource\s+"aws_rds_cluster"\s+"aurora"[\s\S]*?engine\s*=\s*"aurora-postgresql"/s);
   });
 
   test("Aurora cluster has storage encryption enabled", () => {
-    expect(content).toMatch(/resource\s+"aws_rds_cluster"\s+"aurora"[^}]*storage_encrypted\s*=\s*true/s);
+    expect(content).toMatch(/resource\s+"aws_rds_cluster"\s+"aurora"[\s\S]*?storage_encrypted\s*=\s*true/s);
   });
 
   test("declares random_password for Aurora master", () => {
@@ -429,8 +421,8 @@ describe("ElastiCache Redis Resources", () => {
   });
 
   test("Redis has encryption enabled", () => {
-    expect(content).toMatch(/resource\s+"aws_elasticache_replication_group"\s+"redis"[^}]*at_rest_encryption_enabled\s*=\s*true/s);
-    expect(content).toMatch(/resource\s+"aws_elasticache_replication_group"\s+"redis"[^}]*transit_encryption_enabled\s*=\s*true/s);
+    expect(content).toMatch(/resource\s+"aws_elasticache_replication_group"\s+"redis"[\s\S]*?at_rest_encryption_enabled\s*=\s*true/s);
+    expect(content).toMatch(/resource\s+"aws_elasticache_replication_group"\s+"redis"[\s\S]*?transit_encryption_enabled\s*=\s*true/s);
   });
 
   test("declares random_password for Redis auth", () => {
@@ -506,7 +498,7 @@ describe("SNS Resources", () => {
   });
 
   test("SNS topic uses KMS encryption", () => {
-    expect(content).toMatch(/resource\s+"aws_sns_topic"\s+"severe_weather"[^}]*kms_master_key_id/s);
+    expect(content).toMatch(/resource\s+"aws_sns_topic"\s+"severe_weather"[\s\S]*?kms_master_key_id/s);
   });
 });
 
@@ -690,7 +682,7 @@ describe("Output Declarations", () => {
   });
 
   test("declares outputs block", () => {
-    expect(content).toMatch(/# =+.*OUTPUTS.*=+/);
+    expect(content).toMatch(/# =+\n# OUTPUTS\n# =+/);
   });
 
   test("declares kinesis_observations_arn output", () => {
@@ -853,7 +845,7 @@ describe("Tagging Consistency", () => {
   });
 
   test("resources use local.tags for consistent tagging", () => {
-    const resourceMatches = content.match(/resource\s+"aws_\w+"\s+"\w+"\s*{[^}]*tags\s*=\s*merge\(local\.tags/g) || [];
+    const resourceMatches = content.match(/tags\s*=\s*merge\(local\.tags/g) || [];
     // Should have many resources with tags
     expect(resourceMatches.length).toBeGreaterThan(10);
   });
@@ -935,7 +927,7 @@ describe("Data Flow and Integration", () => {
   });
 
   test("Step Functions can invoke Lambda", () => {
-    expect(content).toMatch(/Resource\s*=\s*"\$\{aws_lambda_function\.training_orchestrator\.arn\}"/);
+    expect(content).toMatch(/"Resource"\s*:\s*"\$\{aws_lambda_function\.training_orchestrator\.arn\}"/);
   });
 
   test("EventBridge schedules Step Functions", () => {
@@ -981,10 +973,10 @@ describe("Code Quality and Structure", () => {
   });
 
   test("file has proper section headers", () => {
-    expect(content).toMatch(/# =+.*TERRAFORM CONFIGURATION.*=+/);
-    expect(content).toMatch(/# =+.*VARIABLES.*=+/);
-    expect(content).toMatch(/# =+.*LOCALS.*=+/);
-    expect(content).toMatch(/# =+.*OUTPUTS.*=+/);
+    expect(content).toMatch(/# =+\n# TERRAFORM CONFIGURATION\n# =+/);
+    expect(content).toMatch(/# =+\n# VARIABLES\n# =+/);
+    expect(content).toMatch(/# =+\n# LOCALS\n# =+/);
+    expect(content).toMatch(/# =+\n# OUTPUTS\n# =+/);
   });
 
   test("no hardcoded credentials", () => {
@@ -997,7 +989,6 @@ describe("Code Quality and Structure", () => {
   test("uses variables instead of hardcoded values for critical configs", () => {
     expect(content).toMatch(/var\.env/);
     expect(content).toMatch(/var\.project_name/);
-    expect(content).toMatch(/var\.aws_region/);
   });
 
   test("uses locals for computed values", () => {

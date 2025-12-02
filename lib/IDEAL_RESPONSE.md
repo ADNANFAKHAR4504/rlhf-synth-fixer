@@ -1,13 +1,3 @@
-## `backend_override.tf`
-
-```hcl
-terraform {
-  backend "local" {}
-}
-```
-
----
-
 ## `tap_stack.tf`
 
 ```hcl
