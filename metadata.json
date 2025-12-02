@@ -11,11 +11,15 @@
     "Web Application Deployment"
   ],
   "aws_services": [
+    "VPC",
+    "EC2",
+    "ASG",
+    "ALB",
+    "RDS",
     "S3 Bucket",
-    "CloudFormation",
-    "Lambda",
-    "EventBridge",
-    "CloudWatch LogGroup",
-    "VPC"
+    "IAM",
+    "CloudWatch",
+    "SSM Parameter Store",
+    "Secrets Manager"
   ]
 }
