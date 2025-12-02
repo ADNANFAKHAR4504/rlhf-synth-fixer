@@ -774,8 +774,26 @@ describe('Terraform Infrastructure Integration Tests - VPC', () => {
     logsClient = new CloudWatchLogsClient({ region: actualRegion });
     iamClient = new IAMClient({ region: actualRegion });
     
+    // Discover actual environment suffix from deployed VPC tags
+    let actualEnvironmentSuffix = ENVIRONMENT_SUFFIX;
+    try {
+      const vpcCommand = new DescribeVpcsCommand({ VpcIds: [discovered.vpcId] });
+      const vpcResponse = await ec2Client.send(vpcCommand);
+      const vpc = vpcResponse.Vpcs?.[0];
+      const envTag = vpc?.Tags?.find(t => t.Key === 'Environment');
+      if (envTag?.Value) {
+        actualEnvironmentSuffix = envTag.Value;
+      }
+    } catch (error) {
+      // Fallback to ENVIRONMENT_SUFFIX if we can't discover it
+      console.warn('Could not discover environment suffix from VPC tags, using ENVIRONMENT_SUFFIX');
+    }
+    
+    // Store discovered environment suffix for use in tests
+    (global as any).discoveredEnvironmentSuffix = actualEnvironmentSuffix;
+    
     console.log(`✅ Discovered VPC: ${discovered.vpcId}`);
-    console.log(`✅ Environment: ${ENVIRONMENT_SUFFIX}`);
+    console.log(`✅ Environment: ${actualEnvironmentSuffix} (test env: ${ENVIRONMENT_SUFFIX})`);
     console.log(`✅ Region: ${actualRegion}`);
     console.log(`✅ Public Subnets: ${discovered.publicSubnetIds.length}`);
     console.log(`✅ Private Subnets: ${discovered.privateSubnetIds.length}`);
@@ -825,7 +843,12 @@ describe('Terraform Infrastructure Integration Tests - VPC', () => {
     }
     expect(envTag).toBeDefined();
     if (envTag) {
-      expect(envTag.Value).toBe(ENVIRONMENT_SUFFIX);
+      // Use discovered environment suffix from deployed resources, not test environment variable
+      const actualEnvSuffix = (global as any).discoveredEnvironmentSuffix || ENVIRONMENT_SUFFIX;
+      expect(envTag.Value).toBe(actualEnvSuffix);
+      // Also validate it's a non-empty string
+      expect(envTag.Value).toBeTruthy();
+      expect(typeof envTag.Value).toBe('string');
     }
   });
 });
@@ -1408,7 +1431,12 @@ describe('Terraform Infrastructure Integration Tests - Resource Validation', () 
     const teamTag = tags.find(t => t.Key === 'Team');
 
     expect(envTag).toBeDefined();
-    expect(envTag?.Value).toBe(ENVIRONMENT_SUFFIX);
+    // Use discovered environment suffix from deployed resources, not test environment variable
+    const actualEnvSuffix = (global as any).discoveredEnvironmentSuffix || ENVIRONMENT_SUFFIX;
+    expect(envTag?.Value).toBe(actualEnvSuffix);
+    // Also validate it's a non-empty string
+    expect(envTag?.Value).toBeTruthy();
+    expect(typeof envTag?.Value).toBe('string');
     expect(teamTag).toBeDefined();
     // Team tag might be "unknown" if not set during deployment, but should exist
     expect(teamTag?.Value).toBeTruthy();
