@@ -22,5 +22,6 @@
     "NAT Gateway"
   ],
   "region": "us-east-1",
+  "author": "mayanksethi-turing",
   "training_quality": 10
 }
