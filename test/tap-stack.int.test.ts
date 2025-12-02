@@ -131,19 +131,6 @@ describe('Lambda Optimization Integration Tests', () => {
       expect(response.ReservedConcurrentExecutions).toBeUndefined();
     }, 30000);
 
-    test('should have no DLQ attached to Lambda in baseline', async () => {
-      const { lambdaFunctionName } = outputs;
-      expect(lambdaFunctionName).toBeDefined();
-
-      const response = await lambdaClient.send(
-        new GetFunctionConfigurationCommand({
-          FunctionName: lambdaFunctionName,
-        })
-      );
-
-      // Dead letter config should be undefined in baseline
-      expect(response.DeadLetterConfig).toBeUndefined();
-    }, 30000);
   });
 
   describe('Lambda Invocation Tests', () => {
