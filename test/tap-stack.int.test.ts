@@ -1,19 +1,18 @@
 import {
-  LambdaClient,
-  GetFunctionCommand,
-  GetFunctionConfigurationCommand,
-  InvokeCommand,
-} from '@aws-sdk/client-lambda';
-import {
-  IAMClient,
-  GetRoleCommand,
-  GetRolePolicyCommand,
-  ListAttachedRolePoliciesCommand,
-} from '@aws-sdk/client-iam';
-import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
+import {
+  GetRoleCommand,
+  IAMClient,
+  ListAttachedRolePoliciesCommand
+} from '@aws-sdk/client-iam';
+import {
+  GetFunctionCommand,
+  GetFunctionConfigurationCommand,
+  InvokeCommand,
+  LambdaClient,
+} from '@aws-sdk/client-lambda';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -70,12 +69,9 @@ describe('Lambda Function Optimization - Integration Tests', () => {
         FunctionName: outputs.lambdaFunctionName,
       });
       const functionDetails = await lambdaClient.send(command);
-      if (functionDetails.Concurrency) {
-        expect(functionDetails.Concurrency.ReservedConcurrentExecutions).toBeGreaterThan(0);
-      } else {
-        // Concurrency might not be set, which is also acceptable
-        expect(true).toBe(true);
-      }
+      // Reserved concurrency should be configured (set to 10 to respect AWS account limits)
+      expect(functionDetails.Concurrency).toBeDefined();
+      expect(functionDetails.Concurrency?.ReservedConcurrentExecutions).toBe(10);
     });
 
     it('should have X-Ray tracing enabled', () => {
@@ -91,7 +87,9 @@ describe('Lambda Function Optimization - Integration Tests', () => {
     });
 
     it('should not have AWS_REGION in environment variables', () => {
-      // AWS_REGION is a reserved environment variable and should not be set
+      // AWS_REGION is automatically provided by the Lambda runtime environment
+      // Setting it manually as an environment variable is not allowed and will cause deployment errors
+      // The Lambda service injects AWS_REGION at runtime based on the function's deployed region
       expect(functionConfig.Environment.Variables.AWS_REGION).toBeUndefined();
     });
 

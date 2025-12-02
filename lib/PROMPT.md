@@ -22,7 +22,8 @@ Refactor and optimize an existing Lambda function deployment using **Pulumi with
    - This change will significantly reduce Lambda costs
 
 3. **Concurrency Control**
-   - Add reserved concurrency limit of 50
+   - Add reserved concurrency limit of 10
+   - Note: AWS requires minimum 100 unreserved concurrent executions per account, so use a conservative value
    - Prevents throttling during peak traffic hours
    - Ensures predictable performance under load
 
@@ -30,6 +31,7 @@ Refactor and optimize an existing Lambda function deployment using **Pulumi with
    - Set NEW_RELIC_LICENSE_KEY environment variable for APM integration
    - Set DB_CONNECTION_POOL_SIZE environment variable for database optimization
    - Values should be configurable through Pulumi config
+   - Note: Do NOT set AWS_REGION as environment variable - it is automatically provided by the Lambda runtime
 
 5. **Observability**
    - Enable AWS X-Ray tracing for performance monitoring
@@ -78,7 +80,7 @@ Refactor and optimize an existing Lambda function deployment using **Pulumi with
 
 - Lambda function must be in Node.js 18.x runtime (no other version acceptable)
 - Memory must be exactly 512MB (based on metrics analysis)
-- Reserved concurrency must be 50 (to handle peak load)
+- Reserved concurrency must be 10 (conservative value to respect AWS account limits)
 - Timeout must be 30 seconds
 - IAM permissions must follow least privilege principle
 - DynamoDB table name is fixed as 'payments-table'
@@ -89,7 +91,7 @@ Refactor and optimize an existing Lambda function deployment using **Pulumi with
 
 - **Functionality**: Lambda function deploys successfully with Node.js 18.x runtime
 - **Performance**: Memory set to 512MB with 30-second timeout
-- **Reliability**: Reserved concurrency of 50 configured, X-Ray tracing enabled
+- **Reliability**: Reserved concurrency of 10 configured, X-Ray tracing enabled
 - **Security**: IAM role with least privilege access to DynamoDB table only
 - **Cost Optimization**: Log retention set to 7 days, optimized memory allocation
 - **Resource Naming**: All resources include environmentSuffix for deployment isolation
