@@ -1,0 +1,26 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-12-02T05:03:08+05:30",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring"
+  ],
+  "po_id": "h3y8y3y9",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Lambda",
+    "CloudWatch",
+    "EventBridge",
+    "IAM",
+    "Systems Manager",
+    "Security Groups",
+    "NAT Gateway"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10
+}
