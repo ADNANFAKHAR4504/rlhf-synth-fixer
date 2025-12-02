@@ -15,9 +15,7 @@ LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
 echo "Project: platform=$PLATFORM, language=$LANGUAGE"
 
 # Set default environment variables if not provided
-# Get environment suffix from metadata.json (task ID with "synth" prefix)
-TASK_ID=$(jq -r '.po_id // "unknown"' metadata.json)
-export ENVIRONMENT_SUFFIX=${ENVIRONMENT_SUFFIX:-synth${TASK_ID}}
+export ENVIRONMENT_SUFFIX=${ENVIRONMENT_SUFFIX:-dev}
 export CI=${CI:-1}
 
 echo "Environment suffix: $ENVIRONMENT_SUFFIX"

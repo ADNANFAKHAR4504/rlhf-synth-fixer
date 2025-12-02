@@ -95,3 +95,145 @@ Create a complete CI/CD pipeline infrastructure using **Pulumi with TypeScript**
 - CloudWatch Log Group with 30-day retention
 - Stack outputs for pipeline URL and S3 endpoint
 - All resources tagged and named with environmentSuffix
+- **CI/CD Pipeline YAML configuration file (lib/ci-cd.yml)** following the requirements below
+
+## CI/CD Pipeline Configuration Requirements
+
+You MUST create a production-grade CI/CD pipeline configuration file at `lib/ci-cd.yml` that automates the deployment of the Pulumi infrastructure.
+
+### Platform Requirements
+Choose ONE of the following CI/CD platforms:
+- **GitHub Actions** (Recommended)
+- **GitLab CI/CD**
+- **CircleCI**
+- **Azure DevOps Pipelines**
+
+### Pipeline Stages Required
+Your CI/CD pipeline MUST include the following stages:
+
+1. **Source Stage**: Checkout code from repository
+2. **Build Stage**:
+   - Install dependencies
+   - Run Pulumi preview
+   - Generate CloudFormation templates
+   - Upload artifacts
+3. **Deploy to Dev**: Deploy infrastructure to development environment
+4. **Manual Approval for Staging** (Optional but recommended)
+5. **Deploy to Staging**: Deploy to staging environment
+6. **Manual Approval for Production** (Required)
+7. **Deploy to Production**: Deploy to production environment
+
+### Critical CI/CD Requirements
+
+1. **Script Organization (CRITICAL)**
+   - Any script block with more than 5 lines MUST be moved to external `scripts/` directory
+   - Example: Create `scripts/deploy-pulumi.sh`, `scripts/run-tests.sh`, etc.
+   - Pipeline should call these scripts, not contain inline logic
+
+2. **Secrets Management (CRITICAL - AUTO-FAIL IF VIOLATED)**
+   - NEVER hardcode secrets, credentials, or API keys
+   - Use platform-specific secret management:
+     - GitHub Actions: `${{ secrets.SECRET_NAME }}`
+     - GitLab CI: `$CI_SECRET_NAME` or secret variables
+     - CircleCI: `${SECRET_NAME}` from context/project settings
+   - **Forbidden items that will cause automatic failure:**
+     - AWS Access Keys: `AKIA...`
+     - Hardcoded passwords
+     - API keys
+     - Database credentials
+     - Private SSH/TLS keys
+
+3. **Environment Declaration**
+   - Declare all deployment environments (dev, staging, prod)
+   - Use platform-specific environment protection rules
+   - Example for GitHub Actions:
+     ```yaml
+     jobs:
+       deploy-dev:
+         environment: dev
+     ```
+
+4. **AWS Credentials**
+   - Use OIDC (OpenID Connect) for AWS authentication (preferred)
+   - OR use secrets for AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+   - Specify AWS_REGION as environment variable
+
+5. **Artifact Management**
+   - Upload build artifacts (Pulumi state, outputs, logs)
+   - Download artifacts in deployment stages
+   - Use platform-specific artifact management features
+
+6. **Multi-Environment Support**
+   - Support deployment to multiple environments
+   - Use environment-specific configuration (dev, staging, prod)
+   - Pass environment parameter to Pulumi: `pulumi up --stack <env>`
+
+7. **Notifications**
+   - Include success/failure notifications
+   - Can use Slack, email, or other notification services
+   - Use secrets for webhook URLs
+
+### Example Pipeline Structure (GitHub Actions)
+
+```yaml
+name: Pulumi Infrastructure Pipeline
+
+on:
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - run: npm ci
+      - run: ./scripts/pulumi-preview.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pulumi-outputs
+          path: outputs/
+
+  deploy-dev:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+      - run: ./scripts/deploy-pulumi.sh dev
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+```
+
+### Validation Criteria for CI/CD Pipeline
+
+Your `lib/ci-cd.yml` file will be validated against:
+
+1.  **Platform Detection** - Correct syntax for the chosen platform
+2.  **Script Length** - No inline scripts longer than 5 lines
+3.  **Secret Management** - No hardcoded secrets; proper use of platform secrets
+4.  **Environment Declaration** - All environments properly declared
+5.  **Multi-Stage Pipeline** - Build, Dev, Staging, Prod stages present
+6.  **Artifact Management** - Proper artifact upload/download between stages
+7.  **AWS Configuration** - Proper AWS credentials and region configuration
+8.  **Pulumi Integration** - Correct Pulumi commands for preview and deployment
+
+### Anti-Patterns to Avoid in CI/CD
+
+-  Long inline scripts (>5 lines)
+-  Hardcoded credentials or secrets
+-  Missing environment declarations
+-  No artifact handling between jobs
+-  No manual approval for production
+-  Missing AWS region or credentials configuration
+-  Not using platform-specific secret syntax

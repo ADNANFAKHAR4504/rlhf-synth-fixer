@@ -1,8 +1,0 @@
-encryptionsalt: v1:anS+hr7Gh0A=:v1:W3z/B7R1sWgbdw0U:NvjlweWfK1lszHwO0ryaPilYyyjleg==
-config:
-  TapStack:environmentSuffix: syntha7c6u0x3
-  TapStack:githubOwner: test-owner
-  TapStack:githubRepo: test-repo
-  TapStack:githubBranch: main
-  TapStack:githubToken:
-    secure: v1:iI2B10RRiakhaupg:zhucgSYmoYVZfwidu1+8OsIK4lAc30LmbSy53wbOqmwyloFaN+g=
