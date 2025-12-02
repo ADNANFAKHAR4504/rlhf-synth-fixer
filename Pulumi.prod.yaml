@@ -1,0 +1,7 @@
+config:
+  aws:region: us-east-1
+  pulumi-infra:bucket_name: data-processing-prod
+  pulumi-infra:lambda_memory: "1024"
+  pulumi-infra:table_name: metadata-prod
+  pulumi-infra:notification_email: prod-team@example.com
+  pulumi-infra:queue_name: task-queue-prod
