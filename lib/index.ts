@@ -158,7 +158,6 @@ export class LambdaEtlStack extends pulumi.ComponentResource {
         }),
         memorySize: 512,
         timeout: 30,
-        reservedConcurrentExecutions: 5,
         layers: [sharedLayer.arn],
         environment: {
           variables: {
@@ -279,7 +278,6 @@ export class LambdaEtlStack extends pulumi.ComponentResource {
         }),
         memorySize: 1024,
         timeout: 300,
-        reservedConcurrentExecutions: 5,
         layers: [sharedLayer.arn],
         environment: {
           variables: {
