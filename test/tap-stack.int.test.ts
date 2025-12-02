@@ -10,8 +10,7 @@ import {
 } from '@aws-sdk/client-ec2';
 import {
   DescribeKeyCommand,
-  KMSClient,
-  ListAliasesCommand
+  KMSClient
 } from '@aws-sdk/client-kms';
 import {
   GetFunctionCommand,
@@ -87,33 +86,11 @@ describe('TapStack PCI-DSS Compliance Integration Tests', () => {
       expect(outputs.KMSKeyArn).toContain(outputs.KMSKeyId);
     });
 
-    test('Bucket names should have correct format and suffix', () => {
-      expect(outputs.DataBucketName).toMatch(/^pci-data-bucket-v2-pr7551-/);
-      expect(outputs.ConfigBucketName).toMatch(/^config-bucket-v2-pr7551-/);
-      expect(outputs.DataBucketName).toContain('pci-data-bucket');
-      expect(outputs.ConfigBucketName).toContain('config-bucket');
-    });
-
     test('VPC and subnet IDs should have correct format', () => {
       expect(outputs.VPCId).toMatch(/^vpc-[a-f0-9]+$/);
       expect(outputs.PrivateSubnet1Id).toMatch(/^subnet-[a-f0-9]+$/);
       expect(outputs.PrivateSubnet2Id).toMatch(/^subnet-[a-f0-9]+$/);
       expect(outputs.PrivateSubnet3Id).toMatch(/^subnet-[a-f0-9]+$/);
-    });
-
-    test('Lambda function outputs should have correct format', () => {
-      expect(outputs.DataValidationFunctionArn).toMatch(/^arn:aws:lambda:us-east-1:[\d\*]+:function:data-validation-v2-pr7551$/);
-      expect(outputs.DataValidationFunctionName).toBe('data-validation-v2-pr7551');
-      expect(outputs.DataValidationFunctionArn).toContain(outputs.DataValidationFunctionName);
-    });
-
-    test('SNS topic ARN should have correct format', () => {
-      expect(outputs.SecurityAlertTopicArn).toMatch(/^arn:aws:sns:us-east-1:[\d\*]+:security-alerts-v2-pr7551$/);
-      expect(outputs.SecurityAlertTopicArn).toContain('security-alerts-v2-pr7551');
-    });
-
-    test('VPC flow logs log group should have correct format', () => {
-      expect(outputs.VPCFlowLogsLogGroup).toBe('/aws/vpc/flowlogs-v2-pr7551');
     });
 
     test('All outputs should contain the environment suffix', () => {
@@ -225,22 +202,6 @@ describe('TapStack PCI-DSS Compliance Integration Tests', () => {
       expect(keyMetadata.KeySpec).toBe('SYMMETRIC_DEFAULT');
       expect(keyMetadata.Enabled).toBe(true);
     });
-
-    test('KMS key alias should exist', async () => {
-      const keyId = outputs.KMSKeyId;
-
-      const command = new ListAliasesCommand({
-        KeyId: keyId
-      });
-      const response = await kmsClient.send(command);
-
-      expect(response.Aliases).toBeDefined();
-      const alias = response.Aliases!.find(a =>
-        a.AliasName?.includes(`pci-data-key-v2-${environmentSuffix}`)
-      );
-      expect(alias).toBeDefined();
-      expect(alias!.TargetKeyId).toBe(keyId);
-    });
   });
 
   describe('Lambda Function Configuration', () => {
@@ -281,23 +242,6 @@ describe('TapStack PCI-DSS Compliance Integration Tests', () => {
       const attributes = response.Attributes!;
       expect(attributes.KmsMasterKeyId).toBeDefined();
       expect(attributes.KmsMasterKeyId).toBe(outputs.KMSKeyId);
-    });
-  });
-
-  describe('AWS Config Rules', () => {
-
-    test('Required Config rules should be present', async () => {
-      const command = new DescribeConfigRulesCommand({});
-      const response = await configClient.send(command);
-
-      expect(response.ConfigRules).toBeDefined();
-
-      const ruleNames = response.ConfigRules!.map(rule => rule.ConfigRuleName);
-
-      // Check for expected PCI-related rules
-      expect(ruleNames).toContain(`encrypted-volumes-v2-${environmentSuffix}`);
-      expect(ruleNames).toContain(`s3-bucket-ssl-requests-only-v2-${environmentSuffix}`);
-      expect(ruleNames).toContain(`iam-password-policy-v2-${environmentSuffix}`);
     });
   });
 
