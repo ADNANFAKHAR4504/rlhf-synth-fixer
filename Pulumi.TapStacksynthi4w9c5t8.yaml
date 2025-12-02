@@ -1,5 +1,0 @@
-encryptionsalt: v1:1NU+T9l58NE=:v1:BVbVtPdy8eTqydZM:WHAcqJxWittE3G9DfuUzdlVozkyrRA==
-config:
-  aws:region: us-east-1
-  TapStack:environmentSuffix: synthi4w9c5t8
-  aws:defaultTags: '{"tags":{"Environment":"synthi4w9c5t8","Repository":"synth-i4w9c5t8","Author":"mayanksethi-turing","PRNumber":"unknown","Team":"synth","CreatedAt":"2025-12-02T13:01:00Z","ManagedBy":"pulumi"}}'
