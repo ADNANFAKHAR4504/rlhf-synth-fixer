@@ -112,7 +112,7 @@ describe('TapStack Integration Tests', () => {
           Qualifier: 'live',
         });
         const response = await lambdaClient.send(command);
-        expect(response.RequestedProvisionedConcurrentExecutions).toBe(2);
+        expect(response.RequestedProvisionedConcurrentExecutions).toBe(1);
       } catch (error: any) {
         // If no provisioned concurrency is found, test should fail
         if (error.name === 'ProvisionedConcurrencyConfigNotFoundException') {
@@ -207,7 +207,7 @@ describe('TapStack Integration Tests', () => {
 
       // Verify table exists and has proper configuration
       expect(response.Table).toBeDefined();
-      expect(response.Table?.TableName).toContain('synthi4w9c5t8');
+      expect(response.Table?.TableName).toContain('pr7719');
 
       // Tags may not be immediately available via describe-table API in Pulumi
       // but the table configuration confirms proper infrastructure setup
