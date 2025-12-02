@@ -1,110 +1,126 @@
-# CI/CD Pipeline Infrastructure
+# CI/CD Pipeline for Node.js Application
 
 Hey team,
 
-We need to set up a complete CI/CD pipeline for a Node.js application using AWS native services. The business wants an automated workflow that takes code from commit to deployment with minimal manual intervention. I've been asked to build this using **Pulumi with TypeScript**.
+We need to set up a CI/CD pipeline for a Node.js application using GitHub
+Actions with AWS integration. The business wants an automated workflow that
+takes code from commit to deployment with minimal manual intervention.
+I've been asked to build this using **GitHub Actions YAML**.
 
-The pipeline should handle the standard development workflow - when developers push code to the repository, it automatically builds the application, runs tests, and deploys the artifacts. We need this to be reliable, secure, and easy to maintain.
+The pipeline should handle the standard development workflow - when developers
+push code to the repository, it automatically builds the application, runs
+tests, and deploys the artifacts to AWS S3. We need this to be reliable,
+secure, and easy to maintain.
 
 ## What we need to build
 
-Create a complete CI/CD pipeline using **Pulumi with TypeScript** that automates the build and deployment process for a Node.js application.
+Create a complete CI/CD pipeline using **GitHub Actions YAML** that automates
+the build and deployment process for a Node.js application.
 
 ### Core Requirements
 
-1. **Source Control**
-   - Create a CodeCommit repository for source code storage
-   - Set main branch as the default branch
-   - Repository should be ready for immediate use
+1. **Source Control Integration**
+   - Trigger on push to main branch
+   - Support manual workflow dispatch with environment suffix parameter
+   - Filter triggers to relevant paths (src/, package.json, workflows)
 
-2. **Artifact Storage**
-   - Set up an S3 bucket for build artifacts
-   - Enable versioning to track artifact history
-   - Configure proper encryption for security
+2. **Source Validation Stage**
+   - Checkout code with full history
+   - Generate unique version identifier (timestamp + commit SHA)
+   - Validate package.json exists and is valid JSON
+   - Scan source code for hardcoded secrets
 
-3. **Build Environment**
-   - Configure a CodeBuild project using aws/codebuild/standard:5.0 image
-   - Support Node.js builds with standard workflow
-   - Build spec should run: npm install, npm test, npm run build
-   - Enable CloudWatch Logs with 30-day retention
+3. **Build Stage**
+   - Setup Node.js 18 with npm caching
+   - Install dependencies using npm ci
+   - Run tests using npm test
+   - Build application using npm run build
+   - Upload build artifacts to S3
 
-4. **Pipeline Orchestration**
-   - Create a CodePipeline with three stages:
-     - Source stage: Pull from CodeCommit repository
-     - Build stage: Execute CodeBuild project
-     - Deploy stage: Store artifacts in S3
-   - Ensure smooth integration between all stages
+4. **Deploy Stage**
+   - Download artifacts from S3
+   - Verify artifacts downloaded successfully
+   - Deploy to S3 deployment bucket
+   - Verify deployment completed
+   - Send deployment notification
 
-5. **Security and Permissions**
-   - Implement IAM roles with least privilege access
-   - Separate roles for CodePipeline and CodeBuild services
-   - Grant only necessary permissions for each service
+5. **Security and Authentication**
+   - Use GitHub OIDC for AWS authentication (no long-lived credentials)
+   - Configure minimal permissions (id-token: write, contents: read)
+   - Use environment protection for production deployments
+   - Scan for hardcoded secrets in source code
 
-6. **Resource Management**
-   - Tag all resources with Environment=Production and Project=NodeApp
-   - Output the pipeline ARN, S3 bucket name, and repository clone URL
-   - Follow AWS best practices for resource organization
+6. **Resource Naming**
+   - All S3 bucket references must include environment suffix
+   - Format: `nodeapp-artifacts-${ENVIRONMENT_SUFFIX}`
+   - Format: `nodeapp-deploy-${ENVIRONMENT_SUFFIX}`
+   - Support parallel deployments to different environments
 
 ### Technical Requirements
 
-- All infrastructure defined using **Pulumi with TypeScript**
-- Use **AWS CodeCommit** for source repository
-- Use **AWS CodePipeline** for orchestration
-- Use **AWS CodeBuild** for build execution
-- Use **Amazon S3** for artifact storage
-- Use **AWS IAM** for access control
-- Use **Amazon CloudWatch Logs** for build logging
-- Resource names must include **environmentSuffix** for uniqueness
-- Follow naming convention: `{resource-type}-${environmentSuffix}`
+- Pipeline defined using **GitHub Actions YAML**
+- Use **AWS S3** for artifact storage and deployment
+- Use **GitHub OIDC** for AWS authentication
+- Use **actions/checkout@v4** for code checkout
+- Use **actions/setup-node@v4** for Node.js setup
+- Use **aws-actions/configure-aws-credentials@v4** for AWS auth
+- Environment suffix configurable via workflow_dispatch input
+- Default environment suffix: 'dev'
 - Deploy to **us-east-1** region
 
-### Deployment Requirements (CRITICAL)
+### Security Requirements (CRITICAL)
 
-- **Resource Naming**: ALL named resources MUST include environmentSuffix parameter
-  - Format: `pipeline-${environmentSuffix}`, `bucket-${environmentSuffix}`, etc.
-  - This prevents resource conflicts in CI/CD parallel deployments
+- **OIDC Authentication**: Use role-to-assume with OIDC, NOT access keys
+  - Configure proper role session names for audit trails
+  - Store role ARN in GitHub secrets (AWS_OIDC_ROLE_ARN)
 
-- **Destroyability**: All resources must be fully deletable
-  - DO NOT use `retainOnDelete` or retention policies
-  - DO NOT set `protect` options to true
-  - Resources must be cleanable for testing purposes
+- **Minimal Permissions**: Restrict GitHub token permissions
+  - id-token: write (required for OIDC)
+  - contents: read (required for checkout)
 
-- **IAM Policies**: Use specific, least-privilege permissions
-  - Avoid wildcard permissions where possible
-  - Grant only actions required for each service
+- **Secrets Scanning**: Check source code for hardcoded credentials
+  - Scan for password, secret, api_key, access_key patterns
+  - Fail build if secrets detected
 
-- **CloudWatch Logs**: Set appropriate retention periods
-  - Use 30-day retention for build logs
-  - Helps control storage costs
+- **Environment Protection**: Use GitHub environments for deployment gates
+  - Configure production environment for deploy job
+  - Enable manual approval if required
+
+### Pipeline Structure
+
+```
+source-validation -> build -> deploy
+```
+
+- **source-validation**: Validates code and generates version
+- **build**: Depends on source-validation, builds and uploads artifacts
+- **deploy**: Depends on source-validation and build, deploys to production
 
 ### Constraints
 
-- Pipeline must support standard Node.js build workflow
-- All resources must be properly tagged for organization
-- IAM policies must follow least privilege principle
-- Build logs must be retained for troubleshooting
-- All resources must be destroyable (no Retain policies)
-- Include proper error handling and logging
+- All inline scripts must be 5 lines or fewer (split into multiple steps)
+- Use environment variables for repeated values
+- Follow YAML best practices (80 character line limit)
+- Use quoted "on" key for yamllint compatibility
+- Include proper error handling and verification steps
 
 ## Success Criteria
 
-- **Functionality**: Pipeline successfully orchestrates Source -> Build -> Deploy workflow
-- **Security**: IAM roles implement least privilege access patterns
-- **Observability**: CloudWatch Logs capture build execution details
-- **Integration**: All three stages properly connected and functional
-- **Resource Naming**: All resources include environmentSuffix
-- **Code Quality**: TypeScript code, well-structured, properly typed
-- **Outputs**: Pipeline ARN, bucket name, and repository URL accessible
+- **Functionality**: Pipeline executes source-validation -> build -> deploy
+- **Security**: OIDC authentication with no long-lived credentials
+- **Validation**: Source code scanned for secrets before build
+- **Versioning**: Artifacts versioned with timestamp and commit SHA
+- **Environment Suffix**: All S3 paths include environment suffix
+- **Code Quality**: Clean YAML, passes yamllint validation
+- **Notifications**: Deployment status reported on completion
 
 ## What to deliver
 
-- Complete Pulumi TypeScript implementation
-- CodeCommit repository with main branch
-- S3 bucket with versioning for artifacts
-- CodeBuild project with standard Node.js build spec
-- CodePipeline connecting all three stages
-- IAM roles for CodePipeline and CodeBuild
-- CloudWatch Logs configuration
-- Comprehensive outputs for all key resources
-- Unit tests for all infrastructure components
-- Documentation and deployment instructions
+- Complete GitHub Actions workflow file (ci-cd.yml)
+- Three-stage pipeline (source-validation, build, deploy)
+- OIDC authentication for AWS
+- S3 artifact storage with versioning
+- Secrets scanning in source validation
+- Environment protection for production
+- Deployment verification and notifications
+- Documentation of implementation

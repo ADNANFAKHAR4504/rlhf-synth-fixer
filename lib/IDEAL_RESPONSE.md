@@ -161,7 +161,7 @@ jobs:
 - All AWS authentication uses OIDC via `role-to-assume`
 - No hardcoded AWS access keys or secret keys
 - Secure, short-lived credentials for all stages
-- Proper session naming for each stage
+- Proper session naming for audit trails (Build-{env}, Deploy-{env})
 
 ### 2. Three-Stage Pipeline
 - **Source Validation**: Validates code, generates version, checks for secrets
@@ -189,6 +189,12 @@ jobs:
 - Supports parallel deployments to different environments
 - Configurable via workflow dispatch or defaults to 'dev'
 
+### 7. YAML Best Practices
+- Quoted "on" key for yamllint compatibility
+- All lines under 80 characters
+- Inline scripts kept to 5 lines or fewer
+- Environment variables used for repeated values
+
 ## Architecture Flow
 
 ```
@@ -203,20 +209,27 @@ jobs:
 +-------------------+    +-------------------+    +-------------------+
 ```
 
-## Compliance with Requirements
+## Compliance with PROMPT.md Requirements
 
-- **Source Control**: GitHub Actions workflow with branch and path filters
-- **Artifact Storage**: S3 bucket with environment suffix for versioning
-- **Build Environment**: Node.js 18 with npm caching
-- **Pipeline Orchestration**: Three-stage workflow with proper dependencies
-- **Security**: OIDC authentication, secrets scanning, minimal permissions
-- **Resource Naming**: All resources include environmentSuffix
+| Requirement | Status | Implementation |
+|-------------|--------|----------------|
+| GitHub Actions YAML | Done | ci-cd.yml workflow file |
+| Source validation stage | Done | Validates code, generates version |
+| Build stage | Done | Node.js 18, npm ci/test/build |
+| Deploy stage | Done | S3 sync with verification |
+| OIDC authentication | Done | aws-actions/configure-aws-credentials@v4 |
+| Minimal permissions | Done | id-token: write, contents: read |
+| Secrets scanning | Done | grep-based pattern detection |
+| Environment suffix | Done | All S3 paths include suffix |
+| Environment protection | Done | production environment on deploy |
+| Version generation | Done | Timestamp + commit SHA |
+| Deployment notification | Done | Status and version output |
+| YAML best practices | Done | Passes yamllint validation |
 
 ## AWS Services Used
 
 - **S3**: Artifact storage and deployment target
 - **IAM**: OIDC role for GitHub Actions authentication
-- **CloudWatch Logs**: Build and deployment logging (via GitHub Actions)
 
 ## Usage
 
@@ -227,6 +240,13 @@ gh workflow run "Node.js CI/CD Pipeline" -f environment_suffix=dev
 
 ### Automatic Trigger
 Push changes to `main` branch in `src/`, `package.json`, or `.github/workflows/`
+
+## Prerequisites
+
+1. **AWS OIDC Provider**: Configure GitHub as OIDC provider in AWS IAM
+2. **IAM Role**: Create role with trust policy for GitHub OIDC
+3. **S3 Buckets**: Create artifact and deployment buckets per environment
+4. **GitHub Secret**: Store role ARN as `AWS_OIDC_ROLE_ARN`
 
 ## Outputs
 
