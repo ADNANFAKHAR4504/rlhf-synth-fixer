@@ -116,73 +116,49 @@ class TestTapStackArgs(unittest.TestCase):
 class TestTapStack(unittest.TestCase):
     """Test cases for TapStack component."""
 
-    @pytest.mark.skip(reason="Pulumi test framework limitation with Output serialization in mocked environment")
-    @pulumi.runtime.test
     def test_tap_stack_creates_all_components(self):
         """Test that TapStack creates all required child stacks."""
-
-        def check_stack_components(tap_stack):
-            # Verify main stack attributes
-            self.assertIsInstance(tap_stack, TapStack)
-            self.assertEqual(tap_stack.environment_suffix, 'test')
-
-            # Verify tags include defaults and custom tags
-            self.assertIn('Project', tap_stack.tags)
-            self.assertEqual(tap_stack.tags['Project'], 'JapanCart')
-            self.assertIsNotNone('ManagedBy', tap_stack.tags)
-            self.assertEqual(tap_stack.tags['ManagedBy'], 'Pulumi')
-            self.assertIn('Environment', tap_stack.tags)
-            self.assertEqual(tap_stack.tags['Environment'], 'test')
-
-            # Verify child stacks exist
-            self.assertIsNotNone(tap_stack.vpc)
-            self.assertIsNotNone(tap_stack.kinesis)
-            self.assertIsNotNone(tap_stack.secrets)
-            self.assertIsNotNone(tap_stack.elasticache)
-            self.assertIsNotNone(tap_stack.rds)
-            self.assertIsNotNone(tap_stack.monitoring)
-
-            return True
-
-        # Create test args
+        # Simplified test that avoids Pulumi Output serialization issues
         args = TapStackArgs(environment_suffix='test', tags={'Custom': 'Tag'})
 
-        # Create stack
+        # Create stack (this will trigger the mocks but won't serialize Outputs)
         stack = TapStack('test-stack', args)
 
-        # Return assertion - check the stack directly without accessing .name
-        return pulumi.Output.from_input(stack).apply(check_stack_components)
+        # Direct assertions without using pulumi.runtime.test decorator
+        self.assertIsInstance(stack, TapStack)
+        self.assertEqual(stack.environment_suffix, 'test')
 
-    @pytest.mark.skip(reason="Pulumi test framework limitation with Output serialization in mocked environment")
-    @pulumi.runtime.test
+        # Verify tags include defaults and custom tags
+        self.assertIn('Project', stack.tags)
+        self.assertEqual(stack.tags['Project'], 'JapanCart')
+        self.assertEqual(stack.tags['ManagedBy'], 'Pulumi')
+        self.assertIn('Environment', stack.tags)
+        self.assertEqual(stack.tags['Environment'], 'test')
+
+        # Verify child stacks exist
+        self.assertIsNotNone(stack.vpc)
+        self.assertIsNotNone(stack.kinesis)
+        self.assertIsNotNone(stack.secrets)
+        self.assertIsNotNone(stack.elasticache)
+        self.assertIsNotNone(stack.rds)
+        self.assertIsNotNone(stack.monitoring)
+
     def test_tap_stack_default_environment_suffix(self):
         """Test TapStack with default environment suffix."""
-
-        def check_environment_suffix(args):
-            tap_stack = args
-            self.assertEqual(tap_stack.environment_suffix, 'dev')
-            return True
-
+        # Simplified test without pulumi.runtime.test decorator
         args = TapStackArgs()
         stack = TapStack('test-stack', args)
 
-        return pulumi.Output.from_input(stack).apply(check_environment_suffix)
+        # Direct assertion
+        self.assertEqual(stack.environment_suffix, 'dev')
 
 
 class TestVpcStack(unittest.TestCase):
     """Test cases for VpcStack component."""
 
-    @pulumi.runtime.test
     def test_vpc_stack_creates_vpc_with_correct_cidr(self):
         """Test that VpcStack creates VPC with correct CIDR block."""
-
-        def check_vpc(args):
-            vpc_stack = args
-            self.assertIsNotNone(vpc_stack.vpc_id)
-            self.assertIsNotNone(vpc_stack.public_subnet_ids)
-            self.assertIsNotNone(vpc_stack.private_subnet_ids)
-            return True
-
+        # Simplified test without pulumi.runtime.test decorator
         vpc = VpcStack(
             'test-vpc',
             environment_suffix='test',
@@ -190,89 +166,66 @@ class TestVpcStack(unittest.TestCase):
             tags={'Test': 'Tag'}
         )
 
-        return pulumi.Output.from_input(vpc).apply(check_vpc)
+        # Direct assertions
+        self.assertIsNotNone(vpc.vpc_id)
+        self.assertIsNotNone(vpc.public_subnet_ids)
+        self.assertIsNotNone(vpc.private_subnet_ids)
 
-    @pytest.mark.skip(reason="Pulumi test framework limitation with Output serialization in mocked environment")
-    @pulumi.runtime.test
     def test_vpc_stack_creates_correct_number_of_subnets(self):
         """Test that VpcStack creates correct number of public and private subnets."""
-
-        def check_subnets(args):
-            vpc_stack = args
-            # Each AZ gets one public and one private subnet
-            self.assertEqual(len(vpc_stack.public_subnets), 2)
-            self.assertEqual(len(vpc_stack.private_subnets), 2)
-            return True
-
+        # Simplified test without pulumi.runtime.test decorator
         vpc = VpcStack(
             'test-vpc',
             environment_suffix='test',
             azs=['us-east-1a', 'us-east-1b']
         )
 
-        return pulumi.Output.from_input(vpc).apply(check_subnets)
+        # Direct assertions - Each AZ gets one public and one private subnet
+        self.assertEqual(len(vpc.public_subnets), 2)
+        self.assertEqual(len(vpc.private_subnets), 2)
 
 
 class TestKinesisStack(unittest.TestCase):
     """Test cases for KinesisStack component."""
 
-    @pulumi.runtime.test
     def test_kinesis_stack_creates_stream(self):
         """Test that KinesisStack creates Kinesis stream."""
-
-        def check_kinesis(args):
-            kinesis_stack = args
-            self.assertIsNotNone(kinesis_stack.stream_name)
-            self.assertIsNotNone(kinesis_stack.stream_arn)
-            return True
-
+        # Simplified test without pulumi.runtime.test decorator
         kinesis = KinesisStack(
             'test-kinesis',
             environment_suffix='test',
             tags={'Test': 'Tag'}
         )
 
-        return pulumi.Output.from_input(kinesis).apply(check_kinesis)
+        # Direct assertions
+        self.assertIsNotNone(kinesis.stream_name)
+        self.assertIsNotNone(kinesis.stream_arn)
 
 
 class TestSecretsStack(unittest.TestCase):
     """Test cases for SecretsStack component."""
 
-    @pulumi.runtime.test
     def test_secrets_stack_creates_secret(self):
         """Test that SecretsStack creates Secrets Manager secret."""
-
-        def check_secret(args):
-            secrets_stack = args
-            self.assertIsNotNone(secrets_stack.db_secret_arn)
-            self.assertEqual(secrets_stack.db_username, 'japancart_admin')
-            self.assertIsNotNone(secrets_stack.db_password_value)
-            return True
-
+        # Simplified test without pulumi.runtime.test decorator
         secrets = SecretsStack(
             'test-secrets',
             environment_suffix='test',
             tags={'Test': 'Tag'}
         )
 
-        return pulumi.Output.from_input(secrets).apply(check_secret)
+        # Direct assertions
+        self.assertIsNotNone(secrets.db_secret_arn)
+        self.assertEqual(secrets.db_username, 'japancart_admin')
+        self.assertIsNotNone(secrets.db_password_value)
 
 
 class TestElastiCacheStack(unittest.TestCase):
     """Test cases for ElastiCacheStack component."""
 
-    @pulumi.runtime.test
     def test_elasticache_stack_creates_redis_cluster(self):
         """Test that ElastiCacheStack creates Redis cluster."""
-
-        def check_elasticache(args):
-            elasticache_stack = args
-            self.assertIsNotNone(elasticache_stack.cluster_id)
-            self.assertIsNotNone(elasticache_stack.redis_endpoint)
-            self.assertIsNotNone(elasticache_stack.redis_port)
-            self.assertIsNotNone(elasticache_stack.security_group_id)
-            return True
-
+        # Simplified test without pulumi.runtime.test decorator
         # Create mock outputs
         vpc_id = pulumi.Output.from_input('vpc-12345')
         subnet_ids = [
@@ -288,26 +241,19 @@ class TestElastiCacheStack(unittest.TestCase):
             tags={'Test': 'Tag'}
         )
 
-        return pulumi.Output.from_input(elasticache).apply(check_elasticache)
+        # Direct assertions
+        self.assertIsNotNone(elasticache.cluster_id)
+        self.assertIsNotNone(elasticache.redis_endpoint)
+        self.assertIsNotNone(elasticache.redis_port)
+        self.assertIsNotNone(elasticache.security_group_id)
 
 
 class TestRdsStack(unittest.TestCase):
     """Test cases for RdsStack component."""
 
-    @pytest.mark.skip(reason="Pulumi test framework limitation with Output serialization in mocked environment")
-    @pulumi.runtime.test
     def test_rds_stack_creates_postgres_instance(self):
         """Test that RdsStack creates PostgreSQL instance."""
-
-        def check_rds(args):
-            rds_stack = args
-            self.assertIsNotNone(rds_stack.instance_id)
-            self.assertIsNotNone(rds_stack.endpoint)
-            self.assertIsNotNone(rds_stack.address)
-            self.assertIsNotNone(rds_stack.port)
-            self.assertIsNotNone(rds_stack.security_group_id)
-            return True
-
+        # Simplified test without pulumi.runtime.test decorator
         # Create mock outputs
         vpc_id = pulumi.Output.from_input('vpc-12345')
         subnet_ids = [
@@ -325,27 +271,20 @@ class TestRdsStack(unittest.TestCase):
             tags={'Test': 'Tag'}
         )
 
-        return pulumi.Output.from_input(rds).apply(check_rds)
+        # Direct assertions
+        self.assertIsNotNone(rds.instance_id)
+        self.assertIsNotNone(rds.endpoint)
+        self.assertIsNotNone(rds.address)
+        self.assertIsNotNone(rds.port)
+        self.assertIsNotNone(rds.security_group_id)
 
 
 class TestMonitoringStack(unittest.TestCase):
     """Test cases for MonitoringStack component."""
 
-    @pulumi.runtime.test
     def test_monitoring_stack_creates_alarms(self):
         """Test that MonitoringStack creates CloudWatch alarms."""
-
-        def check_monitoring(args):
-            monitoring_stack = args
-            self.assertIsNotNone(monitoring_stack.kinesis_iterator_age_alarm)
-            self.assertIsNotNone(monitoring_stack.kinesis_write_throughput_alarm)
-            self.assertIsNotNone(monitoring_stack.redis_cpu_alarm)
-            self.assertIsNotNone(monitoring_stack.redis_memory_alarm)
-            self.assertIsNotNone(monitoring_stack.rds_cpu_alarm)
-            self.assertIsNotNone(monitoring_stack.rds_storage_alarm)
-            self.assertIsNotNone(monitoring_stack.rds_connection_alarm)
-            return True
-
+        # Simplified test without pulumi.runtime.test decorator
         # Create mock outputs
         kinesis_stream_name = pulumi.Output.from_input('transaction-stream-test')
         elasticache_cluster_id = pulumi.Output.from_input('redis-cluster-test')
@@ -360,7 +299,14 @@ class TestMonitoringStack(unittest.TestCase):
             tags={'Test': 'Tag'}
         )
 
-        return pulumi.Output.from_input(monitoring).apply(check_monitoring)
+        # Direct assertions
+        self.assertIsNotNone(monitoring.kinesis_iterator_age_alarm)
+        self.assertIsNotNone(monitoring.kinesis_write_throughput_alarm)
+        self.assertIsNotNone(monitoring.redis_cpu_alarm)
+        self.assertIsNotNone(monitoring.redis_memory_alarm)
+        self.assertIsNotNone(monitoring.rds_cpu_alarm)
+        self.assertIsNotNone(monitoring.rds_storage_alarm)
+        self.assertIsNotNone(monitoring.rds_connection_alarm)
 
 
 class TestResourceNaming(unittest.TestCase):
@@ -408,40 +354,31 @@ class TestErrorHandling(unittest.TestCase):
 class TestIntegration(unittest.TestCase):
     """Integration test cases."""
 
-    @pytest.mark.skip(reason="Pulumi test framework limitation with Output serialization in mocked environment")
-    @pulumi.runtime.test
     def test_full_stack_creation_flow(self):
         """Test complete stack creation with all components."""
-
-        def check_full_stack(args):
-            stack = args
-
-            # Verify all components exist
-            self.assertIsNotNone(stack.vpc)
-            self.assertIsNotNone(stack.kinesis)
-            self.assertIsNotNone(stack.secrets)
-            self.assertIsNotNone(stack.elasticache)
-            self.assertIsNotNone(stack.rds)
-            self.assertIsNotNone(stack.monitoring)
-
-            # Verify environment suffix propagated
-            self.assertEqual(stack.environment_suffix, 'integration-test')
-
-            # Verify tags include all required fields
-            self.assertIn('Project', stack.tags)
-            self.assertIn('ManagedBy', stack.tags)
-            self.assertIn('Environment', stack.tags)
-            self.assertIn('TestType', stack.tags)
-
-            return True
-
+        # Simplified test without pulumi.runtime.test decorator
         args = TapStackArgs(
             environment_suffix='integration-test',
             tags={'TestType': 'Integration'}
         )
         stack = TapStack('integration-stack', args)
 
-        return pulumi.Output.from_input(stack).apply(check_full_stack)
+        # Verify all components exist
+        self.assertIsNotNone(stack.vpc)
+        self.assertIsNotNone(stack.kinesis)
+        self.assertIsNotNone(stack.secrets)
+        self.assertIsNotNone(stack.elasticache)
+        self.assertIsNotNone(stack.rds)
+        self.assertIsNotNone(stack.monitoring)
+
+        # Verify environment suffix propagated
+        self.assertEqual(stack.environment_suffix, 'integration-test')
+
+        # Verify tags include all required fields
+        self.assertIn('Project', stack.tags)
+        self.assertIn('ManagedBy', stack.tags)
+        self.assertIn('Environment', stack.tags)
+        self.assertIn('TestType', stack.tags)
 
 
 if __name__ == '__main__':
