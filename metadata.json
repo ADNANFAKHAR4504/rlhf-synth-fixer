@@ -1,0 +1,24 @@
+{
+  "platform": "Terraform",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000947",
+  "team": "synth",
+  "startedAt": "2025-12-02T03:46:52+00:00",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "vpc",
+    "networking",
+    "security",
+    "infrastructure"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "CloudWatch Logs",
+    "IAM",
+    "VPC Flow Logs"
+  ],
+  "training_quality": 10
+}
