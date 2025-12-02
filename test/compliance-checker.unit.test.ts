@@ -274,4 +274,674 @@ describe('ComplianceChecker', () => {
       expect(policy).toBeUndefined();
     });
   });
+
+  describe('Error Handling and Edge Cases', () => {
+    it('should handle invalid environment tag value', async () => {
+      const resource: AWSResource = {
+        id: 'test-resource',
+        arn: 'arn:aws:lambda:us-east-1:123456789012:function:test',
+        type: ResourceType.LAMBDA_FUNCTION,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'invalid-env',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      expect(result.status).toBe(ComplianceStatus.NON_COMPLIANT);
+      const tagViolation = result.violations.find(v => v.rule === 'REQUIRED_TAGS');
+      expect(tagViolation).toBeDefined();
+    });
+
+    it('should handle S3 encryption check errors gracefully', async () => {
+      s3Mock.on(GetBucketEncryptionCommand).rejects(new Error('Access denied'));
+
+      const resource: AWSResource = {
+        id: 'test-bucket',
+        arn: 'arn:aws:s3:::test-bucket',
+        type: ResourceType.S3_BUCKET,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      // Should not throw, but should mark as non-compliant with INFO severity
+      expect(result.status).toBe(ComplianceStatus.NON_COMPLIANT);
+      const infoViolation = result.violations.find(
+        v => v.rule === 'S3_ENCRYPTION' && v.severity === ViolationSeverity.INFO
+      );
+      expect(infoViolation).toBeDefined();
+      expect(infoViolation?.description).toContain('Failed to check');
+    });
+
+    it('should handle S3 public access check errors gracefully', async () => {
+      s3Mock.on(GetBucketEncryptionCommand).resolves({
+        ServerSideEncryptionConfiguration: {
+          Rules: [
+            {
+              ApplyServerSideEncryptionByDefault: {
+                SSEAlgorithm: 'AES256',
+              },
+            },
+          ],
+        },
+      });
+
+      s3Mock.on(GetPublicAccessBlockCommand).rejects(new Error('Access denied'));
+
+      const resource: AWSResource = {
+        id: 'test-bucket',
+        arn: 'arn:aws:s3:::test-bucket',
+        type: ResourceType.S3_BUCKET,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      // Should not throw, but should mark as non-compliant with INFO severity
+      expect(result.status).toBe(ComplianceStatus.NON_COMPLIANT);
+      const infoViolation = result.violations.find(
+        v => v.rule === 'S3_PUBLIC_ACCESS' && v.severity === ViolationSeverity.INFO
+      );
+      expect(infoViolation).toBeDefined();
+    });
+
+    it('should handle security group check errors gracefully', async () => {
+      ec2Mock.on(DescribeSecurityGroupsCommand).rejects(new Error('Access denied'));
+
+      const resource: AWSResource = {
+        id: 'sg-123',
+        arn: 'arn:aws:ec2:us-east-1:123456789012:security-group/sg-123',
+        type: ResourceType.SECURITY_GROUP,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      // Should not throw, but should mark as non-compliant with INFO severity
+      expect(result.status).toBe(ComplianceStatus.NON_COMPLIANT);
+      const infoViolation = result.violations.find(
+        v => v.rule === 'SG_OPEN_ACCESS' && v.severity === ViolationSeverity.INFO
+      );
+      expect(infoViolation).toBeDefined();
+    });
+
+    it('should detect security group with IPv6 open access', async () => {
+      ec2Mock.on(DescribeSecurityGroupsCommand).resolves({
+        SecurityGroups: [
+          {
+            GroupId: 'sg-123',
+            IpPermissions: [
+              {
+                IpProtocol: 'tcp',
+                FromPort: 443,
+                ToPort: 443,
+                Ipv6Ranges: [{ CidrIpv6: '::/0' }],
+              },
+            ],
+          },
+        ],
+      });
+
+      const resource: AWSResource = {
+        id: 'sg-123',
+        arn: 'arn:aws:ec2:us-east-1:123456789012:security-group/sg-123',
+        type: ResourceType.SECURITY_GROUP,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      const sgViolation = result.violations.find(v => v.rule === 'SG_OPEN_ACCESS');
+      expect(sgViolation).toBeDefined();
+    });
+
+    it('should handle security group with no IP permissions', async () => {
+      ec2Mock.on(DescribeSecurityGroupsCommand).resolves({
+        SecurityGroups: [
+          {
+            GroupId: 'sg-123',
+            IpPermissions: undefined,
+          },
+        ],
+      });
+
+      const resource: AWSResource = {
+        id: 'sg-123',
+        arn: 'arn:aws:ec2:us-east-1:123456789012:security-group/sg-123',
+        type: ResourceType.SECURITY_GROUP,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      expect(result.status).toBe(ComplianceStatus.COMPLIANT);
+    });
+
+    it('should handle security group with empty response', async () => {
+      ec2Mock.on(DescribeSecurityGroupsCommand).resolves({
+        SecurityGroups: [],
+      });
+
+      const resource: AWSResource = {
+        id: 'sg-123',
+        arn: 'arn:aws:ec2:us-east-1:123456789012:security-group/sg-123',
+        type: ResourceType.SECURITY_GROUP,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      expect(result.status).toBe(ComplianceStatus.COMPLIANT);
+    });
+
+    it('should allow security group with PublicAccessApproved tag', async () => {
+      const resource: AWSResource = {
+        id: 'sg-123',
+        arn: 'arn:aws:ec2:us-east-1:123456789012:security-group/sg-123',
+        type: ResourceType.SECURITY_GROUP,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+          PublicAccessApproved: 'true',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      const sgViolation = result.violations.find(v => v.rule === 'SG_OPEN_ACCESS');
+      expect(sgViolation).toBeUndefined();
+    });
+
+    it('should detect RDS instance without CloudWatch logging', async () => {
+      const resource: AWSResource = {
+        id: 'rds-instance',
+        arn: 'arn:aws:rds:us-east-1:123456789012:db:test',
+        type: ResourceType.RDS_INSTANCE,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      const loggingViolation = result.violations.find(
+        v => v.rule === 'CLOUDWATCH_LOGGING'
+      );
+      expect(loggingViolation).toBeDefined();
+    });
+
+    it('should allow RDS instance with CloudWatch logging enabled', async () => {
+      const resource: AWSResource = {
+        id: 'rds-instance',
+        arn: 'arn:aws:rds:us-east-1:123456789012:db:test',
+        type: ResourceType.RDS_INSTANCE,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+        metadata: {
+          loggingEnabled: true,
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      const loggingViolation = result.violations.find(
+        v => v.rule === 'CLOUDWATCH_LOGGING'
+      );
+      expect(loggingViolation).toBeUndefined();
+    });
+
+    it('should allow Lambda function (CloudWatch logging by default)', async () => {
+      const resource: AWSResource = {
+        id: 'lambda-function',
+        arn: 'arn:aws:lambda:us-east-1:123456789012:function:test',
+        type: ResourceType.LAMBDA_FUNCTION,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      const loggingViolation = result.violations.find(
+        v => v.rule === 'CLOUDWATCH_LOGGING'
+      );
+      expect(loggingViolation).toBeUndefined();
+    });
+
+    it('should detect resource in unapproved region', async () => {
+      const resource: AWSResource = {
+        id: 'test-resource',
+        arn: 'arn:aws:lambda:ap-south-1:123456789012:function:test',
+        type: ResourceType.LAMBDA_FUNCTION,
+        region: 'ap-south-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      const regionViolation = result.violations.find(
+        v => v.rule === 'RESOURCE_REGION'
+      );
+      expect(regionViolation).toBeDefined();
+    });
+
+    it('should categorize violations by severity correctly', async () => {
+      const resources: AWSResource[] = [
+        {
+          id: 'bucket-no-encryption',
+          arn: 'arn:aws:s3:::bucket-no-encryption',
+          type: ResourceType.S3_BUCKET,
+          region: 'us-east-1',
+          tags: {
+            Environment: 'dev',
+            Owner: 'test',
+            Team: 'test',
+            Project: 'test',
+            CreatedAt: '2025-01-01',
+          },
+        },
+      ];
+
+      s3Mock.on(GetBucketEncryptionCommand).rejects({
+        name: 'ServerSideEncryptionConfigurationNotFoundError',
+      });
+
+      const report = await checker.checkResources(resources);
+
+      expect(report.summary.criticalViolations).toBeGreaterThan(0);
+      expect(report.violationsBySeverity[ViolationSeverity.CRITICAL]).toBeGreaterThan(
+        0
+      );
+    });
+
+    it('should count HIGH severity violations correctly', async () => {
+      ec2Mock.on(DescribeSecurityGroupsCommand).resolves({
+        SecurityGroups: [
+          {
+            GroupId: 'sg-123',
+            IpPermissions: [
+              {
+                IpProtocol: 'tcp',
+                FromPort: 22,
+                ToPort: 22,
+                IpRanges: [{ CidrIp: '0.0.0.0/0' }],
+              },
+            ],
+          },
+        ],
+      });
+
+      const resources: AWSResource[] = [
+        {
+          id: 'sg-123',
+          arn: 'arn:aws:ec2:us-east-1:123456789012:security-group/sg-123',
+          type: ResourceType.SECURITY_GROUP,
+          region: 'us-east-1',
+          tags: {
+            Environment: 'dev',
+            Owner: 'test',
+            Team: 'test',
+            Project: 'test',
+            CreatedAt: '2025-01-01',
+          },
+        },
+      ];
+
+      const report = await checker.checkResources(resources);
+
+      expect(report.summary.highViolations).toBeGreaterThan(0);
+      expect(report.violationsBySeverity[ViolationSeverity.HIGH]).toBeGreaterThan(0);
+    });
+
+    it('should count MEDIUM severity violations correctly', async () => {
+      const resources: AWSResource[] = [
+        {
+          id: 'rds-instance',
+          arn: 'arn:aws:rds:us-east-1:123456789012:db:test',
+          type: ResourceType.RDS_INSTANCE,
+          region: 'ap-south-1',
+          tags: {
+            Environment: 'dev',
+            Owner: 'test',
+            Team: 'test',
+            Project: 'test',
+            CreatedAt: '2025-01-01',
+          },
+        },
+      ];
+
+      const report = await checker.checkResources(resources);
+
+      expect(report.summary.mediumViolations).toBeGreaterThan(0);
+      expect(report.violationsBySeverity[ViolationSeverity.MEDIUM]).toBeGreaterThan(0);
+    });
+
+    it('should count LOW severity violations correctly', async () => {
+      // Create a resource with a LOW severity violation
+      // Since we don't have any LOW severity policies defined, we'll simulate one
+      const resources: AWSResource[] = [
+        {
+          id: 'test-resource',
+          arn: 'arn:aws:lambda:us-east-1:123456789012:function:test',
+          type: ResourceType.LAMBDA_FUNCTION,
+          region: 'us-east-1',
+          tags: {
+            Environment: 'dev',
+            Owner: 'test',
+            Team: 'test',
+            Project: 'test',
+            CreatedAt: '2025-01-01',
+          },
+        },
+      ];
+
+      const report = await checker.checkResources(resources);
+
+      // Even with no LOW violations, the counter should work
+      expect(report.summary.lowViolations).toBe(0);
+      expect(report.violationsBySeverity[ViolationSeverity.LOW]).toBe(0);
+    });
+
+    it('should handle resource with logGroup metadata', async () => {
+      const resource: AWSResource = {
+        id: 'test-resource',
+        arn: 'arn:aws:lambda:us-east-1:123456789012:function:test',
+        type: ResourceType.LAMBDA_FUNCTION,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+        metadata: {
+          logGroup: '/aws/lambda/test',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      const loggingViolation = result.violations.find(
+        v => v.rule === 'CLOUDWATCH_LOGGING'
+      );
+      expect(loggingViolation).toBeUndefined();
+    });
+
+    it('should handle EC2 instance without CloudWatch logging', async () => {
+      const resource: AWSResource = {
+        id: 'i-12345',
+        arn: 'arn:aws:ec2:us-east-1:123456789012:instance/i-12345',
+        type: ResourceType.EC2_INSTANCE,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      // EC2 instances are not in the applicable types for CLOUDWATCH_LOGGING
+      // So no violation should be found
+      const loggingViolation = result.violations.find(
+        v => v.rule === 'CLOUDWATCH_LOGGING'
+      );
+      expect(loggingViolation).toBeUndefined();
+    });
+
+    it('should skip S3 encryption check for non-S3 resources', async () => {
+      const resource: AWSResource = {
+        id: 'test-lambda',
+        arn: 'arn:aws:lambda:us-east-1:123456789012:function:test',
+        type: ResourceType.LAMBDA_FUNCTION,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      // No S3_ENCRYPTION violation for non-S3 resource
+      const encryptionViolation = result.violations.find(
+        v => v.rule === 'S3_ENCRYPTION'
+      );
+      expect(encryptionViolation).toBeUndefined();
+    });
+
+    it('should skip S3 public access check for non-S3 resources', async () => {
+      const resource: AWSResource = {
+        id: 'test-lambda',
+        arn: 'arn:aws:lambda:us-east-1:123456789012:function:test',
+        type: ResourceType.LAMBDA_FUNCTION,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      // No S3_PUBLIC_ACCESS violation for non-S3 resource
+      const publicAccessViolation = result.violations.find(
+        v => v.rule === 'S3_PUBLIC_ACCESS'
+      );
+      expect(publicAccessViolation).toBeUndefined();
+    });
+
+    it('should skip security group check for non-SG resources', async () => {
+      const resource: AWSResource = {
+        id: 'test-lambda',
+        arn: 'arn:aws:lambda:us-east-1:123456789012:function:test',
+        type: ResourceType.LAMBDA_FUNCTION,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      // No SG_OPEN_ACCESS violation for non-SecurityGroup resource
+      const sgViolation = result.violations.find(v => v.rule === 'SG_OPEN_ACCESS');
+      expect(sgViolation).toBeUndefined();
+    });
+
+    it('should handle S3 bucket with all public access blocks properly set', async () => {
+      s3Mock.on(GetBucketEncryptionCommand).resolves({
+        ServerSideEncryptionConfiguration: {
+          Rules: [
+            {
+              ApplyServerSideEncryptionByDefault: {
+                SSEAlgorithm: 'AES256',
+              },
+            },
+          ],
+        },
+      });
+
+      s3Mock.on(GetPublicAccessBlockCommand).resolves({
+        PublicAccessBlockConfiguration: {
+          BlockPublicAcls: true,
+          BlockPublicPolicy: true,
+          IgnorePublicAcls: true,
+          RestrictPublicBuckets: true,
+        },
+      });
+
+      const resource: AWSResource = {
+        id: 'test-bucket',
+        arn: 'arn:aws:s3:::test-bucket',
+        type: ResourceType.S3_BUCKET,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      expect(result.status).toBe(ComplianceStatus.COMPLIANT);
+      const publicAccessViolation = result.violations.find(
+        v => v.rule === 'S3_PUBLIC_ACCESS'
+      );
+      expect(publicAccessViolation).toBeUndefined();
+    });
+
+    it('should handle security group with restricted IP ranges', async () => {
+      ec2Mock.on(DescribeSecurityGroupsCommand).resolves({
+        SecurityGroups: [
+          {
+            GroupId: 'sg-123',
+            IpPermissions: [
+              {
+                IpProtocol: 'tcp',
+                FromPort: 443,
+                ToPort: 443,
+                IpRanges: [{ CidrIp: '10.0.0.0/8' }],
+              },
+            ],
+          },
+        ],
+      });
+
+      const resource: AWSResource = {
+        id: 'sg-123',
+        arn: 'arn:aws:ec2:us-east-1:123456789012:security-group/sg-123',
+        type: ResourceType.SECURITY_GROUP,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      expect(result.status).toBe(ComplianceStatus.COMPLIANT);
+      const sgViolation = result.violations.find(v => v.rule === 'SG_OPEN_ACCESS');
+      expect(sgViolation).toBeUndefined();
+    });
+
+    it('should detect default return false in CloudWatch logging check', async () => {
+      const resource: AWSResource = {
+        id: 'db-instance',
+        arn: 'arn:aws:rds:us-east-1:123456789012:db:test',
+        type: ResourceType.RDS_INSTANCE,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+        metadata: {},
+      };
+
+      const result = await checker.checkResource(resource);
+
+      const loggingViolation = result.violations.find(
+        v => v.rule === 'CLOUDWATCH_LOGGING'
+      );
+      expect(loggingViolation).toBeDefined();
+    });
+  });
 });
