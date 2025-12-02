@@ -14,19 +14,33 @@ This module creates a production-ready data processing infrastructure with:
 import pulumi
 import pulumi_aws as aws
 import json
+from dataclasses import dataclass
+from typing import Optional
+
+
+@dataclass
+class TapStackArgs:
+    """Arguments for TapStack configuration."""
+
+    environment_suffix: str = "dev"
+    tags: Optional[dict] = None
 
 
 class TapStack:
     """Infrastructure stack for multi-AZ data processing."""
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, args: Optional[TapStackArgs] = None):
         """
         Initialize the data processing infrastructure stack.
 
         Args:
             name: The name of the stack
+            args: Configuration arguments for the stack
         """
         self.name = name
+        self.args = args or TapStackArgs()
+        self.environment = self.args.environment_suffix
+        self.default_tags = self.args.tags or {}
 
         # Get availability zones
         self.azs = aws.get_availability_zones(state="available")
@@ -74,6 +88,17 @@ class TapStack:
         self.redis_cpu_alarm = self._create_redis_cpu_alarm()
         self.kinesis_records_alarm = self._create_kinesis_records_alarm()
 
+    def _get_tags(self, name: str, additional_tags: Optional[dict] = None) -> dict:
+        """Get tags with environment and defaults."""
+        tags = {
+            "Name": name,
+            "Environment": self.environment,
+            **self.default_tags,
+        }
+        if additional_tags:
+            tags.update(additional_tags)
+        return tags
+
     def _create_vpc(self) -> aws.ec2.Vpc:
         """Create VPC."""
         return aws.ec2.Vpc(
@@ -81,10 +106,7 @@ class TapStack:
             cidr_block="10.0.0.0/16",
             enable_dns_hostnames=True,
             enable_dns_support=True,
-            tags={
-                "Name": f"{self.name}-vpc",
-                "Environment": "production",
-            },
+            tags=self._get_tags(f"{self.name}-vpc"),
         )
 
     def _create_subnets(self) -> tuple:
