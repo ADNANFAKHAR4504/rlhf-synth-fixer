@@ -1,0 +1,13 @@
+name: payment-processor-migration
+runtime: python
+description: ECS Fargate migration for payment processing system
+
+config:
+  aws:region:
+    description: AWS region for deployment
+    value: us-east-2
+  payment-processor-migration:environmentSuffix:
+    description: Environment suffix for resource naming (e.g., dev, staging, prod)
+  payment-processor-migration:legacyStackName:
+    description: Name of the legacy infrastructure stack to import from
+    default: legacy-infrastructure
