@@ -74,7 +74,7 @@ class DynamoDBStack(pulumi.ComponentResource):
 
         # Sessions table - same safe replacement strategy
         self.sessions_table = aws.dynamodb.Table(
-            f="sessions-{environment_suffix}",
+            f"sessions-{environment_suffix}",
             name=f"sessions-{environment_suffix}",
             billing_mode="PROVISIONED",
             read_capacity=read_capacity,
