@@ -105,7 +105,7 @@ export class Ec2Stack extends pulumi.ComponentResource {
     // Create EC2 instances - create outside of apply() to avoid async issues
     this.instances = [];
     const subnetIdsOutput = pulumi.output(privateSubnetIds);
-    
+
     for (let i = 0; i < 2; i++) {
       const instance = new aws.ec2.Instance(
         `instance-${i}-${environmentSuffix}`,
