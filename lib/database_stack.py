@@ -5,12 +5,13 @@ Creates Aurora PostgreSQL cluster with multi-AZ deployment, encryption at rest,
 and Secrets Manager integration for credentials.
 """
 
-from typing import Optional, List
+import json
+from typing import List, Optional
+
 import pulumi
-from pulumi import ResourceOptions, Output
 import pulumi_aws as aws
 import pulumi_random as random
-import json
+from pulumi import Output, ResourceOptions
 
 
 class DatabaseStackArgs:
@@ -129,7 +130,7 @@ class DatabaseStack(pulumi.ComponentResource):
         self.db_cluster = aws.rds.Cluster(
             f"payment-db-cluster-{args.environment_suffix}",
             engine=aws.rds.EngineType.AURORA_POSTGRESQL,
-            engine_version="15.4",
+            engine_version="15.3",
             engine_mode="provisioned",
             database_name="paymentdb",
             master_username=self.db_username,
@@ -158,7 +159,7 @@ class DatabaseStack(pulumi.ComponentResource):
                 cluster_identifier=self.db_cluster.id,
                 instance_class="db.t3.medium",
                 engine=aws.rds.EngineType.AURORA_POSTGRESQL,
-                engine_version="15.4",
+                engine_version="15.3",
                 publicly_accessible=False,
                 tags={
                     **args.tags,

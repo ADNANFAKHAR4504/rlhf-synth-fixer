@@ -73,6 +73,9 @@ class FrontendStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self, depends_on=[self.bucket])
         )
 
+        # Construct website endpoint (since website_endpoint is deprecated)
+        self.website_endpoint = self.bucket.id.apply(lambda id: f"{id}.s3-website.us-east-1.amazonaws.com")
+
         # Block public access to S3 bucket (CloudFront will access via service principal)
         self.bucket_public_access_block = aws.s3.BucketPublicAccessBlock(
             f"payment-frontend-public-access-block-{args.environment_suffix}",
@@ -113,7 +116,7 @@ class FrontendStack(pulumi.ComponentResource):
             default_root_object="index.html",
             origins=[
                 aws.cloudfront.DistributionOriginArgs(
-                    domain_name=self.bucket.website_endpoint,
+                    domain_name=self.website_endpoint,
                     origin_id="S3Origin",
                     custom_origin_config=aws.cloudfront.DistributionOriginCustomOriginConfigArgs(
                         http_port=80,
