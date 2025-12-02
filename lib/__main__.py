@@ -223,6 +223,8 @@ ecs_cluster = aws.ecs.Cluster(
 )
 
 # IAM Role for ECS Task Execution (pulls from ECR, writes to CloudWatch)
+# Note: tags are omitted here to avoid conflicts with AWS provider default tags
+# which are set by the deployment script. Default tags will be applied automatically.
 task_execution_role = aws.iam.Role(
     f"ecs-task-execution-role-{environment_suffix}",
     name=f"ecs-task-execution-{environment_suffix}",
@@ -237,8 +239,7 @@ task_execution_role = aws.iam.Role(
                 "Action": "sts:AssumeRole"
             }
         ]
-    }"""),
-    tags=common_tags
+    }""")
 )
 
 # Attach AWS managed policy for ECS task execution
@@ -276,6 +277,8 @@ secrets_policy = aws.iam.RolePolicy(
 )
 
 # IAM Role for ECS Task (application runtime permissions)
+# Note: tags are omitted here to avoid conflicts with AWS provider default tags
+# which are set by the deployment script. Default tags will be applied automatically.
 task_role = aws.iam.Role(
     f"ecs-task-role-{environment_suffix}",
     name=f"ecs-task-{environment_suffix}",
@@ -290,8 +293,7 @@ task_role = aws.iam.Role(
                 "Action": "sts:AssumeRole"
             }
         ]
-    }"""),
-    tags=common_tags
+    }""")
 )
 
 # Application-specific policies for task role
