@@ -62,6 +62,9 @@ class CloudFrontStack(pulumi.ComponentResource):
                     restriction_type="none",
                 ),
             ),
+            viewer_certificate=aws.cloudfront.DistributionViewerCertificateArgs(
+                cloudfront_default_certificate=True,
+            ),
             price_class="PriceClass_100",
             tags={**tags, "Name": f"cloudfront-{environment_suffix}"},
             opts=ResourceOptions(parent=self)
