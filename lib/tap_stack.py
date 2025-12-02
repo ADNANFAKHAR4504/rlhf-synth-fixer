@@ -845,74 +845,84 @@ def handler(event, context):
             opts=pulumi.ResourceOptions(parent=self)
         )
 
-        self.config_recorder = aws.cfg.Recorder(
-            f"config-recorder-{environment_suffix}",
-            name=f"config-recorder-{environment_suffix}",
-            role_arn=self.config_role.arn,
-            recording_group=aws.cfg.RecorderRecordingGroupArgs(
-                all_supported=True,
-                include_global_resource_types=True,
-            ),
-            opts=pulumi.ResourceOptions(parent=self)
-        )
+        # AWS Config recorder is conditional to avoid AWS limit of 1 recorder per region
+        # Set create_config_recorder to true in Pulumi config to enable
+        config = pulumi.Config()
+        create_config_recorder = config.get_bool("create_config_recorder") or False
 
-        self.config_delivery_channel = aws.cfg.DeliveryChannel(
-            f"config-delivery-channel-{environment_suffix}",
-            name=f"config-delivery-channel-{environment_suffix}",
-            s3_bucket_name=self.config_bucket.id,
-            opts=pulumi.ResourceOptions(parent=self, depends_on=[self.config_bucket_policy])
-        )
+        if create_config_recorder:
+            self.config_recorder = aws.cfg.Recorder(
+                f"config-recorder-{environment_suffix}",
+                name=f"config-recorder-{environment_suffix}",
+                role_arn=self.config_role.arn,
+                recording_group=aws.cfg.RecorderRecordingGroupArgs(
+                    all_supported=True,
+                    include_global_resource_types=True,
+                ),
+                opts=pulumi.ResourceOptions(parent=self)
+            )
 
-        self.config_recorder_status = aws.cfg.RecorderStatus(
-            f"config-recorder-status-{environment_suffix}",
-            name=self.config_recorder.name,
-            is_enabled=True,
-            opts=pulumi.ResourceOptions(parent=self, depends_on=[self.config_delivery_channel])
-        )
+            self.config_delivery_channel = aws.cfg.DeliveryChannel(
+                f"config-delivery-channel-{environment_suffix}",
+                name=f"config-delivery-channel-{environment_suffix}",
+                s3_bucket_name=self.config_bucket.id,
+                opts=pulumi.ResourceOptions(parent=self, depends_on=[self.config_bucket_policy])
+            )
 
-        # Config rules
-        aws.cfg.Rule(
-            f"config-rule-s3-encryption-{environment_suffix}",
-            name=f"s3-bucket-encryption-{environment_suffix}",
-            source=aws.cfg.RuleSourceArgs(
-                owner="AWS",
-                source_identifier="S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED",
-            ),
-            opts=pulumi.ResourceOptions(parent=self, depends_on=[self.config_recorder_status])
-        )
+            self.config_recorder_status = aws.cfg.RecorderStatus(
+                f"config-recorder-status-{environment_suffix}",
+                name=self.config_recorder.name,
+                is_enabled=True,
+                opts=pulumi.ResourceOptions(parent=self, depends_on=[self.config_delivery_channel])
+            )
 
-        aws.cfg.Rule(
-            f"config-rule-kms-rotation-{environment_suffix}",
-            name=f"kms-key-rotation-{environment_suffix}",
-            source=aws.cfg.RuleSourceArgs(
-                owner="AWS",
-                source_identifier="CMK_BACKING_KEY_ROTATION_ENABLED",
-            ),
-            opts=pulumi.ResourceOptions(parent=self, depends_on=[self.config_recorder_status])
-        )
+            # Config rules
+            aws.cfg.Rule(
+                f"config-rule-s3-encryption-{environment_suffix}",
+                name=f"s3-bucket-encryption-{environment_suffix}",
+                source=aws.cfg.RuleSourceArgs(
+                    owner="AWS",
+                    source_identifier="S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED",
+                ),
+                opts=pulumi.ResourceOptions(parent=self, depends_on=[self.config_recorder_status])
+            )
 
-        aws.cfg.Rule(
-            f"config-rule-log-encryption-{environment_suffix}",
-            name=f"cloudwatch-log-group-encrypted-{environment_suffix}",
-            source=aws.cfg.RuleSourceArgs(
-                owner="AWS",
-                source_identifier="CLOUDWATCH_LOG_GROUP_ENCRYPTED",
-            ),
-            opts=pulumi.ResourceOptions(parent=self, depends_on=[self.config_recorder_status])
-        )
+            aws.cfg.Rule(
+                f"config-rule-kms-rotation-{environment_suffix}",
+                name=f"kms-key-rotation-{environment_suffix}",
+                source=aws.cfg.RuleSourceArgs(
+                    owner="AWS",
+                    source_identifier="CMK_BACKING_KEY_ROTATION_ENABLED",
+                ),
+                opts=pulumi.ResourceOptions(parent=self, depends_on=[self.config_recorder_status])
+            )
 
-        aws.cfg.Rule(
-            f"config-rule-iam-policy-{environment_suffix}",
-            name=f"iam-policy-no-full-star-{environment_suffix}",
-            source=aws.cfg.RuleSourceArgs(
-                owner="AWS",
-                source_identifier="IAM_POLICY_NO_STATEMENTS_WITH_ADMIN_ACCESS",
-            ),
-            opts=pulumi.ResourceOptions(parent=self, depends_on=[self.config_recorder_status])
-        )
+            aws.cfg.Rule(
+                f"config-rule-log-encryption-{environment_suffix}",
+                name=f"cloudwatch-log-group-encrypted-{environment_suffix}",
+                source=aws.cfg.RuleSourceArgs(
+                    owner="AWS",
+                    source_identifier="CLOUDWATCH_LOG_GROUP_ENCRYPTED",
+                ),
+                opts=pulumi.ResourceOptions(parent=self, depends_on=[self.config_recorder_status])
+            )
+
+            aws.cfg.Rule(
+                f"config-rule-iam-policy-{environment_suffix}",
+                name=f"iam-policy-no-full-star-{environment_suffix}",
+                source=aws.cfg.RuleSourceArgs(
+                    owner="AWS",
+                    source_identifier="IAM_POLICY_NO_STATEMENTS_WITH_ADMIN_ACCESS",
+                ),
+                opts=pulumi.ResourceOptions(parent=self, depends_on=[self.config_recorder_status])
+            )
+        else:
+            self.config_recorder = None
+            self.config_delivery_channel = None
+            self.config_recorder_status = None
 
         # Export outputs
-        self.register_outputs({
+        outputs = {
             "vpc_id": self.vpc.id,
             "subnet_ids": [subnet.id for subnet in self.private_subnets],
             "s3_bucket_name": self.s3_bucket.id,
@@ -922,5 +932,7 @@ def handler(event, context):
             ),
             "lambda_function_name": self.lambda_function.name,
             "log_group_name": self.log_group.name,
-            "config_recorder_name": self.config_recorder.name,
-        })
+        }
+        if self.config_recorder is not None:
+            outputs["config_recorder_name"] = self.config_recorder.name
+        self.register_outputs(outputs)

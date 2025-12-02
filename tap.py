@@ -65,4 +65,5 @@ pulumi.export("api_gateway_endpoint", pulumi.Output.concat(
 ))
 pulumi.export("lambda_function_name", stack.lambda_function.name)
 pulumi.export("log_group_name", stack.log_group.name)
-pulumi.export("config_recorder_name", stack.config_recorder.name)
+if stack.config_recorder is not None:
+    pulumi.export("config_recorder_name", stack.config_recorder.name)
