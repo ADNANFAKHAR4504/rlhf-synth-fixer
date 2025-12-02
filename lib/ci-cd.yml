@@ -7,7 +7,7 @@
 name: Multi-Stage Pipeline
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -70,59 +70,47 @@ jobs:
           npx cdk synth --app "npx ts-node --prefer-ts-exts bin/*.ts"
         continue-on-error: false
 
-      - name: Build and push Docker image to ECR
+      - name: Build Docker image
         env:
           IMAGE_TAG: ${{ github.sha }}
         run: |
           ECR_REGISTRY="${{ env.DEV_ACCOUNT_ID }}.dkr.ecr.\
             ${{ env.AWS_REGION }}.amazonaws.com"
           IMAGE_URI="${ECR_REGISTRY}/${{ env.ECR_REPOSITORY }}"
-          aws ecr get-login-password --region ${{ env.AWS_REGION }} | \
-            docker login --username AWS --password-stdin \
-            "${ECR_REGISTRY}"
           docker build -t "${IMAGE_URI}:${IMAGE_TAG}" .
-          docker push "${IMAGE_URI}:${IMAGE_TAG}"
-          docker tag "${IMAGE_URI}:${IMAGE_TAG}" "${IMAGE_URI}:latest"
-          docker push "${IMAGE_URI}:latest"
+
+      - name: Scan container image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: >-
+            ${{ env.DEV_ACCOUNT_ID }}.dkr.ecr.
+            ${{ env.AWS_REGION }}.amazonaws.com/
+            ${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          severity: CRITICAL
+          exit-code: '1'
+
+      - name: Push Docker image to ECR
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+          ECR_REGISTRY: >-
+            ${{ env.DEV_ACCOUNT_ID }}.dkr.ecr.
+            ${{ env.AWS_REGION }}.amazonaws.com
+        run: |
+          ./lib/scripts/build-and-push-docker.sh \
+            "${ECR_REGISTRY}" "${{ env.ECR_REPOSITORY }}" \
+            "${IMAGE_TAG}" "${{ env.AWS_REGION }}"
 
       - name: Wait for ECR image scan and check results
         run: |
-          echo "Waiting for ECR image scan to complete..."
-          sleep 30
-          SCAN_STATUS=$(aws ecr describe-image-scan-findings \
-            --repository-name ${{ env.ECR_REPOSITORY }} \
-            --image-id imageTag=${{ github.sha }} \
-            --region ${{ env.AWS_REGION }} \
-            --query 'imageScanStatus.status' \
-            --output text || echo "PENDING")
-
-          if [ "$SCAN_STATUS" != "COMPLETE" ]; then
-            echo "Scan still in progress, waiting..."
-            sleep 60
-          fi
-
-          CRITICAL_COUNT=$(aws ecr describe-image-scan-findings \
-            --repository-name ${{ env.ECR_REPOSITORY }} \
-            --image-id imageTag=${{ github.sha }} \
-            --region ${{ env.AWS_REGION }} \
-            --query 'imageScanFindings.findingCounts.CRITICAL' \
-            --output text || echo "0")
-
-          if [ "$CRITICAL_COUNT" != "0" ] && \
-             [ "$CRITICAL_COUNT" != "None" ]; then
-            echo "Critical vulnerabilities found: $CRITICAL_COUNT"
-            exit 1
-          fi
-          echo "Image scan passed with $CRITICAL_COUNT critical findings"
+          ./lib/scripts/check-ecr-scan.sh \
+            "${{ env.ECR_REPOSITORY }}" \
+            "${{ github.sha }}" \
+            "${{ env.AWS_REGION }}"
 
       - name: Encrypt artifacts with KMS
         run: |
-          tar -czf cdk-outputs.tar.gz -C cdk.out .
-          aws kms encrypt \
-            --key-id alias/github-actions-artifacts \
-            --plaintext fileb://cdk-outputs.tar.gz \
-            --output text \
-            --query CiphertextBlob > cdk-outputs.tar.gz.encrypted
+          ./lib/scripts/encrypt-artifacts.sh \
+            "alias/github-actions-artifacts"
 
       - name: Upload encrypted artifacts
         uses: actions/upload-artifact@v4
@@ -192,11 +180,9 @@ jobs:
 
       - name: Get Parameter Store values for Dev
         run: |
-          aws ssm get-parameters-by-path \
-            --path "/app/dev" \
-            --recursive \
-            --with-decryption \
-            --region ${{ env.AWS_REGION }} || echo "No parameters found"
+          ./lib/scripts/get-parameter-store.sh \
+            "/app/dev" \
+            "${{ env.AWS_REGION }}"
 
       - name: Deploy to Dev
         run: |
@@ -205,21 +191,19 @@ jobs:
 
       - name: Verify ECS service health
         run: |
-          aws ecs describe-services \
-            --cluster ${{ secrets.ECS_CLUSTER_NAME }}-dev \
-            --services ${{ secrets.ECS_SERVICE_NAME }}-dev \
-            --region ${{ env.AWS_REGION }} \
-            --query 'services[0].runningCount' || echo "Service check completed"
+          ./lib/scripts/verify-ecs-health.sh \
+            "${{ secrets.ECS_CLUSTER_NAME }}-dev" \
+            "${{ secrets.ECS_SERVICE_NAME }}-dev" \
+            "${{ env.AWS_REGION }}"
 
       - name: Send notification
         if: always()
         run: |
-          STATUS=${{ job.status }}
-          aws sns publish \
-            --topic-arn ${{ secrets.SNS_TOPIC_ARN }} \
-            --message "Dev deployment $STATUS for ${{ github.ref }}" \
-            --subject "Dev Deployment $STATUS" \
-            --region ${{ env.AWS_REGION }} || echo "SNS notification sent"
+          ./lib/scripts/send-sns-notification.sh \
+            "${{ secrets.SNS_TOPIC_ARN }}" \
+            "Dev deployment ${{ job.status }} for ${{ github.ref }}" \
+            "Dev Deployment ${{ job.status }}" \
+            "${{ env.AWS_REGION }}"
   manual-approval-staging:
     name: Approve Staging Deployment
     runs-on: ubuntu-latest
@@ -264,11 +248,9 @@ jobs:
 
       - name: Get Parameter Store values for Staging
         run: |
-          aws ssm get-parameters-by-path \
-            --path "/app/staging" \
-            --recursive \
-            --with-decryption \
-            --region ${{ env.AWS_REGION }} || echo "No parameters found"
+          ./lib/scripts/get-parameter-store.sh \
+            "/app/staging" \
+            "${{ env.AWS_REGION }}"
 
       - name: Deploy to Staging with CodeDeploy blue/green
         run: |
@@ -282,29 +264,25 @@ jobs:
 
       - name: Verify ECS service health
         run: |
-          aws ecs describe-services \
-            --cluster ${{ secrets.ECS_CLUSTER_NAME }}-staging \
-            --services ${{ secrets.ECS_SERVICE_NAME }}-staging \
-            --region ${{ env.AWS_REGION }} \
-            --query 'services[0].runningCount' || echo "Service check completed"
+          ./lib/scripts/verify-ecs-health.sh \
+            "${{ secrets.ECS_CLUSTER_NAME }}-staging" \
+            "${{ secrets.ECS_SERVICE_NAME }}-staging" \
+            "${{ env.AWS_REGION }}"
 
       - name: Check CloudWatch alarms
         run: |
-          aws cloudwatch describe-alarms \
-            --alarm-names "${{ secrets.ALARM_PREFIX }}-staging-*" \
-            --region ${{ env.AWS_REGION }} \
-            --query 'MetricAlarms[?StateValue==`ALARM`]' || \
-            echo "Alarm check completed"
+          ./lib/scripts/check-cloudwatch-alarms.sh \
+            "${{ secrets.ALARM_PREFIX }}-staging-*" \
+            "${{ env.AWS_REGION }}"
 
       - name: Send notification
         if: always()
         run: |
-          STATUS=${{ job.status }}
-          aws sns publish \
-            --topic-arn ${{ secrets.SNS_TOPIC_ARN }} \
-            --message "Staging deployment $STATUS for ${{ github.ref }}" \
-            --subject "Staging Deployment $STATUS" \
-            --region ${{ env.AWS_REGION }} || echo "SNS notification sent"
+          ./lib/scripts/send-sns-notification.sh \
+            "${{ secrets.SNS_TOPIC_ARN }}" \
+            "Staging deployment ${{ job.status }} for ${{ github.ref }}" \
+            "Staging Deployment ${{ job.status }}" \
+            "${{ env.AWS_REGION }}"
   manual-approval-prod:
     name: Approve Production Deployment
     runs-on: ubuntu-latest
@@ -348,11 +326,9 @@ jobs:
 
       - name: Get Parameter Store values for Prod
         run: |
-          aws ssm get-parameters-by-path \
-            --path "/app/prod" \
-            --recursive \
-            --with-decryption \
-            --region ${{ env.AWS_REGION }} || echo "No parameters found"
+          ./lib/scripts/get-parameter-store.sh \
+            "/app/prod" \
+            "${{ env.AWS_REGION }}"
 
       - name: Deploy to Production with CodeDeploy blue/green
         run: |
@@ -361,43 +337,29 @@ jobs:
 
       - name: Verify ECS service health
         run: |
-          aws ecs describe-services \
-            --cluster ${{ secrets.ECS_CLUSTER_NAME }}-prod \
-            --services ${{ secrets.ECS_SERVICE_NAME }}-prod \
-            --region ${{ env.AWS_REGION }} \
-            --query 'services[0].runningCount' || echo "Service check completed"
+          ./lib/scripts/verify-ecs-health.sh \
+            "${{ secrets.ECS_CLUSTER_NAME }}-prod" \
+            "${{ secrets.ECS_SERVICE_NAME }}-prod" \
+            "${{ env.AWS_REGION }}"
 
       - name: Check CloudWatch alarms
         run: |
-          aws cloudwatch describe-alarms \
-            --alarm-names "${{ secrets.ALARM_PREFIX }}-prod-*" \
-            --region ${{ env.AWS_REGION }} \
-            --query 'MetricAlarms[?StateValue==`ALARM`]' || \
-            echo "Alarm check completed"
+          ./lib/scripts/check-cloudwatch-alarms.sh \
+            "${{ secrets.ALARM_PREFIX }}-prod-*" \
+            "${{ env.AWS_REGION }}"
 
       - name: Monitor deployment for rollback triggers
         run: |
-          echo "Monitoring deployment for 5 minutes..."
-          sleep 300
-          aws codedeploy get-deployment \
-            --deployment-id $(aws codedeploy list-deployments \
-              --application-name ${{ secrets.CODEDEPLOY_APP_NAME }} \
-              --deployment-group-name \
-                ${{ secrets.CODEDEPLOY_GROUP_NAME }}-prod \
-              --region ${{ env.AWS_REGION }} \
-              --query 'deployments[0]' \
-              --output text) \
-            --region ${{ env.AWS_REGION }} \
-            --query 'deploymentInfo.status' || \
-            echo "Deployment monitoring completed"
+          ./lib/scripts/monitor-deployment.sh \
+            "${{ secrets.CODEDEPLOY_APP_NAME }}" \
+            "${{ secrets.CODEDEPLOY_GROUP_NAME }}-prod" \
+            "${{ env.AWS_REGION }}"
 
       - name: Send notification
         if: always()
         run: |
-          STATUS=${{ job.status }}
-          aws sns publish \
-            --topic-arn ${{ secrets.SNS_TOPIC_ARN }} \
-            --message "Production deployment $STATUS for ${{ github.ref }}" \
-            --subject "Production Deployment $STATUS" \
-            --region ${{ env.AWS_REGION }} || \
-            echo "SNS notification sent"
+          ./lib/scripts/send-sns-notification.sh \
+            "${{ secrets.SNS_TOPIC_ARN }}" \
+            "Production deployment ${{ job.status }} for ${{ github.ref }}" \
+            "Production Deployment ${{ job.status }}" \
+            "${{ env.AWS_REGION }}"
