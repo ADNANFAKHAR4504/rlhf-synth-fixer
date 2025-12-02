@@ -1,7 +1,6 @@
 config:
-  aws:region: us-east-2
-  pulumi-infra:bucket_name: data-processing-dev
-  pulumi-infra:lambda_memory: "512"
-  pulumi-infra:table_name: metadata-dev
-  pulumi-infra:notification_email: dev-team@example.com
-  pulumi-infra:queue_name: task-queue-dev
+  aws:region: us-east-1
+  ecs-optimization-j2l9s6d6:environmentSuffix: dev-j2l9s6d6
+  ecs-optimization-j2l9s6d6:environment: dev
+  ecs-optimization-j2l9s6d6:containerPort: "3000"
+  ecs-optimization-j2l9s6d6:desiredCount: "2"
