@@ -22,8 +22,6 @@
     "IAM"
   ],
   "training_quality": 10,
-  "qa_status": "passed",
-  "phase3_status": "ready",
-  "test_coverage": 98.10,
-  "tests_status": "passed"
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing"
 }
