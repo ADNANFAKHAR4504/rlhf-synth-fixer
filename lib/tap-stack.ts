@@ -828,7 +828,13 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    if (disasterRecoveryRegions.length > 0) {
+    // Only deploy DR StackSet in production environments
+    // StackSets with SELF_MANAGED permission model require pre-existing IAM roles:
+    // - AWSCloudFormationStackSetAdministrationRole (in administrator account)
+    // - AWSCloudFormationStackSetExecutionRole (in target accounts)
+    // These roles are typically only set up in production accounts
+    const isProductionEnv = envTag === 'prod' || envTag === 'production';
+    if (disasterRecoveryRegions.length > 0 && isProductionEnv) {
       const drTemplateBody = JSON.stringify(
         {
           AWSTemplateFormatVersion: '2010-09-09',
