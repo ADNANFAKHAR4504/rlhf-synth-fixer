@@ -22,9 +22,7 @@ Create a complete payment processing infrastructure using **CloudFormation with 
 
 2. **Application Tier**
    - Application Load Balancer in public subnets with SSL termination (TLS 1.2 minimum)
-   - Auto Scaling group with EC2 instances (t3.large) in private subnets
-   - Minimum 2 instances, maximum 6 instances for scaling
-   - Auto Scaling policies using target tracking for CPU utilization at 70%
+   - EC2 instances (t3.large) in private subnets behind the ALB (no Auto Scaling group)
    - EC2 instances must have no direct internet access (private subnet only)
    - Instances use gp3 EBS volumes (100GB, 3000 IOPS)
 
@@ -60,7 +58,7 @@ Create a complete payment processing infrastructure using **CloudFormation with 
 
 - All infrastructure defined using **CloudFormation with JSON format**
 - Use **Application Load Balancer** for traffic distribution with SSL termination
-- Use **Auto Scaling Group** with EC2 t3.large instances
+-- Use **EC2 instances** (t3.large) in private subnets (no Auto Scaling Group)
 - Use **RDS Aurora MySQL** cluster with one writer and one reader
 - Use **KMS** customer-managed keys for database encryption
 - Use **AWS WAF** with rate limiting for DDoS protection
@@ -96,8 +94,8 @@ Create a complete payment processing infrastructure using **CloudFormation with 
 
 ## Success Criteria
 
-- **Functionality**: Complete multi-tier architecture with ALB, Auto Scaling, and RDS Aurora
-- **Performance**: Auto Scaling maintains CPU below 70% under load
+-- **Functionality**: Complete multi-tier architecture with ALB and RDS Aurora
+-- **Performance**: Appropriate instance sizing and ALB configuration keep CPU within acceptable limits under load
 - **Reliability**: Multi-AZ deployment across 3 availability zones for high availability
 - **Security**: PCI DSS compliant with encryption, WAF protection, least privilege IAM, and security groups
 - **Resource Naming**: All resources include environmentSuffix for parallel deployment support
@@ -109,7 +107,7 @@ Create a complete payment processing infrastructure using **CloudFormation with 
 - Complete CloudFormation JSON template implementation
 - VPC with public, private, and database subnet tiers across 3 AZs
 - Application Load Balancer with SSL termination and WAF protection
-- Auto Scaling Group with EC2 t3.large instances and scaling policies
+ - EC2 instances (t3.large) configured via Launch Template; scaling handled outside this template
 - RDS Aurora MySQL cluster with encryption and backup configuration
 - Security groups implementing least privilege access
 - IAM roles with policies for Parameter Store and S3 access

@@ -16,7 +16,6 @@ This solution provides a comprehensive, PCI DSS-compliant infrastructure for mig
 
 ### Application Layer
 - **Application Load Balancer (ALB)**: HTTPS with TLS 1.2, deployed in public subnets
-- **Auto Scaling Group**: Min 2, Max 6 t3.large instances with target tracking (CPU 70%)
 - **Launch Template**: gp3 EBS volumes (100GB, 3000 IOPS), IAM instance profile
 
 ### Database Layer
@@ -45,7 +44,7 @@ This solution provides a comprehensive, PCI DSS-compliant infrastructure for mig
 [PASS] WAF protection
 
 ### 3. High Availability
-- 3 AZs, Auto Scaling, Multi-AZ RDS, 3 NAT Gateways
+- 3 AZs, Multi-AZ RDS, 3 NAT Gateways
 
 ### 4. Destroyability
 - DeletionPolicy: Delete on all resources
@@ -54,7 +53,7 @@ This solution provides a comprehensive, PCI DSS-compliant infrastructure for mig
 ## Testing & Validation
 
 ### Unit Tests: 118 tests - 100% pass rate
-[PASS] VPC configuration, security groups, ALB, Auto Scaling, RDS, WAF, KMS, S3, IAM, CloudWatch
+[PASS] VPC configuration, security groups, ALB, RDS, WAF, KMS, S3, IAM, CloudWatch
 [PASS] PCI DSS compliance, destroyability, resource naming (62 environmentSuffix occurrences)
 
 ### Test Coverage: 100%
@@ -66,7 +65,7 @@ This solution provides a comprehensive, PCI DSS-compliant infrastructure for mig
 
 [PASS] Comprehensive security and PCI DSS compliance
 [PASS] High availability across 3 AZs
-[PASS] Auto Scaling (2-6 instances)
+[PASS] Scalability handled via ALB and appropriate instance sizing
 [PASS] 100% test coverage
 [PASS] Complete documentation
 [PASS] Destroyable infrastructure

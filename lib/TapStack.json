@@ -1,25 +1,11 @@
 {
-  "Description": "Payment Processing System Migration - PCI DSS Compliant Infrastructure",
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "PCI-DSS compliant secure data processing pipeline with encryption, network isolation, and comprehensive audit logging",
   "Parameters": {
     "EnvironmentSuffix": {
       "Type": "String",
-      "Description": "Unique suffix for resource naming to enable parallel deployments",
-      "MinLength": 4,
-      "MaxLength": 20,
-      "AllowedPattern": "[a-z0-9-]+",
-      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens",
-      "Default": "dev-pr7576"
-    },
-    "LatestAmiId": {
-      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
-      "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
-      "Description": "Latest Amazon Linux 2 AMI ID"
-    },
-    "DBPassword": {
-      "Type": "String",
-      "NoEcho": true,
-      "Description": "Database master password",
-      "Default": "TempPassword123!"
+      "Description": "Unique suffix for resource names to enable parallel deployments",
+      "Default": "dev"
     }
   },
   "Resources": {
@@ -33,122 +19,16 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${AWS::StackName}-vpc"
+              "Fn::Sub": "vpc-v2-${EnvironmentSuffix}"
             }
           },
           {
-            "Key": "Environment",
-            "Value": "Production"
+            "Key": "DataClassification",
+            "Value": "PCI"
           },
           {
-            "Key": "CostCenter",
-            "Value": "FinancialServices"
-          },
-          {
-            "Key": "MigrationPhase",
-            "Value": "Phase1"
-          }
-        ]
-      }
-    },
-    "InternetGateway": {
-      "Type": "AWS::EC2::InternetGateway",
-      "Properties": {
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-igw"
-            }
-          }
-        ]
-      }
-    },
-    "AttachGateway": {
-      "Type": "AWS::EC2::VPCGatewayAttachment",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "InternetGatewayId": {
-          "Ref": "InternetGateway"
-        }
-      }
-    },
-    "PublicSubnet1": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "CidrBlock": "10.0.1.0/24",
-        "AvailabilityZone": {
-          "Fn::Select": [
-            0,
-            {
-              "Fn::GetAZs": ""
-            }
-          ]
-        },
-        "MapPublicIpOnLaunch": true,
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-public-subnet-1"
-            }
-          }
-        ]
-      }
-    },
-    "PublicSubnet2": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "CidrBlock": "10.0.2.0/24",
-        "AvailabilityZone": {
-          "Fn::Select": [
-            1,
-            {
-              "Fn::GetAZs": ""
-            }
-          ]
-        },
-        "MapPublicIpOnLaunch": true,
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-public-subnet-2"
-            }
-          }
-        ]
-      }
-    },
-    "PublicSubnet3": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "CidrBlock": "10.0.3.0/24",
-        "AvailabilityZone": {
-          "Fn::Select": [
-            2,
-            {
-              "Fn::GetAZs": ""
-            }
-          ]
-        },
-        "MapPublicIpOnLaunch": true,
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-public-subnet-3"
-            }
+            "Key": "ComplianceScope",
+            "Value": "Payment"
           }
         ]
       }
@@ -159,21 +39,30 @@
         "VpcId": {
           "Ref": "VPC"
         },
-        "CidrBlock": "10.0.11.0/24",
+        "CidrBlock": "10.0.1.0/24",
         "AvailabilityZone": {
           "Fn::Select": [
-            0,
+            "0",
             {
               "Fn::GetAZs": ""
             }
           ]
         },
+        "MapPublicIpOnLaunch": false,
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${AWS::StackName}-private-subnet-1"
+              "Fn::Sub": "private-subnet-1-v2-${EnvironmentSuffix}"
             }
+          },
+          {
+            "Key": "DataClassification",
+            "Value": "PCI"
+          },
+          {
+            "Key": "ComplianceScope",
+            "Value": "Payment"
           }
         ]
       }
@@ -184,21 +73,30 @@
         "VpcId": {
           "Ref": "VPC"
         },
-        "CidrBlock": "10.0.12.0/24",
+        "CidrBlock": "10.0.2.0/24",
         "AvailabilityZone": {
           "Fn::Select": [
-            1,
+            "1",
             {
               "Fn::GetAZs": ""
             }
           ]
         },
+        "MapPublicIpOnLaunch": false,
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${AWS::StackName}-private-subnet-2"
+              "Fn::Sub": "private-subnet-2-v2-${EnvironmentSuffix}"
             }
+          },
+          {
+            "Key": "DataClassification",
+            "Value": "PCI"
+          },
+          {
+            "Key": "ComplianceScope",
+            "Value": "Payment"
           }
         ]
       }
@@ -209,101 +107,35 @@
         "VpcId": {
           "Ref": "VPC"
         },
-        "CidrBlock": "10.0.13.0/24",
+        "CidrBlock": "10.0.3.0/24",
         "AvailabilityZone": {
           "Fn::Select": [
-            2,
+            "2",
             {
               "Fn::GetAZs": ""
             }
           ]
         },
+        "MapPublicIpOnLaunch": false,
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${AWS::StackName}-private-subnet-3"
+              "Fn::Sub": "private-subnet-3-v2-${EnvironmentSuffix}"
             }
-          }
-        ]
-      }
-    },
-    "DatabaseSubnet1": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "CidrBlock": "10.0.21.0/24",
-        "AvailabilityZone": {
-          "Fn::Select": [
-            0,
-            {
-              "Fn::GetAZs": ""
-            }
-          ]
-        },
-        "Tags": [
+          },
           {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-database-subnet-1"
-            }
-          }
-        ]
-      }
-    },
-    "DatabaseSubnet2": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "CidrBlock": "10.0.22.0/24",
-        "AvailabilityZone": {
-          "Fn::Select": [
-            1,
-            {
-              "Fn::GetAZs": ""
-            }
-          ]
-        },
-        "Tags": [
+            "Key": "DataClassification",
+            "Value": "PCI"
+          },
           {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-database-subnet-2"
-            }
+            "Key": "ComplianceScope",
+            "Value": "Payment"
           }
         ]
       }
     },
-    "DatabaseSubnet3": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "CidrBlock": "10.0.23.0/24",
-        "AvailabilityZone": {
-          "Fn::Select": [
-            2,
-            {
-              "Fn::GetAZs": ""
-            }
-          ]
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-database-subnet-3"
-            }
-          }
-        ]
-      }
-    },
-    "PublicRouteTable": {
+    "PrivateRouteTable": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
         "VpcId": {
@@ -313,195 +145,18 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${AWS::StackName}-public-rt"
+              "Fn::Sub": "private-rt-v2-${EnvironmentSuffix}"
             }
-          }
-        ]
-      }
-    },
-    "PublicRoute": {
-      "Type": "AWS::EC2::Route",
-      "DependsOn": "AttachGateway",
-      "Properties": {
-        "RouteTableId": {
-          "Ref": "PublicRouteTable"
-        },
-        "DestinationCidrBlock": "0.0.0.0/0",
-        "GatewayId": {
-          "Ref": "InternetGateway"
-        }
-      }
-    },
-    "PublicSubnet1RouteTableAssociation": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "SubnetId": {
-          "Ref": "PublicSubnet1"
-        },
-        "RouteTableId": {
-          "Ref": "PublicRouteTable"
-        }
-      }
-    },
-    "PublicSubnet2RouteTableAssociation": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "SubnetId": {
-          "Ref": "PublicSubnet2"
-        },
-        "RouteTableId": {
-          "Ref": "PublicRouteTable"
-        }
-      }
-    },
-    "PublicSubnet3RouteTableAssociation": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "SubnetId": {
-          "Ref": "PublicSubnet3"
-        },
-        "RouteTableId": {
-          "Ref": "PublicRouteTable"
-        }
-      }
-    },
-    "NATGateway1EIP": {
-      "Type": "AWS::EC2::EIP",
-      "DependsOn": "AttachGateway",
-      "Properties": {
-        "Domain": "vpc",
-        "Tags": [
+          },
           {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-nat-eip-1"
-            }
-          }
-        ]
-      }
-    },
-    "NATGateway2EIP": {
-      "Type": "AWS::EC2::EIP",
-      "DependsOn": "AttachGateway",
-      "Properties": {
-        "Domain": "vpc",
-        "Tags": [
+            "Key": "DataClassification",
+            "Value": "PCI"
+          },
           {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-nat-eip-2"
-            }
+            "Key": "ComplianceScope",
+            "Value": "Payment"
           }
         ]
-      }
-    },
-    "NATGateway3EIP": {
-      "Type": "AWS::EC2::EIP",
-      "DependsOn": "AttachGateway",
-      "Properties": {
-        "Domain": "vpc",
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-nat-eip-3"
-            }
-          }
-        ]
-      }
-    },
-    "NATGateway1": {
-      "Type": "AWS::EC2::NatGateway",
-      "Properties": {
-        "AllocationId": {
-          "Fn::GetAtt": [
-            "NATGateway1EIP",
-            "AllocationId"
-          ]
-        },
-        "SubnetId": {
-          "Ref": "PublicSubnet1"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-nat-1"
-            }
-          }
-        ]
-      }
-    },
-    "NATGateway2": {
-      "Type": "AWS::EC2::NatGateway",
-      "Properties": {
-        "AllocationId": {
-          "Fn::GetAtt": [
-            "NATGateway2EIP",
-            "AllocationId"
-          ]
-        },
-        "SubnetId": {
-          "Ref": "PublicSubnet2"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-nat-2"
-            }
-          }
-        ]
-      }
-    },
-    "NATGateway3": {
-      "Type": "AWS::EC2::NatGateway",
-      "Properties": {
-        "AllocationId": {
-          "Fn::GetAtt": [
-            "NATGateway3EIP",
-            "AllocationId"
-          ]
-        },
-        "SubnetId": {
-          "Ref": "PublicSubnet3"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-nat-3"
-            }
-          }
-        ]
-      }
-    },
-    "PrivateRouteTable1": {
-      "Type": "AWS::EC2::RouteTable",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-private-rt-1"
-            }
-          }
-        ]
-      }
-    },
-    "PrivateRoute1": {
-      "Type": "AWS::EC2::Route",
-      "Properties": {
-        "RouteTableId": {
-          "Ref": "PrivateRouteTable1"
-        },
-        "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": {
-          "Ref": "NATGateway1"
-        }
       }
     },
     "PrivateSubnet1RouteTableAssociation": {
@@ -511,35 +166,7 @@
           "Ref": "PrivateSubnet1"
         },
         "RouteTableId": {
-          "Ref": "PrivateRouteTable1"
-        }
-      }
-    },
-    "PrivateRouteTable2": {
-      "Type": "AWS::EC2::RouteTable",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-private-rt-2"
-            }
-          }
-        ]
-      }
-    },
-    "PrivateRoute2": {
-      "Type": "AWS::EC2::Route",
-      "Properties": {
-        "RouteTableId": {
-          "Ref": "PrivateRouteTable2"
-        },
-        "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": {
-          "Ref": "NATGateway2"
+          "Ref": "PrivateRouteTable"
         }
       }
     },
@@ -550,35 +177,7 @@
           "Ref": "PrivateSubnet2"
         },
         "RouteTableId": {
-          "Ref": "PrivateRouteTable2"
-        }
-      }
-    },
-    "PrivateRouteTable3": {
-      "Type": "AWS::EC2::RouteTable",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-private-rt-3"
-            }
-          }
-        ]
-      }
-    },
-    "PrivateRoute3": {
-      "Type": "AWS::EC2::Route",
-      "Properties": {
-        "RouteTableId": {
-          "Ref": "PrivateRouteTable3"
-        },
-        "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": {
-          "Ref": "NATGateway3"
+          "Ref": "PrivateRouteTable"
         }
       }
     },
@@ -589,234 +188,165 @@
           "Ref": "PrivateSubnet3"
         },
         "RouteTableId": {
-          "Ref": "PrivateRouteTable3"
+          "Ref": "PrivateRouteTable"
         }
       }
     },
-    "VPCFlowLogsRole": {
-      "Type": "AWS::IAM::Role",
+    "S3VPCEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
       "Properties": {
-        "AssumeRolePolicyDocument": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
+        },
+        "VpcEndpointType": "Gateway",
+        "RouteTableIds": [
+          {
+            "Ref": "PrivateRouteTable"
+          }
+        ],
+        "PolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
             {
               "Effect": "Allow",
-              "Principal": {
-                "Service": "vpc-flow-logs.amazonaws.com"
-              },
-              "Action": "sts:AssumeRole"
+              "Principal": "*",
+              "Action": [
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:ListBucket"
+              ],
+              "Resource": "*"
             }
           ]
-        },
-        "Policies": [
-          {
-            "PolicyName": "VPCFlowLogsPolicy",
-            "PolicyDocument": {
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "logs:CreateLogGroup",
-                    "logs:CreateLogStream",
-                    "logs:PutLogEvents",
-                    "logs:DescribeLogGroups",
-                    "logs:DescribeLogStreams"
-                  ],
-                  "Resource": "*"
-                }
-              ]
-            }
-          }
-        ]
+        }
       }
     },
-    "FlowLogsBucket": {
-      "Type": "AWS::S3::Bucket",
+    "KMSVPCEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
       "Properties": {
-        "BucketName": {
-          "Fn::Join": [
-            "-",
-            [
-              {
-                "Fn::GetAtt": [
-                  "LowercaseStackNameResource",
-                  "LowercaseStackName"
-                ]
-              },
-              "flow-logs"
-            ]
-          ]
-        },
-        "BucketEncryption": {
-          "ServerSideEncryptionConfiguration": [
-            {
-              "ServerSideEncryptionByDefault": {
-                "SSEAlgorithm": "AES256"
-              }
-            }
-          ]
-        },
-        "LifecycleConfiguration": {
-          "Rules": [
-            {
-              "Id": "DeleteOldFlowLogs",
-              "Status": "Enabled",
-              "ExpirationInDays": 90
-            }
-          ]
-        },
-        "PublicAccessBlockConfiguration": {
-          "BlockPublicAcls": true,
-          "BlockPublicPolicy": true,
-          "IgnorePublicAcls": true,
-          "RestrictPublicBuckets": true
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-flow-logs"
-            }
-          }
-        ]
-      }
-    },
-    "VPCFlowLog": {
-      "Type": "AWS::EC2::FlowLog",
-      "Properties": {
-        "ResourceType": "VPC",
-        "ResourceId": {
-          "Ref": "VPC"
-        },
-        "TrafficType": "ALL",
-        "LogDestinationType": "s3",
-        "LogDestination": {
-          "Fn::GetAtt": [
-            "FlowLogsBucket",
-            "Arn"
-          ]
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-flow-log"
-            }
-          }
-        ]
-      }
-    },
-    "ALBSecurityGroup": {
-      "Type": "AWS::EC2::SecurityGroup",
-      "Properties": {
-        "GroupName": {
-          "Fn::Sub": "${AWS::StackName}-alb-sg"
-        },
-        "GroupDescription": "Security group for Application Load Balancer",
         "VpcId": {
           "Ref": "VPC"
         },
-        "SecurityGroupIngress": [
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.kms"
+        },
+        "VpcEndpointType": "Interface",
+        "PrivateDnsEnabled": true,
+        "SubnetIds": [
           {
-            "IpProtocol": "tcp",
-            "FromPort": 80,
-            "ToPort": 80,
-            "CidrIp": "0.0.0.0/0",
-            "Description": "Allow HTTP from internet"
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          },
+          {
+            "Ref": "PrivateSubnet3"
           }
         ],
-        "SecurityGroupEgress": [
+        "SecurityGroupIds": [
           {
-            "IpProtocol": "-1",
-            "CidrIp": "0.0.0.0/0",
-            "Description": "Allow all outbound traffic"
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-alb-sg"
-            }
+            "Ref": "KMSEndpointSecurityGroup"
           }
         ]
       }
     },
-    "EC2SecurityGroup": {
+    "KMSEndpointSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
+        "GroupDescription": "Security group for KMS VPC endpoint",
         "GroupName": {
-          "Fn::Sub": "${AWS::StackName}-ec2-sg"
+          "Fn::Sub": "kms-endpoint-sg-v2-${EnvironmentSuffix}"
         },
-        "GroupDescription": "Security group for EC2 instances",
         "VpcId": {
           "Ref": "VPC"
         },
-        "SecurityGroupIngress": [
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 80,
-            "ToPort": 80,
-            "SourceSecurityGroupId": {
-              "Ref": "ALBSecurityGroup"
-            },
-            "Description": "Allow HTTP from ALB"
-          }
-        ],
-        "SecurityGroupEgress": [
-          {
-            "IpProtocol": "-1",
-            "CidrIp": "0.0.0.0/0",
-            "Description": "Allow all outbound traffic"
-          }
-        ],
+        "SecurityGroupEgress": [],
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${AWS::StackName}-ec2-sg"
+              "Fn::Sub": "kms-endpoint-sg-v2-${EnvironmentSuffix}"
             }
+          },
+          {
+            "Key": "DataClassification",
+            "Value": "PCI"
+          },
+          {
+            "Key": "ComplianceScope",
+            "Value": "Payment"
           }
         ]
       }
     },
-    "RDSSecurityGroup": {
+    "LambdaSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
+        "GroupDescription": "Security group for Lambda function",
         "GroupName": {
-          "Fn::Sub": "${AWS::StackName}-rds-sg"
+          "Fn::Sub": "lambda-sg-v2-${EnvironmentSuffix}"
         },
-        "GroupDescription": "Security group for RDS Aurora cluster",
         "VpcId": {
           "Ref": "VPC"
         },
-        "SecurityGroupIngress": [
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 3306,
-            "ToPort": 3306,
-            "SourceSecurityGroupId": {
-              "Ref": "EC2SecurityGroup"
-            },
-            "Description": "Allow MySQL from EC2 instances"
-          }
-        ],
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${AWS::StackName}-rds-sg"
+              "Fn::Sub": "lambda-sg-v2-${EnvironmentSuffix}"
             }
+          },
+          {
+            "Key": "DataClassification",
+            "Value": "PCI"
+          },
+          {
+            "Key": "ComplianceScope",
+            "Value": "Payment"
           }
         ]
+      }
+    },
+    "KMSEndpointSecurityGroupIngress": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "KMSEndpointSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 443,
+        "ToPort": 443,
+        "SourceSecurityGroupId": {
+          "Ref": "LambdaSecurityGroup"
+        }
+      }
+    },
+    "LambdaSecurityGroupEgress": {
+      "Type": "AWS::EC2::SecurityGroupEgress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "LambdaSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 443,
+        "ToPort": 443,
+        "DestinationSecurityGroupId": {
+          "Ref": "KMSEndpointSecurityGroup"
+        },
+        "Description": "Allow HTTPS to KMS endpoint"
       }
     },
     "KMSKey": {
       "Type": "AWS::KMS::Key",
-      "DeletionPolicy": "Delete",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
       "Properties": {
-        "Description": "KMS key for RDS Aurora encryption",
+        "Description": {
+          "Fn::Sub": "Customer-managed KMS key for PCI data encryption - ${EnvironmentSuffix}"
+        },
         "KeyPolicy": {
           "Version": "2012-10-17",
           "Statement": [
@@ -832,27 +362,58 @@
               "Resource": "*"
             },
             {
-              "Sid": "Allow RDS to use the key",
+              "Sid": "Allow S3 to use the key",
               "Effect": "Allow",
               "Principal": {
-                "Service": "rds.amazonaws.com"
+                "Service": "s3.amazonaws.com"
               },
               "Action": [
                 "kms:Decrypt",
-                "kms:DescribeKey",
-                "kms:CreateGrant"
+                "kms:GenerateDataKey"
               ],
               "Resource": "*"
+            },
+            {
+              "Sid": "Allow CloudWatch Logs to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": {
+                  "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+                }
+              },
+              "Action": [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:CreateGrant",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "ArnLike": {
+                  "kms:EncryptionContext:aws:logs:arn": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                  }
+                }
+              }
             }
           ]
         },
-        "PendingWindowInDays": 7,
         "Tags": [
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${AWS::StackName}-kms-key"
+              "Fn::Sub": "kms-key-v2-${EnvironmentSuffix}"
             }
+          },
+          {
+            "Key": "DataClassification",
+            "Value": "PCI"
+          },
+          {
+            "Key": "ComplianceScope",
+            "Value": "Payment"
           }
         ]
       }
@@ -861,186 +422,539 @@
       "Type": "AWS::KMS::Alias",
       "Properties": {
         "AliasName": {
-          "Fn::Sub": "alias/${AWS::StackName}-rds"
+          "Fn::Sub": "alias/pci-data-key-v2-${EnvironmentSuffix}"
         },
         "TargetKeyId": {
           "Ref": "KMSKey"
         }
       }
     },
-    "DBSubnetGroup": {
-      "Type": "AWS::RDS::DBSubnetGroup",
-      "Properties": {
-        "DBSubnetGroupName": {
-          "Fn::Sub": "${AWS::StackName}-db-subnet-group"
-        },
-        "DBSubnetGroupDescription": "Subnet group for RDS Aurora cluster",
-        "SubnetIds": [
-          {
-            "Ref": "DatabaseSubnet1"
-          },
-          {
-            "Ref": "DatabaseSubnet2"
-          },
-          {
-            "Ref": "DatabaseSubnet3"
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-db-subnet-group"
-            }
-          }
-        ]
-      }
-    },
-    "AuroraCluster": {
-      "Type": "AWS::RDS::DBCluster",
-      "DeletionPolicy": "Delete",
-      "Properties": {
-        "DBClusterIdentifier": {
-          "Fn::Sub": "${AWS::StackName}-aurora-cluster"
-        },
-        "Engine": "aurora-mysql",
-        "EngineVersion": "5.7.mysql_aurora.2.11.2",
-        "MasterUsername": "admin",
-        "MasterUserPassword": {
-          "Ref": "DBPassword"
-        },
-        "DatabaseName": "paymentdb",
-        "BackupRetentionPeriod": 7,
-        "PreferredBackupWindow": "03:00-04:00",
-        "PreferredMaintenanceWindow": "mon:04:00-mon:05:00",
-        "DBSubnetGroupName": {
-          "Ref": "DBSubnetGroup"
-        },
-        "VpcSecurityGroupIds": [
-          {
-            "Ref": "RDSSecurityGroup"
-          }
-        ],
-        "StorageEncrypted": true,
-        "KmsKeyId": {
-          "Ref": "KMSKey"
-        },
-        "EnableCloudwatchLogsExports": [
-          "error",
-          "general",
-          "slowquery"
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-aurora-cluster"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": "Production"
-          },
-          {
-            "Key": "CostCenter",
-            "Value": "FinancialServices"
-          }
-        ]
-      }
-    },
-    "AuroraInstanceWriter": {
-      "Type": "AWS::RDS::DBInstance",
-      "Properties": {
-        "DBInstanceIdentifier": {
-          "Fn::Sub": "${AWS::StackName}-aurora-writer"
-        },
-        "DBClusterIdentifier": {
-          "Ref": "AuroraCluster"
-        },
-        "Engine": "aurora-mysql",
-        "DBInstanceClass": "db.t3.medium",
-        "PubliclyAccessible": false,
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-aurora-writer"
-            }
-          }
-        ]
-      }
-    },
-    "AuroraInstanceReader": {
-      "Type": "AWS::RDS::DBInstance",
-      "Properties": {
-        "DBInstanceIdentifier": {
-          "Fn::Sub": "${AWS::StackName}-aurora-reader"
-        },
-        "DBClusterIdentifier": {
-          "Ref": "AuroraCluster"
-        },
-        "Engine": "aurora-mysql",
-        "DBInstanceClass": "db.t3.medium",
-        "PubliclyAccessible": false,
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-aurora-reader"
-            }
-          }
-        ]
-      }
-    },
-    "DBConnectionsAlarm": {
-      "Type": "AWS::CloudWatch::Alarm",
-      "Properties": {
-        "AlarmName": {
-          "Fn::Sub": "${AWS::StackName}-db-connections"
-        },
-        "AlarmDescription": "Alert when database connections exceed 100",
-        "MetricName": "DatabaseConnections",
-        "Namespace": "AWS/RDS",
-        "Statistic": "Average",
-        "Period": 300,
-        "EvaluationPeriods": 1,
-        "Threshold": 100,
-        "ComparisonOperator": "GreaterThanThreshold",
-        "Dimensions": [
-          {
-            "Name": "DBClusterIdentifier",
-            "Value": {
-              "Ref": "AuroraCluster"
-            }
-          }
-        ]
-      }
-    },
-    "ArtifactsBucket": {
+    "DataBucket": {
       "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
       "Properties": {
         "BucketName": {
-          "Fn::Join": [
-            "-",
-            [
-              {
-                "Fn::GetAtt": [
-                  "LowercaseStackNameResource",
-                  "LowercaseStackName"
-                ]
-              },
-              "artifacts"
-            ]
-          ]
-        },
-        "VersioningConfiguration": {
-          "Status": "Enabled"
+          "Fn::Sub": "pci-data-bucket-v2-${EnvironmentSuffix}-${AWS::AccountId}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
             {
               "ServerSideEncryptionByDefault": {
-                "SSEAlgorithm": "AES256"
+                "SSEAlgorithm": "aws:kms",
+                "KMSMasterKeyID": {
+                  "Fn::GetAtt": [
+                    "KMSKey",
+                    "Arn"
+                  ]
+                }
+              },
+              "BucketKeyEnabled": true
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldVersions",
+              "Status": "Enabled",
+              "NoncurrentVersionExpirationInDays": 90
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "pci-data-bucket-v2-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "DataClassification",
+            "Value": "PCI"
+          },
+          {
+            "Key": "ComplianceScope",
+            "Value": "Payment"
+          }
+        ]
+      }
+    },
+    "DataBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "DataBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "DenyUnencryptedObjectUploads",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${DataBucket.Arn}/*"
+              },
+              "Condition": {
+                "StringNotEquals": {
+                  "s3:x-amz-server-side-encryption": "aws:kms"
+                }
+              }
+            },
+            {
+              "Sid": "DenyInsecureTransport",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "DataBucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${DataBucket.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "VPCFlowLogsLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/vpc/flowlogs-v2-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 90,
+        "KmsKeyId": {
+          "Fn::GetAtt": [
+            "KMSKey",
+            "Arn"
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "vpc-flowlogs-v2-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "DataClassification",
+            "Value": "PCI"
+          },
+          {
+            "Key": "ComplianceScope",
+            "Value": "Payment"
+          }
+        ]
+      }
+    },
+    "VPCFlowLogsRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "vpc-flowlogs-role-v2-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "vpc-flow-logs.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "CloudWatchLogGroupAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                    "logs:DescribeLogGroups",
+                    "logs:DescribeLogStreams"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "VPCFlowLogsLogGroup",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "DataClassification",
+            "Value": "PCI"
+          },
+          {
+            "Key": "ComplianceScope",
+            "Value": "Payment"
+          }
+        ]
+      }
+    },
+    "VPCFlowLog": {
+      "Type": "AWS::EC2::FlowLog",
+      "Properties": {
+        "ResourceType": "VPC",
+        "ResourceId": {
+          "Ref": "VPC"
+        },
+        "TrafficType": "ALL",
+        "LogDestinationType": "cloud-watch-logs",
+        "LogGroupName": {
+          "Ref": "VPCFlowLogsLogGroup"
+        },
+        "DeliverLogsPermissionArn": {
+          "Fn::GetAtt": [
+            "VPCFlowLogsRole",
+            "Arn"
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "vpc-flowlog-v2-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "DataClassification",
+            "Value": "PCI"
+          },
+          {
+            "Key": "ComplianceScope",
+            "Value": "Payment"
+          }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "lambda-execution-role-v2-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "S3Access",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${DataBucket.Arn}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:ListBucket"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "DataBucket",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "KMSAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:Decrypt",
+                    "kms:Encrypt",
+                    "kms:GenerateDataKey",
+                    "kms:DescribeKey"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "KMSKey",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "DataClassification",
+            "Value": "PCI"
+          },
+          {
+            "Key": "ComplianceScope",
+            "Value": "Payment"
+          }
+        ]
+      }
+    },
+    "DataValidationFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "data-validation-v2-${EnvironmentSuffix}"
+        },
+        "Runtime": "nodejs22.x",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "MemorySize": 1024,
+        "Timeout": 60,
+        "VpcConfig": {
+          "SecurityGroupIds": [
+            {
+              "Ref": "LambdaSecurityGroup"
+            }
+          ],
+          "SubnetIds": [
+            {
+              "Ref": "PrivateSubnet1"
+            },
+            {
+              "Ref": "PrivateSubnet2"
+            },
+            {
+              "Ref": "PrivateSubnet3"
+            }
+          ]
+        },
+        "Environment": {
+          "Variables": {
+            "DATA_BUCKET": {
+              "Ref": "DataBucket"
+            },
+            "KMS_KEY_ID": {
+              "Ref": "KMSKey"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "exports.handler = async (event) => {\n  console.log('Validating payment card data...');\n  console.log('Event:', JSON.stringify(event, null, 2));\n  \n  // Extract S3 event details if present\n  const bucket = event.Records?.[0]?.s3?.bucket?.name || process.env.DATA_BUCKET;\n  const key = event.Records?.[0]?.s3?.object?.key || 'test-data.json';\n  \n  console.log(`Processing file: s3://${bucket}/${key}`);\n  \n  // Basic validation logic\n  const validationResult = {\n    status: 'valid',\n    timestamp: new Date().toISOString(),\n    bucket: bucket,\n    key: key,\n    message: 'Payment card data validation completed successfully'\n  };\n  \n  console.log('Validation result:', JSON.stringify(validationResult, null, 2));\n  \n  return {\n    statusCode: 200,\n    body: JSON.stringify(validationResult)\n  };\n};\n"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "data-validation-v2-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "DataClassification",
+            "Value": "PCI"
+          },
+          {
+            "Key": "ComplianceScope",
+            "Value": "Payment"
+          }
+        ]
+      }
+    },
+    "SecurityAlertTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "security-alerts-v2-${EnvironmentSuffix}"
+        },
+        "DisplayName": "PCI Security Alerts",
+        "KmsMasterKeyId": {
+          "Ref": "KMSKey"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "security-alerts-v2-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "DataClassification",
+            "Value": "PCI"
+          },
+          {
+            "Key": "ComplianceScope",
+            "Value": "Payment"
+          }
+        ]
+      }
+    },
+    "ConfigRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "config-role-v2-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "config.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ConfigPermissions",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "config:*",
+                    "sns:Publish"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "ConfigBucketAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetBucketVersioning",
+                    "s3:PutObject",
+                    "s3:GetObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "ConfigBucket",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${ConfigBucket.Arn}/*"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "ConfigKMSAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:GenerateDataKey",
+                    "kms:DescribeKey"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "KMSKey",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "DataClassification",
+            "Value": "PCI"
+          },
+          {
+            "Key": "ComplianceScope",
+            "Value": "Payment"
+          }
+        ]
+      }
+    },
+    "ConfigBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "config-bucket-v2-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "aws:kms",
+                "KMSMasterKeyID": {
+                  "Fn::GetAtt": [
+                    "KMSKey",
+                    "Arn"
+                  ]
+                }
               }
             }
           ]
@@ -1055,461 +969,166 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${AWS::StackName}-artifacts"
+              "Fn::Sub": "config-bucket-v2-${EnvironmentSuffix}"
             }
+          },
+          {
+            "Key": "DataClassification",
+            "Value": "PCI"
+          },
+          {
+            "Key": "ComplianceScope",
+            "Value": "Payment"
           }
         ]
       }
     },
-    "EC2InstanceRole": {
-      "Type": "AWS::IAM::Role",
+    "ConfigBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "${AWS::StackName}-ec2-role"
+        "Bucket": {
+          "Ref": "ConfigBucket"
         },
-        "AssumeRolePolicyDocument": {
+        "PolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
             {
+              "Sid": "AWSConfigBucketPermissionsCheck",
               "Effect": "Allow",
               "Principal": {
-                "Service": "ec2.amazonaws.com"
+                "Service": "config.amazonaws.com"
               },
-              "Action": "sts:AssumeRole"
-            }
-          ]
-        },
-        "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
-        ],
-        "Policies": [
-          {
-            "PolicyName": "ParameterStoreAccess",
-            "PolicyDocument": {
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "ssm:GetParameter",
-                    "ssm:GetParameters",
-                    "ssm:GetParametersByPath"
-                  ],
-                  "Resource": {
-                    "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/*"
-                  }
-                }
-              ]
-            }
-          },
-          {
-            "PolicyName": "S3ArtifactsAccess",
-            "PolicyDocument": {
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "s3:GetObject",
-                    "s3:ListBucket"
-                  ],
-                  "Resource": [
-                    {
-                      "Fn::GetAtt": [
-                        "ArtifactsBucket",
-                        "Arn"
-                      ]
-                    },
-                    {
-                      "Fn::Sub": "${ArtifactsBucket.Arn}/*"
-                    }
-                  ]
-                }
-              ]
-            }
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-ec2-role"
-            }
-          }
-        ]
-      }
-    },
-    "EC2InstanceProfile": {
-      "Type": "AWS::IAM::InstanceProfile",
-      "Properties": {
-        "InstanceProfileName": {
-          "Fn::Sub": "${AWS::StackName}-ec2-profile"
-        },
-        "Roles": [
-          {
-            "Ref": "EC2InstanceRole"
-          }
-        ]
-      }
-    },
-    "LambdaExecutionRole": {
-      "Type": "AWS::IAM::Role",
-      "Properties": {
-        "AssumeRolePolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
+              "Action": "s3:GetBucketAcl",
+              "Resource": {
+                "Fn::Sub": "arn:aws:s3:::${ConfigBucket}"
+              }
+            },
             {
+              "Sid": "AWSConfigBucketDelivery",
               "Effect": "Allow",
               "Principal": {
-                "Service": "lambda.amazonaws.com"
+                "Service": "config.amazonaws.com"
               },
-              "Action": "sts:AssumeRole"
-            }
-          ]
-        },
-        "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-        ]
-      }
-    },
-    "LowercaseStackNameFunction": {
-      "Type": "AWS::Lambda::Function",
-      "Properties": {
-        "FunctionName": {
-          "Fn::Sub": "${AWS::StackName}-lowercase-function"
-        },
-        "Runtime": "python3.9",
-        "Handler": "index.handler",
-        "Role": {
-          "Fn::GetAtt": [
-            "LambdaExecutionRole",
-            "Arn"
-          ]
-        },
-        "Code": {
-          "ZipFile": "import cfnresponse\ndef handler(event, context):\n    if event['RequestType'] in ['Create', 'Update']:\n        stack_name = event['ResourceProperties']['StackName']\n        lowercase = stack_name.lower()\n        cfnresponse.send(event, context, cfnresponse.SUCCESS, {'LowercaseStackName': lowercase})\n    elif event['RequestType'] == 'Delete':\n        cfnresponse.send(event, context, cfnresponse.SUCCESS, {})\n"
-        }
-      }
-    },
-    "LowercaseStackNameResource": {
-      "Type": "AWS::CloudFormation::CustomResource",
-      "Properties": {
-        "ServiceToken": {
-          "Fn::GetAtt": [
-            "LowercaseStackNameFunction",
-            "Arn"
-          ]
-        },
-        "StackName": {
-          "Ref": "AWS::StackName"
-        }
-      }
-    },
-    "ApplicationLogGroup": {
-      "Type": "AWS::Logs::LogGroup",
-      "Properties": {
-        "LogGroupName": {
-          "Fn::Sub": "/aws/payment/${AWS::StackName}"
-        },
-        "RetentionInDays": 30
-      }
-    },
-    "ApplicationLoadBalancer": {
-      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
-      "Properties": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-alb"
-        },
-        "Type": "application",
-        "Scheme": "internet-facing",
-        "IpAddressType": "ipv4",
-        "Subnets": [
-          {
-            "Ref": "PublicSubnet1"
-          },
-          {
-            "Ref": "PublicSubnet2"
-          },
-          {
-            "Ref": "PublicSubnet3"
-          }
-        ],
-        "SecurityGroups": [
-          {
-            "Ref": "ALBSecurityGroup"
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-alb"
-            }
-          }
-        ]
-      }
-    },
-    "ALBTargetGroup": {
-      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
-      "Properties": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-tg"
-        },
-        "Port": 80,
-        "Protocol": "HTTP",
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "HealthCheckEnabled": true,
-        "HealthCheckPath": "/health",
-        "HealthCheckProtocol": "HTTP",
-        "HealthCheckIntervalSeconds": 30,
-        "HealthCheckTimeoutSeconds": 5,
-        "HealthyThresholdCount": 2,
-        "UnhealthyThresholdCount": 3,
-        "TargetType": "instance",
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-tg"
-            }
-          }
-        ]
-      }
-    },
-    "ALBListener": {
-      "Type": "AWS::ElasticLoadBalancingV2::Listener",
-      "Properties": {
-        "DefaultActions": [
-          {
-            "Type": "forward",
-            "TargetGroupArn": {
-              "Ref": "ALBTargetGroup"
-            }
-          }
-        ],
-        "LoadBalancerArn": {
-          "Ref": "ApplicationLoadBalancer"
-        },
-        "Port": 80,
-        "Protocol": "HTTP"
-      }
-    },
-    "WebACL": {
-      "Type": "AWS::WAFv2::WebACL",
-      "Properties": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-waf"
-        },
-        "Scope": "REGIONAL",
-        "DefaultAction": {
-          "Allow": {}
-        },
-        "Rules": [
-          {
-            "Name": "RateLimitRule",
-            "Priority": 1,
-            "Statement": {
-              "RateBasedStatement": {
-                "Limit": 2000,
-                "AggregateKeyType": "IP"
-              }
-            },
-            "Action": {
-              "Block": {}
-            },
-            "VisibilityConfig": {
-              "SampledRequestsEnabled": true,
-              "CloudWatchMetricsEnabled": true,
-              "MetricName": "RateLimitRule"
-            }
-          }
-        ],
-        "VisibilityConfig": {
-          "SampledRequestsEnabled": true,
-          "CloudWatchMetricsEnabled": true,
-          "MetricName": {
-            "Fn::Sub": "${AWS::StackName}-waf"
-          }
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-waf"
-            }
-          }
-        ]
-      }
-    },
-    "WebACLAssociation": {
-      "Type": "AWS::WAFv2::WebACLAssociation",
-      "Properties": {
-        "ResourceArn": {
-          "Ref": "ApplicationLoadBalancer"
-        },
-        "WebACLArn": {
-          "Fn::GetAtt": [
-            "WebACL",
-            "Arn"
-          ]
-        }
-      }
-    },
-    "LaunchTemplate": {
-      "Type": "AWS::EC2::LaunchTemplate",
-      "Properties": {
-        "LaunchTemplateName": {
-          "Fn::Sub": "${AWS::StackName}-launch-template"
-        },
-        "LaunchTemplateData": {
-          "ImageId": {
-            "Ref": "LatestAmiId"
-          },
-          "InstanceType": "t3.large",
-          "IamInstanceProfile": {
-            "Arn": {
-              "Fn::GetAtt": [
-                "EC2InstanceProfile",
-                "Arn"
-              ]
-            }
-          },
-          "SecurityGroupIds": [
-            {
-              "Ref": "EC2SecurityGroup"
-            }
-          ],
-          "BlockDeviceMappings": [
-            {
-              "DeviceName": "/dev/xvda",
-              "Ebs": {
-                "VolumeSize": 100,
-                "VolumeType": "gp3",
-                "Iops": 3000,
-                "Encrypted": true,
-                "DeleteOnTermination": true
-              }
-            }
-          ],
-          "UserData": {
-            "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\necho 'Payment processing application deployment' > /var/log/user-data.log\n"
-          },
-          "TagSpecifications": [
-            {
-              "ResourceType": "instance",
-              "Tags": [
-                {
-                  "Key": "Name",
-                  "Value": {
-                    "Fn::Sub": "${AWS::StackName}-instance"
-                  }
-                },
-                {
-                  "Key": "Environment",
-                  "Value": "Production"
-                },
-                {
-                  "Key": "CostCenter",
-                  "Value": "FinancialServices"
-                },
-                {
-                  "Key": "MigrationPhase",
-                  "Value": "Phase1"
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "arn:aws:s3:::${ConfigBucket}/AWSLogs/${AWS::AccountId}/Config/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control"
                 }
-              ]
+              }
             }
           ]
         }
       }
     },
-    "AutoScalingGroup": {
-      "Type": "AWS::AutoScaling::AutoScalingGroup",
+    "ConfigRecorder": {
+      "Type": "AWS::Config::ConfigurationRecorder",
       "Properties": {
-        "AutoScalingGroupName": {
-          "Fn::Sub": "${AWS::StackName}-asg"
+        "Name": {
+          "Fn::Sub": "config-recorder-v2-${EnvironmentSuffix}"
         },
-        "LaunchTemplate": {
-          "LaunchTemplateId": {
-            "Ref": "LaunchTemplate"
-          },
-          "Version": {
-            "Fn::GetAtt": [
-              "LaunchTemplate",
-              "LatestVersionNumber"
-            ]
-          }
+        "RoleARN": {
+          "Fn::GetAtt": [
+            "ConfigRole",
+            "Arn"
+          ]
         },
-        "MinSize": 2,
-        "MaxSize": 6,
-        "DesiredCapacity": 2,
-        "HealthCheckType": "ELB",
-        "HealthCheckGracePeriod": 300,
-        "VPCZoneIdentifier": [
-          {
-            "Ref": "PrivateSubnet1"
-          },
-          {
-            "Ref": "PrivateSubnet2"
-          },
-          {
-            "Ref": "PrivateSubnet3"
-          }
-        ],
-        "TargetGroupARNs": [
-          {
-            "Ref": "ALBTargetGroup"
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "${AWS::StackName}-asg-instance"
-            },
-            "PropagateAtLaunch": true
-          }
-        ]
-      }
-    },
-    "ScalingPolicy": {
-      "Type": "AWS::AutoScaling::ScalingPolicy",
-      "Properties": {
-        "AutoScalingGroupName": {
-          "Ref": "AutoScalingGroup"
-        },
-        "PolicyType": "TargetTrackingScaling",
-        "TargetTrackingConfiguration": {
-          "PredefinedMetricSpecification": {
-            "PredefinedMetricType": "ASGAverageCPUUtilization"
-          },
-          "TargetValue": 70.0
+        "RecordingGroup": {
+          "AllSupported": true,
+          "IncludeGlobalResourceTypes": true
         }
       }
     },
-    "CPUAlarmHigh": {
-      "Type": "AWS::CloudWatch::Alarm",
+    "ConfigDeliveryChannel": {
+      "Type": "AWS::Config::DeliveryChannel",
       "Properties": {
-        "AlarmName": {
-          "Fn::Sub": "${AWS::StackName}-cpu-high"
+        "Name": {
+          "Fn::Sub": "config-delivery-v2-${EnvironmentSuffix}"
         },
-        "AlarmDescription": "Alert when CPU exceeds 80%",
-        "MetricName": "CPUUtilization",
-        "Namespace": "AWS/EC2",
-        "Statistic": "Average",
-        "Period": 300,
-        "EvaluationPeriods": 2,
-        "Threshold": 80,
-        "ComparisonOperator": "GreaterThanThreshold",
-        "Dimensions": [
-          {
-            "Name": "AutoScalingGroupName",
-            "Value": {
-              "Ref": "AutoScalingGroup"
-            }
-          }
-        ]
+        "S3BucketName": {
+          "Ref": "ConfigBucket"
+        },
+        "SnsTopicARN": {
+          "Ref": "SecurityAlertTopic"
+        }
+      }
+    },
+    "EncryptedVolumesConfigRule": {
+      "Type": "AWS::Config::ConfigRule",
+      "DependsOn": "ConfigRecorder",
+      "Properties": {
+        "ConfigRuleName": {
+          "Fn::Sub": "encrypted-volumes-v2-${EnvironmentSuffix}"
+        },
+        "Description": "Checks that EBS volumes are encrypted",
+        "Source": {
+          "Owner": "AWS",
+          "SourceIdentifier": "ENCRYPTED_VOLUMES"
+        }
+      }
+    },
+    "S3BucketSSLRequestsOnlyConfigRule": {
+      "Type": "AWS::Config::ConfigRule",
+      "DependsOn": "ConfigRecorder",
+      "Properties": {
+        "ConfigRuleName": {
+          "Fn::Sub": "s3-bucket-ssl-requests-only-v2-${EnvironmentSuffix}"
+        },
+        "Description": "Checks that S3 buckets have policies requiring SSL",
+        "Source": {
+          "Owner": "AWS",
+          "SourceIdentifier": "S3_BUCKET_SSL_REQUESTS_ONLY"
+        }
+      }
+    },
+    "IAMPasswordPolicyConfigRule": {
+      "Type": "AWS::Config::ConfigRule",
+      "DependsOn": "ConfigRecorder",
+      "Properties": {
+        "ConfigRuleName": {
+          "Fn::Sub": "iam-password-policy-v2-${EnvironmentSuffix}"
+        },
+        "Description": "Checks that the account password policy meets PCI DSS requirements",
+        "Source": {
+          "Owner": "AWS",
+          "SourceIdentifier": "IAM_PASSWORD_POLICY"
+        }
+      }
+    },
+    "ConfigParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/pci/config/${EnvironmentSuffix}/data-bucket"
+        },
+        "Description": "S3 bucket name for PCI data storage",
+        "Type": "String",
+        "Value": {
+          "Ref": "DataBucket"
+        },
+        "Tags": {
+          "DataClassification": "PCI",
+          "ComplianceScope": "Payment"
+        }
+      }
+    },
+    "KMSKeyParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/pci/config/${EnvironmentSuffix}/kms-key-id"
+        },
+        "Description": "KMS key ID for PCI data encryption",
+        "Type": "String",
+        "Value": {
+          "Ref": "KMSKey"
+        },
+        "Tags": {
+          "DataClassification": "PCI",
+          "ComplianceScope": "Payment"
+        }
       }
     }
   },
@@ -1525,57 +1144,76 @@
         }
       }
     },
-    "ALBDNSName": {
-      "Description": "Application Load Balancer DNS Name",
+    "PrivateSubnet1Id": {
+      "Description": "Private Subnet 1 ID",
       "Value": {
-        "Fn::GetAtt": [
-          "ApplicationLoadBalancer",
-          "DNSName"
-        ]
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-ALBDNSName"
-        }
+        "Ref": "PrivateSubnet1"
       }
     },
-    "AuroraClusterEndpoint": {
-      "Description": "Aurora Cluster Writer Endpoint",
+    "PrivateSubnet2Id": {
+      "Description": "Private Subnet 2 ID",
       "Value": {
-        "Fn::GetAtt": [
-          "AuroraCluster",
-          "Endpoint.Address"
-        ]
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-AuroraClusterEndpoint"
-        }
+        "Ref": "PrivateSubnet2"
       }
     },
-    "AuroraReaderEndpoint": {
-      "Description": "Aurora Cluster Reader Endpoint",
+    "PrivateSubnet3Id": {
+      "Description": "Private Subnet 3 ID",
       "Value": {
-        "Fn::GetAtt": [
-          "AuroraCluster",
-          "ReadEndpoint.Address"
-        ]
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-AuroraReaderEndpoint"
-        }
+        "Ref": "PrivateSubnet3"
       }
     },
-    "ArtifactsBucketName": {
-      "Description": "S3 Bucket for Application Artifacts",
+    "DataBucketName": {
+      "Description": "S3 bucket name for PCI data",
       "Value": {
-        "Ref": "ArtifactsBucket"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-ArtifactsBucketName"
-        }
+        "Ref": "DataBucket"
+      }
+    },
+    "KMSKeyId": {
+      "Description": "KMS key ID for encryption",
+      "Value": {
+        "Ref": "KMSKey"
+      }
+    },
+    "KMSKeyArn": {
+      "Description": "KMS key ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "KMSKey",
+          "Arn"
+        ]
+      }
+    },
+    "DataValidationFunctionArn": {
+      "Description": "Lambda function ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "DataValidationFunction",
+          "Arn"
+        ]
+      }
+    },
+    "DataValidationFunctionName": {
+      "Description": "Lambda function name",
+      "Value": {
+        "Ref": "DataValidationFunction"
+      }
+    },
+    "SecurityAlertTopicArn": {
+      "Description": "SNS topic ARN for security alerts",
+      "Value": {
+        "Ref": "SecurityAlertTopic"
+      }
+    },
+    "VPCFlowLogsLogGroup": {
+      "Description": "CloudWatch Logs log group for VPC flow logs",
+      "Value": {
+        "Ref": "VPCFlowLogsLogGroup"
+      }
+    },
+    "ConfigBucketName": {
+      "Description": "S3 bucket for AWS Config",
+      "Value": {
+        "Ref": "ConfigBucket"
       }
     }
   }

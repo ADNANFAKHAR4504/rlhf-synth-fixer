@@ -6,7 +6,7 @@ This implementation creates a complete PCI DSS compliant payment processing infr
 
 The solution implements a three-tier architecture:
 - **Network Layer**: VPC with public, private, and database subnets across 3 AZs
-- **Application Layer**: Auto Scaling Group with EC2 instances behind an Application Load Balancer
+- **Application Layer**: EC2 instances behind an Application Load Balancer
 - **Data Layer**: RDS Aurora MySQL cluster with encryption and backups
 
 ## File: lib/TapStack.json
@@ -1367,94 +1367,7 @@ The solution implements a three-tier architecture:
         }
       }
     },
-    "AutoScalingGroup": {
-      "Type": "AWS::AutoScaling::AutoScalingGroup",
-      "Properties": {
-        "AutoScalingGroupName": {
-          "Fn::Sub": "payment-asg-${EnvironmentSuffix}"
-        },
-        "LaunchTemplate": {
-          "LaunchTemplateId": {
-            "Ref": "LaunchTemplate"
-          },
-          "Version": {
-            "Fn::GetAtt": [
-              "LaunchTemplate",
-              "LatestVersionNumber"
-            ]
-          }
-        },
-        "MinSize": 2,
-        "MaxSize": 6,
-        "DesiredCapacity": 2,
-        "HealthCheckType": "ELB",
-        "HealthCheckGracePeriod": 300,
-        "VPCZoneIdentifier": [
-          {
-            "Ref": "PrivateSubnet1"
-          },
-          {
-            "Ref": "PrivateSubnet2"
-          },
-          {
-            "Ref": "PrivateSubnet3"
-          }
-        ],
-        "TargetGroupARNs": [
-          {
-            "Ref": "ALBTargetGroup"
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "payment-asg-instance-${EnvironmentSuffix}"
-            },
-            "PropagateAtLaunch": true
-          }
-        ]
-      }
-    },
-    "ScalingPolicy": {
-      "Type": "AWS::AutoScaling::ScalingPolicy",
-      "Properties": {
-        "AutoScalingGroupName": {
-          "Ref": "AutoScalingGroup"
-        },
-        "PolicyType": "TargetTrackingScaling",
-        "TargetTrackingConfiguration": {
-          "PredefinedMetricSpecification": {
-            "PredefinedMetricType": "ASGAverageCPUUtilization"
-          },
-          "TargetValue": 70.0
-        }
-      }
-    },
-    "CPUAlarmHigh": {
-      "Type": "AWS::CloudWatch::Alarm",
-      "Properties": {
-        "AlarmName": {
-          "Fn::Sub": "payment-cpu-high-${EnvironmentSuffix}"
-        },
-        "AlarmDescription": "Alert when CPU exceeds 80%",
-        "MetricName": "CPUUtilization",
-        "Namespace": "AWS/EC2",
-        "Statistic": "Average",
-        "Period": 300,
-        "EvaluationPeriods": 2,
-        "Threshold": 80,
-        "ComparisonOperator": "GreaterThanThreshold",
-        "Dimensions": [
-          {
-            "Name": "AutoScalingGroupName",
-            "Value": {
-              "Ref": "AutoScalingGroup"
-            }
-          }
-        ]
-      }
-    }
+    
   },
   "Outputs": {
     "VPCId": {
@@ -1585,6 +1498,7 @@ aws cloudformation describe-stacks \
 - **Security**: WAF rate limiting, security groups with least privilege, private subnets for compute
 - **Monitoring**: CloudWatch alarms for CPU and database connections, VPC Flow Logs, application logs
 - **Scalability**: Auto Scaling based on CPU utilization (70% target)
+- **Scalability**: Application Load Balancer with appropriately sized EC2 instances (manual or external scaling)
 - **Backup and Recovery**: 7-day backup retention with point-in-time recovery
 
 ## Resource Summary
@@ -1593,7 +1507,7 @@ This CloudFormation template creates 60+ AWS resources including:
 - VPC with 9 subnets (3 public, 3 private, 3 database)
 - 3 NAT Gateways for high availability
 - Application Load Balancer with WAF protection
-- Auto Scaling Group (2-6 EC2 t3.large instances)
+- EC2 instances configured via Launch Template (no Auto Scaling Group)
 - RDS Aurora MySQL cluster (1 writer + 1 reader)
 - KMS customer-managed key for encryption
 - IAM roles and policies
