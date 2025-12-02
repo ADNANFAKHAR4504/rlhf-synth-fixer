@@ -1,0 +1,9 @@
+name: tap
+runtime: nodejs
+description: Infrastructure compliance analysis and validation system
+config:
+  tap:environmentSuffix:
+    description: Environment suffix for resource naming
+  tap:approvedAmiIds:
+    description: List of approved AMI IDs
+    default: []
