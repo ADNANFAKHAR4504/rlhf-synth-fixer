@@ -2,7 +2,9 @@ import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';
 
 const config = new pulumi.Config('TapStack');
-const environmentSuffix = config.require('environmentSuffix');
+// Try to get environmentSuffix from config, fallback to environment variable
+const environmentSuffix =
+  config.get('environmentSuffix') || process.env.ENVIRONMENT_SUFFIX || 'dev';
 const approvedAmiIds = config.getObject<string[]>('approvedAmiIds');
 
 const stack = new TapStack('tap-stack', {

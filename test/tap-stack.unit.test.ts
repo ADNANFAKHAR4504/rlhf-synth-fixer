@@ -488,6 +488,27 @@ describe('TapStack - AMI Compliance', () => {
     // Should handle error gracefully
     expect(Array.isArray(violationsArray)).toBe(true);
   });
+
+  it('should handle AMI check errors when approved AMIs are configured', async () => {
+    const mockError = new Error('EC2 API Error during AMI check');
+    ec2Mock.on(DescribeInstancesCommand).rejects(mockError);
+
+    s3Mock.on(ListBucketsCommand).resolves({ Buckets: [] });
+    ec2Mock.on(DescribeSecurityGroupsCommand).resolves({ SecurityGroups: [] });
+    iamMock.on(ListRolesCommand).resolves({ Roles: [] });
+    cloudwatchMock.on(PutMetricDataCommand).resolves({});
+
+    const stack = new TapStack('test-stack', {
+      environmentSuffix: 'test123',
+      approvedAmiIds: ['ami-approved123'],
+    });
+
+    const violations = await pulumi.output(stack.violationsReport).promise();
+    const violationsArray = JSON.parse(violations);
+
+    // Should handle error gracefully and continue
+    expect(Array.isArray(violationsArray)).toBe(true);
+  });
 });
 
 describe('TapStack - Security Group Compliance', () => {
@@ -541,6 +562,98 @@ describe('TapStack - Security Group Compliance', () => {
       resourceId: 'sg-12345678',
       resourceType: 'SecurityGroup',
       violationType: 'OpenSSHPort',
+      severity: 'critical',
+    });
+  });
+
+  it('should detect open SSH port (22) from ::/0 (IPv6)', async () => {
+    ec2Mock.on(DescribeInstancesCommand).resolves({ Reservations: [] });
+    s3Mock.on(ListBucketsCommand).resolves({ Buckets: [] });
+    iamMock.on(ListRolesCommand).resolves({ Roles: [] });
+
+    ec2Mock.on(DescribeSecurityGroupsCommand).resolves({
+      SecurityGroups: [
+        {
+          GroupId: 'sg-ipv6-ssh',
+          GroupName: 'open-ssh-ipv6-sg',
+          IpPermissions: [
+            {
+              FromPort: 22,
+              ToPort: 22,
+              IpProtocol: 'tcp',
+              Ipv6Ranges: [{ CidrIpv6: '::/0' }],
+            },
+          ],
+        },
+      ],
+    });
+
+    cloudwatchMock.on(PutMetricDataCommand).resolves({});
+    snsMock.on(PublishCommand).resolves({});
+
+    const stack = new TapStack('test-stack', {
+      environmentSuffix: 'test123',
+      approvedAmiIds: [],
+    });
+
+    const violations = await pulumi.output(stack.violationsReport).promise();
+    const violationsArray = JSON.parse(violations);
+
+    const sshViolations = violationsArray.filter(
+      (v: any) => v.violationType === 'OpenSSHPort'
+    );
+
+    expect(sshViolations).toHaveLength(1);
+    expect(sshViolations[0]).toMatchObject({
+      resourceId: 'sg-ipv6-ssh',
+      resourceType: 'SecurityGroup',
+      violationType: 'OpenSSHPort',
+      severity: 'critical',
+    });
+  });
+
+  it('should detect open RDP port (3389) from 0.0.0.0/0 (IPv4)', async () => {
+    ec2Mock.on(DescribeInstancesCommand).resolves({ Reservations: [] });
+    s3Mock.on(ListBucketsCommand).resolves({ Buckets: [] });
+    iamMock.on(ListRolesCommand).resolves({ Roles: [] });
+
+    ec2Mock.on(DescribeSecurityGroupsCommand).resolves({
+      SecurityGroups: [
+        {
+          GroupId: 'sg-rdp-ipv4',
+          GroupName: 'open-rdp-ipv4-sg',
+          IpPermissions: [
+            {
+              FromPort: 3389,
+              ToPort: 3389,
+              IpProtocol: 'tcp',
+              IpRanges: [{ CidrIp: '0.0.0.0/0' }],
+            },
+          ],
+        },
+      ],
+    });
+
+    cloudwatchMock.on(PutMetricDataCommand).resolves({});
+    snsMock.on(PublishCommand).resolves({});
+
+    const stack = new TapStack('test-stack', {
+      environmentSuffix: 'test123',
+      approvedAmiIds: [],
+    });
+
+    const violations = await pulumi.output(stack.violationsReport).promise();
+    const violationsArray = JSON.parse(violations);
+
+    const rdpViolations = violationsArray.filter(
+      (v: any) => v.violationType === 'OpenRDPPort'
+    );
+
+    expect(rdpViolations).toHaveLength(1);
+    expect(rdpViolations[0]).toMatchObject({
+      resourceId: 'sg-rdp-ipv4',
+      resourceType: 'SecurityGroup',
+      violationType: 'OpenRDPPort',
       severity: 'critical',
     });
   });

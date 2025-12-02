@@ -572,24 +572,24 @@ export class TapStack extends pulumi.ComponentResource {
     criticalViolations: ComplianceViolation[],
     environmentSuffix: string
   ): Promise<void> {
-    try {
-      const message = {
-        subject: `Critical Compliance Violations Detected - ${environmentSuffix}`,
-        violations: criticalViolations,
-        timestamp: new Date().toISOString(),
-        totalCount: criticalViolations.length,
-      };
+    const message = {
+      subject: `Critical Compliance Violations Detected - ${environmentSuffix}`,
+      violations: criticalViolations,
+      timestamp: new Date().toISOString(),
+      totalCount: criticalViolations.length,
+    };
 
-      await this.snsTopic.arn.apply(async topicArn => {
+    await this.snsTopic.arn.apply(async topicArn => {
+      try {
         const command = new PublishCommand({
           TopicArn: topicArn,
           Subject: message.subject,
           Message: JSON.stringify(message, null, 2),
         });
         await this.snsClient.send(command);
-      });
-    } catch (error) {
-      console.error('Error sending critical alerts:', error);
-    }
+      } catch (error) {
+        console.error('Error sending critical alerts:', error);
+      }
+    });
   }
 }
