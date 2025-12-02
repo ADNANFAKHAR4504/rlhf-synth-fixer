@@ -888,7 +888,7 @@ Resources:
                   - 'kms:Decrypt'
                   - 'kms:GenerateDataKey'
                   - 'kms:DescribeKey'
-                Resource: !Ref S3KMSKey
+                Resource: !GetAtt S3KMSKey.Arn
         - PolicyName: EC2RecoveryPolicy
           PolicyDocument:
             Version: '2012-10-17'

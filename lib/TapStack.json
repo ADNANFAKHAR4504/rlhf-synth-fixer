@@ -1725,7 +1725,10 @@
                                         "kms:DescribeKey"
                                     ],
                                     "Resource": {
-                                        "Ref": "S3KMSKey"
+                                        "Fn::GetAtt": [
+                                            "S3KMSKey",
+                                            "Arn"
+                                        ]
                                     }
                                 }
                             ]
