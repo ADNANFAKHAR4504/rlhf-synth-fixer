@@ -11,11 +11,22 @@
     "Cloud Environment Setup"
   ],
   "aws_services": [
-    "S3 Bucket",
     "CloudFormation",
-    "Lambda",
-    "EventBridge",
-    "CloudWatch LogGroup",
-    "VPC"
+    "EC2",
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Table",
+    "Security Group",
+    "Launch Template",
+    "S3 Bucket",
+    "RDS",
+    "Secrets Manager",
+    "KMS",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "SSM"
   ]
 }
