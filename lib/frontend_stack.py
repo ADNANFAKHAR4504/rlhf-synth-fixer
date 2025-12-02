@@ -4,11 +4,12 @@ Frontend Stack for Payment Processing Infrastructure
 Creates S3 bucket and CloudFront distribution for React frontend hosting.
 """
 
-from typing import Optional
-import pulumi
-from pulumi import ResourceOptions, Output
-import pulumi_aws as aws
 import json
+from typing import Optional
+
+import pulumi
+import pulumi_aws as aws
+from pulumi import Output, ResourceOptions
 
 
 class FrontendStackArgs:
@@ -51,17 +52,33 @@ class FrontendStack(pulumi.ComponentResource):
         # Create S3 bucket for frontend
         self.bucket = aws.s3.Bucket(
             f"payment-frontend-{args.environment_suffix}",
-            acl="private",
             force_destroy=True,  # For destroyability
-            website=aws.s3.BucketWebsiteArgs(
-                index_document="index.html",
-                error_document="error.html"
-            ),
             tags={
                 **args.tags,
                 'Name': f'payment-frontend-{args.environment_suffix}'
             },
             opts=ResourceOptions(parent=self)
+        )
+
+        # Create bucket ACL
+        self.bucket_acl = aws.s3.BucketAclV2(
+            f"payment-frontend-acl-{args.environment_suffix}",
+            bucket=self.bucket.id,
+            acl="private",
+            opts=ResourceOptions(parent=self, depends_on=[self.bucket])
+        )
+
+        # Create bucket website configuration
+        self.bucket_website = aws.s3.BucketWebsiteConfigurationV2(
+            f"payment-frontend-website-{args.environment_suffix}",
+            bucket=self.bucket.id,
+            index_document=aws.s3.BucketWebsiteConfigurationV2IndexDocumentArgs(
+                suffix="index.html"
+            ),
+            error_document=aws.s3.BucketWebsiteConfigurationV2ErrorDocumentArgs(
+                key="error.html"
+            ),
+            opts=ResourceOptions(parent=self, depends_on=[self.bucket])
         )
 
         # Block public access to S3 bucket (CloudFront will access via OAI)
@@ -152,7 +169,7 @@ class FrontendStack(pulumi.ComponentResource):
                 )
             ],
             tags=args.tags,
-            opts=ResourceOptions(parent=self, depends_on=[self.bucket, self.oai])
+            opts=ResourceOptions(parent=self, depends_on=[self.bucket, self.oai, self.bucket_policy, self.bucket_acl, self.bucket_website])
         )
 
         # Export outputs
