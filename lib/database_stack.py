@@ -183,17 +183,26 @@ class DatabaseStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
+        # Build secret string with all cluster details
+        self.db_secret_string = Output.all(
+            self.db_cluster.endpoint,
+            self.db_cluster.port,
+            self.db_cluster.database_name,
+            self.db_username,
+            self.db_password_version.secret_string
+        ).apply(lambda args: json.dumps({
+            "connection_string": f"postgresql://{args[3]}:{args[4]}@{args[0]}:{args[1]}/{args[2]}",
+            "host": args[0],
+            "port": args[1],
+            "database": args[2],
+            "username": args[3],
+            "password": args[4]
+        }))
+
         self.db_secret_version = aws.secretsmanager.SecretVersion(
             f"payment-db-connection-version-{args.environment_suffix}",
             secret_id=self.db_secret.id,
-            secret_string=self.connection_string.apply(lambda conn: json.dumps({
-                "connection_string": conn,
-                "host": self.db_cluster.endpoint.apply(lambda e: e),
-                "port": self.db_cluster.port.apply(lambda p: p),
-                "database": self.db_cluster.database_name.apply(lambda d: d),
-                "username": self.db_username,
-                "password": self.db_password_version.secret_string.apply(lambda p: p)
-            })),
+            secret_string=self.db_secret_string,
             opts=ResourceOptions(parent=self, depends_on=[self.db_secret])
         )
 
