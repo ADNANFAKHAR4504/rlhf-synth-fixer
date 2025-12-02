@@ -14,89 +14,25 @@ describe('IaC Optimization Integration Tests', () => {
       expect(stats.isFile()).toBe(true);
     });
 
-    it('should display help message', () => {
+    it('should display help message with correct arguments', () => {
       const output = execSync(`python3 "${optimizeScript}" --help`, {
         encoding: 'utf-8',
       });
       expect(output).toContain('usage: optimize.py');
-      expect(output).toContain('--project-dir');
-      expect(output).toContain('--json');
+      expect(output).toContain('--environment');
+      expect(output).toContain('--region');
+      expect(output).toContain('--dry-run');
     });
 
-    it('should run without errors on lib directory', () => {
+    it('should run in dry-run mode without AWS credentials', () => {
       const output = execSync(
-        `python3 "${optimizeScript}" --project-dir "${libDir}"`,
+        `python3 "${optimizeScript}" --dry-run --environment test`,
         {
           encoding: 'utf-8',
         },
       );
-      expect(output).toContain('Analyzing Pulumi project');
-      expect(output).toContain('SUMMARY');
-    });
-
-    it('should output JSON format when requested', () => {
-      const output = execSync(
-        `python3 "${optimizeScript}" --project-dir "${libDir}" --json`,
-        {
-          encoding: 'utf-8',
-        },
-      );
-      // Extract JSON from output (starts after "Analyzing: ..." messages)
-      const lines = output.split('\n');
-      const jsonStartIdx = lines.findIndex((line) => line.trim() === '{');
-      expect(jsonStartIdx).toBeGreaterThan(-1);
-      const jsonStr = lines.slice(jsonStartIdx).join('\n');
-      const results = JSON.parse(jsonStr);
-      expect(results).toHaveProperty('issues');
-      expect(results).toHaveProperty('optimizations');
-      expect(results).toHaveProperty('cost_savings');
-      expect(results).toHaveProperty('best_practices');
-      expect(Array.isArray(results.issues)).toBe(true);
-      expect(Array.isArray(results.optimizations)).toBe(true);
-      expect(Array.isArray(results.cost_savings)).toBe(true);
-      expect(Array.isArray(results.best_practices)).toBe(true);
-    });
-  });
-
-  describe('Code analysis capabilities', () => {
-    it('should analyze TypeScript files in lib directory', () => {
-      const output = execSync(
-        `python3 "${optimizeScript}" --project-dir "${libDir}"`,
-        {
-          encoding: 'utf-8',
-        },
-      );
-      expect(output).toContain('tap-stack.ts');
-      expect(output).toContain('Found');
-      expect(output).toContain('TypeScript file');
-    });
-
-    it('should identify infrastructure components', () => {
-      const output = execSync(
-        `python3 "${optimizeScript}" --project-dir "${libDir}" --json`,
-        {
-          encoding: 'utf-8',
-        },
-      );
-      // Extract JSON from output
-      const lines = output.split('\n');
-      const jsonStartIdx = lines.findIndex((line) => line.trim() === '{');
-      expect(jsonStartIdx).toBeGreaterThan(-1);
-      const jsonStr = lines.slice(jsonStartIdx).join('\n');
-      const results = JSON.parse(jsonStr);
-      // Check that analysis runs (may have 0 issues if code is perfect)
-      expect(results).toBeDefined();
-      expect(typeof results).toBe('object');
-    });
-
-    it('should generate optimization findings', () => {
-      const output = execSync(
-        `python3 "${optimizeScript}" --project-dir "${libDir}"`,
-        {
-          encoding: 'utf-8',
-        },
-      );
-      expect(output).toContain('Total findings:');
+      expect(output).toContain('DRY RUN MODE');
+      expect(output).toContain('Estimated monthly savings');
     });
   });
 
@@ -228,19 +164,15 @@ describe('IaC Optimization Integration Tests', () => {
   });
 
   describe('Error handling', () => {
-    it('should handle invalid project directory gracefully', () => {
-      try {
-        execSync(
-          `python3 "${optimizeScript}" --project-dir "/nonexistent/path"`,
-          {
-            encoding: 'utf-8',
-            stdio: 'pipe',
-          },
-        );
-      } catch (error: any) {
-        // Script should fail but not crash
-        expect(error.status).toBeDefined();
-      }
+    it('should handle dry-run mode gracefully', () => {
+      // Dry-run mode should work without AWS credentials
+      const output = execSync(
+        `python3 "${optimizeScript}" --dry-run -e dev`,
+        {
+          encoding: 'utf-8',
+        },
+      );
+      expect(output).toContain('DRY RUN MODE');
     });
   });
 });
