@@ -1,5 +1,0 @@
-encryptionsalt: v1:8uP6RGBlqzY=:v1:dn99tYKZdwOmUbxo:25uqkGNt9FH7fiZAo6c2k+YZ/vc+1g==
-config:
-  tap:environmentSuffix: synthj2t0k6m8
-  tap:notificationEmail: devops@example.com
-  aws:region: us-east-1
