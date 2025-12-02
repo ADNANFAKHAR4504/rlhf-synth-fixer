@@ -363,25 +363,8 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self.api)
         )
 
-        # 14b. API Gateway usage plan
-        self.usage_plan = aws.apigateway.UsagePlan(
-            f'webhook-usage-plan-{self.environment_suffix}',
-            api_stages=[
-                aws.apigateway.UsagePlanApiStageArgs(
-                    api_id=self.api.id,
-                    stage='dev'
-                )
-            ],
-            quota_settings=aws.apigateway.UsagePlanQuotaSettingsArgs(
-                limit=100000,
-                period='DAY'
-            ),
-            throttle_settings=aws.apigateway.UsagePlanThrottleSettingsArgs(
-                burst_limit=5000,
-                rate_limit=10000
-            ),
-            opts=ResourceOptions(parent=self.api)
-        )
+        # Placeholder for usage_plan - will be created after stage
+        self.usage_plan = None
 
         # 15. API Gateway request validator
         self.request_validator = aws.apigateway.RequestValidator(
@@ -464,13 +447,39 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self.api_deployment)
         )
 
-        # Update usage plan with stage
+        # 21b. API Gateway usage plan (created after stage exists)
+        self.usage_plan = aws.apigateway.UsagePlan(
+            f'webhook-usage-plan-{self.environment_suffix}',
+            api_stages=[
+                aws.apigateway.UsagePlanApiStageArgs(
+                    api_id=self.api.id,
+                    stage=self.api_stage.stage_name
+                )
+            ],
+            quota_settings=aws.apigateway.UsagePlanQuotaSettingsArgs(
+                limit=100000,
+                period='DAY'
+            ),
+            throttle_settings=aws.apigateway.UsagePlanThrottleSettingsArgs(
+                burst_limit=5000,
+                rate_limit=10000
+            ),
+            opts=ResourceOptions(
+                parent=self.api,
+                depends_on=[self.api_stage]
+            )
+        )
+
+        # 21c. Associate API Key with usage plan
         self.usage_plan_key = aws.apigateway.UsagePlanKey(
             f'usage-plan-key-{self.environment_suffix}',
             usage_plan_id=self.usage_plan.id,
             key_id=self.api_key.id,
             key_type='API_KEY',
-            opts=ResourceOptions(parent=self.usage_plan)
+            opts=ResourceOptions(
+                parent=self.usage_plan,
+                depends_on=[self.usage_plan]
+            )
         )
 
         # 22. API Gateway throttling settings
