@@ -245,9 +245,9 @@ class TestECSFargateInfrastructure(unittest.TestCase):
         import sys
 
         # Set environment variables for Pulumi config
-        # Use payment-processor-migration namespace to match project name in Pulumi.yaml
+        # Use TapStack namespace to match project name in Pulumi.yaml
         os.environ["PULUMI_CONFIG"] = json.dumps({
-            "payment-processor-migration:environmentSuffix": "test",
+            "TapStack:environmentSuffix": "test",
             "aws:region": "us-east-2"
         })
 

@@ -6,7 +6,7 @@ import pulumi
 import pulumi_aws as aws
 
 # Configuration
-# Use default namespace (project name: payment-processor-migration)
+# Use default namespace (project name: TapStack)
 config = pulumi.Config()
 environment_suffix = config.get("environmentSuffix") or "dev"
 # Region is a provider config, not project-namespaced
