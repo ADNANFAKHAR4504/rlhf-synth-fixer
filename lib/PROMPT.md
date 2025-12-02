@@ -1,125 +1,182 @@
-# FinOps Cost Optimization Analyzer
+# Infrastructure Compliance Monitoring with CI/CD Cost Optimization
 
 ## Overview
 
-Build a FinOps cost optimization analyzer that scans AWS infrastructure resources and identifies cost-saving opportunities. The tool analyzes idle or underutilized resources across multiple AWS services and generates actionable reports with estimated monthly savings.
+Build an infrastructure compliance monitoring system using Pulumi with TypeScript that automatically scans EC2 instances for security and policy violations. The system includes a CI/CD pipeline integration with a Python optimization script that scales down development environment resources for cost savings.
 
 ## What We Need to Build
 
-Create a Python-based AWS cost analysis tool that automatically identifies wasteful resources and provides optimization recommendations.
+Create a complete solution with two components:
+1. **Pulumi TypeScript Infrastructure Stack** - Compliance monitoring system
+2. **Python Optimization Script** - CI/CD pipeline cost optimization helper
+
+---
+
+## Part 1: Pulumi TypeScript Compliance Monitoring Stack
 
 ### Core Requirements
 
-1. **Application Load Balancer (ALB) Analysis**
-   - Identify idle ALBs with < 1000 requests in the last 14 days
-   - Calculate estimated monthly savings (~$18.40/month per idle ALB)
-   - Skip resources tagged with CostCenter: R&D
+1. **Lambda Compliance Scanner**
+   - Deploy a Lambda function that analyzes EC2 instances for compliance violations
+   - Check for unencrypted EBS volumes
+   - Detect instances with public IP addresses assigned
+   - Identify instances missing required tags
+   - Runtime: Node.js 18.x
+   - Timeout: 300 seconds, Memory: 512 MB
 
-2. **NAT Gateway Analysis**
-   - Find underutilized NAT Gateways (< 1 GB processed in 30 days)
-   - Detect misconfigured NAT Gateways in AZs without private subnets
-   - Calculate estimated monthly savings (~$32.40/month per NAT Gateway)
+2. **Scheduled Monitoring**
+   - Set up CloudWatch Events (EventBridge) to trigger the Lambda function every 6 hours
+   - Use schedule expression `rate(6 hours)` for automated execution
+   - Configure proper IAM permissions for Lambda invocation
 
-3. **S3 Bucket Analysis**
-   - Identify buckets with versioning enabled but no non-current version expiration
-   - Find large buckets (> 1 TB) without Glacier Deep Archive lifecycle policies
-   - Calculate storage cost savings based on tier transitions
+3. **Compliance Metrics**
+   - Create CloudWatch custom metrics to track compliance scores
+   - Namespace: `InfrastructureCompliance`
+   - Metric Name: `ComplianceScore`
+   - Track compliance score as a percentage (0-100)
 
-4. **Elastic IP Analysis**
-   - Find unassociated Elastic IPs
-   - Identify EIPs attached to stopped EC2 instances
-   - Calculate estimated monthly savings (~$3.60/month per unused EIP)
+4. **Alert Notifications**
+   - Configure SNS topic for compliance violation alerts
+   - Set up email subscription for the security team
+   - Lambda publishes detailed violation messages to SNS topic
 
-5. **Report Generation**
-   - Generate console table output with findings summary
-   - Create detailed JSON report (finops_report.json)
-   - Calculate total monthly and annual savings estimates
+5. **Compliance Dashboard**
+   - Implement CloudWatch dashboard showing real-time compliance status
+   - Display compliance scores grouped by instance type
+   - Include widgets for key metrics
+
+6. **Threshold Alarms**
+   - Create CloudWatch alarms that trigger when compliance scores drop below 80%
+   - Alarm name pattern: `compliance-score-low-{environmentSuffix}`
+   - Send notifications via SNS when threshold is breached
+
+7. **Configurable Environment Variables**
+   - `COMPLIANCE_THRESHOLD`: Minimum acceptable compliance score (default: 80)
+   - `MIN_REQUIRED_TAGS`: Number of required tags per instance
+   - `SNS_TOPIC_ARN`: SNS topic for notifications
+
+8. **Stack Outputs**
+   - `lambdaFunctionArn`: Lambda function ARN
+   - `snsTopicArn`: SNS topic ARN for integration
+   - `dashboardUrl`: CloudWatch dashboard URL
+   - `complianceMetricName`: Full metric name (Namespace/MetricName)
+
+### Technical Requirements
+
+- All infrastructure defined using **Pulumi with TypeScript**
+- Use **AWS Lambda** for compliance checking logic (Node.js 18.x runtime)
+- Use **Amazon EC2** API for instance and volume inspection
+- Use **Amazon CloudWatch** for Events, Metrics, Dashboard, and Alarms
+- Use **Amazon SNS** for alert notifications
+- Use **AWS IAM** for roles and policies following least privilege principle
+- Resource names must include **environmentSuffix** for uniqueness
+- Deploy to **us-east-1** region
+
+---
+
+## Part 2: Python CI/CD Optimization Script
+
+### Purpose
+
+A Python script (`lib/optimize.py`) that runs as part of the CI/CD pipeline to scale down development environment resources for cost optimization.
+
+### Core Optimizations
+
+1. **Aurora Serverless v2 Database**
+   - Reduce minCapacity: 2 ACU → 0.5 ACU
+   - Reduce maxCapacity: 4 ACU → 1 ACU
+   - Reduce backup retention: 14 days → 1 day
+   - Estimated savings: ~$130/month
+
+2. **ElastiCache Redis Cluster**
+   - Reduce node count: 3 → 2 nodes
+   - Maintain Multi-AZ distribution
+   - Estimated savings: ~$17/month
+
+3. **ECS Fargate Service**
+   - Reduce task count: 3 → 2 tasks
+   - Maintain service availability
+   - Estimated savings: ~$9/month
+
+### Script Features
+
+- **CLI Arguments**:
+  - `--environment, -e`: Environment suffix (default: 'dev')
+  - `--region, -r`: AWS region (default: 'us-east-1')
+  - `--dry-run`: Preview changes without applying
+
+- **Resource Discovery**: Pattern-based matching for TapStack/StreamFlix resources
+- **Waiters**: Proper AWS waiter integration for operation completion
+- **Cost Estimation**: Calculate and display estimated monthly savings
 
 ### Technical Requirements
 
 - **Language**: Python 3.x
-- **AWS SDK**: boto3 with support for Moto testing via AWS_ENDPOINT_URL
-- **Dependencies**: boto3, tabulate
-- **Region**: us-east-1 (configurable)
-- **Output**: Console table + JSON report file
+- **Dependencies**: boto3, botocore
+- **AWS Services**: RDS (Aurora), ElastiCache, ECS
 
-## Required IAM Permissions
+---
 
-The analyzer requires the following IAM permissions to function correctly:
+## Security Requirements
 
-### EC2 Permissions
-```json
-{
-  "Effect": "Allow",
-  "Action": [
-    "ec2:DescribeNatGateways",
-    "ec2:DescribeSubnets",
-    "ec2:DescribeRouteTables",
-    "ec2:DescribeAddresses",
-    "ec2:DescribeInstances"
-  ],
-  "Resource": "*"
-}
-```
+### IAM Permissions - Compliance Stack
 
-### Elastic Load Balancing Permissions
-```json
-{
-  "Effect": "Allow",
-  "Action": [
-    "elasticloadbalancing:DescribeLoadBalancers",
-    "elasticloadbalancing:DescribeTags"
-  ],
-  "Resource": "*"
-}
-```
-
-### CloudWatch Permissions
-```json
-{
-  "Effect": "Allow",
-  "Action": [
-    "cloudwatch:GetMetricStatistics"
-  ],
-  "Resource": "*"
-}
-```
-
-### S3 Permissions
-```json
-{
-  "Effect": "Allow",
-  "Action": [
-    "s3:ListAllMyBuckets",
-    "s3:GetBucketTagging",
-    "s3:GetBucketVersioning",
-    "s3:GetLifecycleConfiguration"
-  ],
-  "Resource": "*"
-}
-```
-
-### Minimum IAM Policy (Combined)
 ```json
 {
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "FinOpsAnalyzerReadOnly",
       "Effect": "Allow",
       "Action": [
-        "ec2:DescribeNatGateways",
-        "ec2:DescribeSubnets",
-        "ec2:DescribeRouteTables",
-        "ec2:DescribeAddresses",
         "ec2:DescribeInstances",
-        "elasticloadbalancing:DescribeLoadBalancers",
-        "elasticloadbalancing:DescribeTags",
-        "cloudwatch:GetMetricStatistics",
-        "s3:ListAllMyBuckets",
-        "s3:GetBucketTagging",
-        "s3:GetBucketVersioning",
-        "s3:GetLifecycleConfiguration"
+        "ec2:DescribeVolumes"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "cloudwatch:PutMetricData",
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "sns:Publish",
+      "Resource": "arn:aws:sns:*:*:compliance-alerts-*"
+    }
+  ]
+}
+```
+
+### IAM Permissions - Optimization Script
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "rds:DescribeDBClusters",
+        "rds:ModifyDBCluster"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "elasticache:DescribeReplicationGroups",
+        "elasticache:ModifyReplicationGroup",
+        "elasticache:DecreaseReplicaCount"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:ListClusters",
+        "ecs:ListServices",
+        "ecs:DescribeServices",
+        "ecs:UpdateService"
       ],
       "Resource": "*"
     }
@@ -127,81 +184,55 @@ The analyzer requires the following IAM permissions to function correctly:
 }
 ```
 
-## Security Requirements
+---
 
-### Credential Exposure Prevention
+## Deployment Requirements
 
-1. **Error Message Sanitization**
-   - Never expose AWS credentials, access keys, or secret keys in error messages
-   - Sanitize exception messages before logging to remove sensitive data
-   - Use generic error messages for end users while logging details securely
-   - Avoid printing full stack traces that may contain credential information
+- All resources must be destroyable (no RETAIN policies)
+- Use DELETE/DESTROY removal policies for all resources
+- Lambda inline code or proper file bundling
+- Test email subscription may require manual confirmation
 
-2. **Safe Error Handling Pattern**
-   ```python
-   try:
-       # AWS operation
-   except Exception as e:
-       # Log sanitized error - avoid exposing credentials
-       print(f"Error analyzing resource: Operation failed", file=sys.stderr)
-       # Do NOT log: print(f"Error: {e}") - may contain sensitive info
-   ```
-
-3. **Environment Variable Security**
-   - AWS_ENDPOINT_URL should only be set in testing environments
-   - Never log or print environment variables containing credentials
-   - Use AWS IAM roles instead of hardcoded credentials when possible
-
-### Sensitive Resource ARN Handling
-
-1. **ARN Masking in Reports**
-   - Truncate long ARNs in console output (max 50 characters with ellipsis)
-   - Consider masking account IDs in ARNs for shared reports
-   - JSON reports should include full ARNs only for internal use
-
-2. **Report Security**
-   - finops_report.json contains sensitive resource identifiers
-   - Ensure proper file permissions on generated reports
-   - Do not commit reports to version control
-   - Consider encrypting reports at rest in production
-
-3. **Output Sanitization Options**
-   ```python
-   def mask_account_id(arn: str) -> str:
-       """Mask AWS account ID in ARN for external sharing"""
-       # arn:aws:service:region:account-id:resource
-       parts = arn.split(':')
-       if len(parts) >= 5:
-           parts[4] = '***MASKED***'
-       return ':'.join(parts)
-   ```
-
-4. **Logging Best Practices**
-   - Use stderr for warnings and errors (not stdout)
-   - Avoid logging full API responses which may contain sensitive metadata
-   - Implement log levels to control verbosity in production
-
-## Testing Requirements
-
-- Use Moto library for AWS service mocking
-- Set AWS_ENDPOINT_URL environment variable for local testing
-- Test all resource analysis functions independently
-- Verify R&D tag exclusion logic
-- Test CloudWatch metric retrieval edge cases
-- Validate report generation with various finding combinations
+---
 
 ## Success Criteria
 
-- **Functionality**: Successfully identifies all waste types across ALB, NAT Gateway, S3, and EIP
-- **Accuracy**: Correct calculation of estimated savings based on AWS pricing
-- **Performance**: Handles pagination for large resource counts
-- **Security**: No credential exposure, sanitized error messages, secure report handling
-- **Testing**: Comprehensive test coverage with Moto mocks
-- **Code Quality**: Passes pylint with score >= 7.0/10
+### Compliance Stack
+- Lambda successfully scans EC2 instances and identifies violations
+- Scheduled triggers work consistently every 6 hours
+- Dashboard provides clear visibility into compliance status
+- SNS notifications sent when violations detected or scores drop
+
+### Optimization Script
+- Successfully scales down Aurora, ElastiCache, and ECS resources
+- Handles missing resources gracefully
+- Provides accurate cost savings estimates
+- Dry-run mode works correctly
+
+### Integration Tests
+- All stack outputs verified against deployed resources
+- Lambda function configuration validated
+- SNS topic and subscriptions confirmed
+- CloudWatch alarms properly configured
+
+---
 
 ## Deliverables
 
-- `lib/analyse.py` - Main FinOps analyzer implementation
-- Unit tests with Moto mocks
-- IAM policy documentation (included above)
-- JSON report schema documentation
+1. **Pulumi TypeScript Stack** (`lib/tap-stack.ts`)
+   - Complete compliance monitoring infrastructure
+   - All required AWS resources
+
+2. **Python Optimization Script** (`lib/optimize.py`)
+   - CI/CD pipeline cost optimization helper
+   - CLI with dry-run support
+
+3. **Tests**
+   - Unit tests for Pulumi stack
+   - Integration tests for deployed resources
+
+4. **Stack Outputs** (in `cfn-outputs/flat-outputs.json`)
+   - `lambdaFunctionArn`
+   - `snsTopicArn`
+   - `dashboardUrl`
+   - `complianceMetricName`
