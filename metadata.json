@@ -1,7 +1,8 @@
 {
   "po_id": "y5s6n6b3",
-  "subtask": "CI/CD Pipeline Integration",
+  "subtask": "CI/CD Pipeline",
   "difficulty": "medium",
+  "complexity": "medium",
   "platform": "cicd",
   "language": "yml",
   "region": "us-east-1",
@@ -9,6 +10,7 @@
     "CI/CD Pipeline"
   ],
   "team": "synth",
+  "startedAt": "2025-12-02T18:08:00-05:00",
   "turn_type": "single",
   "author": "mayanksethi-turing",
   "training_quality": 8,
