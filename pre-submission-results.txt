@@ -1,0 +1,52 @@
+[0;34m🔍 Pre-Submission Validation for Task 101000928[0m
+[0;34mPlatform: cfn-yaml[0m
+================================================
+
+[0;34m1️⃣ Checking Build...[0m
+[0;32m✅ Build successful[0m
+
+[0;34m2️⃣ Checking Lint...[0m
+[0;31m❌ Lint errors found[0m
+[0;31m   Run: bash scripts/lint.sh[0m
+
+[0;34m3️⃣ Checking Synth...[0m
+[0;32m✅ Synth successful[0m
+
+[0;34m4️⃣ Checking Deployment...[0m
+[0;32m✅ Deployment successful[0m
+[0;32m   12 outputs found[0m
+
+[0;34m5️⃣ Checking Test Coverage...[0m
+[0;31m❌ Unit tests failed[0m
+[0;31m   Run: bash scripts/unit-tests.sh[0m
+[0;34m   Statement Coverage: Unknown%[0m
+[0;34m   Branch Coverage: Unknown%[0m
+[0;34m   Function Coverage: Unknown%[0m
+[0;34m   Line Coverage: Unknown%[0m
+.claude/scripts/pre-submission-check.sh: line 121: bc: command not found
+[0;31m❌ Test coverage below 100%[0m
+[0;31m   Statements: Unknown%, Functions: Unknown%, Lines: Unknown%[0m
+
+[0;34m6️⃣ Checking Integration Tests...[0m
+[0;32m✅ Integration tests passed[0m
+
+[0;34m7️⃣ Checking File Locations...[0m
+[0;32m✅ All files in correct locations[0m
+
+[0;34m8️⃣ Checking Documentation...[0m
+[0;32m✅ All required documentation present[0m
+
+[0;34m9️⃣ Checking Training Quality...[0m
+[0;31m❌ Training quality: 6/10[0m
+[0;31m   Below minimum threshold of 8[0m
+
+================================================
+[0;31m❌ 4 Check(s) Failed[0m
+================================================
+
+[0;31mFix all issues before PR creation[0m
+
+References:
+  - Pre-Submission Checklist: .claude/docs/references/pre-submission-checklist.md
+  - Validation Guide: .claude/docs/guides/validation_and_testing_guide.md
+  - Common Issues: .claude/lessons_learnt.md
