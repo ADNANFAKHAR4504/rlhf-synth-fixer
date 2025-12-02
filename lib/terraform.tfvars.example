@@ -1,0 +1,7 @@
+# terraform.tfvars.example
+# Example variable values - copy to terraform.tfvars and modify
+
+environment_suffix = "dev-abc123"
+vpc_cidr          = "10.0.0.0/16"
+az_count          = 2
+region            = "us-east-1"
