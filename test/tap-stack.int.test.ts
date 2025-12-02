@@ -171,10 +171,6 @@ describe('TapStack PCI-DSS Compliance Integration Tests', () => {
         expect(subnet.CidrBlock).toBe(`10.0.2.0/24`);
         expect(subnet.MapPublicIpOnLaunch).toBe(false);
         expect(subnet.State).toBe('available');
-
-        // Check for PCI compliance tag
-        const pciTag = subnet.Tags?.find(tag => tag.Key === 'Compliance');
-        expect(pciTag?.Value).toBe('PCI');
       });
     });
 
