@@ -711,6 +711,5 @@ exports.handler = async (event) => {
       },
       { provider, dependsOn: [this.configAggregator] }
     );
-
   }
 }
