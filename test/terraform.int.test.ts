@@ -137,7 +137,14 @@ describe("Multi-Environment AWS Infrastructure Integration Tests", () => {
       requiredOutputs.forEach(output => {
         expect(outputs).toHaveProperty(output);
         expect(outputs[output]).toBeDefined();
-        expect(isNonEmptyString(outputs[output])).toBe(true);
+        
+        // Handle both strings and arrays
+        const value = outputs[output];
+        if (Array.isArray(value)) {
+          expect(value.length).toBeGreaterThan(0);
+        } else {
+          expect(isNonEmptyString(value)).toBe(true);
+        }
       });
     });
 
@@ -311,7 +318,7 @@ describe("Multi-Environment AWS Infrastructure Integration Tests", () => {
       expect(response.InternetGateways).toHaveLength(1);
 
       const igw = response.InternetGateways![0];
-      expect(igw.State).toBe("available");
+      expect(igw.Attachments).toHaveLength(1);
       expect(igw.Attachments![0].State).toBe("available");
       expect(igw.Attachments![0].VpcId).toBe(outputs.vpc_id);
     });
@@ -525,7 +532,11 @@ describe("Multi-Environment AWS Infrastructure Integration Tests", () => {
       if (environment === "prod") {
         expect(setting?.value).toBe("enabled");
       } else {
-        expect(setting?.value).toBe("disabled");
+        // Container insights may be disabled by default (no setting) or explicitly set to disabled
+        if (setting) {
+          expect(setting.value).toBe("disabled");
+        }
+        // If no setting exists, container insights is disabled by default, which is acceptable
       }
     });
 
