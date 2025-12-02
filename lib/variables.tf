@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "environment_suffix" {
   description = "Environment suffix for resource naming (required for uniqueness)"
   type        = string
-  default     = "try1"
+  default     = "try3"
 }
 
 variable "repository" {
