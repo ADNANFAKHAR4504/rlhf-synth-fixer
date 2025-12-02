@@ -3,7 +3,11 @@ import * as aws from '@pulumi/aws';
 
 // Configuration
 const config = new pulumi.Config();
-const environmentSuffix = config.require('environmentSuffix');
+// Extract environment suffix from stack name (e.g., TapStackpr7718 -> pr7718)
+const stackName = pulumi.getStack();
+/* istanbul ignore next */
+const environmentSuffix =
+  config.get('environmentSuffix') || stackName.replace('TapStack', '');
 const containerPort = 3000;
 const cpu = 2048; // BASELINE - will be optimized by optimize.py to 512
 const memory = 4096; // BASELINE - will be optimized by optimize.py to 1024

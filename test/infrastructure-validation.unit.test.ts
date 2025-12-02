@@ -18,7 +18,8 @@ describe('Infrastructure Code Validation', () => {
 
     it('should initialize Pulumi Config', () => {
       expect(infraCode).toContain('new pulumi.Config()');
-      expect(infraCode).toContain("config.require('environmentSuffix')");
+      expect(infraCode).toContain("config.get('environmentSuffix')");
+      expect(infraCode).toContain('pulumi.getStack()');
     });
   });
 

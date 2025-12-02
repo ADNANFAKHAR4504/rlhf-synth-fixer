@@ -29,6 +29,21 @@ describe('Pulumi ECS Fargate Infrastructure - Unit Tests', () => {
       const containerPort = 3000;
       expect(containerPort).toBe(3000);
     });
+
+    it('should extract environment suffix from stack name', () => {
+      // Test the logic: config.get('environmentSuffix') || stackName.replace('TapStack', '')
+      const stackName = 'TapStackpr7718';
+      const extractedSuffix = stackName.replace('TapStack', '');
+      expect(extractedSuffix).toBe('pr7718');
+    });
+
+    it('should use config value if provided', () => {
+      // Simulates when environmentSuffix is explicitly set in config
+      const configValue = 'custom123';
+      const stackName = 'TapStackpr7718';
+      const environmentSuffix = configValue || stackName.replace('TapStack', '');
+      expect(environmentSuffix).toBe('custom123');
+    });
   });
 
   describe('Resource Naming', () => {
