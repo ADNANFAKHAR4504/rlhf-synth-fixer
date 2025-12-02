@@ -499,19 +499,19 @@ class TapStack(pulumi.ComponentResource):
 
         # Create a single NAT Gateway per VPC (cost optimization and EIP quota management)
         # Use the first public subnet for the NAT Gateway
-        # Use delete_before_replace to handle EIP quota limits when replacing resources
+        # Note: Using -0 suffix to match existing Pulumi state resource names
         eip = aws.ec2.Eip(
-            f"{environment}-nat-eip-{self.environment_suffix}",
+            f"{environment}-nat-eip-0-{self.environment_suffix}",
             domain="vpc",
-            tags={"Name": f"{environment}-nat-eip-{self.environment_suffix}"},
-            opts=pulumi.ResourceOptions(parent=self, delete_before_replace=True)
+            tags={"Name": f"{environment}-nat-eip-0-{self.environment_suffix}"},
+            opts=pulumi.ResourceOptions(parent=self)
         )
 
         nat = aws.ec2.NatGateway(
-            f"{environment}-nat-{self.environment_suffix}",
+            f"{environment}-nat-0-{self.environment_suffix}",
             subnet_id=public_subnets[0].id,
             allocation_id=eip.id,
-            tags={"Name": f"{environment}-nat-{self.environment_suffix}"},
+            tags={"Name": f"{environment}-nat-0-{self.environment_suffix}"},
             opts=pulumi.ResourceOptions(parent=self)
         )
         nat_gateways.append(nat)

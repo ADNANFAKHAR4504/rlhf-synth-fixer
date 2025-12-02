@@ -108,7 +108,7 @@ class TestVPCIntegration(TestTapStackLiveIntegration):
         """Test blue VPC has NAT gateway (single for cost optimization)."""
         response = self.ec2_client.describe_nat_gateways(
             Filters=[
-                {'Name': 'tag:Name', 'Values': [f'blue-nat-{self.environment_suffix}']},
+                {'Name': 'tag:Name', 'Values': [f'blue-nat-0-{self.environment_suffix}']},
                 {'Name': 'state', 'Values': ['available']}
             ]
         )
@@ -119,7 +119,7 @@ class TestVPCIntegration(TestTapStackLiveIntegration):
         """Test green VPC has NAT gateway (single for cost optimization)."""
         response = self.ec2_client.describe_nat_gateways(
             Filters=[
-                {'Name': 'tag:Name', 'Values': [f'green-nat-{self.environment_suffix}']},
+                {'Name': 'tag:Name', 'Values': [f'green-nat-0-{self.environment_suffix}']},
                 {'Name': 'state', 'Values': ['available']}
             ]
         )
