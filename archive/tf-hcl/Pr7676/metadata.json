@@ -1,0 +1,35 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "101000923",
+  "team": "synthetic",
+  "startedAt": "2025-12-02T00:00:00.000Z",
+  "subtask": "Environment Migration",
+  "subject_labels": [
+    "Environment Migration",
+    "Payment Processing Infrastructure",
+    "High Availability"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "ELB",
+    "S3",
+    "CloudWatch",
+    "KMS",
+    "IAM",
+    "Auto Scaling",
+    "ACM"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
