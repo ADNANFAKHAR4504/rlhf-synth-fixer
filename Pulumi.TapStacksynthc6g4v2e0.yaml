@@ -1,0 +1,8 @@
+encryptionsalt: v1:VaNQEPNgNOo=:v1:qmuVUmnjyjrxU9zx:u5/cGH2A8HCTASk9GNjT2xN9lIqGYw==
+config:
+  TapStack:environmentSuffix: synthc6g4v2e0
+  aws:region: us-east-1
+  TapStack:githubOwner: test-owner
+  TapStack:githubRepo: test-repo
+  TapStack:githubToken:
+    secure: v1:d8KpyW1dN6ulPWoY:KdDyEymG9/W7ZD8xgW+pJ2m4pUC0JBFi6eJWlFK8uEeWU9R5L/Y=
