@@ -5,10 +5,11 @@ Creates VPC with 3 availability zones, each with public and private subnets,
 NAT Gateways for outbound connectivity, and proper routing tables.
 """
 
-from typing import Optional, List
+from typing import List, Optional
+
 import pulumi
-from pulumi import ResourceOptions, Output
 import pulumi_aws as aws
+from pulumi import Output, ResourceOptions
 
 
 class VpcStackArgs:
@@ -125,7 +126,7 @@ class VpcStack(pulumi.ComponentResource):
             # Create Elastic IP for NAT Gateway
             eip = aws.ec2.Eip(
                 f"payment-nat-eip-{i+1}-{args.environment_suffix}",
-                vpc=True,
+                domain="vpc",
                 tags={
                     **args.tags,
                     'Name': f'payment-nat-eip-{i+1}-{args.environment_suffix}'
