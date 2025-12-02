@@ -1,13 +1,14 @@
 module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/test'],
-  testMatch: ['**/*.test.ts', '**/*.test.js', '**/*.py'],
+  testMatch: ['**/*.test.ts', '**/*.test.mjs', '**/*.py'],
   preset: 'ts-jest',
-  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs'],
   transform: {
     '^.+\\.tsx?$': 'ts-jest',
     // Transform JS files (so ESM syntax in some node_modules can be transpiled)
     '^.+\\.jsx?$': 'babel-jest',
+    '^.+\\.mjs$': 'babel-jest',
   },
   transformIgnorePatterns: [
     // allow transforming some packages that ship ESM (including kubernetes client and its deps)
@@ -15,16 +16,13 @@ module.exports = {
   ],
   collectCoverageFrom: [
     '<rootDir>/lib/**/*.ts',
+    '<rootDir>/lib/**/*.mjs',
     '<rootDir>/lib/**/*.js',
-    '<rootDir>/lib/**/*.json',
     '!<rootDir>/bin/**/*.ts',
     '!<rootDir>/lib/lambda/**',
     '!<rootDir>/**/*.d.ts',
     '!<rootDir>/**/*.test.ts',
     '!<rootDir>/**/*.test.js',
-    '!<rootDir>/lib/PROMPT.md',
-    '!<rootDir>/lib/MODEL_RESPONSE.md',
-    '!<rootDir>/lib/README.md',
     '!<rootDir>/node_modules/**',
   ],
   coverageReporters: ['text', 'lcov', 'json-summary'],
