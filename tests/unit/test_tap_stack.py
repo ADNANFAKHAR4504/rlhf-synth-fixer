@@ -20,6 +20,54 @@ from lib.rds_stack import RdsStack
 from lib.monitoring_stack import MonitoringStack
 
 
+class PulumiMocks(pulumi.runtime.Mocks):
+    """
+    Mock implementation for Pulumi resources.
+    Returns inputs as outputs with minimal computed properties.
+    """
+
+    def new_resource(self, args: pulumi.runtime.MockResourceArgs):
+        """Return inputs as outputs with minimal computed properties."""
+        outputs = {**args.inputs, "id": f"{args.name}-id"}
+
+        # Add resource-specific computed outputs
+        if args.typ == "aws:ec2/vpc:Vpc":
+            outputs["cidrBlock"] = args.inputs.get("cidrBlock", "10.0.0.0/16")
+        elif args.typ == "aws:ec2/subnet:Subnet":
+            outputs["availabilityZone"] = args.inputs.get("availabilityZone", "us-east-1a")
+        elif args.typ == "aws:kinesis/stream:Stream":
+            outputs["arn"] = f"arn:aws:kinesis:us-east-1:123456789012:stream/{args.name}"
+        elif args.typ == "aws:secretsmanager/secret:Secret":
+            outputs["arn"] = f"arn:aws:secretsmanager:us-east-1:123456789012:secret:{args.name}"
+        elif args.typ == "aws:secretsmanager/secretVersion:SecretVersion":
+            outputs["arn"] = f"arn:aws:secretsmanager:us-east-1:123456789012:secret:{args.name}-version"
+            outputs["versionId"] = "v1"
+        elif args.typ == "aws:elasticache/replicationGroup:ReplicationGroup":
+            outputs["primaryEndpointAddress"] = f"{args.name}.cache.amazonaws.com"
+            outputs["port"] = 6379
+        elif args.typ == "aws:rds/instance:Instance":
+            outputs["endpoint"] = f"{args.name}.rds.amazonaws.com:5432"
+            outputs["address"] = f"{args.name}.rds.amazonaws.com"
+            outputs["port"] = 5432
+        elif args.typ == "random:index/randomPassword:RandomPassword":
+            outputs["result"] = "mock-password-123456789012"
+            outputs["bcryptHash"] = "mock-bcrypt-hash"
+
+        return [f"{args.name}-id", outputs]
+
+    def call(self, args: pulumi.runtime.MockCallArgs):
+        """Handle function invocations."""
+        if args.token == "aws:index/getAvailabilityZones:getAvailabilityZones":
+            return {"names": ["us-east-1a", "us-east-1b", "us-east-1c"]}
+        elif args.token == "aws:index/getRegion:getRegion":
+            return {"name": "us-east-1"}
+        return args.args
+
+
+# Set mocks before any tests run
+pulumi.runtime.set_mocks(PulumiMocks())
+
+
 class MyMocks:
     """Mock helper for Pulumi tests."""
     def __init__(self):
