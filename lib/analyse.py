@@ -64,7 +64,9 @@ class FinOpsAnalyzer:
                 if self.has_rd_tag(tags):
                     continue
                 # Check CloudWatch metrics
-                dimensions = [{'Name': 'LoadBalancer', 'Value': alb['LoadBalancerArn'].split('/')[-3] + '/' + alb['LoadBalancerArn'].split('/')[-2] + '/' + alb['LoadBalancerArn'].split('/')[-1]}]
+                alb_arn_parts = alb['LoadBalancerArn'].split('/')
+                alb_dimension_value = '/'.join(alb_arn_parts[-3:])
+                dimensions = [{'Name': 'LoadBalancer', 'Value': alb_dimension_value}]
                 request_count = self.get_cloudwatch_metric_sum(
                     'AWS/ApplicationELB',
                     'RequestCount',
@@ -303,7 +305,7 @@ class FinOpsAnalyzer:
         print(f"\nTotal Estimated Monthly Savings: ${total_savings:.2f}")
         print(f"Total Estimated Annual Savings: ${total_savings * 12:.2f}")
         # Write JSON report
-        with open('finops_report.json', 'w') as f:
+        with open('finops_report.json', 'w', encoding='utf-8') as f:
             json.dump({
                 'report_date': datetime.utcnow().isoformat(),
                 'region': self.region,
@@ -312,7 +314,7 @@ class FinOpsAnalyzer:
                 'total_annual_savings': round(total_savings * 12, 2),
                 'findings': findings
             }, f, indent=2)
-        print(f"\nDetailed report saved to: finops_report.json")
+        print("\nDetailed report saved to: finops_report.json")
 
 def main():
     analyzer = FinOpsAnalyzer()
@@ -320,4 +322,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
