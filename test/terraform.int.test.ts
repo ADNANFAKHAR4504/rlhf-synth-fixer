@@ -279,4 +279,3 @@ describe("Resource Tagging", () => {
     expect(projectTag?.Value).toBe("vpc-networking");
   });
 });
-});
