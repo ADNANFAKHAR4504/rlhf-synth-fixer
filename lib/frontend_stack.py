@@ -60,22 +60,14 @@ class FrontendStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Create bucket ACL
-        self.bucket_acl = aws.s3.BucketAclV2(
-            f"payment-frontend-acl-{args.environment_suffix}",
-            bucket=self.bucket.id,
-            acl="private",
-            opts=ResourceOptions(parent=self, depends_on=[self.bucket])
-        )
-
         # Create bucket website configuration
-        self.bucket_website = aws.s3.BucketWebsiteConfigurationV2(
+        self.bucket_website = aws.s3.BucketWebsiteConfiguration(
             f"payment-frontend-website-{args.environment_suffix}",
             bucket=self.bucket.id,
-            index_document=aws.s3.BucketWebsiteConfigurationV2IndexDocumentArgs(
+            index_document=aws.s3.BucketWebsiteConfigurationIndexDocumentArgs(
                 suffix="index.html"
             ),
-            error_document=aws.s3.BucketWebsiteConfigurationV2ErrorDocumentArgs(
+            error_document=aws.s3.BucketWebsiteConfigurationErrorDocumentArgs(
                 key="error.html"
             ),
             opts=ResourceOptions(parent=self, depends_on=[self.bucket])
@@ -169,7 +161,7 @@ class FrontendStack(pulumi.ComponentResource):
                 )
             ],
             tags=args.tags,
-            opts=ResourceOptions(parent=self, depends_on=[self.bucket, self.oai, self.bucket_policy, self.bucket_acl, self.bucket_website])
+            opts=ResourceOptions(parent=self, depends_on=[self.bucket, self.oai, self.bucket_policy, self.bucket_website])
         )
 
         # Export outputs
