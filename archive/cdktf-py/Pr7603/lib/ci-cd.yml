@@ -1,0 +1,359 @@
+# CI/CD Pipeline Configuration for Video Processing Pipeline
+# Multi-stage deployment pipeline for CDKTF Python infrastructure
+
+name: Video Processing Pipeline - CDKTF Deployment
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+
+env:
+  AWS_REGION: us-east-1
+  PYTHON_VERSION: '3.9'
+  NODE_VERSION: '18'
+  DEV_ACCOUNT_ID: ${{ secrets.DEV_ACCOUNT_ID }}
+  STAGING_ACCOUNT_ID: ${{ secrets.STAGING_ACCOUNT_ID }}
+  PROD_ACCOUNT_ID: ${{ secrets.PROD_ACCOUNT_ID }}
+
+jobs:
+  source:
+    name: Source Stage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Source
+
+  build:
+    name: Build and Validate
+    runs-on: ubuntu-latest
+    needs: source
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Build
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pipenv
+          pipenv install --dev
+
+      - name: Run Python linting
+        run: |
+          pipenv run pylint lib/*.py --disable=C,R,W
+
+      - name: Run CDKTF synth
+        run: |
+          export ENVIRONMENT_SUFFIX="ci"
+          pipenv run cdktf synth
+
+      - name: Run security checks
+        run: |
+          # Install checkov for IaC security scanning
+          pip install checkov
+          checkov -d cdktf.out/stacks --framework terraform --quiet
+        continue-on-error: true
+
+      - name: Encrypt artifacts with KMS
+        run: ./scripts/encrypt-artifacts.sh
+
+      - name: Upload encrypted artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cdktf-outputs
+          path: cdktf-outputs.tar.gz.encrypted
+          retention-days: 7
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pipenv
+          pipenv install --dev
+
+      - name: Run unit tests
+        run: |
+          pipenv run pytest tests/ -v --cov=lib --cov-report=term-missing
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+
+  deploy-dev:
+    name: Deploy to Dev
+    runs-on: ubuntu-latest
+    needs: [build, test]
+    environment: dev
+    if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: cdktf-outputs
+          path: artifacts/
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Dev
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          pip install --upgrade pip
+          pip install pipenv
+          pipenv install
+
+      - name: Deploy to Dev
+        run: |
+          export ENVIRONMENT_SUFFIX="dev"
+          export AWS_REGION="${{ env.AWS_REGION }}"
+          pipenv run cdktf deploy --auto-approve
+
+      - name: Verify deployment
+        run: |
+          aws kinesis describe-stream --stream-name video-ingestion-stream-dev || echo "Kinesis stream check failed"
+          aws ecs describe-clusters --clusters video-processing-cluster-dev || echo "ECS cluster check failed"
+
+      - name: Send Slack notification
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d "{\"text\":\"Dev deployment $STATUS for video processing pipeline - ${{ github.ref }}\"}"
+
+  manual-approval-staging:
+    name: Approve Staging Deployment
+    runs-on: ubuntu-latest
+    needs: deploy-dev
+    environment: staging-approval
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Manual approval checkpoint
+        run: echo "Deployment to staging approved"
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: manual-approval-staging
+    environment: staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: cdktf-outputs
+          path: artifacts/
+
+      - name: Assume cross-account role for Staging via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.STAGING_ACCOUNT_ID }}:role/CrossAccountDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Staging
+          role-chaining: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          pip install --upgrade pip
+          pip install pipenv
+          pipenv install
+
+      - name: Deploy to Staging
+        run: |
+          export ENVIRONMENT_SUFFIX="staging"
+          export AWS_REGION="${{ env.AWS_REGION }}"
+          pipenv run cdktf deploy --auto-approve
+
+      - name: Run smoke tests
+        run: |
+          pipenv run pytest tests/smoke/ -v
+
+      - name: Send Slack notification
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d "{\"text\":\"Staging deployment $STATUS for video processing pipeline - ${{ github.ref }}\"}"
+
+  manual-approval-prod:
+    name: Approve Production Deployment
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    environment: prod-approval
+    steps:
+      - name: Manual approval checkpoint
+        run: echo "Deployment to production approved"
+
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: manual-approval-prod
+    environment: prod
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: cdktf-outputs
+          path: artifacts/
+
+      - name: Assume cross-account role for Production via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.PROD_ACCOUNT_ID }}:role/CrossAccountDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Prod
+          role-chaining: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          pip install --upgrade pip
+          pip install pipenv
+          pipenv install
+
+      - name: Create backup of existing infrastructure
+        run: |
+          aws cloudformation describe-stacks > prod-backup-$(date +%Y%m%d-%H%M%S).json || echo "No existing stacks"
+
+      - name: Deploy to Production
+        run: |
+          export ENVIRONMENT_SUFFIX="prod"
+          export AWS_REGION="${{ env.AWS_REGION }}"
+          pipenv run cdktf deploy --auto-approve
+
+      - name: Run production smoke tests
+        run: |
+          pipenv run pytest tests/smoke/ -v --environment=prod
+
+      - name: Verify all services
+        run: |
+          aws kinesis describe-stream --stream-name video-ingestion-stream-prod
+          aws ecs describe-clusters --clusters video-processing-cluster-prod
+          aws rds describe-db-clusters --db-cluster-identifier video-metadata-prod
+
+      - name: Send Slack notification
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d "{\"text\":\"🚀 Production deployment $STATUS for video processing pipeline - ${{ github.ref }}\"}"
+
+  rollback:
+    name: Rollback (Manual Trigger)
+    runs-on: ubuntu-latest
+    if: failure() && github.event_name == 'workflow_dispatch'
+    needs: [deploy-dev, deploy-staging, deploy-prod]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Destroy failed deployment
+        run: |
+          export ENVIRONMENT_SUFFIX="${{ github.event.inputs.environment }}"
+          pipenv run cdktf destroy --auto-approve
+
+      - name: Notify rollback
+        run: |
+          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d "{\"text\":\"⚠️ Rollback initiated for video processing pipeline\"}"

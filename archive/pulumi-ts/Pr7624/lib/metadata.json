@@ -1,0 +1,8 @@
+{
+  "task_id": "s5g3e4n4",
+  "platform": "pulumi",
+  "language": "typescript",
+  "difficulty": "hard",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": ["CI/CD Pipeline"]
+}
