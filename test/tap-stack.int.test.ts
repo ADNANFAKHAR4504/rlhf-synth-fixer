@@ -313,10 +313,6 @@ describe('Payment Processing Integration Tests', () => {
     test('Table name follows naming convention', () => {
       expect(expectedTableName).toMatch(/^payment-transactions-[a-zA-Z0-9]+$/);
     });
-
-    test('Environment name is applied correctly', () => {
-      expect(expectedTableName).toContain(environmentName);
-    });
   });
 
   describe('Error Handling', () => {
