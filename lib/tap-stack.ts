@@ -100,7 +100,7 @@ export class TapStack extends cdk.Stack {
         logGroupName: `/aws/vpc/${resourcePrefix}`,
         retention:
           logs.RetentionDays[
-          `DAYS_${config.logRetentionDays}` as keyof typeof logs.RetentionDays
+            `DAYS_${config.logRetentionDays}` as keyof typeof logs.RetentionDays
           ],
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
@@ -418,7 +418,7 @@ export class TapStack extends cdk.Stack {
         logGroupName: `/aws/lambda/${resourcePrefix}-api-handler`,
         retention:
           logs.RetentionDays[
-          `DAYS_${config.logRetentionDays}` as keyof typeof logs.RetentionDays
+            `DAYS_${config.logRetentionDays}` as keyof typeof logs.RetentionDays
           ],
         encryptionKey: logsKmsKey,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -432,7 +432,7 @@ export class TapStack extends cdk.Stack {
         logGroupName: `/aws/lambda/${resourcePrefix}-event-processor`,
         retention:
           logs.RetentionDays[
-          `DAYS_${config.logRetentionDays}` as keyof typeof logs.RetentionDays
+            `DAYS_${config.logRetentionDays}` as keyof typeof logs.RetentionDays
           ],
         encryptionKey: logsKmsKey,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -446,7 +446,7 @@ export class TapStack extends cdk.Stack {
         logGroupName: `/aws/lambda/${resourcePrefix}-stream-processor`,
         retention:
           logs.RetentionDays[
-          `DAYS_${config.logRetentionDays}` as keyof typeof logs.RetentionDays
+            `DAYS_${config.logRetentionDays}` as keyof typeof logs.RetentionDays
           ],
         encryptionKey: logsKmsKey,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -460,7 +460,7 @@ export class TapStack extends cdk.Stack {
         logGroupName: `/aws/lambda/${resourcePrefix}-notification-handler`,
         retention:
           logs.RetentionDays[
-          `DAYS_${config.logRetentionDays}` as keyof typeof logs.RetentionDays
+            `DAYS_${config.logRetentionDays}` as keyof typeof logs.RetentionDays
           ],
         encryptionKey: logsKmsKey,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
