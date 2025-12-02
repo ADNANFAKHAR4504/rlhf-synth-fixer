@@ -1,0 +1,11 @@
+name: tap
+runtime: nodejs
+description: CI/CD Build System with AWS CodeBuild
+config:
+  environmentSuffix:
+    type: string
+    description: Suffix to ensure resource uniqueness
+  notificationEmail:
+    type: string
+    description: Email address for build notifications
+    default: devops@example.com
