@@ -137,7 +137,7 @@ describe("Multi-Environment AWS Infrastructure Integration Tests", () => {
       requiredOutputs.forEach(output => {
         expect(outputs).toHaveProperty(output);
         expect(outputs[output]).toBeDefined();
-        
+
         // Handle both strings and arrays
         const value = outputs[output];
         if (Array.isArray(value)) {

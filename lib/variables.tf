@@ -52,3 +52,9 @@ variable "team" {
   type        = string
   default     = "platform"
 }
+
+variable "ssl_certificate_arn" {
+  description = "ARN of SSL certificate for HTTPS listener (required for production)"
+  type        = string
+  default     = null
+}

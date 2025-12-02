@@ -422,18 +422,19 @@ describe('Multi-Environment AWS Infrastructure Terraform Stack - Unit Tests', ()
   });
 
   describe('Secrets Management', () => {
-    test('declares RDS password secret', () => {
-      expect(hasResource(stackContent, 'aws_secretsmanager_secret', 'rds_password')).toBe(true);
+    test('uses AWS managed master user password', () => {
+      expect(stackContent).toMatch(/manage_master_user_password\s*=\s*true/);
     });
 
-    test('declares secret version with random password', () => {
-      expect(hasResource(stackContent, 'aws_secretsmanager_secret_version', 'rds_password')).toBe(true);
-      expect(hasResource(stackContent, 'random_password', 'rds_master_password')).toBe(true);
+    test('does not use manual secrets management', () => {
+      // Should NOT have manual secret resources since we use AWS managed
+      expect(hasResource(stackContent, 'aws_secretsmanager_secret', 'rds_password')).toBe(false);
+      expect(hasResource(stackContent, 'aws_secretsmanager_secret_version', 'rds_password')).toBe(false);
+      expect(hasResource(stackContent, 'random_password', 'rds_master_password')).toBe(false);
     });
 
-    test('random password has appropriate configuration', () => {
-      expect(stackContent).toMatch(/length\s*=\s*16/);
-      expect(stackContent).toMatch(/special\s*=\s*true/);
+    test('uses default AWS managed KMS key', () => {
+      expect(stackContent).toMatch(/master_user_secret_kms_key_id\s*=\s*null/);
     });
   });
 

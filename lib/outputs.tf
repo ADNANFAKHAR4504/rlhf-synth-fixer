@@ -124,15 +124,15 @@ output "rds_security_group_id" {
 }
 
 # Secrets Manager Outputs
-output "rds_password_secret_name" {
-  description = "Name of the RDS master password secret"
-  value       = aws_secretsmanager_secret.rds_password.name
+output "rds_password_secret_arn" {
+  description = "ARN of the RDS master password secret (AWS managed)"
+  value       = aws_rds_cluster.main.master_user_secret[0].secret_arn
   sensitive   = true
 }
 
-output "rds_password_secret_arn" {
-  description = "ARN of the RDS master password secret"
-  value       = aws_secretsmanager_secret.rds_password.arn
+output "rds_password_secret_name" {
+  description = "Name of the RDS master password secret (AWS managed)"
+  value       = split(":", aws_rds_cluster.main.master_user_secret[0].secret_arn)[6]
   sensitive   = true
 }
 

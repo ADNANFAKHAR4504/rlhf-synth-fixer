@@ -263,27 +263,8 @@ resource "aws_db_subnet_group" "main" {
   })
 }
 
-# RDS Aurora Master Password Secret
-resource "aws_secretsmanager_secret" "rds_password" {
-  name                    = "${local.resource_prefix}-rds-master-password"
-  description             = "Master password for RDS Aurora PostgreSQL cluster"
-  recovery_window_in_days = 30
-
-  tags = local.common_tags
-}
-
-resource "aws_secretsmanager_secret_version" "rds_password" {
-  secret_id = aws_secretsmanager_secret.rds_password.id
-  secret_string = jsonencode({
-    username = "postgres"
-    password = random_password.rds_master_password.result
-  })
-}
-
-resource "random_password" "rds_master_password" {
-  length  = 16
-  special = true
-}
+# RDS Aurora cluster uses AWS managed master user password
+# This automatically creates and rotates the password in Secrets Manager
 
 # RDS Aurora Cluster
 resource "aws_rds_cluster" "main" {
@@ -293,11 +274,14 @@ resource "aws_rds_cluster" "main" {
   database_name               = "tapdb"
   master_username             = "postgres"
   manage_master_user_password = true
+  master_user_secret_kms_key_id = null # Use default AWS managed key
 
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
 
-  backup_retention_period = var.environment == "prod" ? 30 : 7
+  backup_retention_period      = var.environment == "prod" ? 30 : 7
+  preferred_backup_window      = "03:00-04:00"
+  preferred_maintenance_window = "sun:04:00-sun:06:00"
   preferred_backup_window = "07:00-09:00"
   skip_final_snapshot     = var.environment != "prod"
   deletion_protection     = var.environment == "prod"
@@ -367,6 +351,16 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "assets" {
       sse_algorithm = "AES256"
     }
   }
+}
+
+# S3 Bucket Public Access Block
+resource "aws_s3_bucket_public_access_block" "assets" {
+  bucket = aws_s3_bucket.assets.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
 # ECS Cluster
@@ -485,10 +479,43 @@ resource "aws_lb_target_group" "app" {
   tags = local.common_tags
 }
 
+# HTTP Listener (redirects to HTTPS only when certificate is available)
 resource "aws_lb_listener" "app" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
+
+  default_action {
+    type = var.ssl_certificate_arn != null && var.environment == "prod" ? "redirect" : "forward"
+
+    dynamic "redirect" {
+      for_each = var.ssl_certificate_arn != null && var.environment == "prod" ? [1] : []
+      content {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
+    }
+
+    dynamic "forward" {
+      for_each = var.ssl_certificate_arn != null && var.environment == "prod" ? [] : [1]
+      content {
+        target_group {
+          arn = aws_lb_target_group.app.arn
+        }
+      }
+    }
+  }
+}
+
+# HTTPS Listener (only when certificate is provided)
+resource "aws_lb_listener" "app_https" {
+  count             = var.ssl_certificate_arn != null ? 1 : 0
+  load_balancer_arn = aws_lb.main.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
+  certificate_arn   = var.ssl_certificate_arn
 
   default_action {
     type             = "forward"
@@ -538,6 +565,53 @@ resource "aws_iam_role" "ecs_task" {
   })
 
   tags = local.common_tags
+}
+
+# IAM policy for ECS task to access RDS secrets
+resource "aws_iam_role_policy" "ecs_task_secrets" {
+  name = "${local.resource_prefix}-ecs-task-secrets-policy"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = [
+          aws_rds_cluster.main.master_user_secret[0].secret_arn
+        ]
+      }
+    ]
+  })
+}
+
+# IAM policy for ECS task to access S3 bucket
+resource "aws_iam_role_policy" "ecs_task_s3" {
+  name = "${local.resource_prefix}-ecs-task-s3-policy"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.assets.arn,
+          "${aws_s3_bucket.assets.arn}/*"
+        ]
+      }
+    ]
+  })
 }
 
 # CloudWatch Log Groups
