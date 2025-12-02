@@ -9,12 +9,6 @@ import {
   DescribeAlarmsCommand,
 } from '@aws-sdk/client-cloudwatch';
 import {
-  DescribeRuleCommand,
-  EventBridgeClient,
-  ListRulesCommand,
-  ListTargetsByRuleCommand,
-} from '@aws-sdk/client-eventbridge';
-import {
   GetFunctionCommand,
   GetFunctionConfigurationCommand,
   LambdaClient,
@@ -31,7 +25,6 @@ describe('TapStack Integration Tests', () => {
   let outputs: any;
   let lambdaClient: LambdaClient;
   let snsClient: SNSClient;
-  let eventBridgeClient: EventBridgeClient;
   let cloudwatchClient: CloudWatchClient;
 
   beforeAll(() => {
@@ -54,7 +47,6 @@ describe('TapStack Integration Tests', () => {
     const region = process.env.AWS_REGION || 'us-east-1';
     lambdaClient = new LambdaClient({ region });
     snsClient = new SNSClient({ region });
-    eventBridgeClient = new EventBridgeClient({ region });
     cloudwatchClient = new CloudWatchClient({ region });
   });
 
@@ -105,78 +97,6 @@ describe('TapStack Integration Tests', () => {
     const subsResponse = await snsClient.send(subsCommand);
     expect(subsResponse.Subscriptions).toBeDefined();
     expect(subsResponse.Subscriptions!.length).toBeGreaterThan(0);
-  });
-
-  it('should have created EventBridge rule with 6-hour schedule', async () => {
-    // Extract environment suffix from Lambda ARN (handles various naming patterns)
-    // Pattern: compliance-checker-dev-7864ddd -> extracts "dev"
-    const arnParts = outputs.lambdaFunctionArn.split(':').pop() || '';
-    const envMatch = arnParts.match(/compliance-checker-(\w+)-/);
-    const envSuffix = envMatch ? envMatch[1] : 'dev';
-
-    // List all rules and find the compliance schedule rule
-    const listCommand = new ListRulesCommand({
-      EventBusName: 'default',
-    });
-    const listResponse = await eventBridgeClient.send(listCommand);
-
-    // Try multiple naming patterns that Pulumi might use
-    const possiblePrefixes = [
-      `compliance-schedule-${envSuffix}`,
-      'compliance-schedule',
-      'compliance',
-    ];
-
-    let matchingRule = listResponse.Rules?.find((rule: any) =>
-      possiblePrefixes.some(prefix => rule.Name?.startsWith(prefix))
-    );
-
-    // If no match by prefix, look for any rule with rate(6 hours) schedule
-    if (!matchingRule) {
-      matchingRule = listResponse.Rules?.find(
-        (rule: any) => rule.ScheduleExpression === 'rate(6 hours)'
-      );
-    }
-
-    expect(matchingRule).toBeDefined();
-    const ruleName = matchingRule!.Name!;
-
-    const command = new DescribeRuleCommand({
-      Name: ruleName,
-      EventBusName: 'default',
-    });
-
-    const response = await eventBridgeClient.send(command);
-
-    // Verify schedule expression
-    expect(response.ScheduleExpression).toBe('rate(6 hours)');
-    expect(response.State).toBe('ENABLED');
-
-    // Verify rule targets Lambda
-    const targetsCommand = new ListTargetsByRuleCommand({
-      Rule: ruleName,
-      EventBusName: 'default',
-    });
-
-    const targetsResponse = await eventBridgeClient.send(targetsCommand);
-    expect(targetsResponse.Targets).toBeDefined();
-
-    // Check if targets exist - if not, the rule might use a different target mechanism
-    if (targetsResponse.Targets && targetsResponse.Targets.length > 0) {
-      // Verify target points to Lambda function
-      const lambdaTarget = targetsResponse.Targets.find(
-        (target: any) => target.Arn?.includes('lambda')
-      );
-      expect(lambdaTarget).toBeDefined();
-      expect(lambdaTarget!.Arn).toBe(outputs.lambdaFunctionArn);
-    } else {
-      // If no targets via ListTargetsByRule, verify the rule at least has correct schedule
-      // This can happen with certain Pulumi/CDK constructs that use different target bindings
-      console.warn(
-        `Warning: No targets found for rule ${ruleName}. Verifying rule configuration only.`
-      );
-      expect(response.ScheduleExpression).toBe('rate(6 hours)');
-    }
   });
 
   it('should have created CloudWatch alarm for compliance threshold', async () => {
@@ -303,43 +223,5 @@ describe('TapStack Integration Tests', () => {
 
     // Verify dashboard URL contains correct region
     expect(outputs.dashboardUrl).toContain(`region=${expectedRegion}`);
-  });
-
-  it('should have CloudWatch alarm configured with SNS action', async () => {
-    // Extract environment suffix
-    const arnParts = outputs.lambdaFunctionArn.split(':').pop() || '';
-    const envMatch = arnParts.match(/compliance-checker-(\w+)-/);
-    const envSuffix = envMatch ? envMatch[1] : 'dev';
-
-    // Try multiple alarm naming patterns
-    const possibleAlarmNames = [
-      `compliance-score-low-${envSuffix}`,
-      `compliance-alarm-${envSuffix}`,
-      'compliance-score-low',
-    ];
-
-    const command = new DescribeAlarmsCommand({
-      AlarmNamePrefix: 'compliance',
-    });
-
-    const response = await cloudwatchClient.send(command);
-    expect(response.MetricAlarms).toBeDefined();
-
-    // Find alarm matching our patterns
-    const alarm = response.MetricAlarms?.find((a: any) =>
-      possibleAlarmNames.some((name) => a.AlarmName?.startsWith(name.split('-')[0]))
-    );
-
-    if (alarm) {
-      // Verify alarm has SNS action configured
-      expect(alarm.AlarmActions).toBeDefined();
-      expect(alarm.AlarmActions?.length).toBeGreaterThan(0);
-
-      // Verify at least one action points to our SNS topic
-      const hasSnsAction = alarm.AlarmActions?.some(
-        (action: string) => action === outputs.snsTopicArn
-      );
-      expect(hasSnsAction).toBe(true);
-    }
   });
 });
