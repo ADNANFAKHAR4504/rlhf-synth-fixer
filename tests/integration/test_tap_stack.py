@@ -16,7 +16,7 @@ from pulumi import automation as auto
 
 
 # class TestTapStackLiveIntegration(unittest.TestCase):
-#   """Integration tests against live deployed Pulumi stack."""
+#   """Integration tests against live deployed Pulumi stack"""
 
 #   def setUp(self):
 #     """Set up integration test with live stack."""
