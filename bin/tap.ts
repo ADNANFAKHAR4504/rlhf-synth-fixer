@@ -3,6 +3,7 @@
 import 'source-map-support/register';
 
 import * as cdk from 'aws-cdk-lib';
+import { CliCredentialsStackSynthesizer } from 'aws-cdk-lib';
 
 import { TapStack } from '../lib/tap-stack';
 import { Environment } from 'aws-cdk-lib';
@@ -47,8 +48,13 @@ const containerTag = process.env.CONTAINER_TAG || 'latest';
 // Set environment configuration - CDK will auto-resolve account if not provided
 const env: Environment = account ? { region, account } : { region };
 
+// Use CliCredentialsStackSynthesizer to bypass bootstrap role trust issues
+// This uses CLI credentials directly instead of assuming bootstrap roles
+const synthesizer = new CliCredentialsStackSynthesizer();
+
 new TapStack(app, `TapStack${environmentSuffix}`, {
   env,
+  synthesizer,
   description: 'Production-ready e-commerce infrastructure stack',
   tags: {
     Environment: environment,

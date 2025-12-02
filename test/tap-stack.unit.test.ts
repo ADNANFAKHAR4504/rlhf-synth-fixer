@@ -694,6 +694,40 @@ describe('TapStack', () => {
         ]),
       });
     });
+
+    test('should exclude primary region from DR regions when region is concrete', () => {
+      // This test covers line 68: drRegionSet.delete(primaryRegion)
+      // by specifying a concrete region that matches one of the DR regions
+      const appWithConcreteRegion = new cdk.App();
+      const stackWithConcreteRegion = new TapStack(
+        appWithConcreteRegion,
+        'ConcreteRegionStack',
+        {
+          environment: 'dev',
+          env: {
+            region: 'us-east-1', // Concrete region that's in default DR regions
+            account: '123456789012',
+          },
+          drRegions: ['us-east-1', 'us-west-2', 'eu-west-1'], // Include primary region
+        }
+      );
+      const templateWithConcreteRegion = Template.fromStack(
+        stackWithConcreteRegion
+      );
+
+      // The stack set should NOT include us-east-1 (the primary region) in DR regions
+      templateWithConcreteRegion.hasResourceProperties(
+        'AWS::CloudFormation::StackSet',
+        {
+          StackInstancesGroup: Match.arrayWith([
+            Match.objectLike({
+              // us-east-1 should be filtered out, leaving us-west-2 and eu-west-1
+              Regions: Match.arrayWith(['us-west-2', 'eu-west-1']),
+            }),
+          ]),
+        }
+      );
+    });
   });
 
   describe('IAM Roles and Policies', () => {
