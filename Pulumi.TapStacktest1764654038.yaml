@@ -1,9 +1,0 @@
-encryptionsalt: v1:5LVo3Tk4TdI=:v1:SxP3/1x6uWbaIjXF:Wc8yCiNe4izWaY3IC8cqzJB8vmm4vg==
-config:
-  pulumi-infra:environmentSuffix: test1764654038
-  pulumi-infra:environment: production
-  pulumi-infra:project: tap-infrastructure
-  pulumi-infra:costCenter: engineering
-  pulumi-infra:enableDeletionProtection: "false"
-  pulumi-infra:dbPassword:
-    secure: v1:SzCwOWB+/02asIvV:ib7g3IxJDUnlm0hQF+DlfIgjexSXQbz+EO6i
