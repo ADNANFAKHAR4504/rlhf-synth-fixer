@@ -11,10 +11,14 @@ pulumi.runtime.setMocks({
     id: string;
     state: any;
   } {
+    // Extract service name from type (e.g., "aws:s3/bucket:Bucket" -> "s3")
+    const serviceMatch = args.type.match(/^aws:([^/]+)/);
+    const service = serviceMatch ? serviceMatch[1] : 'unknown';
+
     const outputs: any = {
       ...args.inputs,
       id: args.name + '_id',
-      arn: `arn:aws:${args.type}:us-east-1:123456789012:${args.name}`,
+      arn: `arn:aws:${service}:us-east-1:123456789012:${args.name}`,
     };
 
     // Add specific outputs based on resource type
