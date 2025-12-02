@@ -116,6 +116,7 @@
     "@aws-sdk/client-glue": "^3.904.0",
     "@aws-sdk/client-guardduty": "^3.902.0",
     "@aws-sdk/client-iam": "^3.927.0",
+    "@aws-sdk/client-inspector2": "^3.940.0",
     "@aws-sdk/client-iot": "^3.915.0",
     "@aws-sdk/client-kinesis": "^3.914.0",
     "@aws-sdk/client-kms": "^3.913.0",

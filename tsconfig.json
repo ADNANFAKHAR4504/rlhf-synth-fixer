@@ -19,7 +19,7 @@
     "experimentalDecorators": true,
     "strictPropertyInitialization": false,
     "typeRoots": ["./node_modules/@types"],
-    "types": ["node"],
+    "types": ["node", "jest"],
     "isolatedModules": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,
@@ -32,8 +32,6 @@
     "archive",
     "subcategory-references",
     "worktree",
-    "test",
-    "tests",
     "**/*.d.ts"
   ],
   "include": ["index.ts", "lib/**/*.ts", "bin/**/*.ts", "cli/**/*.ts"]
