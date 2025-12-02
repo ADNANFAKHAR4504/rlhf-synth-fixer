@@ -6,8 +6,8 @@ import pulumi
 import pulumi_aws as aws
 
 # Configuration
-# Use explicit namespace to match Pulumi.yaml config namespace
-config = pulumi.Config("payment-processor-migration")
+# Use default namespace (project name: payment-processor-migration)
+config = pulumi.Config()
 environment_suffix = config.get("environmentSuffix") or "dev"
 # Region is a provider config, not project-namespaced
 aws_config = pulumi.Config("aws")

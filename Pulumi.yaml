@@ -1,4 +1,4 @@
-name: TapStack
+name: payment-processor-migration
 runtime: python
 description: ECS Fargate migration for payment processing system
 main: lib/__main__.py
@@ -9,6 +9,7 @@ config:
     value: us-east-2
   payment-processor-migration:environmentSuffix:
     description: Environment suffix for resource naming (e.g., dev, staging, prod)
+    default: dev
   payment-processor-migration:legacyStackName:
     description: Name of the legacy infrastructure stack to import from
     default: legacy-infrastructure
