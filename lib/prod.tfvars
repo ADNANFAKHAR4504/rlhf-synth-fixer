@@ -1,5 +1,6 @@
 env                          = "prod"
 aws_region                   = "us-east-1"
+master_username              = "dbadmin"
 project_name                 = "weather-pipeline"
 owner                        = "platform-team"
 cost_center                  = "operations"
@@ -29,3 +30,4 @@ buffer_interval_s            = 60
 buffer_size_mb               = 128
 log_retention_days           = 30
 http_endpoint_urls           = ["https://emergency-mgmt.example.com/webhook"]
+pr_number                    = "pr7688"
