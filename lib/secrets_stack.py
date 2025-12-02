@@ -47,16 +47,12 @@ class SecretsStack(pulumi.ComponentResource):
         db_username = "japancart_admin"
 
         # Create secret with credentials
-        secret_value = pulumi.Output.all(
-            self.db_password.result
-        ).apply(lambda args: json.dumps({
-            "username": db_username,
-            "password": args[0],
-            "engine": "postgres",
-            "host": "placeholder",  # Will be updated after RDS creation
-            "port": 5432,
-            "dbname": "transactions"
-        }))
+        # Build secret value using Output.concat to avoid json.dumps in apply()
+        secret_value = pulumi.Output.concat(
+            '{"username": "', db_username,
+            '", "password": "', self.db_password.result,
+            '", "engine": "postgres", "host": "placeholder", "port": 5432, "dbname": "transactions"}'
+        )
 
         self.db_secret = secretsmanager.Secret(
             f"db-credentials-{environment_suffix}",
