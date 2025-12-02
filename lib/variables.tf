@@ -7,6 +7,7 @@ variable "aws_region" {
 variable "environment_suffix" {
   description = "Environment suffix for resource naming (required for uniqueness)"
   type        = string
+  default     = "try1"
 }
 
 variable "repository" {
@@ -62,6 +63,7 @@ variable "db_master_password" {
   description = "Master password for RDS PostgreSQL"
   type        = string
   sensitive   = true
+  default     = "xysuikdf"
 }
 
 variable "domain_name" {
