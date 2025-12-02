@@ -1,0 +1,5 @@
+encryptionsalt: v1:9AtYNTuw4sY=:v1:omJYoYxGfZhoF1d9:I7gUgyx0BzH4HRPaZpTcj7QMmsYz5w==
+config:
+  image-processor:environmentSuffix: synthe4v6t0t4
+  image-processor:environment: dev
+  aws:region: us-east-1
