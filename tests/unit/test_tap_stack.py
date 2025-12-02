@@ -389,8 +389,8 @@ class TestConfigStack(unittest.TestCase):
         }
 
     @pulumi.runtime.test
-    def test_config_stack_creates_config_recorder(self):
-        """Test that ConfigStack creates AWS Config recorder."""
+    def test_config_stack_skips_config_recorder_by_default(self):
+        """Test that ConfigStack skips AWS Config recorder by default to avoid limit conflict."""
         from lib.config_stack import ConfigStack
         import pulumi
 
@@ -404,11 +404,12 @@ class TestConfigStack(unittest.TestCase):
             mock_lambdas
         )
 
-        self.assertIsNotNone(stack.config_recorder)
+        # Config recorder is None by default to avoid AWS limit of 1 recorder per region
+        self.assertIsNone(stack.config_recorder)
 
     @pulumi.runtime.test
-    def test_config_stack_creates_delivery_channel(self):
-        """Test that ConfigStack creates AWS Config delivery channel."""
+    def test_config_stack_skips_delivery_channel_by_default(self):
+        """Test that ConfigStack skips AWS Config delivery channel by default."""
         from lib.config_stack import ConfigStack
         import pulumi
 
@@ -422,7 +423,8 @@ class TestConfigStack(unittest.TestCase):
             mock_lambdas
         )
 
-        self.assertIsNotNone(stack.delivery_channel)
+        # Delivery channel is None by default (requires config recorder)
+        self.assertIsNone(stack.delivery_channel)
 
     @pulumi.runtime.test
     def test_config_stack_creates_config_rules(self):
@@ -463,8 +465,8 @@ class TestConfigStack(unittest.TestCase):
         self.assertIsNotNone(stack.config_role)
 
     @pulumi.runtime.test
-    def test_config_stack_enables_recorder(self):
-        """Test that ConfigStack enables the Config recorder."""
+    def test_config_stack_skips_recorder_status_by_default(self):
+        """Test that ConfigStack skips Config recorder status by default."""
         from lib.config_stack import ConfigStack
         import pulumi
 
@@ -478,7 +480,8 @@ class TestConfigStack(unittest.TestCase):
             mock_lambdas
         )
 
-        self.assertIsNotNone(stack.recorder_status)
+        # Recorder status is None by default (requires config recorder)
+        self.assertIsNone(stack.recorder_status)
 
     @pulumi.runtime.test
     def test_config_stack_creates_lambda_permissions(self):
