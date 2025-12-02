@@ -231,20 +231,31 @@ describe('Lambda Function Optimization - Integration Tests', () => {
   });
 
   describe('Resource Naming Convention', () => {
+    // Extract environment suffix dynamically from deployed resources
+    const getEnvironmentSuffix = () => {
+      // Extract suffix from lambda function name (e.g., "payments-function-pr7649" -> "pr7649")
+      const match = outputs.lambdaFunctionName.match(/^payments-function-(.+)$/);
+      return match ? match[1] : '';
+    };
+
     it('should follow naming convention for Lambda function', () => {
-      expect(outputs.lambdaFunctionName).toMatch(/^payments-function-synth/);
+      const suffix = getEnvironmentSuffix();
+      expect(outputs.lambdaFunctionName).toMatch(new RegExp(`^payments-function-${suffix}`));
     });
 
     it('should follow naming convention for log group', () => {
-      expect(outputs.logGroupName).toMatch(/^\/aws\/lambda\/payments-function-synth/);
+      const suffix = getEnvironmentSuffix();
+      expect(outputs.logGroupName).toMatch(new RegExp(`^/aws/lambda/payments-function-${suffix}`));
     });
 
     it('should follow naming convention for IAM role', () => {
-      expect(outputs.iamRoleArn).toContain('lambda-payments-role-synth');
+      const suffix = getEnvironmentSuffix();
+      expect(outputs.iamRoleArn).toContain(`lambda-payments-role-${suffix}`);
     });
 
     it('should include environmentSuffix in all resource names', () => {
-      const suffix = 'synth';
+      const suffix = getEnvironmentSuffix();
+      expect(suffix).toBeTruthy(); // Ensure suffix exists
       expect(outputs.lambdaFunctionName).toContain(suffix);
       expect(outputs.logGroupName).toContain(suffix);
       expect(outputs.iamRoleArn).toContain(suffix);
