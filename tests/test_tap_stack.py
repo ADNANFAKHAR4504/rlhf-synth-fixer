@@ -29,13 +29,9 @@ class MyMocks(pulumi.runtime.Mocks):
             outputs["id"] = f"rtb-{args.name}"
         elif args.typ == "aws:ec2/securityGroup:SecurityGroup":
             outputs["id"] = f"sg-{args.name}"
-        elif args.typ == "aws:ec2transitgateway/transitGateway:TransitGateway":
-            outputs["id"] = f"tgw-{args.name}"
-            outputs["arn"] = f"arn:aws:ec2:us-east-1:123456789012:transit-gateway/tgw-{args.name}"
-        elif args.typ == "aws:ec2transitgateway/routeTable:RouteTable":
-            outputs["id"] = f"tgw-rtb-{args.name}"
-        elif args.typ == "aws:ec2transitgateway/vpcAttachment:VpcAttachment":
-            outputs["id"] = f"tgw-attach-{args.name}"
+        elif args.typ == "aws:ec2/vpcPeeringConnection:VpcPeeringConnection":
+            outputs["id"] = f"pcx-{args.name}"
+            outputs["accept_status"] = "active"
         elif args.typ == "aws:ec2/instance:Instance":
             outputs["id"] = f"i-{args.name}"
             outputs["primary_network_interface_id"] = f"eni-{args.name}"
@@ -48,6 +44,12 @@ class MyMocks(pulumi.runtime.Mocks):
             outputs["arn"] = f"arn:aws:iam::123456789012:role/role-{args.name}"
         elif args.typ == "aws:ec2/flowLog:FlowLog":
             outputs["id"] = f"fl-{args.name}"
+        elif args.typ == "aws:ec2/route:Route":
+            outputs["id"] = f"route-{args.name}"
+        elif args.typ == "aws:ec2/routeTableAssociation:RouteTableAssociation":
+            outputs["id"] = f"rta-{args.name}"
+        elif args.typ == "aws:iam/rolePolicy:RolePolicy":
+            outputs["id"] = f"policy-{args.name}"
         else:
             outputs["id"] = f"{args.name}-id"
 
@@ -121,24 +123,21 @@ class TestTapStack(unittest.TestCase):
         return pulumi.Output.all().apply(check_subnets)
 
     @pulumi.runtime.test
-    def test_transit_gateway_creation(self):
-        """Test that Transit Gateway is created."""
-        def check_tgw(args):
+    def test_vpc_peering_creation(self):
+        """Test that VPC Peering connection is created."""
+        def check_peering(args):
             stack_args = TapStackArgs(
                 environment_suffix="test123",
                 region="us-east-1"
             )
             stack = TapStack("test-stack", stack_args)
 
-            # Verify Transit Gateway exists
-            assert stack.transit_gateway is not None, "Transit Gateway should exist"
-
-            # Verify TGW route table exists
-            assert stack.tgw_route_table is not None, "TGW route table should exist"
+            # Verify VPC Peering exists
+            assert stack.vpc_peering is not None, "VPC Peering connection should exist"
 
             return True
 
-        return pulumi.Output.all().apply(check_tgw)
+        return pulumi.Output.all().apply(check_peering)
 
     @pulumi.runtime.test
     def test_nat_instance_creation(self):
@@ -314,24 +313,29 @@ class TestTapStack(unittest.TestCase):
         return pulumi.Output.all().apply(check_env_suffix)
 
     @pulumi.runtime.test
-    def test_tgw_attachments(self):
-        """Test that both VPCs are attached to Transit Gateway."""
-        def check_attachments(args):
+    def test_vpc_peering_connectivity(self):
+        """Test that VPC Peering is configured for inter-VPC connectivity."""
+        def check_peering(args):
             stack_args = TapStackArgs(
                 environment_suffix="test123",
                 region="us-east-1"
             )
             stack = TapStack("test-stack", stack_args)
 
-            # Verify dev TGW attachment
-            assert stack.dev_tgw_attachment is not None, "Dev TGW attachment should exist"
+            # Verify VPC Peering connection exists
+            assert stack.vpc_peering is not None, "VPC Peering should exist"
 
-            # Verify prod TGW attachment
-            assert stack.prod_tgw_attachment is not None, "Prod TGW attachment should exist"
+            # Verify auto_accept is enabled
+            auto_accept = stack.vpc_peering.auto_accept
 
-            return True
+            def validate_peering(values):
+                auto_acc = values[0]
+                assert auto_acc is True, f"VPC Peering auto_accept should be True, got {auto_acc}"
+                return True
 
-        return pulumi.Output.all().apply(check_attachments)
+            return pulumi.Output.all(auto_accept).apply(validate_peering)
+
+        return pulumi.Output.all().apply(check_peering)
 
     @pulumi.runtime.test
     def test_iam_role_for_flow_logs(self):

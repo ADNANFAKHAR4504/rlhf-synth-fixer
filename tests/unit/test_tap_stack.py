@@ -29,13 +29,9 @@ class MyMocks(pulumi.runtime.Mocks):
             outputs["id"] = f"rtb-{args.name}"
         elif args.typ == "aws:ec2/securityGroup:SecurityGroup":
             outputs["id"] = f"sg-{args.name}"
-        elif args.typ == "aws:ec2transitgateway/transitGateway:TransitGateway":
-            outputs["id"] = f"tgw-{args.name}"
-            outputs["arn"] = f"arn:aws:ec2:us-east-1:123456789012:transit-gateway/tgw-{args.name}"
-        elif args.typ == "aws:ec2transitgateway/routeTable:RouteTable":
-            outputs["id"] = f"tgw-rtb-{args.name}"
-        elif args.typ == "aws:ec2transitgateway/vpcAttachment:VpcAttachment":
-            outputs["id"] = f"tgw-attach-{args.name}"
+        elif args.typ == "aws:ec2/vpcPeeringConnection:VpcPeeringConnection":
+            outputs["id"] = f"pcx-{args.name}"
+            outputs["accept_status"] = "active"
         elif args.typ == "aws:ec2/instance:Instance":
             outputs["id"] = f"i-{args.name}"
             outputs["primary_network_interface_id"] = f"eni-{args.name}"
@@ -52,10 +48,6 @@ class MyMocks(pulumi.runtime.Mocks):
             outputs["id"] = f"route-{args.name}"
         elif args.typ == "aws:ec2/routeTableAssociation:RouteTableAssociation":
             outputs["id"] = f"rta-{args.name}"
-        elif args.typ == "aws:ec2transitgateway/routeTableAssociation:RouteTableAssociation":
-            outputs["id"] = f"tgw-rta-{args.name}"
-        elif args.typ == "aws:ec2transitgateway/routeTablePropagation:RouteTablePropagation":
-            outputs["id"] = f"tgw-rtp-{args.name}"
         elif args.typ == "aws:iam/rolePolicy:RolePolicy":
             outputs["id"] = f"policy-{args.name}"
         else:
@@ -162,42 +154,34 @@ class TestTapStackVPCCreation(unittest.TestCase):
         return pulumi.Output.all().apply(check_subnets)
 
 
-class TestTapStackTransitGateway(unittest.TestCase):
-    """Test cases for Transit Gateway creation."""
+class TestTapStackVPCPeering(unittest.TestCase):
+    """Test cases for VPC Peering creation."""
 
     @pulumi.runtime.test
-    def test_transit_gateway_creation(self):
-        """Test that Transit Gateway is created."""
-        def check_tgw(args):
+    def test_vpc_peering_creation(self):
+        """Test that VPC Peering connection is created."""
+        def check_peering(args):
             stack_args = TapStackArgs(environment_suffix="test123")
             stack = TapStack("test-stack", stack_args)
 
-            # Verify Transit Gateway exists
-            self.assertIsNotNone(stack.transit_gateway)
-
-            # Verify TGW route table exists
-            self.assertIsNotNone(stack.tgw_route_table)
+            # Verify VPC Peering exists
+            self.assertIsNotNone(stack.vpc_peering)
 
             return True
 
-        return pulumi.Output.all().apply(check_tgw)
+        return pulumi.Output.all().apply(check_peering)
 
     @pulumi.runtime.test
-    def test_tgw_attachments(self):
-        """Test that both VPCs are attached to Transit Gateway."""
-        def check_attachments(args):
-            stack_args = TapStackArgs(environment_suffix="test123")
-            stack = TapStack("test-stack", stack_args)
+    def test_vpc_peering_auto_accept(self):
+        """Test that VPC Peering is configured with auto_accept."""
+        stack_args = TapStackArgs(environment_suffix="test123")
+        stack = TapStack("test-stack", stack_args)
 
-            # Verify dev TGW attachment
-            self.assertIsNotNone(stack.dev_tgw_attachment)
-
-            # Verify prod TGW attachment
-            self.assertIsNotNone(stack.prod_tgw_attachment)
-
+        def validate_auto_accept(auto_accept):
+            self.assertEqual(auto_accept, True)
             return True
 
-        return pulumi.Output.all().apply(check_attachments)
+        return stack.vpc_peering.auto_accept.apply(validate_auto_accept)
 
 
 class TestTapStackNATInstance(unittest.TestCase):

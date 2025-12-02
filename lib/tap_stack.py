@@ -1,8 +1,8 @@
 """
-TapStack - Multi-VPC Transit Gateway Architecture
+TapStack - Multi-VPC Peering Architecture
 
 This module implements a secure multi-VPC network foundation for a fintech payment platform,
-featuring Transit Gateway connectivity, centralized NAT egress, and comprehensive flow logging.
+featuring VPC Peering connectivity, centralized NAT egress, and comprehensive flow logging.
 """
 import sys
 import os
@@ -31,11 +31,11 @@ class TapStackArgs:
 
 class TapStack(pulumi.ComponentResource):
     """
-    Multi-VPC Transit Gateway Infrastructure Stack
+    Multi-VPC Peering Infrastructure Stack
 
     Creates:
     - Two VPCs (dev and prod) with public and private subnets across 3 AZs
-    - Transit Gateway for inter-VPC connectivity
+    - VPC Peering connection for inter-VPC connectivity
     - Single NAT instance for centralized egress
     - Security groups for HTTPS and SSH access
     - VPC Flow Logs with CloudWatch integration
@@ -69,26 +69,13 @@ class TapStack(pulumi.ComponentResource):
             {**self.base_tags, "Environment": "prod"}
         )
 
-        # Create Transit Gateway
-        self.transit_gateway = self._create_transit_gateway()
-
-        # Attach VPCs to Transit Gateway
-        self.dev_tgw_attachment = self._attach_vpc_to_tgw(
-            "dev",
-            self.dev_vpc["vpc"],
-            [subnet.id for subnet in self.dev_vpc["private_subnets"]]
-        )
-
-        self.prod_tgw_attachment = self._attach_vpc_to_tgw(
-            "prod",
-            self.prod_vpc["vpc"],
-            [subnet.id for subnet in self.prod_vpc["private_subnets"]]
-        )
+        # Create VPC Peering connection
+        self.vpc_peering = self._create_vpc_peering()
 
         # Create NAT instance in dev VPC
         self.nat_instance = self._create_nat_instance()
 
-        # Update route tables to use NAT instance and Transit Gateway
+        # Update route tables to use NAT instance and VPC Peering
         self._configure_routing()
 
         # Create security groups
@@ -191,7 +178,7 @@ class TapStack(pulumi.ComponentResource):
                 opts=pulumi.ResourceOptions(parent=self)
             )
 
-        # Create private route table (will be updated later with NAT and TGW routes)
+        # Create private route table (will be updated later with NAT and peering routes)
         private_rt = aws.ec2.RouteTable(
             f"{name}_private_rt",
             vpc_id=vpc.id,
@@ -228,71 +215,28 @@ class TapStack(pulumi.ComponentResource):
         third_octet = int(base_octets[2]) + (subnet_index * 16)
         return f"{base_octets[0]}.{base_octets[1]}.{third_octet}.0/20"
 
-    def _create_transit_gateway(self) -> aws.ec2transitgateway.TransitGateway:
-        """Create Transit Gateway for inter-VPC connectivity."""
-        tgw = aws.ec2transitgateway.TransitGateway(
-            "transit_gateway",
-            description=f"Transit Gateway for payment platform - {self.environment_suffix}",
-            default_route_table_association="disable",
-            default_route_table_propagation="disable",
+    def _create_vpc_peering(self) -> aws.ec2.VpcPeeringConnection:
+        """Create VPC Peering connection for inter-VPC connectivity."""
+        # Create VPC Peering connection from dev to prod
+        peering = aws.ec2.VpcPeeringConnection(
+            "vpc_peering",
+            vpc_id=self.dev_vpc["vpc"].id,
+            peer_vpc_id=self.prod_vpc["vpc"].id,
+            auto_accept=True,
+            accepter=aws.ec2.VpcPeeringConnectionAccepterArgs(
+                allow_remote_vpc_dns_resolution=True,
+            ),
+            requester=aws.ec2.VpcPeeringConnectionRequesterArgs(
+                allow_remote_vpc_dns_resolution=True,
+            ),
             tags={
                 **self.base_tags,
-                "Name": f"payment-tgw-{self.environment_suffix}"
+                "Name": f"dev-to-prod-peering-{self.environment_suffix}"
             },
             opts=pulumi.ResourceOptions(parent=self)
         )
 
-        # Create Transit Gateway route table
-        self.tgw_route_table = aws.ec2transitgateway.RouteTable(
-            "tgw_route_table",
-            transit_gateway_id=tgw.id,
-            tags={
-                **self.base_tags,
-                "Name": f"payment-tgw-rt-{self.environment_suffix}"
-            },
-            opts=pulumi.ResourceOptions(parent=self)
-        )
-
-        return tgw
-
-    def _attach_vpc_to_tgw(
-        self,
-        name: str,
-        vpc: aws.ec2.Vpc,
-        subnet_ids: List[pulumi.Output]
-    ) -> aws.ec2transitgateway.VpcAttachment:
-        """Attach VPC to Transit Gateway."""
-        attachment = aws.ec2transitgateway.VpcAttachment(
-            f"{name}_tgw_attachment",
-            transit_gateway_id=self.transit_gateway.id,
-            vpc_id=vpc.id,
-            subnet_ids=subnet_ids,
-            transit_gateway_default_route_table_association=False,
-            transit_gateway_default_route_table_propagation=False,
-            tags={
-                **self.base_tags,
-                "Name": f"{name}-tgw-attachment-{self.environment_suffix}"
-            },
-            opts=pulumi.ResourceOptions(parent=self, depends_on=[self.tgw_route_table])
-        )
-
-        # Associate with route table
-        aws.ec2transitgateway.RouteTableAssociation(
-            f"{name}_tgw_rt_association",
-            transit_gateway_attachment_id=attachment.id,
-            transit_gateway_route_table_id=self.tgw_route_table.id,
-            opts=pulumi.ResourceOptions(parent=self)
-        )
-
-        # Propagate routes
-        aws.ec2transitgateway.RouteTablePropagation(
-            f"{name}_tgw_rt_propagation",
-            transit_gateway_attachment_id=attachment.id,
-            transit_gateway_route_table_id=self.tgw_route_table.id,
-            opts=pulumi.ResourceOptions(parent=self)
-        )
-
-        return attachment
+        return peering
 
     def _create_nat_instance(self) -> aws.ec2.Instance:
         """Create NAT instance in dev VPC's first public subnet."""
@@ -366,7 +310,7 @@ service iptables save
         return nat_instance
 
     def _configure_routing(self):
-        """Configure routing tables with NAT instance and Transit Gateway routes."""
+        """Configure routing tables with NAT instance and VPC Peering routes."""
         # Add route to internet via NAT instance in both VPC private route tables
         aws.ec2.Route(
             "dev_private_nat_route",
@@ -384,21 +328,21 @@ service iptables save
             opts=pulumi.ResourceOptions(parent=self, depends_on=[self.nat_instance])
         )
 
-        # Add routes to Transit Gateway for inter-VPC communication
+        # Add routes via VPC Peering for inter-VPC communication
         aws.ec2.Route(
             "dev_to_prod_route",
             route_table_id=self.dev_vpc["private_rt"].id,
             destination_cidr_block="10.2.0.0/16",
-            transit_gateway_id=self.transit_gateway.id,
-            opts=pulumi.ResourceOptions(parent=self, depends_on=[self.dev_tgw_attachment])
+            vpc_peering_connection_id=self.vpc_peering.id,
+            opts=pulumi.ResourceOptions(parent=self, depends_on=[self.vpc_peering])
         )
 
         aws.ec2.Route(
             "prod_to_dev_route",
             route_table_id=self.prod_vpc["private_rt"].id,
             destination_cidr_block="10.1.0.0/16",
-            transit_gateway_id=self.transit_gateway.id,
-            opts=pulumi.ResourceOptions(parent=self, depends_on=[self.prod_tgw_attachment])
+            vpc_peering_connection_id=self.vpc_peering.id,
+            opts=pulumi.ResourceOptions(parent=self, depends_on=[self.vpc_peering])
         )
 
     def _create_security_groups(self) -> Dict[str, aws.ec2.SecurityGroup]:
@@ -604,9 +548,8 @@ service iptables save
         pulumi.export("prod_public_subnet_ids", [s.id for s in self.prod_vpc["public_subnets"]])
         pulumi.export("prod_private_subnet_ids", [s.id for s in self.prod_vpc["private_subnets"]])
 
-        # Transit Gateway outputs
-        pulumi.export("transit_gateway_id", self.transit_gateway.id)
-        pulumi.export("transit_gateway_route_table_id", self.tgw_route_table.id)
+        # VPC Peering output
+        pulumi.export("vpc_peering_id", self.vpc_peering.id)
 
         # NAT instance output
         pulumi.export("nat_instance_id", self.nat_instance.id)
