@@ -679,9 +679,18 @@ describe('TapStack', () => {
   });
 
   describe('Disaster Recovery', () => {
-    test('should create stack set for secondary regions', () => {
-      template.resourceCountIs('AWS::CloudFormation::StackSet', 1);
-      template.hasResourceProperties('AWS::CloudFormation::StackSet', {
+    test('should create stack set for secondary regions in production', () => {
+      // StackSet is only created in production environments
+      const appProd = new cdk.App();
+      const stackProd = new TapStack(appProd, 'ProdDRStack', {
+        environment: 'prod',
+        emailAddress: 'test@example.com',
+        drRegions: ['us-east-1', 'us-west-2'],
+      });
+      const templateProd = Template.fromStack(stackProd);
+
+      templateProd.resourceCountIs('AWS::CloudFormation::StackSet', 1);
+      templateProd.hasResourceProperties('AWS::CloudFormation::StackSet', {
         StackInstancesGroup: Match.arrayWith([
           Match.objectLike({
             Regions: Match.arrayWith(['us-east-1', 'us-west-2']),
@@ -695,15 +704,21 @@ describe('TapStack', () => {
       });
     });
 
+    test('should not create stack set in non-production environments', () => {
+      // StackSet should NOT be created in dev environment
+      template.resourceCountIs('AWS::CloudFormation::StackSet', 0);
+    });
+
     test('should exclude primary region from DR regions when region is concrete', () => {
       // This test covers line 68: drRegionSet.delete(primaryRegion)
       // by specifying a concrete region that matches one of the DR regions
+      // StackSet is only created in production environments
       const appWithConcreteRegion = new cdk.App();
       const stackWithConcreteRegion = new TapStack(
         appWithConcreteRegion,
         'ConcreteRegionStack',
         {
-          environment: 'dev',
+          environment: 'prod', // Must be prod for StackSet to be created
           env: {
             region: 'us-east-1', // Concrete region that's in default DR regions
             account: '123456789012',

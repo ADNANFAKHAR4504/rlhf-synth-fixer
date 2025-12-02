@@ -688,15 +688,12 @@ describe('TapStack End-to-End Application Integration Tests', () => {
       });
       console.log('    CI/CD pipeline deployed');
 
-      template.resourceCountIs('AWS::CloudFormation::StackSet', 1);
-      template.hasResourceProperties('AWS::CloudFormation::StackSet', {
-        StackInstancesGroup: Match.arrayWith([
-          Match.objectLike({
-            Regions: Match.arrayWith(['us-east-1', 'us-west-2']),
-          }),
-        ]),
-      });
-      console.log('    Multi-region disaster recovery baseline configured');
+      // StackSet is only created in production environments (prod/production)
+      // Since this test uses 'staging' environment, no StackSet should be created
+      template.resourceCountIs('AWS::CloudFormation::StackSet', 0);
+      console.log(
+        '    Multi-region disaster recovery skipped (non-production environment)'
+      );
 
       // 7. Verify monitoring and alerting
       console.log('7. Validating monitoring and alerting...');
