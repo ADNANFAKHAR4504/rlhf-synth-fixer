@@ -189,13 +189,14 @@ class TestTapStackNATInstance(unittest.TestCase):
 
     @pulumi.runtime.test
     def test_nat_instance_creation(self):
-        """Test that NAT instance is created with correct configuration."""
+        """Test that NAT instances are created with correct configuration for each VPC."""
         def check_nat(args):
             stack_args = TapStackArgs(environment_suffix="test123")
             stack = TapStack("test-stack", stack_args)
 
-            # Verify NAT instance exists
-            self.assertIsNotNone(stack.nat_instance)
+            # Verify NAT instances exist for both VPCs
+            self.assertIsNotNone(stack.dev_nat_instance)
+            self.assertIsNotNone(stack.prod_nat_instance)
 
             return True
 
@@ -203,7 +204,7 @@ class TestTapStackNATInstance(unittest.TestCase):
 
     @pulumi.runtime.test
     def test_nat_instance_properties(self):
-        """Test NAT instance has correct instance type and source_dest_check."""
+        """Test NAT instances have correct instance type and source_dest_check."""
         stack_args = TapStackArgs(environment_suffix="test123")
         stack = TapStack("test-stack", stack_args)
 
@@ -216,8 +217,8 @@ class TestTapStackNATInstance(unittest.TestCase):
             return True
 
         return pulumi.Output.all(
-            stack.nat_instance.instance_type.apply(validate_instance_type),
-            stack.nat_instance.source_dest_check.apply(validate_source_dest)
+            stack.dev_nat_instance.instance_type.apply(validate_instance_type),
+            stack.dev_nat_instance.source_dest_check.apply(validate_source_dest)
         )
 
 
@@ -382,7 +383,7 @@ class TestTapStackTagging(unittest.TestCase):
         return pulumi.Output.all(
             stack.dev_vpc["vpc"].tags.apply(validate_dev_vpc_name),
             stack.prod_vpc["vpc"].tags.apply(validate_prod_vpc_name),
-            stack.nat_instance.tags.apply(validate_nat_name),
+            stack.dev_nat_instance.tags.apply(validate_nat_name),
             stack.security_groups["dev"].tags.apply(validate_sg_name)
         )
 
