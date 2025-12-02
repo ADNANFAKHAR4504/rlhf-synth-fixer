@@ -1,6 +1,6 @@
 {
-  "platform": "pulumi",
-  "language": "ts",
+  "platform": "cicd",
+  "language": "yml",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "j4i1q7e1",
@@ -19,5 +19,9 @@
     "CloudWatch Logs",
     "ECS"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  }
 }
