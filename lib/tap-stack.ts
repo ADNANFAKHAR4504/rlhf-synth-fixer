@@ -100,7 +100,7 @@ export class TapStack extends cdk.Stack {
         logGroupName: `/aws/vpc/${resourcePrefix}`,
         retention:
           logs.RetentionDays[
-            `DAYS_${config.logRetentionDays}` as keyof typeof logs.RetentionDays
+          `DAYS_${config.logRetentionDays}` as keyof typeof logs.RetentionDays
           ],
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
@@ -418,7 +418,7 @@ export class TapStack extends cdk.Stack {
         logGroupName: `/aws/lambda/${resourcePrefix}-api-handler`,
         retention:
           logs.RetentionDays[
-            `DAYS_${config.logRetentionDays}` as keyof typeof logs.RetentionDays
+          `DAYS_${config.logRetentionDays}` as keyof typeof logs.RetentionDays
           ],
         encryptionKey: logsKmsKey,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -432,7 +432,7 @@ export class TapStack extends cdk.Stack {
         logGroupName: `/aws/lambda/${resourcePrefix}-event-processor`,
         retention:
           logs.RetentionDays[
-            `DAYS_${config.logRetentionDays}` as keyof typeof logs.RetentionDays
+          `DAYS_${config.logRetentionDays}` as keyof typeof logs.RetentionDays
           ],
         encryptionKey: logsKmsKey,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -446,7 +446,7 @@ export class TapStack extends cdk.Stack {
         logGroupName: `/aws/lambda/${resourcePrefix}-stream-processor`,
         retention:
           logs.RetentionDays[
-            `DAYS_${config.logRetentionDays}` as keyof typeof logs.RetentionDays
+          `DAYS_${config.logRetentionDays}` as keyof typeof logs.RetentionDays
           ],
         encryptionKey: logsKmsKey,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -460,7 +460,7 @@ export class TapStack extends cdk.Stack {
         logGroupName: `/aws/lambda/${resourcePrefix}-notification-handler`,
         retention:
           logs.RetentionDays[
-            `DAYS_${config.logRetentionDays}` as keyof typeof logs.RetentionDays
+          `DAYS_${config.logRetentionDays}` as keyof typeof logs.RetentionDays
           ],
         encryptionKey: logsKmsKey,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -490,7 +490,7 @@ export class TapStack extends cdk.Stack {
       `),
         memorySize: config.lambdaMemorySize,
         timeout: cdk.Duration.seconds(config.lambdaTimeout),
-        reservedConcurrentExecutions: config.lambdaConcurrency,
+        // Note: reservedConcurrentExecutions removed to avoid account concurrency limits
         role: apiHandlerRole,
         vpc,
         vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
@@ -539,7 +539,7 @@ export class TapStack extends cdk.Stack {
       `),
         memorySize: config.lambdaMemorySize,
         timeout: cdk.Duration.seconds(config.lambdaTimeout * 2),
-        reservedConcurrentExecutions: Math.floor(config.lambdaConcurrency / 2),
+        // Note: reservedConcurrentExecutions removed to avoid account concurrency limits
         role: eventProcessorRole,
         vpc,
         vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
