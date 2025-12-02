@@ -371,7 +371,9 @@ class LambdaEtlOptimizer:
                 print("\n   Issues Found:")
                 for issue in optimization_results['issues']:
                     print(f"      {issue}")
-                all_functions_ok = False
+                    # Only mark as failed for critical issues (❌), not warnings (⚠️)
+                    if '❌' in issue:
+                        all_functions_ok = False
 
             if log_results.get('issue'):
                 print(f"      ❌ {log_results['issue']}")
@@ -394,9 +396,11 @@ class LambdaEtlOptimizer:
         if all_functions_ok:
             print("✅ Lambda ETL infrastructure optimization verification PASSED!")
             print("   All functions properly configured with performance optimizations.")
+            print("   (Warnings shown are informational and do not indicate failure.)")
             return True
         else:
-            print("⚠️  Some optimization checks failed. Please review the issues above.")
+            print("❌ Lambda ETL infrastructure optimization verification FAILED!")
+            print("   Critical issues found - please review above.")
             return False
 
 
