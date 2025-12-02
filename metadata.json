@@ -2,10 +2,15 @@
   "po_id": "y5s6n6b3",
   "subtask": "CI/CD Pipeline Integration",
   "difficulty": "medium",
-  "platform": "Pulumi",
-  "language": "TypeScript",
+  "platform": "cicd",
+  "language": "yml",
   "region": "us-east-1",
-  "subject_labels": ["CI/CD Pipeline"],
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "team": "synth",
+  "turn_type": "single",
+  "author": "mayanksethi-turing",
   "training_quality": 8,
   "aws_services": [
     "S3",

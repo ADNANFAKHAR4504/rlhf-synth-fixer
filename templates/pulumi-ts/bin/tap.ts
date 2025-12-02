@@ -45,25 +45,14 @@ const provider = new aws.Provider('aws', {
 
 // Instantiate the main stack component for the infrastructure.
 // This encapsulates all the resources for the platform.
-const stack = new TapStack(
+new TapStack(
   'pulumi-infra',
   {
-    environmentSuffix: environmentSuffix,
     tags: defaultTags,
-    githubRepo: process.env.GITHUB_REPO || 'https://github.com/example/app',
-    githubTokenParameter:
-      process.env.GITHUB_TOKEN_PARAM || '/cicd/github/token',
-    ecsClusterName: process.env.ECS_CLUSTER_NAME || 'production-cluster',
   },
   { provider }
 );
 
-// Export stack outputs for integration with other systems
-export const pipelineName = stack.pipelineName;
-export const ecrRepositoryUri = stack.ecrRepositoryUri;
-export const artifactBucketName = stack.artifactBucketName;
-export const buildProjectName = stack.buildProjectName;
-export const snsTopicArn = stack.snsTopicArn;
-export const validationLambdaArn = stack.validationLambdaArn;
-export const stateTableName = stack.stateTableName;
-export const kmsKeyId = stack.kmsKeyId;
+// To use the stack outputs, you can export them.
+// For example, if TapStack had an output `bucketName`:
+// export const bucketName = stack.bucketName;
