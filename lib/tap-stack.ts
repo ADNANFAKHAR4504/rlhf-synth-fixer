@@ -124,7 +124,7 @@ export class TapStack extends pulumi.ComponentResource {
         memorySize: 512, // Right-sized based on metrics
         role: lambdaRole,
         deadLetterQueue: dlq,
-        provisionedConcurrency: 2, // Minimize cold starts
+        provisionedConcurrency: 1, // Minimize cold starts (reduced to 1 for account limits)
         logRetentionDays: 7,
         tags: commonTags,
         code: new pulumi.asset.AssetArchive({
