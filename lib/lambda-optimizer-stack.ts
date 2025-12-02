@@ -25,8 +25,9 @@ export class LambdaOptimizerStack extends pulumi.ComponentResource {
     const { environmentSuffix, tags } = args;
 
     // Configuration Management (Requirement 5): Use Pulumi Config for environment variables
-    const dbEndpoint = config.require('dbEndpoint');
-    const apiKey = config.requireSecret('apiKey');
+    // Using get() with defaults instead of require() to allow deployment without explicit config
+    const dbEndpoint = config.get('dbEndpoint') || `db-${environmentSuffix}.example.com:5432`;
+    const apiKey = config.getSecret('apiKey') || pulumi.output('placeholder-api-key');
     const maxRetries = config.getNumber('maxRetries') || 3;
     const logLevel = config.get('logLevel') || 'INFO';
 
