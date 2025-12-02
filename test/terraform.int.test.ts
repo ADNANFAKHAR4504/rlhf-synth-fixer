@@ -1239,19 +1239,6 @@ describe('Application Security & SQL Injection Tests', () => {
   test('Application validates SQL injection attempts in input', async () => {
     expect(apiUrl).toBeDefined();
 
-    const sqlInjectionPayloads = [
-      "' OR '1'='1",
-      "' OR 1=1--",
-      "admin' --",
-      "' UNION SELECT NULL--",
-      "1' AND '1'='1",
-      "'; DROP TABLE users--",
-      "' OR 'x'='x",
-      "1' OR '1'='1",
-      "admin'/*",
-      "' UNION SELECT * FROM users--",
-    ];
-
     // Test that Lambda validator function exists and can handle these
     let lambdaArns: any = outputs.lambda_functions;
     if (typeof lambdaArns === 'string') {
@@ -1270,8 +1257,6 @@ describe('Application Security & SQL Injection Tests', () => {
     expect(func.Configuration).toBeDefined();
     expect(func.Configuration!.State).toBe('Active');
 
-    // Note: Actual SQL injection blocking would be tested at application level
-    // This test verifies the validator function exists and is configured
   }, TEST_TIMEOUT);
 
   test('DynamoDB tables use parameterized queries (no SQL injection risk)', async () => {
@@ -1280,14 +1265,11 @@ describe('Application Security & SQL Injection Tests', () => {
       tables = JSON.parse(tables);
     }
 
-    // DynamoDB uses NoSQL API, so SQL injection is not applicable
-    // But we verify tables are properly configured
     const interactionsTable = await awsCall(() =>
       dynamodbClient.send(new DescribeTableCommand({ TableName: tables.interactions }))
     );
 
     expect(interactionsTable.Table!.TableStatus).toBe('ACTIVE');
-    // DynamoDB uses NoSQL - verify encryption is enabled via SSEDescription
     expect(interactionsTable.Table!.SSEDescription).toBeDefined();
   }, TEST_TIMEOUT);
 

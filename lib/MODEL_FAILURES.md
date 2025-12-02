@@ -2,7 +2,7 @@
 
 **Error:**
 
-```
+```text
 InvalidParameterCombination: Cannot find version 15.4 for postgres
 ```
 
@@ -13,7 +13,7 @@ InvalidParameterCombination: Cannot find version 15.4 for postgres
 
 **Error:**
 
-```
+```text
 log_statement='all' created excessive logging load.
 ```
 
@@ -24,7 +24,7 @@ log_statement='all' created excessive logging load.
 
 **Error:**
 
-```
+```text
 Invalid IOPS Configuration: Explicit IOPS and throughput specified for <400GB gp3 volume.
 ```
 
@@ -35,7 +35,7 @@ Invalid IOPS Configuration: Explicit IOPS and throughput specified for <400GB gp
 
 **Error:**
 
-```
+```text
 Invalid effective_cache_size Value: Exceeded PostgreSQL integer range.
 ```
 
@@ -46,7 +46,7 @@ Invalid effective_cache_size Value: Exceeded PostgreSQL integer range.
 
 **Error:**
 
-```
+```text
 The provider hashicorp/aws does not support data source "aws_sagemaker_endpoint".
 ```
 
@@ -57,7 +57,7 @@ The provider hashicorp/aws does not support data source "aws_sagemaker_endpoint"
 
 **Error:**
 
-```
+```text
 The argument "description" is required, but no definition was found.
 An argument named "replication_group_description" is not expected here.
 ```
@@ -69,7 +69,7 @@ An argument named "replication_group_description" is not expected here.
 
 **Error:**
 
-```
+```text
 No attribute specified when one (and only one) of [rule[0].filter,rule[0].prefix] is required
 ```
 
@@ -80,7 +80,7 @@ No attribute specified when one (and only one) of [rule[0].filter,rule[0].prefix
 
 **Error:**
 
-```
+```text
 BadRequestException: Currently, authorization is restricted to the $connect route only
 ```
 
@@ -91,7 +91,7 @@ BadRequestException: Currently, authorization is restricted to the $connect rout
 
 **Error:**
 
-```
+```text
 InvalidParameterValueException: The function execution role does not have permissions to call ReceiveMessage on SQS
 ```
 
@@ -102,7 +102,7 @@ InvalidParameterValueException: The function execution role does not have permis
 
 **Error:**
 
-```
+```text
 InvalidParameterValueException: Cannot access stream ... Please ensure the role can perform the GetRecords... Actions on your stream.
 ```
 
@@ -113,20 +113,57 @@ InvalidParameterValueException: Cannot access stream ... Please ensure the role 
 
 **Error:**
 
-```
+```text
 InvalidParameter: Endpoint Reason: FIFO SQS Queues can not be subscribed to standard SNS topics
 ```
 
-**Root Cause:** The `email` queue was configured as FIFO, but subscribed to a Standard SNS topic. This combination is not supported.
+**Root Cause:** The `email` queue was configured as FIFO, but subscribed to a Standard SNS topic.
+This combination is not supported.
 **Fix:** Changed `email` queue configuration to `fifo = false` (Standard queue).
 
 ### **Issue 12 — Invalid WAF Rule Action**
 
 **Error:**
 
-```
+```text
 WAFInvalidParameterException: Error reason: A reference in your rule statement is not valid., field: RULE, parameter: Statement
 ```
 
-**Root Cause:** Managed rule groups (`managed_rule_group_statement`) require `override_action` instead of `action`. The `action` block is only for standard rules.
+**Root Cause:** Managed rule groups (`managed_rule_group_statement`) require `override_action` instead of `action`.
+The `action` block is only for standard rules.
 **Fix:** Replaced `action { block {} }` with `override_action { none {} }` for `AWSManagedRulesSQLiRuleSet` and `AWSManagedRulesCommonRuleSet`.
+
+### **Issue 13 — Invalid RDS Password Characters**
+
+**Error:**
+
+```text
+InvalidParameterValue: The parameter MasterUserPassword is not a valid password. Only printable ASCII characters besides '/', '@', '"', ' ' may be used.
+```
+
+**Root Cause:** The `random_password` resource included invalid characters (`@`, `/`, `"`, ` `) by default.
+**Fix:** Added `override_special = "!#$%&*()-_=+[]{}<>:?"` to exclude the forbidden characters.
+
+### **Issue 14 — Lambda Reserved Concurrency Limit**
+
+**Error:**
+
+```text
+InvalidParameterValueException: Specified ReservedConcurrentExecutions for function decreases account's UnreservedConcurrentExecution below its minimum value of [100].
+```
+
+**Root Cause:** Setting `reserved_concurrent_executions` for multiple functions in an account with a low concurrency
+limit violated the minimum unreserved concurrency requirement.
+**Fix:** Set `lambda_concurrency` to `-1` for the `dev` environment to remove the reserved concurrency limit.
+
+### **Issue 15 — Invalid Redis Endpoint Attribute**
+
+**Error:**
+
+```text
+Redis endpoint is missing or null in outputs and Lambda environment variables.
+```
+
+**Root Cause:** The code used `configuration_endpoint_address`, which is only available when Redis Cluster Mode is
+enabled. The current configuration has Cluster Mode disabled.
+**Fix:** Changed `configuration_endpoint_address` to `primary_endpoint_address` in outputs and Lambda environment variables.

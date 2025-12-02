@@ -23,7 +23,7 @@ terraform {
     }
   }
 
-  # backend "s3" {}
+  backend "s3" {}
 }
 
 # =============================================================================
@@ -445,7 +445,7 @@ locals {
     dev = {
       websocket_connections = 100
       kinesis_shards        = 1
-      lambda_concurrency    = 10
+      lambda_concurrency    = -1
       dynamodb_rcu          = 5
       dynamodb_wcu          = 5
       redis_nodes           = 1
@@ -792,8 +792,9 @@ resource "aws_security_group" "aurora" {
 # =============================================================================
 
 resource "random_password" "aurora" {
-  length  = 32
-  special = true
+  length           = 32
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 
 resource "aws_secretsmanager_secret" "aurora" {
@@ -2385,7 +2386,7 @@ resource "aws_lambda_function" "notifier" {
     variables = {
       PREFERENCES_TABLE = aws_dynamodb_table.preferences.name
       SNS_TOPIC_ARN     = aws_sns_topic.notifications.arn
-      REDIS_ENDPOINT    = aws_elasticache_replication_group.redis.configuration_endpoint_address
+      REDIS_ENDPOINT    = aws_elasticache_replication_group.redis.primary_endpoint_address
       REDIS_AUTH_TOKEN  = random_password.redis_auth.result
     }
   }
@@ -2458,7 +2459,7 @@ resource "aws_lambda_function" "trending" {
     variables = {
       METRICS_TABLE      = aws_dynamodb_table.metrics.name
       TRENDING_TABLE     = aws_dynamodb_table.trending.name
-      REDIS_ENDPOINT     = aws_elasticache_replication_group.redis.configuration_endpoint_address
+      REDIS_ENDPOINT     = aws_elasticache_replication_group.redis.primary_endpoint_address
       REDIS_AUTH_TOKEN   = random_password.redis_auth.result
       TRENDING_TTL_HOURS = tostring(local.env_config.trending_ttl_hours)
     }
@@ -2966,8 +2967,13 @@ output "aurora_reader_endpoint" {
 }
 
 output "redis_endpoint" {
-  value       = aws_elasticache_replication_group.redis.configuration_endpoint_address
+  value       = aws_elasticache_replication_group.redis.primary_endpoint_address
   description = "Redis cluster endpoint"
+}
+
+output "rds_endpoint" {
+  value       = aws_rds_cluster.aurora.endpoint
+  description = "Aurora cluster endpoint"
 }
 
 output "step_functions_arn" {
@@ -3012,7 +3018,6 @@ output "security_groups" {
   description = "Security group IDs"
 }
 
-# Additional outputs for integration tests
 output "kinesis_stream_name" {
   value       = aws_kinesis_stream.interactions.name
   description = "Kinesis stream name"
@@ -3068,10 +3073,10 @@ output "kms_key_ids" {
 
 output "vpc_info" {
   value = {
-    vpc_id            = aws_vpc.main.id
+    vpc_id             = aws_vpc.main.id
     private_subnet_ids = aws_subnet.private[*].id
     public_subnet_ids  = aws_subnet.public[*].id
-    cidr_block        = aws_vpc.main.cidr_block
+    cidr_block         = aws_vpc.main.cidr_block
   }
   description = "VPC information"
 }
@@ -3084,8 +3089,6 @@ output "aurora_endpoints" {
   description = "Aurora cluster endpoints"
 }
 ```
-
----
 
 ## `variables.tf`
 
@@ -3129,8 +3132,6 @@ variable "team" {
 }
 ```
 
----
-
 ## `dev.tfvars`
 
 ```hcl
@@ -3156,8 +3157,6 @@ log_retention_days       = 7
 alarm_threshold_messages = 100
 pr_number                = "pr7709"
 ```
-
----
 
 ## `prod.tfvars`
 
@@ -3185,8 +3184,6 @@ alarm_threshold_messages = 2000
 pr_number                = "pr7709"
 ```
 
----
-
 ## `staging.tfvars`
 
 ```hcl
@@ -3212,6 +3209,3 @@ log_retention_days       = 14
 alarm_threshold_messages = 500
 pr_number                = "pr7709"
 ```
-
----
-
