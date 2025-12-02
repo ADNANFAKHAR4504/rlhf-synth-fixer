@@ -115,7 +115,7 @@ class VpcStack(pulumi.ComponentResource):
 
             # NAT Gateway
             self.nat_gateway = aws.ec2.NatGateway(
-g                f"nat-gateway-{environment_suffix}",
+                f"nat-gateway-{environment_suffix}",
                 subnet_id=self.public_subnet.id,
                 allocation_id=self.eip.id,
                 tags={**tags, "Name": f"nat-gateway-{environment_suffix}"},
