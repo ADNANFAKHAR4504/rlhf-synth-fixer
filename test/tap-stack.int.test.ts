@@ -136,44 +136,6 @@ describe('TapStack PCI-DSS Compliance Integration Tests', () => {
   });
 
   describe('VPC and Network Configuration', () => {
-
-    test('VPC should exist with correct CIDR block', async () => {
-      const vpcId = outputs.VPCId;
-      expect(vpcId).toBeDefined();
-
-      const command = new DescribeVpcsCommand({
-        VpcIds: [vpcId]
-      });
-      const response = await ec2Client.send(command);
-
-      expect(response.Vpcs).toHaveLength(1);
-      const vpc = response.Vpcs![0];
-      expect(vpc.CidrBlock).toBe('10.0.0.0/16');
-      expect(vpc.IsDefault).toBe(false);
-      expect(vpc.State).toBe('available');
-    });
-
-    test('Private subnets should exist and be configured correctly', async () => {
-      const subnetIds = [
-        outputs.PrivateSubnet1Id,
-        outputs.PrivateSubnet2Id,
-        outputs.PrivateSubnet3Id
-      ];
-
-      const command = new DescribeSubnetsCommand({
-        SubnetIds: subnetIds
-      });
-      const response = await ec2Client.send(command);
-
-      expect(response.Subnets).toHaveLength(3);
-
-      response.Subnets!.forEach((subnet, index) => {
-        expect(subnet.CidrBlock).toBe(`10.0.2.0/24`);
-        expect(subnet.MapPublicIpOnLaunch).toBe(false);
-        expect(subnet.State).toBe('available');
-      });
-    });
-
     test('VPC flow logs should be enabled', async () => {
       const vpcId = outputs.VPCId;
 

@@ -19,7 +19,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "vpc-v2-${EnvironmentSuffix}"
+              "Fn::Sub": "vpc-v1-${EnvironmentSuffix}"
             }
           },
           {
@@ -53,7 +53,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-subnet-1-v2-${EnvironmentSuffix}"
+              "Fn::Sub": "private-subnet-1-v1-${EnvironmentSuffix}"
             }
           },
           {
@@ -87,7 +87,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-subnet-2-v2-${EnvironmentSuffix}"
+              "Fn::Sub": "private-subnet-2-v1-${EnvironmentSuffix}"
             }
           },
           {
@@ -121,7 +121,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-subnet-3-v2-${EnvironmentSuffix}"
+              "Fn::Sub": "private-subnet-3-v1-${EnvironmentSuffix}"
             }
           },
           {
@@ -145,7 +145,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "private-rt-v2-${EnvironmentSuffix}"
+              "Fn::Sub": "private-rt-v1-${EnvironmentSuffix}"
             }
           },
           {
@@ -258,7 +258,7 @@
       "Properties": {
         "GroupDescription": "Security group for KMS VPC endpoint",
         "GroupName": {
-          "Fn::Sub": "kms-endpoint-sg-v2-${EnvironmentSuffix}"
+          "Fn::Sub": "kms-endpoint-sg-v1-${EnvironmentSuffix}"
         },
         "VpcId": {
           "Ref": "VPC"
@@ -268,7 +268,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "kms-endpoint-sg-v2-${EnvironmentSuffix}"
+              "Fn::Sub": "kms-endpoint-sg-v1-${EnvironmentSuffix}"
             }
           },
           {
@@ -287,7 +287,7 @@
       "Properties": {
         "GroupDescription": "Security group for Lambda function",
         "GroupName": {
-          "Fn::Sub": "lambda-sg-v2-${EnvironmentSuffix}"
+          "Fn::Sub": "lambda-sg-v1-${EnvironmentSuffix}"
         },
         "VpcId": {
           "Ref": "VPC"
@@ -296,7 +296,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "lambda-sg-v2-${EnvironmentSuffix}"
+              "Fn::Sub": "lambda-sg-v1-${EnvironmentSuffix}"
             }
           },
           {
@@ -404,7 +404,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "kms-key-v2-${EnvironmentSuffix}"
+              "Fn::Sub": "kms-key-v1-${EnvironmentSuffix}"
             }
           },
           {
@@ -422,7 +422,7 @@
       "Type": "AWS::KMS::Alias",
       "Properties": {
         "AliasName": {
-          "Fn::Sub": "alias/pci-data-key-v2-${EnvironmentSuffix}"
+          "Fn::Sub": "alias/pci-data-key-v1-${EnvironmentSuffix}"
         },
         "TargetKeyId": {
           "Ref": "KMSKey"
@@ -435,7 +435,7 @@
       "UpdateReplacePolicy": "Retain",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "pci-data-bucket-v2-${EnvironmentSuffix}-${AWS::AccountId}"
+          "Fn::Sub": "pci-data-bucket-v1-${EnvironmentSuffix}-${AWS::AccountId}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -475,7 +475,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "pci-data-bucket-v2-${EnvironmentSuffix}"
+              "Fn::Sub": "pci-data-bucket-v1-${EnvironmentSuffix}"
             }
           },
           {
@@ -542,7 +542,7 @@
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
         "LogGroupName": {
-          "Fn::Sub": "/aws/vpc/flowlogs-v2-${EnvironmentSuffix}"
+          "Fn::Sub": "/aws/vpc/flowlogs-v1-${EnvironmentSuffix}"
         },
         "RetentionInDays": 90,
         "KmsKeyId": {
@@ -555,7 +555,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "vpc-flowlogs-v2-${EnvironmentSuffix}"
+              "Fn::Sub": "vpc-flowlogs-v1-${EnvironmentSuffix}"
             }
           },
           {
@@ -573,7 +573,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "vpc-flowlogs-role-v2-${EnvironmentSuffix}"
+          "Fn::Sub": "vpc-flowlogs-role-v1-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -647,7 +647,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "vpc-flowlog-v2-${EnvironmentSuffix}"
+              "Fn::Sub": "vpc-flowlog-v1-${EnvironmentSuffix}"
             }
           },
           {
@@ -665,7 +665,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "lambda-execution-role-v2-${EnvironmentSuffix}"
+          "Fn::Sub": "lambda-execution-role-v1-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -753,7 +753,7 @@
       "Type": "AWS::Lambda::Function",
       "Properties": {
         "FunctionName": {
-          "Fn::Sub": "data-validation-v2-${EnvironmentSuffix}"
+          "Fn::Sub": "data-validation-v1-${EnvironmentSuffix}"
         },
         "Runtime": "nodejs22.x",
         "Handler": "index.handler",
@@ -800,7 +800,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "data-validation-v2-${EnvironmentSuffix}"
+              "Fn::Sub": "data-validation-v1-${EnvironmentSuffix}"
             }
           },
           {
@@ -818,7 +818,7 @@
       "Type": "AWS::SNS::Topic",
       "Properties": {
         "TopicName": {
-          "Fn::Sub": "security-alerts-v2-${EnvironmentSuffix}"
+          "Fn::Sub": "security-alerts-v1-${EnvironmentSuffix}"
         },
         "DisplayName": "PCI Security Alerts",
         "KmsMasterKeyId": {
@@ -828,7 +828,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "security-alerts-v2-${EnvironmentSuffix}"
+              "Fn::Sub": "security-alerts-v1-${EnvironmentSuffix}"
             }
           },
           {
@@ -846,7 +846,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "config-role-v2-${EnvironmentSuffix}"
+          "Fn::Sub": "config-role-v1-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -945,7 +945,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "config-bucket-v2-${EnvironmentSuffix}-${AWS::AccountId}"
+          "Fn::Sub": "config-bucket-v1-${EnvironmentSuffix}-${AWS::AccountId}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -972,7 +972,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "config-bucket-v2-${EnvironmentSuffix}"
+              "Fn::Sub": "config-bucket-v1-${EnvironmentSuffix}"
             }
           },
           {
@@ -1030,7 +1030,7 @@
       "Type": "AWS::Config::ConfigRule",
       "Properties": {
         "ConfigRuleName": {
-          "Fn::Sub": "encrypted-volumes-v2-${EnvironmentSuffix}"
+          "Fn::Sub": "encrypted-volumes-v1-${EnvironmentSuffix}"
         },
         "Description": "Checks that EBS volumes are encrypted",
         "Source": {
@@ -1043,7 +1043,7 @@
       "Type": "AWS::Config::ConfigRule",
       "Properties": {
         "ConfigRuleName": {
-          "Fn::Sub": "s3-bucket-ssl-requests-only-v2-${EnvironmentSuffix}"
+          "Fn::Sub": "s3-bucket-ssl-requests-only-v1-${EnvironmentSuffix}"
         },
         "Description": "Checks that S3 buckets have policies requiring SSL",
         "Source": {
@@ -1056,7 +1056,7 @@
       "Type": "AWS::Config::ConfigRule",
       "Properties": {
         "ConfigRuleName": {
-          "Fn::Sub": "iam-password-policy-v2-${EnvironmentSuffix}"
+          "Fn::Sub": "iam-password-policy-v1-${EnvironmentSuffix}"
         },
         "Description": "Checks that the account password policy meets PCI DSS requirements",
         "Source": {
