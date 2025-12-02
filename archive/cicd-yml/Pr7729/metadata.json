@@ -29,5 +29,10 @@
     "ECS"
   ],
   "resource_count": 24,
-  "status": "in-progress"
+  "status": "in-progress",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
