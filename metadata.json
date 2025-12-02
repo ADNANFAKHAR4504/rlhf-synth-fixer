@@ -1,0 +1,25 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "j7p2d2l0",
+  "team": "synth",
+  "startedAt": "2025-12-02T15:19:42+05:30",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "ECS",
+    "CloudWatch",
+    "IAM",
+    "Autoscaling",
+    "Container Insights"
+  ],
+  "aws_services": [
+    "ECS",
+    "CloudWatch",
+    "IAM",
+    "S3",
+    "Application Auto Scaling"
+  ],
+  "training_quality": 10
+}
