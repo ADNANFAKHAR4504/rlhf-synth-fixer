@@ -35,9 +35,18 @@ const snsMock = mockClient(SNSClient);
 
 pulumi.runtime.setMocks({
   newResource: (args: pulumi.runtime.MockResourceArgs): { id: string; state: any } => {
+    const state = {
+      ...args.inputs,
+    };
+
+    // Mock SNS topic ARN
+    if (args.type === 'aws:sns/topic:Topic') {
+      state.arn = `arn:aws:sns:us-east-1:123456789012:${args.name}`;
+    }
+
     return {
       id: `${args.name}-id`,
-      state: args.inputs,
+      state,
     };
   },
   call: (args: pulumi.runtime.MockCallArgs): { outputs: any; failures?: any } => {
@@ -147,6 +156,25 @@ describe('TapStack - EC2 Tag Compliance', () => {
     const violationsArray = JSON.parse(violations);
 
     expect(violationsArray).toHaveLength(0);
+  });
+
+  it('should handle EC2 API errors gracefully', async () => {
+    ec2Mock.on(DescribeInstancesCommand).rejects(new Error('EC2 API Error'));
+    s3Mock.on(ListBucketsCommand).resolves({ Buckets: [] });
+    ec2Mock.on(DescribeSecurityGroupsCommand).resolves({ SecurityGroups: [] });
+    iamMock.on(ListRolesCommand).resolves({ Roles: [] });
+    cloudwatchMock.on(PutMetricDataCommand).resolves({});
+
+    const stack = new TapStack('test-stack', {
+      environmentSuffix: 'test123',
+      approvedAmiIds: [],
+    });
+
+    const violations = await pulumi.output(stack.violationsReport).promise();
+    const violationsArray = JSON.parse(violations);
+
+    // Should not throw and return empty violations for EC2
+    expect(Array.isArray(violationsArray)).toBe(true);
   });
 });
 
@@ -285,6 +313,66 @@ describe('TapStack - S3 Bucket Compliance', () => {
 
     expect(s3Violations).toHaveLength(0);
   });
+
+  it('should handle S3 versioning check errors gracefully', async () => {
+    ec2Mock.on(DescribeInstancesCommand).resolves({ Reservations: [] });
+    ec2Mock.on(DescribeSecurityGroupsCommand).resolves({ SecurityGroups: [] });
+    iamMock.on(ListRolesCommand).resolves({ Roles: [] });
+
+    s3Mock.on(ListBucketsCommand).resolves({
+      Buckets: [{ Name: 'test-bucket', CreationDate: new Date() }],
+    });
+
+    s3Mock.on(GetBucketEncryptionCommand).resolves({
+      ServerSideEncryptionConfiguration: {
+        Rules: [
+          {
+            ApplyServerSideEncryptionByDefault: {
+              SSEAlgorithm: 'AES256',
+            },
+          },
+        ],
+      },
+    });
+
+    s3Mock
+      .on(GetBucketVersioningCommand)
+      .rejects(new Error('Versioning check error'));
+
+    cloudwatchMock.on(PutMetricDataCommand).resolves({});
+
+    const stack = new TapStack('test-stack', {
+      environmentSuffix: 'test123',
+      approvedAmiIds: [],
+    });
+
+    const violations = await pulumi.output(stack.violationsReport).promise();
+    const violationsArray = JSON.parse(violations);
+
+    // Should handle error gracefully
+    expect(Array.isArray(violationsArray)).toBe(true);
+  });
+
+  it('should handle S3 API errors gracefully', async () => {
+    ec2Mock.on(DescribeInstancesCommand).resolves({ Reservations: [] });
+    ec2Mock.on(DescribeSecurityGroupsCommand).resolves({ SecurityGroups: [] });
+    iamMock.on(ListRolesCommand).resolves({ Roles: [] });
+
+    s3Mock.on(ListBucketsCommand).rejects(new Error('S3 API Error'));
+
+    cloudwatchMock.on(PutMetricDataCommand).resolves({});
+
+    const stack = new TapStack('test-stack', {
+      environmentSuffix: 'test123',
+      approvedAmiIds: [],
+    });
+
+    const violations = await pulumi.output(stack.violationsReport).promise();
+    const violationsArray = JSON.parse(violations);
+
+    // Should handle error gracefully
+    expect(Array.isArray(violationsArray)).toBe(true);
+  });
 });
 
 describe('TapStack - AMI Compliance', () => {
@@ -376,6 +464,29 @@ describe('TapStack - AMI Compliance', () => {
     );
 
     expect(amiViolations).toHaveLength(0);
+  });
+
+  it('should handle AMI check errors gracefully', async () => {
+    ec2Mock
+      .on(DescribeInstancesCommand)
+      .rejectsOnce(new Error('AMI check error'))
+      .resolves({ Reservations: [] });
+
+    s3Mock.on(ListBucketsCommand).resolves({ Buckets: [] });
+    ec2Mock.on(DescribeSecurityGroupsCommand).resolves({ SecurityGroups: [] });
+    iamMock.on(ListRolesCommand).resolves({ Roles: [] });
+    cloudwatchMock.on(PutMetricDataCommand).resolves({});
+
+    const stack = new TapStack('test-stack', {
+      environmentSuffix: 'test123',
+      approvedAmiIds: ['ami-test'],
+    });
+
+    const violations = await pulumi.output(stack.violationsReport).promise();
+    const violationsArray = JSON.parse(violations);
+
+    // Should handle error gracefully
+    expect(Array.isArray(violationsArray)).toBe(true);
   });
 });
 
@@ -517,6 +628,29 @@ describe('TapStack - Security Group Compliance', () => {
     );
 
     expect(sgViolations).toHaveLength(0);
+  });
+
+  it('should handle security group API errors gracefully', async () => {
+    ec2Mock.on(DescribeInstancesCommand).resolves({ Reservations: [] });
+    s3Mock.on(ListBucketsCommand).resolves({ Buckets: [] });
+    iamMock.on(ListRolesCommand).resolves({ Roles: [] });
+
+    ec2Mock
+      .on(DescribeSecurityGroupsCommand)
+      .rejects(new Error('SecurityGroup API Error'));
+
+    cloudwatchMock.on(PutMetricDataCommand).resolves({});
+
+    const stack = new TapStack('test-stack', {
+      environmentSuffix: 'test123',
+      approvedAmiIds: [],
+    });
+
+    const violations = await pulumi.output(stack.violationsReport).promise();
+    const violationsArray = JSON.parse(violations);
+
+    // Should handle error gracefully
+    expect(Array.isArray(violationsArray)).toBe(true);
   });
 });
 
@@ -706,6 +840,93 @@ describe('TapStack - IAM Role Compliance', () => {
 
     expect(iamViolations).toHaveLength(0);
   });
+
+  it('should handle IAM policy fetch errors gracefully', async () => {
+    ec2Mock.on(DescribeInstancesCommand).resolves({ Reservations: [] });
+    s3Mock.on(ListBucketsCommand).resolves({ Buckets: [] });
+    ec2Mock.on(DescribeSecurityGroupsCommand).resolves({ SecurityGroups: [] });
+
+    iamMock.on(ListRolesCommand).resolves({
+      Roles: [{ RoleName: 'TestRole' }],
+    });
+
+    iamMock.on(ListAttachedRolePoliciesCommand).resolves({
+      AttachedPolicies: [
+        {
+          PolicyName: 'TestPolicy',
+          PolicyArn: 'arn:aws:iam::123456789012:policy/TestPolicy',
+        },
+      ],
+    });
+
+    iamMock.on(GetPolicyCommand).rejects(new Error('Policy fetch error'));
+    iamMock.on(ListRolePoliciesCommand).resolves({ PolicyNames: [] });
+
+    cloudwatchMock.on(PutMetricDataCommand).resolves({});
+
+    const stack = new TapStack('test-stack', {
+      environmentSuffix: 'test123',
+      approvedAmiIds: [],
+    });
+
+    const violations = await pulumi.output(stack.violationsReport).promise();
+    const violationsArray = JSON.parse(violations);
+
+    // Should handle error gracefully
+    expect(Array.isArray(violationsArray)).toBe(true);
+  });
+
+  it('should handle IAM inline policy errors gracefully', async () => {
+    ec2Mock.on(DescribeInstancesCommand).resolves({ Reservations: [] });
+    s3Mock.on(ListBucketsCommand).resolves({ Buckets: [] });
+    ec2Mock.on(DescribeSecurityGroupsCommand).resolves({ SecurityGroups: [] });
+
+    iamMock.on(ListRolesCommand).resolves({
+      Roles: [{ RoleName: 'TestRole' }],
+    });
+
+    iamMock.on(ListAttachedRolePoliciesCommand).resolves({
+      AttachedPolicies: [],
+    });
+
+    iamMock
+      .on(ListRolePoliciesCommand)
+      .rejects(new Error('Inline policy error'));
+
+    cloudwatchMock.on(PutMetricDataCommand).resolves({});
+
+    const stack = new TapStack('test-stack', {
+      environmentSuffix: 'test123',
+      approvedAmiIds: [],
+    });
+
+    const violations = await pulumi.output(stack.violationsReport).promise();
+    const violationsArray = JSON.parse(violations);
+
+    // Should handle error gracefully
+    expect(Array.isArray(violationsArray)).toBe(true);
+  });
+
+  it('should handle IAM API errors gracefully', async () => {
+    ec2Mock.on(DescribeInstancesCommand).resolves({ Reservations: [] });
+    s3Mock.on(ListBucketsCommand).resolves({ Buckets: [] });
+    ec2Mock.on(DescribeSecurityGroupsCommand).resolves({ SecurityGroups: [] });
+
+    iamMock.on(ListRolesCommand).rejects(new Error('IAM API Error'));
+
+    cloudwatchMock.on(PutMetricDataCommand).resolves({});
+
+    const stack = new TapStack('test-stack', {
+      environmentSuffix: 'test123',
+      approvedAmiIds: [],
+    });
+
+    const violations = await pulumi.output(stack.violationsReport).promise();
+    const violationsArray = JSON.parse(violations);
+
+    // Should handle error gracefully
+    expect(Array.isArray(violationsArray)).toBe(true);
+  });
 });
 
 describe('TapStack - CloudWatch Metrics', () => {
@@ -752,6 +973,41 @@ describe('TapStack - CloudWatch Metrics', () => {
     ).toMatchObject({
       Namespace: 'ComplianceMonitoring-test123',
     });
+  });
+
+  it('should handle CloudWatch metric errors gracefully', async () => {
+    ec2Mock.on(DescribeInstancesCommand).resolves({
+      Reservations: [
+        {
+          Instances: [
+            {
+              InstanceId: 'i-1234567890abcdef0',
+              Tags: [],
+            },
+          ],
+        },
+      ],
+    });
+
+    s3Mock.on(ListBucketsCommand).resolves({ Buckets: [] });
+    ec2Mock.on(DescribeSecurityGroupsCommand).resolves({ SecurityGroups: [] });
+    iamMock.on(ListRolesCommand).resolves({ Roles: [] });
+    cloudwatchMock
+      .on(PutMetricDataCommand)
+      .rejects(new Error('CloudWatch error'));
+
+    const stack = new TapStack('test-stack', {
+      environmentSuffix: 'test123',
+      approvedAmiIds: [],
+    });
+
+    const violations = await pulumi.output(stack.violationsReport).promise();
+
+    // Wait for async operations
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Should not throw and still return violations
+    expect(JSON.parse(violations)).toHaveLength(1);
   });
 });
 
@@ -816,6 +1072,37 @@ describe('TapStack - SNS Notifications', () => {
     await new Promise(resolve => setTimeout(resolve, 100));
 
     expect(snsMock.calls()).toHaveLength(0);
+  });
+
+  it('should handle SNS publish errors gracefully', async () => {
+    ec2Mock.on(DescribeInstancesCommand).resolves({ Reservations: [] });
+    s3Mock.on(ListBucketsCommand).resolves({
+      Buckets: [{ Name: 'unencrypted-bucket', CreationDate: new Date() }],
+    });
+
+    s3Mock
+      .on(GetBucketEncryptionCommand)
+      .rejects({ name: 'ServerSideEncryptionConfigurationNotFoundError' });
+
+    s3Mock.on(GetBucketVersioningCommand).resolves({ Status: 'Enabled' });
+
+    ec2Mock.on(DescribeSecurityGroupsCommand).resolves({ SecurityGroups: [] });
+    iamMock.on(ListRolesCommand).resolves({ Roles: [] });
+    cloudwatchMock.on(PutMetricDataCommand).resolves({});
+    snsMock.on(PublishCommand).rejects(new Error('SNS error'));
+
+    const stack = new TapStack('test-stack', {
+      environmentSuffix: 'test123',
+      approvedAmiIds: [],
+    });
+
+    const violations = await pulumi.output(stack.violationsReport).promise();
+
+    // Wait for async operations
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Should not throw and still return violations
+    expect(JSON.parse(violations).length).toBeGreaterThan(0);
   });
 });
 
