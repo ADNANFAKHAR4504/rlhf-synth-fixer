@@ -72,10 +72,11 @@ class TapStack(pulumi.ComponentResource):
         # Create VPC Peering connection
         self.vpc_peering = self._create_vpc_peering()
 
-        # Create NAT instance in dev VPC
-        self.nat_instance = self._create_nat_instance()
+        # Create NAT instances in each VPC
+        self.dev_nat_instance = self._create_nat_instance("dev", self.dev_vpc)
+        self.prod_nat_instance = self._create_nat_instance("prod", self.prod_vpc)
 
-        # Update route tables to use NAT instance and VPC Peering
+        # Update route tables to use NAT instances and VPC Peering
         self._configure_routing()
 
         # Create security groups
@@ -238,8 +239,8 @@ class TapStack(pulumi.ComponentResource):
 
         return peering
 
-    def _create_nat_instance(self) -> aws.ec2.Instance:
-        """Create NAT instance in dev VPC's first public subnet."""
+    def _create_nat_instance(self, name: str, vpc: Dict[str, Any]) -> aws.ec2.Instance:
+        """Create NAT instance in the specified VPC's first public subnet."""
         # Get latest Amazon Linux 2 AMI
         ami = aws.ec2.get_ami(
             most_recent=True,
@@ -252,9 +253,9 @@ class TapStack(pulumi.ComponentResource):
 
         # Create security group for NAT instance
         nat_sg = aws.ec2.SecurityGroup(
-            "nat_sg",
-            vpc_id=self.dev_vpc["vpc"].id,
-            description=f"Security group for NAT instance - {self.environment_suffix}",
+            f"{name}_nat_sg",
+            vpc_id=vpc["vpc"].id,
+            description=f"Security group for {name} NAT instance - {self.environment_suffix}",
             ingress=[
                 {
                     "protocol": "-1",
@@ -273,7 +274,8 @@ class TapStack(pulumi.ComponentResource):
             ],
             tags={
                 **self.base_tags,
-                "Name": f"nat-sg-{self.environment_suffix}"
+                "Environment": name,
+                "Name": f"{name}-nat-sg-{self.environment_suffix}"
             },
             opts=pulumi.ResourceOptions(parent=self)
         )
@@ -293,16 +295,17 @@ service iptables save
 
         # Create NAT instance
         nat_instance = aws.ec2.Instance(
-            "nat_instance",
+            f"{name}_nat_instance",
             instance_type="t3.micro",
             ami=ami.id,
-            subnet_id=self.dev_vpc["public_subnets"][0].id,
+            subnet_id=vpc["public_subnets"][0].id,
             vpc_security_group_ids=[nat_sg.id],
             source_dest_check=False,
             user_data=user_data,
             tags={
                 **self.base_tags,
-                "Name": f"nat-instance-{self.environment_suffix}"
+                "Environment": name,
+                "Name": f"{name}-nat-instance-{self.environment_suffix}"
             },
             opts=pulumi.ResourceOptions(parent=self)
         )
@@ -310,22 +313,22 @@ service iptables save
         return nat_instance
 
     def _configure_routing(self):
-        """Configure routing tables with NAT instance and VPC Peering routes."""
-        # Add route to internet via NAT instance in both VPC private route tables
+        """Configure routing tables with NAT instances and VPC Peering routes."""
+        # Add route to internet via each VPC's own NAT instance
         aws.ec2.Route(
             "dev_private_nat_route",
             route_table_id=self.dev_vpc["private_rt"].id,
             destination_cidr_block="0.0.0.0/0",
-            network_interface_id=self.nat_instance.primary_network_interface_id,
-            opts=pulumi.ResourceOptions(parent=self, depends_on=[self.nat_instance])
+            network_interface_id=self.dev_nat_instance.primary_network_interface_id,
+            opts=pulumi.ResourceOptions(parent=self, depends_on=[self.dev_nat_instance])
         )
 
         aws.ec2.Route(
             "prod_private_nat_route",
             route_table_id=self.prod_vpc["private_rt"].id,
             destination_cidr_block="0.0.0.0/0",
-            network_interface_id=self.nat_instance.primary_network_interface_id,
-            opts=pulumi.ResourceOptions(parent=self, depends_on=[self.nat_instance])
+            network_interface_id=self.prod_nat_instance.primary_network_interface_id,
+            opts=pulumi.ResourceOptions(parent=self, depends_on=[self.prod_nat_instance])
         )
 
         # Add routes via VPC Peering for inter-VPC communication
@@ -551,9 +554,11 @@ service iptables save
         # VPC Peering output
         pulumi.export("vpc_peering_id", self.vpc_peering.id)
 
-        # NAT instance output
-        pulumi.export("nat_instance_id", self.nat_instance.id)
-        pulumi.export("nat_instance_private_ip", self.nat_instance.private_ip)
+        # NAT instance outputs
+        pulumi.export("dev_nat_instance_id", self.dev_nat_instance.id)
+        pulumi.export("dev_nat_instance_private_ip", self.dev_nat_instance.private_ip)
+        pulumi.export("prod_nat_instance_id", self.prod_nat_instance.id)
+        pulumi.export("prod_nat_instance_private_ip", self.prod_nat_instance.private_ip)
 
         # Security group outputs
         pulumi.export("dev_security_group_id", self.security_groups["dev"].id)

@@ -141,7 +141,7 @@ class TestTapStack(unittest.TestCase):
 
     @pulumi.runtime.test
     def test_nat_instance_creation(self):
-        """Test that NAT instance is created with correct configuration."""
+        """Test that NAT instances are created with correct configuration for each VPC."""
         def check_nat(args):
             stack_args = TapStackArgs(
                 environment_suffix="test123",
@@ -149,20 +149,25 @@ class TestTapStack(unittest.TestCase):
             )
             stack = TapStack("test-stack", stack_args)
 
-            # Verify NAT instance exists
-            assert stack.nat_instance is not None, "NAT instance should exist"
+            # Verify NAT instances exist for both VPCs
+            assert stack.dev_nat_instance is not None, "Dev NAT instance should exist"
+            assert stack.prod_nat_instance is not None, "Prod NAT instance should exist"
 
             # Verify instance type and source_dest_check using apply
-            instance_type = stack.nat_instance.instance_type
-            source_dest_check = stack.nat_instance.source_dest_check
+            dev_instance_type = stack.dev_nat_instance.instance_type
+            dev_source_dest_check = stack.dev_nat_instance.source_dest_check
+            prod_instance_type = stack.prod_nat_instance.instance_type
+            prod_source_dest_check = stack.prod_nat_instance.source_dest_check
 
             def validate_nat(values):
-                inst_type, src_dst_check = values
-                assert inst_type == "t3.micro", f"Instance type should be t3.micro, got {inst_type}"
-                assert src_dst_check is False, f"source_dest_check should be False, got {src_dst_check}"
+                dev_type, dev_src_dst, prod_type, prod_src_dst = values
+                assert dev_type == "t3.micro", f"Dev instance type should be t3.micro, got {dev_type}"
+                assert dev_src_dst is False, f"Dev source_dest_check should be False, got {dev_src_dst}"
+                assert prod_type == "t3.micro", f"Prod instance type should be t3.micro, got {prod_type}"
+                assert prod_src_dst is False, f"Prod source_dest_check should be False, got {prod_src_dst}"
                 return True
 
-            return pulumi.Output.all(instance_type, source_dest_check).apply(validate_nat)
+            return pulumi.Output.all(dev_instance_type, dev_source_dest_check, prod_instance_type, prod_source_dest_check).apply(validate_nat)
 
         return pulumi.Output.all().apply(check_nat)
 
@@ -290,24 +295,26 @@ class TestTapStack(unittest.TestCase):
             # Check security group names
             dev_sg_name = stack.security_groups["dev"].tags["Name"]
 
-            # Check NAT instance name
-            nat_name = stack.nat_instance.tags["Name"]
+            # Check NAT instance names
+            dev_nat_name = stack.dev_nat_instance.tags["Name"]
+            prod_nat_name = stack.prod_nat_instance.tags["Name"]
 
             def validate_names(values):
-                dev_vpc, prod_vpc, dev_pub_sub, prod_priv_sub, dev_sg, nat = values
+                dev_vpc, prod_vpc, dev_pub_sub, prod_priv_sub, dev_sg, dev_nat, prod_nat = values
 
                 assert "test123" in dev_vpc, f"Dev VPC name should include test123, got {dev_vpc}"
                 assert "test123" in prod_vpc, f"Prod VPC name should include test123, got {prod_vpc}"
                 assert "test123" in dev_pub_sub, f"Dev public subnet name should include test123, got {dev_pub_sub}"
                 assert "test123" in prod_priv_sub, f"Prod private subnet name should include test123, got {prod_priv_sub}"
                 assert "test123" in dev_sg, f"Dev SG name should include test123, got {dev_sg}"
-                assert "test123" in nat, f"NAT instance name should include test123, got {nat}"
+                assert "test123" in dev_nat, f"Dev NAT instance name should include test123, got {dev_nat}"
+                assert "test123" in prod_nat, f"Prod NAT instance name should include test123, got {prod_nat}"
 
                 return True
 
             return pulumi.Output.all(
                 dev_vpc_name, prod_vpc_name, dev_pub_subnet_name,
-                prod_priv_subnet_name, dev_sg_name, nat_name
+                prod_priv_subnet_name, dev_sg_name, dev_nat_name, prod_nat_name
             ).apply(validate_names)
 
         return pulumi.Output.all().apply(check_env_suffix)
