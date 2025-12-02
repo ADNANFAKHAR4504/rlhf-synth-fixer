@@ -1,652 +1,249 @@
 import fs from 'fs';
 import path from 'path';
 
-describe('Payment Processing System CloudFormation Template - Unit Tests', () => {
+function loadTemplate() {
+  const templatePath = path.join(__dirname, '../lib/TapStack.json');
+  const templateContent = fs.readFileSync(templatePath, 'utf8');
+  return JSON.parse(templateContent);
+}
+
+describe('TapStack CloudFormation Template (lib/TapStack.json) - Focused Unit Tests', () => {
   let template: any;
 
   beforeAll(() => {
-    const templatePath = path.join(__dirname, '../lib/TapStack.json');
-    const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = JSON.parse(templateContent);
+    template = loadTemplate();
   });
 
-  describe('Template Structure and Metadata', () => {
-    test('should have a description', () => {
-      expect(template.Description).toBeDefined();
-      expect(template.Description).toContain('Payment Processing System');
-    });
-
-    test('should have Parameters section', () => {
-      expect(template.Parameters).toBeDefined();
-    });
-
-    test('should have Resources section', () => {
-      expect(template.Resources).toBeDefined();
-    });
-
-    test('should have Outputs section', () => {
-      expect(template.Outputs).toBeDefined();
-    });
+  test('has description with PCI', () => {
+    expect(template.Description).toBeDefined();
+    expect(template.Description).toContain('PCI');
   });
 
-  describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
-    });
-
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Description).toBeDefined();
-      expect(envSuffixParam.MinLength).toBe(4);
-      expect(envSuffixParam.MaxLength).toBe(20);
-      expect(envSuffixParam.AllowedPattern).toBe('[a-z0-9-]+');
-    });
-
-    test('should have LatestAmiId parameter', () => {
-      expect(template.Parameters.LatestAmiId).toBeDefined();
-      expect(template.Parameters.LatestAmiId.Type).toBe('AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>');
-    });
+  test('EnvironmentSuffix parameter defaults to dev', () => {
+    expect(template.Parameters).toBeDefined();
+    expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    expect(template.Parameters.EnvironmentSuffix.Type).toBe('String');
+    expect(template.Parameters.EnvironmentSuffix.Default).toBe('dev');
   });
 
-  describe('VPC Infrastructure', () => {
-    test('should have VPC resource', () => {
-      expect(template.Resources.VPC).toBeDefined();
-      expect(template.Resources.VPC.Type).toBe('AWS::EC2::VPC');
-    });
-
-    test('VPC should have correct CIDR block', () => {
-      const vpc = template.Resources.VPC;
-      expect(vpc.Properties.CidrBlock).toBe('10.0.0.0/16');
-      expect(vpc.Properties.EnableDnsHostnames).toBe(true);
-      expect(vpc.Properties.EnableDnsSupport).toBe(true);
-    });
-
-    test('VPC should have correct tags', () => {
-      const vpc = template.Resources.VPC;
-      const tags = vpc.Properties.Tags;
-      expect(tags).toContainEqual(
-        expect.objectContaining({ Key: 'Environment', Value: 'Production' })
-      );
-      expect(tags).toContainEqual(
-        expect.objectContaining({ Key: 'CostCenter', Value: 'FinancialServices' })
-      );
-      expect(tags).toContainEqual(
-        expect.objectContaining({ Key: 'MigrationPhase', Value: 'Phase1' })
-      );
-    });
-
-    test('should have Internet Gateway', () => {
-      expect(template.Resources.InternetGateway).toBeDefined();
-      expect(template.Resources.InternetGateway.Type).toBe('AWS::EC2::InternetGateway');
-    });
-
-    test('should have VPC Gateway Attachment', () => {
-      expect(template.Resources.AttachGateway).toBeDefined();
-      expect(template.Resources.AttachGateway.Type).toBe('AWS::EC2::VPCGatewayAttachment');
-    });
+  test('VPC exists with correct cidr and DNS settings', () => {
+    expect(template.Resources.VPC).toBeDefined();
+    expect(template.Resources.VPC.Type).toBe('AWS::EC2::VPC');
+    expect(template.Resources.VPC.Properties.CidrBlock).toBe('10.0.0.0/16');
+    expect(template.Resources.VPC.Properties.EnableDnsHostnames).toBe(true);
+    expect(template.Resources.VPC.Properties.EnableDnsSupport).toBe(true);
   });
 
-  describe('Subnets', () => {
-    test('should have 3 public subnets', () => {
-      expect(template.Resources.PublicSubnet1).toBeDefined();
-      expect(template.Resources.PublicSubnet2).toBeDefined();
-      expect(template.Resources.PublicSubnet3).toBeDefined();
-    });
-
-    test('public subnets should have correct CIDR blocks', () => {
-      expect(template.Resources.PublicSubnet1.Properties.CidrBlock).toBe('10.0.1.0/24');
-      expect(template.Resources.PublicSubnet2.Properties.CidrBlock).toBe('10.0.2.0/24');
-      expect(template.Resources.PublicSubnet3.Properties.CidrBlock).toBe('10.0.3.0/24');
-    });
-
-    test('public subnets should map public IP on launch', () => {
-      expect(template.Resources.PublicSubnet1.Properties.MapPublicIpOnLaunch).toBe(true);
-      expect(template.Resources.PublicSubnet2.Properties.MapPublicIpOnLaunch).toBe(true);
-      expect(template.Resources.PublicSubnet3.Properties.MapPublicIpOnLaunch).toBe(true);
-    });
-
-    test('should have 3 private subnets', () => {
-      expect(template.Resources.PrivateSubnet1).toBeDefined();
-      expect(template.Resources.PrivateSubnet2).toBeDefined();
-      expect(template.Resources.PrivateSubnet3).toBeDefined();
-    });
-
-    test('private subnets should have correct CIDR blocks', () => {
-      expect(template.Resources.PrivateSubnet1.Properties.CidrBlock).toBe('10.0.11.0/24');
-      expect(template.Resources.PrivateSubnet2.Properties.CidrBlock).toBe('10.0.12.0/24');
-      expect(template.Resources.PrivateSubnet3.Properties.CidrBlock).toBe('10.0.13.0/24');
-    });
-
-    test('should have 3 database subnets', () => {
-      expect(template.Resources.DatabaseSubnet1).toBeDefined();
-      expect(template.Resources.DatabaseSubnet2).toBeDefined();
-      expect(template.Resources.DatabaseSubnet3).toBeDefined();
-    });
-
-    test('database subnets should have correct CIDR blocks', () => {
-      expect(template.Resources.DatabaseSubnet1.Properties.CidrBlock).toBe('10.0.21.0/24');
-      expect(template.Resources.DatabaseSubnet2.Properties.CidrBlock).toBe('10.0.22.0/24');
-      expect(template.Resources.DatabaseSubnet3.Properties.CidrBlock).toBe('10.0.23.0/24');
-    });
+  test('DataBucket is encrypted with KMS and versioned', () => {
+    expect(template.Resources.DataBucket).toBeDefined();
+    const bucket = template.Resources.DataBucket;
+    expect(bucket.Type).toBe('AWS::S3::Bucket');
+    expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+    const sse = bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault;
+    expect(sse.SSEAlgorithm).toBe('aws:kms');
   });
 
-  describe('NAT Gateways', () => {
-    test('should have 3 NAT Gateway EIPs', () => {
-      expect(template.Resources.NATGateway1EIP).toBeDefined();
-      expect(template.Resources.NATGateway2EIP).toBeDefined();
-      expect(template.Resources.NATGateway3EIP).toBeDefined();
-    });
-
-    test('NAT Gateway EIPs should be in VPC domain', () => {
-      expect(template.Resources.NATGateway1EIP.Properties.Domain).toBe('vpc');
-      expect(template.Resources.NATGateway2EIP.Properties.Domain).toBe('vpc');
-      expect(template.Resources.NATGateway3EIP.Properties.Domain).toBe('vpc');
-    });
-
-    test('should have 3 NAT Gateways', () => {
-      expect(template.Resources.NATGateway1).toBeDefined();
-      expect(template.Resources.NATGateway2).toBeDefined();
-      expect(template.Resources.NATGateway3).toBeDefined();
-    });
+  test('DataValidationFunction runtime and VPC config are correct', () => {
+    const fn = template.Resources.DataValidationFunction;
+    expect(fn).toBeDefined();
+    expect(fn.Type).toBe('AWS::Lambda::Function');
+    expect(fn.Properties.Runtime).toBe('nodejs22.x');
+    expect(fn.Properties.VpcConfig.SubnetIds.length).toBe(3);
   });
 
-  describe('Route Tables', () => {
-    test('should have public route table', () => {
-      expect(template.Resources.PublicRouteTable).toBeDefined();
-    });
-
-    test('should have 3 private route tables', () => {
-      expect(template.Resources.PrivateRouteTable1).toBeDefined();
-      expect(template.Resources.PrivateRouteTable2).toBeDefined();
-      expect(template.Resources.PrivateRouteTable3).toBeDefined();
-    });
-
-    test('public route should point to Internet Gateway', () => {
-      const publicRoute = template.Resources.PublicRoute;
-      expect(publicRoute.Properties.DestinationCidrBlock).toBe('0.0.0.0/0');
-      expect(publicRoute.Properties.GatewayId).toEqual({ Ref: 'InternetGateway' });
-    });
-
-    test('private routes should point to NAT Gateways', () => {
-      expect(template.Resources.PrivateRoute1.Properties.NatGatewayId).toEqual({ Ref: 'NATGateway1' });
-      expect(template.Resources.PrivateRoute2.Properties.NatGatewayId).toEqual({ Ref: 'NATGateway2' });
-      expect(template.Resources.PrivateRoute3.Properties.NatGatewayId).toEqual({ Ref: 'NATGateway3' });
-    });
+  test('VPCFlowLog exists and references the log group', () => {
+    const flow = template.Resources.VPCFlowLog;
+    expect(flow).toBeDefined();
+    expect(flow.Type).toBe('AWS::EC2::FlowLog');
+    expect(flow.Properties.LogGroupName).toEqual({ Ref: 'VPCFlowLogsLogGroup' });
   });
 
-  describe('Security Groups', () => {
-    test('should have ALB security group', () => {
-      expect(template.Resources.ALBSecurityGroup).toBeDefined();
-      expect(template.Resources.ALBSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
-    });
-
-    test('ALB security group should allow HTTP from internet', () => {
-      const albSG = template.Resources.ALBSecurityGroup;
-      const ingressRule = albSG.Properties.SecurityGroupIngress[0];
-      expect(ingressRule.FromPort).toBe(80);
-      expect(ingressRule.ToPort).toBe(80);
-      expect(ingressRule.CidrIp).toBe('0.0.0.0/0');
-      expect(ingressRule.IpProtocol).toBe('tcp');
-    });
-
-    test('should have EC2 security group', () => {
-      expect(template.Resources.EC2SecurityGroup).toBeDefined();
-    });
-
-    test('EC2 security group should allow HTTP from ALB only', () => {
-      const ec2SG = template.Resources.EC2SecurityGroup;
-      const ingressRule = ec2SG.Properties.SecurityGroupIngress[0];
-      expect(ingressRule.FromPort).toBe(80);
-      expect(ingressRule.ToPort).toBe(80);
-      expect(ingressRule.SourceSecurityGroupId).toEqual({ Ref: 'ALBSecurityGroup' });
-    });
-
-    test('should have RDS security group', () => {
-      expect(template.Resources.RDSSecurityGroup).toBeDefined();
-    });
-
-    test('RDS security group should allow MySQL from EC2 only', () => {
-      const rdsSG = template.Resources.RDSSecurityGroup;
-      const ingressRule = rdsSG.Properties.SecurityGroupIngress[0];
-      expect(ingressRule.FromPort).toBe(3306);
-      expect(ingressRule.ToPort).toBe(3306);
-      expect(ingressRule.SourceSecurityGroupId).toEqual({ Ref: 'EC2SecurityGroup' });
-    });
+  test('Outputs include VPCId and DataBucketName references', () => {
+    expect(template.Outputs.VPCId).toBeDefined();
+    expect(template.Outputs.VPCId.Value).toEqual({ Ref: 'VPC' });
+    expect(template.Outputs.DataBucketName).toBeDefined();
+    expect(template.Outputs.DataBucketName.Value).toEqual({ Ref: 'DataBucket' });
   });
 
-  describe('KMS Encryption', () => {
-    test('should have KMS key for RDS encryption', () => {
-      expect(template.Resources.KMSKey).toBeDefined();
-      expect(template.Resources.KMSKey.Type).toBe('AWS::KMS::Key');
-    });
+  test('Private subnets exist and have correct CIDRs and MapPublicIpOnLaunch false', () => {
+    const sub1 = template.Resources.PrivateSubnet1;
+    const sub2 = template.Resources.PrivateSubnet2;
+    const sub3 = template.Resources.PrivateSubnet3;
+    expect(sub1).toBeDefined();
+    expect(sub1.Type).toBe('AWS::EC2::Subnet');
+    expect(sub1.Properties.CidrBlock).toBe('10.0.1.0/24');
+    expect(sub1.Properties.MapPublicIpOnLaunch).toBe(false);
 
-    test('KMS key should have Delete deletion policy', () => {
-      expect(template.Resources.KMSKey.DeletionPolicy).toBe('Delete');
-    });
+    expect(sub2).toBeDefined();
+    expect(sub2.Properties.CidrBlock).toBe('10.0.2.0/24');
+    expect(sub2.Properties.MapPublicIpOnLaunch).toBe(false);
 
-    test('KMS key should have 7-day pending window', () => {
-      expect(template.Resources.KMSKey.Properties.PendingWindowInDays).toBe(7);
-    });
-
-    test('should have KMS key alias', () => {
-      expect(template.Resources.KMSKeyAlias).toBeDefined();
-    });
+    expect(sub3).toBeDefined();
+    expect(sub3.Properties.CidrBlock).toBe('10.0.3.0/24');
+    expect(sub3.Properties.MapPublicIpOnLaunch).toBe(false);
   });
 
-  describe('RDS Aurora Cluster', () => {
-    test('should have DB subnet group', () => {
-      expect(template.Resources.DBSubnetGroup).toBeDefined();
-      expect(template.Resources.DBSubnetGroup.Type).toBe('AWS::RDS::DBSubnetGroup');
-    });
-
-    test('DB subnet group should include all 3 database subnets', () => {
-      const subnetGroup = template.Resources.DBSubnetGroup;
-      expect(subnetGroup.Properties.SubnetIds).toHaveLength(3);
-    });
-
-    test('should have Aurora cluster', () => {
-      expect(template.Resources.AuroraCluster).toBeDefined();
-      expect(template.Resources.AuroraCluster.Type).toBe('AWS::RDS::DBCluster');
-    });
-
-    test('Aurora cluster should have Delete deletion policy', () => {
-      expect(template.Resources.AuroraCluster.DeletionPolicy).toBe('Delete');
-    });
-
-    test('Aurora cluster should be encrypted with KMS', () => {
-      const cluster = template.Resources.AuroraCluster;
-      expect(cluster.Properties.StorageEncrypted).toBe(true);
-      expect(cluster.Properties.KmsKeyId).toEqual({ Ref: 'KMSKey' });
-    });
-
-    test('Aurora cluster should have 7-day backup retention', () => {
-      expect(template.Resources.AuroraCluster.Properties.BackupRetentionPeriod).toBe(7);
-    });
-
-    test('Aurora cluster should use MySQL engine', () => {
-      expect(template.Resources.AuroraCluster.Properties.Engine).toBe('aurora-mysql');
-    });
-
-    test('should have Aurora writer instance', () => {
-      expect(template.Resources.AuroraInstanceWriter).toBeDefined();
-      expect(template.Resources.AuroraInstanceWriter.Type).toBe('AWS::RDS::DBInstance');
-    });
-
-    test('should have Aurora reader instance', () => {
-      expect(template.Resources.AuroraInstanceReader).toBeDefined();
-      expect(template.Resources.AuroraInstanceReader.Type).toBe('AWS::RDS::DBInstance');
-    });
-
-    test('Aurora instances should not be publicly accessible', () => {
-      expect(template.Resources.AuroraInstanceWriter.Properties.PubliclyAccessible).toBe(false);
-      expect(template.Resources.AuroraInstanceReader.Properties.PubliclyAccessible).toBe(false);
-    });
-
-    test('Aurora instances should use t3.medium', () => {
-      expect(template.Resources.AuroraInstanceWriter.Properties.DBInstanceClass).toBe('db.t3.medium');
-      expect(template.Resources.AuroraInstanceReader.Properties.DBInstanceClass).toBe('db.t3.medium');
-    });
+  test('Private subnets have availability zone selection and PCI tags', () => {
+    const sub1 = template.Resources.PrivateSubnet1;
+    const azSelect = sub1.Properties.AvailabilityZone;
+    expect(azSelect['Fn::Select'][0]).toBe('0');
+    expect(sub1.Properties.Tags.some((t: any) => t.Key === 'DataClassification' && t.Value === 'PCI')).toBe(true);
   });
 
-  describe('S3 Buckets', () => {
-    test('should have artifacts bucket', () => {
-      expect(template.Resources.ArtifactsBucket).toBeDefined();
-      expect(template.Resources.ArtifactsBucket.Type).toBe('AWS::S3::Bucket');
-    });
-
-    test('artifacts bucket should have versioning enabled', () => {
-      const bucket = template.Resources.ArtifactsBucket;
-      expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
-    });
-
-    test('artifacts bucket should be encrypted', () => {
-      const bucket = template.Resources.ArtifactsBucket;
-      expect(bucket.Properties.BucketEncryption).toBeDefined();
-      expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
-    });
-
-    test('artifacts bucket should block public access', () => {
-      const bucket = template.Resources.ArtifactsBucket;
-      const blockConfig = bucket.Properties.PublicAccessBlockConfiguration;
-      expect(blockConfig.BlockPublicAcls).toBe(true);
-      expect(blockConfig.BlockPublicPolicy).toBe(true);
-      expect(blockConfig.IgnorePublicAcls).toBe(true);
-      expect(blockConfig.RestrictPublicBuckets).toBe(true);
-    });
-
-    test('should have flow logs bucket', () => {
-      expect(template.Resources.FlowLogsBucket).toBeDefined();
-    });
-
-    test('should have Lambda execution role', () => {
-      expect(template.Resources.LambdaExecutionRole).toBeDefined();
-      expect(template.Resources.LambdaExecutionRole.Type).toBe('AWS::IAM::Role');
-    });
-
-    test('should have lowercase stack name function', () => {
-      expect(template.Resources.LowercaseStackNameFunction).toBeDefined();
-      expect(template.Resources.LowercaseStackNameFunction.Type).toBe('AWS::Lambda::Function');
-    });
-
-    test('should have lowercase stack name custom resource', () => {
-      expect(template.Resources.LowercaseStackNameResource).toBeDefined();
-      expect(template.Resources.LowercaseStackNameResource.Type).toBe('AWS::CloudFormation::CustomResource');
-    });
-
-    test('artifacts bucket should use lowercase stack name', () => {
-      const bucket = template.Resources.ArtifactsBucket;
-      expect(bucket.Properties.BucketName['Fn::Join']).toBeDefined();
-      expect(bucket.Properties.BucketName['Fn::Join'][1]).toContain('artifacts');
-    });
-
-    test('flow logs bucket should use lowercase stack name', () => {
-      const bucket = template.Resources.FlowLogsBucket;
-      expect(bucket.Properties.BucketName['Fn::Join']).toBeDefined();
-      expect(bucket.Properties.BucketName['Fn::Join'][1]).toContain('flow-logs');
-    });
+  test('Private route table exists with PCI tags', () => {
+    const rt = template.Resources.PrivateRouteTable;
+    expect(rt).toBeDefined();
+    expect(rt.Type).toBe('AWS::EC2::RouteTable');
+    expect(rt.Properties.Tags.some((t: any) => t.Key === 'Name')).toBe(true);
   });
 
-  describe('IAM Roles and Policies', () => {
-    test('should have EC2 instance role', () => {
-      expect(template.Resources.EC2InstanceRole).toBeDefined();
-      expect(template.Resources.EC2InstanceRole.Type).toBe('AWS::IAM::Role');
-    });
-
-    test('EC2 instance role should have CloudWatch policy attached', () => {
-      const role = template.Resources.EC2InstanceRole;
-      expect(role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy');
-    });
-
-    test('EC2 instance role should have SSM parameter store access', () => {
-      const role = template.Resources.EC2InstanceRole;
-      const policy = role.Properties.Policies.find((p: any) => p.PolicyName === 'ParameterStoreAccess');
-      expect(policy).toBeDefined();
-    });
-
-    test('EC2 instance role should have S3 artifacts access', () => {
-      const role = template.Resources.EC2InstanceRole;
-      const policy = role.Properties.Policies.find((p: any) => p.PolicyName === 'S3ArtifactsAccess');
-      expect(policy).toBeDefined();
-    });
-
-    test('should have EC2 instance profile', () => {
-      expect(template.Resources.EC2InstanceProfile).toBeDefined();
-      expect(template.Resources.EC2InstanceProfile.Type).toBe('AWS::IAM::InstanceProfile');
-    });
-
-    test('should have VPC Flow Logs role', () => {
-      expect(template.Resources.VPCFlowLogsRole).toBeDefined();
-    });
+  test('Subnet route table associations reference correct resources', () => {
+    const assoc1 = template.Resources.PrivateSubnet1RouteTableAssociation;
+    const assoc2 = template.Resources.PrivateSubnet2RouteTableAssociation;
+    const assoc3 = template.Resources.PrivateSubnet3RouteTableAssociation;
+    expect(assoc1.Properties.SubnetId).toEqual({ Ref: 'PrivateSubnet1' });
+    expect(assoc1.Properties.RouteTableId).toEqual({ Ref: 'PrivateRouteTable' });
+    expect(assoc2.Properties.SubnetId).toEqual({ Ref: 'PrivateSubnet2' });
+    expect(assoc2.Properties.RouteTableId).toEqual({ Ref: 'PrivateRouteTable' });
+    expect(assoc3.Properties.SubnetId).toEqual({ Ref: 'PrivateSubnet3' });
+    expect(assoc3.Properties.RouteTableId).toEqual({ Ref: 'PrivateRouteTable' });
   });
 
-  describe('Application Load Balancer', () => {
-    test('should have ALB', () => {
-      expect(template.Resources.ApplicationLoadBalancer).toBeDefined();
-      expect(template.Resources.ApplicationLoadBalancer.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
-    });
-
-    test('ALB should be internet-facing', () => {
-      const alb = template.Resources.ApplicationLoadBalancer;
-      expect(alb.Properties.Scheme).toBe('internet-facing');
-      expect(alb.Properties.Type).toBe('application');
-    });
-
-    test('ALB should be in all 3 public subnets', () => {
-      const alb = template.Resources.ApplicationLoadBalancer;
-      expect(alb.Properties.Subnets).toHaveLength(3);
-    });
-
-    test('should have ALB target group', () => {
-      expect(template.Resources.ALBTargetGroup).toBeDefined();
-      expect(template.Resources.ALBTargetGroup.Type).toBe('AWS::ElasticLoadBalancingV2::TargetGroup');
-    });
-
-    test('ALB target group should have health check enabled', () => {
-      const tg = template.Resources.ALBTargetGroup;
-      expect(tg.Properties.HealthCheckEnabled).toBe(true);
-      expect(tg.Properties.HealthCheckPath).toBe('/health');
-    });
-
-    test('should have HTTP listener', () => {
-      expect(template.Resources.ALBListener).toBeDefined();
-      expect(template.Resources.ALBListener.Type).toBe('AWS::ElasticLoadBalancingV2::Listener');
-    });
-
-    test('HTTP listener should use port 80', () => {
-      const listener = template.Resources.ALBListener;
-      expect(listener.Properties.Port).toBe(80);
-      expect(listener.Properties.Protocol).toBe('HTTP');
-    });
+  test('S3 VPC Endpoint is gateway type and allows expected actions', () => {
+    const s3ep = template.Resources.S3VPCEndpoint;
+    expect(s3ep).toBeDefined();
+    expect(s3ep.Type).toBe('AWS::EC2::VPCEndpoint');
+    expect(s3ep.Properties.VpcEndpointType).toBe('Gateway');
+    expect(s3ep.Properties.ServiceName['Fn::Sub']).toContain('s3');
+    const actions = s3ep.Properties.PolicyDocument.Statement[0].Action;
+    expect(actions).toContain('s3:GetObject');
+    expect(actions).toContain('s3:PutObject');
+    expect(actions).toContain('s3:ListBucket');
+    expect(s3ep.Properties.RouteTableIds).toEqual([{ Ref: 'PrivateRouteTable' }]);
   });
 
-  describe('WAF Configuration', () => {
-    test('should have WAF Web ACL', () => {
-      expect(template.Resources.WebACL).toBeDefined();
-      expect(template.Resources.WebACL.Type).toBe('AWS::WAFv2::WebACL');
-    });
-
-    test('WAF Web ACL should be regional', () => {
-      expect(template.Resources.WebACL.Properties.Scope).toBe('REGIONAL');
-    });
-
-    test('WAF should have rate limiting rule', () => {
-      const webACL = template.Resources.WebACL;
-      const rateLimitRule = webACL.Properties.Rules.find((r: any) => r.Name === 'RateLimitRule');
-      expect(rateLimitRule).toBeDefined();
-      expect(rateLimitRule.Statement.RateBasedStatement.Limit).toBe(2000);
-    });
-
-    test('should have WAF association with ALB', () => {
-      expect(template.Resources.WebACLAssociation).toBeDefined();
-      expect(template.Resources.WebACLAssociation.Type).toBe('AWS::WAFv2::WebACLAssociation');
-    });
+  test('KMS VPC Endpoint is interface type and uses 3 subnets', () => {
+    const kmsEp = template.Resources.KMSVPCEndpoint;
+    expect(kmsEp).toBeDefined();
+    expect(kmsEp.Type).toBe('AWS::EC2::VPCEndpoint');
+    expect(kmsEp.Properties.VpcEndpointType).toBe('Interface');
+    expect(kmsEp.Properties.PrivateDnsEnabled).toBe(true);
+    expect(kmsEp.Properties.SubnetIds.length).toBe(3);
+    expect(kmsEp.Properties.SecurityGroupIds[0]).toEqual({ Ref: 'KMSEndpointSecurityGroup' });
   });
 
-  describe('Auto Scaling', () => {
-    test('should have Launch Template', () => {
-      expect(template.Resources.LaunchTemplate).toBeDefined();
-      expect(template.Resources.LaunchTemplate.Type).toBe('AWS::EC2::LaunchTemplate');
-    });
-
-    test('Launch Template should use t3.large instances', () => {
-      const lt = template.Resources.LaunchTemplate;
-      expect(lt.Properties.LaunchTemplateData.InstanceType).toBe('t3.large');
-    });
-
-    test('Launch Template should have EBS volume with gp3 and 3000 IOPS', () => {
-      const lt = template.Resources.LaunchTemplate;
-      const blockDevice = lt.Properties.LaunchTemplateData.BlockDeviceMappings[0];
-      expect(blockDevice.Ebs.VolumeSize).toBe(100);
-      expect(blockDevice.Ebs.VolumeType).toBe('gp3');
-      expect(blockDevice.Ebs.Iops).toBe(3000);
-      expect(blockDevice.Ebs.Encrypted).toBe(true);
-    });
-
-    test('should have Auto Scaling Group', () => {
-      expect(template.Resources.AutoScalingGroup).toBeDefined();
-      expect(template.Resources.AutoScalingGroup.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
-    });
-
-    test('Auto Scaling Group should have min 2, max 6 instances', () => {
-      const asg = template.Resources.AutoScalingGroup;
-      expect(asg.Properties.MinSize).toBe(2);
-      expect(asg.Properties.MaxSize).toBe(6);
-      expect(asg.Properties.DesiredCapacity).toBe(2);
-    });
-
-    test('Auto Scaling Group should be in private subnets', () => {
-      const asg = template.Resources.AutoScalingGroup;
-      expect(asg.Properties.VPCZoneIdentifier).toHaveLength(3);
-    });
-
-    test('should have Scaling Policy', () => {
-      expect(template.Resources.ScalingPolicy).toBeDefined();
-      expect(template.Resources.ScalingPolicy.Type).toBe('AWS::AutoScaling::ScalingPolicy');
-    });
-
-    test('Scaling Policy should target 70% CPU utilization', () => {
-      const policy = template.Resources.ScalingPolicy;
-      expect(policy.Properties.PolicyType).toBe('TargetTrackingScaling');
-      expect(policy.Properties.TargetTrackingConfiguration.TargetValue).toBe(70.0);
-    });
+  test('KMS endpoint security group configured with tags and egress rules empty', () => {
+    const sg = template.Resources.KMSEndpointSecurityGroup;
+    expect(sg).toBeDefined();
+    expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
+    expect(sg.Properties.SecurityGroupEgress.length).toBe(0);
+    expect(sg.Properties.Tags.some((t: any) => t.Key === 'DataClassification' && t.Value === 'PCI')).toBe(true);
   });
 
-  describe('CloudWatch Monitoring', () => {
-    test('should have Application Log Group', () => {
-      expect(template.Resources.ApplicationLogGroup).toBeDefined();
-      expect(template.Resources.ApplicationLogGroup.Type).toBe('AWS::Logs::LogGroup');
-    });
+  test('KMS endpoint ingress and Lambda SG egress to KMS SG are present and port 443', () => {
+    const ingress = template.Resources.KMSEndpointSecurityGroupIngress;
+    const egress = template.Resources.LambdaSecurityGroupEgress;
+    expect(ingress.Properties.FromPort).toBe(443);
+    expect(ingress.Properties.ToPort).toBe(443);
+    expect(ingress.Properties.IpProtocol).toBe('tcp');
+    expect(ingress.Properties.SourceSecurityGroupId).toEqual({ Ref: 'LambdaSecurityGroup' });
 
-    test('Application Log Group should have 30-day retention', () => {
-      expect(template.Resources.ApplicationLogGroup.Properties.RetentionInDays).toBe(30);
-    });
-
-    test('should have CPU high alarm', () => {
-      expect(template.Resources.CPUAlarmHigh).toBeDefined();
-      expect(template.Resources.CPUAlarmHigh.Type).toBe('AWS::CloudWatch::Alarm');
-    });
-
-    test('CPU alarm should trigger at 80%', () => {
-      const alarm = template.Resources.CPUAlarmHigh;
-      expect(alarm.Properties.Threshold).toBe(80);
-      expect(alarm.Properties.MetricName).toBe('CPUUtilization');
-    });
-
-    test('should have DB connections alarm', () => {
-      expect(template.Resources.DBConnectionsAlarm).toBeDefined();
-    });
-
-    test('DB connections alarm should trigger at 100', () => {
-      const alarm = template.Resources.DBConnectionsAlarm;
-      expect(alarm.Properties.Threshold).toBe(100);
-      expect(alarm.Properties.MetricName).toBe('DatabaseConnections');
-    });
-
-    test('should have VPC Flow Log', () => {
-      expect(template.Resources.VPCFlowLog).toBeDefined();
-      expect(template.Resources.VPCFlowLog.Type).toBe('AWS::EC2::FlowLog');
-    });
+    expect(egress.Properties.FromPort).toBe(443);
+    expect(egress.Properties.ToPort).toBe(443);
+    expect(egress.Properties.Description).toContain('Allow HTTPS to KMS endpoint');
+    expect(egress.Properties.DestinationSecurityGroupId).toEqual({ Ref: 'KMSEndpointSecurityGroup' });
   });
 
-  describe('Resource Naming with StackName', () => {
-    const resourcesToCheck = [
-      'VPC', 'InternetGateway', 'ALBSecurityGroup', 'EC2SecurityGroup', 'RDSSecurityGroup',
-      'ApplicationLoadBalancer', 'ALBTargetGroup', 'WebACL', 'LaunchTemplate', 'AutoScalingGroup',
-      'AuroraCluster', 'AuroraInstanceWriter', 'AuroraInstanceReader', 'KMSKeyAlias',
-      'EC2InstanceRole', 'ApplicationLogGroup', 'LambdaExecutionRole', 'LowercaseStackNameFunction'
-    ];
-
-    test.each(resourcesToCheck)('%s should include AWS::StackName in name', (resourceName) => {
-      const resource = template.Resources[resourceName];
-      if (!resource) {
-        fail(`Resource ${resourceName} not found`);
-        return;
-      }
-
-      const nameProperty = resource.Properties.Name ||
-        resource.Properties.TableName ||
-        resource.Properties.BucketName ||
-        resource.Properties.RoleName ||
-        resource.Properties.LogGroupName ||
-        resource.Properties.DBClusterIdentifier ||
-        resource.Properties.DBInstanceIdentifier ||
-        resource.Properties.LaunchTemplateName ||
-        resource.Properties.AutoScalingGroupName ||
-        resource.Properties.AliasName ||
-        resource.Properties.GroupName ||
-        resource.Properties.FunctionName;
-
-      if (nameProperty && typeof nameProperty === 'object' && nameProperty['Fn::Sub']) {
-        expect(nameProperty['Fn::Sub']).toContain('${AWS::StackName}');
-      }
-    });
+  test('KMS Key has Retain policy and alias exists and references key', () => {
+    const key = template.Resources.KMSKey;
+    expect(key).toBeDefined();
+    expect(key.DeletionPolicy).toBe('Retain');
+    expect(key.UpdateReplacePolicy).toBe('Retain');
+    expect(template.Resources.KMSKeyAlias.Properties.TargetKeyId.Ref).toBe('KMSKey');
   });
 
-  describe('Outputs', () => {
-    test('should have VPCId output', () => {
-      expect(template.Outputs.VPCId).toBeDefined();
-      expect(template.Outputs.VPCId.Value).toEqual({ Ref: 'VPC' });
-    });
-
-    test('should have ALBDNSName output', () => {
-      expect(template.Outputs.ALBDNSName).toBeDefined();
-    });
-
-    test('should have AuroraClusterEndpoint output', () => {
-      expect(template.Outputs.AuroraClusterEndpoint).toBeDefined();
-    });
-
-    test('should have AuroraReaderEndpoint output', () => {
-      expect(template.Outputs.AuroraReaderEndpoint).toBeDefined();
-    });
-
-    test('should have ArtifactsBucketName output', () => {
-      expect(template.Outputs.ArtifactsBucketName).toBeDefined();
-      expect(template.Outputs.ArtifactsBucketName.Value).toEqual({ Ref: 'ArtifactsBucket' });
-    });
-
-    test('all outputs should have export names', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export).toBeDefined();
-        expect(output.Export.Name).toBeDefined();
-      });
-    });
+  test('DataBucket has Retain DeletionPolicy and encrypted with KMS & BucketKeyEnabled', () => {
+    const bucket = template.Resources.DataBucket;
+    expect(bucket.DeletionPolicy).toBe('Retain');
+    expect(bucket.UpdateReplacePolicy).toBe('Retain');
+    const sse = bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0];
+    expect(sse.ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+    expect(sse.BucketKeyEnabled).toBe(true);
   });
 
-  describe('PCI DSS Compliance Checks', () => {
-    test('RDS database should be encrypted', () => {
-      expect(template.Resources.AuroraCluster.Properties.StorageEncrypted).toBe(true);
-    });
-
-    test('S3 buckets should be encrypted', () => {
-      expect(template.Resources.ArtifactsBucket.Properties.BucketEncryption).toBeDefined();
-      expect(template.Resources.FlowLogsBucket.Properties.BucketEncryption).toBeDefined();
-    });
-
-    test('EBS volumes should be encrypted', () => {
-      const lt = template.Resources.LaunchTemplate;
-      expect(lt.Properties.LaunchTemplateData.BlockDeviceMappings[0].Ebs.Encrypted).toBe(true);
-    });
-
-    test('ALB should use HTTP', () => {
-      const listener = template.Resources.ALBListener;
-      expect(listener.Properties.Protocol).toBe('HTTP');
-    });
-
-    test('RDS should not be publicly accessible', () => {
-      expect(template.Resources.AuroraInstanceWriter.Properties.PubliclyAccessible).toBe(false);
-      expect(template.Resources.AuroraInstanceReader.Properties.PubliclyAccessible).toBe(false);
-    });
-
-    test('S3 buckets should block public access', () => {
-      const artifacts = template.Resources.ArtifactsBucket.Properties.PublicAccessBlockConfiguration;
-      const flowLogs = template.Resources.FlowLogsBucket.Properties.PublicAccessBlockConfiguration;
-
-      [artifacts, flowLogs].forEach(config => {
-        expect(config.BlockPublicAcls).toBe(true);
-        expect(config.BlockPublicPolicy).toBe(true);
-        expect(config.IgnorePublicAcls).toBe(true);
-        expect(config.RestrictPublicBuckets).toBe(true);
-      });
-    });
+  test('DataBucket has lifecycle rule to delete old versions', () => {
+    const rules = template.Resources.DataBucket.Properties.LifecycleConfiguration.Rules;
+    expect(rules.some((r: any) => r.Id === 'DeleteOldVersions' && r.NoncurrentVersionExpirationInDays === 90)).toBe(true);
   });
 
-  describe('Destroyability Requirements', () => {
-    test('RDS cluster should have Delete deletion policy', () => {
-      expect(template.Resources.AuroraCluster.DeletionPolicy).toBe('Delete');
-    });
+  test('DataBucket policy denies unencrypted uploads and insecure transport', () => {
+    const policy = template.Resources.DataBucketPolicy.Properties.PolicyDocument.Statement;
+    const denyUpload = policy.find((p: any) => p.Sid === 'DenyUnencryptedObjectUploads');
+    expect(denyUpload.Effect).toBe('Deny');
+    expect(denyUpload.Condition.StringNotEquals['s3:x-amz-server-side-encryption']).toBe('aws:kms');
+    const denyInsecure = policy.find((p: any) => p.Sid === 'DenyInsecureTransport');
+    expect(denyInsecure.Condition.Bool['aws:SecureTransport']).toBe('false');
+  });
 
-    test('KMS key should have Delete deletion policy with 7-day window', () => {
-      expect(template.Resources.KMSKey.DeletionPolicy).toBe('Delete');
-      expect(template.Resources.KMSKey.Properties.PendingWindowInDays).toBe(7);
-    });
+  test('VPC Flow Logs LogGroup retention and KMS encryption', () => {
+    const lg = template.Resources.VPCFlowLogsLogGroup;
+    expect(lg).toBeDefined();
+    expect(lg.Properties.RetentionInDays).toBe(90);
+    expect(lg.Properties.KmsKeyId['Fn::GetAtt'][0]).toBe('KMSKey');
+  });
 
-    test('S3 buckets should allow deletion', () => {
-      // No DeletionPolicy: Retain means they can be deleted
-      expect(template.Resources.ArtifactsBucket.DeletionPolicy).not.toBe('Retain');
-      expect(template.Resources.FlowLogsBucket.DeletionPolicy).not.toBe('Retain');
-    });
+  test('VPC Flow Logs role contains expected log permissions', () => {
+    const role = template.Resources.VPCFlowLogsRole;
+    const stmts = role.Properties.Policies[0].PolicyDocument.Statement;
+    expect(stmts.some((s: any) => s.Action.includes('logs:CreateLogGroup'))).toBe(true);
+    expect(stmts[0].Resource['Fn::GetAtt'][0]).toBe('VPCFlowLogsLogGroup');
+  });
+
+  test('Lambda execution role includes AWSLambdaVPCAccessExecutionRole managed policy and correct S3/KMS statements', () => {
+    const role = template.Resources.LambdaExecutionRole;
+    expect(role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole');
+    const s3Policy = role.Properties.Policies.find((p: any) => p.PolicyName === 'S3Access');
+    expect(s3Policy.PolicyDocument.Statement.some((s: any) => s.Action.includes('s3:GetObject'))).toBe(true);
+    const kmsPolicy = role.Properties.Policies.find((p: any) => p.PolicyName === 'KMSAccess');
+    expect(kmsPolicy.PolicyDocument.Statement.some((s: any) => s.Action.includes('kms:GenerateDataKey'))).toBe(true);
+  });
+
+  test('Lambda environment variables reference DataBucket and KMSKey', () => {
+    const envVars = template.Resources.DataValidationFunction.Properties.Environment.Variables;
+    expect(envVars.DATA_BUCKET).toEqual({ Ref: 'DataBucket' });
+    expect(envVars.KMS_KEY_ID).toEqual({ Ref: 'KMSKey' });
+  });
+
+  test('DataValidationFunction code contains validation logging string', () => {
+    const code = template.Resources.DataValidationFunction.Properties.Code.ZipFile;
+    expect(code).toContain('Validating payment card data...');
+  });
+
+  test('SecurityAlertTopic has KMS master key configured and meaningful DisplayName', () => {
+    const topic = template.Resources.SecurityAlertTopic;
+    expect(topic.Properties.DisplayName).toBe('PCI Security Alerts');
+    expect(topic.Properties.KmsMasterKeyId.Ref).toBe('KMSKey');
+  });
+
+  test('ConfigBucket is encrypted, public access blocked, and has expected policy statements', () => {
+    const cb = template.Resources.ConfigBucket;
+    expect(cb.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+    expect(cb.Properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
+    const policyDoc = template.Resources.ConfigBucketPolicy.Properties.PolicyDocument.Statement;
+    expect(policyDoc.some((s: any) => s.Sid === 'AWSConfigBucketPermissionsCheck')).toBe(true);
+    expect(policyDoc.some((s: any) => s.Sid === 'AWSConfigBucketDelivery')).toBe(true);
+  });
+
+  test('Config SSM parameter names exist for DataBucket and KMSKey', () => {
+    const param = template.Resources.ConfigParameter;
+    expect(param.Properties.Name['Fn::Sub']).toContain('/pci/config/${EnvironmentSuffix}/data-bucket');
+    const kmsParam = template.Resources.KMSKeyParameter;
+    expect(kmsParam.Properties.Name['Fn::Sub']).toContain('/pci/config/${EnvironmentSuffix}/kms-key-id');
+  });
+
+  test('Outputs include KMSKeyArn and DataValidationFunctionArn', () => {
+    expect(template.Outputs.KMSKeyArn).toBeDefined();
+    expect(template.Outputs.DataValidationFunctionArn).toBeDefined();
+    expect(template.Outputs.KMSKeyArn.Value['Fn::GetAtt'][0]).toBe('KMSKey');
   });
 });
