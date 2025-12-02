@@ -34,9 +34,8 @@ Expected output: Three Pulumi stacks (dev, staging, prod) that can be deployed i
 - Lambda function code must be packaged from the same source directory for all environments
 - DynamoDB tables must have point-in-time recovery enabled only in staging and production
 - API Gateway must implement request throttling with different limits per environment
-- CloudFront distributions must use AWS Certificate Manager certificates from us-east-1
 - S3 buckets must have versioning enabled and block public access in all environments
 - Cross-environment dependencies must be handled through Pulumi stack references only
 
 ## Environment Setup
-Multi-environment AWS infrastructure deployed across three separate accounts in us-east-1 region. Each environment consists of API Gateway, Lambda functions, DynamoDB tables, S3 buckets for logging, Route53 for DNS management, and CloudFront for content delivery. Requires Pulumi CLI 3.x with Python 3.8+, AWS CLI configured with appropriate credentials for each environment account. VPC endpoints for DynamoDB and S3 in each environment to reduce data transfer costs. Lambda functions deployed in private subnets with NAT Gateway for outbound internet access.
+Multi-environment AWS infrastructure deployed across three separate accounts in us-east-1 region. Each environment consists of API Gateway, Lambda functions, DynamoDB tables, S3 buckets for logging and CloudFront for content delivery. Requires Pulumi CLI 3.x with Python 3.8+, AWS CLI configured with appropriate credentials for each environment account. VPC endpoints for DynamoDB and S3 in each environment to reduce data transfer costs. Lambda functions deployed in private subnets with NAT Gateway for outbound internet access.

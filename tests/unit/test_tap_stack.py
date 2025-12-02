@@ -210,6 +210,23 @@ class TestEnvironmentConfig(unittest.TestCase):
         self.assertEqual(tags['CostCenter'], 'DEV-001')
         self.assertEqual(tags['Project'], 'PaymentProcessing')
 
+    def test_get_domain(self):
+        """Test domain generation for different environments."""
+        from lib.config import EnvironmentConfig
+
+        # Test with default base_domain
+        config_dev = EnvironmentConfig('dev')
+        domain_dev = config_dev.get_domain()
+        self.assertEqual(domain_dev, 'dev.api.example.com')
+
+        config_staging = EnvironmentConfig('staging')
+        domain_staging = config_staging.get_domain()
+        self.assertEqual(domain_staging, 'staging.api.example.com')
+
+        config_prod = EnvironmentConfig('prod')
+        domain_prod = config_prod.get_domain()
+        self.assertEqual(domain_prod, 'api.example.com')
+
     def test_capacity_validation(self):
         """Test capacity validation."""
         from lib.config import EnvironmentConfig
