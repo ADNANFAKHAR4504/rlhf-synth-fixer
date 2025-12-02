@@ -152,9 +152,9 @@ describe('TapStack', () => {
   });
 
   describe('RDS Database', () => {
-    test('should create Aurora PostgreSQL cluster', () => {
+    test('should create Aurora MySQL cluster', () => {
       template.hasResourceProperties('AWS::RDS::DBCluster', {
-        Engine: 'aurora-postgresql',
+        Engine: 'aurora-mysql',
         StorageEncrypted: true,
         DatabaseName: 'testdb',
       });

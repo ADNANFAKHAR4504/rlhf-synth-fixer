@@ -602,11 +602,11 @@ describe('TapStack End-to-End Application Integration Tests', () => {
       template.resourceCountIs('AWS::SecretsManager::Secret', 1);
 
       template.hasResourceProperties('AWS::RDS::DBCluster', {
-        Engine: 'aurora-postgresql',
+        Engine: 'aurora-mysql',
         StorageEncrypted: true,
         DatabaseName: 'staging_db',
       });
-      console.log('    Database layer deployed with Aurora PostgreSQL');
+      console.log('    Database layer deployed with Aurora MySQL');
 
       // 3. Verify application layer deployment
       console.log('3. Validating application layer deployment...');
@@ -1102,7 +1102,7 @@ describe('TapStack End-to-End Application Integration Tests', () => {
 
       // Verify database can handle concurrent connections
       template.hasResourceProperties('AWS::RDS::DBCluster', {
-        Engine: 'aurora-postgresql',
+        Engine: 'aurora-mysql',
         StorageEncrypted: true,
       });
       console.log('    Database configured for concurrent access');
@@ -1127,7 +1127,7 @@ describe('TapStack End-to-End Application Integration Tests', () => {
       // Database encryption and security
       template.hasResourceProperties('AWS::RDS::DBCluster', {
         StorageEncrypted: true,
-        Engine: 'aurora-postgresql',
+        Engine: 'aurora-mysql',
       });
 
       template.hasResourceProperties('AWS::SecretsManager::Secret', {
@@ -1339,7 +1339,7 @@ describe('TapStack End-to-End Application Integration Tests', () => {
       // Database connection pooling and performance
       console.log('3. Database performance optimization...');
       template.hasResourceProperties('AWS::RDS::DBCluster', {
-        Engine: 'aurora-postgresql',
+        Engine: 'aurora-mysql',
         StorageEncrypted: true,
       });
 
@@ -1785,7 +1785,7 @@ describe('TapStack End-to-End Application Integration Tests', () => {
       console.log(' Infrastructure Resources Created:');
       console.log(`   • Network: VPC, Subnets, Security Groups`);
       console.log(`   • Compute: ECS Cluster, Service, Tasks`);
-      console.log(`   • Database: Aurora PostgreSQL Cluster`);
+      console.log(`   • Database: Aurora MySQL Cluster`);
       console.log(`   • Load Balancing: ALB with Target Groups`);
       console.log(`   • CDN: CloudFront Distribution`);
       console.log(`   • API: API Gateway`);
@@ -2830,7 +2830,7 @@ describe('TapStack End-to-End Application Integration Tests', () => {
     });
 
     describe('Database Validation', () => {
-      test('should have Aurora PostgreSQL cluster deployed', async () => {
+      test('should have Aurora MySQL cluster deployed', async () => {
         if (!canRunRealAWSTests) {
           console.log(
             'Skipping:  Skipping real AWS RDS test - cannot run real AWS tests'
@@ -2853,11 +2853,11 @@ describe('TapStack End-to-End Application Integration Tests', () => {
           expect(response.DBClusters!.length).toBe(1);
 
           const cluster = response.DBClusters![0];
-          expect(cluster.Engine).toBe('aurora-postgresql');
+          expect(cluster.Engine).toBe('aurora-mysql');
           expect(cluster.Status).toBe('available');
           expect(cluster.StorageEncrypted).toBe(true);
 
-          console.log(' Aurora PostgreSQL cluster validated in AWS');
+          console.log(' Aurora MySQL cluster validated in AWS');
         } catch (error) {
           console.log(
             'Warning:  RDS cluster test failed (expected if not deployed):',
@@ -2895,7 +2895,7 @@ describe('TapStack End-to-End Application Integration Tests', () => {
 
           const instance = response.DBInstances![0];
           expect(instance.DBInstanceStatus).toBe('available');
-          expect(instance.Engine).toBe('aurora-postgresql');
+          expect(instance.Engine).toBe('aurora-mysql');
 
           console.log(' Database instances validated in AWS');
         } catch (error) {

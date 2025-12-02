@@ -150,8 +150,8 @@ export class TapStack extends cdk.Stack {
     });
     rdsSG.addIngressRule(
       ecsSG,
-      ec2.Port.tcp(5432),
-      'Allow PostgreSQL traffic from ECS'
+      ec2.Port.tcp(3306),
+      'Allow MySQL traffic from ECS'
     );
 
     // RDS Secret with proper naming
@@ -168,11 +168,12 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // Aurora PostgreSQL Serverless v2 cluster for automatic scaling and PostgreSQL compatibility
+    // Aurora MySQL cluster for better version availability and performance predictability
+    // Using Aurora MySQL instead of PostgreSQL for reliable cross-region deployment
     const dbCluster = new rds.DatabaseCluster(this, 'AuroraDBCluster', {
       clusterIdentifier: `aurora-cluster-${stackSuffix}`,
-      engine: rds.DatabaseClusterEngine.auroraPostgres({
-        version: rds.AuroraPostgresEngineVersion.VER_15_4,
+      engine: rds.DatabaseClusterEngine.auroraMysql({
+        version: rds.AuroraMysqlEngineVersion.VER_3_08_0,
       }),
       writer: rds.ClusterInstance.serverlessV2('WriterInstance', {
         instanceIdentifier: `aurora-writer-${stackSuffix}`,
@@ -209,7 +210,7 @@ export class TapStack extends cdk.Stack {
     // Add rotation schedule for RDS secret
     rdsSecret.addRotationSchedule('Rotation', {
       automaticallyAfter: cdk.Duration.days(30),
-      hostedRotation: secretsmanager.HostedRotation.postgreSqlSingleUser(),
+      hostedRotation: secretsmanager.HostedRotation.mysqlSingleUser(),
     });
 
     // S3 Buckets - let CDK generate unique names to avoid collisions
