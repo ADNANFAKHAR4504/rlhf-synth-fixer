@@ -828,7 +828,7 @@ describe("Multi-Environment AWS Infrastructure Integration Tests", () => {
 
       const response = await secretsClient.send(command);
       expect(response.Name).toBeDefined();
-      expect(response.Description).toContain("Master password for RDS Aurora PostgreSQL cluster");
+      expect(response.Description).toContain("The secret associated with the primary RDS DB cluster");
       expect(response.VersionIdsToStages).toBeDefined();
     });
   });
