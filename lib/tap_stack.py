@@ -63,8 +63,15 @@ class TapStack(pulumi.ComponentResource):
 
         environment_suffix = args.environment_suffix
 
-        # Load environment configuration
-        env_config = EnvironmentConfig(environment_suffix)
+        # Extract base environment from suffix (for PR-based environments, default to 'dev')
+        # Valid base environments: dev, staging, prod
+        # PR-based suffixes like 'pr7669' should use 'dev' configuration
+        base_environment = environment_suffix
+        if environment_suffix.startswith('pr') or environment_suffix not in ['dev', 'staging', 'prod']:
+            base_environment = 'dev'
+
+        # Load environment configuration using base environment
+        env_config = EnvironmentConfig(base_environment)
         env_config.validate_capacity()
 
         # Get common tags
