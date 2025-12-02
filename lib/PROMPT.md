@@ -1,6 +1,6 @@
 # Multi-Environment Consistency & Replication
 
-> **⚠️ CRITICAL REQUIREMENT: This task MUST be implemented using pulumi with py**
+> **CRITICAL REQUIREMENT: This task MUST be implemented using pulumi with py**
 >
 > Platform: **pulumi**
 > Language: **py**
