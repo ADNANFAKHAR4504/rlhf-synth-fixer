@@ -5,9 +5,9 @@
   "turn_type": "single",
   "po_id": "101000957",
   "team": "synth",
-  "subtask": "Serverless Infrastructure",
+  "subtask": "Application Deployment",
   "subject_labels": [
-    "pending"
+    "Serverless Infrastructure (Functions as Code)"
   ],
   "startedAt": "2025-12-02T00:00:00Z",
   "aws_services": [
@@ -19,5 +19,7 @@
     "IAM",
     "X-Ray"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing"
 }
