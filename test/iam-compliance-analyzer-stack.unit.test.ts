@@ -59,7 +59,7 @@ describe('IAM Compliance Analyzer Infrastructure', () => {
         },
       });
 
-      const bucketName = await bucket.bucket;
+      const bucketName = await pulumi.output(bucket.bucket).promise();
       expect(bucketName).toBe('test-bucket-name');
     });
 
@@ -69,7 +69,7 @@ describe('IAM Compliance Analyzer Infrastructure', () => {
         forceDestroy: true,
       });
 
-      const urn = await bucket.urn;
+      const urn = await pulumi.output(bucket.urn).promise();
       expect(urn).toContain('test-bucket');
     });
 
@@ -81,7 +81,7 @@ describe('IAM Compliance Analyzer Infrastructure', () => {
         },
       });
 
-      const bucketName = await bucket.bucket;
+      const bucketName = await pulumi.output(bucket.bucket).promise();
       expect(bucketName).toBeDefined();
     });
   });
@@ -103,7 +103,7 @@ describe('IAM Compliance Analyzer Infrastructure', () => {
         }),
       });
 
-      const roleArn = await role.arn;
+      const roleArn = await pulumi.output(role.arn).promise();
       expect(roleArn).toContain('arn:aws:iam::');
       expect(roleArn).toContain('role/test-role');
     });
@@ -119,7 +119,7 @@ describe('IAM Compliance Analyzer Infrastructure', () => {
           'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
       });
 
-      const urn = await attachment.urn;
+      const urn = await pulumi.output(attachment.urn).promise();
       expect(urn).toContain('test-attachment');
     });
   });
@@ -139,7 +139,7 @@ describe('IAM Compliance Analyzer Infrastructure', () => {
         }),
       });
 
-      const policyArn = await policy.arn;
+      const policyArn = await pulumi.output(policy.arn).promise();
       expect(policyArn).toContain('arn:aws:iam::');
       expect(policyArn).toContain('policy/test-policy');
     });
@@ -193,7 +193,7 @@ describe('IAM Compliance Analyzer Infrastructure', () => {
         }),
       });
 
-      const lambdaArn = await lambda.arn;
+      const lambdaArn = await pulumi.output(lambda.arn).promise();
       expect(lambdaArn).toContain('arn:aws:lambda:');
       expect(lambdaArn).toContain('function:test-lambda');
     });
@@ -226,7 +226,7 @@ describe('IAM Compliance Analyzer Infrastructure', () => {
         description: 'Triggers IAM compliance scanner daily',
       });
 
-      const ruleName = await rule.name;
+      const ruleName = await pulumi.output(rule.name).promise();
       expect(ruleName).toBe('test-rule');
     });
 
@@ -253,7 +253,7 @@ describe('IAM Compliance Analyzer Infrastructure', () => {
         arn: lambda.arn,
       });
 
-      const urn = await target.urn;
+      const urn = await pulumi.output(target.urn).promise();
       expect(urn).toContain('test-target');
     });
 
@@ -282,7 +282,7 @@ describe('IAM Compliance Analyzer Infrastructure', () => {
         sourceArn: rule.arn,
       });
 
-      const urn = await permission.urn;
+      const urn = await pulumi.output(permission.urn).promise();
       expect(urn).toContain('test-permission');
     });
   });
@@ -294,7 +294,7 @@ describe('IAM Compliance Analyzer Infrastructure', () => {
         dashboardBody: '{}',
       });
 
-      const dashboardName = await dashboard.dashboardName;
+      const dashboardName = await pulumi.output(dashboard.dashboardName).promise();
       expect(dashboardName).toBe('test-dashboard-name');
     });
 
@@ -336,7 +336,7 @@ describe('IAM Compliance Analyzer Infrastructure', () => {
         }
       );
 
-      const urn = await blockPublicAccess.urn;
+      const urn = await pulumi.output(blockPublicAccess.urn).promise();
       expect(urn).toContain('test-block');
     });
   });
