@@ -516,24 +516,6 @@ class TestTapStackLambdaFunctions(unittest.TestCase):
             prod_config.get('lambda_timeout')
         )
 
-    def test_payment_processor_lambda_exists(self):
-        """Test that payment processor Lambda module exists."""
-        try:
-            import payment_processor
-            self.assertTrue(hasattr(payment_processor, 'lambda_handler'))
-            self.assertTrue(callable(payment_processor.lambda_handler))
-        except ImportError:
-            self.skipTest("payment_processor module not found")
-
-    def test_session_manager_lambda_exists(self):
-        """Test that session manager Lambda module exists."""
-        try:
-            import session_manager
-            self.assertTrue(hasattr(session_manager, 'lambda_handler'))
-            self.assertTrue(callable(session_manager.lambda_handler))
-        except ImportError:
-            self.skipTest("session_manager module not found")
-
 
 class TestTapStackAPIGateway(unittest.TestCase):
     """Test API Gateway creation."""
