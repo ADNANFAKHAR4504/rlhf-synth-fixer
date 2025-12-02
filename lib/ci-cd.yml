@@ -93,7 +93,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: cdk-outputs
-          path: cdk.out/
+          path: ./artifacts/
 
       - name: Configure AWS Credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -101,6 +101,17 @@ jobs:
           role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubActions-Dev
+
+      - name: Decrypt artifacts with KMS
+        run: |
+          set -euo pipefail
+          aws kms decrypt \
+            --ciphertext-blob fileb://./artifacts/cdk-outputs.tar.gz.encrypted \
+            --output text \
+            --query Plaintext | base64 --decode > cdk-outputs.tar.gz
+          mkdir -p cdk.out
+          tar -xzf cdk-outputs.tar.gz -C cdk.out
+          rm -f cdk-outputs.tar.gz ./artifacts/cdk-outputs.tar.gz.encrypted
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -111,17 +122,41 @@ jobs:
         run: npm ci
 
       - name: Deploy to Dev with Change Set
+        id: deploy-dev
         run: |
-          npx cdk deploy --all \
-            --require-approval never \
-            --context environment=dev
+          set -euo pipefail
+          MAX_RETRIES=3
+          RETRY_DELAY=30
+          for i in $(seq 1 $MAX_RETRIES); do
+            if npx cdk deploy --all \
+              --require-approval never \
+              --outputs-file cdk-outputs.json \
+              --context environment=dev; then
+              echo "Deployment successful"
+              break
+            fi
+            if [ $i -eq $MAX_RETRIES ]; then
+              echo "Deployment failed after $MAX_RETRIES attempts"
+              exit 1
+            fi
+            echo "Retry $i/$MAX_RETRIES failed. Waiting ${RETRY_DELAY}s..."
+            sleep $RETRY_DELAY
+          done
 
       - name: Verify Change Set
         run: |
-          aws cloudformation describe-change-set \
-            --change-set-name cdk-deploy-change-set \
-            --stack-name MyStack-dev \
-            --query 'Changes[*].ResourceChange' || echo "No change set"
+          set -euo pipefail
+          STACKS=$(aws cloudformation list-stacks \
+            --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE \
+            --query "StackSummaries[?contains(StackName, 'dev')].StackName" \
+            --output text)
+          for STACK in $STACKS; do
+            echo "Checking stack: $STACK"
+            aws cloudformation describe-stack-resources \
+              --stack-name "$STACK" \
+              --query 'StackResources[*].[LogicalResourceId,ResourceStatus]' \
+              --output table || true
+          done
 
       - name: Send Slack notification
         if: always()
@@ -155,7 +190,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: cdk-outputs
-          path: cdk.out/
+          path: ./artifacts/
 
       - name: Assume cross-account role for Staging
         uses: aws-actions/configure-aws-credentials@v4
@@ -167,6 +202,17 @@ jobs:
           role-session-name: GitHubActions-Staging
           role-chaining: true
 
+      - name: Decrypt artifacts with KMS
+        run: |
+          set -euo pipefail
+          aws kms decrypt \
+            --ciphertext-blob fileb://./artifacts/cdk-outputs.tar.gz.encrypted \
+            --output text \
+            --query Plaintext | base64 --decode > cdk-outputs.tar.gz
+          mkdir -p cdk.out
+          tar -xzf cdk-outputs.tar.gz -C cdk.out
+          rm -f cdk-outputs.tar.gz ./artifacts/cdk-outputs.tar.gz.encrypted
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -176,20 +222,37 @@ jobs:
         run: npm ci
 
       - name: Deploy to Staging
+        id: deploy-staging
         run: |
-          npx cdk deploy --all \
-            --require-approval never \
-            --context environment=staging
+          set -euo pipefail
+          MAX_RETRIES=3
+          RETRY_DELAY=30
+          for i in $(seq 1 $MAX_RETRIES); do
+            if npx cdk deploy --all \
+              --require-approval never \
+              --outputs-file cdk-outputs.json \
+              --context environment=staging; then
+              echo "Deployment successful"
+              break
+            fi
+            if [ $i -eq $MAX_RETRIES ]; then
+              echo "Deployment failed after $MAX_RETRIES attempts"
+              exit 1
+            fi
+            echo "Retry $i/$MAX_RETRIES failed. Waiting ${RETRY_DELAY}s..."
+            sleep $RETRY_DELAY
+          done
 
       - name: Send Slack notification
         if: always()
         env:
           WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
           REF: ${{ github.ref }}
+          STATUS: ${{ job.status }}
         run: |
           curl -X POST "$WEBHOOK" \
             -H 'Content-Type: application/json' \
-            -d "{\"text\":\"Staging deployment completed for ${REF}\"}"
+            -d "{\"text\":\"Staging deployment ${STATUS} for ${REF}\"}"
 
   manual-approval-prod:
     name: Approve Production Deployment
@@ -213,7 +276,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: cdk-outputs
-          path: cdk.out/
+          path: ./artifacts/
 
       - name: Assume cross-account role for Production
         uses: aws-actions/configure-aws-credentials@v4
@@ -225,6 +288,17 @@ jobs:
           role-session-name: GitHubActions-Prod
           role-chaining: true
 
+      - name: Decrypt artifacts with KMS
+        run: |
+          set -euo pipefail
+          aws kms decrypt \
+            --ciphertext-blob fileb://./artifacts/cdk-outputs.tar.gz.encrypted \
+            --output text \
+            --query Plaintext | base64 --decode > cdk-outputs.tar.gz
+          mkdir -p cdk.out
+          tar -xzf cdk-outputs.tar.gz -C cdk.out
+          rm -f cdk-outputs.tar.gz ./artifacts/cdk-outputs.tar.gz.encrypted
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -233,18 +307,71 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Deploy to Production
+      - name: Get current stack versions for rollback
+        id: get-versions
         run: |
-          npx cdk deploy --all \
-            --require-approval never \
-            --context environment=prod
+          set -euo pipefail
+          STACKS=$(aws cloudformation list-stacks \
+            --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE \
+            --query "StackSummaries[?contains(StackName, 'prod')].StackName" \
+            --output text)
+          echo "stacks=$STACKS" >> $GITHUB_OUTPUT
+          for STACK in $STACKS; do
+            VERSION=$(aws cloudformation describe-stacks \
+              --stack-name "$STACK" \
+              --query 'Stacks[0].StackId' --output text || echo "none")
+            echo "Stack $STACK version: $VERSION"
+          done
+
+      - name: Deploy to Production
+        id: deploy-prod
+        run: |
+          set -euo pipefail
+          MAX_RETRIES=3
+          RETRY_DELAY=60
+          for i in $(seq 1 $MAX_RETRIES); do
+            if npx cdk deploy --all \
+              --require-approval never \
+              --outputs-file cdk-outputs.json \
+              --context environment=prod; then
+              echo "Deployment successful"
+              echo "deploy_status=success" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+            if [ $i -eq $MAX_RETRIES ]; then
+              echo "Deployment failed after $MAX_RETRIES attempts"
+              echo "deploy_status=failed" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+            echo "Retry $i/$MAX_RETRIES failed. Waiting ${RETRY_DELAY}s..."
+            sleep $RETRY_DELAY
+          done
+
+      - name: Rollback on failure
+        if: failure() && steps.deploy-prod.outputs.deploy_status == 'failed'
+        run: |
+          set -euo pipefail
+          echo "Initiating rollback for production stacks..."
+          STACKS="${{ steps.get-versions.outputs.stacks }}"
+          for STACK in $STACKS; do
+            echo "Rolling back stack: $STACK"
+            aws cloudformation cancel-update-stack --stack-name "$STACK" || true
+            aws cloudformation rollback-stack --stack-name "$STACK" || true
+          done
+          echo "Rollback initiated. Check AWS Console for status."
 
       - name: Send Slack notification
         if: always()
         env:
           WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
           REF: ${{ github.ref }}
+          STATUS: ${{ job.status }}
         run: |
+          if [ "$STATUS" = "failure" ]; then
+            MSG="ALERT: Prod deploy FAILED for ${REF}. Rollback started."
+          else
+            MSG="Production deployment ${STATUS} for ${REF}"
+          fi
           curl -X POST "$WEBHOOK" \
             -H 'Content-Type: application/json' \
-            -d "{\"text\":\"Production deployment completed for ${REF}\"}"
+            -d "{\"text\":\"$MSG\"}"
