@@ -712,20 +712,5 @@ exports.handler = async (event) => {
       { provider, dependsOn: [this.configAggregator] }
     );
 
-    // Export outputs
-    pulumi
-      .all([
-        this.configBucket.id,
-        this.snsTopic.arn,
-        this.complianceFunction.arn,
-        this.configRecorder.id,
-      ])
-      .apply(([bucketId, topicArn, functionArn, recorderId]) => {
-        console.log('Outputs:');
-        console.log(`ConfigBucket: ${bucketId}`);
-        console.log(`SNSTopicArn: ${topicArn}`);
-        console.log(`ComplianceFunctionArn: ${functionArn}`);
-        console.log(`ConfigRecorderId: ${recorderId}`);
-      });
   }
 }

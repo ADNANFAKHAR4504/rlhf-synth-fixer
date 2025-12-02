@@ -76,6 +76,23 @@ describe("TapStack AWS Config Compliance System", () => {
     it("should create Lambda function", () => {
       expect(stack.complianceFunction).toBeDefined();
     });
+
+    it("should create Config aggregator", () => {
+      expect(stack.configAggregator).toBeDefined();
+    });
+
+    it("should have bucket output", async () => {
+      expect(stack.configBucketOutput).toBeDefined();
+      const bucketId = await stack.configBucketOutput.promise();
+      expect(bucketId).toBeDefined();
+    });
+
+    it("should have SNS topic ARN output", async () => {
+      expect(stack.snsTopicArn).toBeDefined();
+      const topicArn = await stack.snsTopicArn.promise();
+      expect(topicArn).toBeDefined();
+      expect(topicArn).toContain("arn:aws");
+    });
   });
 
   describe("Default Values", () => {
@@ -85,6 +102,14 @@ describe("TapStack AWS Config Compliance System", () => {
 
     it("should use default configuration", () => {
       expect(stack).toBeDefined();
+    });
+
+    it("should create all required resources with defaults", () => {
+      expect(stack.configBucket).toBeDefined();
+      expect(stack.configRecorder).toBeDefined();
+      expect(stack.snsTopic).toBeDefined();
+      expect(stack.complianceFunction).toBeDefined();
+      expect(stack.configAggregator).toBeDefined();
     });
   });
 });
