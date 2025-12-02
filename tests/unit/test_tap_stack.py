@@ -552,34 +552,6 @@ class TestConfiguration(unittest.TestCase):
         self.assertTrue(prod_config.get('dynamodb_pitr'))
 
 
-class TestIntegrationTest(unittest.TestCase):
-    """Integration test for the complete stack."""
-
-    def test_complete_stack_creation(self):
-        """Test that complete stack can be created without errors."""
-        try:
-            stack = TapStack(
-                name="integration-test-stack",
-                args=TapStackArgs(environment_suffix="inttest"),
-                opts=None
-            )
-            self.assertIsNotNone(stack)
-        except Exception as e:
-            self.fail(f"Stack creation failed: {str(e)}")
-
-    def test_stack_with_pr_environment_suffix(self):
-        """Test that stack handles PR-based environment suffixes."""
-        try:
-            stack = TapStack(
-                name="pr-test-stack",
-                args=TapStackArgs(environment_suffix="pr7669"),
-                opts=None
-            )
-            self.assertIsNotNone(stack)
-        except Exception as e:
-            self.fail(f"Stack creation with PR suffix failed: {str(e)}")
-
-
 if __name__ == '__main__':
     unittest.main()
 

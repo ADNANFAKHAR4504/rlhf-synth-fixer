@@ -14,8 +14,6 @@ from lib.dynamodb_stack import DynamoDBStack
 from lib.s3_stack import S3Stack
 from lib.lambda_stack import LambdaStack
 from lib.api_gateway_stack import ApiGatewayStack
-from lib.route53_stack import Route53Stack
-from lib.acm_stack import AcmStack
 from lib.cloudfront_stack import CloudFrontStack
 
 
@@ -43,9 +41,7 @@ class TapStack(pulumi.ComponentResource):
     - S3 buckets with lifecycle policies
     - Lambda functions with environment-specific configurations
     - API Gateway with throttling
-    - Route53 DNS management
     - CloudFront distributions
-    - ACM certificates
 
     Args:
         name: The logical name of this Pulumi component
@@ -138,41 +134,16 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Get domain configuration
-        domain = env_config.get_domain()
-
-        # Deploy ACM certificate FIRST (without Route53 validation for now)
-        acm_stack = AcmStack(
-            f"acm-stack-{environment_suffix}",
-            environment_suffix=environment_suffix,
-            domain=domain,
-            hosted_zone_id=None,  # Will create hosted zone separately
-            tags=tags,
-            opts=ResourceOptions(parent=self)
-        )
-
         # Extract API domain from API URL
         api_domain = api_stack.api_url.apply(lambda url: url.replace("https://", "").split("/")[0])
 
-        # Deploy CloudFront SECOND (after ACM)
+        # Deploy CloudFront
         cloudfront_stack = CloudFrontStack(
             f"cloudfront-stack-{environment_suffix}",
             environment_suffix=environment_suffix,
             api_domain=api_domain,
-            certificate_arn=acm_stack.certificate.arn,
-            domain=domain,
             tags=tags,
-            opts=ResourceOptions(parent=self, depends_on=[acm_stack])
-        )
-
-        # Deploy Route53 LAST (after CloudFront) with ACTUAL CloudFront domain
-        route53_stack = Route53Stack(
-            f"route53-stack-{environment_suffix}",
-            environment_suffix=environment_suffix,
-            domain=domain,
-            cloudfront_domain=cloudfront_stack.distribution.domain_name,
-            tags=tags,
-            opts=ResourceOptions(parent=self, depends_on=[cloudfront_stack])
+            opts=ResourceOptions(parent=self)
         )
 
         # Export outputs
@@ -183,7 +154,6 @@ class TapStack(pulumi.ComponentResource):
         pulumi.export("api_endpoint", api_stack.api_url)
         pulumi.export("cloudfront_domain", cloudfront_stack.distribution.domain_name)
         pulumi.export("cloudfront_distribution_id", cloudfront_stack.distribution.id)
-        pulumi.export("domain", domain)
         pulumi.export("environment", environment_suffix)
 
         # Register outputs

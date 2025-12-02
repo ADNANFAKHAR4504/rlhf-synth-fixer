@@ -18,8 +18,6 @@ class CloudFrontStack(pulumi.ComponentResource):
         name: str,
         environment_suffix: str,
         api_domain: Output[str],
-        certificate_arn: Output[str],
-        domain: str,
         tags: dict,
         opts: Optional[ResourceOptions] = None
     ):
@@ -30,7 +28,6 @@ class CloudFrontStack(pulumi.ComponentResource):
             f"cloudfront-{environment_suffix}",
             enabled=True,
             comment=f"CloudFront distribution for {environment_suffix}",
-            aliases=[domain],
             origins=[
                 aws.cloudfront.DistributionOriginArgs(
                     domain_name=api_domain,
@@ -64,11 +61,6 @@ class CloudFrontStack(pulumi.ComponentResource):
                 geo_restriction=aws.cloudfront.DistributionRestrictionsGeoRestrictionArgs(
                     restriction_type="none",
                 ),
-            ),
-            viewer_certificate=aws.cloudfront.DistributionViewerCertificateArgs(
-                acm_certificate_arn=certificate_arn,
-                ssl_support_method="sni-only",
-                minimum_protocol_version="TLSv1.2_2021",
             ),
             price_class="PriceClass_100",
             tags={**tags, "Name": f"cloudfront-{environment_suffix}"},
