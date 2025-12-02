@@ -289,7 +289,7 @@ resource "random_password" "rds_master_password" {
 resource "aws_rds_cluster" "main" {
   cluster_identifier          = "${local.resource_prefix}-aurora-cluster"
   engine                      = "aurora-postgresql"
-  engine_version              = "15.4"
+  engine_version              = "15.10"
   database_name               = "tapdb"
   master_username             = "postgres"
   manage_master_user_password = true
