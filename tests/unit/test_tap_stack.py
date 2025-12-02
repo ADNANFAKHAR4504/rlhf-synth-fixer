@@ -31,7 +31,7 @@ class MyMocks(pulumi.runtime.Mocks):
         # Return mock outputs based on resource type
         outputs = dict(args.inputs)
         outputs['id'] = f'{args.name}-id'
-        outputs['arn'] = f'arn:aws:service:us-east-1:123456789012:{args.name}'
+        outputs['arn'] = f'arn:aws:service:eu-west-2:123456789012:{args.name}'
 
         # Add specific outputs based on resource type
         if 'aws:ec2/vpc:Vpc' in args.typ:
@@ -39,15 +39,15 @@ class MyMocks(pulumi.runtime.Mocks):
             outputs['enable_dns_hostnames'] = args.inputs.get('enable_dns_hostnames', True)
             outputs['enable_dns_support'] = args.inputs.get('enable_dns_support', True)
         elif 'aws:ec2/subnet:Subnet' in args.typ:
-            outputs['availability_zone'] = args.inputs.get('availability_zone', 'us-east-1a')
+            outputs['availability_zone'] = args.inputs.get('availability_zone', 'eu-west-2a')
             outputs['cidr_block'] = args.inputs.get('cidr_block', '10.0.0.0/24')
         elif 'aws:lb/loadBalancer:LoadBalancer' in args.typ:
-            outputs['dns_name'] = f'{args.name}.us-east-1.elb.amazonaws.com'
+            outputs['dns_name'] = f'{args.name}.eu-west-2.elb.amazonaws.com'
         elif 'aws:rds/cluster:Cluster' in args.typ:
-            outputs['endpoint'] = f'{args.name}.cluster.us-east-1.rds.amazonaws.com'
-            outputs['reader_endpoint'] = f'{args.name}.cluster-ro.us-east-1.rds.amazonaws.com'
+            outputs['endpoint'] = f'{args.name}.cluster.eu-west-2.rds.amazonaws.com'
+            outputs['reader_endpoint'] = f'{args.name}.cluster-ro.eu-west-2.rds.amazonaws.com'
         elif 'aws:sqs/queue:Queue' in args.typ:
-            outputs['url'] = f'https://sqs.us-east-1.amazonaws.com/123456789012/{args.name}'
+            outputs['url'] = f'https://sqs.eu-west-2.amazonaws.com/123456789012/{args.name}'
         elif 'aws:cloudwatch/dashboard:Dashboard' in args.typ:
             outputs['dashboard_name'] = args.inputs.get('dashboard_name', args.name)
 

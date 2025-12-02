@@ -183,10 +183,10 @@ class TapStack(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(parent=self)
         )
 
-        # Create cross-region read replica (us-east-2)
-        us_east_2_provider = aws.Provider(
-            "us-east-2-provider",
-            region="us-east-2",
+        # Create cross-region read replica (eu-west-1)
+        eu_west_1_provider = aws.Provider(
+            "eu-west-1-provider",
+            region="eu-west-1",
             opts=pulumi.ResourceOptions(parent=self)
         )
 
@@ -428,7 +428,7 @@ class TapStack(pulumi.ComponentResource):
         self.blue_rds_endpoint = self.blue_aurora_cluster.endpoint
         self.green_rds_endpoint = self.green_aurora_cluster.endpoint
         self.dashboard_url = pulumi.Output.concat(
-            "https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=",
+            "https://console.aws.amazon.com/cloudwatch/home?region=eu-west-2#dashboards:name=",
             self.dashboard.dashboard_name
         )
 
@@ -459,16 +459,18 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Create subnets
-        availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
+        availability_zones = ["eu-west-2a", "eu-west-2b", "eu-west-2c"]
         public_subnets = []
         private_subnets = []
         nat_gateways = []
+
+        # Parse base octets for CIDR calculation
+        base_octets = cidr.split('/')[0].split('.')
 
         for i, az in enumerate(availability_zones):
             # Calculate subnet CIDR blocks (non-overlapping /20 subnets)
             # Public: 10.x.0.0/20, 10.x.16.0/20, 10.x.32.0/20
             # Private: 10.x.128.0/20, 10.x.144.0/20, 10.x.160.0/20
-            base_octets = cidr.split('/')[0].split('.')
             public_third_octet = i * 16
             private_third_octet = 128 + (i * 16)
 
@@ -495,23 +497,23 @@ class TapStack(pulumi.ComponentResource):
             )
             private_subnets.append(private_subnet)
 
-            # Elastic IP for NAT Gateway
-            eip = aws.ec2.Eip(
-                f"{environment}-nat-eip-{i}-{self.environment_suffix}",
-                domain="vpc",
-                tags={"Name": f"{environment}-nat-eip-{i}-{self.environment_suffix}"},
-                opts=pulumi.ResourceOptions(parent=self)
-            )
+        # Create a single NAT Gateway per VPC (cost optimization and EIP quota management)
+        # Use the first public subnet for the NAT Gateway
+        eip = aws.ec2.Eip(
+            f"{environment}-nat-eip-{self.environment_suffix}",
+            domain="vpc",
+            tags={"Name": f"{environment}-nat-eip-{self.environment_suffix}"},
+            opts=pulumi.ResourceOptions(parent=self)
+        )
 
-            # NAT Gateway
-            nat = aws.ec2.NatGateway(
-                f"{environment}-nat-{i}-{self.environment_suffix}",
-                subnet_id=public_subnet.id,
-                allocation_id=eip.id,
-                tags={"Name": f"{environment}-nat-{i}-{self.environment_suffix}"},
-                opts=pulumi.ResourceOptions(parent=self)
-            )
-            nat_gateways.append(nat)
+        nat = aws.ec2.NatGateway(
+            f"{environment}-nat-{self.environment_suffix}",
+            subnet_id=public_subnets[0].id,
+            allocation_id=eip.id,
+            tags={"Name": f"{environment}-nat-{self.environment_suffix}"},
+            opts=pulumi.ResourceOptions(parent=self)
+        )
+        nat_gateways.append(nat)
 
         # Create route tables
         public_route_table = aws.ec2.RouteTable(
@@ -537,7 +539,8 @@ class TapStack(pulumi.ComponentResource):
                 opts=pulumi.ResourceOptions(parent=self)
             )
 
-        for i, (subnet, nat) in enumerate(zip(private_subnets, nat_gateways)):
+        # All private subnets use the single NAT Gateway
+        for i, subnet in enumerate(private_subnets):
             private_route_table = aws.ec2.RouteTable(
                 f"{environment}-private-rt-{i}-{self.environment_suffix}",
                 vpc_id=vpc.id,
@@ -737,14 +740,14 @@ class TapStack(pulumi.ComponentResource):
                             "sqs:GetQueueAttributes",
                             "sqs:SendMessage"
                         ],
-                        "Resource": f"arn:aws:sqs:us-east-1:*:payment-*-{self.environment_suffix}"
+                        "Resource": f"arn:aws:sqs:eu-west-2:*:payment-*-{self.environment_suffix}"
                     },
                     {
                         "Effect": "Allow",
                         "Action": [
                             "secretsmanager:GetSecretValue"
                         ],
-                        "Resource": f"arn:aws:secretsmanager:us-east-1:*:secret:{environment}-db-credentials-*"
+                        "Resource": f"arn:aws:secretsmanager:eu-west-2:*:secret:{environment}-db-credentials-*"
                     },
                     {
                         "Effect": "Allow",
@@ -865,7 +868,7 @@ class TapStack(pulumi.ComponentResource):
                             ],
                             "period": 300,
                             "stat": "Average",
-                            "region": "us-east-1",
+                            "region": "eu-west-2",
                             "title": "ALB Metrics"
                         }
                     },
@@ -878,7 +881,7 @@ class TapStack(pulumi.ComponentResource):
                             ],
                             "period": 300,
                             "stat": "Average",
-                            "region": "us-east-1",
+                            "region": "eu-west-2",
                             "title": "RDS Metrics"
                         }
                     },
@@ -892,7 +895,7 @@ class TapStack(pulumi.ComponentResource):
                             ],
                             "period": 300,
                             "stat": "Sum",
-                            "region": "us-east-1",
+                            "region": "eu-west-2",
                             "title": "Lambda Metrics"
                         }
                     }
@@ -1089,7 +1092,7 @@ class TapStack(pulumi.ComponentResource):
         blue_s3_endpoint = aws.ec2.VpcEndpoint(
             f"blue-s3-endpoint-{self.environment_suffix}",
             vpc_id=self.blue_vpc["vpc"].id,
-            service_name="com.amazonaws.us-east-1.s3",
+            service_name="com.amazonaws.eu-west-2.s3",
             vpc_endpoint_type="Gateway",
             route_table_ids=[],
             tags={"Name": f"blue-s3-endpoint-{self.environment_suffix}"},
@@ -1100,7 +1103,7 @@ class TapStack(pulumi.ComponentResource):
         green_s3_endpoint = aws.ec2.VpcEndpoint(
             f"green-s3-endpoint-{self.environment_suffix}",
             vpc_id=self.green_vpc["vpc"].id,
-            service_name="com.amazonaws.us-east-1.s3",
+            service_name="com.amazonaws.eu-west-2.s3",
             vpc_endpoint_type="Gateway",
             route_table_ids=[],
             tags={"Name": f"green-s3-endpoint-{self.environment_suffix}"},
@@ -1111,7 +1114,7 @@ class TapStack(pulumi.ComponentResource):
         blue_dynamodb_endpoint = aws.ec2.VpcEndpoint(
             f"blue-dynamodb-endpoint-{self.environment_suffix}",
             vpc_id=self.blue_vpc["vpc"].id,
-            service_name="com.amazonaws.us-east-1.dynamodb",
+            service_name="com.amazonaws.eu-west-2.dynamodb",
             vpc_endpoint_type="Gateway",
             route_table_ids=[],
             tags={"Name": f"blue-dynamodb-endpoint-{self.environment_suffix}"},
@@ -1122,7 +1125,7 @@ class TapStack(pulumi.ComponentResource):
         green_dynamodb_endpoint = aws.ec2.VpcEndpoint(
             f"green-dynamodb-endpoint-{self.environment_suffix}",
             vpc_id=self.green_vpc["vpc"].id,
-            service_name="com.amazonaws.us-east-1.dynamodb",
+            service_name="com.amazonaws.eu-west-2.dynamodb",
             vpc_endpoint_type="Gateway",
             route_table_ids=[],
             tags={"Name": f"green-dynamodb-endpoint-{self.environment_suffix}"},
@@ -1133,7 +1136,7 @@ class TapStack(pulumi.ComponentResource):
         blue_secrets_endpoint = aws.ec2.VpcEndpoint(
             f"blue-secrets-endpoint-{self.environment_suffix}",
             vpc_id=self.blue_vpc["vpc"].id,
-            service_name="com.amazonaws.us-east-1.secretsmanager",
+            service_name="com.amazonaws.eu-west-2.secretsmanager",
             vpc_endpoint_type="Interface",
             subnet_ids=[subnet.id for subnet in self.blue_vpc["private_subnets"]],
             security_group_ids=[self.lambda_security_group_blue.id],
@@ -1146,7 +1149,7 @@ class TapStack(pulumi.ComponentResource):
         green_secrets_endpoint = aws.ec2.VpcEndpoint(
             f"green-secrets-endpoint-{self.environment_suffix}",
             vpc_id=self.green_vpc["vpc"].id,
-            service_name="com.amazonaws.us-east-1.secretsmanager",
+            service_name="com.amazonaws.eu-west-2.secretsmanager",
             vpc_endpoint_type="Interface",
             subnet_ids=[subnet.id for subnet in self.green_vpc["private_subnets"]],
             security_group_ids=[self.lambda_security_group_green.id],
