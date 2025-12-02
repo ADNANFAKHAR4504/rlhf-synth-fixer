@@ -596,8 +596,16 @@ def handler(event, context):
         self.api_deployment = aws.apigateway.Deployment(
             f"zerotrust-api-deployment-{environment_suffix}",
             rest_api=self.api.id,
-            stage_name="prod",
             opts=pulumi.ResourceOptions(parent=self, depends_on=[self.api_integration])
+        )
+
+        # Create API Gateway Stage (stage_name was deprecated in Deployment)
+        self.api_stage = aws.apigateway.Stage(
+            f"zerotrust-api-stage-{environment_suffix}",
+            rest_api=self.api.id,
+            deployment=self.api_deployment.id,
+            stage_name="prod",
+            opts=pulumi.ResourceOptions(parent=self)
         )
 
         # Create security group for EC2 instances
