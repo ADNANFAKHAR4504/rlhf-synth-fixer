@@ -1,0 +1,3 @@
+config:
+  aws:region: us-east-1
+  ecs-optimization-p8y1m9z7:costCenter: engineering
