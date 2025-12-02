@@ -1,0 +1,4 @@
+encryptionsalt: v1:6MuOpmC7lw0=:v1:0zOLJBc9L57GbLWi:m88ZeGY7ZtPPYsPhyIj+rpOrov2H1w==
+config:
+  aws:region: us-east-1
+  iam-compliance-analyzer:environmentSuffix: synthz3o6s0c1
