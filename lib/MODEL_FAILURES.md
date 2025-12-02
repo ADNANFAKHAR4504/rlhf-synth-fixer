@@ -9,6 +9,7 @@ This document catalogs common failure patterns when LLMs generate CloudFormation
 ### Failure 1.1: Wildcard Egress Rules (CRITICAL)
 
 **Incorrect Pattern**:
+
 ```json
 "LambdaSecurityGroup": {
   "Properties": {
@@ -21,11 +22,13 @@ This document catalogs common failure patterns when LLMs generate CloudFormation
 ```
 
 **Why This Fails**:
+
 - Violates PCI-DSS requirement: "All security groups must have explicit egress rules with no 0.0.0.0/0 destinations"
 - Lambda can egress to any internet destination, defeating network isolation
 - Attack vector: Compromised Lambda function could exfiltrate data to attacker-controlled endpoints
 
 **Correct Pattern**:
+
 ```json
 "LambdaSecurityGroup": {
   "Properties": {
@@ -45,6 +48,7 @@ This document catalogs common failure patterns when LLMs generate CloudFormation
 ### Failure 1.2: Missing Egress Rules
 
 **Incorrect Pattern**:
+
 ```json
 "LambdaSecurityGroup": {
   "Properties": {
@@ -54,12 +58,14 @@ This document catalogs common failure patterns when LLMs generate CloudFormation
 ```
 
 **Why This Fails**:
+
 - CloudFormation creates default egress rule: all traffic to 0.0.0.0/0
 - Violates requirement for explicit egress rules
 - Difficult to audit (implicit rule not visible in template)
 
 **Correct Pattern**:
 Always explicitly define `SecurityGroupEgress`, even if empty:
+
 ```json
 "KMSEndpointSecurityGroup": {
   "Properties": {
@@ -75,6 +81,7 @@ Always explicitly define `SecurityGroupEgress`, even if empty:
 ### Failure 2.1: Missing Service Principal Access
 
 **Incorrect Pattern**:
+
 ```json
 "KMSKey": {
   "Properties": {
@@ -89,11 +96,13 @@ Always explicitly define `SecurityGroupEgress`, even if empty:
 ```
 
 **Why This Fails**:
+
 - S3 service cannot use key for encryption (no service principal)
 - CloudWatch Logs cannot encrypt flow logs
 - Lambda can access via IAM but S3 bucket encryption fails
 
 **Correct Pattern**:
+
 ```json
 "KeyPolicy": {
   "Statement": [
@@ -121,6 +130,7 @@ Always explicitly define `SecurityGroupEgress`, even if empty:
 ### Failure 2.2: Overly Permissive Key Policy
 
 **Incorrect Pattern**:
+
 ```json
 "KeyPolicy": {
   "Statement": [{
@@ -132,6 +142,7 @@ Always explicitly define `SecurityGroupEgress`, even if empty:
 ```
 
 **Why This Fails**:
+
 - Violates least privilege principle
 - Any AWS principal can use the key
 - PCI-DSS compliance violation
@@ -143,6 +154,7 @@ Always explicitly define `SecurityGroupEgress`, even if empty:
 ### Failure 3.1: Missing Encryption Enforcement
 
 **Incorrect Pattern**:
+
 ```json
 "DataBucket": {
   "Properties": {
@@ -158,11 +170,13 @@ Always explicitly define `SecurityGroupEgress`, even if empty:
 ```
 
 **Why This Fails**:
+
 - Bucket encryption is default, not enforced
 - Clients can upload unencrypted objects if they explicitly disable encryption
 - PCI-DSS violation: encryption must be mandatory
 
 **Correct Pattern**:
+
 ```json
 "DataBucketPolicy": {
   "Properties": {
@@ -192,11 +206,13 @@ Always explicitly define `SecurityGroupEgress`, even if empty:
 No bucket policy, or policy without transport security condition.
 
 **Why This Fails**:
+
 - HTTP requests allowed (data transmitted in clear text)
 - Man-in-the-middle attacks possible
 - PCI-DSS violation: data must be encrypted in transit
 
 **Correct Pattern**:
+
 ```json
 {
   "Sid": "DenyInsecureTransport",
@@ -217,6 +233,7 @@ No bucket policy, or policy without transport security condition.
 ### Failure 4.1: Wildcard Actions
 
 **Incorrect Pattern**:
+
 ```json
 "LambdaExecutionRole": {
   "Policies": [{
@@ -229,11 +246,13 @@ No bucket policy, or policy without transport security condition.
 ```
 
 **Why This Fails**:
+
 - Lambda can delete buckets (s3:DeleteBucket)
 - Lambda can modify bucket policies (s3:PutBucketPolicy)
 - Violates least privilege principle
 
 **Correct Pattern**:
+
 ```json
 "Statement": [
   {
@@ -252,6 +271,7 @@ No bucket policy, or policy without transport security condition.
 ### Failure 4.2: Wildcard Resources
 
 **Incorrect Pattern**:
+
 ```json
 "Statement": [{
   "Action": ["kms:Decrypt", "kms:Encrypt"],
@@ -260,11 +280,13 @@ No bucket policy, or policy without transport security condition.
 ```
 
 **Why This Fails**:
+
 - Lambda can use any KMS key in account
 - Could decrypt data from other applications
 - PCI-DSS scope creep
 
 **Correct Pattern**:
+
 ```json
 "Statement": [{
   "Action": ["kms:Decrypt", "kms:Encrypt", "kms:GenerateDataKey"],
@@ -282,11 +304,13 @@ No bucket policy, or policy without transport security condition.
 Template creates VPC and Lambda but no VPC endpoints.
 
 **Why This Fails**:
+
 - Lambda in private subnet cannot reach S3 or KMS
 - NAT Gateway required (expensive, attack surface)
 - Violates requirement: "VPC endpoints for S3 and KMS to keep traffic within AWS network"
 
 **Correct Pattern**:
+
 ```json
 "S3VPCEndpoint": {
   "Type": "AWS::EC2::VPCEndpoint",
@@ -312,6 +336,7 @@ Template creates VPC and Lambda but no VPC endpoints.
 ### Failure 5.2: Wrong Endpoint Type
 
 **Incorrect Pattern**:
+
 ```json
 "S3VPCEndpoint": {
   "Properties": {
@@ -321,6 +346,7 @@ Template creates VPC and Lambda but no VPC endpoints.
 ```
 
 **Why This Fails**:
+
 - S3 Interface endpoints cost ~$7/month per AZ
 - Unnecessary expense (Gateway endpoint is free)
 - No benefit over Gateway for S3
@@ -332,6 +358,7 @@ Template creates VPC and Lambda but no VPC endpoints.
 ### Failure 6.1: Missing IAM Role
 
 **Incorrect Pattern**:
+
 ```json
 "VPCFlowLog": {
   "Properties": {
@@ -342,11 +369,13 @@ Template creates VPC and Lambda but no VPC endpoints.
 ```
 
 **Why This Fails**:
+
 - CloudFormation stack creation fails
 - Error: "LogDestination requires DeliverLogsPermissionArn"
 - VPC Flow Logs service needs permission to write to CloudWatch
 
 **Correct Pattern**:
+
 ```json
 "VPCFlowLogsRole": {
   "Type": "AWS::IAM::Role",
@@ -380,6 +409,7 @@ Template creates VPC and Lambda but no VPC endpoints.
 ### Failure 6.2: Incorrect Retention Configuration
 
 **Incorrect Pattern**:
+
 ```json
 "VPCFlowLogsLogGroup": {
   "Properties": {
@@ -389,11 +419,13 @@ Template creates VPC and Lambda but no VPC endpoints.
 ```
 
 **Why This Fails**:
+
 - PCI-DSS requires 90 days minimum
 - Compliance violation
 - Insufficient data for forensic analysis
 
 **Correct Pattern**:
+
 ```json
 "VPCFlowLogsLogGroup": {
   "Properties": {
@@ -410,6 +442,7 @@ Template creates VPC and Lambda but no VPC endpoints.
 ### Failure 7.1: Hardcoded Resource Names
 
 **Incorrect Pattern**:
+
 ```json
 "DataBucket": {
   "Properties": {
@@ -419,11 +452,13 @@ Template creates VPC and Lambda but no VPC endpoints.
 ```
 
 **Why This Fails**:
+
 - S3 bucket names must be globally unique
 - Parallel deployments fail (bucket name collision)
 - CI/CD cannot test multiple branches simultaneously
 
 **Correct Pattern**:
+
 ```json
 "DataBucket": {
   "Properties": {
@@ -440,11 +475,13 @@ Template creates VPC and Lambda but no VPC endpoints.
 Template has no parameters section, or EnvironmentSuffix parameter missing.
 
 **Why This Fails**:
+
 - Cannot deploy multiple environments
 - Test deployments overwrite production
 - Stack updates cause resource replacements
 
 **Correct Pattern**:
+
 ```json
 "Parameters": {
   "EnvironmentSuffix": {
@@ -462,6 +499,7 @@ Template has no parameters section, or EnvironmentSuffix parameter missing.
 ### Failure 8.1: Missing Required Tags
 
 **Incorrect Pattern**:
+
 ```json
 "VPC": {
   "Properties": {
@@ -471,11 +509,13 @@ Template has no parameters section, or EnvironmentSuffix parameter missing.
 ```
 
 **Why This Fails**:
+
 - PCI-DSS requires DataClassification and ComplianceScope tags
 - Cannot identify PCI resources programmatically
 - Compliance audit failure
 
 **Correct Pattern**:
+
 ```json
 "VPC": {
   "Properties": {
@@ -495,6 +535,7 @@ Template has no parameters section, or EnvironmentSuffix parameter missing.
 Some resources tagged "DataClassification=PCI", others "DataClassification=pci" (case mismatch).
 
 **Why This Fails**:
+
 - Tag-based filtering breaks (case-sensitive)
 - Cost allocation reports split across tag values
 - Inconsistent compliance reporting
@@ -506,6 +547,7 @@ Some resources tagged "DataClassification=PCI", others "DataClassification=pci" 
 ### Failure 9.1: Missing DeletionPolicy on KMS Key
 
 **Incorrect Pattern**:
+
 ```json
 "KMSKey": {
   "Type": "AWS::KMS::Key"
@@ -513,11 +555,13 @@ Some resources tagged "DataClassification=PCI", others "DataClassification=pci" 
 ```
 
 **Why This Fails**:
+
 - Stack deletion schedules KMS key for deletion (7-30 days)
 - Encrypted data becomes inaccessible during pending-deletion period
 - Data loss risk
 
 **Correct Pattern**:
+
 ```json
 "KMSKey": {
   "Type": "AWS::KMS::Key",
@@ -530,6 +574,7 @@ Some resources tagged "DataClassification=PCI", others "DataClassification=pci" 
 ### Failure 9.2: Incorrect DeletionPolicy on S3 Bucket
 
 **Incorrect Pattern**:
+
 ```json
 "DataBucket": {
   "DeletionPolicy": "Delete"
@@ -537,11 +582,13 @@ Some resources tagged "DataClassification=PCI", others "DataClassification=pci" 
 ```
 
 **Why This Fails**:
+
 - Payment card data deleted with stack
 - Regulatory compliance violation (data retention requirements)
 - Irrecoverable data loss
 
 **Correct Pattern**:
+
 ```json
 "DataBucket": {
   "Type": "AWS::S3::Bucket",
@@ -556,6 +603,7 @@ Some resources tagged "DataClassification=PCI", others "DataClassification=pci" 
 ### Failure 10.1: Lambda Not in Private Subnets
 
 **Incorrect Pattern**:
+
 ```json
 "DataValidationFunction": {
   "Properties": {
@@ -566,11 +614,13 @@ Some resources tagged "DataClassification=PCI", others "DataClassification=pci" 
 ```
 
 **Why This Fails**:
+
 - Lambda runs outside VPC (has internet access)
 - Cannot use VPC endpoints
 - Violates requirement: "Lambda functions must run in private subnets"
 
 **Correct Pattern**:
+
 ```json
 "DataValidationFunction": {
   "Properties": {
@@ -591,6 +641,7 @@ Some resources tagged "DataClassification=PCI", others "DataClassification=pci" 
 ### Failure 10.2: Wrong Lambda Memory Size
 
 **Incorrect Pattern**:
+
 ```json
 "DataValidationFunction": {
   "Properties": {
@@ -600,11 +651,13 @@ Some resources tagged "DataClassification=PCI", others "DataClassification=pci" 
 ```
 
 **Why This Fails**:
+
 - Requirement explicitly states "1GB memory"
 - Insufficient memory for payment card data processing
 - May cause Lambda timeout failures
 
 **Correct Pattern**:
+
 ```json
 "DataValidationFunction": {
   "Properties": {
@@ -620,6 +673,7 @@ Some resources tagged "DataClassification=PCI", others "DataClassification=pci" 
 ### Failure 11.1: Incorrect IAM Managed Policy
 
 **Incorrect Pattern**:
+
 ```json
 "ConfigRole": {
   "Properties": {
@@ -631,11 +685,13 @@ Some resources tagged "DataClassification=PCI", others "DataClassification=pci" 
 ```
 
 **Why This Fails**:
+
 - Policy does not exist (actual: service-role/AWS_ConfigRole)
 - Stack creation fails with InvalidParameterValueException
 - Common hallucination pattern
 
 **Correct Pattern**:
+
 ```json
 "ConfigRole": {
   "Properties": {
@@ -654,11 +710,12 @@ Some resources tagged "DataClassification=PCI", others "DataClassification=pci" 
 ConfigRole has AWS_ConfigRole policy but no bucket access policy.
 
 **Why This Fails**:
+
 - Config cannot write to S3 bucket
-- Config recorder fails to start
 - No compliance data collected
 
 **Correct Pattern**:
+
 ```json
 "ConfigRole": {
   "Properties": {
@@ -685,6 +742,7 @@ ConfigRole has AWS_ConfigRole policy but no bucket access policy.
 ### Failure 12.1: Attempting to Set in Template
 
 **Incorrect Pattern**:
+
 ```json
 "Metadata": {
   "AWS::CloudFormation::Interface": {
@@ -694,12 +752,14 @@ ConfigRole has AWS_ConfigRole policy but no bucket access policy.
 ```
 
 **Why This Fails**:
+
 - CloudFormation templates cannot enable termination protection
 - Property is ignored (no error, but not applied)
 - False sense of security
 
 **Correct Pattern**:
 Termination protection must be enabled via CLI or Console after stack creation:
+
 ```bash
 aws cloudformation update-termination-protection \
   --stack-name <stack-name> \
@@ -713,6 +773,7 @@ aws cloudformation update-termination-protection \
 ### Pattern 1: Security Group Self-References
 
 For resources that need to communicate bidirectionally:
+
 ```json
 "DatabaseSecurityGroup": {
   "Properties": {
@@ -727,18 +788,17 @@ For resources that need to communicate bidirectionally:
 ### Pattern 2: Conditional Resource Creation
 
 Create resources only when optional features enabled:
+
 ```json
 "Conditions": {
   "CreateConfigResources": { "Fn::Equals": [{ "Ref": "EnableConfig" }, "true"] }
-},
-"ConfigRecorder": {
-  "Condition": "CreateConfigResources"
 }
 ```
 
 ### Pattern 3: Cross-Stack References
 
 Export values for use in other stacks:
+
 ```json
 "Outputs": {
   "VPCId": {
@@ -752,6 +812,7 @@ Export values for use in other stacks:
 ### Failure 13.1: KMS Key Policy References IAM Role ARN
 
 **Incorrect Pattern**:
+
 ```json
 "KMSKey": {
   "Type": "AWS::KMS::Key",
@@ -788,6 +849,7 @@ Export values for use in other stacks:
 ```
 
 **Why This Fails**:
+
 - CloudFormation error: `Circular dependency between resources: [KMSKey, LambdaExecutionRole]`
 - KMSKey KeyPolicy references LambdaExecutionRole ARN (Fn::GetAtt)
 - LambdaExecutionRole IAM policy references KMSKey ARN (Fn::GetAtt)
@@ -856,14 +918,16 @@ Remove the Lambda principal from KMS key policy. IAM policies on the role are su
 ```
 
 **Learning Points**:
+
 1. **Never reference IAM roles in KMS key policies** - use IAM policies on the role instead
 2. **Only include service principals** in KMS key policies (s3.amazonaws.com, logs.amazonaws.com)
 3. **Always include account root principal** to allow IAM-based access
 4. **Test template deployment early** - circular dependencies block all deployments
 
 **Why IAM Policy is Sufficient**:
+
 - AWS KMS permission model combines key policy AND IAM policy
-- If account root principal has kms:* in key policy, IAM policies on roles in that account can grant access
+- If account root principal has kms:\* in key policy, IAM policies on roles in that account can grant access
 - No need to explicitly list every role ARN in the key policy
 
 **Impact**: This is a **critical blocker** that prevents template deployment entirely. Must be caught during validation.
