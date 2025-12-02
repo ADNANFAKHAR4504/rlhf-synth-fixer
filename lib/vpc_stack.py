@@ -115,7 +115,7 @@ class VpcStack(pulumi.ComponentResource):
 
             # NAT Gateway
             self.nat_gateway = aws.ec2.NatGateway(
-                f"nat-gateway-{environment_suffix}",
+g                f"nat-gateway-{environment_suffix}",
                 subnet_id=self.public_subnet.id,
                 allocation_id=self.eip.id,
                 tags={**tags, "Name": f"nat-gateway-{environment_suffix}"},
@@ -178,7 +178,7 @@ class VpcStack(pulumi.ComponentResource):
                     protocol="tcp",
                     from_port=443,
                     to_port=443,
-                    source_security_group_id=self.lambda_sg.id,
+                    security_groups=[self.lambda_sg.id],
                     description="Allow HTTPS from Lambda functions"
                 )
             ],
