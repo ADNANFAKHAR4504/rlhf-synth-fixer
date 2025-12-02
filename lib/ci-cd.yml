@@ -1,7 +1,7 @@
 # CI/CD Pipeline Configuration
-# This workflow demonstrates a multi-account, multi-stage CodePipeline for CDK applications
+# This workflow demonstrates a multi-account, multi-stage pipeline for Pulumi applications
 
-name: Multi-Stage Pipeline
+name: Multi-Stage Pulumi Pipeline
 
 on:
   workflow_dispatch:
@@ -12,6 +12,7 @@ on:
 
 env:
   AWS_REGION: us-east-1
+  PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
   DEV_ACCOUNT_ID: ${{ secrets.DEV_ACCOUNT_ID }}
   STAGING_ACCOUNT_ID: ${{ secrets.STAGING_ACCOUNT_ID }}
   PROD_ACCOUNT_ID: ${{ secrets.PROD_ACCOUNT_ID }}
@@ -56,30 +57,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run CDK Synth
-        run: npx cdk synth
+      - name: Run Pulumi Preview
+        run: npx pulumi preview --stack dev
 
-      - name: Run cdk-nag security checks
-        run: |
-          npm install -D cdk-nag
-          npx cdk synth --app "npx ts-node --prefer-ts-exts bin/*.ts"
-        continue-on-error: false
+      - name: Generate infrastructure templates
+        run: npx pulumi stack export --stack dev > pulumi-state.json
 
-      - name: Encrypt artifacts with KMS
-        run: |
-          # Create tarball of artifacts
-          tar -czf cdk-outputs.tar.gz -C cdk.out .
-          # Encrypt with AWS KMS
-          aws kms encrypt \
-            --key-id alias/github-actions-artifacts \
-            --plaintext fileb://cdk-outputs.tar.gz \
-            --output text \
-            --query CiphertextBlob > cdk-outputs.tar.gz.encrypted
-      - name: Upload encrypted artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: cdk-outputs
-          path: cdk-outputs.tar.gz.encrypted
+          name: pulumi-outputs
+          path: |
+            pulumi-state.json
+            Pulumi.*.yaml
 
   deploy-dev:
     name: Deploy to Dev
@@ -93,8 +83,7 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: cdk-outputs
-          path: cdk.out/
+          name: pulumi-outputs
 
       - name: Configure AWS Credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -111,13 +100,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Deploy to Dev with Change Set
-        run: |
-          npx cdk deploy --all --require-approval never --context environment=dev
-      - name: Verify Change Set
-        run: |
-          aws cloudformation describe-change-set --change-set-name cdk-deploy-change-set \
-            --stack-name MyStack-dev --query 'Changes[*].ResourceChange' || echo "No change set found"
+      - name: Deploy to Dev
+        run: npx pulumi up --stack dev --yes
+
+      - name: Export stack outputs
+        run: npx pulumi stack output --stack dev --json > dev-outputs.json
+
       - name: Send Slack notification
         if: always()
         run: |
@@ -145,8 +133,7 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: cdk-outputs
-          path: cdk.out/
+          name: pulumi-outputs
 
       - name: Assume cross-account role for Staging via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -165,8 +152,8 @@ jobs:
         run: npm ci
 
       - name: Deploy to Staging
-        run: |
-          npx cdk deploy --all --require-approval never --context environment=staging
+        run: npx pulumi up --stack staging --yes
+
       - name: Send Slack notification
         if: always()
         run: |
@@ -194,8 +181,7 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: cdk-outputs
-          path: cdk.out/
+          name: pulumi-outputs
 
       - name: Assume cross-account role for Production via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -214,8 +200,8 @@ jobs:
         run: npm ci
 
       - name: Deploy to Production
-        run: |
-          npx cdk deploy --all --require-approval never --context environment=prod
+        run: npx pulumi up --stack prod --yes
+
       - name: Send Slack notification
         if: always()
         run: |
