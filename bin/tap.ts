@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
-import { Tags } from 'aws-cdk-lib';
+import { CliCredentialsStackSynthesizer, Tags } from 'aws-cdk-lib';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import { TapStack } from '../lib/tap-stack';
 
@@ -76,4 +76,6 @@ new TapStack(app, stackName, stackConfig, {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION,
   },
+  // Use CLI credentials directly instead of bootstrap roles to avoid role assumption issues
+  synthesizer: new CliCredentialsStackSynthesizer(),
 });
