@@ -55,9 +55,9 @@
     },
     "SQSVisibilityTimeout": {
       "Type": "Number",
-      "Description": "SQS visibility timeout in seconds",
-      "Default": 30,
-      "MinValue": 0,
+      "Description": "SQS visibility timeout in seconds (must be at least 6x Lambda timeout, minimum 360)",
+      "Default": 420,
+      "MinValue": 360,
       "MaxValue": 43200
     },
     "PaymentAPIEndpoint": {
@@ -68,20 +68,6 @@
   },
 
   "Mappings": {
-    "RegionAMI": {
-      "us-east-1": {
-        "AmazonLinux2": "ami-0c02fb55b34e5f3c1"
-      },
-      "us-west-2": {
-        "AmazonLinux2": "ami-0873b46c45c11058d"
-      },
-      "eu-west-1": {
-        "AmazonLinux2": "ami-0d71ea30463e0ff8d"
-      },
-      "eu-central-1": {
-        "AmazonLinux2": "ami-0a1ee2fb28fe05df3"
-      }
-    },
     "EnvironmentConfig": {
       "dev": {
         "MinSize": "1",
@@ -618,7 +604,7 @@
       "Properties": {
         "LaunchTemplateName": {"Fn::Sub": "launch-template-${EnvironmentSuffix}"},
         "LaunchTemplateData": {
-          "ImageId": {"Fn::FindInMap": ["RegionAMI", {"Ref": "AWS::Region"}, "AmazonLinux2"]},
+          "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
           "InstanceType": {"Ref": "InstanceType"},
           "IamInstanceProfile": {
             "Arn": {"Fn::GetAtt": ["EC2InstanceProfile", "Arn"]}

@@ -87,9 +87,9 @@ describe('Payment Processing Stack CloudFormation Template - Unit Tests', () => 
       expect(rds).toBeDefined();
       const password = rds.Properties.MasterUserPassword;
       expect(password).toBeDefined();
-      // Should use Fn::Sub with dynamic reference
+      // Should use Fn::Sub with dynamic reference to Secrets Manager
       expect(password['Fn::Sub']).toBeDefined();
-      expect(password['Fn::Sub']).toContain('resolve:ssm-secure');
+      expect(password['Fn::Sub']).toContain('resolve:secretsmanager');
     });
 
     test('should have CPUAlarmThreshold parameter', () => {
@@ -113,8 +113,8 @@ describe('Payment Processing Stack CloudFormation Template - Unit Tests', () => 
       const param = template.Parameters.SQSVisibilityTimeout;
       expect(param).toBeDefined();
       expect(param.Type).toBe('Number');
-      expect(param.Default).toBe(30);
-      expect(param.MinValue).toBe(0);
+      expect(param.Default).toBe(420);
+      expect(param.MinValue).toBe(360);
       expect(param.MaxValue).toBe(43200);
     });
 
@@ -127,10 +127,19 @@ describe('Payment Processing Stack CloudFormation Template - Unit Tests', () => 
   });
 
   describe('Mappings', () => {
-    test('should have RegionAMI mapping', () => {
-      expect(template.Mappings.RegionAMI).toBeDefined();
-      expect(template.Mappings.RegionAMI['us-east-1']).toBeDefined();
-      expect(template.Mappings.RegionAMI['us-east-1'].AmazonLinux2).toBeDefined();
+    test('should use SSM Parameter Store for AMI (not RegionAMI mapping)', () => {
+      // Verify RegionAMI mapping does not exist
+      expect(template.Mappings.RegionAMI).toBeUndefined();
+      // Verify LaunchTemplate uses SSM dynamic reference for AMI
+      const launchTemplate = template.Resources.LaunchTemplate;
+      expect(launchTemplate).toBeDefined();
+      const launchTemplateData = launchTemplate.Properties.LaunchTemplateData;
+      expect(launchTemplateData).toBeDefined();
+      const imageId = launchTemplateData.ImageId;
+      expect(imageId).toBeDefined();
+      // Should use SSM dynamic reference
+      expect(typeof imageId).toBe('string');
+      expect(imageId).toContain('resolve:ssm:/aws/service/ami-amazon-linux-latest');
     });
 
     test('should have EnvironmentConfig mapping', () => {
