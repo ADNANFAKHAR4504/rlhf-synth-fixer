@@ -3,7 +3,3 @@ runtime:
   name: nodejs
 description: Optimized ECS Fargate deployment with cost-effective resource allocation
 main: lib/index.ts
-config:
-  environmentSuffix:
-    type: string
-    description: Environment suffix for resource naming (e.g., dev123, prod456). If not provided, will be extracted from stack name.
