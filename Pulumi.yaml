@@ -1,7 +1,5 @@
 name: TapStack
 runtime:
   name: python
-  options:
-    virtualenv: venv
+description: Pulumi infrastructure for TAP
 main: tap.py
-description: Multi-AZ data processing infrastructure with Kinesis, ElastiCache Redis, and RDS PostgreSQL
