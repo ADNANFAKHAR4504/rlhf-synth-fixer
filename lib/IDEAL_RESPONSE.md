@@ -304,7 +304,9 @@ class TapStack(cdk.Stack):
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             encryption=dynamodb.TableEncryption.CUSTOMER_MANAGED,
             encryption_key=self.kms_key,
-            point_in_time_recovery=True,
+            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=True
+            ),
             removal_policy=RemovalPolicy.DESTROY,
         )
 
@@ -352,13 +354,11 @@ class TapStack(cdk.Stack):
             "DataProcessorRole",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             description="Least-privilege role for data processing Lambda",
-        )
-
-        # Add VPC execution role
-        lambda_role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name(
-                "service-role/AWSLambdaVPCAccessExecutionRole"
-            )
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AWSLambdaVPCAccessExecutionRole"
+                )
+            ],
         )
 
         # Explicitly deny internet access via IAM

@@ -211,9 +211,9 @@ class TestVPCConfiguration(unittest.TestCase):
 class TestS3BucketsConfiguration(unittest.TestCase):
     """Test cases for S3 bucket configuration."""
 
-  def setUp(self):
+    def setUp(self):
         """Set up test fixtures."""
-    self.app = cdk.App()
+        self.app = cdk.App()
         self.env_suffix = "test"
 
     @mark.it("creates three S3 buckets")
@@ -399,7 +399,7 @@ class TestDynamoDBTable(unittest.TestCase):
             ])
         })
 
-    @mark.it("creates DynamoDB table with point-in-time recovery")
+    @mark.it("creates DynamoDB table with point-in-time recovery enabled")
     def test_dynamodb_table_pitr(self):
         """Test DynamoDB table has point-in-time recovery enabled."""
         stack = TapStack(
