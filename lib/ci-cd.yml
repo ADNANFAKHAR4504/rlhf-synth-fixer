@@ -1,6 +1,6 @@
 # CI/CD Pipeline Configuration for Pulumi Infrastructure
 # Multi-stage deployment pipeline for Pulumi TypeScript infrastructure
-
+---
 name: Pulumi Infrastructure - Deployment Pipeline
 
 'on':
@@ -406,4 +406,3 @@ jobs:
             -H 'Content-Type: application/json' \
             -d "{\"text\":\"$MSG\"}"
         continue-on-error: true
-
