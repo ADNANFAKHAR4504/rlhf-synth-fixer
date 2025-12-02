@@ -739,10 +739,18 @@ All major infrastructure components from metadata.json are now properly implemen
 - **Impact**: Test coverage now at 100% for statements, branches, functions, and lines.
 - **Status**: RESOLVED - Full test coverage achieved.
 
+### Error 28: Aurora PostgreSQL Version Not Available (RESOLVED)
+- **Error**: `Cannot find version 15.2 for aurora-postgresql (Service: Rds, Status Code: 400)`
+- **Root Cause**: Aurora PostgreSQL version 15.2 is not available in us-east-1 region.
+- **Fix**: Updated engine version from `VER_15_2` to `VER_15_4` in `lib/tap-stack.ts`.
+- **Impact**: Aurora cluster now deploys successfully with an available engine version.
+- **Status**: RESOLVED - Using Aurora PostgreSQL 15.4.
+
 ### Final Quality Metrics (Updated):
 - **Deployment Success**: Zero CloudFormation errors with CliCredentialsStackSynthesizer
 - **Test Coverage**: 100% (111 unit tests + 30 integration tests)
 - **CI/CD Compatibility**: Works with any AWS credentials without bootstrap role trust requirements
+- **Aurora PostgreSQL**: Version 15.4 (region-compatible)
 - **Training Quality Score**: 10/10
 
 ## Conclusion

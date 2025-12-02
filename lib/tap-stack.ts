@@ -172,7 +172,7 @@ export class TapStack extends cdk.Stack {
     const dbCluster = new rds.DatabaseCluster(this, 'AuroraDBCluster', {
       clusterIdentifier: `aurora-cluster-${stackSuffix}`,
       engine: rds.DatabaseClusterEngine.auroraPostgres({
-        version: rds.AuroraPostgresEngineVersion.VER_15_2,
+        version: rds.AuroraPostgresEngineVersion.VER_15_4,
       }),
       writer: rds.ClusterInstance.serverlessV2('WriterInstance', {
         instanceIdentifier: `aurora-writer-${stackSuffix}`,
