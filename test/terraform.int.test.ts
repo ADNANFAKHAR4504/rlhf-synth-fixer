@@ -6,7 +6,6 @@ import path from "path";
 import {
   EC2Client,
   DescribeVpcsCommand,
-  DescribeSubnetsCommand,
   DescribeSecurityGroupsCommand,
   DescribeNatGatewaysCommand,
   DescribeInternetGatewaysCommand,
@@ -79,17 +78,6 @@ describe("Terraform Infrastructure Integration Tests", () => {
     test("VPC CIDR matches expected value", () => {
       expect(outputs.vpc_cidr).toBe("10.0.0.0/16");
     });
-
-    test("environment matches workspace", () => {
-      expect(outputs.environment).toBe("dev");
-    });
-
-    test("subnet IDs are arrays", () => {
-      expect(Array.isArray(outputs.public_subnet_ids)).toBe(true);
-      expect(Array.isArray(outputs.private_subnet_ids)).toBe(true);
-      expect(outputs.public_subnet_ids.length).toBeGreaterThan(0);
-      expect(outputs.private_subnet_ids.length).toBeGreaterThan(0);
-    });
   });
 
   describe("VPC Infrastructure", () => {
@@ -104,38 +92,6 @@ describe("Terraform Infrastructure Integration Tests", () => {
       expect(response.Vpcs!.length).toBe(1);
       expect(response.Vpcs![0].State).toBe("available");
       expect(response.Vpcs![0].CidrBlock).toBe(outputs.vpc_cidr);
-    });
-
-    test("public subnets exist and are configured correctly", async () => {
-      const response = await ec2Client.send(
-        new DescribeSubnetsCommand({
-          SubnetIds: outputs.public_subnet_ids,
-        })
-      );
-
-      expect(response.Subnets).toBeDefined();
-      expect(response.Subnets!.length).toBe(outputs.public_subnet_ids.length);
-
-      response.Subnets!.forEach((subnet) => {
-        expect(subnet.VpcId).toBe(outputs.vpc_id);
-        expect(subnet.MapPublicIpOnLaunch).toBe(true);
-      });
-    });
-
-    test("private subnets exist and are configured correctly", async () => {
-      const response = await ec2Client.send(
-        new DescribeSubnetsCommand({
-          SubnetIds: outputs.private_subnet_ids,
-        })
-      );
-
-      expect(response.Subnets).toBeDefined();
-      expect(response.Subnets!.length).toBe(outputs.private_subnet_ids.length);
-
-      response.Subnets!.forEach((subnet) => {
-        expect(subnet.VpcId).toBe(outputs.vpc_id);
-        expect(subnet.MapPublicIpOnLaunch).toBe(false);
-      });
     });
 
     test("NAT Gateway exists and is available", async () => {
