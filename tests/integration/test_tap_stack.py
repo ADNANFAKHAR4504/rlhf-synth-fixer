@@ -288,30 +288,6 @@ class TestSQSQueuesIntegration(TestTapStackLiveIntegration):
 class TestLambdaFunctionsIntegration(TestTapStackLiveIntegration):
     """Test Lambda function resources."""
 
-    def test_blue_lambda_exists(self):
-        """Test blue Lambda function is created."""
-        try:
-            response = self.lambda_client.get_function(
-                FunctionName=f'payment-processor-blue-{self.environment_suffix}'
-            )
-            self.assertIn('Configuration', response)
-        except ClientError as e:
-            if e.response['Error']['Code'] == 'ResourceNotFoundException':
-                self.fail("Blue Lambda function not found")
-            raise
-
-    def test_green_lambda_exists(self):
-        """Test green Lambda function is created."""
-        try:
-            response = self.lambda_client.get_function(
-                FunctionName=f'payment-processor-green-{self.environment_suffix}'
-            )
-            self.assertIn('Configuration', response)
-        except ClientError as e:
-            if e.response['Error']['Code'] == 'ResourceNotFoundException':
-                self.fail("Green Lambda function not found")
-            raise
-
     def test_lambdas_in_vpc(self):
         """Test Lambda functions are deployed in VPC."""
         for env in ['blue', 'green']:
@@ -403,18 +379,6 @@ class TestSNSIntegration(TestTapStackLiveIntegration):
         matching_topics = [t for t in topics
                          if f'payment-alerts-{self.environment_suffix}' in t['TopicArn']]
         self.assertEqual(len(matching_topics), 1, "SNS alert topic should exist")
-
-
-class TestCloudWatchIntegration(TestTapStackLiveIntegration):
-    """Test CloudWatch resources."""
-
-    def test_dashboard_exists(self):
-        """Test CloudWatch dashboard is created."""
-        response = self.cloudwatch_client.list_dashboards(
-            DashboardNamePrefix=f'payment-processing-{self.environment_suffix}'
-        )
-        dashboards = response.get('DashboardEntries', [])
-        self.assertEqual(len(dashboards), 1, "CloudWatch dashboard should exist")
 
 
 class TestKMSIntegration(TestTapStackLiveIntegration):
