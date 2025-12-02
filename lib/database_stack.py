@@ -130,7 +130,6 @@ class DatabaseStack(pulumi.ComponentResource):
         self.db_cluster = aws.rds.Cluster(
             f"payment-db-cluster-{args.environment_suffix}",
             engine=aws.rds.EngineType.AURORA_POSTGRESQL,
-            engine_version="15.3",
             engine_mode="provisioned",
             database_name="paymentdb",
             master_username=self.db_username,
@@ -159,7 +158,6 @@ class DatabaseStack(pulumi.ComponentResource):
                 cluster_identifier=self.db_cluster.id,
                 instance_class="db.t3.medium",
                 engine=aws.rds.EngineType.AURORA_POSTGRESQL,
-                engine_version="15.3",
                 publicly_accessible=False,
                 tags={
                     **args.tags,
