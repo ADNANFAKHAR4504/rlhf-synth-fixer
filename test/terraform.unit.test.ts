@@ -145,21 +145,13 @@ describe("Terraform Infrastructure Unit Tests", () => {
 
   describe("Terraform Syntax Validation", () => {
     test("terraform validate passes", () => {
-      try {
-        execSync("terraform validate", { cwd: LIB_DIR, stdio: "pipe" });
-        expect(true).toBe(true);
-      } catch (error: any) {
-        fail(`Terraform validate failed: ${error.stdout?.toString() || error.message}`);
-      }
+      const result = execSync("terraform validate", { cwd: LIB_DIR, stdio: "pipe" });
+      expect(result).toBeDefined();
     });
 
     test("terraform fmt -check passes", () => {
-      try {
-        execSync("terraform fmt -check -recursive", { cwd: LIB_DIR, stdio: "pipe" });
-        expect(true).toBe(true);
-      } catch (error: any) {
-        fail(`Terraform fmt check failed - files need formatting`);
-      }
+      const result = execSync("terraform fmt -check -recursive", { cwd: LIB_DIR, stdio: "pipe" });
+      expect(result).toBeDefined();
     });
   });
 

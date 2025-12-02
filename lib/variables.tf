@@ -13,6 +13,7 @@ variable "project_name" {
 variable "environment_suffix" {
   description = "Unique suffix for resource naming to prevent conflicts"
   type        = string
+  default     = "dev"
 }
 
 variable "vpc_cidr" {
@@ -94,3 +95,4 @@ variable "db_name" {
   type        = string
   default     = "fintechdb"
 }
+
