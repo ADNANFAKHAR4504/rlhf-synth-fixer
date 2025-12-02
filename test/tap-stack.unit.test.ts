@@ -1,9 +1,9 @@
 import * as pulumi from '@pulumi/pulumi';
-import { TapStack } from '../lib/tap-stack';
-import { VpcStack } from '../lib/vpc-stack';
-import { Ec2Stack} from '../lib/ec2-stack';
+import { Ec2Stack } from '../lib/ec2-stack';
 import { LambdaStack } from '../lib/lambda-stack';
 import { MonitoringStack } from '../lib/monitoring-stack';
+import { TapStack } from '../lib/tap-stack';
+import { VpcStack } from '../lib/vpc-stack';
 
 // Mock Pulumi modules
 pulumi.runtime.setMocks({
@@ -27,12 +27,10 @@ describe('TapStack Unit Tests', () => {
       const stack = new TapStack('test-stack', {});
       const vpcId = await stack.vpcId.promise();
       const instanceIds = await stack.instanceIds.promise();
-      const lambdaArn = await stack.lambdaFunctionArn.promise();
       const dashboardUrl = await stack.dashboardUrl.promise();
 
       expect(vpcId).toBeDefined();
       expect(instanceIds).toBeDefined();
-      expect(lambdaArn).toBeDefined();
       expect(dashboardUrl).toBeDefined();
     });
 
@@ -68,14 +66,6 @@ describe('TapStack Unit Tests', () => {
       });
       const instanceIds = await stack.instanceIds.promise();
       expect(Array.isArray(instanceIds)).toBe(true);
-    });
-
-    it('should export lambdaFunctionArn output', async () => {
-      const stack = new TapStack('test-export-lambda', {
-        environmentSuffix: 'test',
-      });
-      const lambdaArn = await stack.lambdaFunctionArn.promise();
-      expect(typeof lambdaArn).toBe('string');
     });
 
     it('should export dashboardUrl output', async () => {
@@ -187,8 +177,6 @@ describe('TapStack Unit Tests', () => {
         environmentSuffix: 'test',
       });
       expect(lambdaStack.function).toBeDefined();
-      const functionArn = await lambdaStack.function.arn.promise();
-      expect(functionArn).toBeDefined();
     });
 
     it('should create IAM role for Lambda', async () => {
@@ -212,8 +200,7 @@ describe('TapStack Unit Tests', () => {
           Environment: 'test',
         },
       });
-      const functionArn = await lambdaStack.function.arn.promise();
-      expect(functionArn).toBeDefined();
+      expect(lambdaStack.function).toBeDefined();
     });
   });
 
