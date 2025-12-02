@@ -1,8 +1,0 @@
-config:
-  aws:region: us-east-1
-  TapStack:githubOwner: example-org
-  TapStack:githubRepo: example-repo
-  TapStack:githubBranch: main
-  TapStack:githubToken:
-    secure: v1:aZH0hXfJli+gPWaY:1XwtWPNrWiktPw6zDVn2eilNj783bihXDuFEBTj81Zi7A2oskbaH
-encryptionsalt: v1:LUqOYDN+pnA=:v1:FnUv8BgFlhYCIx9d:yCM+0/cU3sASKKxG8Jf/SoiRP1YmPQ==
