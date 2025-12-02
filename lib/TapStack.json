@@ -40,13 +40,6 @@
       "MaxLength": 16,
       "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
     },
-    "DBPassword": {
-      "Type": "String",
-      "Description": "Master password for RDS PostgreSQL",
-      "NoEcho": true,
-      "MinLength": 8,
-      "MaxLength": 41
-    },
     "CPUAlarmThreshold": {
       "Type": "Number",
       "Description": "CPU utilization alarm threshold percentage",
@@ -697,6 +690,20 @@
       }
     },
 
+    "DBPasswordSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {"Fn::Sub": "rds/${EnvironmentSuffix}/db-password"},
+        "Description": {"Fn::Sub": "RDS master password for ${EnvironmentSuffix} environment"},
+        "GenerateSecretString": {
+          "SecretStringTemplate": {"Fn::Sub": "{\"username\": \"${DBUsername}\"}"},
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
+        }
+      }
+    },
+
     "RDSInstance": {
       "Type": "AWS::RDS::DBInstance",
       "DeletionPolicy": "Delete",
@@ -706,7 +713,7 @@
         "Engine": "postgres",
         "EngineVersion": "14.15",
         "MasterUsername": {"Ref": "DBUsername"},
-        "MasterUserPassword": {"Ref": "DBPassword"},
+        "MasterUserPassword": {"Fn::Sub": "{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}"},
         "AllocatedStorage": "20",
         "StorageType": "gp3",
         "StorageEncrypted": true,

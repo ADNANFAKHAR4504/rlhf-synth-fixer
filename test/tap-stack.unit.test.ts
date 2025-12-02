@@ -79,13 +79,17 @@ describe('Payment Processing Stack CloudFormation Template - Unit Tests', () => 
       expect(param.AllowedPattern).toBe('[a-zA-Z][a-zA-Z0-9]*');
     });
 
-    test('should have DBPassword parameter', () => {
-      const param = template.Parameters.DBPassword;
-      expect(param).toBeDefined();
-      expect(param.Type).toBe('String');
-      expect(param.NoEcho).toBe(true);
-      expect(param.MinLength).toBe(8);
-      expect(param.MaxLength).toBe(41);
+    test('should use dynamic reference for RDS password (not DBPassword parameter)', () => {
+      // Verify DBPassword parameter does not exist
+      expect(template.Parameters.DBPassword).toBeUndefined();
+      // Verify RDS instance uses dynamic reference for password
+      const rds = template.Resources.RDSInstance;
+      expect(rds).toBeDefined();
+      const password = rds.Properties.MasterUserPassword;
+      expect(password).toBeDefined();
+      // Should use Fn::Sub with dynamic reference
+      expect(password['Fn::Sub']).toBeDefined();
+      expect(password['Fn::Sub']).toContain('resolve:ssm-secure');
     });
 
     test('should have CPUAlarmThreshold parameter', () => {
@@ -699,7 +703,7 @@ describe('Payment Processing Stack CloudFormation Template - Unit Tests', () => 
 
     test('should have expected number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(11);
+      expect(parameterCount).toBe(10);
     });
 
     test('should have expected number of outputs', () => {
