@@ -1,0 +1,10 @@
+encryptionsalt: v1:PhUxZJthRGs=:v1:uApi5dgDTbm4y20e:O6wzU2RP5T+vmP1Le2/zs9cU2ctVmA==
+config:
+  TapStack:environmentSuffix: dev
+  TapStack:environment: production
+  TapStack:project: tap-infrastructure
+  TapStack:costCenter: engineering
+  TapStack:enableDeletionProtection: "false"
+  TapStack:dbPassword:
+    secure: v1:9d39JGhdu35JSvdh:eq8fYyqM2VCB7A5ux/8iX+w9bkUPtSLl1fSZ
+  aws:defaultTags: '{"tags":{"Environment":"dev","Repository":"synth-101000956","Author":"ArpitPatidar","PRNumber":"unknown","Team":"synth","CreatedAt":"2025-12-02T06:57:58Z","ManagedBy":"pulumi"}}'
