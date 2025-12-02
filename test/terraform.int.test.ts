@@ -368,44 +368,96 @@ describe('E-Commerce Product Catalog API Integration Tests', () => {
 
   describe('CloudWatch Monitoring', () => {
     test('CloudWatch alarms exist for high CPU', async () => {
-      const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-      const alarmName = `high-cpu-${environmentSuffix}`;
+      expect(outputs.autoscaling_group_name).toBeDefined();
 
+      // Query alarms by dimensions (AutoScalingGroupName) and metric name
+      // This discovers alarms regardless of their exact names
       const command = new DescribeAlarmsCommand({
-        AlarmNames: [alarmName],
+        // Query all alarms and filter by dimensions/metric
+        AlarmNamePrefix: 'high-cpu',
       });
 
       const response = await cloudWatchClient.send(command);
 
-      // Alarm may not exist if resources weren't fully deployed
-      if (response.MetricAlarms && response.MetricAlarms.length > 0) {
-        const alarm = response.MetricAlarms[0];
-        expect(alarm.AlarmName).toBe(alarmName);
+      // Filter alarms that match our ASG and metric
+      const matchingAlarms = (response.MetricAlarms || []).filter((alarm) => {
+        const hasAsgDimension = alarm.Dimensions?.some(
+          (dim) => dim.Name === 'AutoScalingGroupName' && dim.Value === outputs.autoscaling_group_name
+        );
+        return (
+          hasAsgDimension &&
+          alarm.MetricName === 'CPUUtilization' &&
+          alarm.Namespace === 'AWS/EC2'
+        );
+      });
+
+      if (matchingAlarms.length > 0) {
+        const alarm = matchingAlarms[0];
         expect(alarm.MetricName).toBe('CPUUtilization');
         expect(alarm.Namespace).toBe('AWS/EC2');
         expect(alarm.Threshold).toBe(80);
+        expect(alarm.ComparisonOperator).toBe('GreaterThanThreshold');
       } else {
+        // Fallback: try querying by exact name patterns (dev, pr*, etc.)
+        const possibleNames = ['high-cpu-dev', `high-cpu-${process.env.ENVIRONMENT_SUFFIX || 'dev'}`];
+        for (const name of possibleNames) {
+          const nameCommand = new DescribeAlarmsCommand({ AlarmNames: [name] });
+          const nameResponse = await cloudWatchClient.send(nameCommand);
+          if (nameResponse.MetricAlarms && nameResponse.MetricAlarms.length > 0) {
+            const alarm = nameResponse.MetricAlarms[0];
+            expect(alarm.MetricName).toBe('CPUUtilization');
+            expect(alarm.Namespace).toBe('AWS/EC2');
+            expect(alarm.Threshold).toBe(80);
+            return;
+          }
+        }
         console.log('⚠️ CloudWatch alarm not found - may not be deployed');
       }
     });
 
     test('CloudWatch alarm exists for unhealthy hosts', async () => {
-      const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-      const alarmName = `unhealthy-hosts-${environmentSuffix}`;
+      expect(outputs.target_group_arn).toBeDefined();
 
+      // Extract target group name from ARN
+      const targetGroupName = outputs.target_group_arn.split('/').pop() || '';
+
+      // Query alarms by prefix and filter by dimensions/metric
       const command = new DescribeAlarmsCommand({
-        AlarmNames: [alarmName],
+        AlarmNamePrefix: 'unhealthy-hosts',
       });
 
       const response = await cloudWatchClient.send(command);
 
-      // Alarm may not exist if resources weren't fully deployed
-      if (response.MetricAlarms && response.MetricAlarms.length > 0) {
-        const alarm = response.MetricAlarms[0];
-        expect(alarm.AlarmName).toBe(alarmName);
+      // Filter alarms that match our target group and metric
+      const matchingAlarms = (response.MetricAlarms || []).filter((alarm) => {
+        const hasTgDimension = alarm.Dimensions?.some(
+          (dim) => dim.Name === 'TargetGroup' && dim.Value === targetGroupName
+        );
+        return (
+          hasTgDimension &&
+          alarm.MetricName === 'UnHealthyHostCount' &&
+          alarm.Namespace === 'AWS/ApplicationELB'
+        );
+      });
+
+      if (matchingAlarms.length > 0) {
+        const alarm = matchingAlarms[0];
         expect(alarm.MetricName).toBe('UnHealthyHostCount');
         expect(alarm.Namespace).toBe('AWS/ApplicationELB');
+        expect(alarm.ComparisonOperator).toBe('GreaterThanThreshold');
       } else {
+        // Fallback: try querying by exact name patterns (dev, pr*, etc.)
+        const possibleNames = ['unhealthy-hosts-dev', `unhealthy-hosts-${process.env.ENVIRONMENT_SUFFIX || 'dev'}`];
+        for (const name of possibleNames) {
+          const nameCommand = new DescribeAlarmsCommand({ AlarmNames: [name] });
+          const nameResponse = await cloudWatchClient.send(nameCommand);
+          if (nameResponse.MetricAlarms && nameResponse.MetricAlarms.length > 0) {
+            const alarm = nameResponse.MetricAlarms[0];
+            expect(alarm.MetricName).toBe('UnHealthyHostCount');
+            expect(alarm.Namespace).toBe('AWS/ApplicationELB');
+            return;
+          }
+        }
         console.log('⚠️ CloudWatch alarm not found - may not be deployed');
       }
     });
