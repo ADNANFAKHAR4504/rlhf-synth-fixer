@@ -58,8 +58,12 @@ resource "aws_kms_key" "main" {
 }
 
 resource "aws_kms_alias" "main" {
-  name          = "alias/payment-gateway-${var.environment_suffix}"
+  name          = "alias/payment-gateway-${var.environment_suffix}-${formatdate("YYYYMMDDhhmmss", timestamp())}"
   target_key_id = aws_kms_key.main.key_id
+
+  lifecycle {
+    ignore_changes = [name]
+  }
 }
 
 # VPC
@@ -192,7 +196,7 @@ resource "aws_vpc_endpoint_route_table_association" "s3_private" {
 
 # S3 Bucket for VPC Flow Logs
 resource "aws_s3_bucket" "flow_logs" {
-  bucket = "payment-gateway-flow-logs-${var.environment_suffix}"
+  bucket_prefix = "pg-flow-logs-${var.environment_suffix}-"
 
   tags = {
     Name = "payment-gateway-flow-logs-${var.environment_suffix}"
@@ -241,7 +245,7 @@ resource "aws_flow_log" "main" {
 
 # S3 Bucket for Static Assets
 resource "aws_s3_bucket" "static_assets" {
-  bucket = "payment-gateway-static-assets-${var.environment_suffix}"
+  bucket_prefix = "pg-static-${var.environment_suffix}-"
 
   tags = {
     Name = "payment-gateway-static-assets-${var.environment_suffix}"
@@ -505,7 +509,7 @@ resource "aws_launch_template" "main" {
                       "collect_list": [
                         {
                           "file_path": "/var/log/messages",
-                          "log_group_name": "/aws/ec2/payment-gateway-${var.environment_suffix}",
+                          "log_group_name": "/aws/ec2/payment-gateway-${var.environment_suffix}-logs",
                           "log_stream_name": "{instance_id}"
                         }
                       ]
@@ -668,7 +672,7 @@ resource "aws_db_instance" "main" {
   identifier_prefix = "payment-gateway-${var.environment_suffix}-"
 
   engine            = "postgres"
-  engine_version    = "15.3"
+  engine_version    = "15.7"
   instance_class    = "db.t3.medium"
   allocated_storage = 100
   storage_type      = "gp3"
@@ -719,7 +723,7 @@ resource "aws_cloudwatch_metric_alarm" "rds_connections_high" {
 
 # CloudWatch Log Group for EC2
 resource "aws_cloudwatch_log_group" "ec2" {
-  name              = "/aws/ec2/payment-gateway-${var.environment_suffix}"
+  name_prefix       = "/aws/ec2/payment-gateway-${var.environment_suffix}-"
   retention_in_days = 7
 
   tags = {

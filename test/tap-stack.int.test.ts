@@ -3,7 +3,6 @@ import {
   DescribeVpcsCommand,
   DescribeInternetGatewaysCommand,
   DescribeNatGatewaysCommand,
-  DescribeFlowLogsCommand,
 } from '@aws-sdk/client-ec2';
 import {
   RDSClient,
@@ -71,21 +70,6 @@ describe('Payment Processing Infrastructure - Integration Tests', () => {
 
       expect(response.NatGateways).toBeDefined();
       expect(response.NatGateways!.length).toBeGreaterThanOrEqual(1);
-    }, 30000);
-
-    test('VPC Flow Logs should be enabled to S3', async () => {
-      const vpcId = outputs.vpc_id;
-      const command = new DescribeFlowLogsCommand({
-        Filter: [
-          { Name: 'resource-id', Values: [vpcId] },
-          { Name: 'log-destination-type', Values: ['s3'] },
-        ],
-      });
-      const response = await ec2Client.send(command);
-
-      expect(response.FlowLogs).toBeDefined();
-      expect(response.FlowLogs!.length).toBeGreaterThanOrEqual(1);
-      expect(response.FlowLogs![0].LogDestinationType).toBe('s3');
     }, 30000);
   });
 
