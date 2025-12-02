@@ -1,0 +1,13 @@
+aws_region                  = "us-east-2"
+environment                 = "dev"
+vpc_cidr                    = "10.0.0.0/16"
+ecs_cpu                     = 256
+ecs_memory                  = 512
+ecs_desired_count           = 1
+ecs_min_capacity            = 1
+ecs_max_capacity            = 3
+rds_instance_class          = "db.t3.micro"
+rds_allocated_storage       = 20
+rds_backup_retention_period = 7
+sns_email_endpoint          = "dev-alerts@company.com"
+enable_vpc_peering          = true
