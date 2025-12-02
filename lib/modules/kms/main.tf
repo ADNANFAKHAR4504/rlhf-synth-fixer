@@ -8,13 +8,13 @@ resource "aws_kms_key" "main" {
   tags = merge(
     var.common_tags,
     {
-      Name = "${var.environment}-${var.project_name}-kms"
+      Name = "${var.environment}-${var.project_name}-kms-key"
     }
   )
 }
 
 resource "aws_kms_alias" "main" {
-  name          = "alias/${var.environment}-${var.project_name}-kms"
+  name          = "alias/${var.environment}-${var.project_name}-kms-key"
   target_key_id = aws_kms_key.main.key_id
 }
 
