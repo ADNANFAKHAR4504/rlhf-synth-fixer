@@ -117,3 +117,45 @@ Create a complete CI/CD pipeline infrastructure using **Pulumi with TypeScript**
 - Unit tests for all infrastructure components
 - Documentation with deployment instructions
 - Pipeline URL and ECR repository URI as stack outputs
+
+## Implementation Notes
+
+### CI/CD Workflow Template (lib/ci-cd.yml)
+
+The `lib/ci-cd.yml` file is a **reference workflow template** demonstrating how to deploy this Pulumi infrastructure in a GitHub Actions CI/CD pipeline. It is **not an active workflow** for this repository. Users should:
+
+1. Copy this file to `.github/workflows/` in their target repository
+2. Configure the required GitHub secrets (see below)
+3. Adjust environment-specific settings as needed
+
+### Required GitHub Secrets Configuration
+
+The following secrets must be configured in your GitHub repository settings before using the CI/CD workflow:
+
+| Secret Name | Description |
+|-------------|-------------|
+| `GITHUB_OIDC_ROLE_ARN` | ARN of the IAM role for GitHub OIDC authentication |
+| `PULUMI_ACCESS_TOKEN` | Pulumi Cloud access token for state management |
+| `DEV_ACCOUNT_ID` | AWS account ID for development environment |
+| `STAGING_ACCOUNT_ID` | AWS account ID for staging environment |
+| `PROD_ACCOUNT_ID` | AWS account ID for production environment |
+| `SLACK_WEBHOOK_URL` | (Optional) Slack webhook URL for notifications |
+
+### CodePipeline GitHub Configuration
+
+The CodePipeline source stage uses placeholder GitHub credentials that **must be replaced** before deployment:
+
+```typescript
+configuration: {
+  Owner: 'example-owner',      // Replace with your GitHub username/org
+  Repo: 'example-repo',        // Replace with your repository name
+  Branch: 'main',              // Adjust branch as needed
+  OAuthToken: 'placeholder-token',  // Replace with GitHub PAT or use AWS Secrets Manager
+}
+```
+
+**Recommended**: Store the GitHub OAuth token in AWS Secrets Manager and reference it dynamically.
+
+### S3 Versioning Configuration
+
+The S3 bucket uses the `versioning` block configuration which is functional and supported. While AWS has introduced `aws_s3_bucket_versioning` as a separate resource in newer Terraform/provider versions, the inline `versioning` block in Pulumi remains fully operational and is the recommended approach for this implementation. No immediate migration is required.
