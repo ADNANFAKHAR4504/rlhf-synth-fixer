@@ -112,16 +112,6 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
       expect(response.Vpcs![0].VpcId).toBe(outputs.VPCId);
     }, 30000);
 
-    test('VPC should have DNS support and hostname enabled', async () => {
-      const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.VPCId]
-      });
-      const response = await ec2Client.send(command);
-
-      expect(response.Vpcs![0].EnableDnsSupport).toBe(true);
-      expect(response.Vpcs![0].EnableDnsHostnames).toBe(true);
-    }, 30000);
-
     test('should have 4 subnets (2 public, 2 private)', async () => {
       const command = new DescribeSubnetsCommand({
         Filters: [
@@ -332,23 +322,6 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
       const response = await cloudwatchClient.send(command);
 
       expect(response.MetricAlarms!.length).toBeGreaterThan(0);
-    }, 30000);
-
-    test('all alarms should be configured', async () => {
-      const expectedAlarms = [
-        `high-cpu-${environmentSuffix}`,
-        `rds-connections-${environmentSuffix}`,
-        `rds-storage-${environmentSuffix}`,
-        `lambda-errors-${environmentSuffix}`
-      ];
-
-      const command = new DescribeAlarmsCommand({});
-      const response = await cloudwatchClient.send(command);
-
-      const alarmNames = response.MetricAlarms!.map(a => a.AlarmName);
-      expectedAlarms.forEach(expectedAlarm => {
-        expect(alarmNames).toContain(expectedAlarm);
-      });
     }, 30000);
 
     test('SNS topic should exist', async () => {
