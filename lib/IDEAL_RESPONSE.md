@@ -1,6 +1,6 @@
 # IDEAL_RESPONSE - Serverless Webhook Processing System (Training Quality: 9)
 
-This document contains the ideal implementation for the serverless webhook processing system using Pulumi with Python, with production-ready enhancements.
+This document contains the ideal implementation for the serverless webhook processing system using Pulumi with Python, with production-ready enhancements
 
 ## Implementation Status
 
