@@ -375,7 +375,7 @@ describe("TapStack — Live Integration Tests", () => {
   });
 
   // 19
-  it(190) CloudWatch alarms exist that publish to the SNS topic", async () => {
+  it("190) CloudWatch alarms exist that publish to the SNS topic", async () => {
     const topicArn = outputs.AlarmTopicArn;
     const alarms = await retry(() => cw.send(new DescribeAlarmsCommand({})));
     const list = alarms.MetricAlarms || [];
