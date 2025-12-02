@@ -19,6 +19,8 @@ terraform {
       version = "~> 2.4"
     }
   }
+
+  backend "s3" {}
 }
 
 # =============================================================================
@@ -33,12 +35,6 @@ variable "env" {
     condition     = contains(["dev", "staging", "prod"], var.env)
     error_message = "Environment must be dev, staging, or prod"
   }
-}
-
-variable "aws_region" {
-  type        = string
-  description = "AWS region for deployment"
-  default     = "us-east-1"
 }
 
 variable "project_name" {
@@ -297,7 +293,7 @@ variable "database_name" {
 variable "master_username" {
   type        = string
   description = "Aurora master username"
-  default     = "admin"
+  default     = "dbadmin"
 }
 
 variable "instance_class" {
@@ -436,11 +432,7 @@ data "aws_availability_zones" "available" {
 
 data "aws_caller_identity" "current" {}
 
-# Mock SageMaker endpoint data source - in production this would reference an existing endpoint
-data "aws_sagemaker_endpoint" "moderation" {
-  count = 0 # Set to 1 when endpoint exists
-  name  = var.moderation_endpoint_name
-}
+
 
 # =============================================================================
 # LOCALS
@@ -490,7 +482,7 @@ locals {
   env_config = local.capacity_map[var.env]
 
   # Resource naming convention
-  name_prefix = "${var.project_name}-${var.env}"
+  name_prefix = "${var.project_name}-${var.env}-${var.pr_number}"
 
   # Common tags
   tags = merge(
@@ -526,6 +518,59 @@ resource "aws_kms_key" "main" {
 resource "aws_kms_alias" "main" {
   name          = "alias/${local.name_prefix}-main"
   target_key_id = aws_kms_key.main.key_id
+}
+
+resource "aws_kms_key_policy" "main" {
+  key_id = aws_kms_key.main.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${local.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${var.aws_region}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt*",
+          "kms:Decrypt*",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:Describe*"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.aws_region}:${local.account_id}:*"
+          }
+        }
+      },
+      {
+        Sid    = "Allow SNS and SQS"
+        Effect = "Allow"
+        Principal = {
+          Service = [
+            "sns.amazonaws.com",
+            "sqs.amazonaws.com"
+          ]
+        }
+        Action = [
+          "kms:GenerateDataKey*",
+          "kms:Decrypt"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
 }
 
 # =============================================================================
@@ -845,6 +890,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "content" {
     id     = "transition-to-ia"
     status = "Enabled"
 
+    filter {
+      prefix = ""
+    }
+
     transition {
       days          = var.lifecycle_transition_days
       storage_class = "STANDARD_IA"
@@ -1063,14 +1112,14 @@ resource "aws_elasticache_subnet_group" "redis" {
 }
 
 resource "aws_elasticache_replication_group" "redis" {
-  replication_group_id          = "${local.name_prefix}-redis"
-  replication_group_description = "Redis cluster for user preferences and trending content"
-  node_type                     = var.node_type
-  number_cache_clusters         = local.env_config.redis_nodes
-  port                          = 6379
-  parameter_group_name          = aws_elasticache_parameter_group.redis.name
-  subnet_group_name             = aws_elasticache_subnet_group.redis.name
-  security_group_ids            = [aws_security_group.redis.id]
+  replication_group_id = "${local.name_prefix}-redis"
+  description          = "Redis cluster for user preferences and trending content"
+  node_type            = var.node_type
+  num_cache_clusters   = local.env_config.redis_nodes
+  port                 = 6379
+  parameter_group_name = aws_elasticache_parameter_group.redis.name
+  subnet_group_name    = aws_elasticache_subnet_group.redis.name
+  security_group_ids   = [aws_security_group.redis.id]
 
   at_rest_encryption_enabled = true
   kms_key_id                 = aws_kms_key.main.arn
@@ -1127,16 +1176,35 @@ resource "aws_db_subnet_group" "aurora" {
   tags = local.tags
 }
 
+resource "aws_rds_cluster_parameter_group" "aurora" {
+  name        = "${local.name_prefix}-aurora-params"
+  family      = "aurora-postgresql15"
+  description = "Aurora PostgreSQL cluster parameter group"
+
+  parameter {
+    name  = "log_statement"
+    value = "ddl"
+  }
+
+  parameter {
+    name  = "effective_cache_size"
+    value = "393216"
+  }
+
+  tags = local.tags
+}
+
 resource "aws_rds_cluster" "aurora" {
-  cluster_identifier     = "${local.name_prefix}-aurora"
-  engine                 = "aurora-postgresql"
-  engine_mode            = "provisioned"
-  engine_version         = "15.4"
-  database_name          = var.database_name
-  master_username        = var.master_username
-  master_password        = random_password.aurora.result
-  db_subnet_group_name   = aws_db_subnet_group.aurora.name
-  vpc_security_group_ids = [aws_security_group.aurora.id]
+  cluster_identifier              = "${local.name_prefix}-aurora"
+  engine                          = "aurora-postgresql"
+  engine_mode                     = "provisioned"
+  engine_version                  = "15.14"
+  database_name                   = var.database_name
+  master_username                 = var.master_username
+  master_password                 = random_password.aurora.result
+  db_subnet_group_name            = aws_db_subnet_group.aurora.name
+  vpc_security_group_ids          = [aws_security_group.aurora.id]
+  db_cluster_parameter_group_name = aws_rds_cluster_parameter_group.aurora.name
 
   storage_encrypted     = true
   kms_key_id            = aws_kms_key.main.arn
@@ -1246,7 +1314,7 @@ locals {
     }
     email = {
       name = var.email_queue
-      fifo = true # FIFO queue for email to preserve order
+      fifo = false # Changed to standard to allow subscription to standard SNS topic
       filter_policy = jsonencode({
         notification_type = ["email"]
       })
@@ -1973,6 +2041,49 @@ resource "aws_iam_role" "lambda_moderator" {
   tags = local.tags
 }
 
+resource "aws_iam_role_policy" "lambda_moderator" {
+  name = "moderator-policy"
+  role = aws_iam_role.lambda_moderator.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "kinesis:DescribeStream",
+          "kinesis:GetShardIterator",
+          "kinesis:GetRecords",
+          "kinesis:ListShards"
+        ]
+        Resource = aws_kinesis_stream.interactions.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:Scan",
+          "dynamodb:GetItem"
+        ]
+        Resource = aws_dynamodb_table.rules.arn
+      },
+      {
+        Effect   = "Allow"
+        Action   = "sns:Publish"
+        Resource = aws_sns_topic.moderation.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}
+
 resource "aws_iam_role" "lambda_classifier" {
   name_prefix = "${local.name_prefix}-lambda-classifier-"
 
@@ -2164,6 +2275,35 @@ resource "aws_iam_role_policy" "lambda_notifier" {
         Effect   = "Allow"
         Action   = "secretsmanager:GetSecretValue"
         Resource = aws_secretsmanager_secret.redis_auth.arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "lambda_queue_consumer" {
+  name = "queue-consumer-policy"
+  role = aws_iam_role.lambda_queue_consumer.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes"
+        ]
+        Resource = [for q in aws_sqs_queue.notifications : q.arn]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:*:*:*"
       }
     ]
   })
@@ -2453,16 +2593,13 @@ resource "aws_apigatewayv2_route" "connect" {
 resource "aws_apigatewayv2_route" "disconnect" {
   api_id    = aws_apigatewayv2_api.websocket.id
   route_key = "$disconnect"
-
-  authorization_type = "AWS_IAM"
 }
 
 resource "aws_apigatewayv2_route" "interaction" {
   api_id    = aws_apigatewayv2_api.websocket.id
   route_key = "sendInteraction"
 
-  target             = "integrations/${aws_apigatewayv2_integration.validator.id}"
-  authorization_type = "AWS_IAM"
+  target = "integrations/${aws_apigatewayv2_integration.validator.id}"
 }
 
 resource "aws_apigatewayv2_integration" "validator" {
@@ -2479,8 +2616,8 @@ resource "aws_apigatewayv2_stage" "websocket" {
   auto_deploy = true
 
   default_route_settings {
-    throttle_rate_limit  = local.env_config.websocket_connections
-    throttle_burst_limit = local.env_config.websocket_connections * 2
+    throttling_rate_limit  = local.env_config.websocket_connections
+    throttling_burst_limit = local.env_config.websocket_connections * 2
   }
 
   tags = local.tags
@@ -2872,4 +3009,75 @@ output "security_groups" {
     aurora = aws_security_group.aurora.id
   }
   description = "Security group IDs"
+}
+
+output "kinesis_stream_name" {
+  value       = aws_kinesis_stream.interactions.name
+  description = "Kinesis stream name"
+}
+
+output "aurora_cluster_identifier" {
+  value       = aws_rds_cluster.aurora.cluster_identifier
+  description = "Aurora cluster identifier"
+}
+
+output "aurora_port" {
+  value       = aws_rds_cluster.aurora.port
+  description = "Aurora PostgreSQL port"
+}
+
+output "redis_port" {
+  value       = aws_elasticache_replication_group.redis.port
+  description = "Redis port"
+}
+
+output "eventbridge_rule_name" {
+  value       = aws_cloudwatch_event_rule.trending.name
+  description = "EventBridge rule name for trending schedule"
+}
+
+output "lambda_function_names" {
+  value = {
+    validator  = aws_lambda_function.validator.function_name
+    processor  = aws_lambda_function.processor.function_name
+    notifier   = aws_lambda_function.notifier.function_name
+    moderator  = aws_lambda_function.moderator.function_name
+    classifier = aws_lambda_function.classifier.function_name
+    trending   = aws_lambda_function.trending.function_name
+    webhook    = aws_lambda_function.webhook.function_name
+  }
+  description = "Lambda function names"
+}
+
+output "secrets_manager_secrets" {
+  value = {
+    aurora_credentials = aws_secretsmanager_secret.aurora.arn
+    redis_auth         = aws_secretsmanager_secret.redis_auth.arn
+  }
+  description = "Secrets Manager secret ARNs"
+}
+
+output "kms_key_ids" {
+  value = {
+    main = aws_kms_key.main.key_id
+  }
+  description = "KMS key IDs"
+}
+
+output "vpc_info" {
+  value = {
+    vpc_id             = aws_vpc.main.id
+    private_subnet_ids = aws_subnet.private[*].id
+    public_subnet_ids  = aws_subnet.public[*].id
+    cidr_block         = aws_vpc.main.cidr_block
+  }
+  description = "VPC information"
+}
+
+output "aurora_endpoints" {
+  value = {
+    writer = aws_rds_cluster.aurora.endpoint
+    reader = aws_rds_cluster.aurora.reader_endpoint
+  }
+  description = "Aurora cluster endpoints"
 }

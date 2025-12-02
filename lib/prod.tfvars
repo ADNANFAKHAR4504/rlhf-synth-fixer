@@ -18,3 +18,4 @@ max_capacity             = 8
 backup_retention_days    = 30
 log_retention_days       = 90
 alarm_threshold_messages = 2000
+pr_number                = "pr7709"
