@@ -2,7 +2,9 @@ import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
 const config = new pulumi.Config();
-const environmentSuffix = config.require('environmentSuffix');
+// Try to get environmentSuffix from Pulumi config, fall back to environment variable
+const environmentSuffix =
+  config.get('environmentSuffix') || process.env.ENVIRONMENT_SUFFIX || 'dev';
 const region = aws.config.region || 'us-east-1';
 
 // S3 bucket for storing compliance reports
