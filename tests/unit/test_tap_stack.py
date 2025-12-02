@@ -54,6 +54,27 @@ class MyMocks(pulumi.runtime.Mocks):
         return [f'{args.name}-id', outputs]
 
     def call(self, args: pulumi.runtime.MockCallArgs):
+        # Handle aws.get_region() call
+        if args.token == 'aws:index/getRegion:getRegion':
+            return {
+                'name': 'eu-west-1',
+                'description': 'Europe (Ireland)',
+                'endpoint': 'ec2.eu-west-1.amazonaws.com',
+            }
+        # Handle aws.get_availability_zones() call
+        if args.token == 'aws:index/getAvailabilityZones:getAvailabilityZones':
+            return {
+                'names': ['eu-west-1a', 'eu-west-1b', 'eu-west-1c'],
+                'zone_ids': ['euw1-az1', 'euw1-az2', 'euw1-az3'],
+                'id': 'eu-west-1',
+            }
+        # Handle aws.get_caller_identity() call
+        if args.token == 'aws:index/getCallerIdentity:getCallerIdentity':
+            return {
+                'account_id': '123456789012',
+                'arn': 'arn:aws:iam::123456789012:user/test',
+                'user_id': 'AIDAEXAMPLE',
+            }
         return {}
 
 
@@ -594,6 +615,47 @@ class TestMultiAZDeployment(unittest.TestCase):
         # Should have 3 public and 3 private subnets per VPC
         self.assertEqual(len(stack.blue_vpc['public_subnets']), 3)
         self.assertEqual(len(stack.blue_vpc['private_subnets']), 3)
+
+
+class TestAWSConfig(unittest.TestCase):
+    """Test AWS Config creation for compliance monitoring."""
+
+    def setUp(self):
+        """Reset mocked resources before each test."""
+        MockedResources.reset()
+
+    @pulumi.runtime.test
+    def test_aws_config_creates_resources(self):
+        """Test that _create_aws_config creates required resources."""
+        stack = TapStack('test-stack', 'config-test')
+        # Call the private method to create AWS Config resources
+        stack._create_aws_config()
+
+        # Verify that Config resources were created
+        config_resources = [r for r in MockedResources.resources
+                           if 'cfg' in r['type'] or 'config' in r['name'].lower()]
+        self.assertGreater(len(config_resources), 0)
+
+
+class TestVPCEndpoints(unittest.TestCase):
+    """Test VPC Endpoints creation for cost optimization."""
+
+    def setUp(self):
+        """Reset mocked resources before each test."""
+        MockedResources.reset()
+
+    @pulumi.runtime.test
+    def test_vpc_endpoints_creates_resources(self):
+        """Test that _create_vpc_endpoints creates VPC endpoint resources."""
+        stack = TapStack('test-stack', 'endpoint-test')
+        # Call the private method to create VPC Endpoints
+        stack._create_vpc_endpoints()
+
+        # Verify that VPC Endpoint resources were created
+        # Check for ec2/vpcEndpoint type (Pulumi resource type format)
+        endpoint_resources = [r for r in MockedResources.resources
+                             if 'endpoint' in r['name'].lower() and 'vpc' not in r['type'].lower() or 'vpcEndpoint' in r['type']]
+        self.assertGreater(len(endpoint_resources), 0)
 
 
 if __name__ == '__main__':
