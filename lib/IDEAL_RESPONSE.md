@@ -880,6 +880,16 @@ Resources:
                   - 'secretsmanager:GetSecretValue'
                   - 'secretsmanager:DescribeSecret'
                 Resource: !Ref DBSecret
+        - PolicyName: KMSS3AccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:GenerateDataKey'
+                  - 'kms:DescribeKey'
+                Resource: !Ref S3KMSKey
         - PolicyName: EC2RecoveryPolicy
           PolicyDocument:
             Version: '2012-10-17'

@@ -159,12 +159,22 @@ describe('TapStack Infrastructure - Integration Tests', () => {
       const testKey = `integration-write-${Date.now()}.txt`;
       const testData = `Test data written at ${new Date().toISOString()}`;
 
+      // First verify AWS CLI is available and IAM role is working
+      const setupResult = await executeSSMCommand(ec2Instance1Id, [
+        'aws --version',
+        'aws sts get-caller-identity',
+      ]);
+
+      if (setupResult.Status !== 'Success') {
+        const errorMsg = setupResult.StandardErrorContent || setupResult.StandardOutputContent || 'Unknown error';
+        throw new Error(`AWS CLI setup check failed: ${errorMsg}`);
+      }
+
       // EC2 writes to S3 using IAM role - write to file first, then upload
       const result = await executeSSMCommand(ec2Instance1Id, [
         `echo "${testData}" > /tmp/test-write.txt`,
-        `aws --version || echo "AWS CLI check"`,
-        `aws s3 cp /tmp/test-write.txt s3://${s3BucketName}/${testKey} --region ${region} || (echo "S3 upload failed" && cat /tmp/test-write.txt)`,
-        `aws s3 ls s3://${s3BucketName}/${testKey} --region ${region} || echo "S3 list check"`,
+        `aws s3 cp /tmp/test-write.txt s3://${s3BucketName}/${testKey} --region ${region} 2>&1`,
+        `aws s3 ls s3://${s3BucketName}/${testKey} --region ${region} 2>&1 || true`,
         `rm -f /tmp/test-write.txt`,
       ]);
 
@@ -173,29 +183,23 @@ describe('TapStack Infrastructure - Integration Tests', () => {
         throw new Error(`S3 write failed: ${errorMsg}`);
       }
       
-      // Check if upload succeeded by looking for the key in output or error
-      const output = (result.StandardOutputContent || '') + (result.StandardErrorContent || '');
-      if (!output.includes(testKey) && !output.includes('upload')) {
-        // Try to verify directly
-        try {
-          await s3Client.send(
-            new HeadObjectCommand({
-              Bucket: s3BucketName,
-              Key: testKey,
-            })
-          );
-        } catch (error: any) {
-          throw new Error(`S3 object not found after upload. Error: ${error.message}. SSM output: ${output}`);
-        }
-      }
+      // Check if upload succeeded - wait a moment for eventual consistency
+      await new Promise(resolve => setTimeout(resolve, 3000));
 
       // Verify object exists and is encrypted
-      const headResponse = await s3Client.send(
-        new HeadObjectCommand({
-          Bucket: s3BucketName,
-          Key: testKey,
-        })
-      );
+      let headResponse;
+      try {
+        headResponse = await s3Client.send(
+          new HeadObjectCommand({
+            Bucket: s3BucketName,
+            Key: testKey,
+          })
+        );
+      } catch (error: any) {
+        const output = (result.StandardOutputContent || '') + (result.StandardErrorContent || '');
+        throw new Error(`S3 object not found after upload. Error: ${error.message}. SSM output: ${output}`);
+      }
+
       expect(headResponse.ETag).toBeDefined();
       expect(headResponse.ServerSideEncryption).toBe('aws:kms');
     });
@@ -213,12 +217,12 @@ describe('TapStack Infrastructure - Integration Tests', () => {
       );
 
       // Wait a moment for S3 eventual consistency
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 3000));
 
       // EC2 reads from S3
       const result = await executeSSMCommand(ec2Instance1Id, [
-        `aws s3 cp s3://${s3BucketName}/${testKey} /tmp/test-read.txt --region ${region} || echo "S3 download failed"`,
-        `cat /tmp/test-read.txt || echo "File read failed"`,
+        `aws s3 cp s3://${s3BucketName}/${testKey} /tmp/test-read.txt --region ${region} 2>&1`,
+        `cat /tmp/test-read.txt 2>&1 || echo "File read failed"`,
         `rm -f /tmp/test-read.txt`,
       ]);
 
@@ -227,16 +231,16 @@ describe('TapStack Infrastructure - Integration Tests', () => {
         throw new Error(`S3 read failed: ${errorMsg}`);
       }
       
-      const output = result.StandardOutputContent || '';
+      const output = (result.StandardOutputContent || '') + (result.StandardErrorContent || '');
       if (!output.includes(testData)) {
         throw new Error(`Expected data "${testData}" not found in output: ${output}`);
       }
-      expect(result.StandardOutputContent).toContain(testData);
+      expect(output).toContain(testData);
     });
 
     test('EC2 instance should list S3 bucket contents', async () => {
       const result = await executeSSMCommand(ec2Instance1Id, [
-        `aws s3 ls s3://${s3BucketName}/ --region ${region} | head -5 || echo "S3 list check"`,
+        `aws s3 ls s3://${s3BucketName}/ --region ${region} 2>&1 | head -5 || true`,
       ]);
 
       if (result.Status !== 'Success') {
@@ -397,7 +401,7 @@ describe('TapStack Infrastructure - Integration Tests', () => {
 
       // EC2 should be able to list versions
       const result = await executeSSMCommand(ec2Instance1Id, [
-        `aws s3api list-object-versions --bucket ${s3BucketName} --prefix ${testKey} --region ${region} --query 'Versions[0].VersionId' --output text || echo "Version check"`,
+        `aws s3api list-object-versions --bucket ${s3BucketName} --prefix ${testKey} --region ${region} --query 'Versions[0].VersionId' --output text 2>&1 || true`,
       ]);
 
       if (result.Status !== 'Success') {
@@ -428,7 +432,7 @@ describe('TapStack Infrastructure - Integration Tests', () => {
       // EC2 writes encrypted data to S3 - write to file first, then upload
       const writeResult = await executeSSMCommand(ec2Instance1Id, [
         `echo "${testData}" > /tmp/encrypt-test.txt`,
-        `aws s3 cp /tmp/encrypt-test.txt s3://${s3BucketName}/${testKey} --region ${region} || echo "Upload failed"`,
+        `aws s3 cp /tmp/encrypt-test.txt s3://${s3BucketName}/${testKey} --region ${region} 2>&1`,
         `rm -f /tmp/encrypt-test.txt`,
       ]);
 
@@ -437,37 +441,24 @@ describe('TapStack Infrastructure - Integration Tests', () => {
         throw new Error(`S3 encryption write failed: ${errorMsg}`);
       }
       
+      // Wait for S3 eventual consistency
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
       // Verify upload succeeded by checking if object exists
-      let objectExists = false;
+      let headResponse;
       try {
-        await s3Client.send(
+        headResponse = await s3Client.send(
           new HeadObjectCommand({
             Bucket: s3BucketName,
             Key: testKey,
           })
         );
-        objectExists = true;
       } catch (error: any) {
-        if (error.name !== 'NotFound') {
-          throw error;
-        }
+        const output = (writeResult.StandardOutputContent || '') + (writeResult.StandardErrorContent || '');
+        throw new Error(`S3 object ${testKey} was not created. Error: ${error.message}. SSM output: ${output}`);
       }
-      
-      if (!objectExists) {
-        throw new Error(`S3 object ${testKey} was not created. SSM output: ${writeResult.StandardOutputContent || writeResult.StandardErrorContent}`);
-      }
-
-      // Wait for S3 eventual consistency
-      await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Verify encryption
-      const headResponse = await s3Client.send(
-        new HeadObjectCommand({
-          Bucket: s3BucketName,
-          Key: testKey,
-        })
-      );
-
       expect(headResponse.ServerSideEncryption).toBe('aws:kms');
       expect(headResponse.SSEKMSKeyId).toBeDefined();
     });
@@ -485,12 +476,12 @@ describe('TapStack Infrastructure - Integration Tests', () => {
       );
 
       // Wait for S3 eventual consistency
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 3000));
 
       // EC2 reads and decrypts
       const result = await executeSSMCommand(ec2Instance1Id, [
-        `aws s3 cp s3://${s3BucketName}/${testKey} /tmp/decrypt-test.txt --region ${region} || echo "Download failed"`,
-        `cat /tmp/decrypt-test.txt || echo "File read failed"`,
+        `aws s3 cp s3://${s3BucketName}/${testKey} /tmp/decrypt-test.txt --region ${region} 2>&1`,
+        `cat /tmp/decrypt-test.txt 2>&1 || echo "File read failed"`,
         `rm -f /tmp/decrypt-test.txt`,
       ]);
 
@@ -499,11 +490,11 @@ describe('TapStack Infrastructure - Integration Tests', () => {
         throw new Error(`S3 decrypt read failed: ${errorMsg}`);
       }
       
-      const output = result.StandardOutputContent || '';
+      const output = (result.StandardOutputContent || '') + (result.StandardErrorContent || '');
       if (!output.includes(testData)) {
         throw new Error(`Expected data "${testData}" not found. Output: ${output}`);
       }
-      expect(result.StandardOutputContent).toContain(testData);
+      expect(output).toContain(testData);
     });
   });
 
@@ -565,8 +556,8 @@ describe('TapStack Infrastructure - Integration Tests', () => {
 
       // EC2 processes and writes to S3
       const s3WriteResult = await executeSSMCommand(ec2Instance1Id, [
-        `aws s3 cp /tmp/workflow-input.json s3://${s3BucketName}/workflow-${workflowId}.json --region ${region} || echo "S3 upload failed"`,
-        `aws s3 ls s3://${s3BucketName}/workflow-${workflowId}.json --region ${region} || echo "S3 list check"`,
+        `aws s3 cp /tmp/workflow-input.json s3://${s3BucketName}/workflow-${workflowId}.json --region ${region} 2>&1`,
+        `aws s3 ls s3://${s3BucketName}/workflow-${workflowId}.json --region ${region} 2>&1 || true`,
       ]);
       
       if (s3WriteResult.Status !== 'Success') {
@@ -574,49 +565,42 @@ describe('TapStack Infrastructure - Integration Tests', () => {
         throw new Error(`S3 workflow write failed: ${errorMsg}`);
       }
       
-      // Verify upload succeeded
-      let uploadSucceeded = false;
-      const output = (s3WriteResult.StandardOutputContent || '') + (s3WriteResult.StandardErrorContent || '');
-      if (output.includes('workflow-') || output.includes('upload')) {
-        uploadSucceeded = true;
-      } else {
-        // Try direct verification
-        try {
-          await s3Client.send(
-            new HeadObjectCommand({
-              Bucket: s3BucketName,
-              Key: `workflow-${workflowId}.json`,
-            })
-          );
-          uploadSucceeded = true;
-        } catch (error: any) {
-          if (error.name !== 'NotFound') {
-            throw error;
-          }
-        }
+      // Wait for S3 eventual consistency
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // Verify upload succeeded by checking directly
+      let headObject;
+      try {
+        headObject = await s3Client.send(
+          new HeadObjectCommand({
+            Bucket: s3BucketName,
+            Key: `workflow-${workflowId}.json`,
+          })
+        );
+      } catch (error: any) {
+        const output = (s3WriteResult.StandardOutputContent || '') + (s3WriteResult.StandardErrorContent || '');
+        throw new Error(`S3 workflow upload failed. Error: ${error.message}. SSM output: ${output}`);
       }
       
-      if (!uploadSucceeded) {
+      if (!headObject) {
+        const output = (s3WriteResult.StandardOutputContent || '') + (s3WriteResult.StandardErrorContent || '');
         throw new Error(`S3 workflow upload failed. SSM output: ${output}`);
       }
-      
-      // Wait for S3 eventual consistency
-      await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Verify data in S3
-      const s3Object = await s3Client.send(
+      const s3GetObject = await s3Client.send(
         new GetObjectCommand({
           Bucket: s3BucketName,
           Key: `workflow-${workflowId}.json`,
         })
       );
-      const s3Content = await s3Object.Body!.transformToString();
+      const s3Content = await s3GetObject.Body!.transformToString();
       expect(s3Content).toContain('complete end-to-end workflow');
 
       // EC2 reads from S3 and processes
       const s3ReadResult = await executeSSMCommand(ec2Instance1Id, [
-        `aws s3 cp s3://${s3BucketName}/workflow-${workflowId}.json /tmp/workflow-process.json --region ${region} || echo "S3 download failed"`,
-        `cat /tmp/workflow-process.json || echo "File read failed"`,
+        `aws s3 cp s3://${s3BucketName}/workflow-${workflowId}.json /tmp/workflow-process.json --region ${region} 2>&1`,
+        `cat /tmp/workflow-process.json 2>&1 || echo "File read failed"`,
         `rm -f /tmp/workflow-input.json /tmp/workflow-process.json`,
       ]);
       
@@ -625,11 +609,11 @@ describe('TapStack Infrastructure - Integration Tests', () => {
         throw new Error(`S3 workflow read failed: ${errorMsg}`);
       }
       
-      const readOutput = s3ReadResult.StandardOutputContent || '';
+      const readOutput = (s3ReadResult.StandardOutputContent || '') + (s3ReadResult.StandardErrorContent || '');
       if (!readOutput.includes('complete end-to-end workflow')) {
         throw new Error(`Expected workflow data not found. Output: ${readOutput}`);
       }
-      expect(s3ReadResult.StandardOutputContent).toContain('complete end-to-end workflow');
+      expect(readOutput).toContain('complete end-to-end workflow');
 
       // Verify CloudWatch logs are being generated
       await new Promise(resolve => setTimeout(resolve, 15000));
@@ -653,11 +637,11 @@ describe('TapStack Infrastructure - Integration Tests', () => {
       // Test that EC2 can access S3, Secrets Manager, and CloudWatch
       const result = await executeSSMCommand(ec2Instance1Id, [
         // Test S3 access
-        `aws s3 ls s3://${s3BucketName}/ --region ${region} | head -1 || echo "S3 access test"`,
+        `aws s3 ls s3://${s3BucketName}/ --region ${region} 2>&1 | head -1 || true`,
         // Test Secrets Manager access
-        `aws secretsmanager describe-secret --secret-id ${dbSecretArn} --region ${region} --query ARN --output text || echo "Secrets Manager access test"`,
+        `aws secretsmanager describe-secret --secret-id ${dbSecretArn} --region ${region} --query ARN --output text 2>&1 || true`,
         // Test CloudWatch Logs access
-        `aws logs describe-log-groups --log-group-name-prefix /aws/ec2/ --region ${region} --max-items 1 --query 'logGroups[0].logGroupName' --output text || echo "CloudWatch Logs access test"`,
+        `aws logs describe-log-groups --log-group-name-prefix /aws/ec2/ --region ${region} --max-items 1 --query 'logGroups[0].logGroupName' --output text 2>&1 || true`,
       ]);
 
       if (result.Status !== 'Success') {
