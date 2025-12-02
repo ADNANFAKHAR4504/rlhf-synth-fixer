@@ -1,0 +1,4 @@
+encryptionsalt: v1:Tqw1pqUAr9c=:v1:Djwst35c3ikdtanU:5+y65wiLku+U3PBOEnxSeCxqNT4+kw==
+config:
+  TapStack:githubConnectionArn: arn:aws:codestar-connections:us-east-1:342597974367:connection/d87ad657-63f9-4ef9-8b1f-57ba217bf48b
+  TapStack:environmentSuffix: g1x4e1u1
