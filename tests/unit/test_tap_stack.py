@@ -166,16 +166,16 @@ class TestVPCCreation(unittest.TestCase):
         self.assertEqual(len(stack.green_vpc['private_subnets']), 3)
 
     @pulumi.runtime.test
-    def test_blue_vpc_has_nat_gateways(self):
-        """Test blue VPC has NAT gateways."""
+    def test_blue_vpc_has_nat_gateway(self):
+        """Test blue VPC has NAT gateway (single for cost optimization)."""
         stack = TapStack('test-stack', 'test')
-        self.assertEqual(len(stack.blue_vpc['nat_gateways']), 3)
+        self.assertEqual(len(stack.blue_vpc['nat_gateways']), 1)
 
     @pulumi.runtime.test
-    def test_green_vpc_has_nat_gateways(self):
-        """Test green VPC has NAT gateways."""
+    def test_green_vpc_has_nat_gateway(self):
+        """Test green VPC has NAT gateway (single for cost optimization)."""
         stack = TapStack('test-stack', 'test')
-        self.assertEqual(len(stack.green_vpc['nat_gateways']), 3)
+        self.assertEqual(len(stack.green_vpc['nat_gateways']), 1)
 
 
 class TestTransitGateway(unittest.TestCase):
