@@ -11,19 +11,19 @@ locals {
       ecs_task_count     = 1
       db_instance_class  = "db.t3.medium"
       log_retention_days = 7
-      vpc_cidr_base     = 10
+      vpc_cidr_base      = 10
     }
     staging = {
       ecs_task_count     = 2
       db_instance_class  = "db.r5.large"
       log_retention_days = 30
-      vpc_cidr_base     = 20
+      vpc_cidr_base      = 20
     }
     prod = {
       ecs_task_count     = 4
       db_instance_class  = "db.r5.xlarge"
       log_retention_days = 90
-      vpc_cidr_base     = 30
+      vpc_cidr_base      = 30
     }
   }
 
