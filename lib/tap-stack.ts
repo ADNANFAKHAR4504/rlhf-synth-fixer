@@ -259,6 +259,9 @@ export class TapStack extends cdk.Stack {
     const wafMetricSuffix =
       wafMetricSuffixBase.length > 0 ? wafMetricSuffixBase : 'stack';
 
+    // Note: CloudFront WAF WebACL must be created in us-east-1 region
+    // For CloudFront, we associate WAF via the distribution's webAclId property
+    // CfnWebACLAssociation does NOT work with CloudFront distributions
     const cloudFrontWebAcl = new wafv2.CfnWebACL(this, 'CloudFrontWebAcl', {
       name: `cloudfront-webacl-${stackSuffix}`.substring(0, 128),
       scope: 'CLOUDFRONT',
@@ -304,10 +307,14 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    new wafv2.CfnWebACLAssociation(this, 'CloudFrontWebAclAssociation', {
-      resourceArn: distribution.distributionArn,
-      webAclArn: cloudFrontWebAcl.attrArn,
-    });
+    // Associate WAF WebACL with CloudFront distribution using escape hatch
+    // This is required because CDK's Distribution construct doesn't expose webAclId directly
+    const cfnDistribution = distribution.node
+      .defaultChild as cloudfront.CfnDistribution;
+    cfnDistribution.addPropertyOverride(
+      'DistributionConfig.WebACLId',
+      cloudFrontWebAcl.attrArn
+    );
 
     // ECS Cluster
     const cluster = new ecs.Cluster(this, 'ECSCluster', {

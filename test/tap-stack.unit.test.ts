@@ -285,8 +285,10 @@ describe('TapStack', () => {
       });
     });
 
-    test('should associate web ACLs with CloudFront distribution and ALB', () => {
-      template.resourceCountIs('AWS::WAFv2::WebACLAssociation', 2);
+    test('should associate web ACL with ALB', () => {
+      // CloudFront WAF is associated via distribution's WebACLId property, not via CfnWebACLAssociation
+      // Only ALB uses CfnWebACLAssociation resource
+      template.resourceCountIs('AWS::WAFv2::WebACLAssociation', 1);
     });
   });
 

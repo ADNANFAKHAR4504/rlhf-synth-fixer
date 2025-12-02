@@ -670,7 +670,9 @@ describe('TapStack End-to-End Application Integration Tests', () => {
         }),
       });
       template.resourceCountIs('AWS::WAFv2::WebACL', 2);
-      template.resourceCountIs('AWS::WAFv2::WebACLAssociation', 2);
+      // CloudFront WAF is associated via distribution's WebACLId property, not via CfnWebACLAssociation
+      // Only ALB uses CfnWebACLAssociation resource
+      template.resourceCountIs('AWS::WAFv2::WebACLAssociation', 1);
       console.log(
         '    CDN and static asset storage deployed with WAF protections'
       );
