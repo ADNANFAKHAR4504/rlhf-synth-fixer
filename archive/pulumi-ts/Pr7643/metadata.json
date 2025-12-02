@@ -23,5 +23,10 @@
     "Amazon CloudWatch"
   ],
   "author": "mayanksethi-turing",
-  "training_quality": 10
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
