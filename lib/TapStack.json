@@ -81,7 +81,7 @@
         "MinSize": "1",
         "MaxSize": "2",
         "DesiredCapacity": "1",
-        "DBInstanceClass": "db.t3.small",
+        "DBInstanceClass": "db.t3.medium",
         "CacheNodeType": "cache.t3.micro",
         "MultiAZ": "false"
       },
@@ -90,7 +90,7 @@
         "MinSize": "2",
         "MaxSize": "4",
         "DesiredCapacity": "2",
-        "DBInstanceClass": "db.t3.medium",
+        "DBInstanceClass": "db.t3.large",
         "CacheNodeType": "cache.t3.small",
         "MultiAZ": "false"
       },
