@@ -1,0 +1,42 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912185",
+  "team": "4",
+  "startedAt": "2025-12-01T20:17:04.037Z",
+  "subtask": "IaC-Multi-Environment-Management",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnets",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Route Tables",
+    "Security Groups",
+    "Application Load Balancer",
+    "Target Groups",
+    "ECS Cluster",
+    "ECS Task Definition",
+    "ECS Fargate Service",
+    "RDS Aurora Global Database",
+    "RDS Subnet Group",
+    "S3 Buckets",
+    "S3 Replication Configuration",
+    "IAM Roles",
+    "IAM Policies",
+    "KMS Keys"
+  ],
+  "task_config": {
+    "deploy_env": "prod.tfvars"
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
+}
