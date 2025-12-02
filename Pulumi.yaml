@@ -1,0 +1,7 @@
+name: tap
+runtime:
+  name: nodejs
+  options:
+    typescript: true
+description: ECS optimization infrastructure with Pulumi TypeScript
+main: lib/
