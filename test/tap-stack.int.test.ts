@@ -1,27 +1,27 @@
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeInstancesCommand,
-  DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeInternetGatewaysCommand,
-  DescribeNatGatewaysCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  LambdaClient,
-  GetFunctionCommand,
-  InvokeCommand,
-} from '@aws-sdk/client-lambda';
-import {
   CloudWatchClient,
   DescribeAlarmsCommand,
   ListDashboardsCommand,
 } from '@aws-sdk/client-cloudwatch';
 import {
+  DescribeInstancesCommand,
+  DescribeInternetGatewaysCommand,
+  DescribeNatGatewaysCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
   EventBridgeClient,
   ListRulesCommand,
   ListTargetsByRuleCommand,
 } from '@aws-sdk/client-eventbridge';
+import {
+  GetFunctionCommand,
+  InvokeCommand,
+  LambdaClient,
+} from '@aws-sdk/client-lambda';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -37,6 +37,10 @@ let outputs: any;
 
 try {
   outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+  // Parse instanceIds if it's a JSON string
+  if (typeof outputs.instanceIds === 'string') {
+    outputs.instanceIds = JSON.parse(outputs.instanceIds);
+  }
 } catch (error) {
   console.error('Failed to load deployment outputs:', error);
   throw new Error(
