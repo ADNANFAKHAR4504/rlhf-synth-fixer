@@ -268,12 +268,12 @@ resource "aws_db_subnet_group" "main" {
 
 # RDS Aurora Cluster
 resource "aws_rds_cluster" "main" {
-  cluster_identifier          = "${local.resource_prefix}-aurora-cluster"
-  engine                      = "aurora-postgresql"
-  engine_version              = "15.10"
-  database_name               = "tapdb"
-  master_username             = "postgres"
-  manage_master_user_password = true
+  cluster_identifier            = "${local.resource_prefix}-aurora-cluster"
+  engine                        = "aurora-postgresql"
+  engine_version                = "15.10"
+  database_name                 = "tapdb"
+  master_username               = "postgres"
+  manage_master_user_password   = true
   master_user_secret_kms_key_id = null # Use default AWS managed key
 
   db_subnet_group_name   = aws_db_subnet_group.main.name
@@ -282,9 +282,8 @@ resource "aws_rds_cluster" "main" {
   backup_retention_period      = var.environment == "prod" ? 30 : 7
   preferred_backup_window      = "03:00-04:00"
   preferred_maintenance_window = "sun:04:00-sun:06:00"
-  preferred_backup_window = "07:00-09:00"
-  skip_final_snapshot     = var.environment != "prod"
-  deletion_protection     = var.environment == "prod"
+  skip_final_snapshot          = var.environment != "prod"
+  deletion_protection          = var.environment == "prod"
 
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-aurora-cluster"
