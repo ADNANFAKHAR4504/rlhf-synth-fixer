@@ -1,15 +1,5 @@
-name: tap-image-processing
+name: TapStack
 runtime:
   name: nodejs
 description: Optimized Lambda-based image processing infrastructure
 main: bin/tap.ts
-
-config:
-  inputBucketName:
-    type: string
-    description: Name of the S3 bucket for input images
-    default: ""
-  outputBucketName:
-    type: string
-    description: Name of the S3 bucket for output images
-    default: ""
