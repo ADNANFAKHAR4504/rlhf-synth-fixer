@@ -26,6 +26,26 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+# Get latest Amazon Linux 2 AMI if not specified
+data "aws_ami" "amazon_linux_2" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+
+  filter {
+    name   = "state"
+    values = ["available"]
+  }
+}
+
+locals {
+  ami_id = var.ami_id != "" ? var.ami_id : data.aws_ami.amazon_linux_2.id
+}
+
 # KMS key for encryption
 resource "aws_kms_key" "main" {
   description             = "KMS key for payment gateway encryption ${var.environment_suffix}"
@@ -286,6 +306,14 @@ resource "aws_security_group" "alb" {
     description = "Allow HTTPS from internet"
   }
 
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow HTTP from internet (for testing without ACM)"
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -450,7 +478,7 @@ resource "aws_iam_instance_profile" "ec2" {
 # Launch Template
 resource "aws_launch_template" "main" {
   name_prefix   = "payment-gateway-${var.environment_suffix}-"
-  image_id      = var.ami_id
+  image_id      = local.ami_id
   instance_type = "t3.medium"
 
   iam_instance_profile {
@@ -589,8 +617,9 @@ resource "aws_lb_target_group" "main" {
   }
 }
 
-# HTTPS Listener
+# HTTPS Listener (created only when ACM certificate is provided)
 resource "aws_lb_listener" "https" {
+  count             = var.acm_certificate_arn != "" ? 1 : 0
   load_balancer_arn = aws_lb.main.arn
   port              = "443"
   protocol          = "HTTPS"
@@ -604,6 +633,23 @@ resource "aws_lb_listener" "https" {
 
   tags = {
     Name = "payment-gateway-https-listener-${var.environment_suffix}"
+  }
+}
+
+# HTTP Listener (created when no ACM certificate is provided - for testing)
+resource "aws_lb_listener" "http" {
+  count             = var.acm_certificate_arn == "" ? 1 : 0
+  load_balancer_arn = aws_lb.main.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.main.arn
+  }
+
+  tags = {
+    Name = "payment-gateway-http-listener-${var.environment_suffix}"
   }
 }
 

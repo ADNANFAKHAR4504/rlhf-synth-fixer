@@ -25,10 +25,6 @@
     "ACM"
   ],
   "training_quality": 10,
-  "coverage": {
-    "lines": 0,
-    "branches": 0
-  },
-  "author": "anthropic-claude",
-  "dockerS3Location": ""
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing"
 }

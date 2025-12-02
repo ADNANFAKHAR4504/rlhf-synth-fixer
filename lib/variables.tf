@@ -7,6 +7,7 @@ variable "aws_region" {
 variable "environment_suffix" {
   description = "Unique suffix for resource naming to prevent collisions"
   type        = string
+  default     = "dev"
 
   validation {
     condition     = can(regex("^[a-z0-9-]+$", var.environment_suffix))
@@ -32,12 +33,13 @@ variable "ami_id" {
 }
 
 variable "acm_certificate_arn" {
-  description = "ARN of ACM certificate for HTTPS listener"
+  description = "ARN of ACM certificate for HTTPS listener. If not provided, HTTPS listener will be skipped."
   type        = string
+  default     = ""
 
   validation {
-    condition     = can(regex("^arn:aws:acm:", var.acm_certificate_arn))
-    error_message = "acm_certificate_arn must be a valid ACM certificate ARN"
+    condition     = var.acm_certificate_arn == "" || can(regex("^arn:aws:acm:", var.acm_certificate_arn))
+    error_message = "acm_certificate_arn must be a valid ACM certificate ARN or empty string"
   }
 }
 
