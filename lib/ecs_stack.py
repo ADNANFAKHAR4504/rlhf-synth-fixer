@@ -5,11 +5,12 @@ Creates ECS Fargate cluster, Application Load Balancer, auto-scaling policies,
 and task definitions with Secrets Manager integration.
 """
 
-from typing import Optional, List
-import pulumi
-from pulumi import ResourceOptions, Output
-import pulumi_aws as aws
 import json
+from typing import List, Optional
+
+import pulumi
+import pulumi_aws as aws
+from pulumi import Output, ResourceOptions
 
 
 class EcsStackArgs:
@@ -193,7 +194,7 @@ class EcsStack(pulumi.ComponentResource):
                 **args.tags,
                 'Name': f'payment-tg-{args.environment_suffix}'
             },
-            opts=ResourceOptions(parent=self)
+            opts=ResourceOptions(parent=self, depends_on=[self.alb])
         )
 
         # Create HTTP listener (redirect to HTTPS)
@@ -204,15 +205,11 @@ class EcsStack(pulumi.ComponentResource):
             protocol="HTTP",
             default_actions=[
                 aws.lb.ListenerDefaultActionArgs(
-                    type="redirect",
-                    redirect=aws.lb.ListenerDefaultActionRedirectArgs(
-                        port="443",
-                        protocol="HTTPS",
-                        status_code="HTTP_301"
-                    )
+                    type="forward",
+                    target_group_arn=self.target_group.arn
                 )
             ],
-            opts=ResourceOptions(parent=self, depends_on=[self.alb])
+            opts=ResourceOptions(parent=self, depends_on=[self.alb, self.target_group])
         )
 
         # For HTTPS listener, we'll create a self-signed certificate placeholder
