@@ -49,8 +49,10 @@ class TapStack(pulumi.ComponentResource):
             tags=resource_tags,
             server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
                 rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-                        sse_algorithm='AES256'
+                    apply_server_side_encryption_by_default=(
+                        aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                            sse_algorithm='AES256'
+                        )
                     )
                 )
             ),
@@ -420,9 +422,11 @@ class TapStack(pulumi.ComponentResource):
             action='lambda:InvokeFunction',
             function=self.ingestion_function.name,
             principal='apigateway.amazonaws.com',
-            source_arn=Output.all(self.api.execution_arn, self.webhook_resource.path, self.webhook_method.http_method).apply(
-                lambda args: f'{args[0]}/*/{args[2]}{args[1]}'
-            ),
+            source_arn=Output.all(
+                self.api.execution_arn, 
+                self.webhook_resource.path, 
+                self.webhook_method.http_method
+            ).apply(lambda args: f'{args[0]}/*/{args[2]}{args[1]}'),
             opts=ResourceOptions(parent=self.ingestion_function)
         )
 
@@ -567,13 +571,16 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self.stripe_rule)
         )
 
-        # Export stack outputs
-        self.api_endpoint = Output.concat(
-            'https://',
-            self.api.id,
-            '.execute-api.us-east-1.amazonaws.com/',
-            self.api_stage.stage_name,
-            '/webhook'
+        # Get current AWS region for API endpoint construction  
+        current_region = aws.get_region()
+        
+        # Export stack outputs with dynamic region
+        self.api_endpoint = Output.all(
+            self.api.id, 
+            self.api_stage.stage_name, 
+            current_region.name
+        ).apply(
+            lambda args: f'https://{args[0]}.execute-api.{args[2]}.amazonaws.com/{args[1]}/webhook'
         )
 
         self.register_outputs({

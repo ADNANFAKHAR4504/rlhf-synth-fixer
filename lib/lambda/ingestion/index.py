@@ -11,7 +11,7 @@ import logging
 import os
 import traceback
 from datetime import datetime
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 from uuid import uuid4
 
 import boto3
@@ -71,8 +71,14 @@ def validate_signature(payload: str, signature: str, provider_id: str) -> bool:
         # Try to get provider-specific secret
         secret = get_provider_secret(provider_id)
         if not secret:
-            logger.info(f'Using default secret for provider {provider_id}')
-            secret = 'default-secret'
+            # In production, you should configure provider secrets in Secrets Manager
+            logger.warning(
+                f'No secret configured for provider {provider_id}. '
+                f'Consider adding webhook/{ENVIRONMENT}/{provider_id}/signing-key to Secrets Manager'
+            )
+            # Using a more secure default approach - reject instead of using default
+            logger.error(f'Signature validation failed: no secret configured for provider {provider_id}')
+            return False
         
         expected_signature = hmac.new(
             secret.encode(),
