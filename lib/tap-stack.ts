@@ -285,13 +285,14 @@ echo ECS_ENABLE_TASK_IAM_ROLE_NETWORK_HOST=true >> /etc/ecs/ecs.config`.apply(
 );
 
 // Create Auto Scaling Group
+// Start with 1 instance to avoid deployment timeouts, will scale up as needed
 const autoScalingGroup = new aws.autoscaling.Group(
   `ecs-asg${environmentSuffix}`,
   {
     vpcZoneIdentifiers: [publicSubnet1.id, publicSubnet2.id],
     minSize: 1,
     maxSize: 10,
-    desiredCapacity: 2,
+    desiredCapacity: 1,
     healthCheckType: 'EC2',
     healthCheckGracePeriod: 300,
     launchTemplate: {
@@ -462,17 +463,19 @@ const taskDefinition = new aws.ecs.TaskDefinition(
 );
 
 // Create ECS Service with placement constraints
+// Note: assignPublicIp is not supported for EC2 launch type (only for Fargate)
+// Start with 1 task to match ASG capacity
 const ecsService = new aws.ecs.Service(
   `ecs-service${environmentSuffix}`,
   {
     cluster: ecsCluster.arn,
     taskDefinition: taskDefinition.arn,
-    desiredCount: 2,
+    desiredCount: 1,
     launchType: 'EC2',
     networkConfiguration: {
       subnets: [publicSubnet1.id, publicSubnet2.id],
       securityGroups: [ecsSecurityGroup.id],
-      assignPublicIp: true,
+      // assignPublicIp not supported for EC2 launch type
     },
     loadBalancers: [
       {
