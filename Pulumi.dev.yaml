@@ -1,0 +1,4 @@
+config:
+  aws:region: us-east-1
+  TapStack:environmentSuffix: synthS6e8u3n2
+  TapStack:awsRegion: us-east-1
