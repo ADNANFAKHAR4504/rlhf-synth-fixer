@@ -8,8 +8,6 @@
   "subtask": "CI/CD Pipeline Integration",
   "subject_labels": [
     "CI/CD Pipeline",
-    "AWS CodePipeline",
-    "AWS CodeBuild"
   ],
   "po_id": "r4d8b1p1",
   "aws_services": [
