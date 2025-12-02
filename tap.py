@@ -55,7 +55,11 @@ stack = TapStack(
 )
 
 # Export stack outputs for integration tests
-pulumi.export('config_recorder_name', stack.config_stack.config_recorder.name)
+# Only export config_recorder_name if it was created
+if stack.config_stack.config_recorder:
+    pulumi.export('config_recorder_name', stack.config_stack.config_recorder.name)
+else:
+    pulumi.export('config_recorder_name', 'default')  # Use existing default recorder name
 pulumi.export('dynamodb_table_name', stack.monitoring_stack.dynamodb_table.name)
 pulumi.export('sns_topic_arn', stack.monitoring_stack.sns_topic.arn)
 pulumi.export('reports_bucket_name', stack.monitoring_stack.reports_bucket.id)

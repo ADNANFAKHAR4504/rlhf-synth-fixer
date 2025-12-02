@@ -85,9 +85,12 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Register outputs
-        self.register_outputs({
-            'config_recorder_name': self.config_stack.config_recorder.name,
+        outputs = {
             'dynamodb_table_name': self.monitoring_stack.dynamodb_table.name,
             'sns_topic_arn': self.monitoring_stack.sns_topic.arn,
             'reports_bucket_name': self.monitoring_stack.reports_bucket.id,
-        })
+        }
+        # Only include config_recorder_name if it was created
+        if self.config_stack.config_recorder:
+            outputs['config_recorder_name'] = self.config_stack.config_recorder.name
+        self.register_outputs(outputs)

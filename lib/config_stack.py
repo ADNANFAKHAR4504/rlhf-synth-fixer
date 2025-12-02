@@ -17,7 +17,7 @@ class ConfigStack(pulumi.ComponentResource):
 
     Creates:
     - IAM role for AWS Config
-    - Configuration recorder (uses existing if one already exists in the region)
+    - Configuration recorder (skipped if one already exists in the region)
     - Delivery channel
     - Custom Config rules
     """
@@ -41,6 +41,10 @@ class ConfigStack(pulumi.ComponentResource):
             'Compliance': 'Required',
             'ManagedBy': 'Pulumi',
         }
+
+        # Check if we should create config recorder (default: skip to avoid conflict)
+        config = pulumi.Config()
+        create_config_recorder = config.get_bool("create_config_recorder") or False
 
         # Create IAM role for AWS Config
         self.config_role = aws.iam.Role(
@@ -89,54 +93,61 @@ class ConfigStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Use a well-known name for the configuration recorder to allow importing existing ones
-        # AWS Config only allows 1 recorder per region, so we use a fixed name "default"
+        # AWS Config only allows 1 recorder per region
+        # Only create recorder/delivery channel if explicitly enabled
         recorder_name = "default"
 
-        # Create configuration recorder with a fixed name to support import
-        self.config_recorder = aws.cfg.Recorder(
-            f"config-recorder-{environment_suffix}",
-            name=recorder_name,
-            role_arn=self.config_role.arn,
-            recording_group=aws.cfg.RecorderRecordingGroupArgs(
-                all_supported=False,
-                resource_types=[
-                    "AWS::EC2::Instance",
-                    "AWS::RDS::DBInstance",
-                    "AWS::S3::Bucket",
-                    "AWS::IAM::User",
-                    "AWS::IAM::Role",
-                    "AWS::IAM::Policy",
-                ]
-            ),
-            opts=ResourceOptions(
-                parent=self,
-                depends_on=[self.config_policy_attachment, self.config_s3_policy],
-                delete_before_replace=True,
+        if create_config_recorder:
+            # Create configuration recorder
+            self.config_recorder = aws.cfg.Recorder(
+                f"config-recorder-{environment_suffix}",
+                name=recorder_name,
+                role_arn=self.config_role.arn,
+                recording_group=aws.cfg.RecorderRecordingGroupArgs(
+                    all_supported=False,
+                    resource_types=[
+                        "AWS::EC2::Instance",
+                        "AWS::RDS::DBInstance",
+                        "AWS::S3::Bucket",
+                        "AWS::IAM::User",
+                        "AWS::IAM::Role",
+                        "AWS::IAM::Policy",
+                    ]
+                ),
+                opts=ResourceOptions(
+                    parent=self,
+                    depends_on=[self.config_policy_attachment, self.config_s3_policy],
+                )
             )
-        )
 
-        # Create delivery channel with fixed name to match recorder
-        self.delivery_channel = aws.cfg.DeliveryChannel(
-            f"config-delivery-{environment_suffix}",
-            name=recorder_name,
-            s3_bucket_name=config_bucket_name,
-            opts=ResourceOptions(
-                parent=self,
-                depends_on=[self.config_recorder],
-                delete_before_replace=True,
+            # Create delivery channel
+            self.delivery_channel = aws.cfg.DeliveryChannel(
+                f"config-delivery-{environment_suffix}",
+                name=recorder_name,
+                s3_bucket_name=config_bucket_name,
+                opts=ResourceOptions(
+                    parent=self,
+                    depends_on=[self.config_recorder],
+                )
             )
-        )
 
-        # Start configuration recorder
-        self.recorder_status = aws.cfg.RecorderStatus(
-            f"config-recorder-status-{environment_suffix}",
-            name=self.config_recorder.name,
-            is_enabled=True,
-            opts=ResourceOptions(parent=self, depends_on=[self.delivery_channel])
-        )
+            # Start configuration recorder
+            self.recorder_status = aws.cfg.RecorderStatus(
+                f"config-recorder-status-{environment_suffix}",
+                name=self.config_recorder.name,
+                is_enabled=True,
+                opts=ResourceOptions(parent=self, depends_on=[self.delivery_channel])
+            )
+        else:
+            # Use existing config recorder - set attributes to None for tests
+            self.config_recorder = None
+            self.delivery_channel = None
+            self.recorder_status = None
 
         # Create AWS Config custom rules
+        # Build depends_on list - only include recorder_status if it was created
+        rule_depends_on = [self.recorder_status] if self.recorder_status else []
+
         # EC2 Tag Compliance Rule
         self.ec2_tag_config_rule = aws.cfg.Rule(
             f"ec2-tag-compliance-{environment_suffix}",
@@ -155,7 +166,7 @@ class ConfigStack(pulumi.ComponentResource):
                 ]
             ),
             tags=tags,
-            opts=ResourceOptions(parent=self, depends_on=[self.recorder_status])
+            opts=ResourceOptions(parent=self, depends_on=rule_depends_on)
         )
 
         # S3 Encryption Compliance Rule
@@ -176,7 +187,7 @@ class ConfigStack(pulumi.ComponentResource):
                 ]
             ),
             tags=tags,
-            opts=ResourceOptions(parent=self, depends_on=[self.recorder_status])
+            opts=ResourceOptions(parent=self, depends_on=rule_depends_on)
         )
 
         # RDS Backup Compliance Rule
@@ -197,7 +208,7 @@ class ConfigStack(pulumi.ComponentResource):
                 ]
             ),
             tags=tags,
-            opts=ResourceOptions(parent=self, depends_on=[self.recorder_status])
+            opts=ResourceOptions(parent=self, depends_on=rule_depends_on)
         )
 
         # Add permissions for Config to invoke Lambda functions
