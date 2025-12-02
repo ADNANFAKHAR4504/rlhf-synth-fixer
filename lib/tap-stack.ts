@@ -891,10 +891,8 @@ export class TapStack extends cdk.Stack {
         stackSetName: `tap-dr-${stackSuffix}`.substring(0, 128),
         description: `Regional disaster recovery baseline for ${this.stackName}`,
         permissionModel: 'SELF_MANAGED',
-        autoDeployment: {
-          enabled: true,
-          retainStacksOnAccountRemoval: false,
-        },
+        // Note: autoDeployment is only supported with SERVICE_MANAGED permission model (requires AWS Organizations)
+        // For SELF_MANAGED, stack instances are deployed explicitly via stackInstancesGroup
         parameters: [
           {
             parameterKey: 'PrimaryBucketName',
