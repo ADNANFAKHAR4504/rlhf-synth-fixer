@@ -1,101 +1,115 @@
-# CI/CD Pipeline Infrastructure - Pulumi TypeScript Implementation
+# CI/CD Pipeline Integration - GitHub Actions Implementation
 
-This implementation creates a comprehensive multi-stage CI/CD pipeline infrastructure for Node.js microservices using Pulumi with TypeScript.
+This implementation creates a comprehensive multi-stage CI/CD pipeline workflow using GitHub Actions for CDK applications with multi-account AWS deployments.
 
 ## Architecture Overview
 
 The solution provisions:
-- S3 bucket for pipeline artifacts with versioning and KMS encryption
-- Two CodePipeline instances (production for main branch, staging for develop branch)
-- CodeBuild projects for build and test stages
-- Lambda functions for notifications and approval checks
-- SNS topics for pipeline notifications and failure alerts
-- EventBridge rules to capture pipeline state changes
-- IAM roles with least-privilege access for all services
+- Multi-stage GitHub Actions workflow with source, build, and deploy stages
+- GitHub OIDC authentication for secure keyless AWS access
+- Cross-account deployments using IAM role chaining
+- Manual approval gates using GitHub environments
+- KMS encryption for pipeline artifacts
+- Slack notifications for deployment status
+- cdk-nag integration for security compliance scanning
 
 ## File Structure
 
 ```
 lib/
-├── index.ts                          # Main infrastructure code
-├── lambda/
-│   ├── notification/
-│   │   ├── index.js                  # Notification Lambda function
-│   │   └── package.json              # Dependencies
-│   └── approval/
-│       ├── index.js                  # Approval check Lambda function
-│       └── package.json              # Dependencies
-Pulumi.yaml                           # Pulumi project configuration
+|-- ci-cd.yml                         # GitHub Actions workflow
+|-- PROMPT.md                         # Original task requirements
+|-- MODEL_RESPONSE.md                 # This file
+|-- IDEAL_RESPONSE.md                 # Complete implementation reference
+|-- MODEL_FAILURES.md                 # Analysis of implementation issues
 ```
 
 ## Implementation Files
 
-The complete infrastructure code has been generated and is available in the following files:
-- `Pulumi.yaml` - Project configuration
-- `lib/index.ts` - Main infrastructure code (845 lines)
-- `lib/lambda/notification/index.js` - Notification Lambda function
-- `lib/lambda/notification/package.json` - Lambda dependencies
-- `lib/lambda/approval/index.js` - Approval Lambda function
-- `lib/lambda/approval/package.json` - Lambda dependencies
+The complete workflow configuration is available in:
+- `lib/ci-cd.yml` - GitHub Actions workflow (218 lines)
 
 ## Key Features Implemented
 
-1. **Resource Naming with environmentSuffix**: All resources include `${environmentSuffix}` in their names for uniqueness across deployments
+1. **GitHub OIDC Authentication**: Secure keyless authentication to AWS without long-lived credentials
 
-2. **Encryption**: All data at rest encrypted with KMS, all data in transit uses TLS/SSL
+2. **Multi-Account Deployment**:
+   - Dev account: Direct deployment after build
+   - Staging account: Cross-account role chaining with manual approval
+   - Production account: Cross-account role chaining with manual approval
 
-3. **Branch-Based Deployments**:
-   - Production pipeline for main branch with manual approval gate
-   - Staging pipeline for develop branch (auto-deploy)
+3. **Pipeline Stages**:
+   - Source: Checkout code with full history
+   - Build: CDK synthesis, cdk-nag security checks, artifact encryption
+   - Deploy Dev: Deploy to development environment
+   - Staging Approval: Manual approval gate
+   - Deploy Staging: Cross-account deployment to staging
+   - Production Approval: Manual approval gate
+   - Deploy Production: Cross-account deployment to production
 
-4. **IAM Least Privilege**: Separate roles for CodePipeline, CodeBuild, and Lambda with minimal required permissions
+4. **Security Features**:
+   - GitHub OIDC for AWS authentication
+   - KMS encryption for artifacts
+   - cdk-nag security scanning
+   - Role chaining for cross-account access
+   - Environment protection rules
 
 5. **Notification System**:
-   - EventBridge rules capture pipeline state changes
-   - SNS topics for general notifications and failure alerts
-   - Lambda functions send detailed notifications
+   - Slack notifications on all deployment outcomes
+   - Environment-specific notification context
+   - Always-run notifications (success/failure)
 
-6. **Resource Tagging**: All resources tagged with Environment, CostCenter, ManagedBy, and Project tags
-
-7. **Destroyability**: No retention policies or deletion protection - all resources can be cleanly destroyed
-
-8. **Lambda SDK v3**: All Lambda functions use AWS SDK v3 for Node.js 18.x compatibility
+6. **Resource Organization**:
+   - Separate GitHub environments for each stage
+   - Environment variables for account IDs
+   - Secrets management via GitHub secrets
 
 ## Deployment Instructions
 
-1. Install dependencies:
-   ```bash
-   npm install
+1. Configure GitHub Secrets:
+   ```
+   GITHUB_OIDC_ROLE_ARN: <IAM role ARN for OIDC>
+   DEV_ACCOUNT_ID: <Dev AWS account ID>
+   STAGING_ACCOUNT_ID: <Staging AWS account ID>
+   PROD_ACCOUNT_ID: <Production AWS account ID>
+   SLACK_WEBHOOK_URL: <Slack webhook URL>
    ```
 
-2. Configure Pulumi stack:
-   ```bash
-   pulumi stack init dev
-   pulumi config set aws:region us-east-1
-   pulumi config set environmentSuffix <unique-suffix>
-   ```
+2. Configure GitHub Environments:
+   - `dev` - Development environment
+   - `staging-approval` - Manual approval for staging
+   - `staging` - Staging environment
+   - `prod-approval` - Manual approval for production
+   - `prod` - Production environment
 
-3. Deploy infrastructure:
-   ```bash
-   pulumi up
-   ```
+3. Set up IAM roles:
+   - GitHub OIDC role in dev account
+   - CrossAccountDeployRole in staging account
+   - CrossAccountDeployRole in production account
 
-4. Verify outputs:
-   ```bash
-   pulumi stack output
-   ```
+4. Trigger pipeline:
+   - Push to `main` branch for production deployment
+   - Push to `dev` branch for development deployment
+   - Use workflow_dispatch for manual trigger
 
 ## Testing
 
-The infrastructure can be tested by:
-1. Uploading source artifacts to S3 at `source/main.zip` and `source/develop.zip`
-2. Pipelines will automatically start upon source changes
-3. Production pipeline requires manual approval before deployment
-4. Notifications will be sent to SNS topics
+The workflow can be tested by:
+1. Pushing to the dev branch to trigger dev deployment
+2. Reviewing deployment logs in GitHub Actions
+3. Checking Slack notifications for deployment status
+4. Pushing to main branch and approving staging/production deployments
+
+## Pipeline Flow
+
+```
+Source -> Build -> Deploy Dev -> [Approval] -> Deploy Staging -> [Approval] -> Deploy Prod
+```
 
 ## Clean Up
 
-To destroy all resources:
-```bash
-pulumi destroy
-```
+Since this is a GitHub Actions workflow, cleanup involves:
+1. Deleting the workflow file from the repository
+2. Removing GitHub secrets
+3. Removing GitHub environments
+4. Deleting IAM roles if no longer needed
