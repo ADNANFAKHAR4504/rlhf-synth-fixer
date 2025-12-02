@@ -1,4 +1,4 @@
-name: product-catalog-api
+name: TapStack
 runtime:
   name: python
 description: Containerized web application deployment using ECS Fargate
