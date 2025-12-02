@@ -335,8 +335,9 @@ const ecsCluster = new aws.ecs.Cluster(`ecs-cluster${environmentSuffix}`, {
 });
 
 // Create Capacity Provider
+// Note: Cannot use 'ecs-', 'aws-', or 'fargate-' prefix per AWS naming rules
 const capacityProvider = new aws.ecs.CapacityProvider(
-  `ecs-capacity-provider${environmentSuffix}`,
+  `capacity-provider${environmentSuffix}`,
   {
     autoScalingGroupProvider: {
       autoScalingGroupArn: autoScalingGroup.arn,
