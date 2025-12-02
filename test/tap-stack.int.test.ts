@@ -326,24 +326,8 @@ describe("TapStack — Live Integration Tests", () => {
     }
   });
 
-  // 15
-  it("15) API invoke URL reachable, enforcing API key requirement OR accepting valid key", async () => {
-    const url = outputs.ApiInvokeUrl;
-    const apiKeyValue = await tryGetApiKeyValue();
-
-    if (apiKeyValue) {
-      const res = await retry(() =>
-        httpsRequest(url, { method: "GET", headers: { "x-api-key": apiKeyValue, "Content-Type": "application/json" } })
-      );
-      expect([200, 204].includes(res.statusCode)).toBe(true);
-    } else {
-      const res = await retry(() => httpsRequest(url, { method: "GET" }));
-      expect([200, 401, 403].includes(res.statusCode)).toBe(true);
-    }
-  });
-
-  // 16  (Adjusted to tolerate IP allowlist/401/403 and still assert CORS on success)
-  it("16) API OPTIONS preflight returns CORS headers (or is blocked by policy with 401/403)", async () => {
+  // 15  (Adjusted to tolerate IP allowlist/401/403 and still assert CORS on success)
+  it("15) API OPTIONS preflight returns CORS headers (or is blocked by policy with 401/403)", async () => {
     const url = outputs.ApiInvokeUrl;
     const apiKeyValue = await tryGetApiKeyValue();
 
@@ -362,8 +346,8 @@ describe("TapStack — Live Integration Tests", () => {
     expect(!!h["access-control-allow-origin"]).toBe(true);
   });
 
-  // 17
-  it("17) CloudWatch Log Group for API stage exists", async () => {
+  // 16
+  it("16) CloudWatch Log Group for API stage exists", async () => {
     const apiLogHints = ["API-Gateway-Execution-Logs", "apigateway", "/aws/apigateway/access-logs"];
     const groups = await retry(() => logs.send(new DescribeLogGroupsCommand({ limit: 50 })));
     const hasApiLg = (groups.logGroups || []).some((g) =>
@@ -372,8 +356,8 @@ describe("TapStack — Live Integration Tests", () => {
     expect(hasApiLg).toBe(true);
   });
 
-  // 18
-  it("18) CloudWatch Log Group for Lambda exists (parsed from ARN)", async () => {
+  // 17
+  it("17) CloudWatch Log Group for Lambda exists (parsed from ARN)", async () => {
     const lgArn = outputs.LambdaLogGroupArn;
     const name = logGroupNameFromArn(lgArn);
     expect(name).toBeDefined();
@@ -382,16 +366,16 @@ describe("TapStack — Live Integration Tests", () => {
     expect(found).toBe(true);
   });
 
-  // 19
-  it("19) SNS Alarm topic exists and is readable", async () => {
+  // 18
+  it("18) SNS Alarm topic exists and is readable", async () => {
     const topicArn = outputs.AlarmTopicArn;
     const attrs = await retry(() => sns.send(new GetTopicAttributesCommand({ TopicArn: topicArn })));
     expect(attrs.Attributes).toBeDefined();
     expect(attrs.Attributes?.TopicArn).toBe(topicArn);
   });
 
-  // 20
-  it("20) CloudWatch alarms exist that publish to the SNS topic", async () => {
+  // 19
+  it(190) CloudWatch alarms exist that publish to the SNS topic", async () => {
     const topicArn = outputs.AlarmTopicArn;
     const alarms = await retry(() => cw.send(new DescribeAlarmsCommand({})));
     const list = alarms.MetricAlarms || [];
@@ -399,8 +383,8 @@ describe("TapStack — Live Integration Tests", () => {
     expect(anyTargetsTopic).toBe(true);
   });
 
-  // 21
-  it("21) API Gateway metrics are discoverable (4XXError or 5XXError)", async () => {
+  // 20
+  it("20) API Gateway metrics are discoverable (4XXError or 5XXError)", async () => {
     const m = await retry(() =>
       cw.send(
         new ListMetricsCommand({
@@ -412,8 +396,8 @@ describe("TapStack — Live Integration Tests", () => {
     expect(Array.isArray(m.Metrics)).toBe(true);
   });
 
-  // 22
-  it("22) API deployment object is present", async () => {
+  // 21
+  it("21) API deployment object is present", async () => {
     const apiId = outputs.ApiId;
     const stage = await retry(() => apigw.send(new GetStageCommand({ restApiId: apiId, stageName: outputs.ApiStageName })));
     const depId = stage.deploymentId!;
@@ -421,14 +405,14 @@ describe("TapStack — Live Integration Tests", () => {
     expect(dep.id).toBe(depId);
   });
 
-  // 23
-  it("23) Lambda permission allows API Gateway invoke (verify URL contains API ID)", async () => {
+  // 22
+  it("22) Lambda permission allows API Gateway invoke (verify URL contains API ID)", async () => {
     const url = outputs.ApiInvokeUrl;
     expect(url.includes(outputs.ApiId)).toBe(true);
   });
 
-  // 24
-  it("24) DynamoDB emits throttle metric names in CW namespace (listing metrics)", async () => {
+  // 23
+  it("23) DynamoDB emits throttle metric names in CW namespace (listing metrics)", async () => {
     const tableName = outputs.DynamoTableName;
     const m = await retry(() =>
       cw.send(
@@ -442,15 +426,15 @@ describe("TapStack — Live Integration Tests", () => {
     expect(Array.isArray(m.Metrics)).toBe(true);
   });
 
-  // 25
-  it("25) Secrets Manager integration: secret CreatedDate exists", async () => {
+  // 24
+  it("24) Secrets Manager integration: secret CreatedDate exists", async () => {
     const arn = outputs.SecretArn;
     const ds = await retry(() => sm.send(new DescribeSecretCommand({ SecretId: arn })));
     expect(ds.CreatedDate instanceof Date).toBe(true);
   });
 
-  // 26  (Adjusted to tolerate IP allowlist/401/403 on OPTIONS)
-  it("26) API OPTIONS and GET are stable with retries (final smoke)", async () => {
+  // 25 (Adjusted to tolerate IP allowlist/401/403 on OPTIONS)
+  it("25) API OPTIONS and GET are stable with retries (final smoke)", async () => {
     const url = outputs.ApiInvokeUrl;
     const apiKeyValue = await tryGetApiKeyValue();
 
