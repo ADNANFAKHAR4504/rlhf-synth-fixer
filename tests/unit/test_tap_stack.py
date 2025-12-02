@@ -483,6 +483,7 @@ class TestFrontendStack(unittest.TestCase):
         mock_bucket_instance.bucket = 'frontend-bucket'
         mock_bucket_instance.arn = Output.from_input('arn:aws:s3:::frontend-bucket')
         mock_bucket_instance.bucket_regional_domain_name = Output.from_input('frontend-bucket.s3.amazonaws.com')
+        mock_bucket_instance.website_endpoint = Output.from_input('frontend-bucket.s3-website.us-east-1.amazonaws.com')
         mock_bucket.return_value = mock_bucket_instance
 
         mock_public_access.return_value = MagicMock(spec=Resource)
@@ -493,23 +494,16 @@ class TestFrontendStack(unittest.TestCase):
         mock_distribution_instance.hosted_zone_id = 'zone-id'
         mock_distribution.return_value = mock_distribution_instance
 
-        # Mock OAI for CloudFront
-        with patch('lib.frontend_stack.aws.cloudfront.OriginAccessIdentity') as mock_oai:
-            mock_oai_instance = MagicMock(spec=Resource)
-            mock_oai_instance.iam_arn = 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity'
-            mock_oai_instance.cloudfront_access_identity_path = 'origin-access-identity/cloudfront/E123456789'
-            mock_oai.return_value = mock_oai_instance
+        # Create FrontendStack
+        args = FrontendStackArgs(environment_suffix='test', tags={'Test': 'Tag'})
+        stack = FrontendStack('test-frontend', args)
 
-            # Create FrontendStack
-            args = FrontendStackArgs(environment_suffix='test', tags={'Test': 'Tag'})
-            stack = FrontendStack('test-frontend', args)
+        # Assertions
+        self.assertIsInstance(stack.bucket_name, Output)
+        self.assertIsInstance(stack.cloudfront_domain, Output)
 
-            # Assertions
-            self.assertIsInstance(stack.bucket_name, Output)
-            self.assertIsInstance(stack.cloudfront_domain, Output)
-
-            # Verify register_outputs was called
-            mock_register_outputs.assert_called()
+        # Verify register_outputs was called
+        mock_register_outputs.assert_called()
 
 
 class TestTapStackArgs(unittest.TestCase):

@@ -73,7 +73,7 @@ class FrontendStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self, depends_on=[self.bucket])
         )
 
-        # Block public access to S3 bucket (CloudFront will access via OAI)
+        # Block public access to S3 bucket (CloudFront will access via service principal)
         self.bucket_public_access_block = aws.s3.BucketPublicAccessBlock(
             f"payment-frontend-public-access-block-{args.environment_suffix}",
             bucket=self.bucket.id,
@@ -84,31 +84,24 @@ class FrontendStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self, depends_on=[self.bucket])
         )
 
-        # Create CloudFront Origin Access Identity
-        self.oai = aws.cloudfront.OriginAccessIdentity(
-            f"payment-oai-{args.environment_suffix}",
-            comment=f"OAI for payment frontend {args.environment_suffix}",
-            opts=ResourceOptions(parent=self)
-        )
-
         # Create bucket policy to allow CloudFront access
         self.bucket_policy = aws.s3.BucketPolicy(
             f"payment-frontend-policy-{args.environment_suffix}",
             bucket=self.bucket.id,
-            policy=pulumi.Output.all(self.bucket.arn, self.oai.iam_arn).apply(
-                lambda args: json.dumps({
+            policy=self.bucket.arn.apply(
+                lambda arn: json.dumps({
                     "Version": "2012-10-17",
                     "Statement": [{
                         "Effect": "Allow",
                         "Principal": {
-                            "AWS": args[1]
+                            "Service": "cloudfront.amazonaws.com"
                         },
                         "Action": "s3:GetObject",
-                        "Resource": f"{args[0]}/*"
+                        "Resource": f"{arn}/*"
                     }]
                 })
             ),
-            opts=ResourceOptions(parent=self, depends_on=[self.bucket, self.oai])
+            opts=ResourceOptions(parent=self, depends_on=[self.bucket])
         )
 
         # Create CloudFront distribution
@@ -120,17 +113,20 @@ class FrontendStack(pulumi.ComponentResource):
             default_root_object="index.html",
             origins=[
                 aws.cloudfront.DistributionOriginArgs(
-                    domain_name=self.bucket.bucket_regional_domain_name,
-                    origin_id=f"S3-{self.bucket.id}",
-                    s3_origin_config=aws.cloudfront.DistributionOriginS3OriginConfigArgs(
-                        origin_access_identity=self.oai.cloudfront_access_identity_path
+                    domain_name=self.bucket.website_endpoint,
+                    origin_id="S3Origin",
+                    custom_origin_config=aws.cloudfront.DistributionOriginCustomOriginConfigArgs(
+                        http_port=80,
+                        https_port=443,
+                        origin_protocol_policy="https-only",
+                        origin_ssl_protocols=["TLSv1.2"]
                     )
                 )
             ],
             default_cache_behavior=aws.cloudfront.DistributionDefaultCacheBehaviorArgs(
                 allowed_methods=["GET", "HEAD", "OPTIONS"],
                 cached_methods=["GET", "HEAD"],
-                target_origin_id=self.bucket.id.apply(lambda id: f"S3-{id}"),
+                target_origin_id="S3Origin",
                 viewer_protocol_policy="redirect-to-https",
                 compress=True,
                 forwarded_values=aws.cloudfront.DistributionDefaultCacheBehaviorForwardedValuesArgs(
@@ -161,7 +157,7 @@ class FrontendStack(pulumi.ComponentResource):
                 )
             ],
             tags=args.tags,
-            opts=ResourceOptions(parent=self, depends_on=[self.bucket, self.oai, self.bucket_policy, self.bucket_website])
+            opts=ResourceOptions(parent=self, depends_on=[self.bucket, self.bucket_policy, self.bucket_website])
         )
 
         # Export outputs
