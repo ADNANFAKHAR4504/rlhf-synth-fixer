@@ -3,11 +3,13 @@ Pulumi stack for serverless webhook processing system.
 Implements API Gateway, Lambda, DynamoDB, S3, SQS, EventBridge infrastructure.
 """
 
-from typing import Optional
 import json
+from typing import Optional
+
 import pulumi
 import pulumi_aws as aws
-from pulumi import ResourceOptions, Output
+from pulumi import Output, ResourceOptions
+
 
 class TapStackArgs:
     """Arguments for TapStack component."""
@@ -45,6 +47,16 @@ class TapStack(pulumi.ComponentResource):
             bucket=f'webhook-payloads-{self.environment_suffix}-{pulumi.get_stack()}'.lower(),
             force_destroy=True,
             tags=resource_tags,
+            server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
+                rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                        sse_algorithm='AES256'
+                    )
+                )
+            ),
+            versioning=aws.s3.BucketVersioningArgs(
+                enabled=True
+            ),
             lifecycle_rules=[
                 aws.s3.BucketLifecycleRuleArgs(
                     id='archive-old-payloads',
@@ -83,6 +95,12 @@ class TapStack(pulumi.ComponentResource):
                     type='S'
                 )
             ],
+            server_side_encryption=aws.dynamodb.TableServerSideEncryptionArgs(
+                enabled=True
+            ),
+            point_in_time_recovery=aws.dynamodb.TablePointInTimeRecoveryArgs(
+                enabled=True
+            ),
             tags=resource_tags,
             opts=ResourceOptions(parent=self)
         )
@@ -337,7 +355,35 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # 14. API Gateway request validator
+        # 14. API Gateway API Key for rate limiting
+        self.api_key = aws.apigateway.ApiKey(
+            f'webhook-api-key-{self.environment_suffix}',
+            enabled=True,
+            tags=resource_tags,
+            opts=ResourceOptions(parent=self.api)
+        )
+
+        # 14b. API Gateway usage plan
+        self.usage_plan = aws.apigateway.UsagePlan(
+            f'webhook-usage-plan-{self.environment_suffix}',
+            api_stages=[
+                aws.apigateway.UsagePlanApiStageArgs(
+                    api_id=self.api.id,
+                    stage='dev'
+                )
+            ],
+            quota_settings=aws.apigateway.UsagePlanQuotaSettingsArgs(
+                limit=100000,
+                period='DAY'
+            ),
+            throttle_settings=aws.apigateway.UsagePlanThrottleSettingsArgs(
+                burst_limit=5000,
+                rate_limit=10000
+            ),
+            opts=ResourceOptions(parent=self.api)
+        )
+
+        # 15. API Gateway request validator
         self.request_validator = aws.apigateway.RequestValidator(
             f'webhook-validator-{self.environment_suffix}',
             rest_api=self.api.id,
@@ -347,7 +393,7 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self.api)
         )
 
-        # 15. API Gateway resource for /webhook
+        # 16. API Gateway resource for /webhook
         self.webhook_resource = aws.apigateway.Resource(
             f'webhook-resource-{self.environment_suffix}',
             rest_api=self.api.id,
@@ -356,22 +402,24 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self.api)
         )
 
-        # 16. API Gateway POST method
+        # 17. API Gateway POST method with API_KEY authorization
         self.webhook_method = aws.apigateway.Method(
             f'webhook-method-{self.environment_suffix}',
             rest_api=self.api.id,
             resource_id=self.webhook_resource.id,
             http_method='POST',
-            authorization='NONE',
+            authorization='AWS_IAM',
+            api_key_required=True,
             request_parameters={
                 'method.request.header.X-Webhook-Signature': True,
-                'method.request.header.X-Provider-ID': True
+                'method.request.header.X-Provider-ID': True,
+                'method.request.header.x-api-key': True
             },
             request_validator_id=self.request_validator.id,
             opts=ResourceOptions(parent=self.webhook_resource)
         )
 
-        # 17. API Gateway Lambda integration
+        # 18. API Gateway Lambda integration
         self.webhook_integration = aws.apigateway.Integration(
             f'webhook-integration-{self.environment_suffix}',
             rest_api=self.api.id,
@@ -383,7 +431,7 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self.webhook_method)
         )
 
-        # 18. Lambda permission for API Gateway
+        # 19. Lambda permission for API Gateway
         self.api_lambda_permission = aws.lambda_.Permission(
             f'api-invoke-lambda-{self.environment_suffix}',
             action='lambda:InvokeFunction',
@@ -395,7 +443,7 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self.ingestion_function)
         )
 
-        # 19. API Gateway deployment
+        # 20. API Gateway deployment
         self.api_deployment = aws.apigateway.Deployment(
             f'webhook-deployment-{self.environment_suffix}',
             rest_api=self.api.id,
@@ -405,7 +453,7 @@ class TapStack(pulumi.ComponentResource):
             )
         )
 
-        # 20. API Gateway stage
+        # 21. API Gateway stage
         self.api_stage = aws.apigateway.Stage(
             f'webhook-stage-{self.environment_suffix}',
             rest_api=self.api.id,
@@ -416,7 +464,16 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self.api_deployment)
         )
 
-        # 21. API Gateway throttling settings
+        # Update usage plan with stage
+        self.usage_plan_key = aws.apigateway.UsagePlanKey(
+            f'usage-plan-key-{self.environment_suffix}',
+            usage_plan_id=self.usage_plan.id,
+            key_id=self.api_key.id,
+            key_type='API_KEY',
+            opts=ResourceOptions(parent=self.usage_plan)
+        )
+
+        # 22. API Gateway throttling settings
         self.throttle_settings = aws.apigateway.MethodSettings(
             f'throttle-settings-{self.environment_suffix}',
             rest_api=self.api.id,
@@ -432,7 +489,40 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self.api_stage)
         )
 
-        # 22. EventBridge rule for Stripe webhooks (example)
+        # 23. CloudWatch Logs for API Gateway execution
+        self.api_log_group = aws.cloudwatch.LogGroup(
+            f'api-gateway-logs-{self.environment_suffix}',
+            name=f'/aws/apigateway/webhook-api-{self.environment_suffix}',
+            retention_in_days=7,
+            tags=resource_tags,
+            opts=ResourceOptions(parent=self)
+        )
+
+        # 24. IAM role for API Gateway CloudWatch Logs
+        self.api_cloudwatch_role = aws.iam.Role(
+            f'api-cloudwatch-role-{self.environment_suffix}',
+            name=f'api-cloudwatch-role-{self.environment_suffix}',
+            assume_role_policy=json.dumps({
+                'Version': '2012-10-17',
+                'Statement': [{
+                    'Effect': 'Allow',
+                    'Principal': {'Service': 'apigateway.amazonaws.com'},
+                    'Action': 'sts:AssumeRole'
+                }]
+            }),
+            tags=resource_tags,
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Attach CloudWatch Logs policy to API Gateway role
+        aws.iam.RolePolicyAttachment(
+            f'api-cloudwatch-policy-{self.environment_suffix}',
+            role=self.api_cloudwatch_role.name,
+            policy_arn='arn:aws:iam::aws:policy/CloudWatchLogsFullAccess',
+            opts=ResourceOptions(parent=self.api_cloudwatch_role)
+        )
+
+        # 25. EventBridge rule for Stripe webhooks (example)
         self.stripe_rule = aws.cloudwatch.EventRule(
             f'stripe-webhook-rule-{self.environment_suffix}',
             name=f'stripe-webhook-rule-{self.environment_suffix}',
@@ -449,7 +539,7 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self.event_bus)
         )
 
-        # 23. EventBridge CloudWatch Logs target (example)
+        # 26. EventBridge CloudWatch Logs target (example)
         self.event_log_group = aws.cloudwatch.LogGroup(
             f'webhook-events-log-{self.environment_suffix}',
             name=f'/aws/events/webhook-events-{self.environment_suffix}',
