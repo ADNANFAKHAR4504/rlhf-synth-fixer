@@ -1,9 +1,9 @@
 # CI/CD Pipeline Configuration
-# This workflow demonstrates a multi-account, multi-stage CodePipeline for CDK applications
-
+# Multi-account, multi-stage CodePipeline for CDK apps
+---
 name: Multi-Stage Pipeline
 
-on:
+"on":
   workflow_dispatch:
   push:
     branches:
@@ -67,14 +67,13 @@ jobs:
 
       - name: Encrypt artifacts with KMS
         run: |
-          # Create tarball of artifacts
           tar -czf cdk-outputs.tar.gz -C cdk.out .
-          # Encrypt with AWS KMS
           aws kms encrypt \
             --key-id alias/github-actions-artifacts \
             --plaintext fileb://cdk-outputs.tar.gz \
             --output text \
             --query CiphertextBlob > cdk-outputs.tar.gz.encrypted
+
       - name: Upload encrypted artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -113,17 +112,27 @@ jobs:
 
       - name: Deploy to Dev with Change Set
         run: |
-          npx cdk deploy --all --require-approval never --context environment=dev
+          npx cdk deploy --all \
+            --require-approval never \
+            --context environment=dev
+
       - name: Verify Change Set
         run: |
-          aws cloudformation describe-change-set --change-set-name cdk-deploy-change-set \
-            --stack-name MyStack-dev --query 'Changes[*].ResourceChange' || echo "No change set found"
+          aws cloudformation describe-change-set \
+            --change-set-name cdk-deploy-change-set \
+            --stack-name MyStack-dev \
+            --query 'Changes[*].ResourceChange' || echo "No change set"
+
       - name: Send Slack notification
         if: always()
+        env:
+          WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          REF: ${{ github.ref }}
         run: |
-          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+          curl -X POST "$WEBHOOK" \
             -H 'Content-Type: application/json' \
-            -d '{"text":"Dev deployment completed for ${{ github.ref }}"}'
+            -d "{\"text\":\"Dev deployment completed for ${REF}\"}"
+
   manual-approval-staging:
     name: Approve Staging Deployment
     runs-on: ubuntu-latest
@@ -148,10 +157,12 @@ jobs:
           name: cdk-outputs
           path: cdk.out/
 
-      - name: Assume cross-account role for Staging via OIDC
+      - name: Assume cross-account role for Staging
         uses: aws-actions/configure-aws-credentials@v4
+        env:
+          ROLE: arn:aws:iam::${{ env.STAGING_ACCOUNT_ID }}:role/DeployRole
         with:
-          role-to-assume: arn:aws:iam::${{ env.STAGING_ACCOUNT_ID }}:role/CrossAccountDeployRole
+          role-to-assume: ${{ env.ROLE }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubActions-Staging
           role-chaining: true
@@ -166,13 +177,20 @@ jobs:
 
       - name: Deploy to Staging
         run: |
-          npx cdk deploy --all --require-approval never --context environment=staging
+          npx cdk deploy --all \
+            --require-approval never \
+            --context environment=staging
+
       - name: Send Slack notification
         if: always()
+        env:
+          WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          REF: ${{ github.ref }}
         run: |
-          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+          curl -X POST "$WEBHOOK" \
             -H 'Content-Type: application/json' \
-            -d '{"text":"Staging deployment completed for ${{ github.ref }}"}'
+            -d "{\"text\":\"Staging deployment completed for ${REF}\"}"
+
   manual-approval-prod:
     name: Approve Production Deployment
     runs-on: ubuntu-latest
@@ -197,10 +215,12 @@ jobs:
           name: cdk-outputs
           path: cdk.out/
 
-      - name: Assume cross-account role for Production via OIDC
+      - name: Assume cross-account role for Production
         uses: aws-actions/configure-aws-credentials@v4
+        env:
+          ROLE: arn:aws:iam::${{ env.PROD_ACCOUNT_ID }}:role/DeployRole
         with:
-          role-to-assume: arn:aws:iam::${{ env.PROD_ACCOUNT_ID }}:role/CrossAccountDeployRole
+          role-to-assume: ${{ env.ROLE }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubActions-Prod
           role-chaining: true
@@ -215,10 +235,16 @@ jobs:
 
       - name: Deploy to Production
         run: |
-          npx cdk deploy --all --require-approval never --context environment=prod
+          npx cdk deploy --all \
+            --require-approval never \
+            --context environment=prod
+
       - name: Send Slack notification
         if: always()
+        env:
+          WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          REF: ${{ github.ref }}
         run: |
-          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+          curl -X POST "$WEBHOOK" \
             -H 'Content-Type: application/json' \
-            -d '{"text":"Production deployment completed for ${{ github.ref }}"}'
+            -d "{\"text\":\"Production deployment completed for ${REF}\"}"
