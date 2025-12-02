@@ -1,0 +1,34 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "101000923",
+  "team": "synthetic",
+  "startedAt": "2025-12-02T00:00:00.000Z",
+  "subtask": "Environment Migration",
+  "subject_labels": [
+    "Environment Migration",
+    "Payment Processing Infrastructure",
+    "High Availability"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "ELB",
+    "S3",
+    "CloudWatch",
+    "KMS",
+    "IAM",
+    "Auto Scaling",
+    "ACM"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 0,
+    "branches": 0
+  },
+  "author": "anthropic-claude",
+  "dockerS3Location": ""
+}
