@@ -2,10 +2,10 @@ const fs = require('fs');
 const path = require('path');
 
 describe('CloudFormation Template Unit Tests', () => {
-  let template;
+  let template: any;
 
   beforeAll(() => {
-    const templatePath = path.join(__dirname, '../lib/tapstack.json');
+    const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
   });
@@ -43,29 +43,6 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(template.Parameters.EnvironmentSuffix.AllowedPattern).toBeDefined();
     });
 
-    it('should have VpcId parameter', () => {
-      expect(template.Parameters.VpcId).toBeDefined();
-      expect(template.Parameters.VpcId.Type).toBe('AWS::EC2::VPC::Id');
-    });
-
-    it('should have three private subnet parameters', () => {
-      expect(template.Parameters.PrivateSubnet1).toBeDefined();
-      expect(template.Parameters.PrivateSubnet1.Type).toBe('AWS::EC2::Subnet::Id');
-      expect(template.Parameters.PrivateSubnet2).toBeDefined();
-      expect(template.Parameters.PrivateSubnet2.Type).toBe('AWS::EC2::Subnet::Id');
-      expect(template.Parameters.PrivateSubnet3).toBeDefined();
-      expect(template.Parameters.PrivateSubnet3.Type).toBe('AWS::EC2::Subnet::Id');
-    });
-
-    it('should have three application subnet CIDR parameters', () => {
-      expect(template.Parameters.ApplicationSubnetCidr1).toBeDefined();
-      expect(template.Parameters.ApplicationSubnetCidr1.AllowedPattern).toBeDefined();
-      expect(template.Parameters.ApplicationSubnetCidr2).toBeDefined();
-      expect(template.Parameters.ApplicationSubnetCidr2.AllowedPattern).toBeDefined();
-      expect(template.Parameters.ApplicationSubnetCidr3).toBeDefined();
-      expect(template.Parameters.ApplicationSubnetCidr3.AllowedPattern).toBeDefined();
-    });
-
     it('should have MasterUsername parameter with constraints', () => {
       expect(template.Parameters.MasterUsername).toBeDefined();
       expect(template.Parameters.MasterUsername.Type).toBe('String');
@@ -74,10 +51,54 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(template.Parameters.MasterUsername.AllowedPattern).toBeDefined();
     });
 
-    it('should have MasterPassword parameter with NoEcho', () => {
-      expect(template.Parameters.MasterPassword).toBeDefined();
-      expect(template.Parameters.MasterPassword.NoEcho).toBe(true);
-      expect(template.Parameters.MasterPassword.MinLength).toBe(8);
+    it('should NOT have MasterPassword parameter (uses Secrets Manager instead)', () => {
+      expect(template.Parameters.MasterPassword).toBeUndefined();
+    });
+  });
+
+  describe('Secrets Manager', () => {
+    it('should create Secrets Manager secret for database password', () => {
+      const secret = template.Resources.DatabaseMasterPasswordSecret;
+      expect(secret).toBeDefined();
+      expect(secret.Type).toBe('AWS::SecretsManager::Secret');
+      expect(secret.Properties.GenerateSecretString).toBeDefined();
+      expect(secret.Properties.GenerateSecretString.PasswordLength).toBe(16);
+    });
+
+    it('should configure password requirements', () => {
+      const secret = template.Resources.DatabaseMasterPasswordSecret;
+      const genConfig = secret.Properties.GenerateSecretString;
+      expect(genConfig.RequireEachIncludedType).toBe(true);
+      expect(genConfig.ExcludeCharacters).toBeDefined();
+    });
+  });
+
+  describe('VPC and Networking', () => {
+    it('should create VPC with proper CIDR block', () => {
+      const vpc = template.Resources.VPC;
+      expect(vpc).toBeDefined();
+      expect(vpc.Type).toBe('AWS::EC2::VPC');
+      expect(vpc.Properties.CidrBlock).toBe('10.0.0.0/16');
+      expect(vpc.Properties.EnableDnsHostnames).toBe(true);
+      expect(vpc.Properties.EnableDnsSupport).toBe(true);
+    });
+
+    it('should create three private subnets in different AZs', () => {
+      const subnet1 = template.Resources.PrivateSubnet1;
+      const subnet2 = template.Resources.PrivateSubnet2;
+      const subnet3 = template.Resources.PrivateSubnet3;
+
+      expect(subnet1).toBeDefined();
+      expect(subnet1.Type).toBe('AWS::EC2::Subnet');
+      expect(subnet1.Properties.CidrBlock).toBe('10.0.1.0/24');
+
+      expect(subnet2).toBeDefined();
+      expect(subnet2.Type).toBe('AWS::EC2::Subnet');
+      expect(subnet2.Properties.CidrBlock).toBe('10.0.2.0/24');
+
+      expect(subnet3).toBeDefined();
+      expect(subnet3.Type).toBe('AWS::EC2::Subnet');
+      expect(subnet3.Properties.CidrBlock).toBe('10.0.3.0/24');
     });
   });
 
@@ -96,7 +117,7 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(statements).toBeDefined();
       expect(Array.isArray(statements)).toBe(true);
 
-      const rdsStatement = statements.find(s => s.Sid === 'Allow RDS to use the key');
+      const rdsStatement = statements.find((s: any) => s.Sid === 'Allow RDS to use the key');
       expect(rdsStatement).toBeDefined();
       expect(rdsStatement.Principal.Service).toBe('rds.amazonaws.com');
       expect(rdsStatement.Action).toContain('kms:Decrypt');
@@ -115,7 +136,7 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(kmsKey.Properties.Tags).toBeDefined();
       expect(Array.isArray(kmsKey.Properties.Tags)).toBe(true);
 
-      const nameTag = kmsKey.Properties.Tags.find(t => t.Key === 'Name');
+      const nameTag = kmsKey.Properties.Tags.find((t: any) => t.Key === 'Name');
       expect(nameTag).toBeDefined();
       expect(nameTag.Value['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
@@ -132,7 +153,7 @@ describe('CloudFormation Template Unit Tests', () => {
 
     it('should allow MySQL port 3306 from application subnets', () => {
       const sg = template.Resources.DatabaseSecurityGroup;
-      sg.Properties.SecurityGroupIngress.forEach(rule => {
+      sg.Properties.SecurityGroupIngress.forEach((rule: any) => {
         expect(rule.IpProtocol).toBe('tcp');
         expect(rule.FromPort).toBe(3306);
         expect(rule.ToPort).toBe(3306);
@@ -140,9 +161,9 @@ describe('CloudFormation Template Unit Tests', () => {
       });
     });
 
-    it('should use VpcId parameter', () => {
+    it('should use VPC resource reference', () => {
       const sg = template.Resources.DatabaseSecurityGroup;
-      expect(sg.Properties.VpcId.Ref).toBe('VpcId');
+      expect(sg.Properties.VpcId.Ref).toBe('VPC');
     });
 
     it('should include environmentSuffix in name', () => {
@@ -160,9 +181,9 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(subnetGroup.Properties.SubnetIds.length).toBe(3);
     });
 
-    it('should reference all three private subnet parameters', () => {
+    it('should reference all three private subnet resources', () => {
       const subnetGroup = template.Resources.DatabaseSubnetGroup;
-      const subnetRefs = subnetGroup.Properties.SubnetIds.map(s => s.Ref);
+      const subnetRefs = subnetGroup.Properties.SubnetIds.map((s: any) => s.Ref);
       expect(subnetRefs).toContain('PrivateSubnet1');
       expect(subnetRefs).toContain('PrivateSubnet2');
       expect(subnetRefs).toContain('PrivateSubnet3');
@@ -205,6 +226,12 @@ describe('CloudFormation Template Unit Tests', () => {
     it('should use MySQL 8.0 engine version', () => {
       const cluster = template.Resources.AuroraCluster;
       expect(cluster.Properties.EngineVersion).toMatch(/^8\.0/);
+    });
+
+    it('should use Secrets Manager for password', () => {
+      const cluster = template.Resources.AuroraCluster;
+      expect(cluster.Properties.MasterUserPassword['Fn::Sub']).toContain('resolve:secretsmanager');
+      expect(cluster.Properties.MasterUserPassword['Fn::Sub']).toContain('DatabaseMasterPasswordSecret');
     });
 
     it('should enable KMS encryption', () => {
@@ -323,10 +350,10 @@ describe('CloudFormation Template Unit Tests', () => {
       const writer = template.Resources.AuroraWriterInstance;
       const reader1 = template.Resources.AuroraReaderInstance1;
 
-      const writerRoleTag = writer.Properties.Tags.find(t => t.Key === 'Role');
+      const writerRoleTag = writer.Properties.Tags.find((t: any) => t.Key === 'Role');
       expect(writerRoleTag.Value).toBe('Writer');
 
-      const readerRoleTag = reader1.Properties.Tags.find(t => t.Key === 'Role');
+      const readerRoleTag = reader1.Properties.Tags.find((t: any) => t.Key === 'Role');
       expect(readerRoleTag.Value).toBe('Reader');
     });
   });
@@ -371,8 +398,15 @@ describe('CloudFormation Template Unit Tests', () => {
       expect(output.Value.Ref).toBe('DatabaseSecurityGroup');
     });
 
+    it('should output database password secret ARN', () => {
+      const output = template.Outputs.DatabasePasswordSecretArn;
+      expect(output).toBeDefined();
+      expect(output.Description).toContain('Secrets Manager');
+      expect(output.Value.Ref).toBe('DatabaseMasterPasswordSecret');
+    });
+
     it('should export all outputs with stack name prefix', () => {
-      Object.values(template.Outputs).forEach(output => {
+      Object.values(template.Outputs).forEach((output: any) => {
         expect(output.Export).toBeDefined();
         expect(output.Export.Name['Fn::Sub']).toContain('${AWS::StackName}');
       });
@@ -380,13 +414,16 @@ describe('CloudFormation Template Unit Tests', () => {
   });
 
   describe('Resource Count', () => {
-    it('should have exactly 10 resources', () => {
+    it('should have exactly 15 resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(10);
+      expect(resourceCount).toBe(15);
     });
 
     it('should have all required resource types', () => {
-      const resourceTypes = Object.values(template.Resources).map(r => r.Type);
+      const resourceTypes = Object.values(template.Resources).map((r: any) => r.Type);
+      expect(resourceTypes).toContain('AWS::SecretsManager::Secret');
+      expect(resourceTypes).toContain('AWS::EC2::VPC');
+      expect(resourceTypes.filter(t => t === 'AWS::EC2::Subnet').length).toBe(3);
       expect(resourceTypes).toContain('AWS::KMS::Key');
       expect(resourceTypes).toContain('AWS::KMS::Alias');
       expect(resourceTypes).toContain('AWS::EC2::SecurityGroup');
