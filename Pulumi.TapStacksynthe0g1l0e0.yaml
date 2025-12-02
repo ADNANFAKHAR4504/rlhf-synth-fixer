@@ -1,4 +1,0 @@
-encryptionsalt: v1:c92I7xYe1To=:v1:qlOsoosjv/MPwM37:EdQ35itbCRrqzqQUHTfIAt2k87jdhQ==
-config:
-  aws:defaultTags: '{"tags":{"Environment":"synthe0g1l0e0","Repository":"synth-e0g1l0e0","Author":"mayanksethi-turing","PRNumber":"unknown","Team":"synth","CreatedAt":"2025-12-02T08:33:45Z","ManagedBy":"pulumi"}}'
-  TapStack:environmentSuffix: synthe0g1l0e0

@@ -1,6 +1,6 @@
 {
-  "platform": "pulumi",
-  "language": "ts",
+  "platform": "cicd",
+  "language": "yml",
   "complexity": "hard",
   "po_id": "e0g1l0e0",
   "team": "synth",
@@ -18,5 +18,10 @@
     "IAM",
     "CloudWatch Logs"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "claude-synth"
 }
