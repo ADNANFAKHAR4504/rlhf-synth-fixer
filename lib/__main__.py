@@ -6,9 +6,12 @@ import pulumi
 import pulumi_aws as aws
 
 # Configuration
-config = pulumi.Config()
+# Use explicit namespace to match Pulumi.yaml config namespace
+config = pulumi.Config("payment-processor-migration")
 environment_suffix = config.get("environmentSuffix") or "dev"
-region = config.get("region") or "us-east-2"
+# Region is a provider config, not project-namespaced
+aws_config = pulumi.Config("aws")
+region = aws_config.get("region") or "us-east-2"
 
 # Resource tags
 common_tags = {
