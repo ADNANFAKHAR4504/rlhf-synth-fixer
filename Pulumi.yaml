@@ -1,4 +1,0 @@
-name: ci-cd-build-pipeline
-runtime: nodejs
-description: CI/CD Build Pipeline with CodeBuild, S3, CloudWatch Logs, and IAM
-main: bin/tap.ts

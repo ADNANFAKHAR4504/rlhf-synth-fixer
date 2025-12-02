@@ -1,5 +1,0 @@
-config:
-  aws:region: us-east-1
-  pulumi-infra:environmentSuffix: dev-test
-  pulumi-infra:availabilityZones: us-east-1a,us-east-1b,us-east-1c
-encryptionsalt: v1:YXP6iWKsl6Q=:v1:oltETyg0AL+Bd/Hp:EvB8YfQt34PuWrHZBaIwTzkOifY/vw==
