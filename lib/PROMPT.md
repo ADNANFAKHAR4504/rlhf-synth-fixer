@@ -1,6 +1,6 @@
 # IaC Program Optimization
 
-> **⚠️ CRITICAL REQUIREMENT: This task MUST be implemented using Pulumi with TypeScript**
+> **️ CRITICAL REQUIREMENT: This task MUST be implemented using Pulumi with TypeScript**
 >
 > Platform: **Pulumi**
 > Language: **TypeScript**
@@ -106,22 +106,22 @@ This is an Infrastructure as Code optimization task focused on refactoring and i
 
 #### AWS Config
 - **CRITICAL**: If creating AWS Config roles, use correct managed policy:
-  - ✅ CORRECT: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
-  - ❌ WRONG: `arn:aws:iam::aws:policy/service-role/ConfigRole`
-  - ❌ WRONG: `arn:aws:iam::aws:policy/AWS_ConfigRole`
+  -  CORRECT: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
+  -  WRONG: `arn:aws:iam::aws:policy/service-role/ConfigRole`
+  -  WRONG: `arn:aws:iam::aws:policy/AWS_ConfigRole`
 - **Alternative**: Use service-linked role `AWSServiceRoleForConfig` (auto-created)
 
 #### Lambda Functions
 - **Node.js 18.x+**: Do NOT use `require('aws-sdk')` - AWS SDK v2 not available
-  - ✅ Use AWS SDK v3: `import { S3Client } from '@aws-sdk/client-s3'`
-  - ✅ Or extract data from event object directly
+  -  Use AWS SDK v3: `import { S3Client } from '@aws-sdk/client-s3'`
+  -  Or extract data from event object directly
 - **Reserved Concurrency**: Avoid setting `reservedConcurrentExecutions` unless required
   - If required, use low values (1-5) to avoid account limit issues
 
 #### CloudWatch Synthetics
 - **CRITICAL**: Use current runtime version
-  - ✅ CORRECT: `synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0`
-  - ❌ WRONG: `SYNTHETICS_NODEJS_PUPPETEER_5_1` (deprecated)
+  -  CORRECT: `synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0`
+  -  WRONG: `SYNTHETICS_NODEJS_PUPPETEER_5_1` (deprecated)
 
 #### RDS Databases
 - **Prefer**: Aurora Serverless v2 (faster provisioning, auto-scaling)
@@ -150,11 +150,11 @@ This is an Infrastructure as Code optimization task focused on refactoring and i
 ### Correct Resource Naming (Pulumi TypeScript)
 ```typescript
 const bucket = new aws.s3.Bucket("data-bucket", {
-  bucket: `data-bucket-${environmentSuffix}`,  // ✅ CORRECT
+  bucket: `data-bucket-${environmentSuffix}`,  //  CORRECT
   // ...
 });
 
-// ❌ WRONG:
+//  WRONG:
 // bucket: 'data-bucket-prod'  // Hardcoded, will fail
 ```
 
@@ -162,12 +162,12 @@ const bucket = new aws.s3.Bucket("data-bucket", {
 ```typescript
 const lambda = new aws.lambda.Function("webhook-processor", {
   name: `webhook-processor-${environmentSuffix}`,
-  memorySize: 512,  // ✅ CORRECT - appropriate for workload
-  reservedConcurrentExecutions: 5,  // ✅ CORRECT - limited concurrency
+  memorySize: 512,  //  CORRECT - appropriate for workload
+  reservedConcurrentExecutions: 5,  //  CORRECT - limited concurrency
   // ...
 });
 
-// ❌ WRONG:
+//  WRONG:
 // memorySize: 3072  // Unnecessarily high
 // reservedConcurrentExecutions: undefined  // Unlimited concurrency
 ```
@@ -176,13 +176,13 @@ const lambda = new aws.lambda.Function("webhook-processor", {
 ```typescript
 const table = new aws.dynamodb.Table("webhook-table", {
   name: `webhook-table-${environmentSuffix}`,
-  billingMode: "PROVISIONED",  // ✅ CORRECT for predictable workload
+  billingMode: "PROVISIONED",  //  CORRECT for predictable workload
   readCapacity: 100,
   writeCapacity: 100,
   // ...
 });
 
-// ❌ WRONG:
+//  WRONG:
 // billingMode: "PAY_PER_REQUEST"  // More expensive for predictable load
 ```
 
