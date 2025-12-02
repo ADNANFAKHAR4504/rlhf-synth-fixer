@@ -1,0 +1,8 @@
+config:
+  aws:region: us-east-1
+  TapStack:environmentSuffix: dev
+  TapStack:dbEndpoint: dev-db.example.com:5432
+  TapStack:apiKey:
+    secure: AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAA
+  TapStack:maxRetries: "3"
+  TapStack:logLevel: INFO

@@ -113,7 +113,7 @@ export class LambdaOptimizerStack extends pulumi.ComponentResource {
         compatibleRuntimes: ['nodejs18.x', 'nodejs20.x'],
         code: new pulumi.asset.AssetArchive({
           nodejs: new pulumi.asset.FileArchive(
-            '../lib/lambda/layers/dependencies'
+            './lib/lambda/layers/dependencies'
           ),
         }),
         description: 'Shared dependencies layer for Lambda functions',
@@ -137,7 +137,7 @@ export class LambdaOptimizerStack extends pulumi.ComponentResource {
       `optimized-function-${environmentSuffix}`,
       {
         name: `optimized-function-${environmentSuffix}`,
-        runtime: 'nodejs18.x',
+        runtime: 'nodejs20.x',
         handler: 'index.handler',
         role: lambdaRole.arn,
 
@@ -175,7 +175,7 @@ export class LambdaOptimizerStack extends pulumi.ComponentResource {
         },
 
         code: new pulumi.asset.AssetArchive({
-          '.': new pulumi.asset.FileArchive('../lib/lambda/function'),
+          '.': new pulumi.asset.FileArchive('./lib/lambda/function'),
         }),
 
         // Resource Tagging (Requirement 10): Cost tracking and compliance tags
