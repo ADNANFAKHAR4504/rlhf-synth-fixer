@@ -23,7 +23,7 @@
     "build:strict": "tsc",
     "start": "ts-node cli/create-task.ts",
     "lint": "eslint .",
-    "synth": "cdk synth --all",
+    "synth": "pulumi preview --stack ${ENVIRONMENT_SUFFIX:-dev} --non-interactive",
     "format": "prettier --write 'lib/*.{ts,tsx}' 'bin/*.{ts,tsx}' 'test/*.{ts,tsx}' 'cli/*.{ts,tsx}'",
     "format:check": "prettier --check 'lib/*.{ts,tsx}'",
     "format-all": "npm run format && npm run lint",
