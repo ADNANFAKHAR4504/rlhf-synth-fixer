@@ -1,5 +1,5 @@
 {
-  "platform": "Terraform",
+  "platform": "tf",
   "language": "hcl",
   "complexity": "hard",
   "turn_type": "single",
@@ -20,5 +20,8 @@
     "IAM",
     "VPC Flow Logs"
   ],
+  "region": "eu-central-1",
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
   "training_quality": 10
 }
