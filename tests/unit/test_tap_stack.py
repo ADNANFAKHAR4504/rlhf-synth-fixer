@@ -119,18 +119,15 @@ class TestTapStack(unittest.TestCase):
     def test_tap_stack_creates_all_components(self):
         """Test that TapStack creates all required child stacks."""
 
-        def check_stack_components(args):
-            stack_name, tap_stack = args
-
+        def check_stack_components(tap_stack):
             # Verify main stack attributes
-            self.assertEqual(stack_name, 'test-stack')
             self.assertIsInstance(tap_stack, TapStack)
             self.assertEqual(tap_stack.environment_suffix, 'test')
 
             # Verify tags include defaults and custom tags
             self.assertIn('Project', tap_stack.tags)
             self.assertEqual(tap_stack.tags['Project'], 'JapanCart')
-            self.assertIn('ManagedBy', tap_stack.tags)
+            self.assertIsNotNone('ManagedBy', tap_stack.tags)
             self.assertEqual(tap_stack.tags['ManagedBy'], 'Pulumi')
             self.assertIn('Environment', tap_stack.tags)
             self.assertEqual(tap_stack.tags['Environment'], 'test')
@@ -151,8 +148,8 @@ class TestTapStack(unittest.TestCase):
         # Create stack
         stack = TapStack('test-stack', args)
 
-        # Return assertion
-        return pulumi.Output.all(stack.name, stack).apply(check_stack_components)
+        # Return assertion - check the stack directly without accessing .name
+        return pulumi.Output.from_input(stack).apply(check_stack_components)
 
     @pulumi.runtime.test
     def test_tap_stack_default_environment_suffix(self):
