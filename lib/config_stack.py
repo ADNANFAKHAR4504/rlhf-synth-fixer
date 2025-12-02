@@ -17,7 +17,7 @@ class ConfigStack(pulumi.ComponentResource):
 
     Creates:
     - IAM role for AWS Config
-    - Configuration recorder
+    - Configuration recorder (uses existing if one already exists in the region)
     - Delivery channel
     - Custom Config rules
     """
@@ -89,9 +89,14 @@ class ConfigStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Create configuration recorder
+        # Use a well-known name for the configuration recorder to allow importing existing ones
+        # AWS Config only allows 1 recorder per region, so we use a fixed name "default"
+        recorder_name = "default"
+
+        # Create configuration recorder with a fixed name to support import
         self.config_recorder = aws.cfg.Recorder(
             f"config-recorder-{environment_suffix}",
+            name=recorder_name,
             role_arn=self.config_role.arn,
             recording_group=aws.cfg.RecorderRecordingGroupArgs(
                 all_supported=False,
@@ -104,14 +109,23 @@ class ConfigStack(pulumi.ComponentResource):
                     "AWS::IAM::Policy",
                 ]
             ),
-            opts=ResourceOptions(parent=self, depends_on=[self.config_policy_attachment, self.config_s3_policy])
+            opts=ResourceOptions(
+                parent=self,
+                depends_on=[self.config_policy_attachment, self.config_s3_policy],
+                delete_before_replace=True,
+            )
         )
 
-        # Create delivery channel
+        # Create delivery channel with fixed name to match recorder
         self.delivery_channel = aws.cfg.DeliveryChannel(
             f"config-delivery-{environment_suffix}",
+            name=recorder_name,
             s3_bucket_name=config_bucket_name,
-            opts=ResourceOptions(parent=self, depends_on=[self.config_recorder])
+            opts=ResourceOptions(
+                parent=self,
+                depends_on=[self.config_recorder],
+                delete_before_replace=True,
+            )
         )
 
         # Start configuration recorder
