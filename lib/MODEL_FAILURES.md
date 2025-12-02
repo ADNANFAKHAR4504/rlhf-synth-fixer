@@ -317,34 +317,190 @@ ecs_cluster = aws.ecs.Cluster(
 
 ---
 
+### 11. Configuration Access Error - Required Config Without Default
+
+**Impact Level**: Critical
+
+**MODEL_RESPONSE Issue**: The code uses `config.require("environmentSuffix")` which causes a `ConfigMissingError` if the configuration is not explicitly set:
+
+```python
+# Line 18 in lib/__main__.py
+environment_suffix = config.require("environmentSuffix")
+```
+
+This breaks deployment in test environments where the configuration might not be set, and prevents the code from running during unit tests.
+
+**IDEAL_RESPONSE Fix**: Use `config.get()` with a default value to allow the code to work in all environments:
+
+```python
+environment_suffix = config.get("environmentSuffix") or "dev"
+```
+
+**Root Cause**: Model used `require()` without considering that test environments may not have all configurations set, violating the principle of graceful defaults.
+
+**Deployment Impact**:
+- **Blocks all deployments** - fails immediately if config not set
+- **Prevents unit testing** - tests cannot run without full Pulumi stack configuration
+- **Violates best practice** - should provide sensible defaults for optional configurations
+
+**Training Value**: Demonstrates the importance of providing default values for configuration parameters to enable testing and development environments.
+
+---
+
+### 12. Invalid ECR Repository Parameter - Encryption Configuration
+
+**Impact Level**: Critical
+
+**MODEL_RESPONSE Issue**: The code attempts to use `encryption_configuration` parameter which is not supported in the current Pulumi AWS provider version:
+
+```python
+# Lines 48-50 in lib/__main__.py
+encryption_configuration=aws.ecr.RepositoryEncryptionConfigurationArgs(
+    encryption_type="AES256",
+),
+```
+
+This causes a `TypeError: Repository._internal_init() got an unexpected keyword argument 'encryption_configuration'` during deployment.
+
+**IDEAL_RESPONSE Fix**: Remove the unsupported parameter. ECR repositories use AWS-managed encryption by default:
+
+```python
+ecr_repository = aws.ecr.Repository(
+    f"payment-processor-ecr-{environment_suffix}",
+    name=f"payment-processor-{environment_suffix}",
+    image_scanning_configuration=aws.ecr.RepositoryImageScanningConfigurationArgs(
+        scan_on_push=True,
+    ),
+    image_tag_mutability="MUTABLE",
+    tags=common_tags
+)
+```
+
+**Root Cause**: Model used an API parameter that doesn't exist in the current Pulumi AWS provider version, indicating lack of API version awareness.
+
+**Deployment Impact**:
+- **Immediate deployment failure** - TypeError prevents resource creation
+- **Blocks all ECR repository creation** - cannot proceed without fixing
+
+**Training Value**: Highlights the importance of verifying API compatibility with the specific provider version being used.
+
+---
+
+### 13. Invalid ECS Service Deployment Configuration Structure
+
+**Impact Level**: Critical
+
+**MODEL_RESPONSE Issue**: The code uses a nested `ServiceDeploymentConfigurationArgs` object which is not the correct API structure:
+
+```python
+# Lines 378-385 in lib/__main__.py
+deployment_configuration=aws.ecs.ServiceDeploymentConfigurationArgs(
+    maximum_percent=200,
+    minimum_healthy_percent=100,
+    deployment_circuit_breaker=aws.ecs.ServiceDeploymentConfigurationDeploymentCircuitBreakerArgs(
+        enable=True,
+        rollback=True
+    )
+),
+```
+
+This causes `TypeError: ServiceDeploymentConfigurationArgs.__init__() got an unexpected keyword argument 'maximum_percent'` because the parameters should be set directly on the Service resource, not in a nested configuration object.
+
+**IDEAL_RESPONSE Fix**: Use direct parameters on the Service resource:
+
+```python
+ecs_service = aws.ecs.Service(
+    f"payment-processor-service-{environment_suffix}",
+    # ... other parameters ...
+    deployment_maximum_percent=200,
+    deployment_minimum_healthy_percent=100,
+    # ... rest of configuration ...
+)
+```
+
+**Root Cause**: Model used incorrect API structure, likely confusing with other AWS SDK patterns or outdated Pulumi provider documentation.
+
+**Deployment Impact**:
+- **Immediate deployment failure** - TypeError prevents ECS service creation
+- **Blocks all service deployments** - cannot create ECS service without fixing
+
+**Training Value**: Demonstrates the need to verify the exact API structure for the Pulumi provider version being used, as it may differ from AWS SDK or CloudFormation patterns.
+
+---
+
+### 14. Unsupported Deployment Circuit Breaker Attribute
+
+**Impact Level**: Critical
+
+**MODEL_RESPONSE Issue**: The code attempts to use `deployment_circuit_breaker` which is not available in the current Pulumi AWS provider version:
+
+```python
+# Lines 381-384 in lib/__main__.py
+deployment_circuit_breaker=aws.ecs.ServiceDeploymentConfigurationDeploymentCircuitBreakerArgs(
+    enable=True,
+    rollback=True
+)
+```
+
+This causes `AttributeError: module 'pulumi_aws.ecs' has no attribute 'ServiceDeploymentConfigurationDeploymentCircuitBreakerArgs'` during code execution.
+
+**IDEAL_RESPONSE Fix**: Remove the unsupported attribute. Circuit breaker functionality may not be available in the current provider version:
+
+```python
+ecs_service = aws.ecs.Service(
+    f"payment-processor-service-{environment_suffix}",
+    # ... other parameters ...
+    deployment_maximum_percent=200,
+    deployment_minimum_healthy_percent=100,
+    # Remove deployment_circuit_breaker - not supported in current provider version
+    # ... rest of configuration ...
+)
+```
+
+**Root Cause**: Model attempted to use a feature that doesn't exist in the current Pulumi AWS provider version, indicating lack of version-specific API knowledge.
+
+**Deployment Impact**:
+- **Immediate code execution failure** - AttributeError prevents module import
+- **Blocks all deployments** - cannot even load the code without fixing
+
+**Training Value**: Emphasizes the critical importance of verifying feature availability in the specific provider version before using it.
+
+---
+
 ## Summary
 
-**Total Failures**: 10 (2 Critical, 2 High, 4 Medium, 2 Low)
+**Total Failures**: 14 (6 Critical, 2 High, 4 Medium, 2 Low)
 
 **Primary Knowledge Gaps**:
 1. **Self-sufficient infrastructure**: Model doesn't understand that deployments must be standalone and not depend on external stacks
-2. **Conditional resource creation**: Model doesn't use conditional logic to handle "import or create" scenarios
-3. **Complete feature implementation**: Model provides partial implementations with comments suggesting full functionality
-4. **Security best practices**: Missed encryption requirements and hardcoded secrets
-5. **Cost optimization**: Didn't implement VPC endpoints or Fargate Spot strategies
+2. **API version compatibility**: Model uses parameters and structures that don't exist in the current Pulumi AWS provider version
+3. **Configuration management**: Model doesn't provide default values for optional configurations, breaking test environments
+4. **Conditional resource creation**: Model doesn't use conditional logic to handle "import or create" scenarios
+5. **Complete feature implementation**: Model provides partial implementations with comments suggesting full functionality
+6. **Security best practices**: Missed encryption requirements and hardcoded secrets
+7. **Cost optimization**: Didn't implement VPC endpoints or Fargate Spot strategies
 
 **Training Value**: This task demonstrates critical failures in understanding:
 - Infrastructure independence and self-sufficiency principles
+- API version compatibility and provider-specific implementations
+- Configuration management with sensible defaults
 - The difference between production patterns and testing requirements
 - Complete vs. partial feature implementation
 - Security and compliance requirements for financial services
 - Cost optimization opportunities in AWS
 
 **Estimated Fix Effort**:
-- Critical failures: 6-8 hours
+- Critical failures: 8-10 hours (including API compatibility fixes)
 - High failures: 3-4 hours
 - Medium failures: 2-3 hours
 - Low failures: 1-2 hours
-- **Total**: 12-17 hours of development work
+- **Total**: 14-19 hours of development work
 
 **Recommended Training Focus**:
 1. Self-sufficient infrastructure patterns
-2. Conditional resource creation in IaC
-3. Complete vs. partial feature implementation
-4. Security and compliance requirements for financial services
-5. Cost optimization strategies in AWS
+2. Pulumi provider API version compatibility verification
+3. Configuration management with defaults for testability
+4. Conditional resource creation in IaC
+5. Complete vs. partial feature implementation
+6. Security and compliance requirements for financial services
+7. Cost optimization strategies in AWS

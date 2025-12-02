@@ -1,6 +1,7 @@
 name: payment-processor-migration
 runtime: python
 description: ECS Fargate migration for payment processing system
+main: lib/__main__.py
 
 config:
   aws:region:

@@ -1,4 +1,0 @@
-config:
-  aws:region: us-east-2
-  payment-processor-migration:environmentSuffix: dev
-  payment-processor-migration:legacyStackName: legacy-infrastructure
