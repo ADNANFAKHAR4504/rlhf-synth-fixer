@@ -24,6 +24,7 @@ Refactor and optimize an ECS Fargate deployment using **Pulumi with TypeScript**
    - Tag all resources with Environment, Team, and Project
    - Enable proper cost tracking and attribution
    - Make tags consistent across all AWS resources
+   - **Include tags on ALL resources**: VPC, subnets, security groups, IAM roles, ECS resources, etc.
 
 4. **Fix Target Group Loop**
    - Current code creates 10 separate target groups in a loop
@@ -34,6 +35,7 @@ Refactor and optimize an ECS Fargate deployment using **Pulumi with TypeScript**
    - Add proper health check configuration to ALB target group
    - Set reasonable timeouts and intervals
    - Configure healthy/unhealthy thresholds
+   - **Make health check path configurable** (default: `/`)
 
 6. **Consolidate IAM Roles**
    - Remove duplicate IAM role definitions
@@ -59,6 +61,7 @@ Refactor and optimize an ECS Fargate deployment using **Pulumi with TypeScript**
 - Resource names must include **environmentSuffix** for uniqueness
 - Follow naming convention: `{resource-type}-{environmentSuffix}`
 - Deploy to **us-east-1** region
+- **Use `aws.getRegion()` for dynamic region detection** in CloudWatch log configuration (avoid hardcoding region)
 
 ### Deployment Requirements (CRITICAL)
 
@@ -66,6 +69,7 @@ Refactor and optimize an ECS Fargate deployment using **Pulumi with TypeScript**
 - Resource naming pattern: `{resource-type}-{environmentSuffix}`
 - All resources must be destroyable (FORBIDDEN: RemovalPolicy.RETAIN or DeletionProtection)
 - This ensures clean teardown after testing
+- **Support `ENVIRONMENT_SUFFIX` environment variable** as fallback for Pulumi config
 
 ### Constraints
 
@@ -75,6 +79,33 @@ Refactor and optimize an ECS Fargate deployment using **Pulumi with TypeScript**
 - All resources must be destroyable (no Retain policies)
 - Include proper error handling and validation
 - Code must be production-ready and well-documented
+
+### Configuration Parameters
+
+The following should be configurable via Pulumi config or environment variables:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `environmentSuffix` | (required) | Environment identifier (e.g., `dev`, `prod`, `pr123`) |
+| `containerMemory` | `512` | Container memory in MB |
+| `containerCpu` | `256` | Container CPU units |
+| `desiredCount` | `2` | Number of ECS tasks to run |
+| `team` | `platform` | Team name for cost allocation tags |
+| `project` | `ecs-optimization` | Project name for cost allocation tags |
+
+### Design Decisions & Notes
+
+The following are **intentional design choices** for this demo/test infrastructure:
+
+1. **ALB Security Group allows 0.0.0.0/0**: This is expected for a public-facing ALB. In production, consider restricting to specific IP ranges or using WAF.
+
+2. **Tasks have public IPs**: Required for Fargate tasks in public subnets to pull images from ECR/Docker Hub without NAT Gateway. For production, use private subnets with NAT Gateway.
+
+3. **Uses nginx:latest image**: This is a demo deployment. For production, always use versioned/immutable tags.
+
+4. **VPC created inline**: This stack creates its own VPC for isolation. For production, consider accepting VPC/subnet IDs as parameters.
+
+5. **No KMS encryption**: CloudWatch logs and other resources use default encryption. For sensitive workloads, add KMS key parameter.
 
 ## Success Criteria
 
@@ -96,5 +127,11 @@ Refactor and optimize an ECS Fargate deployment using **Pulumi with TypeScript**
 - Consolidated IAM roles
 - CloudWatch log retention policy (7 days)
 - Stack outputs for ALB DNS and service ARN
-- Unit tests for infrastructure code
-- Documentation explaining the optimizations made
+
+## Files NOT Required
+
+The following files are **NOT required** for this Pulumi TypeScript project:
+
+- **README.md**: Deployment documentation is not required; this PROMPT.md serves as the specification
+- **requirements.txt**: This is a TypeScript/Node.js project, not Python. Dependencies are managed via `package.json`
+- **Pipfile**: Python dependencies are only for the optimization script, not the IaC code
