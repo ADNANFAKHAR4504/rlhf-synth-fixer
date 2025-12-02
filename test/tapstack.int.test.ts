@@ -1,26 +1,41 @@
-const {
+import {
   RDSClient,
   DescribeDBClustersCommand,
   DescribeDBInstancesCommand,
-} = require('@aws-sdk/client-rds');
-const {
+  DBCluster,
+  DBInstance,
+  DBClusterMember,
+  DBSubnetGroup,
+} from '@aws-sdk/client-rds';
+import {
   KMSClient,
   DescribeKeyCommand,
   GetKeyRotationStatusCommand,
-} = require('@aws-sdk/client-kms');
-const {
+  KeyMetadata,
+} from '@aws-sdk/client-kms';
+import {
   EC2Client,
   DescribeSecurityGroupsCommand,
-} = require('@aws-sdk/client-ec2');
-const fs = require('fs');
-const path = require('path');
+  SecurityGroup,
+} from '@aws-sdk/client-ec2';
+import * as fs from 'fs';
+import * as path from 'path';
+
+interface StackOutputs {
+  ClusterEndpoint: string;
+  ReaderEndpoint: string;
+  ClusterPort: string;
+  KmsKeyArn: string;
+  ClusterIdentifier: string;
+  SecurityGroupId: string;
+}
 
 describe('CloudFormation Stack Integration Tests', () => {
-  let outputs;
-  let rdsClient;
-  let kmsClient;
-  let ec2Client;
-  let region;
+  let outputs: StackOutputs;
+  let rdsClient: RDSClient;
+  let kmsClient: KMSClient;
+  let ec2Client: EC2Client;
+  let region: string;
 
   beforeAll(() => {
     // Load deployment outputs
@@ -80,14 +95,14 @@ describe('CloudFormation Stack Integration Tests', () => {
   });
 
   describe('Aurora Cluster Validation', () => {
-    let cluster;
+    let cluster: DBCluster;
 
     beforeAll(async () => {
       const command = new DescribeDBClustersCommand({
         DBClusterIdentifier: outputs.ClusterIdentifier,
       });
       const response = await rdsClient.send(command);
-      cluster = response.DBClusters[0];
+      cluster = response.DBClusters![0];
     });
 
     it('should have cluster in available state', () => {
@@ -137,8 +152,8 @@ describe('CloudFormation Stack Integration Tests', () => {
   });
 
   describe('DB Instances Validation', () => {
-    let instances;
-    let clusterMembers;
+    let instances: DBInstance[];
+    let clusterMembers: DBClusterMember[];
 
     beforeAll(async () => {
       const instancesCommand = new DescribeDBInstancesCommand({
@@ -150,14 +165,14 @@ describe('CloudFormation Stack Integration Tests', () => {
         ],
       });
       const instancesResponse = await rdsClient.send(instancesCommand);
-      instances = instancesResponse.DBInstances;
+      instances = instancesResponse.DBInstances!;
 
       // Get cluster members to check writer/reader roles
       const clusterCommand = new DescribeDBClustersCommand({
         DBClusterIdentifier: outputs.ClusterIdentifier,
       });
       const clusterResponse = await rdsClient.send(clusterCommand);
-      clusterMembers = clusterResponse.DBClusters[0].DBClusterMembers;
+      clusterMembers = clusterResponse.DBClusters![0].DBClusterMembers!;
     });
 
     it('should have exactly 3 DB instances', () => {
@@ -213,23 +228,23 @@ describe('CloudFormation Stack Integration Tests', () => {
     });
 
     it('should be in private subnets', () => {
-      instances.forEach(instance => {
+      instances.forEach((instance: DBInstance) => {
         expect(instance.DBSubnetGroup).toBeDefined();
-        expect(instance.DBSubnetGroup.Subnets.length).toBeGreaterThanOrEqual(3);
+        expect(instance.DBSubnetGroup!.Subnets!.length).toBeGreaterThanOrEqual(3);
       });
     });
   });
 
   describe('KMS Key Validation', () => {
-    let keyMetadata;
-    let keyRotationStatus;
+    let keyMetadata: KeyMetadata;
+    let keyRotationStatus: boolean | undefined;
 
     beforeAll(async () => {
       const keyId = outputs.KmsKeyArn;
 
       const describeCommand = new DescribeKeyCommand({ KeyId: keyId });
       const describeResponse = await kmsClient.send(describeCommand);
-      keyMetadata = describeResponse.KeyMetadata;
+      keyMetadata = describeResponse.KeyMetadata!;
 
       const rotationCommand = new GetKeyRotationStatusCommand({ KeyId: keyId });
       const rotationResponse = await kmsClient.send(rotationCommand);
@@ -254,14 +269,14 @@ describe('CloudFormation Stack Integration Tests', () => {
   });
 
   describe('Security Group Validation', () => {
-    let securityGroup;
+    let securityGroup: SecurityGroup;
 
     beforeAll(async () => {
       const command = new DescribeSecurityGroupsCommand({
         GroupIds: [outputs.SecurityGroupId],
       });
       const response = await ec2Client.send(command);
-      securityGroup = response.SecurityGroups[0];
+      securityGroup = response.SecurityGroups![0];
     });
 
     it('should exist and be active', () => {
@@ -270,43 +285,43 @@ describe('CloudFormation Stack Integration Tests', () => {
 
     it('should have MySQL ingress rules', () => {
       expect(securityGroup.IpPermissions).toBeDefined();
-      expect(securityGroup.IpPermissions.length).toBeGreaterThanOrEqual(1);
+      expect(securityGroup.IpPermissions!.length).toBeGreaterThanOrEqual(1);
 
-      const mysqlRules = securityGroup.IpPermissions.filter(
+      const mysqlRules = securityGroup.IpPermissions!.filter(
         rule => rule.FromPort === 3306 && rule.ToPort === 3306
       );
       expect(mysqlRules.length).toBeGreaterThanOrEqual(1);
 
       // Count total CIDR rules across all ingress rules
-      const totalCidrRules = securityGroup.IpPermissions.reduce(
-        (sum, rule) => sum + (rule.IpRanges?.length || 0),
+      const totalCidrRules = securityGroup.IpPermissions!.reduce(
+        (sum: number, rule) => sum + (rule.IpRanges?.length || 0),
         0
       );
       expect(totalCidrRules).toBe(3);
     });
 
     it('should allow TCP traffic on port 3306', () => {
-      const mysqlRules = securityGroup.IpPermissions.filter(
+      const mysqlRules = securityGroup.IpPermissions!.filter(
         rule => rule.IpProtocol === 'tcp' && rule.FromPort === 3306
       );
       expect(mysqlRules.length).toBeGreaterThanOrEqual(1);
 
       // Verify total CIDR entries across all MySQL rules
       const totalCidrRules = mysqlRules.reduce(
-        (sum, rule) => sum + (rule.IpRanges?.length || 0),
+        (sum: number, rule) => sum + (rule.IpRanges?.length || 0),
         0
       );
       expect(totalCidrRules).toBe(3);
     });
 
     it('should have CIDR-based ingress rules', () => {
-      const mysqlRules = securityGroup.IpPermissions.filter(
+      const mysqlRules = securityGroup.IpPermissions!.filter(
         rule => rule.FromPort === 3306
       );
 
       mysqlRules.forEach(rule => {
         expect(rule.IpRanges).toBeDefined();
-        expect(rule.IpRanges.length).toBeGreaterThan(0);
+        expect(rule.IpRanges!.length).toBeGreaterThan(0);
       });
     });
   });
@@ -319,7 +334,7 @@ describe('CloudFormation Stack Integration Tests', () => {
     it('should have consistent naming across resources', () => {
       const environmentSuffix = outputs.ClusterIdentifier.split('-').pop();
       expect(environmentSuffix).toBeDefined();
-      expect(environmentSuffix.length).toBeGreaterThan(0);
+      expect(environmentSuffix!.length).toBeGreaterThan(0);
     });
   });
 
@@ -335,16 +350,14 @@ describe('CloudFormation Stack Integration Tests', () => {
   });
 
   describe('High Availability Configuration', () => {
-    let cluster;
-    let instances;
-    let subnetGroup;
+    let instances: DBInstance[];
+    let subnetGroup: DBSubnetGroup | undefined;
 
     beforeAll(async () => {
       const clusterCommand = new DescribeDBClustersCommand({
         DBClusterIdentifier: outputs.ClusterIdentifier,
       });
       const clusterResponse = await rdsClient.send(clusterCommand);
-      cluster = clusterResponse.DBClusters[0];
 
       const instancesCommand = new DescribeDBInstancesCommand({
         Filters: [
@@ -355,11 +368,11 @@ describe('CloudFormation Stack Integration Tests', () => {
         ],
       });
       const instancesResponse = await rdsClient.send(instancesCommand);
-      instances = instancesResponse.DBInstances;
+      instances = instancesResponse.DBInstances!;
 
       // Get subnet group from one of the instances
-      if (instances.length > 0) {
-        subnetGroup = instances[0].DBSubnetGroup;
+      if (instances!.length > 0) {
+        subnetGroup = instances![0].DBSubnetGroup;
       }
     });
 
@@ -370,26 +383,26 @@ describe('CloudFormation Stack Integration Tests', () => {
 
     it('should have subnet group spanning multiple AZs', () => {
       expect(subnetGroup).toBeDefined();
-      expect(subnetGroup.Subnets).toBeDefined();
-      expect(subnetGroup.Subnets.length).toBe(3);
+      expect(subnetGroup!.Subnets).toBeDefined();
+      expect(subnetGroup!.Subnets!.length).toBe(3);
 
       const azs = new Set(
-        subnetGroup.Subnets.map(s => s.SubnetAvailabilityZone?.Name || s.AvailabilityZone)
+        subnetGroup!.Subnets!.map(s => s.SubnetAvailabilityZone?.Name)
       );
       expect(azs.size).toBeGreaterThanOrEqual(2);
     });
   });
 
   describe('Encryption Configuration', () => {
-    let cluster;
-    let instances;
+    let cluster: DBCluster;
+    let instances: DBInstance[];
 
     beforeAll(async () => {
       const clusterCommand = new DescribeDBClustersCommand({
         DBClusterIdentifier: outputs.ClusterIdentifier,
       });
       const clusterResponse = await rdsClient.send(clusterCommand);
-      cluster = clusterResponse.DBClusters[0];
+      cluster = clusterResponse.DBClusters![0];
 
       const instancesCommand = new DescribeDBInstancesCommand({
         Filters: [
@@ -400,23 +413,23 @@ describe('CloudFormation Stack Integration Tests', () => {
         ],
       });
       const instancesResponse = await rdsClient.send(instancesCommand);
-      instances = instancesResponse.DBInstances;
+      instances = instancesResponse.DBInstances!;
     });
 
     it('should use same KMS key for cluster and instances', () => {
       const clusterKmsKey = cluster.KmsKeyId;
-      instances.forEach(instance => {
+      instances.forEach((instance: DBInstance) => {
         expect(instance.KmsKeyId).toBe(clusterKmsKey);
       });
     });
 
     it('should use same KMS key for Performance Insights', () => {
       const clusterKmsKey = cluster.KmsKeyId;
-      instances.forEach(instance => {
+      instances.forEach((instance: DBInstance) => {
         if (instance.PerformanceInsightsEnabled) {
           // Performance Insights KMS key should match cluster KMS key
           expect(instance.PerformanceInsightsKMSKeyId).toContain(
-            clusterKmsKey.split('/').pop()
+            clusterKmsKey!.split('/').pop()!
           );
         }
       });
