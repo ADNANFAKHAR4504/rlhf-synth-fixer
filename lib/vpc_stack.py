@@ -115,7 +115,7 @@ class VpcStack(pulumi.ComponentResource):
 
             # NAT Gateway
             self.nat_gateway = aws.ec2.NatGateway(
-                f="nat-gateway-{environment_suffix}",
+                f"nat-gateway-{environment_suffix}",
                 subnet_id=self.public_subnet.id,
                 allocation_id=self.eip.id,
                 tags={**tags, "Name": f"nat-gateway-{environment_suffix}"},
@@ -124,7 +124,7 @@ class VpcStack(pulumi.ComponentResource):
 
             # Route to NAT Gateway
             aws.ec2.Route(
-                f="private-route-{environment_suffix}",
+                f"private-route-{environment_suffix}",
                 route_table_id=self.private_route_table.id,
                 destination_cidr_block="0.0.0.0/0",
                 nat_gateway_id=self.nat_gateway.id,
