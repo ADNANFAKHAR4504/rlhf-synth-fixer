@@ -17,6 +17,7 @@ import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
 
 interface TapStackConfig {
@@ -42,6 +43,10 @@ interface TapStackConfig {
   cloudfrontPriceClass: cloudfront.PriceClass;
   vpcMaxAzs: number;
   natGateways: number;
+  // Optional security configurations
+  allowedCorsOrigins?: string[]; // Restrict CORS to specific origins (defaults to CloudFront URL)
+  enableWaf?: boolean; // Enable WAF protection for API Gateway (defaults to true for prod)
+  enableLambdaConcurrencyLimit?: boolean; // Enable Lambda concurrency limits (defaults to false)
 }
 
 export class TapStack extends cdk.Stack {
@@ -490,7 +495,10 @@ export class TapStack extends cdk.Stack {
       `),
         memorySize: config.lambdaMemorySize,
         timeout: cdk.Duration.seconds(config.lambdaTimeout),
-        // Note: reservedConcurrentExecutions removed to avoid account concurrency limits
+        // Conditionally apply concurrency limits based on configuration
+        ...(config.enableLambdaConcurrencyLimit && {
+          reservedConcurrentExecutions: config.lambdaConcurrency,
+        }),
         role: apiHandlerRole,
         vpc,
         vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
@@ -539,7 +547,10 @@ export class TapStack extends cdk.Stack {
       `),
         memorySize: config.lambdaMemorySize,
         timeout: cdk.Duration.seconds(config.lambdaTimeout * 2),
-        // Note: reservedConcurrentExecutions removed to avoid account concurrency limits
+        // Conditionally apply concurrency limits based on configuration
+        ...(config.enableLambdaConcurrencyLimit && {
+          reservedConcurrentExecutions: config.lambdaConcurrency,
+        }),
         role: eventProcessorRole,
         vpc,
         vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
@@ -765,6 +776,15 @@ export class TapStack extends cdk.Stack {
     });
 
     // ---------------- API Gateway ----------------
+    // Determine allowed CORS origins - restrict to CloudFront URL in production
+    const corsOrigins = config.allowedCorsOrigins ?? [
+      `https://${distribution.distributionDomainName}`,
+      // Allow localhost for development
+      ...(config.stage === 'dev'
+        ? ['http://localhost:3000', 'http://localhost:5173']
+        : []),
+    ];
+
     const api = new apigateway.RestApi(this, `${resourcePrefix}-api`, {
       restApiName: `${resourcePrefix}-api`,
       description: `${config.serviceName} API Gateway`,
@@ -782,7 +802,7 @@ export class TapStack extends cdk.Stack {
         types: [apigateway.EndpointType.REGIONAL],
       },
       defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowOrigins: corsOrigins,
         allowMethods: apigateway.Cors.ALL_METHODS,
         allowHeaders: [
           'Content-Type',
@@ -806,6 +826,103 @@ export class TapStack extends cdk.Stack {
     itemResource.addMethod('DELETE', apiIntegration);
     const healthResource = api.root.addResource('health');
     healthResource.addMethod('GET', apiIntegration);
+
+    // ---------------- WAF WebACL for API Gateway ----------------
+    // Enable WAF by default in staging/prod, configurable via enableWaf
+    const shouldEnableWaf = config.enableWaf ?? config.stage !== 'dev';
+
+    if (shouldEnableWaf) {
+      const webAcl = new wafv2.CfnWebACL(this, `${resourcePrefix}-waf`, {
+        name: `${resourcePrefix}-waf`,
+        scope: 'REGIONAL',
+        defaultAction: { allow: {} },
+        visibilityConfig: {
+          cloudWatchMetricsEnabled: true,
+          metricName: `${resourcePrefix}-waf-metrics`,
+          sampledRequestsEnabled: true,
+        },
+        rules: [
+          // AWS Managed Rules - Common Rule Set
+          {
+            name: 'AWSManagedRulesCommonRuleSet',
+            priority: 1,
+            overrideAction: { none: {} },
+            statement: {
+              managedRuleGroupStatement: {
+                vendorName: 'AWS',
+                name: 'AWSManagedRulesCommonRuleSet',
+              },
+            },
+            visibilityConfig: {
+              cloudWatchMetricsEnabled: true,
+              metricName: `${resourcePrefix}-common-rules`,
+              sampledRequestsEnabled: true,
+            },
+          },
+          // AWS Managed Rules - Known Bad Inputs
+          {
+            name: 'AWSManagedRulesKnownBadInputsRuleSet',
+            priority: 2,
+            overrideAction: { none: {} },
+            statement: {
+              managedRuleGroupStatement: {
+                vendorName: 'AWS',
+                name: 'AWSManagedRulesKnownBadInputsRuleSet',
+              },
+            },
+            visibilityConfig: {
+              cloudWatchMetricsEnabled: true,
+              metricName: `${resourcePrefix}-bad-inputs`,
+              sampledRequestsEnabled: true,
+            },
+          },
+          // AWS Managed Rules - SQL Injection
+          {
+            name: 'AWSManagedRulesSQLiRuleSet',
+            priority: 3,
+            overrideAction: { none: {} },
+            statement: {
+              managedRuleGroupStatement: {
+                vendorName: 'AWS',
+                name: 'AWSManagedRulesSQLiRuleSet',
+              },
+            },
+            visibilityConfig: {
+              cloudWatchMetricsEnabled: true,
+              metricName: `${resourcePrefix}-sqli`,
+              sampledRequestsEnabled: true,
+            },
+          },
+          // Rate limiting rule - 2000 requests per 5 minutes per IP
+          {
+            name: 'RateLimitRule',
+            priority: 4,
+            action: { block: {} },
+            statement: {
+              rateBasedStatement: {
+                limit: 2000,
+                aggregateKeyType: 'IP',
+              },
+            },
+            visibilityConfig: {
+              cloudWatchMetricsEnabled: true,
+              metricName: `${resourcePrefix}-rate-limit`,
+              sampledRequestsEnabled: true,
+            },
+          },
+        ],
+      });
+
+      // Associate WAF with API Gateway
+      new wafv2.CfnWebACLAssociation(
+        this,
+        `${resourcePrefix}-waf-association`,
+        {
+          resourceArn: api.deploymentStage.stageArn,
+          webAclArn: webAcl.attrArn,
+        }
+      );
+    }
 
     // ---------------- CloudWatch Dashboard ----------------
     const dashboard = new cloudwatch.Dashboard(

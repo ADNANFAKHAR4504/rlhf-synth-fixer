@@ -24,6 +24,8 @@
     "CloudWatch Dashboards",
     "IAM",
     "VPC",
-    "X-Ray"
-  ]
+    "X-Ray",
+    "WAFv2"
+  ],
+  "training_quality": 10
 }

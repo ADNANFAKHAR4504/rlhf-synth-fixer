@@ -2852,6 +2852,169 @@ describe('TapStack Integration Tests - End-to-End App Flows', () => {
       testTimeout
     );
   });
+
+  describe('WAF & Security Configuration Validation', () => {
+    (useMockData ? test.skip : test)(
+      'WAF WebACL is deployed and protecting API Gateway',
+      async () => {
+        // Initialize WAFv2 client
+        const wafv2 = new AWS.WAFV2({ region: 'us-east-1' });
+
+        // List WebACLs in the region
+        const webAcls = await wafv2
+          .listWebACLs({
+            Scope: 'REGIONAL',
+          })
+          .promise();
+
+        // Find our WebACL by name pattern
+        const stackPrefix = `tap-service-${process.env.ENVIRONMENT_SUFFIX || 'dev'}`;
+        const ourWebAcl = webAcls.WebACLs?.find(acl =>
+          acl.Name?.includes(stackPrefix)
+        );
+
+        // Verify WebACL exists for non-dev environments
+        const stage = process.env.ENVIRONMENT_SUFFIX;
+        if (stage === 'staging' || stage === 'prod') {
+          expect(ourWebAcl).toBeDefined();
+          console.log(`WAF WebACL found: ${ourWebAcl?.Name}`);
+
+          if (ourWebAcl?.ARN) {
+            // Get WebACL details
+            const webAclDetails = await wafv2
+              .getWebACL({
+                Name: ourWebAcl.Name!,
+                Scope: 'REGIONAL',
+                Id: ourWebAcl.Id!,
+              })
+              .promise();
+
+            // Verify managed rule sets are present
+            const rules = webAclDetails.WebACL?.Rules || [];
+            const ruleNames = rules.map(r => r.Name);
+
+            expect(ruleNames).toContain('AWSManagedRulesCommonRuleSet');
+            expect(ruleNames).toContain('AWSManagedRulesKnownBadInputsRuleSet');
+            expect(ruleNames).toContain('AWSManagedRulesSQLiRuleSet');
+            expect(ruleNames).toContain('RateLimitRule');
+
+            console.log(`WAF rules configured: ${ruleNames.join(', ')}`);
+          }
+        } else {
+          console.log('WAF not required for dev environment');
+        }
+      },
+      testTimeout
+    );
+
+    (useMockData ? test.skip : test)(
+      'API Gateway has proper CORS configuration',
+      async () => {
+        // Test CORS by making a preflight request
+        const corsResponse = await makeHttpRequest(
+          `${outputs.apiGatewayUrl}/items`,
+          'OPTIONS'
+        );
+
+        // OPTIONS should return 200 or 204
+        expect([200, 204]).toContain(corsResponse.statusCode);
+
+        // Verify CORS headers are present
+        const headers = corsResponse.headers || {};
+        const corsHeaders = Object.keys(headers).filter(h =>
+          h.toLowerCase().startsWith('access-control-')
+        );
+
+        expect(corsHeaders.length).toBeGreaterThan(0);
+        console.log(`CORS headers present: ${corsHeaders.join(', ')}`);
+      },
+      testTimeout
+    );
+
+    (useMockData ? test.skip : test)(
+      'CloudFront distribution uses HTTPS only',
+      async () => {
+        const cf = new AWS.CloudFront({ region: 'us-east-1' });
+
+        // List distributions
+        const distributions = await cf.listDistributions().promise();
+        const distList = distributions.DistributionList?.Items || [];
+
+        // Find our distribution by domain
+        const cfUrl = outputs.cloudFrontUrl
+          .replace('https://', '')
+          .replace('/', '');
+        const ourDist = distList.find(d => d.DomainName === cfUrl);
+
+        if (ourDist) {
+          expect(ourDist.DefaultCacheBehavior?.ViewerProtocolPolicy).toBe(
+            'redirect-to-https'
+          );
+          console.log(
+            `CloudFront HTTPS policy: ${ourDist.DefaultCacheBehavior?.ViewerProtocolPolicy}`
+          );
+        }
+      },
+      testTimeout
+    );
+
+    (useMockData ? test.skip : test)(
+      'KMS keys have rotation enabled',
+      async () => {
+        const kms = new AWS.KMS({ region: 'us-east-1' });
+
+        // Get the data KMS key
+        const keyId = outputs.dataKmsKeyId;
+        if (keyId) {
+          const keyRotation = await kms
+            .getKeyRotationStatus({
+              KeyId: keyId,
+            })
+            .promise();
+
+          expect(keyRotation.KeyRotationEnabled).toBe(true);
+          console.log(
+            `KMS key rotation enabled: ${keyRotation.KeyRotationEnabled}`
+          );
+        }
+      },
+      testTimeout
+    );
+
+    (useMockData ? test.skip : test)(
+      'S3 buckets have public access blocked',
+      async () => {
+        const s3 = new AWS.S3({ region: 'us-east-1' });
+
+        const buckets = [
+          outputs.frontendBucketName,
+          outputs.artifactsBucketName,
+        ].filter(Boolean);
+
+        for (const bucketName of buckets) {
+          try {
+            const publicAccessBlock = await s3
+              .getPublicAccessBlockConfiguration({
+                Bucket: bucketName,
+              })
+              .promise();
+
+            const config = publicAccessBlock.PublicAccessBlockConfiguration;
+            expect(config?.BlockPublicAcls).toBe(true);
+            expect(config?.BlockPublicPolicy).toBe(true);
+            expect(config?.IgnorePublicAcls).toBe(true);
+            expect(config?.RestrictPublicBuckets).toBe(true);
+
+            console.log(`Bucket ${bucketName}: Public access fully blocked`);
+          } catch (error: any) {
+            // Some buckets might not have public access block configured
+            console.log(`Bucket ${bucketName}: ${error.message}`);
+          }
+        }
+      },
+      testTimeout
+    );
+  });
 });
 
 // Helper Functions

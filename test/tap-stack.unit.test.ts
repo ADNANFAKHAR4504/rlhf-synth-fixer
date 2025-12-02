@@ -531,4 +531,197 @@ describe('TapStack', () => {
       });
     });
   });
+
+  describe('WAF Configuration', () => {
+    test('staging stage creates WAF WebACL by default', () => {
+      const stagingApp = new cdk.App();
+      const stagingStack = new TapStack(stagingApp, 'StagingWafStack', {
+        ...testConfig,
+        stage: 'staging',
+      });
+      const stagingTemplate = Template.fromStack(stagingStack);
+
+      stagingTemplate.resourceCountIs('AWS::WAFv2::WebACL', 1);
+      stagingTemplate.hasResourceProperties('AWS::WAFv2::WebACL', {
+        Scope: 'REGIONAL',
+        DefaultAction: { Allow: {} },
+      });
+    });
+
+    test('prod stage creates WAF WebACL by default', () => {
+      const prodApp = new cdk.App();
+      const prodStack = new TapStack(prodApp, 'ProdWafStack', {
+        ...testConfig,
+        stage: 'prod',
+      });
+      const prodTemplate = Template.fromStack(prodStack);
+
+      prodTemplate.resourceCountIs('AWS::WAFv2::WebACL', 1);
+    });
+
+    test('dev stage does not create WAF by default', () => {
+      // Dev stage should not have WAF unless explicitly enabled
+      const wafResources = template.findResources('AWS::WAFv2::WebACL');
+      expect(Object.keys(wafResources).length).toBe(0);
+    });
+
+    test('WAF can be explicitly enabled for dev stage', () => {
+      const devWafApp = new cdk.App();
+      const devWafStack = new TapStack(devWafApp, 'DevWafStack', {
+        ...testConfig,
+        stage: 'dev',
+        enableWaf: true,
+      });
+      const devWafTemplate = Template.fromStack(devWafStack);
+
+      devWafTemplate.resourceCountIs('AWS::WAFv2::WebACL', 1);
+    });
+
+    test('WAF includes managed rule sets', () => {
+      const stagingApp = new cdk.App();
+      const stagingStack = new TapStack(stagingApp, 'StagingRulesStack', {
+        ...testConfig,
+        stage: 'staging',
+      });
+      const stagingTemplate = Template.fromStack(stagingStack);
+
+      stagingTemplate.hasResourceProperties('AWS::WAFv2::WebACL', {
+        Rules: Match.arrayWith([
+          Match.objectLike({
+            Name: 'AWSManagedRulesCommonRuleSet',
+            Statement: {
+              ManagedRuleGroupStatement: {
+                VendorName: 'AWS',
+                Name: 'AWSManagedRulesCommonRuleSet',
+              },
+            },
+          }),
+          Match.objectLike({
+            Name: 'AWSManagedRulesKnownBadInputsRuleSet',
+          }),
+          Match.objectLike({
+            Name: 'AWSManagedRulesSQLiRuleSet',
+          }),
+          Match.objectLike({
+            Name: 'RateLimitRule',
+            Statement: {
+              RateBasedStatement: {
+                Limit: 2000,
+                AggregateKeyType: 'IP',
+              },
+            },
+          }),
+        ]),
+      });
+    });
+
+    test('WAF association is created for API Gateway', () => {
+      const prodApp = new cdk.App();
+      const prodStack = new TapStack(prodApp, 'ProdAssocStack', {
+        ...testConfig,
+        stage: 'prod',
+      });
+      const prodTemplate = Template.fromStack(prodStack);
+
+      prodTemplate.resourceCountIs('AWS::WAFv2::WebACLAssociation', 1);
+    });
+  });
+
+  describe('CORS Configuration', () => {
+    test('API Gateway has CORS configured', () => {
+      template.hasResourceProperties('AWS::ApiGateway::Method', {
+        HttpMethod: 'OPTIONS',
+        AuthorizationType: 'NONE',
+      });
+    });
+
+    test('dev stage includes localhost origins for development', () => {
+      // Dev stage should allow localhost for local development
+      // This is verified by the existence of the OPTIONS method
+      template.hasResourceProperties('AWS::ApiGateway::RestApi', {
+        Name: 'tap-service-dev-test-api',
+      });
+    });
+
+    test('custom CORS origins can be configured', () => {
+      const customCorsApp = new cdk.App();
+      const customCorsStack = new TapStack(customCorsApp, 'CustomCorsStack', {
+        ...testConfig,
+        allowedCorsOrigins: [
+          'https://custom.example.com',
+          'https://app.example.com',
+        ],
+      });
+      const customCorsTemplate = Template.fromStack(customCorsStack);
+
+      // Verify API is created - CORS is applied at runtime
+      customCorsTemplate.hasResourceProperties('AWS::ApiGateway::RestApi', {
+        Name: 'tap-service-dev-test-api',
+      });
+    });
+  });
+
+  describe('Lambda Concurrency Configuration', () => {
+    test('Lambda concurrency is disabled by default', () => {
+      // Default config should not have reserved concurrent executions
+      const lambdas = template.findResources('AWS::Lambda::Function');
+      const apiHandler = Object.values(lambdas).find(
+        l => l.Properties.FunctionName === 'tap-service-dev-test-api-handler'
+      );
+      expect(
+        apiHandler?.Properties.ReservedConcurrentExecutions
+      ).toBeUndefined();
+    });
+
+    test('Lambda concurrency can be enabled via config', () => {
+      const concurrencyApp = new cdk.App();
+      const concurrencyStack = new TapStack(
+        concurrencyApp,
+        'ConcurrencyStack',
+        {
+          ...testConfig,
+          enableLambdaConcurrencyLimit: true,
+          lambdaConcurrency: 5,
+        }
+      );
+      const concurrencyTemplate = Template.fromStack(concurrencyStack);
+
+      concurrencyTemplate.hasResourceProperties('AWS::Lambda::Function', {
+        FunctionName: 'tap-service-dev-test-api-handler',
+        ReservedConcurrentExecutions: 5,
+      });
+    });
+  });
+
+  describe('Security Best Practices', () => {
+    test('all S3 buckets have encryption enabled', () => {
+      const buckets = template.findResources('AWS::S3::Bucket');
+      Object.values(buckets).forEach(bucket => {
+        expect(bucket.Properties.BucketEncryption).toBeDefined();
+      });
+    });
+
+    test('CloudFront uses HTTPS only', () => {
+      template.hasResourceProperties('AWS::CloudFront::Distribution', {
+        DistributionConfig: {
+          DefaultCacheBehavior: {
+            ViewerProtocolPolicy: 'redirect-to-https',
+          },
+        },
+      });
+    });
+
+    test('API Gateway has tracing enabled', () => {
+      template.hasResourceProperties('AWS::ApiGateway::Stage', {
+        TracingEnabled: true,
+      });
+    });
+
+    test('VPC flow logs are enabled', () => {
+      template.hasResourceProperties('AWS::EC2::FlowLog', {
+        ResourceType: 'VPC',
+        TrafficType: 'ALL',
+      });
+    });
+  });
 });

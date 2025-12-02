@@ -32,35 +32,51 @@ const prNumber = process.env.PR_NUMBER || 'unknown';
 const team = process.env.TEAM || 'unknown';
 const createdAt = new Date().toISOString();
 
-// TapStack configuration
+// Determine stage from environment suffix
+const stage =
+  environmentSuffix === 'prod'
+    ? ('prod' as const)
+    : environmentSuffix === 'staging'
+      ? ('staging' as const)
+      : ('dev' as const);
+
+// TapStack configuration - all configurable via environment variables
 const stackConfig = {
   environmentSuffix: environmentSuffix,
-  serviceName: 'tap-service',
-  stage:
-    environmentSuffix === 'prod'
-      ? ('prod' as const)
-      : environmentSuffix === 'staging'
-        ? ('staging' as const)
-        : ('dev' as const),
-  ownerEmail: 'cloud-team@example.com',
+  serviceName: process.env.SERVICE_NAME || 'tap-service',
+  stage,
+  // Owner email - parameterized via environment variable with sensible default
+  ownerEmail:
+    process.env.OWNER_EMAIL ||
+    process.env.ALERT_EMAIL ||
+    'cloud-team@example.com',
   region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
-  logRetentionDays: 7,
-  lambdaMemorySize: 512,
-  lambdaTimeout: 30,
-  lambdaConcurrency: 10,
-  apiThrottleRate: 100,
-  apiThrottleBurst: 200,
-  dynamoReadCapacity: 5,
-  dynamoWriteCapacity: 5,
+  logRetentionDays: parseInt(process.env.LOG_RETENTION_DAYS || '7', 10),
+  lambdaMemorySize: parseInt(process.env.LAMBDA_MEMORY_SIZE || '512', 10),
+  lambdaTimeout: parseInt(process.env.LAMBDA_TIMEOUT || '30', 10),
+  lambdaConcurrency: parseInt(process.env.LAMBDA_CONCURRENCY || '10', 10),
+  apiThrottleRate: parseInt(process.env.API_THROTTLE_RATE || '100', 10),
+  apiThrottleBurst: parseInt(process.env.API_THROTTLE_BURST || '200', 10),
+  dynamoReadCapacity: parseInt(process.env.DYNAMO_READ_CAPACITY || '5', 10),
+  dynamoWriteCapacity: parseInt(process.env.DYNAMO_WRITE_CAPACITY || '5', 10),
   alarmEvaluationPeriods: 2,
   alarmDatapointsToAlarm: 2,
   metricPeriodSeconds: 300,
-  s3LifecycleExpirationDays: 90,
+  s3LifecycleExpirationDays: parseInt(
+    process.env.S3_LIFECYCLE_DAYS || '90',
+    10
+  ),
   dlqMaxReceiveCount: 3,
   sqsVisibilityTimeout: 300,
   cloudfrontPriceClass: cloudfront.PriceClass.PRICE_CLASS_100,
-  vpcMaxAzs: 2,
-  natGateways: 1,
+  vpcMaxAzs: parseInt(process.env.VPC_MAX_AZS || '2', 10),
+  natGateways: parseInt(process.env.NAT_GATEWAYS || '1', 10),
+  // Security configurations
+  enableWaf: process.env.ENABLE_WAF !== 'false', // Enabled by default
+  allowedCorsOrigins:
+    process.env.ALLOWED_CORS_ORIGINS?.split(',').filter(Boolean),
+  enableLambdaConcurrencyLimit:
+    process.env.ENABLE_LAMBDA_CONCURRENCY_LIMIT === 'true',
 };
 
 // Apply tags to all stacks in this app (optional - you can do this at stack level instead)
