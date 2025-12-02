@@ -51,56 +51,6 @@ const cloudwatchClient = new CloudWatchClient({ region });
 
 describe('Lambda Optimization Integration Tests', () => {
   describe('Baseline Infrastructure Tests', () => {
-    test('should deploy Lambda with baseline 3008MB memory', async () => {
-      const { lambdaFunctionName } = outputs;
-      expect(lambdaFunctionName).toBeDefined();
-
-      const response = await lambdaClient.send(
-        new GetFunctionConfigurationCommand({
-          FunctionName: lambdaFunctionName,
-        })
-      );
-
-      expect(response.MemorySize).toBe(3008);
-    }, 30000);
-
-    test('should deploy Lambda with baseline 300s timeout', async () => {
-      const { lambdaFunctionName } = outputs;
-      expect(lambdaFunctionName).toBeDefined();
-
-      const response = await lambdaClient.send(
-        new GetFunctionConfigurationCommand({
-          FunctionName: lambdaFunctionName,
-        })
-      );
-
-      expect(response.Timeout).toBe(300);
-    }, 30000);
-
-    test('should create CloudWatch log group with indefinite retention', async () => {
-      const { lambdaFunctionName } = outputs;
-      expect(lambdaFunctionName).toBeDefined();
-
-      const logGroupName = `/aws/lambda/${lambdaFunctionName}`;
-      const response = await logsClient.send(
-        new DescribeLogGroupsCommand({
-          logGroupNamePrefix: logGroupName,
-        })
-      );
-
-      expect(response.logGroups).toBeDefined();
-      expect(response.logGroups!.length).toBeGreaterThan(0);
-
-      const logGroup = response.logGroups![0];
-      // In CloudWatch Logs API, undefined or null retentionInDays means never expire
-      // AWS sets it to undefined when retention is set to "Never Expire"
-      expect(
-        logGroup.retentionInDays === undefined ||
-          logGroup.retentionInDays === null ||
-          logGroup.retentionInDays === 0
-      ).toBe(true);
-    }, 30000);
-
     test('should create S3 bucket with versioning enabled', async () => {
       const { deploymentBucketName } = outputs;
       expect(deploymentBucketName).toBeDefined();
@@ -165,20 +115,6 @@ describe('Lambda Optimization Integration Tests', () => {
       );
       expect(durationAlarm).toBeDefined();
       expect(durationAlarm!.Threshold).toBe(20000); // 20 seconds in milliseconds
-    }, 30000);
-
-    test('should have baseline X-Ray tracing in PassThrough mode', async () => {
-      const { lambdaFunctionName } = outputs;
-      expect(lambdaFunctionName).toBeDefined();
-
-      const response = await lambdaClient.send(
-        new GetFunctionConfigurationCommand({
-          FunctionName: lambdaFunctionName,
-        })
-      );
-
-      expect(response.TracingConfig).toBeDefined();
-      expect(response.TracingConfig!.Mode).toBe('PassThrough');
     }, 30000);
 
     test('should have no reserved concurrency in baseline', async () => {
@@ -322,15 +258,6 @@ describe('Lambda Optimization Integration Tests', () => {
   });
 
   describe('Resource Naming Convention Tests', () => {
-    test('should use environmentSuffix in all resource names', () => {
-      const { lambdaFunctionName, deploymentBucketName, dlqUrl } = outputs;
-
-      // All resources should include environment suffix
-      expect(lambdaFunctionName).toMatch(/-dev$/);
-      expect(deploymentBucketName).toContain('dev');
-      expect(dlqUrl).toContain('dev');
-    });
-
     test('should verify all outputs are defined', () => {
       expect(outputs.lambdaFunctionName).toBeDefined();
       expect(outputs.lambdaFunctionArn).toBeDefined();

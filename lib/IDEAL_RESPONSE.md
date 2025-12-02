@@ -63,7 +63,7 @@ class LambdaOptimizer:
         - Set reserved concurrent executions to 50
         - Enable X-Ray tracing
         """
-        print("\n🔧 Optimizing Lambda Configuration...")
+        print("\n Optimizing Lambda Configuration...")
 
         try:
             function_name = f'lambda-function-{self.environment_suffix}'
@@ -93,7 +93,7 @@ class LambdaOptimizer:
                 ReservedConcurrentExecutions=50
             )
 
-            print("✅ Lambda configuration optimized:")
+            print(" Lambda configuration optimized:")
             print(f"   - Memory: {config.get('MemorySize', 0)}MB → 1024MB")
             print(f"   - Timeout: {config.get('Timeout', 0)}s → 30s")
             print("   - Reserved concurrency: None → 50")
@@ -107,14 +107,14 @@ class LambdaOptimizer:
             return True
 
         except ClientError as e:
-            print(f"❌ Error optimizing Lambda configuration: {e}")
+            print(f" Error optimizing Lambda configuration: {e}")
             return False
 
     def optimize_cloudwatch_logs(self) -> bool:
         """
         Set CloudWatch log retention to 7 days.
         """
-        print("\n🔧 Optimizing CloudWatch Logs...")
+        print("\n Optimizing CloudWatch Logs...")
 
         try:
             log_group_name = f'/aws/lambda/lambda-function-{self.environment_suffix}'
@@ -129,10 +129,10 @@ class LambdaOptimizer:
                     print(f"Found log group: {log_group_name}")
                     print(f"Current retention: {current_retention}")
                 else:
-                    print(f"❌ Log group not found: {log_group_name}")
+                    print(f" Log group not found: {log_group_name}")
                     return False
             except ClientError:
-                print(f"❌ Log group not found: {log_group_name}")
+                print(f" Log group not found: {log_group_name}")
                 return False
 
             # Set retention to 7 days
@@ -141,20 +141,20 @@ class LambdaOptimizer:
                 retentionInDays=7
             )
 
-            print("✅ CloudWatch logs optimized:")
+            print(" CloudWatch logs optimized:")
             print(f"   - Retention: {current_retention} → 7 days")
 
             return True
 
         except ClientError as e:
-            print(f"❌ Error optimizing CloudWatch logs: {e}")
+            print(f" Error optimizing CloudWatch logs: {e}")
             return False
 
     def configure_dead_letter_queue(self) -> bool:
         """
         Create SQS Dead Letter Queue and configure Lambda to use it.
         """
-        print("\n🔧 Configuring Dead Letter Queue...")
+        print("\n Configuring Dead Letter Queue...")
 
         try:
             queue_name = f'lambda-dlq-{self.environment_suffix}'
@@ -193,7 +193,7 @@ class LambdaOptimizer:
                 }
             )
 
-            print("✅ Dead Letter Queue configured:")
+            print(" Dead Letter Queue configured:")
             print(f"   - Queue: {queue_name}")
             print(f"   - ARN: {queue_arn}")
 
@@ -204,7 +204,7 @@ class LambdaOptimizer:
             return True
 
         except ClientError as e:
-            print(f"❌ Error configuring DLQ: {e}")
+            print(f" Error configuring DLQ: {e}")
             return False
 
     def create_cloudwatch_alarms(self) -> bool:
@@ -213,7 +213,7 @@ class LambdaOptimizer:
         - Error rate > 1%
         - Duration > 20 seconds
         """
-        print("\n🔧 Creating CloudWatch Alarms...")
+        print("\n Creating CloudWatch Alarms...")
 
         try:
             function_name = f'lambda-function-{self.environment_suffix}'
@@ -239,7 +239,7 @@ class LambdaOptimizer:
                 ],
                 TreatMissingData='notBreaching'
             )
-            print(f"✅ Created alarm: {error_alarm_name}")
+            print(f" Created alarm: {error_alarm_name}")
 
             # Alarm 2: Duration > 20 seconds
             duration_alarm_name = f'lambda-duration-{self.environment_suffix}'
@@ -262,16 +262,16 @@ class LambdaOptimizer:
                 ],
                 TreatMissingData='notBreaching'
             )
-            print(f"✅ Created alarm: {duration_alarm_name}")
+            print(f" Created alarm: {duration_alarm_name}")
 
-            print("✅ CloudWatch alarms created:")
+            print(" CloudWatch alarms created:")
             print("   - Error rate alarm: > 1%")
             print("   - Duration alarm: > 20 seconds")
 
             return True
 
         except ClientError as e:
-            print(f"❌ Error creating CloudWatch alarms: {e}")
+            print(f" Error creating CloudWatch alarms: {e}")
             return False
 
     def add_environment_variables(self) -> bool:
@@ -280,7 +280,7 @@ class LambdaOptimizer:
         Note: In production, these would reference actual secrets.
         For testing, we'll add placeholder references.
         """
-        print("\n🔧 Adding Environment Variables...")
+        print("\n Adding Environment Variables...")
 
         try:
             function_name = f'lambda-function-{self.environment_suffix}'
@@ -305,7 +305,7 @@ class LambdaOptimizer:
                 }
             )
 
-            print("✅ Environment variables added:")
+            print(" Environment variables added:")
             print("   - DATABASE_URL: (from config)")
             print("   - API_KEY: (from config)")
 
@@ -316,7 +316,7 @@ class LambdaOptimizer:
             return True
 
         except ClientError as e:
-            print(f"❌ Error adding environment variables: {e}")
+            print(f" Error adding environment variables: {e}")
             return False
 
     def get_cost_savings_estimate(self) -> Dict[str, Any]:
@@ -369,7 +369,7 @@ class LambdaOptimizer:
 
     def run_optimization(self) -> None:
         """Run all optimization tasks."""
-        print("\n🚀 Starting Lambda optimization...")
+        print("\n Starting Lambda optimization...")
         print("=" * 50)
 
         results = {
@@ -381,20 +381,20 @@ class LambdaOptimizer:
         }
 
         print("\n" + "=" * 50)
-        print("📊 Optimization Summary:")
+        print(" Optimization Summary:")
         print("-" * 50)
 
         success_count = sum(results.values())
         total_count = len(results)
 
         for service, success in results.items():
-            status = "✅ Success" if success else "❌ Failed"
+            status = " Success" if success else " Failed"
             print(f"{service.replace('_', ' ').title()}: {status}")
 
         print(f"\nTotal: {success_count}/{total_count} optimizations successful")
 
         if success_count == total_count:
-            print("\n💰 Estimated Monthly Cost Savings:")
+            print("\n Estimated Monthly Cost Savings:")
             print("-" * 50)
             savings = self.get_cost_savings_estimate()
             print(f"Memory Optimization: ${savings['memory_monthly_savings']}")
@@ -402,9 +402,9 @@ class LambdaOptimizer:
             print(f"Log Retention: ${savings['log_retention_monthly_savings']}")
             print(f"Total: ${savings['total_monthly_savings']}/month")
             print(f"\nAssumptions: {savings['assumptions']['monthly_invocations']:,} invocations/month")
-            print("\n✨ All optimizations completed successfully!")
+            print("\n All optimizations completed successfully!")
         else:
-            print("\n⚠️  Some optimizations failed. Please check the logs above.")
+            print("\n️  Some optimizations failed. Please check the logs above.")
 
 
 def main():
@@ -438,7 +438,7 @@ def main():
     aws_region = args.region or os.getenv('AWS_REGION') or 'us-east-1'
 
     if args.dry_run:
-        print("🔍 DRY RUN MODE - No changes will be made")
+        print(" DRY RUN MODE - No changes will be made")
         print("\nPlanned optimizations:")
         print("- Lambda memory: 3008MB → 1024MB")
         print("- Lambda timeout: 300s → 30s")
@@ -455,17 +455,17 @@ def main():
         return
 
     # Proceed with optimization
-    print(f"🚀 Starting optimization in {aws_region}")
+    print(f" Starting optimization in {aws_region}")
     print(f"Environment suffix: {environment_suffix}")
 
     try:
         optimizer = LambdaOptimizer(environment_suffix, aws_region)
         optimizer.run_optimization()
     except KeyboardInterrupt:
-        print("\n\n⚠️  Optimization interrupted by user")
+        print("\n\n️  Optimization interrupted by user")
         sys.exit(1)
     except Exception as e:
-        print(f"\n❌ Unexpected error: {e}")
+        print(f"\n Unexpected error: {e}")
         sys.exit(1)
 
 
