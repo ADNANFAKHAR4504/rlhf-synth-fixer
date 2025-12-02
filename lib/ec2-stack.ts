@@ -102,31 +102,31 @@ export class Ec2Stack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Create EC2 instances
+    // Create EC2 instances - create outside of apply() to avoid async issues
     this.instances = [];
-    pulumi.output(privateSubnetIds).apply(subnetIds => {
-      for (let i = 0; i < 2; i++) {
-        const instance = new aws.ec2.Instance(
-          `instance-${i}-${environmentSuffix}`,
-          {
-            ami: ami.id,
-            instanceType: 't3.micro',
-            subnetId: subnetIds[i % subnetIds.length],
-            vpcSecurityGroupIds: [this.securityGroup.id],
-            iamInstanceProfile: instanceProfile.name,
-            tags: {
-              ...tags,
-              Name: `instance-${i}-${environmentSuffix}`,
-              Environment: 'production',
-              Owner: 'compliance-team',
-              CostCenter: 'engineering',
-            },
+    const subnetIdsOutput = pulumi.output(privateSubnetIds);
+    
+    for (let i = 0; i < 2; i++) {
+      const instance = new aws.ec2.Instance(
+        `instance-${i}-${environmentSuffix}`,
+        {
+          ami: ami.id,
+          instanceType: 't3.micro',
+          subnetId: subnetIdsOutput.apply(ids => ids[i % ids.length]),
+          vpcSecurityGroupIds: [this.securityGroup.id],
+          iamInstanceProfile: instanceProfile.name,
+          tags: {
+            ...tags,
+            Name: `instance-${i}-${environmentSuffix}`,
+            Environment: 'production',
+            Owner: 'compliance-team',
+            CostCenter: 'engineering',
           },
-          { parent: this }
-        );
-        this.instances.push(instance);
-      }
-    });
+        },
+        { parent: this }
+      );
+      this.instances.push(instance);
+    }
 
     this.registerOutputs({
       instanceIds: pulumi.all(this.instances.map(i => i.id)),
