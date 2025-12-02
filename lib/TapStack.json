@@ -16,15 +16,39 @@
       "MaxLength": 16,
       "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9]*$",
       "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters"
-    },
-    "DatabasePasswordSecretArn": {
-      "Type": "String",
-      "Description": "ARN of the Secrets Manager secret containing the database master password",
-      "AllowedPattern": "^arn:aws:secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:.+$",
-      "ConstraintDescription": "Must be a valid Secrets Manager secret ARN"
     }
   },
   "Resources": {
+    "DatabaseMasterPasswordSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "aurora-master-password-${EnvironmentSuffix}"
+        },
+        "Description": "Master password for Aurora MySQL cluster",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\":\"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 16,
+          "ExcludeCharacters": "\"@/\\",
+          "RequireEachIncludedType": true
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-master-password-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
     "VPC": {
       "Type": "AWS::EC2::VPC",
       "Properties": {
@@ -356,7 +380,7 @@
           "Ref": "MasterUsername"
         },
         "MasterUserPassword": {
-          "Fn::Sub": "{{resolve:secretsmanager:${DatabasePasswordSecretArn}:SecretString:password}}"
+          "Fn::Sub": "{{resolve:secretsmanager:${DatabaseMasterPasswordSecret}:SecretString:password}}"
         },
         "DBClusterIdentifier": {
           "Fn::Sub": "aurora-mysql-cluster-${EnvironmentSuffix}"
@@ -602,6 +626,17 @@
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-SecurityGroupId"
+        }
+      }
+    },
+    "DatabasePasswordSecretArn": {
+      "Description": "ARN of the Secrets Manager secret containing the database password",
+      "Value": {
+        "Ref": "DatabaseMasterPasswordSecret"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DatabasePasswordSecretArn"
         }
       }
     }
