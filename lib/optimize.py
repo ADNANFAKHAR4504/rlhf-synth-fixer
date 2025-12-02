@@ -6,12 +6,12 @@ This script analyzes Pulumi TypeScript infrastructure code and identifies
 optimization opportunities based on best practices.
 """
 
-import os
-import sys
-import re
 import json
-from typing import Dict, List, Any, Tuple
+import os
+import re
+import sys
 from pathlib import Path
+from typing import Any, Dict, List, Tuple
 
 
 class PulumiCodeOptimizer:
@@ -327,7 +327,6 @@ class PulumiCodeOptimizer:
 
         required_files = {
             "Pulumi.yaml": "Project definition file",
-            "Pulumi.dev.yaml": "Development environment configuration",
             "package.json": "Node.js dependencies",
             "tsconfig.json": "TypeScript configuration"
         }
