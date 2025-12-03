@@ -38,9 +38,11 @@ describe('TapStack', () => {
         return 'test-value';
       }),
       requireSecret: jest.fn((key: string) => pulumi.output('test-secret')),
+      getSecret: jest.fn((key: string) => pulumi.output('test-secret')),
       getNumber: jest.fn(() => 3),
       get: jest.fn((key: string) => {
         if (key === 'logLevel') return 'INFO';
+        if (key === 'apiKey') return undefined; // No apiKey configured by default
         return 'default-value';
       }),
     }));

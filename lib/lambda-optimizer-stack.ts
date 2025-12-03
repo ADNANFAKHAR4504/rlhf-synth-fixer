@@ -26,8 +26,12 @@ export class LambdaOptimizerStack extends pulumi.ComponentResource {
 
     // Configuration Management (Requirement 5): Use Pulumi Config for environment variables
     // Using get() with defaults instead of require() to allow deployment without explicit config
-    const dbEndpoint = config.get('dbEndpoint') || `db-${environmentSuffix}.example.com:5432`;
-    const apiKey = config.getSecret('apiKey') || pulumi.output('placeholder-api-key');
+    const dbEndpoint =
+      config.get('dbEndpoint') || `db-${environmentSuffix}.example.com:5432`;
+    const apiKey: pulumi.Output<string> =
+      (config.get('apiKey')
+        ? config.getSecret('apiKey')
+        : undefined) || pulumi.output('placeholder-api-key');
     const maxRetries = config.getNumber('maxRetries') || 3;
     const logLevel = config.get('logLevel') || 'INFO';
 
@@ -114,7 +118,7 @@ export class LambdaOptimizerStack extends pulumi.ComponentResource {
         compatibleRuntimes: ['nodejs18.x', 'nodejs20.x'],
         code: new pulumi.asset.AssetArchive({
           nodejs: new pulumi.asset.FileArchive(
-            './lib/lambda/layers/dependencies'
+            './lib/lambda/layers/dependencies/nodejs'
           ),
         }),
         description: 'Shared dependencies layer for Lambda functions',

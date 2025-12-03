@@ -19,6 +19,7 @@
     "check-pipenv": "bash -c \"req='2025.0.4'; curr=$(pipenv --version 2>/dev/null | grep -oE '[0-9]+\\.[0-9]+\\.[0-9]+' || echo 'not installed'); if [ \\\"\\$curr\\\" != \\\"\\$req\\\" ]; then echo \\\"❌ Pipenv version mismatch! Required: \\$req, Current: \\$curr\\\"; exit 1; fi; echo \\\"✅ Pipenv version is correct: \\$curr\\\"\"",
     "check-versions": "npm run check-node && npm run check-python && npm run check-pipenv",
     "preinstall": "echo 'Skipping version checks for CI/CD'",
+    "postinstall": "cd lib/lambda/layers/dependencies/nodejs && npm install --production --no-save 2>/dev/null || true",
     "build": "tsc --skipLibCheck",
     "build:strict": "tsc",
     "start": "ts-node cli/create-task.ts",
