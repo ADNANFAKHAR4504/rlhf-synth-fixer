@@ -120,6 +120,17 @@ export class ComplianceChecker {
           this.checkApprovedRegion(resource),
         recommendation: 'Move resource to an approved region or add exception',
       },
+      {
+        id: 'RESOURCE_NAMING',
+        name: 'Resource Naming Convention',
+        description: 'Resources should follow naming conventions',
+        severity: ViolationSeverity.LOW,
+        applicableTypes: Object.values(ResourceType),
+        check: async (resource: AWSResource) =>
+          this.checkResourceNaming(resource),
+        recommendation:
+          'Follow naming convention: lowercase with hyphens, include environment',
+      },
     ];
   }
 
@@ -297,10 +308,7 @@ export class ComplianceChecker {
    * Check if S3 bucket has encryption enabled
    */
   private async checkS3Encryption(resource: AWSResource): Promise<boolean> {
-    if (resource.type !== ResourceType.S3_BUCKET) {
-      return true;
-    }
-
+    // Note: This method is only called for S3_BUCKET resources due to applicableTypes filter
     try {
       const client = new S3Client({ region: resource.region });
       const command = new GetBucketEncryptionCommand({
@@ -327,9 +335,7 @@ export class ComplianceChecker {
    * Check if S3 bucket has public access blocked
    */
   private async checkS3PublicAccess(resource: AWSResource): Promise<boolean> {
-    if (resource.type !== ResourceType.S3_BUCKET) {
-      return true;
-    }
+    // Note: This method is only called for S3_BUCKET resources due to applicableTypes filter
 
     // Check for whitelist tag
     if (resource.tags['PublicAccessAllowed'] === 'true') {
@@ -371,9 +377,7 @@ export class ComplianceChecker {
   private async checkSecurityGroupRules(
     resource: AWSResource
   ): Promise<boolean> {
-    if (resource.type !== ResourceType.SECURITY_GROUP) {
-      return true;
-    }
+    // Note: This method is only called for SECURITY_GROUP resources due to applicableTypes filter
 
     // Allow whitelisted security groups
     if (resource.tags['PublicAccessApproved'] === 'true') {
@@ -429,6 +433,8 @@ export class ComplianceChecker {
   private async checkCloudWatchLogging(
     resource: AWSResource
   ): Promise<boolean> {
+    // Note: This method is only called for LAMBDA_FUNCTION and RDS_INSTANCE due to applicableTypes filter
+
     // This is a simplified check - in production you'd check actual log groups
     // For now, we'll check if the resource has a LogGroup tag or metadata
     if (resource.metadata?.logGroup) {
@@ -446,6 +452,7 @@ export class ComplianceChecker {
       return !!resource.metadata?.loggingEnabled;
     }
 
+    // Should not reach here due to applicableTypes filter, but return false as fallback
     return false;
   }
 
@@ -461,6 +468,21 @@ export class ComplianceChecker {
     ];
 
     return approvedRegions.includes(resource.region);
+  }
+
+  /**
+   * Check if resource follows naming conventions
+   */
+  private async checkResourceNaming(resource: AWSResource): Promise<boolean> {
+    // Resource ID should be lowercase with hyphens
+    const namingPattern = /^[a-z0-9-]+$/;
+
+    // Allow resources with NamingException tag
+    if (resource.tags['NamingException'] === 'true') {
+      return true;
+    }
+
+    return namingPattern.test(resource.id);
   }
 
   /**

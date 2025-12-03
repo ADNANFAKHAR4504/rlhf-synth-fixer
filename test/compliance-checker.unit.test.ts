@@ -691,12 +691,11 @@ describe('ComplianceChecker', () => {
     });
 
     it('should count LOW severity violations correctly', async () => {
-      // Create a resource with a LOW severity violation
-      // Since we don't have any LOW severity policies defined, we'll simulate one
+      // Create a resource with a LOW severity violation (bad naming)
       const resources: AWSResource[] = [
         {
-          id: 'test-resource',
-          arn: 'arn:aws:lambda:us-east-1:123456789012:function:test',
+          id: 'BadNaming_123',  // Violates naming convention
+          arn: 'arn:aws:lambda:us-east-1:123456789012:function:BadNaming_123',
           type: ResourceType.LAMBDA_FUNCTION,
           region: 'us-east-1',
           tags: {
@@ -711,9 +710,9 @@ describe('ComplianceChecker', () => {
 
       const report = await checker.checkResources(resources);
 
-      // Even with no LOW violations, the counter should work
-      expect(report.summary.lowViolations).toBe(0);
-      expect(report.violationsBySeverity[ViolationSeverity.LOW]).toBe(0);
+      // Should have LOW violations from RESOURCE_NAMING policy
+      expect(report.summary.lowViolations).toBeGreaterThan(0);
+      expect(report.violationsBySeverity[ViolationSeverity.LOW]).toBeGreaterThan(0);
     });
 
     it('should handle resource with logGroup metadata', async () => {
@@ -942,6 +941,197 @@ describe('ComplianceChecker', () => {
         v => v.rule === 'CLOUDWATCH_LOGGING'
       );
       expect(loggingViolation).toBeDefined();
+    });
+
+    it('should detect LOW severity naming convention violations', async () => {
+      const resource: AWSResource = {
+        id: 'MyBucket_123',  // Invalid: has uppercase and underscore
+        arn: 'arn:aws:s3:::MyBucket_123',
+        type: ResourceType.S3_BUCKET,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      const namingViolation = result.violations.find(
+        v => v.rule === 'RESOURCE_NAMING'
+      );
+      expect(namingViolation).toBeDefined();
+      expect(namingViolation?.severity).toBe(ViolationSeverity.LOW);
+    });
+
+    it('should allow resources with valid naming convention', async () => {
+      const resource: AWSResource = {
+        id: 'my-bucket-123',  // Valid: lowercase with hyphens
+        arn: 'arn:aws:s3:::my-bucket-123',
+        type: ResourceType.S3_BUCKET,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      const namingViolation = result.violations.find(
+        v => v.rule === 'RESOURCE_NAMING'
+      );
+      expect(namingViolation).toBeUndefined();
+    });
+
+    it('should allow resources with NamingException tag', async () => {
+      const resource: AWSResource = {
+        id: 'MyLegacyBucket',  // Invalid naming but has exception
+        arn: 'arn:aws:s3:::MyLegacyBucket',
+        type: ResourceType.S3_BUCKET,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+          NamingException: 'true',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      const namingViolation = result.violations.find(
+        v => v.rule === 'RESOURCE_NAMING'
+      );
+      expect(namingViolation).toBeUndefined();
+    });
+
+    it('should handle Lambda function CloudWatch logging check (EC2 fallback)', async () => {
+      const resource: AWSResource = {
+        id: 'my-ec2',
+        arn: 'arn:aws:ec2:us-east-1:123456789012:instance/i-123',
+        type: ResourceType.EC2_INSTANCE,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      // EC2 is not in applicableTypes for CLOUDWATCH_LOGGING, so no violation
+      const loggingViolation = result.violations.find(
+        v => v.rule === 'CLOUDWATCH_LOGGING'
+      );
+      expect(loggingViolation).toBeUndefined();
+    });
+
+    it('should handle S3 encryption check for non-S3 resources', async () => {
+      const resource: AWSResource = {
+        id: 'my-lambda',
+        arn: 'arn:aws:lambda:us-east-1:123456789012:function:test',
+        type: ResourceType.LAMBDA_FUNCTION,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      // Lambda is not applicable for S3_ENCRYPTION policy
+      const encryptionViolation = result.violations.find(
+        v => v.rule === 'S3_ENCRYPTION'
+      );
+      expect(encryptionViolation).toBeUndefined();
+    });
+
+    it('should handle S3 public access check for non-S3 resources', async () => {
+      const resource: AWSResource = {
+        id: 'my-lambda',
+        arn: 'arn:aws:lambda:us-east-1:123456789012:function:test',
+        type: ResourceType.LAMBDA_FUNCTION,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      // Lambda is not applicable for S3_PUBLIC_ACCESS policy
+      const publicAccessViolation = result.violations.find(
+        v => v.rule === 'S3_PUBLIC_ACCESS'
+      );
+      expect(publicAccessViolation).toBeUndefined();
+    });
+
+    it('should handle security group check for non-SG resources', async () => {
+      const resource: AWSResource = {
+        id: 'my-bucket',
+        arn: 'arn:aws:s3:::my-bucket',
+        type: ResourceType.S3_BUCKET,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      // S3 bucket is not applicable for SG_OPEN_ACCESS policy
+      const sgViolation = result.violations.find(
+        v => v.rule === 'SG_OPEN_ACCESS'
+      );
+      expect(sgViolation).toBeUndefined();
+    });
+
+    it('should handle CloudWatch logging check for non-applicable resources', async () => {
+      const resource: AWSResource = {
+        id: 'my-bucket',
+        arn: 'arn:aws:s3:::my-bucket',
+        type: ResourceType.S3_BUCKET,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      // S3 is not in applicableTypes for CLOUDWATCH_LOGGING
+      const loggingViolation = result.violations.find(
+        v => v.rule === 'CLOUDWATCH_LOGGING'
+      );
+      expect(loggingViolation).toBeUndefined();
     });
   });
 });

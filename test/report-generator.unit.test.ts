@@ -193,6 +193,15 @@ describe('ReportGenerator', () => {
       expect(report).toContain('Resource Inventory');
       expect(report).toContain('inv-123');
     });
+
+    it('should throw error for unsupported format', () => {
+      expect(() => {
+        generator.generateInventoryReport(
+          mockInventory,
+          'INVALID' as ReportFormat
+        );
+      }).toThrow('Unsupported format');
+    });
   });
 
   describe('generateExecutiveSummary', () => {
