@@ -92,7 +92,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Route to internet gateway
-    const _route = new aws.ec2.Route(
+    new aws.ec2.Route(
       `inspector-route-${environmentSuffix}`,
       {
         routeTableId: routeTable.id,
@@ -103,7 +103,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Associate route table with subnet
-    const _routeTableAssociation = new aws.ec2.RouteTableAssociation(
+    new aws.ec2.RouteTableAssociation(
       `inspector-rta-${environmentSuffix}`,
       {
         subnetId: subnet.id,
@@ -159,7 +159,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Attach SSM policy for management
-    const _ssmPolicyAttachment = new aws.iam.RolePolicyAttachment(
+    new aws.iam.RolePolicyAttachment(
       `inspector-ssm-policy-${environmentSuffix}`,
       {
         role: ec2Role.name,
@@ -231,7 +231,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // S3 bucket versioning
-    const _bucketVersioning = new aws.s3.BucketVersioningV2(
+    new aws.s3.BucketVersioningV2(
       `inspector-audit-versioning-${environmentSuffix}`,
       {
         bucket: s3Bucket.id,
@@ -243,21 +243,20 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // S3 bucket encryption
-    const _bucketEncryption =
-      new aws.s3.BucketServerSideEncryptionConfigurationV2(
-        `inspector-audit-encryption-${environmentSuffix}`,
-        {
-          bucket: s3Bucket.id,
-          rules: [
-            {
-              applyServerSideEncryptionByDefault: {
-                sseAlgorithm: 'AES256',
-              },
+    new aws.s3.BucketServerSideEncryptionConfigurationV2(
+      `inspector-audit-encryption-${environmentSuffix}`,
+      {
+        bucket: s3Bucket.id,
+        rules: [
+          {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'AES256',
             },
-          ],
-        },
-        { parent: this }
-      );
+          },
+        ],
+      },
+      { parent: this }
+    );
 
     // IAM role for Lambda function
     const lambdaRole = new aws.iam.Role(
@@ -283,7 +282,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Attach basic Lambda execution policy
-    const _lambdaBasicPolicy = new aws.iam.RolePolicyAttachment(
+    new aws.iam.RolePolicyAttachment(
       `inspector-lambda-basic-${environmentSuffix}`,
       {
         role: lambdaRole.name,
@@ -442,7 +441,7 @@ Audit Trail: s3://\${process.env.S3_BUCKET}/\${s3Key}
     );
 
     // EventBridge target to trigger Lambda
-    const _findingsTarget = new aws.cloudwatch.EventTarget(
+    new aws.cloudwatch.EventTarget(
       `inspector-findings-target-${environmentSuffix}`,
       {
         rule: findingsRule.name,
@@ -452,7 +451,7 @@ Audit Trail: s3://\${process.env.S3_BUCKET}/\${s3Key}
     );
 
     // Lambda permission for EventBridge
-    const _lambdaPermission = new aws.lambda.Permission(
+    new aws.lambda.Permission(
       `inspector-lambda-permission-${environmentSuffix}`,
       {
         action: 'lambda:InvokeFunction',
