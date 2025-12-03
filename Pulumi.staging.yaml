@@ -1,6 +1,0 @@
-config:
-  aws:region: us-east-1
-  ecs-optimization-j2l9s6d6:environmentSuffix: staging-j2l9s6d6
-  ecs-optimization-j2l9s6d6:environment: staging
-  ecs-optimization-j2l9s6d6:containerPort: "3000"
-  ecs-optimization-j2l9s6d6:desiredCount: "3"
