@@ -17,10 +17,7 @@ export class RoutingConstruct extends Construct {
   constructor(scope: Construct, id: string, props: RoutingConstructProps) {
     super(scope, id);
 
-    const {
-      environmentSuffix,
-      primaryProvider,
-    } = props;
+    const { environmentSuffix, primaryProvider } = props;
 
     // Use CloudWatch-based calculated health check instead of HTTPS health check
     // This avoids issues with Lambda URL FQDNs containing special characters at synthesis time
