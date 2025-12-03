@@ -303,7 +303,7 @@ export class TapStack extends TerraformStack {
 
     services.forEach(service => {
       const repo = new EcrRepository(this, `ecr-${service}`, {
-        name: `${service}-${environmentSuffix}`,
+        name: `app-${service}-${environmentSuffix}`,
         imageTagMutability: 'IMMUTABLE',
         forceDelete: true,
         tags: {
@@ -338,7 +338,7 @@ export class TapStack extends TerraformStack {
     const logGroups: { [key: string]: CloudwatchLogGroup } = {};
     services.forEach(service => {
       logGroups[service] = new CloudwatchLogGroup(this, `log-${service}`, {
-        name: `/ecs/${service}-${environmentSuffix}`,
+        name: `/ecs/app-${service}-${environmentSuffix}`,
         retentionInDays: 30,
         tags: {
           Name: `${service}-logs-${environmentSuffix}`,
@@ -348,11 +348,11 @@ export class TapStack extends TerraformStack {
 
     // Secrets Manager Secrets
     const dbSecret = new SecretsmanagerSecret(this, 'db-secret', {
-      name: `db-credentials-${environmentSuffix}`,
+      name: `app-db-creds-${environmentSuffix}`,
       description: 'Database credentials for trading application',
       forceOverwriteReplicaSecret: true,
       tags: {
-        Name: `db-credentials-${environmentSuffix}`,
+        Name: `app-db-creds-${environmentSuffix}`,
       },
     });
 
@@ -367,11 +367,11 @@ export class TapStack extends TerraformStack {
     });
 
     const apiKeySecret = new SecretsmanagerSecret(this, 'api-key-secret', {
-      name: `api-keys-${environmentSuffix}`,
+      name: `app-api-keys-${environmentSuffix}`,
       description: 'API keys for external services',
       forceOverwriteReplicaSecret: true,
       tags: {
-        Name: `api-keys-${environmentSuffix}`,
+        Name: `app-api-keys-${environmentSuffix}`,
       },
     });
 
@@ -551,20 +551,20 @@ export class TapStack extends TerraformStack {
 
     // Application Load Balancer
     const alb = new Lb(this, 'alb', {
-      name: `ecs-alb-${environmentSuffix}`,
+      name: `app-alb-${environmentSuffix}`,
       internal: false,
       loadBalancerType: 'application',
       securityGroups: [albSg.id],
       subnets: publicSubnets.map(s => s.id),
       enableDeletionProtection: false,
       tags: {
-        Name: `ecs-alb-${environmentSuffix}`,
+        Name: `app-alb-${environmentSuffix}`,
       },
     });
 
     // Target Group for Frontend
     const frontendTargetGroup = new LbTargetGroup(this, 'frontend-tg', {
-      name: `frontend-tg-${environmentSuffix}`,
+      name: `app-fe-tg-${environmentSuffix}`,
       port: 3000,
       protocol: 'HTTP',
       targetType: 'ip',
@@ -580,13 +580,13 @@ export class TapStack extends TerraformStack {
         unhealthyThreshold: 3,
       },
       tags: {
-        Name: `frontend-tg-${environmentSuffix}`,
+        Name: `app-fe-tg-${environmentSuffix}`,
       },
     });
 
     // Target Group for API Gateway
     const apiGatewayTargetGroup = new LbTargetGroup(this, 'api-gateway-tg', {
-      name: `api-gateway-tg-${environmentSuffix}`,
+      name: `app-apigw-tg-${environmentSuffix}`,
       port: 8080,
       protocol: 'HTTP',
       targetType: 'ip',
@@ -602,7 +602,7 @@ export class TapStack extends TerraformStack {
         unhealthyThreshold: 3,
       },
       tags: {
-        Name: `api-gateway-tg-${environmentSuffix}`,
+        Name: `app-apigw-tg-${environmentSuffix}`,
       },
     });
 
