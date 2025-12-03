@@ -354,7 +354,7 @@ export class SecretsModule extends Construct {
       this,
       'rds-secret',
       {
-        name: resourceName('payment-rds-master-pwd'),
+        name: resourceName('payment-db-credentials'),
         description: 'Master password for RDS Aurora MySQL cluster',
         recoveryWindowInDays: 7,
         tags: { ...props.tags, Name: resourceName('payment-rds-secret') },
@@ -483,7 +483,7 @@ export class RDSModule extends Construct {
       {
         identifier: `${resourceName('payment-db')}-instance-1`.toLowerCase(),
         clusterIdentifier: this.cluster.id,
-        instanceClass: 'db.t3.small',
+        instanceClass: 'db.t3.medium',
         engine: this.cluster.engine,
         engineVersion: this.cluster.engineVersion,
         publiclyAccessible: false,
