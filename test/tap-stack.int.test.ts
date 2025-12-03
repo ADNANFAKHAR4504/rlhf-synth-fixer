@@ -135,17 +135,53 @@ async function waitForJobAvailable(timeoutMs: number = 600000): Promise<void> {
       run =>
         run.JobRunState === 'RUNNING' ||
         run.JobRunState === 'STARTING' ||
-        run.JobRunState === 'WAITING'
+        run.JobRunState === 'WAITING' ||
+        run.JobRunState === 'STOPPING'
     );
 
     if (!runningJobs || runningJobs.length === 0) {
-      return; // No running jobs, safe to start a new one
+      // Add small buffer to ensure job is fully stopped
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      return;
     }
 
     // Wait and check again
     await new Promise(resolve => setTimeout(resolve, 15000));
   }
   throw new Error('Timeout waiting for running jobs to complete');
+}
+
+async function startGlueJobWithRetry(
+  args?: Record<string, string>,
+  maxRetries: number = 5
+): Promise<string> {
+  let lastError: Error | undefined;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      // Wait for any running jobs first
+      await waitForJobAvailable();
+
+      const response = await glueClient.send(
+        new StartJobRunCommand({
+          JobName: glueJobName,
+          Arguments: args,
+        })
+      );
+      return response.JobRunId!;
+    } catch (error: unknown) {
+      const err = error as Error;
+      if (err.name === 'ConcurrentRunsExceededException') {
+        lastError = err;
+        // Exponential backoff: 30s, 60s, 120s, 240s, 480s
+        const waitTime = 30000 * Math.pow(2, attempt);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      } else {
+        throw error;
+      }
+    }
+  }
+  throw lastError || new Error('Failed to start Glue job after retries');
 }
 
 async function waitForQueryCompletion(
@@ -358,9 +394,6 @@ describe('Big Data Pipeline Integration Tests', () => {
 
   describe('Flow 4: Failed Record Handling', () => {
     test('should send invalid records to DLQ and failed bucket', async () => {
-      // Wait for any running jobs to complete first
-      await waitForJobAvailable();
-
       // Upload invalid data
       const testKey = `test-invalid-${Date.now()}.csv`;
       await s3Client.send(
@@ -372,21 +405,16 @@ describe('Big Data Pipeline Integration Tests', () => {
         })
       );
 
-      // Trigger Glue job with invalid data
-      const jobRunResponse = await glueClient.send(
-        new StartJobRunCommand({
-          JobName: glueJobName,
-          Arguments: {
-            '--raw_bucket': rawBucketName,
-            '--processed_bucket': processedBucketName,
-            '--failed_bucket': failedBucketName,
-            '--dlq_url': dlqUrl,
-          },
-        })
-      );
+      // Trigger Glue job with invalid data (with retry logic)
+      const jobRunId = await startGlueJobWithRetry({
+        '--raw_bucket': rawBucketName,
+        '--processed_bucket': processedBucketName,
+        '--failed_bucket': failedBucketName,
+        '--dlq_url': dlqUrl,
+      });
 
       // Wait for job completion
-      await waitForJobCompletion(jobRunResponse.JobRunId!);
+      await waitForJobCompletion(jobRunId);
 
       // Check DLQ for messages about failed records
       if (dlqUrl) {
@@ -556,9 +584,6 @@ E2E_TXN_${timestamp},E2E_CUST_001,999.99,2024-01-15 15:00:00,E2E_MERCH_001,PURCH
 
   describe('Flow 8: Data Validation Rules', () => {
     test('should reject transactions with negative amounts', async () => {
-      // Wait for any running jobs to complete first
-      await waitForJobAvailable();
-
       const negativeAmountData = `transaction_id,customer_id,amount,timestamp,merchant_id,transaction_type,status
 NEG_TXN_001,CUST001,-100.00,2024-01-15 10:30:00,MERCH001,PURCHASE,COMPLETED`;
 
@@ -572,14 +597,10 @@ NEG_TXN_001,CUST001,-100.00,2024-01-15 10:30:00,MERCH001,PURCHASE,COMPLETED`;
         })
       );
 
-      // Run job
-      const jobRun = await glueClient.send(
-        new StartJobRunCommand({
-          JobName: glueJobName,
-        })
-      );
+      // Run job with retry logic
+      const jobRunId = await startGlueJobWithRetry();
 
-      await waitForJobCompletion(jobRun.JobRunId!);
+      await waitForJobCompletion(jobRunId);
 
       // Check failed bucket for rejected records
       const failedCheck = await s3Client.send(
