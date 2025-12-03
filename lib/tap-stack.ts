@@ -38,7 +38,7 @@ export class TapStack {
     });
 
     // Get current AWS account ID and region
-    const current = aws.getCallerIdentity();
+    const current = aws.getCallerIdentityOutput();
 
     // Create KMS key for encryption
     const configKmsKey = new aws.kms.Key(
@@ -67,10 +67,11 @@ export class TapStack {
     );
 
     // Create S3 bucket for Config snapshots
+    const bucketName = pulumi.interpolate`config-bucket-${environmentSuffix}-${current.accountId}`;
     this.configBucket = new aws.s3.Bucket(
       `config-bucket-${environmentSuffix}`,
       {
-        bucket: `config-bucket-${environmentSuffix}`,
+        bucket: bucketName,
         versioning: {
           enabled: true,
         },
@@ -681,7 +682,7 @@ exports.handler = async (event) => {
     this.configAggregator = new aws.cfg.AggregateAuthorization(
       `config-aggregator-auth-${environmentSuffix}`,
       {
-        accountId: current.then(acc => acc.accountId),
+        accountId: current.accountId,
         region: region,
         tags: {
           Name: `config-aggregator-auth-${environmentSuffix}`,
@@ -699,7 +700,7 @@ exports.handler = async (event) => {
       {
         name: `config-aggregator-${environmentSuffix}`,
         accountAggregationSource: {
-          accountIds: [current.then(acc => acc.accountId)],
+          accountIds: [current.accountId],
           allRegions: true,
         },
         tags: {
