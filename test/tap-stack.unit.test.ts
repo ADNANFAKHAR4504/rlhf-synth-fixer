@@ -174,12 +174,12 @@ describe('TapStack - Optimized Lambda Deployment', () => {
       // Mock validation passes - actual configuration verified in integration tests
     });
 
-    it('should configure Lambda with reserved concurrent executions (100)', async () => {
+    it('should not configure reserved concurrent executions (removed due to account limits)', async () => {
       const stack = new TapStack('ConcurrencyTest', {
         environmentSuffix: 'concurrency',
       });
       expect(stack).toBeDefined();
-      // Mock validation passes - actual configuration verified in integration tests
+      // Reserved concurrency removed to comply with AWS account limits (100 unreserved minimum)
     });
   });
 

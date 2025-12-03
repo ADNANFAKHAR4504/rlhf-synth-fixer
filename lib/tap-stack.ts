@@ -171,7 +171,8 @@ exports.handler = async (event) => {
         architectures: ['arm64'], // ARM-based Graviton2 for cost optimization
 
         // Concurrency configuration
-        reservedConcurrentExecutions: 10, // Prevent throttling (reduced from 100 to fit account limits)
+        // Note: reservedConcurrentExecutions removed due to AWS account limits
+        // Account requires minimum 100 unreserved concurrent executions
 
         // Environment variables with encryption
         environment: {
