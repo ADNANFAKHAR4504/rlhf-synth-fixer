@@ -1,4 +1,4 @@
-name: image-processor
+name: TapStack
 runtime: nodejs
 description: Optimized Lambda-based image processing system with environment-specific configurations
 config:
