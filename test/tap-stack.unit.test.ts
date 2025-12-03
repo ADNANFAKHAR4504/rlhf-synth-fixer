@@ -15,7 +15,13 @@ import {
   CloudWatchClient,
   PutMetricDataCommand,
 } from '@aws-sdk/client-cloudwatch';
-import {  S3Client,  ListBucketsCommand,} from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  ListBucketsCommand,
+  GetBucketVersioningCommand,
+  GetBucketEncryptionCommand,
+  GetPublicAccessBlockCommand,
+} from '@aws-sdk/client-s3';
 import { mockClient } from 'aws-sdk-client-mock';
 
 const ec2Mock = mockClient(EC2Client);
@@ -986,5 +992,235 @@ describe('ComplianceScanner', () => {
 
       expect(report.violations.length).toBe(0);
     });
+// S3 Tests to add to tap-stack.unit.test.ts before the final closing braces
+// These tests cover the checkS3Buckets method to achieve 100% coverage
+
+  describe('checkS3Buckets', () => {
+    it('should detect bucket without versioning', async () => {
+      const testScanner = new ComplianceScanner('us-east-1', 'test', []);
+
+      ec2Mock.reset();
+      s3Mock.reset();
+
+      ec2Mock.on(DescribeInstancesCommand).resolves({ Reservations: [] });
+      ec2Mock.on(DescribeVpcsCommand).resolves({ Vpcs: [] });
+
+      s3Mock.on(ListBucketsCommand).resolves({
+        Buckets: [{ Name: 'test-bucket' }],
+      });
+
+      s3Mock
+        .on(GetBucketVersioningCommand)
+        .resolves({ Status: 'Suspended' });
+      s3Mock
+        .on(GetBucketEncryptionCommand)
+        .resolves({
+          ServerSideEncryptionConfiguration: {
+            Rules: [{ ApplyServerSideEncryptionByDefault: { SSEAlgorithm: 'AES256' } }],
+          },
+        });
+      s3Mock.on(GetPublicAccessBlockCommand).resolves({
+        PublicAccessBlockConfiguration: {
+          BlockPublicAcls: true,
+          BlockPublicPolicy: true,
+          IgnorePublicAcls: true,
+          RestrictPublicBuckets: true,
+        },
+      });
+
+      await testScanner.checkS3Buckets();
+      const report = await testScanner.generateReport();
+
+      expect(report.violations.length).toBe(1);
+      expect(report.violations[0].violationType).toBe('VersioningDisabled');
+      expect(report.violations[0].severity).toBe('MEDIUM');
+    });
+
+    it('should detect bucket without encryption', async () => {
+      const testScanner = new ComplianceScanner('us-east-1', 'test', []);
+
+      ec2Mock.reset();
+      s3Mock.reset();
+
+      ec2Mock.on(DescribeInstancesCommand).resolves({ Reservations: [] });
+      ec2Mock.on(DescribeVpcsCommand).resolves({ Vpcs: [] });
+
+      s3Mock.on(ListBucketsCommand).resolves({
+        Buckets: [{ Name: 'test-bucket' }],
+      });
+
+      s3Mock.on(GetBucketVersioningCommand).resolves({ Status: 'Enabled' });
+
+      const encryptionError = new Error(
+        'ServerSideEncryptionConfigurationNotFoundError'
+      );
+      encryptionError.name = 'ServerSideEncryptionConfigurationNotFoundError';
+      s3Mock.on(GetBucketEncryptionCommand).rejects(encryptionError);
+
+      s3Mock.on(GetPublicAccessBlockCommand).resolves({
+        PublicAccessBlockConfiguration: {
+          BlockPublicAcls: true,
+          BlockPublicPolicy: true,
+          IgnorePublicAcls: true,
+          RestrictPublicBuckets: true,
+        },
+      });
+
+      await testScanner.checkS3Buckets();
+      const report = await testScanner.generateReport();
+
+      expect(report.violations.length).toBe(1);
+      expect(report.violations[0].violationType).toBe('EncryptionDisabled');
+      expect(report.violations[0].severity).toBe('HIGH');
+    });
+
+    it('should detect bucket without public access block', async () => {
+      const testScanner = new ComplianceScanner('us-east-1', 'test', []);
+
+      ec2Mock.reset();
+      s3Mock.reset();
+
+      ec2Mock.on(DescribeInstancesCommand).resolves({ Reservations: [] });
+      ec2Mock.on(DescribeVpcsCommand).resolves({ Vpcs: [] });
+
+      s3Mock.on(ListBucketsCommand).resolves({
+        Buckets: [{ Name: 'test-bucket' }],
+      });
+
+      s3Mock.on(GetBucketVersioningCommand).resolves({ Status: 'Enabled' });
+      s3Mock
+        .on(GetBucketEncryptionCommand)
+        .resolves({
+          ServerSideEncryptionConfiguration: {
+            Rules: [{ ApplyServerSideEncryptionByDefault: { SSEAlgorithm: 'AES256' } }],
+          },
+        });
+
+      s3Mock.on(GetPublicAccessBlockCommand).resolves({
+        PublicAccessBlockConfiguration: {
+          BlockPublicAcls: false,
+          BlockPublicPolicy: true,
+          IgnorePublicAcls: true,
+          RestrictPublicBuckets: true,
+        },
+      });
+
+      await testScanner.checkS3Buckets();
+      const report = await testScanner.generateReport();
+
+      expect(report.violations.length).toBe(1);
+      expect(report.violations[0].violationType).toBe('PublicAccessNotBlocked');
+      expect(report.violations[0].severity).toBe('HIGH');
+    });
+
+    it('should detect bucket with missing public access block configuration', async () => {
+      const testScanner = new ComplianceScanner('us-east-1', 'test', []);
+
+      ec2Mock.reset();
+      s3Mock.reset();
+
+      ec2Mock.on(DescribeInstancesCommand).resolves({ Reservations: [] });
+      ec2Mock.on(DescribeVpcsCommand).resolves({ Vpcs: [] });
+
+      s3Mock.on(ListBucketsCommand).resolves({
+        Buckets: [{ Name: 'test-bucket' }],
+      });
+
+      s3Mock.on(GetBucketVersioningCommand).resolves({ Status: 'Enabled' });
+      s3Mock
+        .on(GetBucketEncryptionCommand)
+        .resolves({
+          ServerSideEncryptionConfiguration: {
+            Rules: [{ ApplyServerSideEncryptionByDefault: { SSEAlgorithm: 'AES256' } }],
+          },
+        });
+
+      const publicAccessError = new Error(
+        'NoSuchPublicAccessBlockConfiguration'
+      );
+      publicAccessError.name = 'NoSuchPublicAccessBlockConfiguration';
+      s3Mock.on(GetPublicAccessBlockCommand).rejects(publicAccessError);
+
+      await testScanner.checkS3Buckets();
+      const report = await testScanner.generateReport();
+
+      expect(report.violations.length).toBe(1);
+      expect(report.violations[0].violationType).toBe('PublicAccessNotBlocked');
+      expect(report.violations[0].severity).toBe('HIGH');
+    });
+
+    it('should pass when bucket has all security controls', async () => {
+      const testScanner = new ComplianceScanner('us-east-1', 'test', []);
+
+      ec2Mock.reset();
+      s3Mock.reset();
+
+      ec2Mock.on(DescribeInstancesCommand).resolves({ Reservations: [] });
+      ec2Mock.on(DescribeVpcsCommand).resolves({ Vpcs: [] });
+
+      s3Mock.on(ListBucketsCommand).resolves({
+        Buckets: [{ Name: 'test-bucket' }],
+      });
+
+      s3Mock.on(GetBucketVersioningCommand).resolves({ Status: 'Enabled' });
+      s3Mock
+        .on(GetBucketEncryptionCommand)
+        .resolves({
+          ServerSideEncryptionConfiguration: {
+            Rules: [{ ApplyServerSideEncryptionByDefault: { SSEAlgorithm: 'AES256' } }],
+          },
+        });
+      s3Mock.on(GetPublicAccessBlockCommand).resolves({
+        PublicAccessBlockConfiguration: {
+          BlockPublicAcls: true,
+          BlockPublicPolicy: true,
+          IgnorePublicAcls: true,
+          RestrictPublicBuckets: true,
+        },
+      });
+
+      await testScanner.checkS3Buckets();
+      const report = await testScanner.generateReport();
+
+      expect(report.violations.length).toBe(0);
+    });
+
+    it('should handle buckets without names', async () => {
+      const testScanner = new ComplianceScanner('us-east-1', 'test', []);
+
+      ec2Mock.reset();
+      s3Mock.reset();
+
+      ec2Mock.on(DescribeInstancesCommand).resolves({ Reservations: [] });
+      ec2Mock.on(DescribeVpcsCommand).resolves({ Vpcs: [] });
+
+      s3Mock.on(ListBucketsCommand).resolves({
+        Buckets: [{}],
+      });
+
+      await testScanner.checkS3Buckets();
+      const report = await testScanner.generateReport();
+
+      expect(report.violations.length).toBe(0);
+    });
+
+    it('should handle API errors gracefully', async () => {
+      const testScanner = new ComplianceScanner('us-east-1', 'test', []);
+
+      ec2Mock.reset();
+      s3Mock.reset();
+
+      ec2Mock.on(DescribeInstancesCommand).resolves({ Reservations: [] });
+      ec2Mock.on(DescribeVpcsCommand).resolves({ Vpcs: [] });
+
+      s3Mock.on(ListBucketsCommand).rejects(new Error('API Error'));
+
+      await testScanner.checkS3Buckets();
+      const report = await testScanner.generateReport();
+
+      expect(report.violations.length).toBe(0);
+    });
+  });
+
   });
 });
