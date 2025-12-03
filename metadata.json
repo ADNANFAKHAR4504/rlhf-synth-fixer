@@ -8,16 +8,9 @@
   "startedAt": "2025-12-03T07:38:40+00:00",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Use Step Functions to orchestrate the migration workflow",
-    "Use AWS Transit Gateway for network connectivity between migrated and legacy components",
-    "Implement AWS Database Migration Service (DMS) for real-time database replication",
-    "Configure AWS Secrets Manager rotation for all database credentials",
-    "Implement CloudWatch Logs with metric filters for migration monitoring",
-    "Implement SNS topics for migration status notifications",
-    "Deploy Lambda functions for data validation between old and new systems",
-    "Deploy API Gateway with custom authorizers for authentication during transition",
-    "Use Parameter Store for environment-specific configuration values",
-    "Configure S3 buckets with versioning for migration state backups"
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
   ],
   "aws_services": [
     "VPC",
@@ -33,5 +26,7 @@
     "Secrets Manager",
     "Systems Manager Parameter Store"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342"
 }
