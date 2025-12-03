@@ -7,7 +7,7 @@
   "startedAt": "2025-12-03T02:55:12+05:30",
   "subtask": "CI/CD Pipeline",
   "subject_labels": [
-   "CI/CD Pipeline"
+    "CI/CD Pipeline"
   ],
   "aws_services": [
     "S3",
@@ -20,5 +20,11 @@
     "CloudWatch"
   ],
   "po_id": "m0m6k1q2",
-  "training_quality": 9
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
