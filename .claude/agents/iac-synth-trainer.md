@@ -19,8 +19,9 @@ This agent takes a PR (by number or branch name) and systematically fixes all is
 
 ### Production Readiness Checklist
 
-All of the following MUST pass:
+All of the following MUST pass (adjusted based on task type):
 
+#### Standard IaC Tasks:
 1. ✅ **Worktree Validation** - Correct structure and location
 2. ✅ **Metadata Validation** - All required fields present and valid
 3. ✅ **Code Quality** - Lint, build, synth all passing
@@ -33,6 +34,50 @@ All of the following MUST pass:
 10. ✅ **Training Quality** - Score >= 8
 11. ✅ **File Location Compliance** - All files in allowed directories
 12. ✅ **Commit Message Format** - Follows conventional commits with lowercase
+
+#### CI/CD Pipeline Integration Tasks (Special):
+1. ✅ **Worktree Validation** - Correct structure and location
+2. ✅ **Metadata Validation** - All required fields present and valid
+3. ✅ **Code Quality** - Lint, build all passing (**synth SKIPPED**)
+4. ✅ **CI/CD Pipeline File** - lib/ci-cd.yml exists and is valid
+5. ✅ **CI/CD Validation** - scripts/cicd-pipeline.sh passes
+6. ✅ **Code Health Check** - No known failure patterns
+7. ✅ **Test Coverage** - 100% coverage (statements, functions, lines)
+8. ✅ **Infrastructure Code** - Stack files present and correct
+9. ✅ **Documentation** - MODEL_FAILURES.md and IDEAL_RESPONSE.md complete
+10. ✅ **Training Quality** - Score >= 8
+11. ✅ **File Location Compliance** - All files in allowed directories
+12. ✅ **Commit Message Format** - Follows conventional commits with lowercase
+**NOTE**: Deployment and integration tests are **SKIPPED** for CI/CD tasks (validated by pipeline job)
+
+#### Infrastructure Analysis Tasks (Special):
+1. ✅ **Worktree Validation** - Correct structure and location
+2. ✅ **Metadata Validation** - All required fields, platform="analysis"
+3. ✅ **Code Quality** - Lint, build all passing (**synth SKIPPED**)
+4. ✅ **Analysis Script** - lib/analyse.py or lib/analyse.sh exists
+5. ✅ **Code Health Check** - No known failure patterns
+6. ✅ **Test Coverage** - 100% coverage for analysis script
+7. ✅ **Documentation** - MODEL_FAILURES.md and IDEAL_RESPONSE.md complete
+8. ✅ **Training Quality** - Score >= 8
+9. ✅ **File Location Compliance** - All files in allowed directories
+10. ✅ **Commit Message Format** - Follows conventional commits with lowercase
+**NOTE**: Deployment, pre-deployment validation, and integration tests are **SKIPPED** (no infrastructure)
+
+#### IaC Optimization Tasks (Special):
+1. ✅ **Worktree Validation** - Correct structure and location
+2. ✅ **Metadata Validation** - All required fields present and valid
+3. ✅ **Code Quality** - Lint, build, synth all passing
+4. ✅ **Optimization Script** - lib/optimize.py exists and is valid
+5. ✅ **Pre-Deployment Validation** - No hardcoded values, proper naming
+6. ✅ **Code Health Check** - No known failure patterns
+7. ✅ **Deployment Success** - Baseline infrastructure deployed
+8. ✅ **Optimization Success** - lib/optimize.py runs successfully
+9. ✅ **Test Coverage** - 100% coverage (statements, functions, lines)
+10. ✅ **Integration Tests** - All tests passing, verify optimizations
+11. ✅ **Documentation** - MODEL_FAILURES.md and IDEAL_RESPONSE.md complete
+12. ✅ **Training Quality** - Score >= 8
+13. ✅ **File Location Compliance** - All files in allowed directories
+14. ✅ **Commit Message Format** - Follows conventional commits with lowercase
 
 **IF ANY MISSING: Fix automatically if possible, otherwise report BLOCKED**
 
@@ -211,7 +256,7 @@ All of the following MUST pass:
    echo "Total: ${TOTAL_JOBS} | Passed: ${PASSED_JOBS} | Failed: ${FAILED_JOBS} | Pending: ${PENDING_JOBS}"
    ```
 
-5. **Analyze failed jobs in detail**:
+6. **Analyze failed jobs in detail**:
    ```bash
    if [ -f failed_jobs.txt ]; then
      echo ""
@@ -246,7 +291,7 @@ All of the following MUST pass:
    fi
    ```
 
-6. **Read current state**:
+7. **Read current state**:
    - Read `metadata.json`
    - Read `lib/PROMPT.md`
    - Check for existing `lib/MODEL_RESPONSE.md`, `lib/IDEAL_RESPONSE.md`, `lib/MODEL_FAILURES.md`
@@ -254,15 +299,69 @@ All of the following MUST pass:
    - Check deployment status
    - **Store CI/CD checklist for reference throughout workflow**
 
+8. **Detect Special Task Types** (CRITICAL):
+   ```bash
+   echo "🔍 Detecting task type from metadata..."
+   
+   # Read metadata for task type detection
+   SUBTASK=$(jq -r '.subtask // "Unknown"' metadata.json)
+   SUBJECT_LABELS=$(jq -r '.subject_labels[]? // empty' metadata.json)
+   PLATFORM=$(jq -r '.platform // "Unknown"' metadata.json)
+   
+   # Initialize task type flags
+   IS_CICD_TASK=false
+   IS_OPTIMIZATION_TASK=false
+   IS_ANALYSIS_TASK=false
+   
+   # Detect CI/CD Pipeline Integration task
+   if echo "$SUBJECT_LABELS" | grep -q "CI/CD Pipeline"; then
+     IS_CICD_TASK=true
+     echo "🔄 CI/CD Pipeline Integration task detected"
+     echo "ℹ️  Special workflow: Skip synth/deploy, focus on CI/CD validation"
+   fi
+   
+   # Detect IaC Optimization task
+   if echo "$SUBJECT_LABELS" | grep -q "IaC Optimization"; then
+     IS_OPTIMIZATION_TASK=true
+     echo "📊 IaC Optimization task detected"
+     echo "ℹ️  Special workflow: Deploy baseline + run optimize.py"
+   fi
+   
+   # Detect Infrastructure Analysis/QA task
+   if [ "$SUBTASK" = "Infrastructure QA and Management" ] || [ "$PLATFORM" = "analysis" ]; then
+     IS_ANALYSIS_TASK=true
+     echo "🔍 Infrastructure Analysis task detected"
+     echo "ℹ️  Special workflow: No deployment, focus on analysis script"
+   fi
+   
+   # Store task type for use in validation phases
+   echo "Task Type Detection Results:" > task_type.txt
+   echo "IS_CICD_TASK=${IS_CICD_TASK}" >> task_type.txt
+   echo "IS_OPTIMIZATION_TASK=${IS_OPTIMIZATION_TASK}" >> task_type.txt
+   echo "IS_ANALYSIS_TASK=${IS_ANALYSIS_TASK}" >> task_type.txt
+   
+   # Export for use in validation scripts
+   export IS_CICD_TASK
+   export IS_OPTIMIZATION_TASK
+   export IS_ANALYSIS_TASK
+   
+   echo "✅ Task type detection complete"
+   ```
+
 ### Phase 2: Map CI/CD Failures to Local Validations
 
-**Strategy**: Use CI/CD job failures to guide local validation priorities
+**Strategy**: Use CI/CD job failures to guide local validation priorities (adjusted based on task type)
 
 1. **Map CI/CD jobs to local validation checkpoints**:
    ```bash
    echo "🗺️ Mapping CI/CD failures to local validations..."
 
-   # CI/CD Job → Local Validation mapping
+   # Source task type detection
+   if [ -f task_type.txt ]; then
+     source task_type.txt
+   fi
+
+   # CI/CD Job → Local Validation mapping (standard tasks)
    declare -A CICD_TO_LOCAL=(
      ["detect-metadata"]="Checkpoint A: Metadata Completeness"
      ["validate-commit-message"]="Checkpoint: Commit Message Format"
@@ -272,6 +371,9 @@ All of the following MUST pass:
      ["unit-tests"]="Checkpoint H: Test Coverage (100%)"
      ["deploy"]="Checkpoint: Deployment Success"
      ["integration-tests-live"]="Checkpoint I: Integration Test Quality"
+     ["cicd-pipeline-optimization"]="Checkpoint: CI/CD Pipeline Validation"
+     ["iac-optimization"]="Checkpoint: IaC Optimization Script"
+     ["analysis"]="Checkpoint: Infrastructure Analysis"
      ["claude-code-action"]="Checkpoint J: Training Quality (>= 8)"
    )
 
@@ -297,6 +399,11 @@ All of the following MUST pass:
 
 2. **Run prioritized validations** (based on CI/CD failures):
    ```bash
+   # Source task type detection
+   if [ -f task_type.txt ]; then
+     source task_type.txt
+   fi
+
    # If we have priority validations, run those first
    if [ -f priority_validations.txt ]; then
      echo "🎯 Running prioritized validations..."
@@ -318,7 +425,12 @@ All of the following MUST pass:
            bash .claude/scripts/build.sh
            ;;
          "synth")
-           bash .claude/scripts/synth.sh
+           # Skip synth for CI/CD Pipeline Integration and Analysis tasks
+           if [ "$IS_CICD_TASK" = "true" ] || [ "$IS_ANALYSIS_TASK" = "true" ]; then
+             echo "⏭️ Skipping synth (not required for this task type)"
+           else
+             bash .claude/scripts/synth.sh
+           fi
            ;;
          "unit-tests")
            bash .claude/scripts/unit-tests.sh
@@ -332,10 +444,74 @@ All of the following MUST pass:
            fi
            ;;
          "deploy")
-           bash .claude/scripts/qa-pipeline.sh  # Includes deployment
+           # Skip deployment for CI/CD Pipeline Integration and Analysis tasks
+           if [ "$IS_CICD_TASK" = "true" ] || [ "$IS_ANALYSIS_TASK" = "true" ]; then
+             echo "⏭️ Skipping deployment (not required for this task type)"
+           else
+             bash .claude/scripts/qa-pipeline.sh  # Includes deployment
+           fi
            ;;
          "integration-tests-live")
-           bash .claude/scripts/integration-tests.sh
+           # Skip integration tests for CI/CD Pipeline Integration and Analysis tasks
+           if [ "$IS_CICD_TASK" = "true" ] || [ "$IS_ANALYSIS_TASK" = "true" ]; then
+             echo "⏭️ Skipping integration tests (no deployment for this task type)"
+           else
+             bash .claude/scripts/integration-tests.sh
+           fi
+           ;;
+         "cicd-pipeline-optimization")
+           # CI/CD Pipeline Integration specific validation
+           if [ "$IS_CICD_TASK" = "true" ]; then
+             echo "🔄 Running CI/CD Pipeline validation..."
+             
+             # Verify lib/ci-cd.yml exists
+             if [ ! -f "lib/ci-cd.yml" ]; then
+               echo "❌ ERROR: lib/ci-cd.yml is required for CI/CD Pipeline Integration tasks"
+               exit 1
+             fi
+             
+             # Run CI/CD pipeline validation script
+             if [ -f "scripts/cicd-pipeline.sh" ]; then
+               bash scripts/cicd-pipeline.sh
+             else
+               echo "⚠️ scripts/cicd-pipeline.sh not found, skipping platform validation"
+             fi
+             
+             # Validate YAML syntax
+             if command -v yamllint &> /dev/null; then
+               yamllint lib/ci-cd.yml || echo "⚠️ YAML validation warnings (non-blocking)"
+             fi
+             
+             echo "✅ CI/CD Pipeline validation complete"
+           fi
+           ;;
+         "iac-optimization")
+           # IaC Optimization specific validation
+           if [ "$IS_OPTIMIZATION_TASK" = "true" ]; then
+             echo "📊 Running IaC Optimization validation..."
+             
+             # Verify lib/optimize.py exists
+             if [ ! -f "lib/optimize.py" ]; then
+               echo "❌ ERROR: lib/optimize.py is required for IaC Optimization tasks"
+               exit 1
+             fi
+             
+             echo "✅ IaC Optimization script found"
+           fi
+           ;;
+         "analysis")
+           # Infrastructure Analysis specific validation
+           if [ "$IS_ANALYSIS_TASK" = "true" ]; then
+             echo "🔍 Running Infrastructure Analysis validation..."
+             
+             # Verify analysis script exists
+             if [ ! -f "lib/analyse.py" ] && [ ! -f "lib/analyse.sh" ]; then
+               echo "❌ ERROR: lib/analyse.py or lib/analyse.sh is required for Analysis tasks"
+               exit 1
+             fi
+             
+             echo "✅ Analysis script found"
+           fi
            ;;
          "claude-code-action")
            # Check training quality
@@ -356,6 +532,11 @@ All of the following MUST pass:
    ```bash
    echo "🔍 Running comprehensive validation suite..."
 
+   # Source task type detection
+   if [ -f task_type.txt ]; then
+     source task_type.txt
+   fi
+
    # Checkpoint A: Metadata Completeness
    echo "1. Metadata Completeness"
    bash .claude/scripts/validate-metadata.sh metadata.json
@@ -368,19 +549,83 @@ All of the following MUST pass:
    echo "3. Build Quality (Lint, Build, Synth)"
    bash .claude/scripts/lint.sh
    bash .claude/scripts/build.sh
-   bash .claude/scripts/synth.sh
+   
+   # Skip synth for CI/CD Pipeline Integration and Analysis tasks
+   if [ "$IS_CICD_TASK" = "true" ] || [ "$IS_ANALYSIS_TASK" = "true" ]; then
+     echo "⏭️ Skipping synth (not required for this task type)"
+   else
+     bash .claude/scripts/synth.sh
+   fi
 
    # Checkpoint F: Pre-Deployment Validation
    echo "4. Pre-Deployment Validation"
-   bash .claude/scripts/pre-validate-iac.sh
+   # Skip for CI/CD Pipeline Integration and Analysis tasks (no deployment)
+   if [ "$IS_CICD_TASK" = "true" ] || [ "$IS_ANALYSIS_TASK" = "true" ]; then
+     echo "⏭️ Skipping pre-deployment validation (no deployment for this task type)"
+   else
+     bash .claude/scripts/pre-validate-iac.sh
+   fi
 
    # Code Health Check
    echo "5. Code Health Check"
    bash .claude/scripts/code-health-check.sh
 
-   # Master QA Pipeline (includes deployment, tests, coverage)
-   echo "6. Master QA Pipeline"
-   bash .claude/scripts/qa-pipeline.sh
+   # Task-specific validations
+   if [ "$IS_CICD_TASK" = "true" ]; then
+     echo "6. CI/CD Pipeline Validation (Special for CI/CD tasks)"
+     
+     # Verify lib/ci-cd.yml exists
+     if [ ! -f "lib/ci-cd.yml" ]; then
+       echo "❌ ERROR: lib/ci-cd.yml is required for CI/CD Pipeline Integration tasks"
+       exit 1
+     fi
+     
+     # Run CI/CD pipeline validation
+     if [ -f "scripts/cicd-pipeline.sh" ]; then
+       bash scripts/cicd-pipeline.sh
+     fi
+     
+     # Validate infrastructure code exists and is correct
+     echo "7. Infrastructure Code Validation"
+     bash .claude/scripts/unit-tests.sh
+     
+     echo "✅ CI/CD Pipeline Integration validation complete (skipped deployment)"
+     
+   elif [ "$IS_ANALYSIS_TASK" = "true" ]; then
+     echo "6. Analysis Script Validation (Special for Analysis tasks)"
+     
+     # Verify analysis script exists
+     if [ ! -f "lib/analyse.py" ] && [ ! -f "lib/analyse.sh" ]; then
+       echo "❌ ERROR: lib/analyse.py or lib/analyse.sh is required"
+       exit 1
+     fi
+     
+     # Run unit tests for analysis script
+     bash .claude/scripts/unit-tests.sh
+     
+     echo "✅ Infrastructure Analysis validation complete (no deployment required)"
+     
+   elif [ "$IS_OPTIMIZATION_TASK" = "true" ]; then
+     echo "6. Master QA Pipeline with Optimization"
+     
+     # Verify lib/optimize.py exists
+     if [ ! -f "lib/optimize.py" ]; then
+       echo "❌ ERROR: lib/optimize.py is required for IaC Optimization tasks"
+       exit 1
+     fi
+     
+     # Deploy baseline infrastructure and run optimization
+     bash .claude/scripts/qa-pipeline.sh
+     
+     echo "✅ IaC Optimization validation complete"
+     
+   else
+     # Standard IaC task - full deployment pipeline
+     echo "6. Master QA Pipeline"
+     bash .claude/scripts/qa-pipeline.sh
+     
+     echo "✅ Standard IaC validation complete"
+   fi
 
    echo "✅ Comprehensive validation complete"
    ```
@@ -701,15 +946,20 @@ After applying fixes:
    fi
    ```
 
-4. **Production Readiness Criteria** (ALL must be true):
+4. **Production Readiness Criteria** (adjusted by task type):
    ```bash
+   # Source task type detection
+   if [ -f task_type.txt ]; then
+     source task_type.txt
+   fi
+
    # Local validations
    ✅ pre-submission-check.sh exits with 0
-   ✅ All 12 quality gates passing
+   ✅ All quality gates passing (task-specific count)
 
    # CI/CD pipeline
    ✅ All CI/CD jobs completed (not in_progress or pending)
-   ✅ No failed jobs
+   ✅ No failed jobs (check if skipped jobs are expected)
    ✅ ready_for_merge = true
 
    # Code quality
@@ -718,7 +968,26 @@ After applying fixes:
    ✅ All files in allowed directories
    ✅ Commit messages properly formatted
 
-   # If ALL true: PRODUCTION_READY = true
+   # Task-specific criteria
+   if [ "$IS_CICD_TASK" = "true" ]; then
+     ✅ lib/ci-cd.yml exists and is valid
+     ✅ cicd-pipeline-optimization job passed
+     ℹ️  synth, deploy, integration-tests-live are SKIPPED (expected)
+   elif [ "$IS_ANALYSIS_TASK" = "true" ]; then
+     ✅ lib/analyse.py or lib/analyse.sh exists
+     ✅ analysis job passed
+     ℹ️  synth, deploy, integration-tests-live are SKIPPED (expected)
+   elif [ "$IS_OPTIMIZATION_TASK" = "true" ]; then
+     ✅ lib/optimize.py exists and runs successfully
+     ✅ iac-optimization job passed
+     ✅ Baseline infrastructure deployed
+     ✅ Optimization applied and verified
+   else
+     # Standard IaC task
+     ✅ All jobs including synth, deploy, integration-tests-live passed
+   fi
+
+   # If ALL applicable criteria true: PRODUCTION_READY = true
    # If ANY false: Continue iteration or escalate
    ```
 
@@ -728,7 +997,7 @@ After applying fixes:
    ```bash
    bash .claude/scripts/pre-submission-check.sh
    ```
-   - This validates ALL 9 critical requirements
+   - This validates all critical requirements (task-type specific)
    - Must pass before proceeding
 
 2. **Verify training quality**:
@@ -757,8 +1026,41 @@ After applying fixes:
    COMPLEXITY=$(jq -r '.complexity' metadata.json)
    TRAINING_QUALITY=$(jq -r '.training_quality' metadata.json)
 
+   # Source task type detection
+   if [ -f task_type.txt ]; then
+     source task_type.txt
+   fi
+
    # Convert subtask to lowercase for subject
    SUBTASK_LOWER=$(echo "${SUBTASK}" | tr '[:upper:]' '[:lower:]')
+
+   # Build commit message body based on task type
+   if [ "$IS_CICD_TASK" = "true" ]; then
+     FIXES_DETAILS="- Fixed all quality gate failures
+   - Validated CI/CD pipeline configuration (lib/ci-cd.yml)
+   - Achieved 100% test coverage for infrastructure code
+   - Updated documentation
+   - Skipped deployment (CI/CD task - infrastructure validated via tests)"
+   elif [ "$IS_ANALYSIS_TASK" = "true" ]; then
+     FIXES_DETAILS="- Fixed all quality gate failures
+   - Validated analysis script (lib/analyse.py or lib/analyse.sh)
+   - Achieved 100% test coverage for analysis code
+   - Updated documentation
+   - Skipped deployment (Analysis task - no infrastructure)"
+   elif [ "$IS_OPTIMIZATION_TASK" = "true" ]; then
+     FIXES_DETAILS="- Fixed all quality gate failures
+   - Deployed baseline infrastructure
+   - Validated optimization script (lib/optimize.py)
+   - Achieved 100% test coverage
+   - Verified cost optimizations
+   - Updated documentation"
+   else
+     FIXES_DETAILS="- Fixed all quality gate failures
+   - Achieved 100% test coverage
+   - Resolved deployment issues
+   - Integration tests passing
+   - Updated documentation"
+   fi
 
    git commit -m "fix(synth-${TASK_ID}): resolve production readiness issues
 
@@ -766,10 +1068,7 @@ After applying fixes:
    Complexity: ${COMPLEXITY}
    Training Quality: ${TRAINING_QUALITY}/10
 
-   - Fixed all quality gate failures
-   - Achieved 100% test coverage
-   - Resolved deployment issues
-   - Updated documentation
+   ${FIXES_DETAILS}
 
    Task ID: ${TASK_ID}"
    ```
@@ -782,6 +1081,51 @@ After applying fixes:
 
 6. **Add comment to PR with fix summary**:
    ```bash
+   # Source task type detection
+   if [ -f task_type.txt ]; then
+     source task_type.txt
+   fi
+
+   # Build validations list based on task type
+   if [ "$IS_CICD_TASK" = "true" ]; then
+     VALIDATIONS_LIST="- Build Quality (lint, build)
+   - CI/CD Pipeline Validation (lib/ci-cd.yml)
+   - Test Coverage: 100%
+   - Infrastructure Code Validated
+   - Training Quality: ${TRAINING_QUALITY}/10
+   - File Locations: Compliant
+   - Documentation: Complete
+   
+   ℹ️  Note: Synth, Deployment, and Integration Tests skipped (CI/CD Pipeline Integration task)"
+   elif [ "$IS_ANALYSIS_TASK" = "true" ]; then
+     VALIDATIONS_LIST="- Build Quality (lint, build)
+   - Analysis Script Validation
+   - Test Coverage: 100%
+   - Training Quality: ${TRAINING_QUALITY}/10
+   - File Locations: Compliant
+   - Documentation: Complete
+   
+   ℹ️  Note: Synth, Deployment, and Integration Tests skipped (Infrastructure Analysis task)"
+   elif [ "$IS_OPTIMIZATION_TASK" = "true" ]; then
+     VALIDATIONS_LIST="- Build Quality (lint, build, synth)
+   - Deployment Successful (Baseline)
+   - Optimization Script Validated (lib/optimize.py)
+   - Cost Savings Verified
+   - Test Coverage: 100%
+   - Integration Tests: All passing
+   - Training Quality: ${TRAINING_QUALITY}/10
+   - File Locations: Compliant
+   - Documentation: Complete"
+   else
+     VALIDATIONS_LIST="- Build Quality (lint, build, synth)
+   - Deployment Successful
+   - Test Coverage: 100%
+   - Integration Tests: All passing
+   - Training Quality: ${TRAINING_QUALITY}/10
+   - File Locations: Compliant
+   - Documentation: Complete"
+   fi
+
    # Create summary of fixes applied
    FIXES_SUMMARY="### Automated Fixes Applied
 
@@ -791,13 +1135,7 @@ After applying fixes:
    - [List of issues fixed]
 
    #### Validations Passing:
-   - Build Quality (lint, build, synth)
-   - Deployment Successful
-   - Test Coverage: 100%
-   - Integration Tests: All passing
-   - Training Quality: ${TRAINING_QUALITY}/10
-   - File Locations: Compliant
-   - Documentation: Complete
+   ${VALIDATIONS_LIST}
 
    **Status**: Ready for review and merge"
 
@@ -810,6 +1148,120 @@ After applying fixes:
    ```bash
    # Gather all fix comments posted during workflow
    ALL_FIXES=$(cat all_fixes_summary.txt)
+
+   # Source task type detection
+   if [ -f task_type.txt ]; then
+     source task_type.txt
+   fi
+
+   # Build quality gates table based on task type
+   if [ "$IS_CICD_TASK" = "true" ]; then
+     QUALITY_GATES_TABLE="| Quality Gate | Status |
+   |-------------|--------|
+   | Worktree Validation | ✅ PASSED |
+   | Metadata Validation | ✅ PASSED |
+   | Code Quality (Lint, Build) | ✅ PASSED |
+   | CI/CD Pipeline File (lib/ci-cd.yml) | ✅ PASSED |
+   | Code Health Check | ✅ PASSED |
+   | Test Coverage | ✅ 100% |
+   | Infrastructure Code Validation | ✅ PASSED |
+   | Documentation Complete | ✅ PASSED |
+   | Training Quality | ✅ ${TRAINING_QUALITY}/10 |
+   | File Location Compliance | ✅ PASSED |
+   | Commit Message Format | ✅ PASSED |"
+     
+     CICD_JOBS_LIST="- ✅ Detect Project Files
+   - ✅ Validate Commit Message
+   - ✅ Build
+   - ⏭️  Synth (Skipped - CI/CD task)
+   - ✅ Lint
+   - ✅ Unit Testing (100% coverage)
+   - ⏭️  Deploy (Skipped - CI/CD task)
+   - ⏭️  Integration Tests (Skipped - CI/CD task)
+   - ✅ CICD Pipeline Optimization
+   - ✅ Claude Review"
+     
+   elif [ "$IS_ANALYSIS_TASK" = "true" ]; then
+     QUALITY_GATES_TABLE="| Quality Gate | Status |
+   |-------------|--------|
+   | Worktree Validation | ✅ PASSED |
+   | Metadata Validation | ✅ PASSED |
+   | Code Quality (Lint, Build) | ✅ PASSED |
+   | Analysis Script | ✅ PASSED |
+   | Code Health Check | ✅ PASSED |
+   | Test Coverage | ✅ 100% |
+   | Documentation Complete | ✅ PASSED |
+   | Training Quality | ✅ ${TRAINING_QUALITY}/10 |
+   | File Location Compliance | ✅ PASSED |
+   | Commit Message Format | ✅ PASSED |"
+     
+     CICD_JOBS_LIST="- ✅ Detect Project Files
+   - ✅ Validate Commit Message
+   - ✅ Build
+   - ⏭️  Synth (Skipped - Analysis task)
+   - ✅ Lint
+   - ✅ Unit Testing (100% coverage)
+   - ⏭️  Deploy (Skipped - Analysis task)
+   - ⏭️  Integration Tests (Skipped - Analysis task)
+   - ✅ Analysis
+   - ✅ Claude Review"
+     
+   elif [ "$IS_OPTIMIZATION_TASK" = "true" ]; then
+     QUALITY_GATES_TABLE="| Quality Gate | Status |
+   |-------------|--------|
+   | Worktree Validation | ✅ PASSED |
+   | Metadata Validation | ✅ PASSED |
+   | Code Quality (Lint, Build, Synth) | ✅ PASSED |
+   | Optimization Script (lib/optimize.py) | ✅ PASSED |
+   | Pre-Deployment Validation | ✅ PASSED |
+   | Code Health Check | ✅ PASSED |
+   | Deployment Success | ✅ PASSED |
+   | Optimization Success | ✅ PASSED |
+   | Test Coverage | ✅ 100% |
+   | Integration Tests | ✅ PASSED |
+   | Documentation Complete | ✅ PASSED |
+   | Training Quality | ✅ ${TRAINING_QUALITY}/10 |
+   | File Location Compliance | ✅ PASSED |
+   | Commit Message Format | ✅ PASSED |"
+     
+     CICD_JOBS_LIST="- ✅ Detect Project Files
+   - ✅ Validate Commit Message
+   - ✅ Build
+   - ✅ Synth
+   - ✅ Lint
+   - ✅ Unit Testing (100% coverage)
+   - ✅ Deploy
+   - ✅ Integration Tests (Live)
+   - ✅ IaC Optimization
+   - ✅ Claude Review"
+     
+   else
+     # Standard IaC task
+     QUALITY_GATES_TABLE="| Quality Gate | Status |
+   |-------------|--------|
+   | Worktree Validation | ✅ PASSED |
+   | Metadata Validation | ✅ PASSED |
+   | Code Quality (Lint, Build, Synth) | ✅ PASSED |
+   | Pre-Deployment Validation | ✅ PASSED |
+   | Code Health Check | ✅ PASSED |
+   | Deployment Success | ✅ PASSED |
+   | Test Coverage | ✅ 100% |
+   | Integration Tests | ✅ PASSED |
+   | Documentation Complete | ✅ PASSED |
+   | Training Quality | ✅ ${TRAINING_QUALITY}/10 |
+   | File Location Compliance | ✅ PASSED |
+   | Commit Message Format | ✅ PASSED |"
+     
+     CICD_JOBS_LIST="- ✅ Detect Project Files
+   - ✅ Validate Commit Message
+   - ✅ Build
+   - ✅ Synth
+   - ✅ Lint
+   - ✅ Unit Testing (100% coverage)
+   - ✅ Deploy
+   - ✅ Integration Tests (Live)
+   - ✅ Claude Review"
+   fi
 
    # Create final summary comment
    FINAL_COMMENT="## ✅ PR Ready for Merge - All Issues Resolved
@@ -827,20 +1279,7 @@ After applying fixes:
 
    ### ✅ All Quality Gates: PASSED
 
-   | Quality Gate | Status |
-   |-------------|--------|
-   | Worktree Validation | ✅ PASSED |
-   | Metadata Validation | ✅ PASSED |
-   | Code Quality (Lint, Build, Synth) | ✅ PASSED |
-   | Pre-Deployment Validation | ✅ PASSED |
-   | Code Health Check | ✅ PASSED |
-   | Deployment Success | ✅ PASSED |
-   | Test Coverage | ✅ 100% |
-   | Integration Tests | ✅ PASSED |
-   | Documentation Complete | ✅ PASSED |
-   | Training Quality | ✅ ${TRAINING_QUALITY}/10 |
-   | File Location Compliance | ✅ PASSED |
-   | Commit Message Format | ✅ PASSED |
+   ${QUALITY_GATES_TABLE}
 
    ### 🔧 Fixes Applied
 
@@ -849,15 +1288,7 @@ After applying fixes:
    ### 📋 CI/CD Pipeline Status
 
    All CI/CD jobs now passing:
-   - ✅ Detect Project Files
-   - ✅ Validate Commit Message
-   - ✅ Build
-   - ✅ Synth
-   - ✅ Lint
-   - ✅ Unit Testing (100% coverage)
-   - ✅ Deploy
-   - ✅ Integration Tests (Live)
-   - ✅ Claude Review
+   ${CICD_JOBS_LIST}
 
    ### 🎯 PR Status
    **✅ READY FOR MERGE** - All production requirements met
@@ -940,7 +1371,7 @@ bash .claude/scripts/enhanced-error-recovery.sh <type> <msg> <attempt> <max>
 ### Escalation Criteria
 
 Escalate to user when:
-- Maximum iterations (5) reached without passing all checks
+- Maximum iterations (10) reached without passing all checks
 - Deployment fails with quota/permission errors after retries
 - Critical issues cannot be auto-fixed (architectural problems)
 - External dependencies required (AWS resources, credentials)
@@ -968,6 +1399,62 @@ Report BLOCKED with:
 - **Commit messages must follow conventional commits with lowercase**
 - **Do NOT destroy resources** - cleanup handled after manual review
 
+### 🔄 Special Task Type Handling (CRITICAL)
+
+The agent MUST detect and handle three special task types differently:
+
+#### 1. CI/CD Pipeline Integration Tasks
+**Detection**: `subject_labels` contains "CI/CD Pipeline"
+
+**Special Requirements**:
+- ✅ **lib/ci-cd.yml REQUIRED** - GitHub Actions workflow file
+- ⏭️ **SKIP synth** - Not required for CI/CD tasks
+- ⏭️ **SKIP deployment** - Infrastructure not deployed to AWS
+- ⏭️ **SKIP integration tests** - No live resources to test
+- ✅ **RUN CI/CD validation** - scripts/cicd-pipeline.sh and validate-cicd-platform.sh
+- ✅ **Infrastructure code still required** - Stack files must exist and be correct
+- ✅ **Unit tests with 100% coverage** - Test infrastructure code
+- ✅ **Documentation complete** - PROMPT.md, IDEAL_RESPONSE.md, MODEL_FAILURES.md
+
+**Why**: The CI/CD Pipeline Integration task focuses on creating a pipeline configuration (`lib/ci-cd.yml`) that WOULD deploy infrastructure. The infrastructure code is validated through unit tests, not actual deployment. This aligns with the GitHub CI/CD workflow which skips synth/deploy jobs for these tasks.
+
+**CI/CD Jobs Expected**:
+- ✅ detect-metadata, validate-commit-message, build, lint, unit-tests
+- ✅ cicd-pipeline-optimization (special validation job)
+- ⏭️ synth (skipped by CI/CD pipeline)
+- ⏭️ deploy (skipped by CI/CD pipeline)
+- ⏭️ integration-tests-live (skipped by CI/CD pipeline)
+
+#### 2. Infrastructure QA and Management Tasks
+**Detection**: `subtask` = "Infrastructure QA and Management" OR `platform` = "analysis"
+
+**Special Requirements**:
+- ✅ **lib/analyse.py OR lib/analyse.sh REQUIRED** - Analysis script
+- ✅ **platform = "analysis"** in metadata.json
+- ⏭️ **NO infrastructure deployment** - Analysis only
+- ⏭️ **SKIP synth** - No infrastructure templates
+- ⏭️ **SKIP pre-deployment validation** - Nothing to deploy
+- ⏭️ **SKIP deployment** - No AWS resources created
+- ⏭️ **SKIP integration tests** - No live resources
+- ✅ **Unit tests for analysis script** - 100% coverage required
+- ✅ **Documentation complete** - PROMPT.md, IDEAL_RESPONSE.md, MODEL_FAILURES.md
+
+**Why**: These tasks analyze existing infrastructure, they don't create new infrastructure.
+
+#### 3. IaC Optimization Tasks
+**Detection**: `subject_labels` contains "IaC Optimization"
+
+**Special Requirements**:
+- ✅ **lib/optimize.py REQUIRED** - Optimization script
+- ✅ **Baseline infrastructure deployed** - Higher resource allocations (intentional)
+- ✅ **Run optimize.py after deployment** - Modifies live resources via boto3
+- ✅ **Verify cost savings** - Integration tests validate optimizations
+- ✅ **Stack files contain baseline values** - NOT optimized (correct behavior)
+- ✅ **Full deployment pipeline** - Deploy → Optimize → Test
+- ✅ **Documentation complete** - PROMPT.md, IDEAL_RESPONSE.md, MODEL_FAILURES.md
+
+**Why**: These tasks deploy baseline infrastructure then optimize it programmatically to demonstrate cost savings.
+
 ### 🔄 Iteration Policy
 
 **Continue fixing until**:
@@ -976,6 +1463,11 @@ Report BLOCKED with:
 3. ✅ 100% test coverage achieved
 4. ✅ Training quality >= 8
 5. ✅ No pending or in-progress CI/CD jobs
+
+**Adjusted for task type**:
+- **CI/CD tasks**: Skip deployment/integration test requirements
+- **Analysis tasks**: Skip deployment/integration test requirements
+- **Optimization tasks**: Include optimization script validation
 
 **OR escalate if**:
 - Maximum iterations (10) reached without success
@@ -1277,7 +1769,9 @@ gh api -X DELETE "/repos/{owner}/{repo}/issues/comments/{comment_id}"
 
 **Agent reports SUCCESS only when PR is 100% PRODUCTION READY**:
 
-### Mandatory Success Conditions (ALL must be true):
+### Mandatory Success Conditions (adjusted by task type):
+
+#### For Standard IaC Tasks:
 
 1. **✅ All 12 Quality Gates Passing**:
    - Worktree Validation
@@ -1297,7 +1791,7 @@ gh api -X DELETE "/repos/{owner}/{repo}/issues/comments/{comment_id}"
    - detect-metadata: success
    - validate-commit-message: success
    - build: success
-   - synth: success (or skipped if not applicable)
+   - synth: success
    - lint: success
    - unit-tests: success
    - deploy: success
@@ -1306,6 +1800,98 @@ gh api -X DELETE "/repos/{owner}/{repo}/issues/comments/{comment_id}"
    - cleanup: success (or skipped)
    - No jobs in "failure" state
    - No jobs "in_progress" or "pending"
+
+#### For CI/CD Pipeline Integration Tasks:
+
+1. **✅ All Required Quality Gates Passing**:
+   - Worktree Validation
+   - Metadata Validation
+   - Code Quality (Lint, Build) - **Synth SKIPPED**
+   - CI/CD Pipeline File (lib/ci-cd.yml exists and valid)
+   - Code Health Check
+   - Test Coverage (100%)
+   - Infrastructure Code Correct (validated via unit tests)
+   - Documentation Complete
+   - Training Quality (>= 8)
+   - File Location Compliance
+   - Commit Message Format
+
+2. **✅ All CI/CD Jobs Passing**:
+   - detect-metadata: success
+   - validate-commit-message: success
+   - build: success
+   - synth: **skipped** (expected for CI/CD tasks)
+   - lint: success
+   - unit-tests: success
+   - cicd-pipeline-optimization: success (special validation)
+   - deploy: **skipped** (expected for CI/CD tasks)
+   - integration-tests-live: **skipped** (expected for CI/CD tasks)
+   - claude-code-action: success (quality score >= 8)
+   - No jobs in "failure" state
+   - No jobs "in_progress" or "pending"
+
+#### For Infrastructure Analysis Tasks:
+
+1. **✅ All Required Quality Gates Passing**:
+   - Worktree Validation
+   - Metadata Validation (platform="analysis")
+   - Code Quality (Lint, Build) - **Synth SKIPPED**
+   - Analysis Script (lib/analyse.py or lib/analyse.sh exists)
+   - Code Health Check
+   - Test Coverage (100%)
+   - Documentation Complete
+   - Training Quality (>= 8)
+   - File Location Compliance
+   - Commit Message Format
+
+2. **✅ All CI/CD Jobs Passing**:
+   - detect-metadata: success
+   - validate-commit-message: success
+   - build: success
+   - synth: **skipped** (expected for analysis tasks)
+   - lint: success
+   - unit-tests: success
+   - analysis: success (special validation)
+   - deploy: **skipped** (expected for analysis tasks)
+   - integration-tests-live: **skipped** (expected for analysis tasks)
+   - claude-code-action: success (quality score >= 8)
+   - No jobs in "failure" state
+   - No jobs "in_progress" or "pending"
+
+#### For IaC Optimization Tasks:
+
+1. **✅ All Quality Gates Passing**:
+   - Worktree Validation
+   - Metadata Validation
+   - Code Quality (Lint, Build, Synth)
+   - Optimization Script (lib/optimize.py exists and valid)
+   - Pre-Deployment Validation
+   - Code Health Check
+   - Deployment Success (baseline infrastructure)
+   - Optimization Success (lib/optimize.py runs successfully)
+   - Test Coverage (100%)
+   - Integration Tests (verify optimizations)
+   - Documentation Complete
+   - Training Quality (>= 8)
+   - File Location Compliance
+   - Commit Message Format
+
+2. **✅ All CI/CD Jobs Passing**:
+   - detect-metadata: success
+   - validate-commit-message: success
+   - build: success
+   - synth: success
+   - lint: success
+   - unit-tests: success
+   - deploy: success
+   - iac-optimization: success (special validation)
+   - integration-tests-live: success
+   - claude-code-action: success (quality score >= 8)
+   - cleanup: success (or skipped)
+   - No jobs in "failure" state
+   - No jobs "in_progress" or "pending"
+
+### Common Success Conditions (ALL task types):
 
 3. **✅ PR Status Verified**:
    - ready_for_merge = true (from CI/CD summary)
@@ -1316,10 +1902,10 @@ gh api -X DELETE "/repos/{owner}/{repo}/issues/comments/{comment_id}"
 4. **✅ Code Quality Verified**:
    - pre-submission-check.sh exits with code 0
    - No validation errors or warnings
-   - All tests passing (100% coverage)
+   - All applicable tests passing (100% coverage)
    - No lint issues
    - No build errors
-   - No deployment failures
+   - Deployment successful (if applicable for task type)
 
 **Agent MUST NOT report SUCCESS if ANY of the above is false**
 
