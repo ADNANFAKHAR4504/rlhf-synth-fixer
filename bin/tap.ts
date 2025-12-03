@@ -49,6 +49,7 @@ new TapStack(
   'pulumi-infra',
   {
     tags: defaultTags,
+    environmentSuffix: environmentSuffix,
   },
   { provider }
 );

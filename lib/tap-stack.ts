@@ -3,6 +3,7 @@ import * as aws from '@pulumi/aws';
 
 export interface TapStackArgs {
   tags?: Record<string, string>;
+  environmentSuffix: string;
 }
 
 export class TapStack extends pulumi.ComponentResource {
@@ -13,13 +14,12 @@ export class TapStack extends pulumi.ComponentResource {
 
   constructor(
     name: string,
-    args?: TapStackArgs,
+    args: TapStackArgs,
     opts?: pulumi.ComponentResourceOptions
   ) {
     super('tap:stack:TapStack', name, {}, opts);
 
-    const config = new pulumi.Config();
-    const environmentSuffix = config.require('environmentSuffix');
+    const environmentSuffix = args.environmentSuffix;
 
     // S3 Bucket for AWS Config configuration history
     const configBucket = new aws.s3.Bucket(

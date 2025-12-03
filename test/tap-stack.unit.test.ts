@@ -32,8 +32,6 @@ describe('TapStack', () => {
   let stack: typeof import('../lib/tap-stack');
 
   beforeAll(() => {
-    // Set Pulumi configuration
-    pulumi.runtime.setConfig('TapStack:environmentSuffix', 'test123');
     // Dynamically import to ensure mocks are set up first
     stack = require('../lib/tap-stack');
   });
@@ -54,6 +52,7 @@ describe('TapStack', () => {
     beforeAll(async () => {
       tapStack = new stack.TapStack('test-stack', {
         tags: { Environment: 'test' },
+        environmentSuffix: 'test123',
       });
     });
 
@@ -99,22 +98,27 @@ describe('TapStack', () => {
       const testTags = { Department: 'IT', CostCenter: 'CC123' };
       const tapStack = new stack.TapStack('test-tags-stack', {
         tags: testTags,
+        environmentSuffix: 'test123',
       });
       expect(tapStack).toBeDefined();
     });
 
-    it('should work without optional arguments', () => {
-      const tapStack = new stack.TapStack('test-no-args-stack');
+    it('should require environmentSuffix argument', () => {
+      const tapStack = new stack.TapStack('test-required-args-stack', {
+        environmentSuffix: 'test123',
+      });
       expect(tapStack).toBeDefined();
     });
   });
 
   describe('Resource naming with environmentSuffix', () => {
     it('should include environmentSuffix in resource names', done => {
-      const tapStack = new stack.TapStack('suffix-test-stack');
+      const tapStack = new stack.TapStack('suffix-test-stack', {
+        environmentSuffix: 'test123',
+      });
 
       pulumi.all([tapStack.configRecorderName]).apply(([name]) => {
-        expect(name).toContain('test123'); // environmentSuffix from mock
+        expect(name).toContain('test123'); // environmentSuffix from args
         done();
       });
     });
@@ -122,29 +126,39 @@ describe('TapStack', () => {
 
   describe('AWS Config components', () => {
     it('should create Config recorder', () => {
-      const tapStack = new stack.TapStack('config-recorder-test');
+      const tapStack = new stack.TapStack('config-recorder-test', {
+        environmentSuffix: 'test123',
+      });
       expect(tapStack.configRecorderName).toBeDefined();
     });
 
     it('should create S3 bucket for Config', () => {
-      const tapStack = new stack.TapStack('s3-bucket-test');
+      const tapStack = new stack.TapStack('s3-bucket-test', {
+        environmentSuffix: 'test123',
+      });
       expect(tapStack.configBucketArn).toBeDefined();
     });
 
     it('should create SNS topic for compliance', () => {
-      const tapStack = new stack.TapStack('sns-topic-test');
+      const tapStack = new stack.TapStack('sns-topic-test', {
+        environmentSuffix: 'test123',
+      });
       expect(tapStack.complianceTopicArn).toBeDefined();
     });
 
     it('should create Lambda function for custom rule', () => {
-      const tapStack = new stack.TapStack('lambda-test');
+      const tapStack = new stack.TapStack('lambda-test', {
+        environmentSuffix: 'test123',
+      });
       expect(tapStack.tagCheckerLambdaArn).toBeDefined();
     });
   });
 
   describe('Output validation', () => {
     it('should register all required outputs', done => {
-      const tapStack = new stack.TapStack('output-validation-test');
+      const tapStack = new stack.TapStack('output-validation-test', {
+        environmentSuffix: 'test123',
+      });
 
       pulumi
         .all([
