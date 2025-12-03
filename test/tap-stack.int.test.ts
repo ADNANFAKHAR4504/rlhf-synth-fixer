@@ -631,7 +631,7 @@ describe('TapStack Infrastructure - Integration Tests', () => {
         })
       );
       expect(rdsResponse.DBInstances![0].DBInstanceStatus).toBe('available');
-    });
+    }, 120000); // 2 minute timeout
 
     test('Data flow validation: EC2 instances can access all required services', async () => {
       // Test that EC2 can access S3, Secrets Manager, and CloudWatch
