@@ -211,29 +211,36 @@ const LAMBDA_NAME = deployedOutputs.FindingsProcessorName || `inspector-findings
 
 ---
 
-### 6. Jest Configuration Root Directory Mismatch
+### 6. TypeScript Configuration Missing Test and Bin Directories
 
 **Impact Level**: Medium
 
-**MODEL_RESPONSE Issue**: `jest.config.js` points to `/test` directory but tests are located in `/lib/test`, causing test discovery failures.
+**MODEL_RESPONSE Issue**: `tsconfig.json` excludes `bin` and `test` directories, causing ESLint parsing errors and preventing TypeScript from recognizing Jest types in tests.
 
-```javascript
+```json
 // INCORRECT - MODEL_RESPONSE
-roots: ['<rootDir>/test'],
+{
+  "types": ["node"],
+  "exclude": ["node_modules", "test", "tests", "bin", "**/*.d.ts"]
+}
 ```
 
-**IDEAL_RESPONSE Fix**: Update Jest root to match actual test location.
+**IDEAL_RESPONSE Fix**: Update tsconfig.json to include necessary directories and Jest types.
 
-```javascript
+```json
 // CORRECT - IDEAL_RESPONSE
-roots: ['<rootDir>/lib/test'],
+{
+  "types": ["node", "jest"],
+  "exclude": ["node_modules", "cdk.out", "templates", "archive", "cli", "**/*.d.ts"],
+  "include": ["lib/**/*.ts", "bin/**/*.ts", "test/**/*.ts"]
+}
 ```
 
-**Root Cause**: The model placed tests in `lib/test/` but didn't update Jest configuration accordingly. Inconsistent file structure understanding.
+**Root Cause**: The model excluded test and bin directories from TypeScript compilation without providing explicit include paths, causing ESLint configuration errors.
 
 **Cost/Security/Performance Impact**:
-- All tests fail to run with "Directory not found" error
-- Blocks QA validation completely
+- ESLint fails with "TSConfig does not include this file" error
+- Blocks lint validation completely
 - Quick fix but critical blocker
 - 15-30 minutes debugging time
 
