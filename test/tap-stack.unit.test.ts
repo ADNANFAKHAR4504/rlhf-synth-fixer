@@ -596,3 +596,45 @@ describe('TapStack - Big Data Pipeline', () => {
     });
   });
 });
+
+// Additional tests for branch coverage - Environment Suffix Resolution
+describe('TapStack - Environment Suffix Branch Coverage', () => {
+  test('uses environmentSuffix from props when provided', () => {
+    const app = new cdk.App();
+    const stack = new TapStack(app, 'PropsTestStack', {
+      environmentSuffix: 'fromprops',
+    });
+    const template = Template.fromStack(stack);
+
+    // Verify the suffix is used in resource names
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      BucketName: 'fin-s3-raw-fromprops',
+    });
+  });
+
+  test('uses environmentSuffix from context when props not provided', () => {
+    const app = new cdk.App({
+      context: {
+        environmentSuffix: 'fromcontext',
+      },
+    });
+    const stack = new TapStack(app, 'ContextTestStack', {});
+    const template = Template.fromStack(stack);
+
+    // Verify the suffix from context is used in resource names
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      BucketName: 'fin-s3-raw-fromcontext',
+    });
+  });
+
+  test('uses default dev suffix when neither props nor context provided', () => {
+    const app = new cdk.App();
+    const stack = new TapStack(app, 'DefaultTestStack');
+    const template = Template.fromStack(stack);
+
+    // Verify the default 'dev' suffix is used in resource names
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      BucketName: 'fin-s3-raw-dev',
+    });
+  });
+});
