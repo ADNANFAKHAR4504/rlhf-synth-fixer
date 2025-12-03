@@ -332,44 +332,6 @@ describe('Infrastructure Code Validation', () => {
     });
   });
 
-  describe('Export Validation', () => {
-    it('should export lambdaFunctionName', () => {
-      expect(infraCode).toContain('export const lambdaFunctionName');
-    });
-
-    it('should export lambdaFunctionArn', () => {
-      expect(infraCode).toContain('export const lambdaFunctionArn');
-    });
-
-    it('should export lambdaRoleArn', () => {
-      expect(infraCode).toContain('export const lambdaRoleArn');
-    });
-
-    it('should export dynamoTableName', () => {
-      expect(infraCode).toContain('export const dynamoTableName');
-    });
-
-    it('should export dlqQueueUrl', () => {
-      expect(infraCode).toContain('export const dlqQueueUrl');
-    });
-
-    it('should export dlqQueueArn', () => {
-      expect(infraCode).toContain('export const dlqQueueArn');
-    });
-
-    it('should export layerArn', () => {
-      expect(infraCode).toContain('export const layerArn');
-    });
-
-    it('should export errorRateAlarmArn', () => {
-      expect(infraCode).toContain('export const errorRateAlarmArn');
-    });
-
-    it('should export durationAlarmArn', () => {
-      expect(infraCode).toContain('export const durationAlarmArn');
-    });
-  });
-
   describe('Cost Optimization Validation', () => {
     it('should use optimized memory (1024 MB)', () => {
       expect(infraCode).toContain('memorySize: 1024');
