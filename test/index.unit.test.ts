@@ -56,7 +56,7 @@ describe('Image Processor Infrastructure Tests', () => {
 
   beforeAll(async () => {
     // Import the index module
-    module = require('../index');
+    module = require('../lib/index');
   });
 
   describe('Exports', () => {
