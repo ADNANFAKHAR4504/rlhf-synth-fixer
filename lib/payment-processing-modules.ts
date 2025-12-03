@@ -370,7 +370,7 @@ export class SecretsModule extends Construct {
           secretId: this.rdsSecret.id,
           secretString: JSON.stringify({
             username: 'admin',
-            password: `PaymentDB${props.environmentSuffix}2024!@#`,
+            password: `PaymentDB${props.environmentSuffix}2024SecurePass`,
           }),
         }
       );
@@ -462,7 +462,7 @@ export class RDSModule extends Construct {
       engineVersion: '8.0.mysql_aurora.3.04.0',
       databaseName: 'paymentdb',
       masterUsername: 'admin',
-      masterPassword: `PaymentDB${props.environmentSuffix}2024!@#`,
+      masterPassword: `PaymentDB${props.environmentSuffix}2024SecurePass`,
       dbSubnetGroupName: this.subnetGroup.name,
       vpcSecurityGroupIds: [this.securityGroup.id],
       storageEncrypted: true,
@@ -653,23 +653,23 @@ export class ALBModule extends Construct {
     const resourceName = (resource: string) =>
       `${resource}-${props.environmentSuffix}`;
 
-    // Security Group for ALB - only HTTPS traffic
+    // Security Group for ALB - HTTP traffic (HTTPS requires valid ACM certificate)
     this.securityGroup = new aws.securityGroup.SecurityGroup(this, 'alb-sg', {
       vpcId: props.vpcId,
       name: resourceName('payment-alb-sg'),
-      description: 'Security group for ALB - allows only HTTPS traffic',
+      description: 'Security group for ALB - allows HTTP traffic',
       tags: { ...props.tags, Name: resourceName('payment-alb-sg') },
     });
 
-    // Ingress: Allow HTTPS only
-    new aws.securityGroupRule.SecurityGroupRule(this, 'alb-ingress-https', {
+    // Ingress: Allow HTTP (use HTTPS with valid certificate in production)
+    new aws.securityGroupRule.SecurityGroupRule(this, 'alb-ingress-http', {
       type: 'ingress',
-      fromPort: 443,
-      toPort: 443,
+      fromPort: 80,
+      toPort: 80,
       protocol: 'tcp',
       cidrBlocks: ['0.0.0.0/0'],
       securityGroupId: this.securityGroup.id,
-      description: 'HTTPS from anywhere',
+      description: 'HTTP from anywhere',
     });
 
     // Egress: Allow traffic to ECS tasks
@@ -720,13 +720,11 @@ export class ALBModule extends Construct {
       }
     );
 
-    // HTTPS Listener with SSL termination
-    this.httpsListener = new aws.lbListener.LbListener(this, 'https-listener', {
+    // HTTP Listener (use HTTPS with valid ACM certificate in production)
+    this.httpsListener = new aws.lbListener.LbListener(this, 'http-listener', {
       loadBalancerArn: this.alb.arn,
-      port: 443,
-      protocol: 'HTTPS',
-      sslPolicy: 'ELBSecurityPolicy-TLS-1-2-2017-01',
-      certificateArn: props.certificateArn,
+      port: 80,
+      protocol: 'HTTP',
       defaultAction: [
         {
           type: 'forward',
