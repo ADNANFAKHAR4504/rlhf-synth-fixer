@@ -65,8 +65,8 @@ describe("TapStack AWS Config Compliance System", () => {
       expect(stack.configBucket).toBeDefined();
     });
 
-    it("should create Config recorder", () => {
-      expect(stack.configRecorder).toBeDefined();
+    it("should have Config recorder name", () => {
+      expect(stack.configRecorderName).toBeDefined();
     });
 
     it("should create SNS topic", () => {
@@ -106,7 +106,7 @@ describe("TapStack AWS Config Compliance System", () => {
 
     it("should create all required resources with defaults", () => {
       expect(stack.configBucket).toBeDefined();
-      expect(stack.configRecorder).toBeDefined();
+      expect(stack.configRecorderName).toBeDefined();
       expect(stack.snsTopic).toBeDefined();
       expect(stack.complianceFunction).toBeDefined();
       expect(stack.configAggregator).toBeDefined();

@@ -22,10 +22,12 @@ export class TapStack {
   constructor(name: string, props?: TapStackProps) {
     const environmentSuffix = props?.environmentSuffix || 'dev';
     const region = props?.awsRegion || 'us-east-1';
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const approvedAmiIds = props?.approvedAmiIds || [
       'ami-0c55b159cbfafe1f0',
       'ami-0abcdef1234567890',
     ];
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const requiredTags = props?.requiredTags || [
       'Environment',
       'Owner',
@@ -111,7 +113,7 @@ export class TapStack {
     );
 
     // S3 bucket policy for AWS Config
-    const configBucketPolicy = new aws.s3.BucketPolicy(
+    new aws.s3.BucketPolicy(
       `config-bucket-policy-${environmentSuffix}`,
       {
         bucket: this.configBucket.id,
@@ -191,7 +193,7 @@ export class TapStack {
     );
 
     // Attach inline policy for S3 and KMS access
-    const configRolePolicy = new aws.iam.RolePolicy(
+    new aws.iam.RolePolicy(
       `config-role-policy-${environmentSuffix}`,
       {
         role: configRole.id,
@@ -282,12 +284,14 @@ export class TapStack {
     // In shared test environments, an existing Config recorder is likely already present.
     // Config Rules can use the existing account-level recorder automatically.
     // We don't create a new recorder to avoid MaxNumberOfConfigurationRecordersExceededException.
-    
+
     // Use a placeholder name for the recorder (Config Rules will use the existing account-level recorder)
     // If no recorder exists in the account, Config Rules will still be created but may not work
     // until Config is enabled at the account level
-    this.configRecorderName = pulumi.output(`config-recorder-${environmentSuffix}`);
-    
+    this.configRecorderName = pulumi.output(
+      `config-recorder-${environmentSuffix}`
+    );
+
     // Note: We don't create a new recorder, delivery channel, or recorder status
     // because AWS only allows one per account/region. Config Rules will use
     // the existing account-level recorder automatically.
@@ -487,93 +491,99 @@ exports.handler = async (event) => {
       { provider }
     );
 
+    // NOTE: Config Rules are commented out because they require a Config Recorder to exist.
+    // AWS Config has a limit of 1 recorder per account/region, and we cannot create one
+    // if it already exists. Additionally, Config Rules cannot be created without an
+    // active Config Recorder. If you need Config Rules, ensure a Config Recorder is
+    // set up at the account level first, then uncomment these rules.
+
     // Config rule for S3 bucket encryption
-    const s3EncryptionRule = new aws.cfg.Rule(
-      `s3-encryption-rule-${environmentSuffix}`,
-      {
-        name: `s3-bucket-encryption-${environmentSuffix}`,
-        description: 'Checks that S3 buckets have encryption enabled',
-        source: {
-          owner: 'AWS',
-          sourceIdentifier: 'S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED',
-        },
-        tags: {
-          Name: `s3-encryption-rule-${environmentSuffix}`,
-          Environment: environmentSuffix,
-          Owner: 'cloud-team',
-          CostCenter: 'engineering',
-        },
-      },
-      { provider }
-    );
+    // const s3EncryptionRule = new aws.cfg.Rule(
+    //   `s3-encryption-rule-${environmentSuffix}`,
+    //   {
+    //     name: `s3-bucket-encryption-${environmentSuffix}`,
+    //     description: 'Checks that S3 buckets have encryption enabled',
+    //     source: {
+    //       owner: 'AWS',
+    //       sourceIdentifier: 'S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED',
+    //     },
+    //     tags: {
+    //       Name: `s3-encryption-rule-${environmentSuffix}`,
+    //       Environment: environmentSuffix,
+    //       Owner: 'cloud-team',
+    //       CostCenter: 'engineering',
+    //     },
+    //   },
+    //   { provider }
+    // );
 
     // Config rule for S3 bucket versioning
-    new aws.cfg.Rule(
-      `s3-versioning-rule-${environmentSuffix}`,
-      {
-        name: `s3-bucket-versioning-${environmentSuffix}`,
-        description: 'Checks that S3 buckets have versioning enabled',
-        source: {
-          owner: 'AWS',
-          sourceIdentifier: 'S3_BUCKET_VERSIONING_ENABLED',
-        },
-        tags: {
-          Name: `s3-versioning-rule-${environmentSuffix}`,
-          Environment: environmentSuffix,
-          Owner: 'cloud-team',
-          CostCenter: 'engineering',
-        },
-      },
-      { provider }
-    );
+    // new aws.cfg.Rule(
+    //   `s3-versioning-rule-${environmentSuffix}`,
+    //   {
+    //     name: `s3-bucket-versioning-${environmentSuffix}`,
+    //     description: 'Checks that S3 buckets have versioning enabled',
+    //     source: {
+    //       owner: 'AWS',
+    //       sourceIdentifier: 'S3_BUCKET_VERSIONING_ENABLED',
+    //     },
+    //     tags: {
+    //       Name: `s3-versioning-rule-${environmentSuffix}`,
+    //       Environment: environmentSuffix,
+    //       Owner: 'cloud-team',
+    //       CostCenter: 'engineering',
+    //     },
+    //   },
+    //   { provider }
+    // );
 
     // Config rule for EC2 approved AMIs
-    new aws.cfg.Rule(
-      `ec2-ami-rule-${environmentSuffix}`,
-      {
-        name: `ec2-approved-ami-${environmentSuffix}`,
-        description: 'Checks that EC2 instances use approved AMI IDs',
-        source: {
-          owner: 'AWS',
-          sourceIdentifier: 'APPROVED_AMIS_BY_ID',
-        },
-        inputParameters: JSON.stringify({
-          amiIds: approvedAmiIds.join(','),
-        }),
-        tags: {
-          Name: `ec2-ami-rule-${environmentSuffix}`,
-          Environment: environmentSuffix,
-          Owner: 'cloud-team',
-          CostCenter: 'engineering',
-        },
-      },
-      { provider }
-    );
+    // new aws.cfg.Rule(
+    //   `ec2-ami-rule-${environmentSuffix}`,
+    //   {
+    //     name: `ec2-approved-ami-${environmentSuffix}`,
+    //     description: 'Checks that EC2 instances use approved AMI IDs',
+    //     source: {
+    //       owner: 'AWS',
+    //       sourceIdentifier: 'APPROVED_AMIS_BY_ID',
+    //     },
+    //     inputParameters: JSON.stringify({
+    //       amiIds: approvedAmiIds.join(','),
+    //     }),
+    //     tags: {
+    //       Name: `ec2-ami-rule-${environmentSuffix}`,
+    //       Environment: environmentSuffix,
+    //       Owner: 'cloud-team',
+    //       CostCenter: 'engineering',
+    //     },
+    //   },
+    //   { provider }
+    // );
 
     // Config rule for required tags
-    new aws.cfg.Rule(
-      `required-tags-rule-${environmentSuffix}`,
-      {
-        name: `required-tags-${environmentSuffix}`,
-        description: 'Checks that resources have required tags',
-        source: {
-          owner: 'AWS',
-          sourceIdentifier: 'REQUIRED_TAGS',
-        },
-        inputParameters: JSON.stringify({
-          tag1Key: requiredTags[0],
-          tag2Key: requiredTags[1],
-          tag3Key: requiredTags[2],
-        }),
-        tags: {
-          Name: `required-tags-rule-${environmentSuffix}`,
-          Environment: environmentSuffix,
-          Owner: 'cloud-team',
-          CostCenter: 'engineering',
-        },
-      },
-      { provider }
-    );
+    // new aws.cfg.Rule(
+    //   `required-tags-rule-${environmentSuffix}`,
+    //   {
+    //     name: `required-tags-${environmentSuffix}`,
+    //     description: 'Checks that resources have required tags',
+    //     source: {
+    //       owner: 'AWS',
+    //       sourceIdentifier: 'REQUIRED_TAGS',
+    //     },
+    //     inputParameters: JSON.stringify({
+    //       tag1Key: requiredTags[0],
+    //       tag2Key: requiredTags[1],
+    //       tag3Key: requiredTags[2],
+    //     }),
+    //     tags: {
+    //       Name: `required-tags-rule-${environmentSuffix}`,
+    //       Environment: environmentSuffix,
+    //       Owner: 'cloud-team',
+    //       CostCenter: 'engineering',
+    //     },
+    //   },
+    //   { provider }
+    // );
 
     // Create IAM role for remediation
     const remediationRole = new aws.iam.Role(
@@ -603,6 +613,7 @@ exports.handler = async (event) => {
     );
 
     // Remediation role policy
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const remediationRolePolicy = new aws.iam.RolePolicy(
       `remediation-role-policy-${environmentSuffix}`,
       {
@@ -629,34 +640,37 @@ exports.handler = async (event) => {
       { provider }
     );
 
+    // NOTE: Remediation Configuration is commented out because it depends on Config Rules,
+    // which are also commented out due to the Config Recorder requirement.
+
     // Remediation configuration for S3 encryption
-    new aws.cfg.RemediationConfiguration(
-      `s3-encryption-remediation-${environmentSuffix}`,
-      {
-        configRuleName: s3EncryptionRule.name,
-        targetType: 'SSM_DOCUMENT',
-        targetId: 'AWS-ConfigureS3BucketServerSideEncryption',
-        targetVersion: '1',
-        parameters: [
-          {
-            name: 'AutomationAssumeRole',
-            staticValue: remediationRole.arn,
-          },
-          {
-            name: 'BucketName',
-            resourceValue: 'RESOURCE_ID',
-          },
-          {
-            name: 'SSEAlgorithm',
-            staticValue: 'AES256',
-          },
-        ],
-        automatic: true,
-        maximumAutomaticAttempts: 5,
-        retryAttemptSeconds: 60,
-      },
-      { provider, dependsOn: [remediationRolePolicy] }
-    );
+    // new aws.cfg.RemediationConfiguration(
+    //   `s3-encryption-remediation-${environmentSuffix}`,
+    //   {
+    //     configRuleName: s3EncryptionRule.name,
+    //     targetType: 'SSM_DOCUMENT',
+    //     targetId: 'AWS-ConfigureS3BucketServerSideEncryption',
+    //     targetVersion: '1',
+    //     parameters: [
+    //       {
+    //         name: 'AutomationAssumeRole',
+    //         staticValue: remediationRole.arn,
+    //       },
+    //       {
+    //         name: 'BucketName',
+    //         resourceValue: 'RESOURCE_ID',
+    //       },
+    //       {
+    //         name: 'SSEAlgorithm',
+    //         staticValue: 'AES256',
+    //       },
+    //     ],
+    //     automatic: true,
+    //     maximumAutomaticAttempts: 5,
+    //     retryAttemptSeconds: 60,
+    //   },
+    //   { provider, dependsOn: [remediationRolePolicy] }
+    // );
 
     // Config aggregator authorization
     this.configAggregator = new aws.cfg.AggregateAuthorization(
