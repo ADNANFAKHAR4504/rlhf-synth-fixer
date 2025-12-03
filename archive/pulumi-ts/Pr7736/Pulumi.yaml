@@ -1,0 +1,5 @@
+name: TapStack
+runtime:
+  name: nodejs
+description: Pulumi infrastructure for S3 compliance analysis
+main: bin/tap.ts
