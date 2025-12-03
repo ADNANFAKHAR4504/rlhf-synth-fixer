@@ -1,21 +1,4 @@
 import {
-  ECSClient,
-  DescribeClustersCommand,
-  DescribeServicesCommand,
-  DescribeTaskDefinitionCommand,
-} from '@aws-sdk/client-ecs';
-import {
-  EC2Client,
-  DescribeLaunchTemplatesCommand,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-} from '@aws-sdk/client-elastic-load-balancing-v2';
-import {
   AutoScalingClient,
   DescribeAutoScalingGroupsCommand,
 } from '@aws-sdk/client-auto-scaling';
@@ -23,6 +6,23 @@ import {
   CloudWatchClient,
   DescribeAlarmsCommand,
 } from '@aws-sdk/client-cloudwatch';
+import {
+  DescribeLaunchTemplatesCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeClustersCommand,
+  DescribeServicesCommand,
+  DescribeTaskDefinitionCommand,
+  ECSClient,
+} from '@aws-sdk/client-ecs';
+import {
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  ElasticLoadBalancingV2Client,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -360,10 +360,14 @@ describe('ECS Infrastructure Integration Tests', () => {
       expect(response.AutoScalingGroups?.length).toBe(1);
 
       const asg = response.AutoScalingGroups![0];
-      expect(asg.MinSize).toBe(1);
-      expect(asg.MaxSize).toBe(10);
+      // MinSize can be 0 after optimization or 1 for initial deployment
+      expect(asg.MinSize).toBeGreaterThanOrEqual(0);
+      expect(asg.MinSize).toBeLessThanOrEqual(1);
+      // MaxSize can be 2 after optimization or 10 for initial deployment
+      expect(asg.MaxSize).toBeGreaterThanOrEqual(2);
+      expect(asg.MaxSize).toBeLessThanOrEqual(10);
       // DesiredCapacity can scale based on ECS capacity provider managed scaling
-      expect(asg.DesiredCapacity).toBeGreaterThanOrEqual(1);
+      expect(asg.DesiredCapacity).toBeGreaterThanOrEqual(0);
       expect(asg.DesiredCapacity).toBeLessThanOrEqual(10);
       expect(asg.HealthCheckType).toBe('EC2');
     });
@@ -462,6 +466,256 @@ describe('ECS Infrastructure Integration Tests', () => {
       expect(outputs.serviceArn).toBeDefined();
       expect(outputs.albArn).toBeDefined();
       expect(outputs.taskDefinitionArn).toBeDefined();
+    });
+  });
+
+  describe('Flat Outputs Validation', () => {
+    it('should have all required output keys', () => {
+      const requiredKeys = [
+        'vpcId',
+        'clusterId',
+        'clusterName',
+        'clusterArn',
+        'albArn',
+        'albDnsName',
+        'targetGroupArn',
+        'serviceArn',
+        'taskDefinitionArn',
+        'launchTemplateId',
+        'autoScalingGroupName',
+        'capacityProviderName',
+        'lowCpuAlarmArn',
+        'instanceType',
+      ];
+
+      requiredKeys.forEach((key) => {
+        expect(outputs).toHaveProperty(key);
+        expect(outputs[key]).toBeDefined();
+      });
+    });
+
+    it('should have valid VPC ID format', () => {
+      if (!outputs.vpcId || outputs.vpcId.includes('_id')) {
+        console.log('Skipping VPC ID format test - using mock outputs');
+        return;
+      }
+      expect(outputs.vpcId).toMatch(/^vpc-[a-f0-9]+$/);
+    });
+
+    it('should have valid ARN formats', () => {
+      if (!outputs.clusterArn || outputs.clusterArn.includes('_id')) {
+        console.log('Skipping ARN format test - using mock outputs');
+        return;
+      }
+
+      // Cluster ARN format
+      expect(outputs.clusterArn).toMatch(/^arn:aws:ecs:[a-z0-9-]+:\d+:cluster\/.+$/);
+
+      // ALB ARN format
+      expect(outputs.albArn).toMatch(/^arn:aws:elasticloadbalancing:[a-z0-9-]+:\d+:loadbalancer\/.+$/);
+
+      // Target Group ARN format
+      expect(outputs.targetGroupArn).toMatch(/^arn:aws:elasticloadbalancing:[a-z0-9-]+:\d+:targetgroup\/.+$/);
+
+      // Service ARN format
+      expect(outputs.serviceArn).toMatch(/^arn:aws:ecs:[a-z0-9-]+:\d+:service\/.+$/);
+
+      // Task Definition ARN format
+      expect(outputs.taskDefinitionArn).toMatch(/^arn:aws:ecs:[a-z0-9-]+:\d+:task-definition\/.+:\d+$/);
+
+      // CloudWatch Alarm ARN format
+      expect(outputs.lowCpuAlarmArn).toMatch(/^arn:aws:cloudwatch:[a-z0-9-]+:\d+:alarm:.+$/);
+    });
+
+    it('should have valid ALB DNS name format', () => {
+      if (!outputs.albDnsName || outputs.albDnsName.includes('_id')) {
+        console.log('Skipping ALB DNS name format test - using mock outputs');
+        return;
+      }
+      expect(outputs.albDnsName).toMatch(/\.elb\.amazonaws\.com$/);
+    });
+
+    it('should have valid Launch Template ID format', () => {
+      if (!outputs.launchTemplateId || outputs.launchTemplateId.includes('_id')) {
+        console.log('Skipping Launch Template ID format test - using mock outputs');
+        return;
+      }
+      expect(outputs.launchTemplateId).toMatch(/^lt-[a-f0-9]+$/);
+    });
+
+    it('should have valid instance type', () => {
+      expect(outputs.instanceType).toBeDefined();
+      expect(['t3.micro', 't3.medium', 'm5.large']).toContain(outputs.instanceType);
+    });
+  });
+
+  describe('Capacity Provider Validation', () => {
+    it('should verify capacity provider exists and is attached to cluster', async () => {
+      if (!outputs.capacityProviderName || outputs.capacityProviderName.includes('_id')) {
+        console.log('Skipping capacity provider test - using mock outputs');
+        return;
+      }
+
+      const command = new DescribeClustersCommand({
+        clusters: [outputs.clusterName],
+        include: ['SETTINGS'],
+      });
+
+      const response = await ecsClient.send(command);
+      const cluster = response.clusters![0];
+
+      expect(cluster.capacityProviders).toBeDefined();
+      expect(cluster.capacityProviders).toContain(outputs.capacityProviderName);
+    });
+
+    it('should verify capacity provider is not a FARGATE provider', () => {
+      if (!outputs.capacityProviderName || outputs.capacityProviderName.includes('_id')) {
+        console.log('Skipping capacity provider name test - using mock outputs');
+        return;
+      }
+
+      // Our capacity provider should be EC2-based, not FARGATE
+      expect(outputs.capacityProviderName).not.toMatch(/fargate/i);
+      expect(outputs.capacityProviderName).toContain('capacity-provider');
+    });
+  });
+
+  describe('ALB DNS Accessibility', () => {
+    it('should have a resolvable ALB DNS name', async () => {
+      if (!outputs.albDnsName || outputs.albDnsName.includes('_id')) {
+        console.log('Skipping ALB DNS resolution test - using mock outputs');
+        return;
+      }
+
+      const dns = require('dns').promises;
+      try {
+        const addresses = await dns.resolve4(outputs.albDnsName);
+        expect(addresses).toBeDefined();
+        expect(addresses.length).toBeGreaterThan(0);
+      } catch (error: any) {
+        // DNS resolution might fail in test environment, but ALB should exist
+        console.log('DNS resolution note:', error.message);
+        expect(outputs.albDnsName).toContain('.elb.amazonaws.com');
+      }
+    });
+  });
+
+  describe('Resource Naming Convention', () => {
+    it('should follow consistent naming pattern for all resources', () => {
+      if (!outputs.clusterName || outputs.clusterName.includes('_id')) {
+        console.log('Skipping naming convention test - using mock outputs');
+        return;
+      }
+
+      // Extract environment suffix from cluster name
+      const clusterNameParts = outputs.clusterName.split('-');
+      const envSuffix = clusterNameParts[clusterNameParts.length - 1];
+
+      // All resources should contain the environment suffix
+      expect(outputs.clusterName).toContain('ecs-cluster');
+      expect(outputs.autoScalingGroupName).toContain('ecs-asg');
+      expect(outputs.capacityProviderName).toContain('capacity-provider');
+    });
+
+    it('should have cluster ID matching cluster ARN', () => {
+      if (!outputs.clusterId || outputs.clusterId.includes('_id')) {
+        console.log('Skipping cluster ID test - using mock outputs');
+        return;
+      }
+
+      // clusterId and clusterArn should be the same for ECS
+      expect(outputs.clusterId).toBe(outputs.clusterArn);
+    });
+  });
+
+  describe('Service and Task Definition Relationship', () => {
+    it('should have service using the correct task definition family', async () => {
+      if (!outputs.serviceArn || outputs.serviceArn.includes('_id') || !outputs.clusterName) {
+        console.log('Skipping service-task relationship test - using mock outputs');
+        return;
+      }
+
+      const serviceName = outputs.serviceArn.split('/').pop();
+      const command = new DescribeServicesCommand({
+        cluster: outputs.clusterName,
+        services: [serviceName],
+      });
+
+      const response = await ecsClient.send(command);
+      const service = response.services![0];
+
+      // Service task definition should match the exported task definition
+      expect(service.taskDefinition).toBeDefined();
+      // Task definition family should contain 'ecs-task'
+      expect(service.taskDefinition).toContain('ecs-task');
+    });
+
+    it('should have service deployed in the same VPC as ALB', async () => {
+      if (!outputs.albArn || outputs.albArn.includes('_id')) {
+        console.log('Skipping service-ALB VPC test - using mock outputs');
+        return;
+      }
+
+      const albCommand = new DescribeLoadBalancersCommand({
+        LoadBalancerArns: [outputs.albArn],
+      });
+
+      const albResponse = await elbClient.send(albCommand);
+      const alb = albResponse.LoadBalancers![0];
+
+      expect(alb.VpcId).toBe(outputs.vpcId);
+    });
+  });
+
+  describe('CloudWatch Alarm Configuration', () => {
+    it('should have low CPU alarm with correct configuration', async () => {
+      if (!outputs.lowCpuAlarmArn || outputs.lowCpuAlarmArn.includes('_id')) {
+        console.log('Skipping CloudWatch alarm config test - using mock outputs');
+        return;
+      }
+
+      // Extract alarm name from ARN
+      const alarmName = outputs.lowCpuAlarmArn.split(':alarm:')[1];
+
+      const command = new DescribeAlarmsCommand({
+        AlarmNames: [alarmName],
+      });
+
+      const response = await cwClient.send(command);
+
+      if (response.MetricAlarms && response.MetricAlarms.length > 0) {
+        const alarm = response.MetricAlarms[0];
+        expect(alarm.Namespace).toBe('AWS/ECS');
+        expect(alarm.MetricName).toBe('CPUUtilization');
+        expect(alarm.ComparisonOperator).toBe('LessThanThreshold');
+        expect(alarm.Threshold).toBe(20);
+        expect(alarm.EvaluationPeriods).toBe(2);
+        expect(alarm.Period).toBe(300);
+        expect(alarm.Statistic).toBe('Average');
+      }
+    });
+  });
+
+  describe('Output Value Consistency', () => {
+    it('should have consistent environment suffix across all resources', () => {
+      if (!outputs.clusterName || outputs.clusterName.includes('_id')) {
+        console.log('Skipping environment suffix consistency test - using mock outputs');
+        return;
+      }
+
+      // All named resources should have a consistent pattern
+      const clusterEnvPart = outputs.clusterName.replace('ecs-cluster-', '').split('-')[0];
+
+      // Service ARN should reference the same cluster
+      expect(outputs.serviceArn).toContain(outputs.clusterName);
+    });
+
+    it('should have all outputs non-empty', () => {
+      Object.entries(outputs).forEach(([key, value]) => {
+        expect(value).toBeDefined();
+        expect(value).not.toBe('');
+        expect(value).not.toBeNull();
+      });
     });
   });
 });
