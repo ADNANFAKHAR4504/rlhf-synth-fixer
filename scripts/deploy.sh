@@ -54,6 +54,19 @@ if [ -n "$PULUMI_BACKEND_URL" ]; then
   echo "  Pulumi organization: $PULUMI_ORG"
 fi
 
+echo "=== Validation Phase ==="
+echo "🔍 Validating stack naming conventions..."
+if [ -f "scripts/validate-stack-naming.sh" ]; then
+  ./scripts/validate-stack-naming.sh || {
+    echo "⚠️ Stack naming validation failed. Please fix naming inconsistencies."
+    echo "ℹ️ Use 'TapStack' (capital T, capital S) everywhere."
+    # Don't fail deployment for now, just warn
+    # exit 1
+  }
+else
+  echo "⚠️ validate-stack-naming.sh not found, skipping naming validation"
+fi
+
 echo "=== Bootstrap Phase ==="
 ./scripts/bootstrap.sh
 
@@ -605,6 +618,12 @@ elif [ "$PLATFORM" = "pulumi" ]; then
   fi
   
   echo "Using environment suffix: $ENVIRONMENT_SUFFIX"
+  
+  # Validate stack naming convention
+  EXPECTED_STACK_NAME="TapStack${ENVIRONMENT_SUFFIX}"
+  echo "📋 Expected stack name: ${PULUMI_ORG}/TapStack/${EXPECTED_STACK_NAME}"
+  echo "   Standard: TapStack (capital T, capital S) + environment suffix"
+  
   echo "Selecting or creating Pulumi stack Using ENVIRONMENT_SUFFIX=$ENVIRONMENT_SUFFIX"
   
   if [ "$LANGUAGE" = "go" ]; then
