@@ -170,7 +170,7 @@ const imageProcessorLambda = new aws.lambda.Function(
     // reservedConcurrentExecutions: lambdaConcurrency, // 5 for dev, 10 for prod
 
     code: new pulumi.asset.AssetArchive({
-      '.': new pulumi.asset.FileArchive('./lambda'),
+      '.': new pulumi.asset.FileArchive('./lib/lambda'),
     }),
 
     tags: {

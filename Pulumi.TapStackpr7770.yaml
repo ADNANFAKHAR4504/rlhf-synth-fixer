@@ -1,4 +1,0 @@
-config:
-  TapStack:environmentSuffix: pr7770
-  TapStack:environment: dev
-  aws:region: us-east-1

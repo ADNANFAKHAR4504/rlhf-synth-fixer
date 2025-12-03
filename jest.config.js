@@ -1,6 +1,6 @@
 module.exports = {
   testEnvironment: 'node',
-  roots: ['<rootDir>/__tests__'],
+  roots: ['<rootDir>/test'],
   testMatch: ['**/*.test.ts', '**/*.test.mjs', '**/*.py'],
   preset: 'ts-jest',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs'],
@@ -15,13 +15,11 @@ module.exports = {
     'node_modules/(?!(aws-cdk-lib|@aws-cdk|constructs|@aws-sdk|@smithy|@kubernetes/client-node|openid-client|oauth4webapi|jose)/)',
   ],
   collectCoverageFrom: [
-    '<rootDir>/index.ts',
     '<rootDir>/lib/**/*.ts',
     '<rootDir>/lib/**/*.mjs',
     '<rootDir>/lib/**/*.js',
     '!<rootDir>/bin/**/*.ts',
     '!<rootDir>/lib/lambda/**',
-    '!<rootDir>/lambda/**',
     '!<rootDir>/**/*.d.ts',
     '!<rootDir>/**/*.test.ts',
     '!<rootDir>/**/*.test.js',
@@ -30,7 +28,7 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'json-summary'],
   coverageThreshold: {
     global: {
-      branches: 50,
+      branches: 70,
       functions: 100,
       lines: 100,
       statements: 99,
