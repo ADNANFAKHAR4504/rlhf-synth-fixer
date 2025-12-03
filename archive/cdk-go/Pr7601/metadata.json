@@ -1,0 +1,28 @@
+{
+  "platform": "cdk",
+  "language": "go",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-12-01T19:57:00+00:00",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "po_id": "t5q3q7r7",
+  "aws_services": [
+    "CodePipeline",
+    "CodeBuild",
+    "S3",
+    "SNS",
+    "IAM",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
