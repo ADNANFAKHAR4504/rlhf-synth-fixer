@@ -1,501 +1,211 @@
-# Model Failures Analysis
+# Model Failures
 
-This document outlines the issues found in the MODEL_RESPONSE.md and how they were corrected in IDEAL_RESPONSE.md.
+This file documents common issues, errors, or failures encountered during CI/CD Pipeline YAML implementation.
 
-## Critical Failures
+## Critical Failures (Auto-Fail)
 
-### 1. Missing environmentSuffix in Resource Names
-**Issue**: Resource names did not include the environmentSuffix parameter as required.
+### 1. Hardcoded Secrets
+**Issue**: Credentials hardcoded directly in YAML configuration
 
-**MODEL_RESPONSE Examples**:
-- `artifacts-bucket` (hardcoded)
-- `nodejs-app-repo` (hardcoded)
-- `build-logs` (hardcoded)
-- `codebuild-role` (hardcoded)
-
-**IDEAL_RESPONSE Correction**:
-- `artifacts-bucket-${args.environmentSuffix}`
-- `nodejs-app-repo-${args.environmentSuffix}`
-- `build-logs-${args.environmentSuffix}`
-- `codebuild-role-${args.environmentSuffix}`
-
-**Impact**: Without environmentSuffix, multiple deployments would conflict with each other. This is a deployment blocker.
-
----
-
-### 2. Missing forceDestroy for S3 Bucket
-**Issue**: S3 bucket created without forceDestroy property, making it non-destroyable when containing objects.
-
-**MODEL_RESPONSE**:
-```typescript
-const artifactsBucket = new aws.s3.Bucket(`artifacts-bucket`, {
-  versioning: {
-    enabled: true,
-  },
-  tags: tags,
-}, { parent: this });
+**Examples of Violations**:
+```yaml
+env:
+  AWS_ACCESS_KEY_ID: AKIAIOSFODNN7EXAMPLE
+  AWS_SECRET_ACCESS_KEY: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+  DATABASE_PASSWORD: MySecretPassword123
 ```
 
-**IDEAL_RESPONSE Correction**:
-```typescript
-const artifactsBucket = new aws.s3.BucketV2(`artifacts-bucket-${args.environmentSuffix}`, {
-  forceDestroy: true,
-  tags: tags,
-}, { parent: this });
+**Impact**: Security breach, credential exposure in version control
+**Fix**: Use platform-specific secret management
+
+### 2. Inline Scripts >5 Lines
+**Issue**: Complex logic embedded directly in pipeline YAML
+
+**Example of Violation**:
+```yaml
+- name: Deploy Application
+  run: |
+    echo "Starting deployment"
+    aws ecr get-login-password --region us-east-1 | docker login ...
+    docker build -t myapp:latest .
+    docker tag myapp:latest $ECR_REGISTRY/myapp:latest
+    docker push $ECR_REGISTRY/myapp:latest
+    kubectl apply -f k8s/deployment.yml
+    kubectl rollout status deployment/myapp
 ```
 
-**Impact**: Stack destruction would fail if bucket contains artifacts. Violates destroyability requirement.
+**Impact**: Unmaintainable, untestable, hard to debug
+**Fix**: Move to `scripts/deploy.sh`
 
----
+### 3. Public DockerHub Images for Deployment
+**Issue**: Using public container registry instead of private registry
 
-### 3. Missing forceDelete for ECR Repository
-**Issue**: ECR repository created without forceDelete property, making it non-destroyable when containing images.
-
-**MODEL_RESPONSE**:
-```typescript
-const ecrRepo = new aws.ecr.Repository(`nodejs-app-repo`, {
-  imageScanningConfiguration: {
-    scanOnPush: true,
-  },
-  tags: tags,
-}, { parent: this });
+**Example of Violation**:
+```yaml
+- name: Build and Deploy
+  run: |
+    docker build -t myusername/myapp:latest .
+    docker push myusername/myapp:latest
 ```
 
-**IDEAL_RESPONSE Correction**:
-```typescript
-const ecrRepo = new aws.ecr.Repository(`nodejs-app-repo-${args.environmentSuffix}`, {
-  forceDelete: true,
-  imageScanningConfiguration: {
-    scanOnPush: true,
-  },
-  tags: tags,
-}, { parent: this });
+**Impact**: No access control, potential security risks
+**Fix**: Use ECR, GCR, ACR, or other private registries
+
+### 4. Missing Container Scanning
+**Issue**: Building and deploying containers without vulnerability scanning
+
+**Example of Violation**:
+```yaml
+- name: Build
+  run: docker build -t myapp:latest .
+- name: Deploy
+  run: ./scripts/deploy.sh
 ```
 
-**Impact**: Stack destruction would fail if repository contains images. Violates destroyability requirement.
-
----
-
-### 4. Missing ECR Lifecycle Policy
-**Issue**: No lifecycle policy to prevent unlimited image accumulation in ECR.
-
-**MODEL_RESPONSE**: Missing entirely.
-
-**IDEAL_RESPONSE Correction**:
-```typescript
-new aws.ecr.LifecyclePolicy(`ecr-lifecycle-${args.environmentSuffix}`, {
-  repository: ecrRepo.name,
-  policy: JSON.stringify({
-    rules: [
-      {
-        rulePriority: 1,
-        description: "Keep last 10 images",
-        selection: {
-          tagStatus: "any",
-          countType: "imageCountMoreThan",
-          countNumber: 10,
-        },
-        action: {
-          type: "expire",
-        },
-      },
-    ],
-  }),
-}, { parent: this });
-```
-
-**Impact**: ECR costs would grow indefinitely. Violates explicit requirement.
-
----
+**Impact**: Deploying vulnerable containers to production
+**Fix**: Add Trivy, Grype, Snyk, or Anchore scanning
 
 ## Security Failures
 
-### 5. Overly Permissive CodeBuild IAM Policy
-**Issue**: Used AWS managed policy `AWSCodeBuildAdminAccess` instead of least-privilege custom policy.
+### 5. Missing Environment Declarations
+**Issue**: Deploying to production without environment protection
 
-**MODEL_RESPONSE**:
-```typescript
-new aws.iam.RolePolicyAttachment(`codebuild-policy-attachment`, {
-  role: codeBuildRole.name,
-  policyArn: "arn:aws:iam::aws:policy/AWSCodeBuildAdminAccess",
-}, { parent: this });
+**Example of Violation**:
+```yaml
+deploy-prod:
+  runs-on: ubuntu-latest
+  steps:
+    - run: ./scripts/deploy.sh prod
 ```
 
-**IDEAL_RESPONSE Correction**:
-```typescript
-new aws.iam.RolePolicy(`codebuild-policy-${args.environmentSuffix}`, {
-  role: codeBuildRole.id,
-  policy: pulumi.all([artifactsBucket.arn, ecrRepo.arn, logGroup.arn]).apply(([bucketArn, repoArn, logArn]) =>
-    JSON.stringify({
-      Version: "2012-10-17",
-      Statement: [
-        {
-          Effect: "Allow",
-          Action: [
-            "logs:CreateLogGroup",
-            "logs:CreateLogStream",
-            "logs:PutLogEvents",
-          ],
-          Resource: [`${logArn}:*`],
-        },
-        {
-          Effect: "Allow",
-          Action: ["ecr:GetAuthorizationToken"],
-          Resource: "*",
-        },
-        {
-          Effect: "Allow",
-          Action: [
-            "ecr:BatchCheckLayerAvailability",
-            "ecr:GetDownloadUrlForLayer",
-            "ecr:BatchGetImage",
-            "ecr:PutImage",
-            "ecr:InitiateLayerUpload",
-            "ecr:UploadLayerPart",
-            "ecr:CompleteLayerUpload",
-          ],
-          Resource: repoArn,
-        },
-        {
-          Effect: "Allow",
-          Action: [
-            "s3:GetObject",
-            "s3:GetObjectVersion",
-            "s3:PutObject",
-          ],
-          Resource: `${bucketArn}/*`,
-        },
-      ],
-    })
-  ),
-}, { parent: this });
+**Impact**: No deployment protection, accidental production deployments
+**Fix**: Add `environment: production`
+
+### 6. Incorrect Platform Syntax
+**Issue**: Using wrong syntax for detected CI/CD platform
+
+**Example of Violation** (GitLab CI using GitHub Actions syntax):
+```yaml
+name: Pipeline
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
 ```
 
-**Impact**: Grants excessive permissions violating least-privilege principle. Security risk.
-
----
-
-### 6. Overly Permissive CodePipeline IAM Policy
-**Issue**: Used wildcard permissions (`s3:*`, `codebuild:*`, `Resource: "*"`) instead of specific actions and resources.
-
-**MODEL_RESPONSE**:
-```typescript
-new aws.iam.RolePolicy(`codepipeline-policy`, {
-  role: codePipelineRole.id,
-  policy: JSON.stringify({
-    Version: "2012-10-17",
-    Statement: [
-      {
-        Effect: "Allow",
-        Action: ["s3:*"],
-        Resource: "*",
-      },
-      {
-        Effect: "Allow",
-        Action: ["codebuild:*"],
-        Resource: "*",
-      },
-    ],
-  }),
-}, { parent: this });
-```
-
-**IDEAL_RESPONSE Correction**:
-```typescript
-new aws.iam.RolePolicy(`codepipeline-policy-${args.environmentSuffix}`, {
-  role: codePipelineRole.id,
-  policy: pulumi.all([artifactsBucket.arn, codeBuildProject.arn]).apply(([bucketArn, buildArn]) =>
-    JSON.stringify({
-      Version: "2012-10-17",
-      Statement: [
-        {
-          Effect: "Allow",
-          Action: [
-            "s3:GetObject",
-            "s3:GetObjectVersion",
-            "s3:GetBucketVersioning",
-            "s3:PutObject",
-          ],
-          Resource: [bucketArn, `${bucketArn}/*`],
-        },
-        {
-          Effect: "Allow",
-          Action: [
-            "codebuild:BatchGetBuilds",
-            "codebuild:StartBuild",
-          ],
-          Resource: buildArn,
-        },
-        {
-          Effect: "Allow",
-          Action: ["sns:Publish"],
-          Resource: notificationTopic.arn,
-        },
-      ],
-    })
-  ),
-}, { parent: this });
-```
-
-**Impact**: Grants excessive permissions to all S3 buckets and CodeBuild projects. Security risk.
-
----
+**Impact**: Pipeline won't execute, syntax errors
+**Fix**: Use platform-specific syntax
 
 ## Functional Failures
 
-### 7. Missing GitHub Webhook
-**Issue**: No webhook resource created for automatic pipeline triggers on GitHub commits.
+### 7. Missing Job Dependencies
+**Issue**: Jobs running without proper dependency chain
 
-**MODEL_RESPONSE**: Missing entirely.
-
-**IDEAL_RESPONSE Correction**:
-```typescript
-const webhook = new aws.codepipeline.Webhook(`github-webhook-${args.environmentSuffix}`, {
-  authentication: "GITHUB_HMAC",
-  targetAction: "Source",
-  targetPipeline: pipeline.name,
-  authenticationConfiguration: {
-    secretToken: args.githubToken,
-  },
-  filters: [{
-    jsonPath: "$.ref",
-    matchEquals: pulumi.interpolate`refs/heads/${args.githubBranch}`,
-  }],
-  tags: tags,
-}, { parent: this });
-```
-
-**Impact**: Pipeline would not trigger automatically on commits. Requires manual triggering.
-
----
-
-### 8. Missing Deploy Stage
-**Issue**: Pipeline only has Source and Build stages, missing the Deploy stage as specified.
-
-**MODEL_RESPONSE**:
-```typescript
-stages: [
-  {
-    name: "Source",
-    actions: [...]
-  },
-  {
-    name: "Build",
-    actions: [...]
-  },
-]
-```
-
-**IDEAL_RESPONSE Correction**:
-```typescript
-stages: [
-  {
-    name: "Source",
-    actions: [...]
-  },
-  {
-    name: "Build",
-    actions: [...]
-  },
-  {
-    name: "Deploy",
-    actions: [{
-      name: "Deploy",
-      category: "Build",
-      owner: "AWS",
-      provider: "CodeBuild",
-      version: "1",
-      inputArtifacts: ["build_output"],
-      configuration: {
-        ProjectName: codeBuildProject.name,
-      },
-    }],
-  },
-]
-```
-
-**Impact**: Does not meet requirement for three-stage pipeline (source, build, deploy).
-
----
-
-### 9. Missing SNS Notification Configuration
-**Issue**: SNS topic created but not configured for pipeline failure notifications.
-
-**MODEL_RESPONSE**: Only creates topic, no notification rule or policy.
-
-**IDEAL_RESPONSE Correction**:
-```typescript
-// SNS notification rule for pipeline failures
-const notificationRule = new aws.codestarnotifications.NotificationRule(`pipeline-failure-notification-${args.environmentSuffix}`, {
-  detailType: "FULL",
-  eventTypeIds: [
-    "codepipeline-pipeline-pipeline-execution-failed",
-    "codepipeline-pipeline-pipeline-execution-canceled",
-    "codepipeline-pipeline-pipeline-execution-superseded",
-  ],
-  name: pulumi.interpolate`pipeline-failures-${args.environmentSuffix}`,
-  resource: pipeline.arn,
-  targets: [{
-    address: notificationTopic.arn,
-  }],
-  tags: tags,
-}, { parent: this });
-
-// Allow CodeStar Notifications to publish to SNS
-new aws.sns.TopicPolicy(`notification-topic-policy-${args.environmentSuffix}`, {
-  arn: notificationTopic.arn,
-  policy: notificationTopic.arn.apply(arn =>
-    JSON.stringify({
-      Version: "2012-10-17",
-      Statement: [{
-        Effect: "Allow",
-        Principal: {
-          Service: "codestar-notifications.amazonaws.com",
-        },
-        Action: "SNS:Publish",
-        Resource: arn,
-      }],
-    })
-  ),
-}, { parent: this });
-```
-
-**Impact**: No notifications sent on pipeline failures. Does not meet requirement.
-
----
-
-### 10. Incorrect S3 Versioning Configuration
-**Issue**: Used deprecated inline versioning configuration instead of separate BucketVersioningV2 resource.
-
-**MODEL_RESPONSE**:
-```typescript
-const artifactsBucket = new aws.s3.Bucket(`artifacts-bucket`, {
-  versioning: {
-    enabled: true,
-  },
-  tags: tags,
-}, { parent: this });
-```
-
-**IDEAL_RESPONSE Correction**:
-```typescript
-const artifactsBucket = new aws.s3.BucketV2(`artifacts-bucket-${args.environmentSuffix}`, {
-  forceDestroy: true,
-  tags: tags,
-}, { parent: this });
-
-const bucketVersioning = new aws.s3.BucketVersioningV2(`artifacts-bucket-versioning-${args.environmentSuffix}`, {
-  bucket: artifactsBucket.id,
-  versioningConfiguration: {
-    status: "Enabled",
-  },
-}, { parent: this });
-```
-
-**Impact**: Uses deprecated API pattern. May not work with newer Pulumi AWS provider versions.
-
----
-
-### 11. Incomplete BuildSpec
-**Issue**: BuildSpec missing artifacts section and proper image tagging with commit hash.
-
-**MODEL_RESPONSE**: Basic buildspec without artifacts or commit-based tagging.
-
-**IDEAL_RESPONSE Correction**: Added commit hash tagging and artifacts section:
+**Example of Violation**:
 ```yaml
-- COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
-- IMAGE_TAG_HASH=$IMAGE_TAG-$COMMIT_HASH
-...
-- docker tag $REPOSITORY_URI:$IMAGE_TAG $REPOSITORY_URI:$IMAGE_TAG_HASH
-- docker push $REPOSITORY_URI:$IMAGE_TAG_HASH
-- printf '[{"name":"nodejs-app","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
-artifacts:
-  files:
-    - imagedefinitions.json
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps: [...]
+
+  deploy:
+    runs-on: ubuntu-latest
+    steps: [...]  # Missing 'needs: build'
 ```
 
-**Impact**: No traceability of images to commits. Missing artifacts for deploy stage.
+**Impact**: Deploy job might run before build completes
+**Fix**: Add proper job dependencies with `needs:`
 
----
+### 8. Missing Artifact Handling
+**Issue**: Not passing build artifacts to deployment stages
 
-### 12. Missing PollForSourceChanges Configuration
-**Issue**: GitHub source action missing `PollForSourceChanges: "false"` when using webhooks.
+**Example of Violation**:
+```yaml
+build:
+  runs-on: ubuntu-latest
+  steps:
+    - run: npm run build
+    # Missing artifact upload
 
-**MODEL_RESPONSE**:
-```typescript
-configuration: {
-  Owner: args.githubOwner,
-  Repo: args.githubRepo,
-  Branch: args.githubBranch,
-  OAuthToken: args.githubToken,
-}
+deploy:
+  needs: build
+  runs-on: ubuntu-latest
+  steps:
+    - run: ./scripts/deploy.sh
+    # Missing artifact download
 ```
 
-**IDEAL_RESPONSE Correction**:
-```typescript
-configuration: {
-  Owner: args.githubOwner,
-  Repo: args.githubRepo,
-  Branch: args.githubBranch,
-  OAuthToken: args.githubToken,
-  PollForSourceChanges: "false",
-}
+**Impact**: Deploy stage has no artifacts to deploy
+**Fix**: Use actions/upload-artifact and actions/download-artifact
+
+### 9. Missing Manual Approval for Production
+**Issue**: No manual approval gate before production deployment
+
+**Example of Violation**:
+```yaml
+deploy-prod:
+  needs: deploy-staging
+  runs-on: ubuntu-latest
+  # Missing environment approval
 ```
 
-**Impact**: Pipeline would poll GitHub instead of using webhook, wasting resources and delaying triggers.
+**Impact**: Automated deployments to production without review
+**Fix**: Add environment with required reviewers
 
----
+### 10. No Failure Notifications
+**Issue**: Pipeline failures go unnoticed
 
-### 13. Missing Public Output Properties
-**Issue**: Output properties not declared as public class members.
-
-**MODEL_RESPONSE**: Only uses `registerOutputs()`.
-
-**IDEAL_RESPONSE Correction**:
-```typescript
-public readonly bucketName: pulumi.Output<string>;
-public readonly ecrRepositoryUrl: pulumi.Output<string>;
-public readonly pipelineName: pulumi.Output<string>;
-public readonly notificationTopicArn: pulumi.Output<string>;
-
-constructor(name: string, args: TapStackArgs, opts?: pulumi.ComponentResourceOptions) {
-  super("custom:app:TapStack", name, {}, opts);
-
-  // ... resource creation ...
-
-  // Assign outputs
-  this.bucketName = artifactsBucket.bucket;
-  this.ecrRepositoryUrl = ecrRepo.repositoryUrl;
-  this.pipelineName = pipeline.name;
-  this.notificationTopicArn = notificationTopic.arn;
-}
+**Example of Violation**:
+```yaml
+jobs:
+  deploy:
+    steps:
+      - run: ./scripts/deploy.sh
+    # Missing notification on failure
 ```
 
-**Impact**: Outputs not accessible from parent stack. Poor TypeScript practices.
+**Impact**: Team unaware of deployment failures
+**Fix**: Add Slack/email notifications with `if: failure()`
 
----
+## Platform-Specific Issues
+
+### 11. GitHub Actions - Missing Checkout
+**Issue**: Not checking out code before use
+
+**Example of Violation**:
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm install  # No code checked out!
+```
+
+### 12. GitLab CI - Missing Image Declaration
+**Issue**: Not specifying Docker image for job execution
+
+**Example of Violation**:
+```yaml
+build:
+  script:
+    - npm install  # No image specified
+```
+
+### 13. CircleCI - Incorrect Version Format
+**Issue**: Using wrong version declaration
+
+**Example of Violation**:
+```yaml
+version: 3.0  # CircleCI uses 2.1
+```
 
 ## Summary
 
-**Total Failures**: 13
+Common failure categories:
+- **Security**: Hardcoded secrets, no scanning, public registries
+- **Maintainability**: Long inline scripts, poor organization
+- **Reliability**: Missing dependencies, no artifacts, no approvals
+- **Compliance**: Missing environment protection, no notifications
+- **Platform**: Incorrect syntax, missing required elements
 
-**Critical (Deployment Blockers)**: 4
-- Missing environmentSuffix in all resources
-- Missing forceDestroy on S3 bucket
-- Missing forceDelete on ECR repository
-- Missing ECR lifecycle policy
-
-**Security Issues**: 2
-- Overly permissive CodeBuild IAM policy
-- Overly permissive CodePipeline IAM policy
-
-**Functional Issues**: 7
-- Missing GitHub webhook
-- Missing Deploy stage
-- Missing SNS notification configuration
-- Incorrect S3 versioning pattern
-- Incomplete BuildSpec
-- Missing PollForSourceChanges setting
-- Missing public output properties
-
-All issues have been corrected in the IDEAL_RESPONSE.md.
+All issues must be resolved for production-ready pipeline configuration.

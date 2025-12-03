@@ -1,210 +1,128 @@
-# CI/CD Pipeline Implementation
+# Model Response
 
-I'll create a complete CI/CD pipeline infrastructure using Pulumi with TypeScript for your Node.js application.
+This file should contain the initial model output for the CI/CD Pipeline YAML configuration task.
 
-## File: lib/tap-stack.ts
+## Expected Content
 
-```typescript
-import * as pulumi from "@pulumi/pulumi";
-import * as aws from "@pulumi/aws";
+The model's response should include:
 
-export interface TapStackArgs {
-  environmentSuffix: pulumi.Input<string>;
-  githubToken: pulumi.Input<string>;
-  githubOwner: pulumi.Input<string>;
-  githubRepo: pulumi.Input<string>;
-  githubBranch: pulumi.Input<string>;
-}
+1. **Analysis Phase**
+   - Understanding the platform requirements
+   - Identifying the Node.js application needs
+   - Determining the deployment target (AWS ECR + infrastructure)
 
-export class TapStack extends pulumi.ComponentResource {
-  constructor(name: string, args: TapStackArgs, opts?: pulumi.ComponentResourceOptions) {
-    super("custom:app:TapStack", name, {}, opts);
+2. **Pipeline Design**
+   - Multi-stage pipeline architecture
+   - Build → Scan → Deploy flow
+   - Environment-specific configurations
 
-    const tags = {
-      Environment: "production",
-      Project: "nodejs-app",
-    };
+3. **Implementation**
+   - Complete `lib/ci-cd.yml` file
+   - Platform-specific syntax (GitHub Actions, GitLab CI, etc.)
+   - External scripts in `scripts/` directory if needed
 
-    // S3 bucket for artifacts
-    const artifactsBucket = new aws.s3.Bucket(`artifacts-bucket`, {
-      versioning: {
-        enabled: true,
-      },
-      tags: tags,
-    }, { parent: this });
+4. **Key Components**
+   - Source checkout
+   - Docker image build
+   - Container vulnerability scanning
+   - Private registry push (ECR)
+   - Multi-environment deployment
+   - Manual approval gates
+   - Notifications
 
-    // ECR repository
-    const ecrRepo = new aws.ecr.Repository(`nodejs-app-repo`, {
-      imageScanningConfiguration: {
-        scanOnPush: true,
-      },
-      tags: tags,
-    }, { parent: this });
+## Example Initial Response Structure
 
-    // CloudWatch Log Group
-    const logGroup = new aws.cloudwatch.LogGroup(`build-logs`, {
-      retentionInDays: 7,
-      tags: tags,
-    }, { parent: this });
+```yaml
+# lib/ci-cd.yml
 
-    // SNS Topic for notifications
-    const notificationTopic = new aws.sns.Topic(`pipeline-notifications`, {
-      tags: tags,
-    }, { parent: this });
+name: Docker Build and Deploy Pipeline
 
-    // IAM Role for CodeBuild
-    const codeBuildRole = new aws.iam.Role(`codebuild-role`, {
-      assumeRolePolicy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [{
-          Action: "sts:AssumeRole",
-          Effect: "Allow",
-          Principal: {
-            Service: "codebuild.amazonaws.com",
-          },
-        }],
-      }),
-      tags: tags,
-    }, { parent: this });
+on:
+  push:
+    branches: [main, dev]
 
-    // Attach policies to CodeBuild role
-    new aws.iam.RolePolicyAttachment(`codebuild-policy-attachment`, {
-      role: codeBuildRole.name,
-      policyArn: "arn:aws:iam::aws:policy/AWSCodeBuildAdminAccess",
-    }, { parent: this });
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
 
-    // CodeBuild Project
-    const codeBuildProject = new aws.codebuild.Project(`docker-build-project`, {
-      serviceRole: codeBuildRole.arn,
-      artifacts: {
-        type: "CODEPIPELINE",
-      },
-      environment: {
-        computeType: "BUILD_GENERAL1_SMALL",
-        image: "aws/codebuild/standard:5.0",
-        type: "LINUX_CONTAINER",
-        privilegedMode: true,
-        environmentVariables: [
-          {
-            name: "AWS_DEFAULT_REGION",
-            value: "us-east-1",
-          },
-          {
-            name: "ECR_REPOSITORY_URI",
-            value: ecrRepo.repositoryUrl,
-          },
-        ],
-      },
-      source: {
-        type: "CODEPIPELINE",
-        buildspec: `version: 0.2
-phases:
-  pre_build:
-    commands:
-      - echo Logging in to Amazon ECR...
-      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_REPOSITORY_URI
+jobs:
   build:
-    commands:
-      - echo Build started on \`date\`
-      - docker build -t $ECR_REPOSITORY_URI:latest .
-      - docker push $ECR_REPOSITORY_URI:latest
-  post_build:
-    commands:
-      - echo Build completed on \`date\``,
-      },
-      logsConfig: {
-        cloudwatchLogs: {
-          groupName: logGroup.name,
-        },
-      },
-      tags: tags,
-    }, { parent: this });
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-    // IAM Role for CodePipeline
-    const codePipelineRole = new aws.iam.Role(`codepipeline-role`, {
-      assumeRolePolicy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [{
-          Action: "sts:AssumeRole",
-          Effect: "Allow",
-          Principal: {
-            Service: "codepipeline.amazonaws.com",
-          },
-        }],
-      }),
-      tags: tags,
-    }, { parent: this });
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
 
-    // Inline policy for CodePipeline
-    new aws.iam.RolePolicy(`codepipeline-policy`, {
-      role: codePipelineRole.id,
-      policy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [
-          {
-            Effect: "Allow",
-            Action: ["s3:*"],
-            Resource: "*",
-          },
-          {
-            Effect: "Allow",
-            Action: ["codebuild:*"],
-            Resource: "*",
-          },
-        ],
-      }),
-    }, { parent: this });
+      - name: Build Docker image
+        run: |
+          docker build -t nodejs-app:${{ github.sha }} .
 
-    // CodePipeline
-    const pipeline = new aws.codepipeline.Pipeline(`cicd-pipeline`, {
-      roleArn: codePipelineRole.arn,
-      artifactStore: {
-        location: artifactsBucket.bucket,
-        type: "S3",
-      },
-      stages: [
-        {
-          name: "Source",
-          actions: [{
-            name: "Source",
-            category: "Source",
-            owner: "ThirdParty",
-            provider: "GitHub",
-            version: "1",
-            outputArtifacts: ["source_output"],
-            configuration: {
-              Owner: args.githubOwner,
-              Repo: args.githubRepo,
-              Branch: args.githubBranch,
-              OAuthToken: args.githubToken,
-            },
-          }],
-        },
-        {
-          name: "Build",
-          actions: [{
-            name: "Build",
-            category: "Build",
-            owner: "AWS",
-            provider: "CodeBuild",
-            version: "1",
-            inputArtifacts: ["source_output"],
-            outputArtifacts: ["build_output"],
-            configuration: {
-              ProjectName: codeBuildProject.name,
-            },
-          }],
-        },
-      ],
-      tags: tags,
-    }, { parent: this });
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: nodejs-app-${{ github.sha }}.tar
 
-    // Export outputs
-    this.registerOutputs({
-      bucketName: artifactsBucket.bucket,
-      ecrRepositoryUrl: ecrRepo.repositoryUrl,
-      pipelineName: pipeline.name,
-      notificationTopicArn: notificationTopic.arn,
-    });
-  }
-}
+  scan:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+
+      - name: Run Trivy scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: nodejs-app:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          exit-code: 1
+
+  deploy-dev:
+    needs: scan
+    environment: dev
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Dev
+        run: ./scripts/deploy.sh dev
+
+  deploy-staging:
+    needs: deploy-dev
+    environment: staging
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Staging
+        run: ./scripts/deploy.sh staging
+
+  deploy-prod:
+    needs: deploy-staging
+    environment: production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Production
+        run: ./scripts/deploy.sh prod
+
+      - name: Notify on success
+        if: success()
+        run: |
+          curl -X POST ${{ secrets.SLACK_WEBHOOK }} \
+            -H 'Content-Type: application/json' \
+            -d '{"text":"Production deployment successful"}'
+```
+
+## Evaluation Criteria
+
+The response will be evaluated against:
+- Platform syntax correctness
+- Script length compliance (>5 lines external)
+- Private registry usage
+- Secret management
+- Container scanning
+- Environment declarations
+- Artifact handling
+- Notifications
