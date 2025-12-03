@@ -328,7 +328,7 @@ export class KMSModule extends Construct {
 
     // KMS Alias
     this.alias = new aws.kmsAlias.KmsAlias(this, 'rds-key-alias', {
-      name: `alias/${resourceName('payment-rds')}`,
+      name: `alias/${resourceName('payment-rds-key')}`,
       targetKeyId: this.key.id,
     });
   }
@@ -406,7 +406,7 @@ export class RDSModule extends Construct {
       this,
       'rds-log-group',
       {
-        name: `/aws/rds/cluster/${resourceName('payment-db')}/slowquery`,
+        name: `/aws/rds/cluster/${resourceName('payment-database')}/slowquery`,
         retentionInDays: 2557,
         tags: { ...props.tags, Name: resourceName('payment-rds-logs') },
       }
@@ -448,10 +448,10 @@ export class RDSModule extends Construct {
       this,
       'db-subnet-group',
       {
-        name: resourceName('payment-db-subnet-group').toLowerCase(),
+        name: resourceName('payment-db-subnet-grp').toLowerCase(),
         subnetIds: props.privateSubnetIds,
         description: 'Subnet group for RDS Aurora MySQL cluster',
-        tags: { ...props.tags, Name: resourceName('payment-db-subnet-group') },
+        tags: { ...props.tags, Name: resourceName('payment-db-subnet-grp') },
       }
     );
 
@@ -685,13 +685,13 @@ export class ALBModule extends Construct {
 
     // Application Load Balancer
     this.alb = new aws.lb.Lb(this, 'alb', {
-      name: resourceName('payment-alb'),
+      name: resourceName('payment-lb'),
       loadBalancerType: 'application',
       securityGroups: [this.securityGroup.id],
       subnets: props.publicSubnetIds,
       enableDeletionProtection: false,
       enableHttp2: true,
-      tags: { ...props.tags, Name: resourceName('payment-alb') },
+      tags: { ...props.tags, Name: resourceName('payment-lb') },
     });
 
     // Target Group for ECS tasks
@@ -699,7 +699,7 @@ export class ALBModule extends Construct {
       this,
       'target-group',
       {
-        name: resourceName('payment-tg'),
+        name: resourceName('payment-target'),
         port: 8080,
         protocol: 'HTTP',
         vpcId: props.vpcId,
@@ -716,7 +716,7 @@ export class ALBModule extends Construct {
           interval: 30,
           matcher: '200',
         },
-        tags: { ...props.tags, Name: resourceName('payment-tg') },
+        tags: { ...props.tags, Name: resourceName('payment-target') },
       }
     );
 
@@ -767,7 +767,7 @@ export class ECSModule extends Construct {
       this,
       'ecs-log-group',
       {
-        name: `/aws/ecs/${resourceName('payment-service')}`,
+        name: `/aws/ecs/${resourceName('payment-svc')}`,
         retentionInDays: 2557,
         tags: { ...props.tags, Name: resourceName('payment-ecs-logs') },
       }
