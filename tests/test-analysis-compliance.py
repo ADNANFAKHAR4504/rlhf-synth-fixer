@@ -51,6 +51,13 @@ class TestComplianceInfraAnalyzer(unittest.TestCase):
             # Role already exists from previous test run, continue
             pass
 
+        # Clean up any existing functions from previous test runs
+        for func_name in ['ec2-scanner-test1', 's3-compliance-scanner-test1', 'other-function-test1']:
+            try:
+                lambda_client.delete_function(FunctionName=func_name)
+            except lambda_client.exceptions.ResourceNotFoundException:
+                pass  # Function doesn't exist, continue
+
         # Create scanner functions with unique names
         lambda_client.create_function(
             FunctionName='ec2-scanner-test1',
@@ -350,6 +357,44 @@ class TestComplianceInfraAnalyzer(unittest.TestCase):
             # Role already exists from previous test run, continue
             pass
 
+        # Clean up existing resources from previous test runs
+        # Delete Lambda function if exists
+        try:
+            lambda_client.delete_function(FunctionName='ec2-scanner-test-full')
+        except lambda_client.exceptions.ResourceNotFoundException:
+            pass
+
+        # Delete DynamoDB table if exists
+        try:
+            dynamodb_client.delete_table(TableName='compliance-history-test-full')
+        except dynamodb_client.exceptions.ResourceNotFoundException:
+            pass
+
+        # Delete SNS topic if exists
+        try:
+            topics = sns_client.list_topics()
+            for topic in topics.get('Topics', []):
+                if 'compliance-alerts-test-full' in topic['TopicArn']:
+                    sns_client.delete_topic(TopicArn=topic['TopicArn'])
+        except Exception:
+            pass
+
+        # Delete CloudWatch alarm if exists
+        try:
+            cloudwatch_client.delete_alarms(AlarmNames=['compliance-threshold-test-full'])
+        except Exception:
+            pass
+
+        # Delete EventBridge rule if exists
+        try:
+            events_client.remove_targets(Rule='ec2-scanner-schedule-test-full', Ids=['1'])
+        except Exception:
+            pass
+        try:
+            events_client.delete_rule(Name='ec2-scanner-schedule-test-full')
+        except Exception:
+            pass
+
         # Create test infrastructure
         # Lambda scanner
         lambda_client.create_function(
@@ -360,9 +405,9 @@ class TestComplianceInfraAnalyzer(unittest.TestCase):
             Code={'ZipFile': b'fake code'}
         )
 
-        # DynamoDB table
+        # DynamoDB table with unique name
         dynamodb_client.create_table(
-            TableName='compliance-history-pr7708',
+            TableName='compliance-history-test-full',
             KeySchema=[
                 {'AttributeName': 'resourceType', 'KeyType': 'HASH'},
                 {'AttributeName': 'scanTimestamp', 'KeyType': 'RANGE'}
@@ -374,12 +419,12 @@ class TestComplianceInfraAnalyzer(unittest.TestCase):
             BillingMode='PAY_PER_REQUEST'
         )
 
-        # SNS topic
-        alert_topic = sns_client.create_topic(Name='compliance-alerts-pr7708')
+        # SNS topic with unique name
+        alert_topic = sns_client.create_topic(Name='compliance-alerts-test-full')
 
-        # CloudWatch alarm
+        # CloudWatch alarm with unique name
         cloudwatch_client.put_metric_alarm(
-            AlarmName='compliance-threshold-pr7708',
+            AlarmName='compliance-threshold-test-full',
             ComparisonOperator='GreaterThanThreshold',
             EvaluationPeriods=2,
             MetricName='NonCompliantResources',
@@ -389,9 +434,9 @@ class TestComplianceInfraAnalyzer(unittest.TestCase):
             Threshold=10.0
         )
 
-        # EventBridge rule
+        # EventBridge rule with unique name
         events_client.put_rule(
-            Name='ec2-scanner-schedule-pr7708',
+            Name='ec2-scanner-schedule-test-full',
             ScheduleExpression='rate(6 hours)',
             State='ENABLED'
         )
