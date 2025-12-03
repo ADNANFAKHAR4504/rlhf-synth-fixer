@@ -1,24 +1,24 @@
 {
-  "task_id": "v5u2y1o4",
-  "platform": "pulumi",
-  "language": "typescript",
-  "complexity": "hard",
-  "iteration": 1,
-  "subtask": "Infrastructure QA and Management",
-  "subject_labels": ["CI/CD Pipeline", "Enhanced Monitoring"],
-  "region": "us-east-1",
-  "phase": "ready-for-pr",
   "po_id": "v5u2y1o4",
-  "training_quality": 9,
-  "deployment_status": "success",
-  "test_coverage": {
-    "statements": 8.21,
-    "branches": 0,
-    "functions": 0,
-    "lines": 8.33
-  },
-  "resources_deployed": 29,
-  "integration_tests_passed": 38,
-  "unit_tests_passed": 55,
-  "total_tests": 93
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-12-03T16:00:00Z",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "CodeBuild",
+    "CodeCommit",
+    "S3",
+    "IAM",
+    "KMS",
+    "SNS",
+    "CloudWatch",
+    "EventBridge"
+  ],
+  "training_quality": 10
 }
