@@ -49,13 +49,17 @@ export class StorageConstruct extends Construct {
       },
     });
 
-    const secondaryBucketVersioning = new S3BucketVersioningA(this, 'SecondaryBucketVersioning', {
-      provider: secondaryProvider,
-      bucket: secondaryBucket.id,
-      versioningConfiguration: {
-        status: 'Enabled',
-      },
-    });
+    const secondaryBucketVersioning = new S3BucketVersioningA(
+      this,
+      'SecondaryBucketVersioning',
+      {
+        provider: secondaryProvider,
+        bucket: secondaryBucket.id,
+        versioningConfiguration: {
+          status: 'Enabled',
+        },
+      }
+    );
 
     // Enable encryption on both buckets
     new S3BucketServerSideEncryptionConfigurationA(
@@ -147,39 +151,43 @@ export class StorageConstruct extends Construct {
     });
 
     // S3 Replication Configuration with RTC
-    const replicationConfig = new S3BucketReplicationConfigurationA(this, 'BucketReplication', {
-      provider: primaryProvider,
-      bucket: primaryBucket.id,
-      role: replicationRole.arn,
-      rule: [
-        {
-          id: 'replicate-all-objects',
-          status: 'Enabled',
-          priority: 1,
-          deleteMarkerReplication: {
+    const replicationConfig = new S3BucketReplicationConfigurationA(
+      this,
+      'BucketReplication',
+      {
+        provider: primaryProvider,
+        bucket: primaryBucket.id,
+        role: replicationRole.arn,
+        rule: [
+          {
+            id: 'replicate-all-objects',
             status: 'Enabled',
-          },
-          filter: {
-            prefix: '',
-          },
-          destination: {
-            bucket: secondaryBucket.arn,
-            replicationTime: {
+            priority: 1,
+            deleteMarkerReplication: {
               status: 'Enabled',
-              time: {
-                minutes: 15,
+            },
+            filter: {
+              prefix: '',
+            },
+            destination: {
+              bucket: secondaryBucket.arn,
+              replicationTime: {
+                status: 'Enabled',
+                time: {
+                  minutes: 15,
+                },
+              },
+              metrics: {
+                status: 'Enabled',
+                eventThreshold: {
+                  minutes: 15,
+                },
               },
             },
-            metrics: {
-              status: 'Enabled',
-              eventThreshold: {
-                minutes: 15,
-              },
-            },
           },
-        },
-      ],
-    });
+        ],
+      }
+    );
 
     // Ensure secondary bucket versioning is enabled before replication
     replicationConfig.node.addDependency(secondaryBucketVersioning);
