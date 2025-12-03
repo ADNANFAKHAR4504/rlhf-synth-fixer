@@ -97,7 +97,9 @@ describe('TapStack Unit Tests', () => {
 
   describe('SNS Topic Configuration', () => {
     it('should create SNS topic with correct name pattern', async () => {
-      const topicArn = await stack.snsTopicArn;
+      const topicArn = await new Promise<string>((resolve) => {
+        stack.snsTopicArn.apply((arn) => resolve(arn));
+      });
       expect(topicArn).toContain('compliance-notifications-test');
     });
 
@@ -116,7 +118,9 @@ describe('TapStack Unit Tests', () => {
 
   describe('DynamoDB Table Configuration', () => {
     it('should create DynamoDB table with correct name pattern', async () => {
-      const tableName = await stack.dynamoTableName;
+      const tableName = await new Promise<string>((resolve) => {
+        stack.dynamoTableName.apply((name) => resolve(name));
+      });
       expect(tableName).toContain('compliance-history-test');
     });
 
@@ -157,7 +161,9 @@ describe('TapStack Unit Tests', () => {
 
   describe('CloudWatch Log Group Configuration', () => {
     it('should create log group with correct name', async () => {
-      const lambdaArn = await stack.lambdaFunctionArn;
+      const lambdaArn = await new Promise<string>((resolve) => {
+        stack.lambdaFunctionArn.apply((arn) => resolve(arn));
+      });
       expect(lambdaArn).toContain('compliance-analyzer-test');
     });
 
@@ -169,7 +175,9 @@ describe('TapStack Unit Tests', () => {
 
   describe('Lambda Function Configuration', () => {
     it('should create Lambda function with correct runtime', async () => {
-      const lambdaArn = await stack.lambdaFunctionArn;
+      const lambdaArn = await new Promise<string>((resolve) => {
+        stack.lambdaFunctionArn.apply((arn) => resolve(arn));
+      });
       expect(lambdaArn).toContain('compliance-analyzer-test');
     });
 
@@ -222,7 +230,9 @@ describe('TapStack Unit Tests', () => {
 
   describe('CloudWatch Alarm Configuration', () => {
     it('should create compliance failure alarm', async () => {
-      const alarmArn = await stack.complianceAlarmArn;
+      const alarmArn = await new Promise<string>((resolve) => {
+        stack.complianceAlarmArn.apply((arn) => resolve(arn));
+      });
       expect(alarmArn).toContain('compliance-failure-alarm-test');
     });
 
@@ -249,25 +259,33 @@ describe('TapStack Unit Tests', () => {
 
   describe('Resource Outputs', () => {
     it('should export Lambda function ARN', async () => {
-      const lambdaArn = await stack.lambdaFunctionArn;
+      const lambdaArn = await new Promise<string>((resolve) => {
+        stack.lambdaFunctionArn.apply((arn) => resolve(arn));
+      });
       expect(lambdaArn).toBeDefined();
       expect(typeof lambdaArn).toBe('string');
     });
 
     it('should export SNS topic ARN', async () => {
-      const snsArn = await stack.snsTopicArn;
+      const snsArn = await new Promise<string>((resolve) => {
+        stack.snsTopicArn.apply((arn) => resolve(arn));
+      });
       expect(snsArn).toBeDefined();
       expect(typeof snsArn).toBe('string');
     });
 
     it('should export DynamoDB table name', async () => {
-      const tableName = await stack.dynamoTableName;
+      const tableName = await new Promise<string>((resolve) => {
+        stack.dynamoTableName.apply((name) => resolve(name));
+      });
       expect(tableName).toBeDefined();
       expect(typeof tableName).toBe('string');
     });
 
     it('should export CloudWatch alarm ARN', async () => {
-      const alarmArn = await stack.complianceAlarmArn;
+      const alarmArn = await new Promise<string>((resolve) => {
+        stack.complianceAlarmArn.apply((arn) => resolve(arn));
+      });
       expect(alarmArn).toBeDefined();
       expect(typeof alarmArn).toBe('string');
     });
@@ -336,10 +354,18 @@ describe('TapStack Unit Tests', () => {
 
   describe('Resource Naming Conventions', () => {
     it('should use environmentSuffix in all resource names', async () => {
-      const lambdaArn = await stack.lambdaFunctionArn;
-      const snsArn = await stack.snsTopicArn;
-      const tableName = await stack.dynamoTableName;
-      const alarmArn = await stack.complianceAlarmArn;
+      const lambdaArn = await new Promise<string>((resolve) => {
+        stack.lambdaFunctionArn.apply((arn) => resolve(arn));
+      });
+      const snsArn = await new Promise<string>((resolve) => {
+        stack.snsTopicArn.apply((arn) => resolve(arn));
+      });
+      const tableName = await new Promise<string>((resolve) => {
+        stack.dynamoTableName.apply((name) => resolve(name));
+      });
+      const alarmArn = await new Promise<string>((resolve) => {
+        stack.complianceAlarmArn.apply((arn) => resolve(arn));
+      });
 
       expect(lambdaArn).toContain('test');
       expect(snsArn).toContain('test');
@@ -348,7 +374,9 @@ describe('TapStack Unit Tests', () => {
     });
 
     it('should follow consistent naming pattern', async () => {
-      const lambdaArn = await stack.lambdaFunctionArn;
+      const lambdaArn = await new Promise<string>((resolve) => {
+        stack.lambdaFunctionArn.apply((arn) => resolve(arn));
+      });
       expect(lambdaArn).toMatch(/compliance-analyzer-test/);
     });
   });
