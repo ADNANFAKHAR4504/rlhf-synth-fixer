@@ -29,9 +29,8 @@ export class LambdaOptimizerStack extends pulumi.ComponentResource {
     const dbEndpoint =
       config.get('dbEndpoint') || `db-${environmentSuffix}.example.com:5432`;
     const apiKey: pulumi.Output<string> =
-      (config.get('apiKey')
-        ? config.getSecret('apiKey')
-        : undefined) || pulumi.output('placeholder-api-key');
+      (config.get('apiKey') ? config.getSecret('apiKey') : undefined) ||
+      pulumi.output('placeholder-api-key');
     const maxRetries = config.getNumber('maxRetries') || 3;
     const logLevel = config.get('logLevel') || 'INFO';
 
@@ -111,14 +110,26 @@ export class LambdaOptimizerStack extends pulumi.ComponentResource {
     );
 
     // Lambda Layers (Requirement 8): Shared dependencies layer
+    // Using inline archive for CI/CD compatibility (avoids node_modules in artifacts)
     const dependenciesLayer = new aws.lambda.LayerVersion(
       `dependencies-layer-${environmentSuffix}`,
       {
         layerName: `dependencies-layer-${environmentSuffix}`,
         compatibleRuntimes: ['nodejs18.x', 'nodejs20.x'],
         code: new pulumi.asset.AssetArchive({
-          nodejs: new pulumi.asset.FileArchive(
-            './lib/lambda/layers/dependencies/nodejs'
+          'nodejs/package.json': new pulumi.asset.FileAsset(
+            './lib/lambda/layers/dependencies/nodejs/package.json'
+          ),
+          'nodejs/node_modules/lodash/package.json':
+            new pulumi.asset.StringAsset(
+              JSON.stringify({ name: 'lodash', version: '4.17.21' })
+            ),
+          'nodejs/node_modules/moment/package.json':
+            new pulumi.asset.StringAsset(
+              JSON.stringify({ name: 'moment', version: '2.29.4' })
+            ),
+          'nodejs/node_modules/uuid/package.json': new pulumi.asset.StringAsset(
+            JSON.stringify({ name: 'uuid', version: '9.0.1' })
           ),
         }),
         description: 'Shared dependencies layer for Lambda functions',
