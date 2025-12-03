@@ -1,3 +1,0 @@
-config:
-  aws:defaultTags: '{"tags":{"Environment":"synthq4c5c5w4","Repository":"synth-q4c5c5w4","Author":"mayanksethi-turing","PRNumber":"unknown","Team":"synth","CreatedAt":"2025-12-02T15:18:24Z","ManagedBy":"pulumi"}}'
-encryptionsalt: v1:1q06k1eN4eQ=:v1:r+ZRQloeI+NafiiR:RfQXr4IzArEeAvLKAud6m0hTIQoUyA==

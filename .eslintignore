@@ -1,6 +1,0 @@
-node_modules
-coverage
-*.d.ts
-dist
-build
-bin/

@@ -15,7 +15,6 @@ module.exports = {
     'node_modules/(?!(aws-cdk-lib|@aws-cdk|constructs|@aws-sdk|@smithy|@kubernetes/client-node|openid-client|oauth4webapi|jose)/)',
   ],
   collectCoverageFrom: [
-    '<rootDir>/index.ts',
     '<rootDir>/lib/**/*.ts',
     '<rootDir>/lib/**/*.mjs',
     '<rootDir>/lib/**/*.js',
