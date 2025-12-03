@@ -40,8 +40,8 @@ class InfrastructureOptimizer:
     def optimize_glue_job(self) -> bool:
         """
         Optimize Glue ETL job configuration.
-        - Reduce numberOfWorkers from 2 to 1
         - Reduce timeout from 120 to 60 minutes
+        - Note: G.1X requires minimum 2 workers, so we keep workers at 2
         """
         print("\n[INFO] Optimizing Glue ETL Job...")
         
@@ -54,10 +54,16 @@ class InfrastructureOptimizer:
             
             current_workers = job.get('NumberOfWorkers', 2)
             current_timeout = job.get('Timeout', 120)
+            current_worker_type = job.get('WorkerType', 'G.1X')
             
             print(f"Found job: {job_name}")
             print(f"Current workers: {current_workers}")
+            print(f"Current worker type: {current_worker_type}")
             print(f"Current timeout: {current_timeout} minutes")
+            
+            # G.1X requires minimum 2 workers, so we only optimize timeout
+            # and keep minimum workers for the worker type
+            optimized_timeout = 60
             
             # Update job with optimized settings
             self.glue_client.update_job(
@@ -66,17 +72,17 @@ class InfrastructureOptimizer:
                     'Role': job['Role'],
                     'Command': job['Command'],
                     'DefaultArguments': job.get('DefaultArguments', {}),
-                    'NumberOfWorkers': 1,
-                    'WorkerType': 'G.1X',
+                    'NumberOfWorkers': current_workers,  # Keep current (G.1X min is 2)
+                    'WorkerType': current_worker_type,
                     'GlueVersion': job.get('GlueVersion', '4.0'),
-                    'Timeout': 60,
+                    'Timeout': optimized_timeout,
                     'MaxRetries': job.get('MaxRetries', 1),
                 }
             )
             
             print("[SUCCESS] Glue job optimization complete:")
-            print(f"   - Workers: {current_workers} -> 1")
-            print(f"   - Timeout: {current_timeout} minutes -> 60 minutes")
+            print(f"   - Workers: {current_workers} (kept - G.1X minimum is 2)")
+            print(f"   - Timeout: {current_timeout} minutes -> {optimized_timeout} minutes")
             
             return True
             
@@ -235,10 +241,10 @@ class InfrastructureOptimizer:
         """
         # Rough estimates based on AWS pricing
         glue_savings = {
-            # G.1X worker: $0.44/hour, reducing from 2 to 1 worker
-            'worker_reduction': 0.44 * 2 * 30,  # Assuming 2 hours/day average
-            # Reduced timeout means less max cost per run
-            'timeout_reduction': 0.44 * 1 * 30,
+            # G.1X worker: $0.44/hour
+            # Note: G.1X requires min 2 workers, so no worker reduction
+            # Reduced timeout means less max cost per run (50% reduction)
+            'timeout_reduction': 0.44 * 2 * 1 * 30,  # 2 workers, 1 hour saved/day
         }
         
         athena_savings = {
@@ -254,7 +260,6 @@ class InfrastructureOptimizer:
         }
         
         total_savings = (
-            glue_savings['worker_reduction'] +
             glue_savings['timeout_reduction'] +
             athena_savings['scan_limit_savings'] +
             s3_savings['tiering_savings']
@@ -262,7 +267,7 @@ class InfrastructureOptimizer:
         
         return {
             'glue_monthly_savings': round(
-                glue_savings['worker_reduction'] + glue_savings['timeout_reduction'], 2
+                glue_savings['timeout_reduction'], 2
             ),
             'athena_monthly_savings': round(athena_savings['scan_limit_savings'], 2),
             's3_monthly_savings': round(s3_savings['tiering_savings'], 2),
@@ -342,7 +347,7 @@ def main():
     if args.dry_run:
         print("[DRY RUN] DRY RUN MODE - No changes will be made")
         print("\nPlanned optimizations:")
-        print("- Glue Job: Reduce workers 2->1, timeout 120->60 minutes")
+        print("- Glue Job: Reduce timeout 120->60 minutes (G.1X requires min 2 workers)")
         print("- Athena Workgroup: Reduce scan limit 5GB->1GB")
         print("- S3 Lifecycle: Intelligent Tiering 30->7 days, Glacier 90->30 days")
         print("- Glue Crawler: Daily->Weekly schedule")
