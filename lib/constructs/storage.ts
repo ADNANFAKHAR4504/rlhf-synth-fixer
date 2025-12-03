@@ -151,46 +151,40 @@ export class StorageConstruct extends Construct {
     });
 
     // S3 Replication Configuration with RTC
-    const replicationConfig = new S3BucketReplicationConfigurationA(
-      this,
-      'BucketReplication',
-      {
-        provider: primaryProvider,
-        bucket: primaryBucket.id,
-        role: replicationRole.arn,
-        rule: [
-          {
-            id: 'replicate-all-objects',
+    new S3BucketReplicationConfigurationA(this, 'BucketReplication', {
+      provider: primaryProvider,
+      bucket: primaryBucket.id,
+      role: replicationRole.arn,
+      dependsOn: [secondaryBucketVersioning],
+      rule: [
+        {
+          id: 'replicate-all-objects',
+          status: 'Enabled',
+          priority: 1,
+          deleteMarkerReplication: {
             status: 'Enabled',
-            priority: 1,
-            deleteMarkerReplication: {
+          },
+          filter: {
+            prefix: '',
+          },
+          destination: {
+            bucket: secondaryBucket.arn,
+            replicationTime: {
               status: 'Enabled',
-            },
-            filter: {
-              prefix: '',
-            },
-            destination: {
-              bucket: secondaryBucket.arn,
-              replicationTime: {
-                status: 'Enabled',
-                time: {
-                  minutes: 15,
-                },
+              time: {
+                minutes: 15,
               },
-              metrics: {
-                status: 'Enabled',
-                eventThreshold: {
-                  minutes: 15,
-                },
+            },
+            metrics: {
+              status: 'Enabled',
+              eventThreshold: {
+                minutes: 15,
               },
             },
           },
-        ],
-      }
-    );
-
-    // Ensure secondary bucket versioning is enabled before replication
-    replicationConfig.node.addDependency(secondaryBucketVersioning);
+        },
+      ],
+    });
 
     // Export values
     this.primaryBucketName = primaryBucket.bucket;

@@ -96,7 +96,7 @@ export class DatabaseConstruct extends Construct {
     // Aurora Global Cluster
     const globalCluster = new RdsGlobalCluster(this, 'AuroraGlobalCluster', {
       provider: primaryProvider,
-      globalClusterIdentifier: `aurora-global-${environmentSuffix}`,
+      globalClusterIdentifier: `dr-aurora-global-${environmentSuffix}`,
       engine: 'aurora-postgresql',
       engineVersion: '14.6',
       databaseName: 'transactions',
@@ -107,7 +107,7 @@ export class DatabaseConstruct extends Construct {
     // Primary Aurora Cluster
     const primaryCluster = new RdsCluster(this, 'PrimaryAuroraCluster', {
       provider: primaryProvider,
-      clusterIdentifier: `aurora-primary-${environmentSuffix}`,
+      clusterIdentifier: `dr-aurora-pri-${environmentSuffix}`,
       engine: 'aurora-postgresql',
       engineVersion: '14.6',
       globalClusterIdentifier: globalCluster.id,
@@ -124,21 +124,21 @@ export class DatabaseConstruct extends Construct {
       deletionProtection: false,
       enabledCloudwatchLogsExports: ['postgresql'],
       tags: {
-        Name: `aurora-primary-${environmentSuffix}`,
+        Name: `dr-aurora-pri-${environmentSuffix}`,
       },
     });
 
     // Primary Aurora Instance
     new RdsClusterInstance(this, 'PrimaryAuroraInstance', {
       provider: primaryProvider,
-      identifier: `aurora-primary-instance-${environmentSuffix}`,
+      identifier: `dr-aurora-pri-inst-${environmentSuffix}`,
       clusterIdentifier: primaryCluster.id,
       instanceClass: 'db.r5.large',
       engine: 'aurora-postgresql',
       engineVersion: '14.6',
       publiclyAccessible: false,
       tags: {
-        Name: `aurora-primary-instance-${environmentSuffix}`,
+        Name: `dr-aurora-pri-inst-${environmentSuffix}`,
       },
     });
 
@@ -149,14 +149,14 @@ export class DatabaseConstruct extends Construct {
       enableKeyRotation: true,
       deletionWindowInDays: 7,
       tags: {
-        Name: `aurora-secondary-kms-${environmentSuffix}`,
+        Name: `dr-aurora-sec-kms-${environmentSuffix}`,
       },
     });
 
     // Secondary Aurora Cluster
     const secondaryCluster = new RdsCluster(this, 'SecondaryAuroraCluster', {
       provider: secondaryProvider,
-      clusterIdentifier: `aurora-secondary-${environmentSuffix}`,
+      clusterIdentifier: `dr-aurora-sec-${environmentSuffix}`,
       engine: 'aurora-postgresql',
       engineVersion: '14.6',
       globalClusterIdentifier: globalCluster.id,
@@ -169,21 +169,21 @@ export class DatabaseConstruct extends Construct {
       enabledCloudwatchLogsExports: ['postgresql'],
       dependsOn: [primaryCluster],
       tags: {
-        Name: `aurora-secondary-${environmentSuffix}`,
+        Name: `dr-aurora-sec-${environmentSuffix}`,
       },
     });
 
     // Secondary Aurora Instance
     new RdsClusterInstance(this, 'SecondaryAuroraInstance', {
       provider: secondaryProvider,
-      identifier: `aurora-secondary-instance-${environmentSuffix}`,
+      identifier: `dr-aurora-sec-inst-${environmentSuffix}`,
       clusterIdentifier: secondaryCluster.id,
       instanceClass: 'db.r5.large',
       engine: 'aurora-postgresql',
       engineVersion: '14.6',
       publiclyAccessible: false,
       tags: {
-        Name: `aurora-secondary-instance-${environmentSuffix}`,
+        Name: `dr-aurora-sec-inst-${environmentSuffix}`,
       },
     });
 
