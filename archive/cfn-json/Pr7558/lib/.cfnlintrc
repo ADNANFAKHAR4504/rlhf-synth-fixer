@@ -1,0 +1,5 @@
+ignore_templates:
+  - "**/parameters/*.json"
+  - "lib/parameters/*.json"
+  - "parameters/*.json"
+  - "*-params.json"

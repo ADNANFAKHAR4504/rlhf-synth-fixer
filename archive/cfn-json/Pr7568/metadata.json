@@ -1,0 +1,40 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912945",
+  "team": "synth",
+  "startedAt": "2025-12-01T00:00:00.000Z",
+  "subtask": "CloudFormation Template Optimization",
+  "subject_labels": [
+    "Preserve all existing functionality while reducing template size by at least 40%",
+    "Convert all hardcoded values to parameters with proper validation rules",
+    "Implement proper resource dependencies using DependsOn only where necessary",
+    "Replace all Fn::Join constructs with Fn::Sub for improved readability",
+    "Consolidate duplicate security group rules using reusable mappings",
+    "Fix circular dependency between RDS instance and its parameter group",
+    "Implement condition-based resource creation for dev/staging/prod environments",
+    "Use CloudFormation pseudo parameters instead of hardcoded region/account values",
+    "Ensure all resources have DeletionPolicy and UpdateReplacePolicy attributes",
+    "Add proper metadata sections for CloudFormation Designer compatibility"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Elastic Load Balancing",
+    "RDS",
+    "ElastiCache",
+    "S3",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

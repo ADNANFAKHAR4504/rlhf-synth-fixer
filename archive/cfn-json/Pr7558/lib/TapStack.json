@@ -1,0 +1,740 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Payment Processing Infrastructure - Flattened Stack for Multi-Account Deployment",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming",
+      "AllowedPattern": "[a-zA-Z0-9-]+",
+      "ConstraintDescription": "Must contain only alphanumeric characters and hyphens"
+    }
+  },
+  "Conditions": {
+    "IsProduction": {
+      "Fn::Equals": [{ "Ref": "EnvironmentSuffix" }, "prod"]
+    }
+  },
+  "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-vpc-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-igw-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
+        ]
+      }
+    },
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "InternetGatewayId": { "Ref": "InternetGateway" }
+      }
+    },
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "CidrBlock": "10.0.0.0/24",
+        "AvailabilityZone": { "Fn::Select": [0, { "Fn::GetAZs": { "Ref": "AWS::Region" } }] },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-public-subnet-1-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
+        ]
+      }
+    },
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": { "Fn::Select": [1, { "Fn::GetAZs": { "Ref": "AWS::Region" } }] },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-public-subnet-2-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
+        ]
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": { "Fn::Select": [0, { "Fn::GetAZs": { "Ref": "AWS::Region" } }] },
+        "Tags": [
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-private-subnet-1-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "CidrBlock": "10.0.3.0/24",
+        "AvailabilityZone": { "Fn::Select": [1, { "Fn::GetAZs": { "Ref": "AWS::Region" } }] },
+        "Tags": [
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-private-subnet-2-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
+        ]
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "Tags": [
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-public-rt-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
+        ]
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "RouteTableId": { "Ref": "PublicRouteTable" },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": { "Ref": "InternetGateway" }
+      }
+    },
+    "PublicSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": { "Ref": "PublicSubnet1" },
+        "RouteTableId": { "Ref": "PublicRouteTable" }
+      }
+    },
+    "PublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": { "Ref": "PublicSubnet2" },
+        "RouteTableId": { "Ref": "PublicRouteTable" }
+      }
+    },
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "Tags": [
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-private-rt-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
+        ]
+      }
+    },
+    "PrivateSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": { "Ref": "PrivateSubnet1" },
+        "RouteTableId": { "Ref": "PrivateRouteTable" }
+      }
+    },
+    "PrivateSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": { "Ref": "PrivateSubnet2" },
+        "RouteTableId": { "Ref": "PrivateRouteTable" }
+      }
+    },
+    "LambdaSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": { "Fn::Sub": "payment-lambda-sg-${EnvironmentSuffix}" },
+        "GroupDescription": "Security group for payment processing Lambda functions",
+        "VpcId": { "Ref": "VPC" },
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
+          }
+        ],
+        "Tags": [
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-lambda-sg-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
+        ]
+      }
+    },
+    "AlbSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": { "Fn::Sub": "payment-alb-sg-${EnvironmentSuffix}" },
+        "GroupDescription": "Security group for Application Load Balancer",
+        "VpcId": { "Ref": "VPC" },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow HTTPS from anywhere"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow HTTP from anywhere"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
+          }
+        ],
+        "Tags": [
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-alb-sg-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
+        ]
+      }
+    },
+    "DynamoDBEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "VpcId": { "Ref": "VPC" },
+        "ServiceName": { "Fn::Sub": "com.amazonaws.${AWS::Region}.dynamodb" },
+        "VpcEndpointType": "Gateway",
+        "RouteTableIds": [{ "Ref": "PrivateRouteTable" }]
+      }
+    },
+    "PaymentTransactionsTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "TableName": { "Fn::Sub": "payment-transactions-${EnvironmentSuffix}" },
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          { "AttributeName": "transactionId", "AttributeType": "S" },
+          { "AttributeName": "timestamp", "AttributeType": "N" },
+          { "AttributeName": "customerId", "AttributeType": "S" },
+          { "AttributeName": "paymentStatus", "AttributeType": "S" }
+        ],
+        "KeySchema": [
+          { "AttributeName": "transactionId", "KeyType": "HASH" },
+          { "AttributeName": "timestamp", "KeyType": "RANGE" }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "customer-index",
+            "KeySchema": [
+              { "AttributeName": "customerId", "KeyType": "HASH" },
+              { "AttributeName": "timestamp", "KeyType": "RANGE" }
+            ],
+            "Projection": { "ProjectionType": "ALL" }
+          },
+          {
+            "IndexName": "status-index",
+            "KeySchema": [
+              { "AttributeName": "paymentStatus", "KeyType": "HASH" },
+              { "AttributeName": "timestamp", "KeyType": "RANGE" }
+            ],
+            "Projection": { "ProjectionType": "ALL" }
+          }
+        ],
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "Tags": [
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-transactions-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": { "Fn::Sub": "payment-lambda-role-${EnvironmentSuffix}" },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": { "Service": "lambda.amazonaws.com" },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "DynamoDBAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan"
+                  ],
+                  "Resource": [
+                    { "Fn::GetAtt": ["PaymentTransactionsTable", "Arn"] },
+                    { "Fn::Sub": "${PaymentTransactionsTable.Arn}/index/*" }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "CloudWatchLogs",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": { "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/payment-*" }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
+        ]
+      }
+    },
+    "ValidationFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": { "Fn::Sub": "payment-validation-${EnvironmentSuffix}" },
+        "Runtime": "nodejs22.x",
+        "Handler": "index.handler",
+        "Role": { "Fn::GetAtt": ["LambdaExecutionRole", "Arn"] },
+        "MemorySize": 512,
+        "Timeout": 30,
+        "ReservedConcurrentExecutions": {
+          "Fn::If": ["IsProduction", 100, { "Ref": "AWS::NoValue" }]
+        },
+        "Environment": {
+          "Variables": {
+            "ENVIRONMENT": { "Ref": "EnvironmentSuffix" },
+            "PAYMENT_TABLE": { "Ref": "PaymentTransactionsTable" }
+          }
+        },
+        "VpcConfig": {
+          "SecurityGroupIds": [{ "Ref": "LambdaSecurityGroup" }],
+          "SubnetIds": [
+            { "Ref": "PrivateSubnet1" },
+            { "Ref": "PrivateSubnet2" }
+          ]
+        },
+        "Code": {
+          "ZipFile": "const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');\nconst { DynamoDBDocumentClient, GetItemCommand } = require('@aws-sdk/lib-dynamodb');\n\nconst client = new DynamoDBClient({});\nconst ddbDocClient = DynamoDBDocumentClient.from(client);\n\nexports.handler = async (event) => {\n  console.log('Validation event:', JSON.stringify(event));\n  \n  const body = typeof event.body === 'string' ? JSON.parse(event.body) : event;\n  const { transactionId, amount, customerId } = body;\n  \n  if (!transactionId || !amount || !customerId) {\n    return {\n      statusCode: 400,\n      body: JSON.stringify({ error: 'Missing required fields' })\n    };\n  }\n  \n  if (amount <= 0 || amount > 10000) {\n    return {\n      statusCode: 400,\n      body: JSON.stringify({ error: 'Invalid amount' })\n    };\n  }\n  \n  return {\n    statusCode: 200,\n    body: JSON.stringify({\n      valid: true,\n      transactionId,\n      customerId,\n      amount\n    })\n  };\n};\n"
+        },
+        "Tags": [
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-validation-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
+        ]
+      }
+    },
+    "ProcessingFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": { "Fn::Sub": "payment-processing-${EnvironmentSuffix}" },
+        "Runtime": "nodejs22.x",
+        "Handler": "index.handler",
+        "Role": { "Fn::GetAtt": ["LambdaExecutionRole", "Arn"] },
+        "MemorySize": 512,
+        "Timeout": 60,
+        "ReservedConcurrentExecutions": {
+          "Fn::If": ["IsProduction", 100, { "Ref": "AWS::NoValue" }]
+        },
+        "Environment": {
+          "Variables": {
+            "ENVIRONMENT": { "Ref": "EnvironmentSuffix" },
+            "PAYMENT_TABLE": { "Ref": "PaymentTransactionsTable" }
+          }
+        },
+        "VpcConfig": {
+          "SecurityGroupIds": [{ "Ref": "LambdaSecurityGroup" }],
+          "SubnetIds": [
+            { "Ref": "PrivateSubnet1" },
+            { "Ref": "PrivateSubnet2" }
+          ]
+        },
+        "Code": {
+          "ZipFile": "const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');\nconst { DynamoDBDocumentClient, PutItemCommand } = require('@aws-sdk/lib-dynamodb');\n\nconst client = new DynamoDBClient({});\nconst ddbDocClient = DynamoDBDocumentClient.from(client);\n\nexports.handler = async (event) => {\n  console.log('Processing event:', JSON.stringify(event));\n  \n  const body = typeof event.body === 'string' ? JSON.parse(event.body) : event;\n  const { transactionId, amount, customerId } = body;\n  \n  const timestamp = Date.now();\n  \n  const params = {\n    TableName: process.env.PAYMENT_TABLE,\n    Item: {\n      transactionId,\n      timestamp,\n      customerId,\n      amount,\n      paymentStatus: 'COMPLETED',\n      processedAt: new Date().toISOString()\n    }\n  };\n  \n  try {\n    await ddbDocClient.send(new PutItemCommand(params));\n    \n    return {\n      statusCode: 200,\n      body: JSON.stringify({\n        success: true,\n        transactionId,\n        timestamp,\n        status: 'COMPLETED'\n      })\n    };\n  } catch (error) {\n    console.error('Error processing payment:', error);\n    throw error;\n  }\n};\n"
+        },
+        "Tags": [
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-processing-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
+        ]
+      }
+    },
+    "ValidationFunctionPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": { "Ref": "ValidationFunction" },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "elasticloadbalancing.amazonaws.com"
+      }
+    },
+    "ProcessingFunctionPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": { "Ref": "ProcessingFunction" },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "elasticloadbalancing.amazonaws.com"
+      }
+    },
+    "StepFunctionsFunctionPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": { "Ref": "ValidationFunction" },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "states.amazonaws.com"
+      }
+    },
+    "StepFunctionsProcessingPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": { "Ref": "ProcessingFunction" },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "states.amazonaws.com"
+      }
+    },
+    "ApplicationLoadBalancer": {
+      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "Properties": {
+        "Name": { "Fn::Sub": "payment-alb-${EnvironmentSuffix}" },
+        "Type": "application",
+        "Scheme": "internet-facing",
+        "IpAddressType": "ipv4",
+        "Subnets": [
+          { "Ref": "PublicSubnet1" },
+          { "Ref": "PublicSubnet2" }
+        ],
+        "SecurityGroups": [{ "Ref": "AlbSecurityGroup" }],
+        "Tags": [
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-alb-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
+        ]
+      }
+    },
+    "ValidationTargetGroup": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "DependsOn": "ValidationFunctionPermission",
+      "Properties": {
+        "Name": { "Fn::Sub": "payment-validation-tg-${EnvironmentSuffix}" },
+        "TargetType": "lambda",
+        "Targets": [
+          { "Id": { "Fn::GetAtt": ["ValidationFunction", "Arn"] } }
+        ],
+        "HealthCheckEnabled": true,
+        "HealthCheckPath": "/health",
+        "HealthCheckIntervalSeconds": 35,
+        "HealthCheckTimeoutSeconds": 30,
+        "HealthyThresholdCount": 2,
+        "UnhealthyThresholdCount": 2,
+        "Tags": [
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
+        ]
+      }
+    },
+    "ProcessingTargetGroup": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "DependsOn": "ProcessingFunctionPermission",
+      "Properties": {
+        "Name": { "Fn::Sub": "payment-processing-tg-${EnvironmentSuffix}" },
+        "TargetType": "lambda",
+        "Targets": [
+          { "Id": { "Fn::GetAtt": ["ProcessingFunction", "Arn"] } }
+        ],
+        "HealthCheckEnabled": true,
+        "HealthCheckPath": "/health",
+        "HealthCheckIntervalSeconds": 35,
+        "HealthCheckTimeoutSeconds": 30,
+        "HealthyThresholdCount": 2,
+        "UnhealthyThresholdCount": 2,
+        "Tags": [
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
+        ]
+      }
+    },
+    "AlbListener": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties": {
+        "LoadBalancerArn": { "Ref": "ApplicationLoadBalancer" },
+        "Port": 80,
+        "Protocol": "HTTP",
+        "DefaultActions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": { "Ref": "ValidationTargetGroup" }
+          }
+        ]
+      }
+    },
+    "AlbListenerRule": {
+      "Type": "AWS::ElasticLoadBalancingV2::ListenerRule",
+      "Properties": {
+        "ListenerArn": { "Ref": "AlbListener" },
+        "Priority": 1,
+        "Conditions": [
+          {
+            "Field": "path-pattern",
+            "Values": ["/process"]
+          }
+        ],
+        "Actions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": { "Ref": "ProcessingTargetGroup" }
+          }
+        ]
+      }
+    },
+    "StepFunctionsRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": { "Fn::Sub": "payment-stepfunctions-role-${EnvironmentSuffix}" },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": { "Service": "states.amazonaws.com" },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "LambdaInvoke",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": ["lambda:InvokeFunction"],
+                  "Resource": [
+                    { "Fn::GetAtt": ["ValidationFunction", "Arn"] },
+                    { "Fn::GetAtt": ["ProcessingFunction", "Arn"] }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
+        ]
+      }
+    },
+    "PaymentStateMachine": {
+      "Type": "AWS::StepFunctions::StateMachine",
+      "Properties": {
+        "StateMachineName": { "Fn::Sub": "payment-workflow-${EnvironmentSuffix}" },
+        "RoleArn": { "Fn::GetAtt": ["StepFunctionsRole", "Arn"] },
+        "DefinitionString": {
+          "Fn::Sub": [
+            "{\n  \"Comment\": \"Payment Processing Workflow\",\n  \"StartAt\": \"ValidatePayment\",\n  \"States\": {\n    \"ValidatePayment\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::lambda:invoke\",\n      \"Parameters\": {\n        \"FunctionName\": \"${ValidationFunctionArn}\",\n        \"Payload.$\": \"$\"\n      },\n      \"Retry\": [\n        {\n          \"ErrorEquals\": [\"States.TaskFailed\", \"States.Timeout\"],\n          \"IntervalSeconds\": 2,\n          \"MaxAttempts\": 3,\n          \"BackoffRate\": 2.0\n        }\n      ],\n      \"Catch\": [\n        {\n          \"ErrorEquals\": [\"States.ALL\"],\n          \"Next\": \"ValidationFailed\"\n        }\n      ],\n      \"Next\": \"ProcessPayment\"\n    },\n    \"ProcessPayment\": {\n      \"Type\": \"Task\",\n      \"Resource\": \"arn:aws:states:::lambda:invoke\",\n      \"Parameters\": {\n        \"FunctionName\": \"${ProcessingFunctionArn}\",\n        \"Payload.$\": \"$.Payload.body\"\n      },\n      \"Retry\": [\n        {\n          \"ErrorEquals\": [\"States.TaskFailed\", \"States.Timeout\"],\n          \"IntervalSeconds\": 2,\n          \"MaxAttempts\": 3,\n          \"BackoffRate\": 2.0\n        }\n      ],\n      \"Catch\": [\n        {\n          \"ErrorEquals\": [\"States.ALL\"],\n          \"Next\": \"ProcessingFailed\"\n        }\n      ],\n      \"Next\": \"PaymentSucceeded\"\n    },\n    \"PaymentSucceeded\": {\n      \"Type\": \"Succeed\"\n    },\n    \"ValidationFailed\": {\n      \"Type\": \"Fail\",\n      \"Error\": \"ValidationError\",\n      \"Cause\": \"Payment validation failed\"\n    },\n    \"ProcessingFailed\": {\n      \"Type\": \"Fail\",\n      \"Error\": \"ProcessingError\",\n      \"Cause\": \"Payment processing failed\"\n    }\n  }\n}",
+            {
+              "ValidationFunctionArn": { "Fn::GetAtt": ["ValidationFunction", "Arn"] },
+              "ProcessingFunctionArn": { "Fn::GetAtt": ["ProcessingFunction", "Arn"] }
+            }
+          ]
+        },
+        "Tags": [
+          { "Key": "Name", "Value": { "Fn::Sub": "payment-workflow-${EnvironmentSuffix}" } },
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
+        ]
+      }
+    },
+    "AlarmTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": { "Fn::Sub": "payment-alarms-${EnvironmentSuffix}" },
+        "DisplayName": { "Fn::Sub": "Payment Processing Alarms - ${EnvironmentSuffix}" },
+        "Tags": [
+          { "Key": "Environment", "Value": { "Ref": "EnvironmentSuffix" } }
+        ]
+      }
+    },
+    "ValidationFunctionErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": { "Fn::Sub": "payment-validation-errors-${EnvironmentSuffix}" },
+        "AlarmDescription": "Alarm when validation function has errors",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": { "Ref": "ValidationFunction" }
+          }
+        ],
+        "AlarmActions": [{ "Ref": "AlarmTopic" }],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "ProcessingFunctionErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": { "Fn::Sub": "payment-processing-errors-${EnvironmentSuffix}" },
+        "AlarmDescription": "Alarm when processing function has errors",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": { "Ref": "ProcessingFunction" }
+          }
+        ],
+        "AlarmActions": [{ "Ref": "AlarmTopic" }],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "DynamoDBThrottleAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": { "Fn::Sub": "payment-dynamodb-throttle-${EnvironmentSuffix}" },
+        "AlarmDescription": "Alarm when DynamoDB requests are throttled",
+        "MetricName": "UserErrors",
+        "Namespace": "AWS/DynamoDB",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 10,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "TableName",
+            "Value": { "Ref": "PaymentTransactionsTable" }
+          }
+        ],
+        "AlarmActions": [{ "Ref": "AlarmTopic" }],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "StateMachineFailureAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": { "Fn::Sub": "payment-workflow-failures-${EnvironmentSuffix}" },
+        "AlarmDescription": "Alarm when state machine executions fail",
+        "MetricName": "ExecutionsFailed",
+        "Namespace": "AWS/States",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 3,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "StateMachineArn",
+            "Value": { "Ref": "PaymentStateMachine" }
+          }
+        ],
+        "AlarmActions": [{ "Ref": "AlarmTopic" }],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "ValidationFunctionDurationAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": { "Fn::Sub": "payment-validation-duration-${EnvironmentSuffix}" },
+        "AlarmDescription": "Alarm when validation function duration is high",
+        "MetricName": "Duration",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 5000,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": { "Ref": "ValidationFunction" }
+          }
+        ],
+        "AlarmActions": [{ "Ref": "AlarmTopic" }],
+        "TreatMissingData": "notBreaching"
+      }
+    }
+  },
+  "Outputs": {
+    "StackName": {
+      "Description": "Name of the CloudFormation stack",
+      "Value": { "Ref": "AWS::StackName" },
+      "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-StackName" } }
+    },
+    "EnvironmentName": {
+      "Description": "Environment name for this deployment",
+      "Value": { "Ref": "EnvironmentSuffix" },
+      "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-EnvironmentName" } }
+    },
+    "VpcId": {
+      "Description": "VPC ID",
+      "Value": { "Ref": "VPC" },
+      "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-VpcId" } }
+    },
+    "AlbDnsName": {
+      "Description": "DNS name of the Application Load Balancer",
+      "Value": { "Fn::GetAtt": ["ApplicationLoadBalancer", "DNSName"] },
+      "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-AlbDnsName" } }
+    },
+    "StateMachineArn": {
+      "Description": "ARN of the payment processing state machine",
+      "Value": { "Fn::GetAtt": ["PaymentStateMachine", "Arn"] },
+      "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-StateMachineArn" } }
+    },
+    "PaymentTableName": {
+      "Description": "Name of the payment transactions table",
+      "Value": { "Ref": "PaymentTransactionsTable" },
+      "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-PaymentTableName" } }
+    },
+    "ValidationFunctionArn": {
+      "Description": "ARN of the validation Lambda function",
+      "Value": { "Fn::GetAtt": ["ValidationFunction", "Arn"] },
+      "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-ValidationFunctionArn" } }
+    },
+    "ProcessingFunctionArn": {
+      "Description": "ARN of the processing Lambda function",
+      "Value": { "Fn::GetAtt": ["ProcessingFunction", "Arn"] },
+      "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-ProcessingFunctionArn" } }
+    },
+    "AlarmTopicArn": {
+      "Description": "ARN of the SNS alarm topic",
+      "Value": { "Ref": "AlarmTopic" },
+      "Export": { "Name": { "Fn::Sub": "${AWS::StackName}-AlarmTopicArn" } }
+    }
+  }
+}
