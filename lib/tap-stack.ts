@@ -46,7 +46,7 @@ export class TapStack extends pulumi.ComponentResource {
     // Required tags for cost allocation
     const resourceTags = {
       ...baseTags,
-      Environment: 'production',
+      Environment: environmentSuffix,
       Team: 'payments',
       CostCenter: 'fintech',
     };
