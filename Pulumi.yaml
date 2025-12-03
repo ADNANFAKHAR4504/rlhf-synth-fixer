@@ -1,4 +1,4 @@
-name: ecs-optimization-j2l9s6d6
+name: TapStack
 runtime: nodejs
 description: Optimized ECS deployment with Pulumi TypeScript
 main: lib/index.ts
@@ -6,14 +6,14 @@ config:
   aws:region:
     description: AWS region for deployment
     value: us-east-1
-  ecs-optimization-j2l9s6d6:environmentSuffix:
+  TapStack:environmentSuffix:
     description: Unique suffix for resource naming
-  ecs-optimization-j2l9s6d6:environment:
+  TapStack:environment:
     description: Environment name (dev, staging, production)
     default: dev
-  ecs-optimization-j2l9s6d6:containerPort:
+  TapStack:containerPort:
     description: Container port for the application
     default: 3000
-  ecs-optimization-j2l9s6d6:desiredCount:
+  TapStack:desiredCount:
     description: Desired number of tasks
     default: 2
