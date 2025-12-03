@@ -1,5 +1,0 @@
-encryptionsalt: v1:EZ10ag85H5U=:v1:uOsztKn0pHO+paLp:BAZbaWnYjF6zyQRffW05Gj7AD+ljcg==
-config:
-  TapStack:environmentSuffix: synthx7q0t8u1
-  TapStack:notificationEmail: devops@example.com
-  aws:region: us-east-1
