@@ -29,5 +29,11 @@
   },
   "deployment_status": "success",
   "resources_deployed": 36,
-  "resources_cleaned": true
+  "resources_cleaned": true,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
