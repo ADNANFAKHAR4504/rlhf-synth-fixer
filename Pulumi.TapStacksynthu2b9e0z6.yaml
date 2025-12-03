@@ -1,0 +1,5 @@
+encryptionsalt: v1:5Zigo/n8QN4=:v1:C6mktlQW7FRsqSVR:XvrSoVTmCJgmGlYcQqIn4KgWYZ+/Vw==
+config:
+  aws:defaultTags: '{"tags":{"Environment":"synthu2b9e0z6","Repository":"synth-u2b9e0z6","Author":"mayanksethi-turing","PRNumber":"unknown","Team":"synth","CreatedAt":"2025-12-03T15:36:20Z","ManagedBy":"pulumi"}}'
+  TapStack:environmentSuffix: synthu2b9e0z6
+  aws:region: us-east-1

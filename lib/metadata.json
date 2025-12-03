@@ -1,0 +1,14 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "task_id": "u2b9e0z6",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "Infrastructure Analysis",
+    "Infrastructure QA and Management",
+    "Infrastructure Monitoring"
+  ],
+  "complexity": "hard",
+  "timestamp": "2025-12-03T20:00:00Z",
+  "pr_number": null
+}

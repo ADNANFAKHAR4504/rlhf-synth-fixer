@@ -1,0 +1,5 @@
+encryptionsalt: v1:FMWkIteD+3Y=:v1:qTA4ADmwCd3JK59C:i/3klt8Tm/1om/28kqFfFJoZn+aFdA==
+config:
+  compliance-monitoring:environmentSuffix: synthu2b9e0z6
+  aws:region: us-east-1
+  compliance-monitoring:alertEmail: ops@example.com
