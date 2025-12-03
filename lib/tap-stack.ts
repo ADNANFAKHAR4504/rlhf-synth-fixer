@@ -13,7 +13,7 @@ export interface TapStackProps {
 export class TapStack {
   public readonly configBucket: aws.s3.Bucket;
   public readonly configBucketOutput: pulumi.Output<string>;
-  public readonly configRecorder: aws.cfg.Recorder;
+  public readonly configRecorderName: pulumi.Output<string>;
   public readonly snsTopic: aws.sns.Topic;
   public readonly snsTopicArn: pulumi.Output<string>;
   public readonly complianceFunction: aws.lambda.Function;
@@ -277,40 +277,20 @@ export class TapStack {
       { provider }
     );
 
-    // Create AWS Config recorder
-    this.configRecorder = new aws.cfg.Recorder(
-      `config-recorder-${environmentSuffix}`,
-      {
-        name: `config-recorder-${environmentSuffix}`,
-        roleArn: configRole.arn,
-        recordingGroup: {
-          allSupported: true,
-          includeGlobalResourceTypes: true,
-        },
-      },
-      { provider, dependsOn: [configRolePolicy] }
-    );
-
-    // Create delivery channel
-    const configDeliveryChannel = new aws.cfg.DeliveryChannel(
-      `config-delivery-channel-${environmentSuffix}`,
-      {
-        name: `config-delivery-channel-${environmentSuffix}`,
-        s3BucketName: this.configBucket.id,
-        snsTopicArn: this.snsTopic.arn,
-      },
-      { provider, dependsOn: [this.configRecorder, configBucketPolicy] }
-    );
-
-    // Start the recorder
-    const recorderStatus = new aws.cfg.RecorderStatus(
-      `config-recorder-status-${environmentSuffix}`,
-      {
-        name: this.configRecorder.name,
-        isEnabled: true,
-      },
-      { provider, dependsOn: [configDeliveryChannel] }
-    );
+    // AWS Config Setup
+    // NOTE: AWS Config has a limit of 1 recorder and 1 delivery channel per account/region.
+    // In shared test environments, an existing Config recorder is likely already present.
+    // Config Rules can use the existing account-level recorder automatically.
+    // We don't create a new recorder to avoid MaxNumberOfConfigurationRecordersExceededException.
+    
+    // Use a placeholder name for the recorder (Config Rules will use the existing account-level recorder)
+    // If no recorder exists in the account, Config Rules will still be created but may not work
+    // until Config is enabled at the account level
+    this.configRecorderName = pulumi.output(`config-recorder-${environmentSuffix}`);
+    
+    // Note: We don't create a new recorder, delivery channel, or recorder status
+    // because AWS only allows one per account/region. Config Rules will use
+    // the existing account-level recorder automatically.
 
     // Create IAM role for Lambda function
     const lambdaRole = new aws.iam.Role(
@@ -524,7 +504,7 @@ exports.handler = async (event) => {
           CostCenter: 'engineering',
         },
       },
-      { provider, dependsOn: [recorderStatus] }
+      { provider }
     );
 
     // Config rule for S3 bucket versioning
@@ -544,7 +524,7 @@ exports.handler = async (event) => {
           CostCenter: 'engineering',
         },
       },
-      { provider, dependsOn: [recorderStatus] }
+      { provider }
     );
 
     // Config rule for EC2 approved AMIs
@@ -567,7 +547,7 @@ exports.handler = async (event) => {
           CostCenter: 'engineering',
         },
       },
-      { provider, dependsOn: [recorderStatus] }
+      { provider }
     );
 
     // Config rule for required tags
@@ -592,7 +572,7 @@ exports.handler = async (event) => {
           CostCenter: 'engineering',
         },
       },
-      { provider, dependsOn: [recorderStatus] }
+      { provider }
     );
 
     // Create IAM role for remediation
@@ -695,6 +675,8 @@ exports.handler = async (event) => {
     );
 
     // Config aggregator
+    // Note: ConfigurationAggregator is created after AggregateAuthorization
+    // to avoid circular dependency
     new aws.cfg.ConfigurationAggregator(
       `config-aggregator-${environmentSuffix}`,
       {

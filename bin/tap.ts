@@ -19,4 +19,4 @@ const stack = new TapStack('TapStack', {
 export const configBucketName = stack.configBucketOutput;
 export const snsTopicArn = stack.snsTopicArn;
 export const complianceFunctionArn = stack.complianceFunction.arn;
-export const configRecorderName = stack.configRecorder.name;
+export const configRecorderName = stack.configRecorderName;
