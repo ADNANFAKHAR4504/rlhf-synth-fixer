@@ -1,0 +1,40 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000922",
+  "team": "synth",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "startedAt": "2025-12-02T07:22:37.775373Z",
+  "subtask": "Environment Migration",
+  "subject_labels": [
+    "Use JSON format exclusively for the CloudFormation template",
+    "VPC CIDR must be 10.0.0.0/16 with specific subnet allocation",
+    "Database subnets must have no direct internet access",
+    "Application subnets must access internet only through NAT Gateway",
+    "Security groups must follow least-privilege principle",
+    "All resources must be tagged with Environment and MigrationPhase tags",
+    "Use CloudFormation parameters for reusable values",
+    "Network ACLs must explicitly deny all traffic except required ports",
+    "Output values must include all subnet IDs and security group IDs"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "InternetGateway",
+    "NATGateway",
+    "SecurityGroup",
+    "NetworkACL",
+    "RouteTable",
+    "Subnet",
+    "EIP"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

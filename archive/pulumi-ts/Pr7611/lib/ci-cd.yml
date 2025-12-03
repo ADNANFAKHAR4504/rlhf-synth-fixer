@@ -1,0 +1,361 @@
+# CI/CD Pipeline Configuration for Infrastructure as Code
+# This configuration defines the complete CI/CD pipeline for deploying and managing
+# the Pulumi-based infrastructure automation
+
+name: ci-cd-pipeline-integration
+version: 1.0.0
+description: Automated CI/CD pipeline for containerized applications using AWS services
+
+# Pipeline Configuration
+pipeline:
+  name: cicd-pipeline
+  stages:
+    - name: source
+      type: github
+      configuration:
+        repository: "{{ GITHUB_REPO }}"
+        branch: main
+        webhook_enabled: true
+        oauth_token: "{{ GITHUB_TOKEN }}"
+        version: 2  # GitHub version 2 source action
+
+    - name: build
+      type: codebuild
+      configuration:
+        project_name: docker-image-builder
+        compute_type: BUILD_GENERAL1_SMALL
+        environment:
+          type: LINUX_CONTAINER
+          image: aws/codebuild/standard:5.0
+          privileged_mode: true
+          environment_variables:
+            - name: AWS_DEFAULT_REGION
+              value: "{{ AWS_REGION }}"
+            - name: ECR_REPOSITORY_URI
+              value: "{{ ECR_REPO_URI }}"
+            - name: IMAGE_TAG
+              value: latest
+        buildspec: |
+          version: 0.2
+          phases:
+            pre_build:
+              commands:
+                - echo Logging in to Amazon ECR...
+                - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_REPOSITORY_URI
+                - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+                - IMAGE_TAG=${COMMIT_HASH:=latest}
+            build:
+              commands:
+                - echo Build started on `date`
+                - echo Building the Docker image...
+                - docker build -t $ECR_REPOSITORY_URI:latest .
+                - docker tag $ECR_REPOSITORY_URI:latest $ECR_REPOSITORY_URI:$IMAGE_TAG
+            post_build:
+              commands:
+                - echo Build completed on `date`
+                - echo Installing Trivy for vulnerability scanning...
+                - wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | apt-key add -
+                - echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | tee -a /etc/apt/sources.list.d/trivy.list
+                - apt-get update && apt-get install -y trivy
+                - echo Scanning Docker image for vulnerabilities...
+                - trivy image --severity HIGH,CRITICAL --exit-code 0 $ECR_REPOSITORY_URI:$IMAGE_TAG
+                - echo Pushing the Docker images...
+                - docker push $ECR_REPOSITORY_URI:latest
+                - docker push $ECR_REPOSITORY_URI:$IMAGE_TAG
+                - echo Writing image definitions file...
+                - printf '[{"name":"app","imageUri":"%s"}]' $ECR_REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+          artifacts:
+            files:
+              - imagedefinitions.json
+
+    - name: deploy
+      type: lambda
+      configuration:
+        function_name: ecr-image-tagger
+        runtime: nodejs18.x
+        handler: index.handler
+        timeout: 60
+        memory_size: 128
+        inline_code: |
+          const AWS = require('aws-sdk');
+          const ecr = new AWS.ECR();
+
+          exports.handler = async (event) => {
+              console.log('Received event:', JSON.stringify(event, null, 2));
+
+              const repositoryName = process.env.ECR_REPOSITORY_NAME;
+              const imageTag = 'latest';
+              const productionTag = 'production';
+
+              try {
+                  // Get the image manifest for the latest tag
+                  const describeParams = {
+                      repositoryName: repositoryName,
+                      imageIds: [{ imageTag: imageTag }]
+                  };
+
+                  const images = await ecr.describeImages(describeParams).promise();
+
+                  if (images.imageDetails.length === 0) {
+                      throw new Error('No image found with tag: ' + imageTag);
+                  }
+
+                  const imageDigest = images.imageDetails[0].imageDigest;
+
+                  // Tag the image with 'production' tag
+                  const tagParams = {
+                      repositoryName: repositoryName,
+                      imageManifest: JSON.stringify(images.imageDetails[0]),
+                      imageTag: productionTag
+                  };
+
+                  // Put the production tag
+                  await ecr.putImage({
+                      repositoryName: repositoryName,
+                      imageManifest: images.imageDetails[0].imageManifest,
+                      imageTag: productionTag
+                  }).promise();
+
+                  console.log(`Successfully tagged image ${imageDigest} as ${productionTag}`);
+
+                  return {
+                      statusCode: 200,
+                      body: JSON.stringify({
+                          message: 'Image tagged successfully',
+                          imageDigest: imageDigest,
+                          tag: productionTag
+                      })
+                  };
+              } catch (error) {
+                  console.error('Error:', error);
+                  throw error;
+              }
+          };
+
+# Artifact Storage Configuration
+artifact_store:
+  type: s3
+  bucket_name: cicd-pipeline-artifacts
+  encryption:
+    type: aws:kms
+    key_alias: aws/s3
+  versioning: enabled
+  lifecycle_rules:
+    - name: delete-old-artifacts
+      enabled: true
+      expiration_days: 30
+      transitions:
+        - days: 7
+          storage_class: STANDARD_IA
+
+# ECR Configuration
+ecr:
+  repository_name: app-repository
+  image_tag_mutability: MUTABLE
+  image_scanning:
+    scan_on_push: true
+  lifecycle_policy:
+    rules:
+      - rulePriority: 1
+        description: Keep only last 10 images
+        selection:
+          tagStatus: any
+          countType: imageCountMoreThan
+          countNumber: 10
+        action:
+          type: expire
+
+# CloudWatch Configuration
+cloudwatch:
+  logs:
+    retention_days: 7
+    log_groups:
+      - name: /aws/codebuild/docker-image-builder
+        retention_days: 7
+      - name: /aws/lambda/ecr-image-tagger
+        retention_days: 7
+  events:
+    rules:
+      - name: github-push-trigger
+        description: Trigger pipeline on GitHub push events
+        event_pattern: |
+          {
+            "source": ["aws.codecommit"],
+            "detail-type": ["CodeCommit Repository State Change"],
+            "detail": {
+              "event": ["referenceCreated", "referenceUpdated"],
+              "referenceType": ["branch"],
+              "referenceName": ["main"]
+            }
+          }
+        targets:
+          - arn: "{{ CODEPIPELINE_ARN }}"
+            role_arn: "{{ EVENTS_ROLE_ARN }}"
+
+# IAM Configuration
+iam:
+  roles:
+    - name: codepipeline-service-role
+      service: codepipeline.amazonaws.com
+      policies:
+        - name: codepipeline-base-policy
+          statements:
+            - effect: Allow
+              actions:
+                - s3:GetObject
+                - s3:GetObjectVersion
+                - s3:PutObject
+                - s3:GetBucketLocation
+                - s3:ListBucket
+              resources:
+                - "{{ ARTIFACT_BUCKET_ARN }}"
+                - "{{ ARTIFACT_BUCKET_ARN }}/*"
+            - effect: Allow
+              actions:
+                - codebuild:BatchGetBuilds
+                - codebuild:StartBuild
+              resources:
+                - "{{ CODEBUILD_PROJECT_ARN }}"
+            - effect: Allow
+              actions:
+                - lambda:InvokeFunction
+              resources:
+                - "{{ LAMBDA_FUNCTION_ARN }}"
+
+    - name: codebuild-service-role
+      service: codebuild.amazonaws.com
+      policies:
+        - name: codebuild-base-policy
+          statements:
+            - effect: Allow
+              actions:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              resources:
+                - "arn:aws:logs:{{ AWS_REGION }}:{{ AWS_ACCOUNT_ID }}:log-group:/aws/codebuild/*"
+            - effect: Allow
+              actions:
+                - s3:GetObject
+                - s3:GetObjectVersion
+                - s3:PutObject
+              resources:
+                - "{{ ARTIFACT_BUCKET_ARN }}/*"
+            - effect: Allow
+              actions:
+                - ecr:GetAuthorizationToken
+                - ecr:BatchCheckLayerAvailability
+                - ecr:GetDownloadUrlForLayer
+                - ecr:BatchGetImage
+                - ecr:PutImage
+                - ecr:InitiateLayerUpload
+                - ecr:UploadLayerPart
+                - ecr:CompleteLayerUpload
+              resources:
+                - "*"
+
+    - name: lambda-execution-role
+      service: lambda.amazonaws.com
+      policies:
+        - name: lambda-ecr-tagging-policy
+          statements:
+            - effect: Allow
+              actions:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              resources:
+                - "arn:aws:logs:{{ AWS_REGION }}:{{ AWS_ACCOUNT_ID }}:log-group:/aws/lambda/*"
+            - effect: Allow
+              actions:
+                - ecr:DescribeImages
+                - ecr:PutImage
+                - ecr:BatchGetImage
+                - ecr:GetDownloadUrlForLayer
+              resources:
+                - "{{ ECR_REPOSITORY_ARN }}"
+            - effect: Allow
+              actions:
+                - codepipeline:PutJobSuccessResult
+                - codepipeline:PutJobFailureResult
+              resources:
+                - "*"
+
+# Resource Tags
+tags:
+  Environment: production
+  Team: devops
+  Project: cicd-pipeline-integration
+  ManagedBy: pulumi
+  CostCenter: engineering
+  Owner: devops-team
+
+# Notifications
+notifications:
+  sns:
+    topics:
+      - name: pipeline-notifications
+        subscriptions:
+          - protocol: email
+            endpoint: "{{ NOTIFICATION_EMAIL }}"
+    events:
+      - PIPELINE_EXECUTION_STARTED
+      - PIPELINE_EXECUTION_SUCCEEDED
+      - PIPELINE_EXECUTION_FAILED
+      - PIPELINE_EXECUTION_CANCELED
+
+# Security Configuration
+security:
+  encryption:
+    s3_buckets:
+      server_side_encryption: AES256
+      kms_master_key: aws/s3
+    ecr:
+      encryption_type: AES256
+  vpc:
+    enabled: false  # Set to true for VPC isolation
+    vpc_id: "{{ VPC_ID }}"
+    subnets:
+      - "{{ SUBNET_ID_1 }}"
+      - "{{ SUBNET_ID_2 }}"
+    security_groups:
+      - "{{ SECURITY_GROUP_ID }}"
+
+# Monitoring and Alerts
+monitoring:
+  cloudwatch_alarms:
+    - name: pipeline-failure-alarm
+      metric_name: ExecutionFailure
+      namespace: AWS/CodePipeline
+      statistic: Sum
+      period: 300
+      evaluation_periods: 1
+      threshold: 1
+      comparison_operator: GreaterThanOrEqualToThreshold
+      alarm_actions:
+        - "{{ SNS_TOPIC_ARN }}"
+
+    - name: codebuild-failure-alarm
+      metric_name: FailedBuilds
+      namespace: AWS/CodeBuild
+      statistic: Sum
+      period: 300
+      evaluation_periods: 1
+      threshold: 1
+      comparison_operator: GreaterThanOrEqualToThreshold
+      alarm_actions:
+        - "{{ SNS_TOPIC_ARN }}"
+
+# Deployment Configuration
+deployment:
+  approval_required: false
+  rollback_on_failure: true
+  timeout_minutes: 30
+  concurrent_executions: 1
+
+# Environment Variables
+environment_variables:
+  AWS_REGION: us-east-1
+  AWS_ACCOUNT_ID: "{{ AWS_ACCOUNT_ID }}"
+  GITHUB_REPO: "{{ GITHUB_REPO }}"
+  NOTIFICATION_EMAIL: "{{ NOTIFICATION_EMAIL }}"
