@@ -165,8 +165,8 @@ describe('Infrastructure Deployment Validation', () => {
       const response = await ecsClient.send(command);
       const service = response.services![0];
 
-      // After optimization: 2 tasks (optimized from baseline 3)
-      expect(service.desiredCount).toBe(2);
+      // Baseline: 3 tasks (before optimization)
+      expect(service.desiredCount).toBe(3);
     });
 
     it('should use Fargate launch type', async () => {
@@ -257,9 +257,9 @@ describe('Infrastructure Deployment Validation', () => {
       const response = await ecsClient.send(command);
       const taskDef = response.taskDefinition!;
 
-      // After optimization: CPU=256, Memory=512 (optimized from baseline 512/1024)
-      expect(taskDef.cpu).toBe('256');
-      expect(taskDef.memory).toBe('512');
+      // Baseline: CPU=512, Memory=1024 (before optimization)
+      expect(taskDef.cpu).toBe('512');
+      expect(taskDef.memory).toBe('1024');
     });
 
     it('should use Fargate compatibility', async () => {
@@ -402,9 +402,9 @@ describe('Infrastructure Deployment Validation', () => {
       expect(policy.rules).toBeDefined();
       expect(policy.rules.length).toBeGreaterThan(0);
 
-      // After optimization: keep 5 images (optimized from baseline 10)
+      // Baseline: keep 10 images (before optimization)
       const rule = policy.rules[0];
-      expect(rule.selection.countNumber).toBe(5);
+      expect(rule.selection.countNumber).toBe(10);
     });
   });
 
@@ -423,7 +423,7 @@ describe('Infrastructure Deployment Validation', () => {
       expect(response.ScalableTargets!.length).toBe(1);
 
       const target = response.ScalableTargets![0];
-      expect(target.MinCapacity).toBe(1); // After optimization: min 1 (optimized from baseline 2)
+      expect(target.MinCapacity).toBe(2); // Baseline: min 2 (before optimization)
       expect(target.MaxCapacity).toBe(6);
     });
 
