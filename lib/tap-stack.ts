@@ -33,10 +33,12 @@ export class TapStack extends pulumi.ComponentResource {
       config.get('region') || process.env.AWS_REGION || 'us-east-1';
 
     // S3 Bucket Consolidation (Requirement 1)
+    // Add timestamp to ensure uniqueness and avoid conflicts
+    const bucketSuffix = `${environmentSuffix}-${Date.now()}`;
     const contentBucket = new aws.s3.Bucket(
       `content-bucket-${environmentSuffix}`,
       {
-        bucket: `content-bucket-${environmentSuffix}`,
+        bucket: `content-bucket-${bucketSuffix}`,
         tags: centralTags,
         forceDestroy: true, // Requirement: Destroyability
       },
@@ -224,81 +226,10 @@ exports.handler = async (event) => {
       { parent: this, provider: usEast1Provider }
     );
 
-    // Cache Policies for different file types (Requirement 3)
-    const imageCachePolicy = new aws.cloudfront.CachePolicy(
-      `image-cache-policy-${environmentSuffix}`,
-      {
-        name: `image-cache-policy-${environmentSuffix}`,
-        comment: 'Cache policy for image files (jpg, png)',
-        defaultTtl: 86400, // 1 day
-        maxTtl: 31536000, // 1 year
-        minTtl: 0,
-        parametersInCacheKeyAndForwardedToOrigin: {
-          cookiesConfig: {
-            cookieBehavior: 'none',
-          },
-          headersConfig: {
-            headerBehavior: 'none',
-          },
-          queryStringsConfig: {
-            queryStringBehavior: 'none',
-          },
-          enableAcceptEncodingGzip: true,
-          enableAcceptEncodingBrotli: true,
-        },
-      },
-      { parent: this }
-    );
-
-    const cssCachePolicy = new aws.cloudfront.CachePolicy(
-      `css-cache-policy-${environmentSuffix}`,
-      {
-        name: `css-cache-policy-${environmentSuffix}`,
-        comment: 'Cache policy for CSS files',
-        defaultTtl: 3600, // 1 hour
-        maxTtl: 86400, // 1 day
-        minTtl: 0,
-        parametersInCacheKeyAndForwardedToOrigin: {
-          cookiesConfig: {
-            cookieBehavior: 'none',
-          },
-          headersConfig: {
-            headerBehavior: 'none',
-          },
-          queryStringsConfig: {
-            queryStringBehavior: 'none',
-          },
-          enableAcceptEncodingGzip: true,
-          enableAcceptEncodingBrotli: true,
-        },
-      },
-      { parent: this }
-    );
-
-    const jsCachePolicy = new aws.cloudfront.CachePolicy(
-      `js-cache-policy-${environmentSuffix}`,
-      {
-        name: `js-cache-policy-${environmentSuffix}`,
-        comment: 'Cache policy for JavaScript files',
-        defaultTtl: 3600, // 1 hour
-        maxTtl: 86400, // 1 day
-        minTtl: 0,
-        parametersInCacheKeyAndForwardedToOrigin: {
-          cookiesConfig: {
-            cookieBehavior: 'none',
-          },
-          headersConfig: {
-            headerBehavior: 'none',
-          },
-          queryStringsConfig: {
-            queryStringBehavior: 'none',
-          },
-          enableAcceptEncodingGzip: true,
-          enableAcceptEncodingBrotli: true,
-        },
-      },
-      { parent: this }
-    );
+    // Use AWS Managed Cache Policies instead of custom ones to avoid naming conflicts
+    // AWS Managed Cache Policy IDs (Requirement 3)
+    // Managed-CachingOptimized: Optimized for static content with compression
+    const managedCachePolicyId = '658327ea-f89d-4fab-a63d-7e88639e58f6';
 
     // CloudFront Distribution Consolidation (Requirement 2)
     // Price Class Optimization (Requirement 8)
@@ -345,6 +276,7 @@ exports.handler = async (event) => {
         },
 
         // Cache behaviors for different file types (Requirement 3)
+        // Using AWS Managed CachingOptimized policy for all static content
         orderedCacheBehaviors: [
           {
             pathPattern: '*.jpg',
@@ -353,7 +285,7 @@ exports.handler = async (event) => {
             allowedMethods: ['GET', 'HEAD'],
             cachedMethods: ['GET', 'HEAD'],
             compress: true,
-            cachePolicyId: imageCachePolicy.id,
+            cachePolicyId: managedCachePolicyId,
           },
           {
             pathPattern: '*.png',
@@ -362,7 +294,7 @@ exports.handler = async (event) => {
             allowedMethods: ['GET', 'HEAD'],
             cachedMethods: ['GET', 'HEAD'],
             compress: true,
-            cachePolicyId: imageCachePolicy.id,
+            cachePolicyId: managedCachePolicyId,
           },
           {
             pathPattern: '*.css',
@@ -371,7 +303,7 @@ exports.handler = async (event) => {
             allowedMethods: ['GET', 'HEAD'],
             cachedMethods: ['GET', 'HEAD'],
             compress: true,
-            cachePolicyId: cssCachePolicy.id,
+            cachePolicyId: managedCachePolicyId,
           },
           {
             pathPattern: '*.js',
@@ -380,7 +312,7 @@ exports.handler = async (event) => {
             allowedMethods: ['GET', 'HEAD'],
             cachedMethods: ['GET', 'HEAD'],
             compress: true,
-            cachePolicyId: jsCachePolicy.id,
+            cachePolicyId: managedCachePolicyId,
           },
         ],
 
