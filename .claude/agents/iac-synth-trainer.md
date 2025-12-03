@@ -268,10 +268,10 @@ All of the following MUST pass (adjusted based on task type):
      ".claude/scripts/validate-code-platform.sh"
      ".claude/scripts/pre-submission-check.sh"
      ".claude/scripts/cicd-job-checker.sh"
-     ".claude/scripts/iac-synth-trainer/add-assignee.sh"
-     ".claude/scripts/iac-synth-trainer/setup-worktree.sh"
-     ".claude/scripts/iac-synth-trainer/validate-file-path.sh"
-     ".claude/scripts/iac-synth-trainer/wait-for-cicd.sh"
+     ".claude/scripts/add-assignee.sh"
+     ".claude/scripts/setup-worktree.sh"
+     ".claude/scripts/validate-file-path.sh"
+     ".claude/scripts/wait-for-cicd.sh"
      ".claude/scripts/retry-operation.sh"
    )
 
@@ -288,7 +288,7 @@ All of the following MUST pass (adjusted based on task type):
 3. **Add assignee to PR** (extracted to script):
    ```bash
    # Use helper script with retry logic
-   bash .claude/scripts/iac-synth-trainer/add-assignee.sh ${PR_NUMBER}
+   bash .claude/scripts/add-assignee.sh ${PR_NUMBER}
    ```
 
 4. **Create isolated worktree and sync with main** (CRITICAL):
@@ -298,7 +298,7 @@ All of the following MUST pass (adjusted based on task type):
    # - Worktree validation with cleanup on failure
    # - Branch synchronization with main (rebase if behind)
    # - Parallel execution safety
-   WORKTREE_PATH=$(bash .claude/scripts/iac-synth-trainer/setup-worktree.sh ${BRANCH_NAME} ${TASK_ID})
+   WORKTREE_PATH=$(bash .claude/scripts/setup-worktree.sh ${BRANCH_NAME} ${TASK_ID})
 
    if [ $? -ne 0 ]; then
      echo "❌ Failed to setup worktree"
@@ -1168,7 +1168,7 @@ After applying fixes:
    # After pushing fixes, wait for CI/CD to complete
    # Handles: sleep, polling, queued state, timeout
    if [ -n "$PR_NUMBER" ]; then
-     bash .claude/scripts/iac-synth-trainer/wait-for-cicd.sh ${PR_NUMBER} 600
+     bash .claude/scripts/wait-for-cicd.sh ${PR_NUMBER} 600
    fi
    ```
 
@@ -1736,7 +1736,7 @@ The agent MUST detect and handle three special task types differently:
 FILE_TO_MODIFY="path/to/file"
 
 # Use helper script with fixed regex for Pipfile.lock, etc.
-if bash .claude/scripts/iac-synth-trainer/validate-file-path.sh "${FILE_TO_MODIFY}"; then
+if bash .claude/scripts/validate-file-path.sh "${FILE_TO_MODIFY}"; then
   # Proceed with modification
   echo "✅ File validation passed: ${FILE_TO_MODIFY}"
 else
@@ -1749,7 +1749,7 @@ fi
 ```bash
 # Before git add, validate all modified files
 for file in $(git diff --name-only); do
-  if ! bash .claude/scripts/iac-synth-trainer/validate-file-path.sh "$file"; then
+  if ! bash .claude/scripts/validate-file-path.sh "$file"; then
     echo "❌ Cannot commit forbidden file: $file"
     exit 1
   fi
@@ -1925,7 +1925,7 @@ fi
 **Adjustment**:
 ```bash
 # For tasks known to have long deployments
-bash .claude/scripts/iac-synth-trainer/wait-for-cicd.sh ${PR_NUMBER} 900  # 15 minutes
+bash .claude/scripts/wait-for-cicd.sh ${PR_NUMBER} 900  # 15 minutes
 ```
 
 ### 5. GitHub API Rate Limiting
