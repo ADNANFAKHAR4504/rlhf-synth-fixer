@@ -236,9 +236,36 @@ class ECSFargateOptimizer:
             )
             service = service_details['services'][0]
             current_desired_count = service['desiredCount']
+            current_running_count = service.get('runningCount', 0)
+
+            # Check if service is healthy before optimization
+            if current_running_count < current_desired_count:
+                logger.warning(f"Service not fully stable: {current_running_count}/{current_desired_count} tasks running")
+                logger.warning("Waiting 60s for service to stabilize before optimization...")
+                import time
+                time.sleep(60)
+
+                # Re-check service status
+                service_details = self.ecs_client.describe_services(
+                    cluster=cluster_arn,
+                    services=[service_arn]
+                )
+                service = service_details['services'][0]
+                current_running_count = service.get('runningCount', 0)
+                current_desired_count = service['desiredCount']
+
+                if current_running_count < current_desired_count:
+                    logger.error(f"Service still not stable: {current_running_count}/{current_desired_count}")
+                    logger.error("Skipping optimization to avoid further destabilization")
+                    return False
 
             # Optimize desired count (3 -> 2)
             optimized_desired_count = 2
+
+            # Check if already optimized
+            if current_desired_count <= optimized_desired_count and not new_task_def_arn:
+                logger.info(f"Service already optimized: desired count is {current_desired_count}")
+                return True
 
             if current_desired_count > optimized_desired_count:
                 # Calculate savings from reduced task count
@@ -288,14 +315,28 @@ class ECSFargateOptimizer:
                     service_status = service_check['services'][0]
                     running_count = service_status.get('runningCount', 0)
                     desired_count = service_status.get('desiredCount', 0)
+                    service_events = service_status.get('events', [])
 
                     logger.info(f"Current service state: {running_count}/{desired_count} tasks running")
+
+                    # Log recent service events for debugging
+                    if service_events:
+                        logger.info("Recent service events:")
+                        for event in service_events[:5]:
+                            logger.info(f"  - {event.get('message', 'No message')}")
 
                     # If we have the desired number of running tasks, consider it a success
                     if running_count >= desired_count and desired_count == optimized_desired_count:
                         logger.info("Service has reached desired task count despite waiter timeout")
+                    elif running_count > 0 and desired_count == optimized_desired_count:
+                        # Partial success: some tasks are running but not all
+                        logger.warning(f"Service partially stabilized: {running_count}/{desired_count} tasks running")
+                        logger.warning("Optimization may still be in progress. Check service status later.")
+                        # Don't fail the entire optimization for partial success
                     else:
-                        # Re-raise the exception if service is truly unhealthy
+                        # Service is unhealthy: no tasks running or wrong desired count
+                        logger.error(f"Service failed to stabilize: {running_count}/{desired_count} tasks")
+                        # Re-raise the exception
                         raise
 
             # Optimize auto-scaling min capacity
