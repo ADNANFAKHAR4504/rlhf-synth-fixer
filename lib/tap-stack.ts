@@ -855,7 +855,7 @@ export class TapStack extends TerraformStack {
 
     // ECS Service for Frontend
     const frontendService = new EcsService(this, 'frontend-service', {
-      name: `frontend-${environmentSuffix}`,
+      name: `app-fe-${environmentSuffix}`,
       cluster: cluster.id,
       taskDefinition: frontendTaskDef.arn,
       desiredCount: 2,
@@ -886,7 +886,7 @@ export class TapStack extends TerraformStack {
 
     // ECS Service for API Gateway
     const apiGatewayService = new EcsService(this, 'api-gateway-service', {
-      name: `api-gateway-${environmentSuffix}`,
+      name: `app-apigw-${environmentSuffix}`,
       cluster: cluster.id,
       taskDefinition: apiGatewayTaskDef.arn,
       desiredCount: 2,
@@ -919,7 +919,7 @@ export class TapStack extends TerraformStack {
 
     // ECS Service for Processing Service
     const processingService = new EcsService(this, 'processing-service', {
-      name: `processing-service-${environmentSuffix}`,
+      name: `app-proc-${environmentSuffix}`,
       cluster: cluster.id,
       taskDefinition: processingTaskDef.arn,
       desiredCount: 2,
