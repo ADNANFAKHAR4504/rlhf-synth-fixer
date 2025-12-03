@@ -1,6 +1,6 @@
 {
   "language": "python",
-  "app": "python main.py",
+  "app": "python tap.py",
   "projectId": "vpc-peering-cross-account",
   "sendCrashReports": "false",
   "terraformProviders": [
