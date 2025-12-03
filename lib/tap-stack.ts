@@ -143,6 +143,10 @@ export class TapStack extends TerraformStack {
         to_port: 3306,
         protocol: 'tcp',
         security_groups: [ecs.securityGroup.id],
+        cidr_blocks: [],
+        ipv6_cidr_blocks: [],
+        prefix_list_ids: [],
+        self: false,
         description: 'MySQL from ECS tasks only',
       },
     ]);

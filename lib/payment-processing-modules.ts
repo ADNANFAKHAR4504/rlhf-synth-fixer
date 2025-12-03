@@ -217,6 +217,9 @@ export class VPCModule extends Construct {
           {
             id: 'transition-to-glacier',
             status: 'Enabled',
+            filter: {
+              prefix: '',
+            },
             transition: [
               {
                 days: 90,
@@ -396,13 +399,13 @@ export class RDSModule extends Construct {
     const resourceName = (resource: string) =>
       `${resource}-${props.environmentSuffix}`;
 
-    // CloudWatch Log Group for RDS Slow Query Logs (7-year retention = 2555 days)
+    // CloudWatch Log Group for RDS Slow Query Logs (7-year retention = 2557 days)
     this.logGroup = new aws.cloudwatchLogGroup.CloudwatchLogGroup(
       this,
       'rds-log-group',
       {
         name: `/aws/rds/cluster/${resourceName('payment-db')}/slowquery`,
-        retentionInDays: 2555,
+        retentionInDays: 2557,
         tags: { ...props.tags, Name: resourceName('payment-rds-logs') },
       }
     );
@@ -759,13 +762,13 @@ export class ECSModule extends Construct {
     const resourceName = (resource: string) =>
       `${resource}-${props.environmentSuffix}`;
 
-    // CloudWatch Log Group for ECS tasks (7-year retention = 2555 days)
+    // CloudWatch Log Group for ECS tasks (7-year retention = 2557 days)
     this.logGroup = new aws.cloudwatchLogGroup.CloudwatchLogGroup(
       this,
       'ecs-log-group',
       {
         name: `/aws/ecs/${resourceName('payment-service')}`,
-        retentionInDays: 2555,
+        retentionInDays: 2557,
         tags: { ...props.tags, Name: resourceName('payment-ecs-logs') },
       }
     );
