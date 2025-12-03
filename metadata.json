@@ -4,6 +4,9 @@
   "platform": "pulumi",
   "language": "ts",
   "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-12-02T16:33:00Z",
   "category": "Infrastructure QA",
   "subcategory": "Compliance and Resource Management",
   "description": "AWS infrastructure compliance monitoring and resource management system using Pulumi",
@@ -14,6 +17,10 @@
   "issues": [],
   "created_at": "2025-12-02T16:33:00Z",
   "updated_at": "2025-12-02T16:50:00Z",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring",
+    "General Infrastructure Tooling QA"
+  ],
   "aws_services": [
     "S3",
     "SNS",
