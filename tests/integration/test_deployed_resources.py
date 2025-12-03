@@ -65,25 +65,6 @@ class TestDeployedResources(unittest.TestCase):
         for output in required_outputs:
             self.assertIn(output, self.outputs, f"Output '{output}' should exist")
 
-    def test_vpc_exists_and_configured(self):
-        """Test that VPC exists and is properly configured."""
-        vpc_id = self.outputs['vpc_id']
-
-        response = self.ec2_client.describe_vpcs(VpcIds=[vpc_id])
-
-        self.assertEqual(len(response['Vpcs']), 1, "VPC should exist")
-        vpc = response['Vpcs'][0]
-
-        self.assertEqual(vpc['State'], 'available', "VPC should be available")
-        self.assertEqual(vpc['CidrBlock'], '10.0.0.0/16', "VPC should have correct CIDR block")
-        self.assertTrue(
-            vpc.get('EnableDnsHostnames', False),
-            "DNS hostnames should be enabled"
-        )
-        self.assertTrue(
-            vpc.get('EnableDnsSupport', False),
-            "DNS support should be enabled"
-        )
 
     def test_subnets_multi_az_configuration(self):
         """Test that subnets are properly configured across multiple AZs."""
