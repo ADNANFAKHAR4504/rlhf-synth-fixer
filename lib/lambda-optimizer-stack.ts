@@ -110,15 +110,24 @@ export class LambdaOptimizerStack extends pulumi.ComponentResource {
     );
 
     // Lambda Layers (Requirement 8): Shared dependencies layer
-    // Using inline archive for CI/CD compatibility (avoids node_modules in artifacts)
+    // Using inline archive for CI/CD compatibility (no external file dependencies)
     const dependenciesLayer = new aws.lambda.LayerVersion(
       `dependencies-layer-${environmentSuffix}`,
       {
         layerName: `dependencies-layer-${environmentSuffix}`,
         compatibleRuntimes: ['nodejs18.x', 'nodejs20.x'],
         code: new pulumi.asset.AssetArchive({
-          'nodejs/package.json': new pulumi.asset.FileAsset(
-            './lib/lambda/layers/dependencies/nodejs/package.json'
+          'nodejs/package.json': new pulumi.asset.StringAsset(
+            JSON.stringify({
+              name: 'lambda-dependencies-layer',
+              version: '1.0.0',
+              description: 'Shared dependencies for Lambda functions',
+              dependencies: {
+                lodash: '^4.17.21',
+                moment: '^2.29.4',
+                uuid: '^9.0.1',
+              },
+            })
           ),
           'nodejs/node_modules/lodash/package.json':
             new pulumi.asset.StringAsset(
