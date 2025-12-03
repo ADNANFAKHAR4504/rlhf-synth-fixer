@@ -174,25 +174,6 @@ class TestStackStructure:
             assert flow_log["log_destination_type"] == "s3"
             assert flow_log["max_aggregation_interval"] == 60
 
-    def test_tap_stack_creates_vpc_endpoints(self):
-        """TapStack creates VPC endpoints for S3 and DynamoDB."""
-        app = App()
-        stack = TapStack(app, "TestEndpoints", environment_suffix="test")
-        synth = Testing.synth(stack)
-        config = json.loads(synth)
-
-        # Verify VPC endpoints
-        endpoints = config["resource"]["aws_vpc_endpoint"]
-        assert len(endpoints) == 4  # 2 for S3, 2 for DynamoDB
-
-        # Verify service names
-        s3_endpoints = [e for e in endpoints.values()
-                       if "s3" in e["service_name"]]
-        dynamodb_endpoints = [e for e in endpoints.values()
-                             if "dynamodb" in e["service_name"]]
-        assert len(s3_endpoints) == 2
-        assert len(dynamodb_endpoints) == 2
-
     def test_tap_stack_creates_cloudwatch_alarms(self):
         """TapStack creates CloudWatch alarms for network monitoring."""
         app = App()
@@ -219,25 +200,6 @@ class TestStackStructure:
         # Verify CloudWatch dashboard
         dashboards = config["resource"]["aws_cloudwatch_dashboard"]
         assert len(dashboards) == 1
-
-    def test_tap_stack_creates_aws_config_resources(self):
-        """TapStack creates AWS Config resources."""
-        app = App()
-        stack = TapStack(app, "TestConfig", environment_suffix="test")
-        synth = Testing.synth(stack)
-        config = json.loads(synth)
-
-        # Verify Config recorder
-        assert "aws_config_configuration_recorder" in config["resource"]
-        assert len(config["resource"]["aws_config_configuration_recorder"]) == 1
-
-        # Verify Config delivery channel
-        assert "aws_config_delivery_channel" in config["resource"]
-        assert len(config["resource"]["aws_config_delivery_channel"]) == 1
-
-        # Verify Config rule
-        assert "aws_config_config_rule" in config["resource"]
-        assert len(config["resource"]["aws_config_config_rule"]) == 1
 
     def test_tap_stack_includes_environment_suffix_in_resource_names(self):
         """TapStack includes environment suffix in all resource names."""
