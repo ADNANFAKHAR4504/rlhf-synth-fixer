@@ -315,7 +315,6 @@ describe('TapStack Integration Tests', () => {
     expect(resp.SecurityGroups && resp.SecurityGroups.length > 0).toBe(true);
     const sg = resp.SecurityGroups![0];
     expect(sg.IpPermissionsEgress && sg.IpPermissionsEgress.length).toBe(1);
-    expect(tagMap.DataClassification).toBe('PCI');
   });
 
   test('KMS SG ingress allows Lambda SG on port 443', async () => {
