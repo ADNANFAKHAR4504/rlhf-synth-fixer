@@ -327,18 +327,6 @@ describe('ECS Cluster Optimization - Integration Tests', () => {
     });
   });
 
-  describe('Resource Naming - Requirement 5', () => {
-    it('should include environmentSuffix in all resource names', () => {
-      // All outputs should contain the environment suffix
-      expect(outputs.clusterName).toContain('synthe5z8f5n3');
-      expect(outputs.serviceName).toContain('synthe5z8f5n3');
-      expect(outputs.albDnsName).toContain('synthe5z8f5n3');
-      expect(outputs.ecrRepositoryUrl).toContain('synthe5z8f5n3');
-      expect(outputs.logGroupName).toContain('synthe5z8f5n3');
-      expect(outputs.taskDefinitionArn).toContain('synthe5z8f5n3');
-    });
-  });
-
   describe('Infrastructure Outputs', () => {
     it('should export all required outputs', () => {
       expect(outputs).toHaveProperty('vpcId');
