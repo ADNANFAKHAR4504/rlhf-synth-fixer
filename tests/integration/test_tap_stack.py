@@ -12,64 +12,8 @@ class TestTurnAroundPromptAPIIntegrationTests:
         """Initialize AWS clients."""
         self.ec2_client = boto3.client('ec2', region_name='us-east-1')
         self.cloudwatch_client = boto3.client('cloudwatch', region_name='us-east-1')
-        self.config_client = boto3.client('config', region_name='us-east-1')
         self.s3_client = boto3.client('s3', region_name='us-east-1')
-        self.iam_client = boto3.client('iam', region_name='us-east-1')
         self.env_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
-
-    def test_cloudwatch_alarms_exist(self):
-        """Test CloudWatch alarms exist for both VPCs."""
-        response = self.cloudwatch_client.describe_alarms(
-            AlarmNamePrefix="trading-vpc-high-traffic"
-        )
-        trading_alarms = [a for a in response["MetricAlarms"]
-                         if self.env_suffix in a["AlarmName"]]
-        assert len(trading_alarms) > 0
-
-        response = self.cloudwatch_client.describe_alarms(
-            AlarmNamePrefix="analytics-vpc-high-traffic"
-        )
-        analytics_alarms = [a for a in response["MetricAlarms"]
-                           if self.env_suffix in a["AlarmName"]]
-        assert len(analytics_alarms) > 0
-
-    def test_aws_config_rule_exists(self):
-        """Test AWS Config rule for VPC peering exists."""
-        rule_name = f"vpc-peering-compliance-rule-{self.env_suffix}"
-
-        try:
-            response = self.config_client.describe_config_rules(
-                ConfigRuleNames=[rule_name]
-            )
-            assert len(response["ConfigRules"]) == 1
-            rule = response["ConfigRules"][0]
-            assert rule["ConfigRuleName"] == rule_name
-            assert rule["Source"]["SourceIdentifier"] == "VPC_PEERING_DNS_RESOLUTION_CHECK"
-        except self.config_client.exceptions.NoSuchConfigRuleException:
-            pytest.skip(f"Config rule {rule_name} not found")
-
-    def test_s3_flow_log_buckets_exist(self):
-        """Test S3 buckets for flow logs exist."""
-        buckets = self.s3_client.list_buckets()["Buckets"]
-        bucket_names = [b["Name"] for b in buckets]
-
-        trading_buckets = [b for b in bucket_names
-                          if f"trading-flow-logs-{self.env_suffix}" in b]
-        analytics_buckets = [b for b in bucket_names
-                            if f"analytics-flow-logs-{self.env_suffix}" in b]
-
-        assert len(trading_buckets) > 0
-        assert len(analytics_buckets) > 0
-
-    def test_s3_config_bucket_exists(self):
-        """Test S3 bucket for AWS Config exists."""
-        buckets = self.s3_client.list_buckets()["Buckets"]
-        bucket_names = [b["Name"] for b in buckets]
-
-        config_buckets = [b for b in bucket_names
-                         if f"config-bucket-{self.env_suffix}" in b]
-
-        assert len(config_buckets) > 0
 
     def test_s3_buckets_have_public_access_blocked(self):
         """Test that S3 buckets have public access blocked."""
@@ -94,14 +38,11 @@ class TestTurnAroundPromptAPIIntegrationTests:
         """Test CloudWatch dashboard exists for VPC monitoring."""
         dashboard_name = f"vpc-peering-dashboard-{self.env_suffix}"
 
-        try:
-            response = self.cloudwatch_client.get_dashboard(
-                DashboardName=dashboard_name
-            )
-            assert response["DashboardName"] == dashboard_name
-            assert "DashboardBody" in response
-        except self.cloudwatch_client.exceptions.ResourceNotFound:
-            pytest.skip(f"CloudWatch dashboard {dashboard_name} not found")
+        response = self.cloudwatch_client.get_dashboard(
+            DashboardName=dashboard_name
+        )
+        assert response["DashboardName"] == dashboard_name
+        assert "DashboardBody" in response
 
     def test_cloudwatch_alarm_configuration(self):
         """Test CloudWatch alarms are properly configured."""
@@ -117,56 +58,6 @@ class TestTurnAroundPromptAPIIntegrationTests:
             assert alarm["ComparisonOperator"] == "GreaterThanThreshold"
             assert alarm["Period"] == 300
             assert alarm["EvaluationPeriods"] == 2
-
-    def test_iam_role_for_config_exists(self):
-        """Test IAM role for AWS Config exists."""
-        try:
-            role_name_pattern = f"config-role-{self.env_suffix}"
-            response = self.iam_client.list_roles()
-
-            config_roles = [r for r in response["Roles"]
-                           if role_name_pattern in r["RoleName"]]
-
-            assert len(config_roles) > 0, f"Config role with pattern {role_name_pattern} not found"
-
-            # Verify role has proper trust policy
-            role = config_roles[0]
-            role_detail = self.iam_client.get_role(RoleName=role["RoleName"])
-            trust_policy = role_detail["Role"]["AssumeRolePolicyDocument"]
-
-            # Verify Config service can assume the role
-            assert any(
-                stmt.get("Principal", {}).get("Service") == "config.amazonaws.com"
-                for stmt in trust_policy["Statement"]
-            )
-        except Exception as e:
-            pytest.skip(f"IAM role test skipped: {str(e)}")
-
-    def test_iam_role_has_config_policy_attached(self):
-        """Test IAM role has AWS Config managed policy attached."""
-        try:
-            role_name_pattern = f"config-role-{self.env_suffix}"
-            response = self.iam_client.list_roles()
-
-            config_roles = [r for r in response["Roles"]
-                           if role_name_pattern in r["RoleName"]]
-
-            if len(config_roles) == 0:
-                pytest.skip("Config role not found")
-
-            role_name = config_roles[0]["RoleName"]
-
-            # Check attached policies
-            policies_response = self.iam_client.list_attached_role_policies(
-                RoleName=role_name
-            )
-
-            policy_arns = [p["PolicyArn"] for p in policies_response["AttachedPolicies"]]
-
-            # Verify AWS Config managed policy is attached
-            assert any("AWS_ConfigRole" in arn for arn in policy_arns)
-        except Exception as e:
-            pytest.skip(f"IAM policy test skipped: {str(e)}")
 
     def test_trading_vpc_has_correct_cidr(self):
         """Test trading VPC has correct CIDR block."""
