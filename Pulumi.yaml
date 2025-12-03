@@ -7,7 +7,8 @@ config:
     description: AWS region for deployment
     value: us-east-1
   TapStack:environmentSuffix:
-    description: Unique suffix for resource naming
+    description: Unique suffix for resource naming (read from ENVIRONMENT_SUFFIX env var if not set)
+    default: dev
   TapStack:environment:
     description: Environment name (dev, staging, production)
     default: dev

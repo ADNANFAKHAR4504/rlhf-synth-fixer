@@ -3,7 +3,9 @@ import * as aws from '@pulumi/aws';
 
 // Configuration management - no hardcoded values
 const config = new pulumi.Config();
-const environmentSuffix = config.require('environmentSuffix');
+// Read environmentSuffix from environment variable (set by deployment script)
+const environmentSuffix =
+  process.env.ENVIRONMENT_SUFFIX || config.get('environmentSuffix') || 'dev';
 const environment = config.get('environment') || 'dev';
 const region = config.get('awsRegion') || 'us-east-1';
 const containerPort = config.getNumber('containerPort') || 3000;
