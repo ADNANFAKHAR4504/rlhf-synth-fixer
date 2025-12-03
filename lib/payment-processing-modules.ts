@@ -354,7 +354,7 @@ export class SecretsModule extends Construct {
       this,
       'rds-secret',
       {
-        name: resourceName('payment-rds-master-password'),
+        name: resourceName('payment-rds-master-pwd'),
         description: 'Master password for RDS Aurora MySQL cluster',
         recoveryWindowInDays: 7,
         tags: { ...props.tags, Name: resourceName('payment-rds-secret') },
