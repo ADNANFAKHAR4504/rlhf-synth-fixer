@@ -130,8 +130,8 @@ describe('TapStack', () => {
       const resultsBucket = environment?.variables?.RESULTS_BUCKET;
       expect(resultsBucket).toBeTruthy();
 
-      const region = environment?.variables?.AWS_REGION;
-      expect(region).toBe('us-east-1');
+      // AWS_REGION is not set as it's a reserved Lambda environment variable
+      // The Lambda function uses the AWS_REGION provided by the Lambda runtime
     });
 
     it('should have proper tags on Lambda function', async () => {
