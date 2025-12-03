@@ -1,4 +1,0 @@
-config:
-  aws:defaultTags: '{"tags":{"Environment":"dev","Repository":"synth-p4e4z4s0","Author":"mayanksethi-turing","PRNumber":"unknown","Team":"synth","CreatedAt":"2025-12-02T11:21:11Z","ManagedBy":"pulumi"}}'
-  TapStack:environmentSuffix: synthp4e4z4s0
-encryptionsalt: v1:i4muL3Tmtyg=:v1:kAUnvyske3it28Ic:Wa8x0oqtYPbea6RnQDVsvZ+NpSYchw==
