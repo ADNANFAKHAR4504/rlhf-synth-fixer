@@ -73,7 +73,6 @@ module.exports = {
     '*.d.ts',
     'worktree/',
     'test/',
-    'bin/',
     'cli/',
   ],
 };
