@@ -942,10 +942,10 @@ class TapStack(TerraformStack):
                     "type": "metric",
                     "properties": {
                         "metrics": [
-                            ["AWS/ApiGateway", "Latency", {"ApiName": api['api'].name}],
-                            ["AWS/ApiGateway", "Count", {"ApiName": api['api'].name}],
-                            ["AWS/ApiGateway", "4XXError", {"ApiName": api['api'].name}],
-                            ["AWS/ApiGateway", "5XXError", {"ApiName": api['api'].name}]
+                            ["AWS/ApiGateway", "Latency", "ApiName", api['api'].name],
+                            ["AWS/ApiGateway", "Count", "ApiName", api['api'].name],
+                            ["AWS/ApiGateway", "4XXError", "ApiName", api['api'].name],
+                            ["AWS/ApiGateway", "5XXError", "ApiName", api['api'].name]
                         ],
                         "view": "timeSeries",
                         "region": region,
@@ -957,10 +957,10 @@ class TapStack(TerraformStack):
                     "type": "metric",
                     "properties": {
                         "metrics": [
-                            ["AWS/Lambda", "Invocations", {"FunctionName": lambdas['validation'].function_name}],
-                            ["AWS/Lambda", "Errors", {"FunctionName": lambdas['validation'].function_name}],
-                            ["AWS/Lambda", "Duration", {"FunctionName": lambdas['validation'].function_name}],
-                            ["AWS/Lambda", "Throttles", {"FunctionName": lambdas['validation'].function_name}]
+                            ["AWS/Lambda", "Invocations", "FunctionName", lambdas['validation'].function_name],
+                            ["AWS/Lambda", "Errors", "FunctionName", lambdas['validation'].function_name],
+                            ["AWS/Lambda", "Duration", "FunctionName", lambdas['validation'].function_name],
+                            ["AWS/Lambda", "Throttles", "FunctionName", lambdas['validation'].function_name]
                         ],
                         "view": "timeSeries",
                         "region": region,
@@ -972,10 +972,10 @@ class TapStack(TerraformStack):
                     "type": "metric",
                     "properties": {
                         "metrics": [
-                            ["AWS/Lambda", "Invocations", {"FunctionName": lambdas['processing'].function_name}],
-                            ["AWS/Lambda", "Errors", {"FunctionName": lambdas['processing'].function_name}],
-                            ["AWS/Lambda", "Duration", {"FunctionName": lambdas['processing'].function_name}],
-                            ["AWS/Lambda", "Throttles", {"FunctionName": lambdas['processing'].function_name}]
+                            ["AWS/Lambda", "Invocations", "FunctionName", lambdas['processing'].function_name],
+                            ["AWS/Lambda", "Errors", "FunctionName", lambdas['processing'].function_name],
+                            ["AWS/Lambda", "Duration", "FunctionName", lambdas['processing'].function_name],
+                            ["AWS/Lambda", "Throttles", "FunctionName", lambdas['processing'].function_name]
                         ],
                         "view": "timeSeries",
                         "region": region,
@@ -987,10 +987,10 @@ class TapStack(TerraformStack):
                     "type": "metric",
                     "properties": {
                         "metrics": [
-                            ["AWS/DynamoDB", "ConsumedReadCapacityUnits", {"TableName": table.name}],
-                            ["AWS/DynamoDB", "ConsumedWriteCapacityUnits", {"TableName": table.name}],
-                            ["AWS/DynamoDB", "UserErrors", {"TableName": table.name}],
-                            ["AWS/DynamoDB", "SystemErrors", {"TableName": table.name}]
+                            ["AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", table.name],
+                            ["AWS/DynamoDB", "ConsumedWriteCapacityUnits", "TableName", table.name],
+                            ["AWS/DynamoDB", "UserErrors", "TableName", table.name],
+                            ["AWS/DynamoDB", "SystemErrors", "TableName", table.name]
                         ],
                         "view": "timeSeries",
                         "region": region,
