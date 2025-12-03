@@ -307,7 +307,7 @@ async function sendNotification(event) {
       `lambda-dynamodb-policy-${environmentSuffix}`,
       {
         role: lambdaRole.id,
-        policy: pulumi.all([dynamoTable.arn]).apply(([tableArn]: [string]) =>
+        policy: dynamoTable.arn.apply((tableArn) =>
           JSON.stringify({
             Version: '2012-10-17',
             Statement: [
@@ -334,7 +334,7 @@ async function sendNotification(event) {
       `lambda-sqs-policy-${environmentSuffix}`,
       {
         role: lambdaRole.id,
-        policy: pulumi.all([dlqQueue.arn]).apply(([queueArn]: [string]) =>
+        policy: dlqQueue.arn.apply((queueArn) =>
           JSON.stringify({
             Version: '2012-10-17',
             Statement: [
