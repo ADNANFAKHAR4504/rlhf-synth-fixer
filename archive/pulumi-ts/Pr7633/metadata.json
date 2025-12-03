@@ -22,5 +22,10 @@
     "IAM"
   ],
   "training_quality": 10,
-  "completedAt": "2025-12-02T05:17:00.000Z"
+  "completedAt": "2025-12-02T05:17:00.000Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
