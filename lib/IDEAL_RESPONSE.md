@@ -341,7 +341,6 @@ export class TapStack extends pulumi.ComponentResource {
             SNS_TOPIC_ARN: complianceTopic.arn,
             SQS_QUEUE_URL: complianceQueue.url,
             LIFECYCLE_AGE_THRESHOLD: complianceConfig.lifecycleAgeThreshold.toString(),
-            AWS_REGION: region,
           },
         },
         code: new pulumi.asset.AssetArchive({

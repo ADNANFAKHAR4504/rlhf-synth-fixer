@@ -209,7 +209,8 @@ describe('S3 Compliance Analysis Stack - Code Patterns', () => {
       expect(indexCode).toMatch(/SNS_TOPIC_ARN/);
       expect(indexCode).toMatch(/SQS_QUEUE_URL/);
       expect(indexCode).toMatch(/LIFECYCLE_AGE_THRESHOLD/);
-      expect(indexCode).toMatch(/AWS_REGION/);
+      // Note: AWS_REGION is a reserved Lambda env var, so we don't set it explicitly
+      // Lambda automatically provides AWS_REGION from the runtime environment
     });
 
     test('should use FileArchive for code', () => {
