@@ -1,322 +1,22 @@
 # Model Response Failures Analysis
 
-This document analyzes the failures and issues found in the MODEL_RESPONSE code generation for the compliance scanner infrastructure task.
+This document analyzes the failures and issues found in the MODEL_RESPONSE code generation for the Infrastructure Compliance Scanner task.
 
 ## Critical Failures
 
-### 1. AWS SDK Version Mismatch in Lambda Runtime
-
-**Impact Level**: Critical
-
-**MODEL_RESPONSE Issue**: The Lambda function code uses `aws-sdk` (AWS SDK v2) while specifying Node.js 18.x runtime. Node.js 18.x runtime in AWS Lambda only includes AWS SDK v3, not v2.
-
-```javascript
-// MODEL_RESPONSE code (lines 105-117 in tap-stack.ts Lambda code)
-const AWS = require('aws-sdk');
-
-const ec2 = new AWS.EC2({ region });
-const rds = new AWS.RDS({ region });
-const s3 = new AWS.S3({ region });
-```
-
-**IDEAL_RESPONSE Fix**: Use AWS SDK v3 (@aws-sdk/*) with proper imports:
-
-```javascript
-const { EC2Client, DescribeInstancesCommand } = require('@aws-sdk/client-ec2');
-const { RDSClient, DescribeDBInstancesCommand, DescribeDBClustersCommand, ListTagsForResourceCommand } = require('@aws-sdk/client-rds');
-const { S3Client, ListBucketsCommand, GetBucketTaggingCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
-
-const ec2Client = new EC2Client({ region });
-const rdsClient = new RDSClient({ region });
-const s3Client = new S3Client({ region });
-```
-
-**Root Cause**: The model did not account for the fact that Lambda Node.js 18+ runtimes no longer include AWS SDK v2. This is a well-documented breaking change in AWS Lambda.
-
-**AWS Documentation Reference**: https://docs.aws.amazon.com/lambda/latest/dg/lambda-nodejs.html
-
-**Deployment Impact**: Lambda function fails immediately on invocation with `Runtime.ImportModuleError: Error: Cannot find module 'aws-sdk'`. This makes the entire compliance scanning system non-functional.
-
-**Cost/Security/Performance Impact**:
-- Cost: Complete deployment failure - infrastructure deployed but unusable ($0.40/month for EventBridge + S3, wasted)
-- Security: No compliance scanning can occur, leaving security gaps unidentified
-- Performance: N/A - function cannot execute
-
----
-
-### 2. Incorrect Lambda Package Dependencies
-
-**Impact Level**: Critical
-
-**MODEL_RESPONSE Issue**: The Lambda function's package.json (lines 404-418) specifies `aws-sdk: ^2.1000.0` as a dependency, which is incorrect for Node.js 18.x runtime.
-
-```javascript
-"package.json": new pulumi.asset.StringAsset(
-  JSON.stringify({
-    name: "compliance-scanner",
-    version: "1.0.0",
-    dependencies: {
-      "aws-sdk": "^2.1000.0",  // WRONG for Node.js 18+
-    },
-  })
-)
-```
-
-**IDEAL_RESPONSE Fix**: Include correct AWS SDK v3 packages:
-
-```javascript
-"package.json": new pulumi.asset.StringAsset(
-  JSON.stringify({
-    name: "compliance-scanner",
-    version: "1.0.0",
-    dependencies: {
-      "@aws-sdk/client-ec2": "^3.0.0",
-      "@aws-sdk/client-rds": "^3.0.0",
-      "@aws-sdk/client-s3": "^3.0.0"
-    },
-  })
-)
-```
-
-**Root Cause**: The model generated package dependencies that match SDK v2 syntax without verifying runtime compatibility.
-
-**Deployment Impact**: Even if aws-sdk v2 were bundled, the API calls use v2 syntax which is incompatible with v3's command-based architecture.
-
----
-
-## High Severity Failures
-
-### 3. Missing AWS SDK v3 Command-Based Architecture
+### 1. Missing CloudWatch Log Group with Retention Policy
 
 **Impact Level**: High
 
-**MODEL_RESPONSE Issue**: All AWS API calls use SDK v2's promise-based syntax:
+**MODEL_RESPONSE Issue**: No explicit CloudWatch Log Group was created for the Lambda function. AWS creates one automatically, but without a retention policy, logs are kept indefinitely.
 
-```javascript
-// MODEL_RESPONSE (lines 134, 174, 252)
-const ec2Data = await ec2.describeInstances().promise();
-const rdsInstances = await rds.describeDBInstances().promise();
-const bucketsData = await s3.listBuckets().promise();
-```
-
-**IDEAL_RESPONSE Fix**: Use SDK v3's command pattern:
-
-```javascript
-const ec2Data = await ec2Client.send(new DescribeInstancesCommand({}));
-const rdsInstances = await rdsClient.send(new DescribeDBInstancesCommand({}));
-const bucketsData = await s3Client.send(new ListBucketsCommand({}));
-```
-
-**Root Cause**: The model was trained on SDK v2 patterns and didn't recognize that Node.js 18 requires SDK v3.
-
-**AWS Documentation Reference**: https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/
-
-**Performance Impact**: SDK v3 is 20-30% faster and uses less memory due to modular imports (only import needed clients, not entire SDK).
-
----
-
-### 4. Lambda Code Bundling Strategy
-
-**Impact Level**: High
-
-**MODEL_RESPONSE Issue**: The Lambda function code is defined inline using `pulumi.asset.StringAsset` (lines 104-410), which is a 300+ line inline string. This makes the code:
-- Hard to test independently
-- Difficult to debug
-- Impossible to lint/format properly
-- Not reusable
-
-**IDEAL_RESPONSE Fix**: Extract Lambda code to separate file(s):
-
-```typescript
-// lib/lambda/compliance-scanner/index.ts
-export const handler = async (event) => { ... };
-
-// lib/tap-stack.ts
-const scannerFunction = new aws.lambda.Function(
-  `compliance-scanner-${props.environmentSuffix}`,
-  {
-    runtime: aws.lambda.Runtime.NodeJS18dX,
-    handler: "index.handler",
-    code: new pulumi.asset.FileArchive("./lib/lambda/compliance-scanner"),
-    // ...
-  }
-);
-```
-
-**Root Cause**: The model prioritized single-file generation over code quality and maintainability.
-
-**Code Quality Impact**:
-- No syntax highlighting for inline Lambda code
-- No TypeScript type checking for Lambda code
-- Inline strings bypass ESLint rules
-- Makes unit testing Lambda logic nearly impossible
-
----
-
-## Medium Severity Failures
-
-### 5. Unused Import in Main Stack File
-
-**Impact Level**: Medium
-
-**MODEL_RESPONSE Issue**: Line 3 of lib/tap-stack.ts imports `ComplianceScanner` from `./compliance-scanner`, but this import is never used in the code.
-
-```typescript
-import { ComplianceScanner } from './compliance-scanner';  // Never used
-```
-
-**IDEAL_RESPONSE Fix**: Remove the unused import:
-
-```typescript
-import * as pulumi from '@pulumi/pulumi';
-import * as aws from '@pulumi/aws';
-// ComplianceScanner import removed
-```
-
-**Root Cause**: The model generated type definitions in compliance-scanner.ts but then embedded all logic inline in the Lambda function string, making the types unused.
-
-**Code Quality Impact**: Triggers ESLint errors, suggests poor code organization.
-
----
-
-### 6. Pulumi Output String Interpolation
-
-**Impact Level**: Medium
-
-**MODEL_RESPONSE Issue**: Lines 467-472 use incorrect syntax for Pulumi Output interpolation:
-
-```typescript
-this.scanResults = pulumi.output(
-  `Compliance scanner deployed. Invoke function: ${scannerFunction.name.apply(n => n)}`
-);
-```
-
-**IDEAL_RESPONSE Fix**: Use `pulumi.interpolate` template literal:
-
-```typescript
-this.scanResults = pulumi.interpolate`Compliance scanner deployed. Invoke function: ${scannerFunction.name}`;
-```
-
-**Root Cause**: The model used an older Pulumi pattern (.apply()) instead of the recommended interpolate syntax.
-
-**AWS Documentation Reference**: https://www.pulumi.com/docs/concepts/inputs-outputs/
-
-**Code Quality Impact**: Triggers Pulumi deprecation warnings, less readable code.
-
----
-
-### 7. Missing EventBridge Target Input Transformer
-
-**Impact Level**: Medium
-
-**MODEL_RESPONSE Issue**: The EventBridge rule (lines 438-458) triggers the Lambda on a schedule but doesn't pass any input parameters. The Lambda might benefit from knowing it was triggered by a scheduled event vs. manual invocation.
-
-**IDEAL_RESPONSE Fix**: Add input transformer to EventBridge target:
-
-```typescript
-new aws.cloudwatch.EventTarget(
-  `compliance-scan-target-${props.environmentSuffix}`,
-  {
-    rule: scanRule.name,
-    arn: scannerFunction.arn,
-    input: JSON.stringify({
-      source: 'eventbridge-schedule',
-      scheduledTime: '$.time'
-    })
-  },
-  { parent: this }
-);
-```
-
-**Root Cause**: The model generated a minimal EventBridge configuration without considering operational best practices.
-
-**Operational Impact**: Cannot distinguish between scheduled vs. manual scans in CloudWatch Logs or reports.
-
----
-
-## Low Severity Failures
-
-### 8. Hardcoded Ninety Days Constant Not Used
-
-**Impact Level**: Low
-
-**MODEL_RESPONSE Issue**: Line 108 defines `NINETY_DAYS_MS` constant but it's never used:
-
-```javascript
-const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;  // Defined but unused
-```
-
-Instead, the code recalculates this inline multiple times:
-
-```javascript
-const ageInDays = Math.floor((Date.now() - launchTime.getTime()) / (1000 * 60 * 60 * 24));
-if (ageInDays > 90) { ... }
-```
-
-**IDEAL_RESPONSE Fix**: Use the constant or remove it:
-
-```javascript
-const NINETY_DAYS = 90;
-// ...
-if (ageInDays > NINETY_DAYS) { ... }
-```
-
-**Root Cause**: The model defined a constant following good practice but then forgot to use it.
-
-**Code Quality Impact**: Dead code, minor readability issue.
-
----
-
-### 9. No Lambda Layer for Shared Dependencies
-
-**Impact Level**: Low
-
-**MODEL_RESPONSE Issue**: The Lambda function bundles all dependencies directly. For a production system scanning multiple AWS accounts, using Lambda Layers would reduce deployment size and speed up cold starts.
-
-**IDEAL_RESPONSE Fix**: Create Lambda Layer for AWS SDK:
-
-```typescript
-const sdkLayer = new aws.lambda.LayerVersion(
-  `aws-sdk-layer-${props.environmentSuffix}`,
-  {
-    layerName: `aws-sdk-v3-layer-${props.environmentSuffix}`,
-    code: new pulumi.asset.FileArchive("./lib/lambda/layers/aws-sdk"),
-    compatibleRuntimes: [aws.lambda.Runtime.NodeJS18dX],
-  },
-  { parent: this }
-);
-
-const scannerFunction = new aws.lambda.Function(
-  // ...
-  {
-    layers: [sdkLayer.arn],
-    // ...
-  }
-);
-```
-
-**Root Cause**: The model prioritized simplicity over optimization.
-
-**Performance Impact**:
-- Slightly larger deployment package (~500KB vs ~50KB with layer)
-- Marginally slower cold starts (10-50ms)
-- For single-function deployment, this is acceptable
-
----
-
-### 10. Missing CloudWatch Log Group with Retention
-
-**Impact Level**: Low
-
-**MODEL_RESPONSE Issue**: No explicit CloudWatch Log Group is created for the Lambda function. AWS creates one automatically, but without retention policy, logs are kept forever.
-
-**IDEAL_RESPONSE Fix**: Create log group with retention:
+**IDEAL_RESPONSE Fix**: Create log group with retention before Lambda:
 
 ```typescript
 const logGroup = new aws.cloudwatch.LogGroup(
   `compliance-scanner-logs-${props.environmentSuffix}`,
   {
-    name: pulumi.interpolate`/aws/lambda/${scannerFunction.name}`,
+    name: `/aws/lambda/compliance-scanner-${props.environmentSuffix}`,
     retentionInDays: 30,
     tags: {
       Name: `compliance-scanner-logs-${props.environmentSuffix}`,
@@ -333,24 +33,215 @@ const logGroup = new aws.cloudwatch.LogGroup(
 
 ---
 
+### 2. Missing S3 Bucket Public Access Block
+
+**Impact Level**: Critical (Security)
+
+**MODEL_RESPONSE Issue**: The S3 bucket for compliance reports was created without explicitly blocking public access.
+
+**IDEAL_RESPONSE Fix**: Add public access block:
+
+```typescript
+new aws.s3.BucketPublicAccessBlock(
+  `compliance-reports-public-access-block-${props.environmentSuffix}`,
+  {
+    bucket: reportBucket.id,
+    blockPublicAcls: true,
+    blockPublicPolicy: true,
+    ignorePublicAcls: true,
+    restrictPublicBuckets: true,
+  },
+  { parent: this }
+);
+```
+
+**Root Cause**: The model did not apply security best practices for S3 buckets.
+
+**Security Impact**: Without explicit public access block, bucket could potentially be made public through misconfiguration.
+
+---
+
+### 3. Missing Lambda Function Name Property
+
+**Impact Level**: High
+
+**MODEL_RESPONSE Issue**: The Lambda function was created without an explicit `name` property, causing AWS to generate a random name.
+
+```typescript
+// MODEL_RESPONSE (missing name)
+const scannerFunction = new aws.lambda.Function(
+  `compliance-scanner-${props.environmentSuffix}`,
+  {
+    runtime: aws.lambda.Runtime.NodeJS18dX,
+    handler: 'index.handler',
+    // name was not specified
+  }
+);
+```
+
+**IDEAL_RESPONSE Fix**: Explicitly set name:
+
+```typescript
+const scannerFunction = new aws.lambda.Function(
+  `compliance-scanner-${props.environmentSuffix}`,
+  {
+    name: `compliance-scanner-${props.environmentSuffix}`,
+    runtime: aws.lambda.Runtime.NodeJS18dX,
+    handler: 'index.handler',
+    // ...
+  }
+);
+```
+
+**Root Cause**: The model assumed the Pulumi resource name would be used as the AWS resource name.
+
+**Operational Impact**: Without explicit naming, Lambda function names become unpredictable, breaking integration tests that expect specific naming patterns.
+
+---
+
+### 4. Missing Integration Test Output Exports
+
+**Impact Level**: High
+
+**MODEL_RESPONSE Issue**: The stack only exported `scanResults` and `complianceReport` outputs, but integration tests expected `LambdaFunctionName` and `S3BucketName`.
+
+```typescript
+// MODEL_RESPONSE - insufficient outputs
+this.registerOutputs({
+  scanResults: this.scanResults,
+  complianceReport: this.complianceReport,
+  functionArn: scannerFunction.arn,
+  reportBucketName: reportBucket.id,
+});
+```
+
+**IDEAL_RESPONSE Fix**: Add all required outputs:
+
+```typescript
+this.registerOutputs({
+  scanResults: this.scanResults,
+  complianceReport: this.complianceReport,
+  LambdaFunctionName: this.lambdaFunctionName,
+  S3BucketName: this.s3BucketName,
+  LambdaFunctionArn: this.lambdaFunctionArn,
+  EventRuleName: this.eventRuleName,
+});
+```
+
+**Root Cause**: The model did not verify that outputs matched integration test expectations.
+
+**Testing Impact**: Integration tests fail because expected outputs are not available in flat-outputs.json.
+
+---
+
+## Medium Severity Failures
+
+### 5. Lambda DependsOn Log Group Missing
+
+**Impact Level**: Medium
+
+**MODEL_RESPONSE Issue**: Lambda function did not have explicit dependency on CloudWatch Log Group.
+
+**IDEAL_RESPONSE Fix**: Add dependsOn:
+
+```typescript
+const scannerFunction = new aws.lambda.Function(
+  `compliance-scanner-${props.environmentSuffix}`,
+  {
+    // ... config
+  },
+  { parent: this, dependsOn: [logGroup] }
+);
+```
+
+**Root Cause**: The model did not establish proper resource ordering.
+
+**Deployment Impact**: Race condition where Lambda might be created before log group, causing AWS to create a default log group with no retention.
+
+---
+
+### 6. Region Variable Unused
+
+**Impact Level**: Low
+
+**MODEL_RESPONSE Issue**: The `region` variable was defined in props but not used in the constructor.
+
+```typescript
+// MODEL_RESPONSE - region passed but unused
+const region = props.region || 'us-east-1';
+// Variable defined but never referenced
+```
+
+**IDEAL_RESPONSE Fix**: While the region is handled by AWS provider configuration, documenting its purpose improves code clarity.
+
+**Root Cause**: The model defined the variable as a pattern but didn't implement any region-specific logic.
+
+**Code Quality Impact**: Unused variables indicate incomplete implementation.
+
+---
+
+## Low Severity Failures
+
+### 7. Missing Type Exports in Main File
+
+**Impact Level**: Low
+
+**MODEL_RESPONSE Issue**: The compliance-scanner.ts file exports types, but these are never imported in tap-stack.ts.
+
+**Root Cause**: The model generated type definitions but then embedded all logic inline in the Lambda function string.
+
+**Code Quality Impact**: Unused exports suggest poor code organization.
+
+---
+
+### 8. Inconsistent Output Naming Convention
+
+**Impact Level**: Low
+
+**MODEL_RESPONSE Issue**: Some outputs used camelCase (`functionArn`, `reportBucketName`) while integration tests expected PascalCase (`LambdaFunctionName`, `S3BucketName`).
+
+**IDEAL_RESPONSE Fix**: Use consistent PascalCase for all outputs that integration tests consume:
+
+```typescript
+export const LambdaFunctionName = stack.lambdaFunctionName;
+export const S3BucketName = stack.s3BucketName;
+```
+
+**Root Cause**: The model did not verify output naming conventions against test expectations.
+
+---
+
 ## Summary
 
-- Total failures: **2 Critical**, **3 High**, **3 Medium**, **2 Low**
-- Primary knowledge gaps:
-  1. AWS Lambda runtime evolution (Node.js 18+ SDK changes)
-  2. AWS SDK v2 → v3 migration patterns
-  3. Modern Pulumi best practices (interpolate vs. apply)
+| Category | Count |
+|----------|-------|
+| Critical | 2 |
+| High | 2 |
+| Medium | 1 |
+| Low | 3 |
+| **Total** | **8** |
 
-- Training value: **HIGH** - This example demonstrates critical production deployment failures that occur when:
-  - The model doesn't track breaking changes in cloud platforms
-  - Code generation prioritizes patterns from older training data over current best practices
-  - Inline code generation prevents proper testing and validation
+## Primary Knowledge Gaps
 
-**Recommendation**: This response should be used for fine-tuning to teach the model:
-1. Always check Lambda runtime compatibility with dependencies
-2. Prefer AWS SDK v3 for Node.js 14.x and later
-3. Extract Lambda code to separate files for testability
-4. Use modern Pulumi patterns (interpolate, not apply)
-5. Always verify that generated code can actually execute
+1. **Security Best Practices**: S3 public access blocks should always be applied
+2. **Resource Naming**: Explicit naming for predictable resource identification
+3. **Output Alignment**: Stack outputs must match integration test expectations
+4. **Resource Dependencies**: Proper dependsOn for log groups before Lambda
+5. **Cost Management**: Log retention policies to control CloudWatch costs
 
-The critical SDK version mismatch would have been caught in integration testing, but ideally should be prevented at code generation time.
+## Training Value
+
+**HIGH** - This example demonstrates production deployment issues that occur when:
+- Security configurations are not explicitly set
+- Resource naming is left to AWS defaults
+- Stack outputs don't align with test expectations
+- Resource dependencies are not properly established
+
+## Recommendations for Model Improvement
+
+1. Always add S3 public access block for any S3 bucket
+2. Always add explicit CloudWatch Log Group with retention before Lambda
+3. Always specify explicit functionName for Lambda functions
+4. Always verify stack outputs match integration test expectations
+5. Always use dependsOn for resources that must be created in order
+6. Review integration tests before finalizing infrastructure code

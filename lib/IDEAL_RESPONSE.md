@@ -1,55 +1,267 @@
-# Ideal Infrastructure Compliance Scanner Implementation
+# Infrastructure Compliance Scanner - Ideal Implementation
 
-This document provides the corrected Pulumi TypeScript implementation for the AWS compliance scanner.
+This document provides the complete Pulumi TypeScript implementation for the AWS Infrastructure Compliance Scanner that checks EC2, RDS, and S3 resources for mandatory tag compliance.
 
-## Key Corrections from MODEL_RESPONSE
+## Architecture Overview
 
-The IDEAL_RESPONSE fixes the following critical issues:
+The compliance scanner consists of the following components:
 
-1. **AWS SDK v3 for Node.js 18.x** - Lambda code uses proper SDK v3 syntax
-2. **Pulumi interpolate** - Uses modern `pulumi.interpolate` instead of deprecated `.apply()`
-3. **Removed unused imports** - Clean code without `ComplianceScanner` import
-4. **CloudWatch Log Group** - Explicit log retention policy
-5. **Proper resource naming** - All resources include environmentSuffix
+1. **Lambda Function**: Scans EC2 instances, RDS databases/clusters, and S3 buckets for mandatory tags
+2. **S3 Bucket**: Stores compliance reports with timestamps
+3. **EventBridge Rule**: Triggers daily compliance scans
+4. **IAM Role**: Provides least-privilege access for resource scanning
+5. **CloudWatch Log Group**: Stores Lambda execution logs with 30-day retention
 
 ## File Structure
 
 ```
 lib/
-├── tap-stack.ts          # Main infrastructure stack (CORRECTED)
-├── compliance-scanner.ts # Type definitions
-├── AWS_REGION           # Region configuration
-└── README.md            # Documentation
+  tap-stack.ts          # Main infrastructure stack
+  compliance-scanner.ts # TypeScript type definitions
+  PROMPT.md             # Task requirements
+  IDEAL_RESPONSE.md     # This documentation
+  MODEL_FAILURES.md     # Common issues and fixes
+  README.md             # Quick reference
 
 bin/
-└── tap.ts               # Entrypoint
+  tap.ts                # Pulumi entrypoint
 
 test/
-├── tap-stack.unit.test.ts  # Unit tests (100% coverage)
-└── tap-stack.int.test.ts   # Integration tests
+  tap-stack.unit.test.ts  # Unit tests
+  tap-stack.int.test.ts   # Integration tests
 ```
 
-## Corrected lib/tap-stack.ts
+## Complete Source Code
 
-The current lib/tap-stack.ts in this repository represents the IDEAL implementation with the following key fixes applied:
+### File: lib/tap-stack.ts
 
-### 1. Clean Imports (FIXED)
 ```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
-// Removed: import { ComplianceScanner } from './compliance-scanner';
+
+export interface TapStackProps {
+  environmentSuffix: string;
+  region?: string;
+}
+
+export class TapStack extends pulumi.ComponentResource {
+  public readonly scanResults: pulumi.Output<string>;
+  public readonly complianceReport: pulumi.Output<string>;
+  public readonly lambdaFunctionName: pulumi.Output<string>;
+  public readonly s3BucketName: pulumi.Output<string>;
+  public readonly lambdaFunctionArn: pulumi.Output<string>;
+  public readonly eventRuleName: pulumi.Output<string>;
+
+  constructor(
+    name: string,
+    props: TapStackProps,
+    opts?: pulumi.ComponentResourceOptions
+  ) {
+    super('custom:infrastructure:TapStack', name, {}, opts);
+
+    // Note: region is passed to the stack but AWS region is controlled by the Pulumi AWS provider
+    // The props.region can be used for resource naming or configuration if needed
+    const _region = props.region || 'us-east-1';
+    void _region; // Suppress unused variable warning - region available for future use
+
+    // Create S3 bucket for storing compliance reports
+    const reportBucket = new aws.s3.Bucket(
+      `compliance-reports-${props.environmentSuffix}`,
+      {
+        bucket: `compliance-reports-${props.environmentSuffix}`,
+        forceDestroy: true,
+        tags: {
+          Name: `compliance-reports-${props.environmentSuffix}`,
+          Environment: props.environmentSuffix,
+          Purpose: 'ComplianceReporting',
+        },
+      },
+      { parent: this }
+    );
+
+    // Block public access for S3 bucket
+    new aws.s3.BucketPublicAccessBlock(
+      `compliance-reports-public-access-block-${props.environmentSuffix}`,
+      {
+        bucket: reportBucket.id,
+        blockPublicAcls: true,
+        blockPublicPolicy: true,
+        ignorePublicAcls: true,
+        restrictPublicBuckets: true,
+      },
+      { parent: this }
+    );
+
+    // Create Lambda execution role
+    const lambdaRole = new aws.iam.Role(
+      `compliance-scanner-role-${props.environmentSuffix}`,
+      {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Principal: {
+                Service: 'lambda.amazonaws.com',
+              },
+              Effect: 'Allow',
+            },
+          ],
+        }),
+        tags: {
+          Name: `compliance-scanner-role-${props.environmentSuffix}`,
+          Environment: props.environmentSuffix,
+        },
+      },
+      { parent: this }
+    );
+
+    // Attach policies for resource scanning
+    new aws.iam.RolePolicyAttachment(
+      `compliance-scanner-basic-${props.environmentSuffix}`,
+      {
+        role: lambdaRole.name,
+        policyArn:
+          'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+      },
+      { parent: this }
+    );
+
+    new aws.iam.RolePolicy(
+      `compliance-scanner-policy-${props.environmentSuffix}`,
+      {
+        role: lambdaRole.id,
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: [
+                'ec2:DescribeInstances',
+                'ec2:DescribeTags',
+                'rds:DescribeDBInstances',
+                'rds:DescribeDBClusters',
+                'rds:ListTagsForResource',
+                's3:ListAllMyBuckets',
+                's3:GetBucketTagging',
+                's3:GetBucketLocation',
+                's3:PutObject',
+              ],
+              Resource: '*',
+            },
+          ],
+        }),
+      },
+      { parent: this }
+    );
+
+    // Create CloudWatch Log Group for Lambda with retention policy
+    const logGroup = new aws.cloudwatch.LogGroup(
+      `compliance-scanner-logs-${props.environmentSuffix}`,
+      {
+        name: `/aws/lambda/compliance-scanner-${props.environmentSuffix}`,
+        retentionInDays: 30,
+        tags: {
+          Name: `compliance-scanner-logs-${props.environmentSuffix}`,
+          Environment: props.environmentSuffix,
+        },
+      },
+      { parent: this }
+    );
+
+    // Create Lambda function for compliance scanning
+    const scannerFunction = new aws.lambda.Function(
+      `compliance-scanner-${props.environmentSuffix}`,
+      {
+        name: `compliance-scanner-${props.environmentSuffix}`,
+        runtime: aws.lambda.Runtime.NodeJS18dX,
+        handler: 'index.handler',
+        role: lambdaRole.arn,
+        code: new pulumi.asset.AssetArchive({
+          'index.js': new pulumi.asset.StringAsset(LAMBDA_CODE),
+          'package.json': new pulumi.asset.StringAsset(
+            JSON.stringify({
+              name: 'compliance-scanner',
+              version: '1.0.0',
+              dependencies: {
+                '@aws-sdk/client-ec2': '^3.0.0',
+                '@aws-sdk/client-rds': '^3.0.0',
+                '@aws-sdk/client-s3': '^3.0.0',
+              },
+            })
+          ),
+        }),
+        environment: {
+          variables: {
+            REPORT_BUCKET: reportBucket.id,
+            ENVIRONMENT_SUFFIX: props.environmentSuffix,
+          },
+        },
+        timeout: 300,
+        memorySize: 512,
+        tags: {
+          Name: `compliance-scanner-${props.environmentSuffix}`,
+          Environment: props.environmentSuffix,
+        },
+      },
+      { parent: this, dependsOn: [logGroup] }
+    );
+
+    // Create EventBridge rule for scheduled scanning
+    const scanRule = new aws.cloudwatch.EventRule(
+      `compliance-scan-schedule-${props.environmentSuffix}`,
+      {
+        description: 'Trigger compliance scan daily',
+        scheduleExpression: 'rate(1 day)',
+        tags: {
+          Name: `compliance-scan-schedule-${props.environmentSuffix}`,
+          Environment: props.environmentSuffix,
+        },
+      },
+      { parent: this }
+    );
+
+    new aws.cloudwatch.EventTarget(
+      `compliance-scan-target-${props.environmentSuffix}`,
+      {
+        rule: scanRule.name,
+        arn: scannerFunction.arn,
+      },
+      { parent: this }
+    );
+
+    new aws.lambda.Permission(
+      `compliance-scan-permission-${props.environmentSuffix}`,
+      {
+        action: 'lambda:InvokeFunction',
+        function: scannerFunction.name,
+        principal: 'events.amazonaws.com',
+        sourceArn: scanRule.arn,
+      },
+      { parent: this }
+    );
+
+    // Export outputs
+    this.scanResults = pulumi.interpolate`Compliance scanner deployed. Invoke function: ${scannerFunction.name}`;
+    this.complianceReport = pulumi.interpolate`Reports saved to: s3://${reportBucket.id}/`;
+    this.lambdaFunctionName = scannerFunction.name;
+    this.s3BucketName = reportBucket.id;
+    this.lambdaFunctionArn = scannerFunction.arn;
+    this.eventRuleName = scanRule.name;
+
+    this.registerOutputs({
+      scanResults: this.scanResults,
+      complianceReport: this.complianceReport,
+      LambdaFunctionName: this.lambdaFunctionName,
+      S3BucketName: this.s3BucketName,
+      LambdaFunctionArn: this.lambdaFunctionArn,
+      EventRuleName: this.eventRuleName,
+    });
+  }
+}
 ```
 
-### 2. Modern Pulumi Output Syntax (FIXED)
-```typescript
-// IDEAL - Uses pulumi.interpolate
-this.scanResults = pulumi.interpolate`Compliance scanner deployed. Invoke function: ${scannerFunction.name}`;
-this.complianceReport = pulumi.interpolate`Reports saved to: s3://${reportBucket.id}/`;
-```
-
-### 3. **CRITICAL FIX REQUIRED**: AWS SDK v3 in Lambda Code
-
-The Lambda function code (lines 104-410) needs to be updated to use AWS SDK v3. Here's the corrected version:
+### Lambda Function Code (index.js)
 
 ```javascript
 const { EC2Client, DescribeInstancesCommand, DescribeTagsCommand } = require('@aws-sdk/client-ec2');
@@ -120,7 +332,7 @@ exports.handler = async (event) => {
     results.errors.push({ service: 'EC2', error: err.message });
   }
 
-  // Scan RDS instances and clusters (similar pattern with SDK v3)
+  // Scan RDS instances
   try {
     const rdsInstances = await rdsClient.send(new DescribeDBInstancesCommand({}));
 
@@ -287,13 +499,7 @@ exports.handler = async (event) => {
     }
   };
 
-  // Generate recommendations
-  const allNonCompliant = [
-    ...results.details.ec2.nonCompliant,
-    ...results.details.rds.nonCompliant,
-    ...results.details.s3.nonCompliant
-  ];
-
+  // Generate recommendations grouped by service
   const byService = {
     'EC2 Instance': results.details.ec2.nonCompliant,
     'RDS Instance': results.details.rds.nonCompliant.filter(r => r.resourceType === 'RDS Instance'),
@@ -315,6 +521,12 @@ exports.handler = async (event) => {
     }
   }
 
+  // Flag resources older than 90 days
+  const allNonCompliant = [
+    ...results.details.ec2.nonCompliant,
+    ...results.details.rds.nonCompliant,
+    ...results.details.s3.nonCompliant
+  ];
   const flaggedResources = allNonCompliant.filter(r => r.flagged);
   if (flaggedResources.length > 0) {
     results.recommendations.push({
@@ -346,38 +558,145 @@ exports.handler = async (event) => {
 };
 ```
 
-### 4. Updated package.json for Lambda
-```javascript
-"package.json": new pulumi.asset.StringAsset(
-  JSON.stringify({
-    name: "compliance-scanner",
-    version: "1.0.0",
-    dependencies: {
-      "@aws-sdk/client-ec2": "^3.0.0",
-      "@aws-sdk/client-rds": "^3.0.0",
-      "@aws-sdk/client-s3": "^3.0.0"
-    },
-  })
-)
+### File: lib/compliance-scanner.ts
+
+```typescript
+export interface ComplianceScanResult {
+  timestamp: string;
+  environmentSuffix: string;
+  region: string;
+  summary: ComplianceSummary;
+  details: ComplianceDetails;
+  groupedByService: Record<string, ResourceInfo[]>;
+  recommendations: Recommendation[];
+  reportLocation?: string;
+  errors?: ServiceError[];
+}
+
+export interface ComplianceSummary {
+  ec2: ServiceCompliance;
+  rds: ServiceCompliance;
+  s3: ServiceCompliance;
+  overall: ServiceCompliance;
+}
+
+export interface ServiceCompliance {
+  total: number;
+  compliant: number;
+  nonCompliant: number;
+  compliancePercentage: string;
+}
+
+export interface ComplianceDetails {
+  ec2: {
+    compliant: ResourceInfo[];
+    nonCompliant: ResourceInfo[];
+  };
+  rds: {
+    compliant: ResourceInfo[];
+    nonCompliant: ResourceInfo[];
+  };
+  s3: {
+    compliant: ResourceInfo[];
+    nonCompliant: ResourceInfo[];
+  };
+}
+
+export interface ResourceInfo {
+  resourceId: string;
+  resourceType: string;
+  createDate?: string;
+  launchDate?: string;
+  ageInDays: number;
+  region: string;
+  tags: Record<string, string>;
+  missingTags: string[];
+  flagged?: boolean;
+  flagReason?: string;
+  state?: string;
+  engine?: string;
+}
+
+export interface Recommendation {
+  service?: string;
+  count?: number;
+  action: string;
+  resourceIds?: string[];
+  moreCount?: number;
+  priority?: string;
+}
+
+export interface ServiceError {
+  service: string;
+  error: string;
+}
+
+export class ComplianceScanner {
+  // Type definitions for use in Lambda
+}
 ```
 
-## Testing
+### File: bin/tap.ts
 
-The IDEAL implementation includes:
+```typescript
+#!/usr/bin/env node
+import * as pulumi from '@pulumi/pulumi';
+import { TapStack } from '../lib/tap-stack';
 
-1. **Unit Tests** (test/tap-stack.unit.test.ts):
-   - 25 tests covering all code paths
-   - 100% statement, function, and line coverage
-   - Tests infrastructure creation logic
-   - Tests compliance calculation logic
-   - Tests edge cases and error handling
+const config = new pulumi.Config();
+const environmentSuffix = config.require('environmentSuffix');
+const region = config.get('region') || 'us-east-1';
 
-2. **Integration Tests** (test/tap-stack.int.test.ts):
-   - 16 tests validating deployed resources
-   - Tests Lambda function invocation
-   - Tests S3 bucket accessibility
-   - Tests end-to-end compliance workflow
-   - Uses real AWS outputs (no mocking)
+const stack = new TapStack('tap-stack', {
+  environmentSuffix,
+  region,
+});
+
+// Standard outputs
+export const scanResults = stack.scanResults;
+export const complianceReport = stack.complianceReport;
+
+// Outputs for integration tests (match flat-outputs.json format)
+export const LambdaFunctionName = stack.lambdaFunctionName;
+export const S3BucketName = stack.s3BucketName;
+export const LambdaFunctionArn = stack.lambdaFunctionArn;
+export const EventRuleName = stack.eventRuleName;
+```
+
+## Key Implementation Features
+
+### 1. Resource Naming with Environment Suffix
+
+All resources include the `environmentSuffix` for idempotent naming:
+- S3 Bucket: `compliance-reports-${environmentSuffix}`
+- Lambda Function: `compliance-scanner-${environmentSuffix}`
+- IAM Role: `compliance-scanner-role-${environmentSuffix}`
+- EventBridge Rule: `compliance-scan-schedule-${environmentSuffix}`
+- CloudWatch Log Group: `/aws/lambda/compliance-scanner-${environmentSuffix}`
+
+### 2. AWS SDK v3 for Lambda
+
+The Lambda function uses AWS SDK v3 (required for Node.js 18.x runtime):
+- `@aws-sdk/client-ec2`
+- `@aws-sdk/client-rds`
+- `@aws-sdk/client-s3`
+
+### 3. Tag Compliance Checking
+
+Mandatory tags checked:
+- Environment
+- Owner
+- CostCenter
+- Project
+
+### 4. 90-Day Flagging
+
+Resources running >90 days without proper tags are flagged with HIGH priority for remediation.
+
+### 5. Report Generation
+
+- Reports saved to S3 with timestamp: `compliance-report-YYYY-MM-DDTHH-MM-SS.json`
+- Includes summary, details by service, grouped by service, and recommendations
 
 ## Deployment
 
@@ -398,20 +717,50 @@ pulumi config set aws:region us-east-1
 # Deploy
 pulumi up --yes
 
-# Get outputs
+# Get outputs for integration tests
 pulumi stack output --json > cfn-outputs/flat-outputs.json
 ```
 
-## Summary
+## Outputs
 
-The IDEAL_RESPONSE demonstrates:
+| Output | Description |
+|--------|-------------|
+| LambdaFunctionName | Name of the compliance scanner Lambda function |
+| S3BucketName | Name of the S3 bucket for reports |
+| LambdaFunctionArn | ARN of the Lambda function |
+| EventRuleName | Name of the EventBridge scheduled rule |
+| scanResults | Human-readable deployment message |
+| complianceReport | S3 location for reports |
 
-1. **Production-ready code** - Uses current AWS SDK v3 for Lambda Node.js 18+
-2. **Modern Pulumi patterns** - Uses interpolate instead of deprecated apply
-3. **Clean architecture** - No unused imports or dead code
-4. **100% test coverage** - Comprehensive unit and integration tests
-5. **Proper resource naming** - All resources include environmentSuffix
-6. **Error handling** - Graceful degradation when AWS APIs fail
-7. **Documentation** - Clear README and usage instructions
+## Testing
 
-This implementation is fully functional, testable, and deployable to AWS without modifications.
+### Unit Tests
+
+Run unit tests with Pulumi mocks:
+```bash
+npm run test:unit
+```
+
+### Integration Tests
+
+Integration tests run against deployed infrastructure:
+```bash
+npm run test:int
+```
+
+## Requirements Validation
+
+| Requirement | Implementation |
+|-------------|----------------|
+| Query EC2 instances | DescribeInstancesCommand with tag collection |
+| Query RDS databases | DescribeDBInstancesCommand, DescribeDBClustersCommand |
+| Query S3 buckets | ListBucketsCommand with GetBucketTaggingCommand |
+| Check mandatory tags | Environment, Owner, CostCenter, Project validation |
+| Calculate compliance % | Per-service and overall percentage calculation |
+| Flag >90 day resources | ageInDays comparison with NINETY_DAYS constant |
+| Group by service | groupedByService object in report |
+| Export to JSON | S3 PutObject with timestamp in key |
+| Scheduled scanning | EventBridge rule with rate(1 day) |
+| environmentSuffix naming | All resources include suffix |
+| Error handling | try/catch with errors array in report |
+| Read-only operations | Only Describe/List/Get API calls |

@@ -43,12 +43,12 @@ describe('TAP Stack Integration Tests', () => {
 
     it('should have Lambda function name in correct format', () => {
       expect(outputs.LambdaFunctionName).toMatch(
-        /^compliance-scanner-[a-f0-9]+-[a-f0-9]+$/
+        /^compliance-scanner-[a-zA-Z0-9-]+$/
       );
     });
 
     it('should have S3 bucket name in correct format', () => {
-      expect(outputs.S3BucketName).toMatch(/^compliance-reports-[a-f0-9]+$/);
+      expect(outputs.S3BucketName).toMatch(/^compliance-reports-[a-zA-Z0-9-]+$/);
     });
   });
 

@@ -1,5 +1,7 @@
 import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Set up Pulumi runtime mocks
 pulumi.runtime.setMocks({
@@ -8,7 +10,7 @@ pulumi.runtime.setMocks({
     state: Record<string, any>;
   } {
     const id =
-      args.inputs.name || args.inputs.bucket || args.name || 'test-id';
+      args.inputs.name || args.inputs.functionName || args.inputs.bucket || args.name || 'test-id';
     return {
       id: `${id}-mocked-id`,
       state: {
@@ -25,6 +27,12 @@ pulumi.runtime.setMocks({
     return args.inputs;
   },
 });
+
+// Read tap-stack.ts for code analysis tests
+const tapStackCode = fs.readFileSync(
+  path.join(__dirname, '../lib/tap-stack.ts'),
+  'utf-8'
+);
 
 describe('TapStack Unit Tests', () => {
   describe('Stack Instantiation', () => {
@@ -361,6 +369,225 @@ describe('TapStack Unit Tests', () => {
       const flaggedResources = resources.filter((r) => r.flagged);
       expect(flaggedResources).toHaveLength(2);
       expect(flaggedResources.every((r) => r.ageInDays > 90)).toBe(true);
+    });
+  });
+
+  describe('Infrastructure Code Analysis', () => {
+    describe('S3 Bucket Configuration', () => {
+      it('should create S3 bucket with environmentSuffix in name', () => {
+        expect(tapStackCode).toMatch(/compliance-reports-\$\{props\.environmentSuffix\}/);
+      });
+
+      it('should have forceDestroy enabled for S3 bucket', () => {
+        expect(tapStackCode).toMatch(/forceDestroy:\s*true/);
+      });
+
+      it('should have S3 bucket public access block', () => {
+        expect(tapStackCode).toMatch(/BucketPublicAccessBlock/);
+      });
+
+      it('should block all public access', () => {
+        expect(tapStackCode).toMatch(/blockPublicAcls:\s*true/);
+        expect(tapStackCode).toMatch(/blockPublicPolicy:\s*true/);
+        expect(tapStackCode).toMatch(/ignorePublicAcls:\s*true/);
+        expect(tapStackCode).toMatch(/restrictPublicBuckets:\s*true/);
+      });
+    });
+
+    describe('Lambda Function Configuration', () => {
+      it('should create Lambda function with explicit name', () => {
+        expect(tapStackCode).toMatch(/name:\s*`compliance-scanner-\$\{props\.environmentSuffix\}`/);
+      });
+
+      it('should use NodeJS 18.x runtime', () => {
+        expect(tapStackCode).toMatch(/runtime:\s*aws\.lambda\.Runtime\.NodeJS18dX/);
+      });
+
+      it('should set timeout to 300 seconds', () => {
+        expect(tapStackCode).toMatch(/timeout:\s*300/);
+      });
+
+      it('should set memory to 512 MB', () => {
+        expect(tapStackCode).toMatch(/memorySize:\s*512/);
+      });
+
+      it('should have REPORT_BUCKET environment variable', () => {
+        expect(tapStackCode).toMatch(/REPORT_BUCKET:\s*reportBucket\.id/);
+      });
+
+      it('should have ENVIRONMENT_SUFFIX environment variable', () => {
+        expect(tapStackCode).toMatch(/ENVIRONMENT_SUFFIX:\s*props\.environmentSuffix/);
+      });
+
+      it('should have dependsOn logGroup', () => {
+        expect(tapStackCode).toMatch(/dependsOn:\s*\[logGroup\]/);
+      });
+    });
+
+    describe('CloudWatch Log Group Configuration', () => {
+      it('should create CloudWatch Log Group', () => {
+        expect(tapStackCode).toMatch(/aws\.cloudwatch\.LogGroup/);
+      });
+
+      it('should set log group name with Lambda prefix', () => {
+        expect(tapStackCode).toMatch(/name:\s*`\/aws\/lambda\/compliance-scanner-\$\{props\.environmentSuffix\}`/);
+      });
+
+      it('should set retention to 30 days', () => {
+        expect(tapStackCode).toMatch(/retentionInDays:\s*30/);
+      });
+    });
+
+    describe('IAM Configuration', () => {
+      it('should create IAM role for Lambda', () => {
+        expect(tapStackCode).toMatch(/aws\.iam\.Role/);
+      });
+
+      it('should attach AWSLambdaBasicExecutionRole', () => {
+        expect(tapStackCode).toMatch(/AWSLambdaBasicExecutionRole/);
+      });
+
+      it('should have EC2 describe permissions', () => {
+        expect(tapStackCode).toMatch(/ec2:DescribeInstances/);
+        expect(tapStackCode).toMatch(/ec2:DescribeTags/);
+      });
+
+      it('should have RDS describe permissions', () => {
+        expect(tapStackCode).toMatch(/rds:DescribeDBInstances/);
+        expect(tapStackCode).toMatch(/rds:DescribeDBClusters/);
+        expect(tapStackCode).toMatch(/rds:ListTagsForResource/);
+      });
+
+      it('should have S3 permissions', () => {
+        expect(tapStackCode).toMatch(/s3:ListAllMyBuckets/);
+        expect(tapStackCode).toMatch(/s3:GetBucketTagging/);
+        expect(tapStackCode).toMatch(/s3:PutObject/);
+      });
+    });
+
+    describe('EventBridge Configuration', () => {
+      it('should create EventBridge rule', () => {
+        expect(tapStackCode).toMatch(/aws\.cloudwatch\.EventRule/);
+      });
+
+      it('should schedule daily scan', () => {
+        expect(tapStackCode).toMatch(/scheduleExpression:\s*['"]rate\(1 day\)['"]/);
+      });
+
+      it('should create EventBridge target', () => {
+        expect(tapStackCode).toMatch(/aws\.cloudwatch\.EventTarget/);
+      });
+
+      it('should create Lambda permission for EventBridge', () => {
+        expect(tapStackCode).toMatch(/aws\.lambda\.Permission/);
+        expect(tapStackCode).toMatch(/events\.amazonaws\.com/);
+      });
+    });
+
+    describe('Output Configuration', () => {
+      it('should export lambdaFunctionName', () => {
+        expect(tapStackCode).toMatch(/this\.lambdaFunctionName\s*=\s*scannerFunction\.name/);
+      });
+
+      it('should export s3BucketName', () => {
+        expect(tapStackCode).toMatch(/this\.s3BucketName\s*=\s*reportBucket\.id/);
+      });
+
+      it('should export lambdaFunctionArn', () => {
+        expect(tapStackCode).toMatch(/this\.lambdaFunctionArn\s*=\s*scannerFunction\.arn/);
+      });
+
+      it('should export eventRuleName', () => {
+        expect(tapStackCode).toMatch(/this\.eventRuleName\s*=\s*scanRule\.name/);
+      });
+
+      it('should register outputs with PascalCase keys', () => {
+        expect(tapStackCode).toMatch(/LambdaFunctionName:\s*this\.lambdaFunctionName/);
+        expect(tapStackCode).toMatch(/S3BucketName:\s*this\.s3BucketName/);
+      });
+    });
+
+    describe('Lambda Code Analysis', () => {
+      it('should use AWS SDK v3 for EC2', () => {
+        expect(tapStackCode).toMatch(/@aws-sdk\/client-ec2/);
+        expect(tapStackCode).toMatch(/EC2Client/);
+        expect(tapStackCode).toMatch(/DescribeInstancesCommand/);
+      });
+
+      it('should use AWS SDK v3 for RDS', () => {
+        expect(tapStackCode).toMatch(/@aws-sdk\/client-rds/);
+        expect(tapStackCode).toMatch(/RDSClient/);
+        expect(tapStackCode).toMatch(/DescribeDBInstancesCommand/);
+        expect(tapStackCode).toMatch(/DescribeDBClustersCommand/);
+      });
+
+      it('should use AWS SDK v3 for S3', () => {
+        expect(tapStackCode).toMatch(/@aws-sdk\/client-s3/);
+        expect(tapStackCode).toMatch(/S3Client/);
+        expect(tapStackCode).toMatch(/ListBucketsCommand/);
+        expect(tapStackCode).toMatch(/GetBucketTaggingCommand/);
+        expect(tapStackCode).toMatch(/PutObjectCommand/);
+      });
+
+      it('should define REQUIRED_TAGS constant', () => {
+        expect(tapStackCode).toMatch(/REQUIRED_TAGS\s*=\s*\['Environment',\s*'Owner',\s*'CostCenter',\s*'Project'\]/);
+      });
+
+      it('should define NINETY_DAYS constant', () => {
+        expect(tapStackCode).toMatch(/NINETY_DAYS\s*=\s*90/);
+      });
+
+      it('should handle NoSuchTagSet error for S3', () => {
+        expect(tapStackCode).toMatch(/NoSuchTagSet/);
+      });
+
+      it('should calculate compliance percentages', () => {
+        expect(tapStackCode).toMatch(/compliancePercentage/);
+        expect(tapStackCode).toMatch(/toFixed\(2\)/);
+      });
+
+      it('should generate recommendations', () => {
+        expect(tapStackCode).toMatch(/recommendations\.push/);
+      });
+
+      it('should save report to S3', () => {
+        expect(tapStackCode).toMatch(/PutObjectCommand/);
+        expect(tapStackCode).toMatch(/compliance-report-/);
+      });
+    });
+  });
+
+  describe('Stack Output Tests', () => {
+    it('should have lambdaFunctionName output', async () => {
+      const stack = new TapStack('test-outputs', {
+        environmentSuffix: 'outputtest',
+      });
+
+      expect(stack.lambdaFunctionName).toBeDefined();
+    });
+
+    it('should have s3BucketName output', async () => {
+      const stack = new TapStack('test-s3-output', {
+        environmentSuffix: 's3test',
+      });
+
+      expect(stack.s3BucketName).toBeDefined();
+    });
+
+    it('should have lambdaFunctionArn output', async () => {
+      const stack = new TapStack('test-arn-output', {
+        environmentSuffix: 'arntest',
+      });
+
+      expect(stack.lambdaFunctionArn).toBeDefined();
+    });
+
+    it('should have eventRuleName output', async () => {
+      const stack = new TapStack('test-rule-output', {
+        environmentSuffix: 'ruletest',
+      });
+
+      expect(stack.eventRuleName).toBeDefined();
     });
   });
 });

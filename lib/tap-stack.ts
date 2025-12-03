@@ -9,6 +9,10 @@ export interface TapStackProps {
 export class TapStack extends pulumi.ComponentResource {
   public readonly scanResults: pulumi.Output<string>;
   public readonly complianceReport: pulumi.Output<string>;
+  public readonly lambdaFunctionName: pulumi.Output<string>;
+  public readonly s3BucketName: pulumi.Output<string>;
+  public readonly lambdaFunctionArn: pulumi.Output<string>;
+  public readonly eventRuleName: pulumi.Output<string>;
 
   constructor(
     name: string,
@@ -16,6 +20,11 @@ export class TapStack extends pulumi.ComponentResource {
     opts?: pulumi.ComponentResourceOptions
   ) {
     super('custom:infrastructure:TapStack', name, {}, opts);
+
+    // Note: region is passed to the stack but AWS region is controlled by the Pulumi AWS provider
+    // The props.region can be used for resource naming or configuration if needed
+    const _region = props.region || 'us-east-1';
+    void _region; // Suppress unused variable warning - region available for future use
 
     // Create S3 bucket for storing compliance reports
     const reportBucket = new aws.s3.Bucket(
@@ -28,6 +37,19 @@ export class TapStack extends pulumi.ComponentResource {
           Environment: props.environmentSuffix,
           Purpose: 'ComplianceReporting',
         },
+      },
+      { parent: this }
+    );
+
+    // Block public access for S3 bucket
+    new aws.s3.BucketPublicAccessBlock(
+      `compliance-reports-public-access-block-${props.environmentSuffix}`,
+      {
+        bucket: reportBucket.id,
+        blockPublicAcls: true,
+        blockPublicPolicy: true,
+        ignorePublicAcls: true,
+        restrictPublicBuckets: true,
       },
       { parent: this }
     );
@@ -95,10 +117,25 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // Create CloudWatch Log Group for Lambda with retention policy
+    const logGroup = new aws.cloudwatch.LogGroup(
+      `compliance-scanner-logs-${props.environmentSuffix}`,
+      {
+        name: `/aws/lambda/compliance-scanner-${props.environmentSuffix}`,
+        retentionInDays: 30,
+        tags: {
+          Name: `compliance-scanner-logs-${props.environmentSuffix}`,
+          Environment: props.environmentSuffix,
+        },
+      },
+      { parent: this }
+    );
+
     // Create Lambda function for compliance scanning
     const scannerFunction = new aws.lambda.Function(
       `compliance-scanner-${props.environmentSuffix}`,
       {
+        name: `compliance-scanner-${props.environmentSuffix}`,
         runtime: aws.lambda.Runtime.NodeJS18dX,
         handler: 'index.handler',
         role: lambdaRole.arn,
@@ -424,7 +461,7 @@ exports.handler = async (event) => {
           Environment: props.environmentSuffix,
         },
       },
-      { parent: this }
+      { parent: this, dependsOn: [logGroup] }
     );
 
     // Create EventBridge rule for scheduled scanning (optional)
@@ -464,12 +501,18 @@ exports.handler = async (event) => {
     // Export outputs
     this.scanResults = pulumi.interpolate`Compliance scanner deployed. Invoke function: ${scannerFunction.name}`;
     this.complianceReport = pulumi.interpolate`Reports saved to: s3://${reportBucket.id}/`;
+    this.lambdaFunctionName = scannerFunction.name;
+    this.s3BucketName = reportBucket.id;
+    this.lambdaFunctionArn = scannerFunction.arn;
+    this.eventRuleName = scanRule.name;
 
     this.registerOutputs({
       scanResults: this.scanResults,
       complianceReport: this.complianceReport,
-      functionArn: scannerFunction.arn,
-      reportBucketName: reportBucket.id,
+      LambdaFunctionName: this.lambdaFunctionName,
+      S3BucketName: this.s3BucketName,
+      LambdaFunctionArn: this.lambdaFunctionArn,
+      EventRuleName: this.eventRuleName,
     });
   }
 }
