@@ -7,7 +7,6 @@ describe('TapStack - Multi-Environment Infrastructure', () => {
   let synthesized: any;
 
   beforeEach(() => {
-    jest.clearAllMocks();
     app = new App();
   });
 
@@ -60,6 +59,28 @@ describe('TapStack - Multi-Environment Infrastructure', () => {
           environmentSuffix: 'invalid',
         });
       }).toThrow('Unknown environment: invalid');
+    });
+
+    test('TapStack accepts PR environment suffix and maps to dev config', () => {
+      stack = new TapStack(app, 'TestPRStack', {
+        environmentSuffix: 'pr7795',
+      });
+      synthesized = JSON.parse(Testing.synth(stack));
+
+      expect(stack).toBeDefined();
+      expect(synthesized.terraform.backend.s3.key).toContain('pr7795');
+      // ensure provider exists
+      expect(synthesized.provider.aws).toBeDefined();
+    });
+
+    test('TapStack accepts PR environment suffix with dash and maps to dev config', () => {
+      stack = new TapStack(app, 'TestPRDashStack', {
+        environmentSuffix: 'pr-7796',
+      });
+      const parsed = JSON.parse(Testing.synth(stack));
+
+      expect(parsed.terraform.backend.s3.key).toContain('pr-7796');
+      expect(parsed.provider.aws).toBeDefined();
     });
 
     test('TapStack accepts custom state bucket configuration', () => {

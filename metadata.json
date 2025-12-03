@@ -2,18 +2,9 @@
   "platform": "cdktf",
   "language": "ts",
   "complexity": "expert",
-  "subtask": "Environment Migration",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Use CDK stack dependencies to ensure proper deployment order across environments",
-    "Use CDK custom resources to verify environment parity post-deployment",
-    "Use CDK context values for environment-specific configuration without hardcoding",
-    "Implement automated drift detection using CDK diff in deployment pipeline",
-    "Implement a custom CDK construct for reusable RDS Aurora cluster configuration",
-    "Configure cross-environment read replicas for production database in staging",
-    "Each environment must have isolated VPCs with consistent CIDR block patterns",
-    "Environment configurations must be validated at synthesis time using CDK aspects",
-    "Implement tagging strategy with environment, cost center, and deployment timestamp",
-    "Use AWS Systems Manager Parameter Store for sensitive values with hierarchical paths"
+    "Environment Migration"
   ],
   "team": "synth",
   "turn_type": "single",
@@ -31,5 +22,7 @@
     "IAM",
     "SSM"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342"
 }

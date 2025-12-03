@@ -5,8 +5,8 @@ import {
 import { S3Backend, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 import { DevStack } from './dev-stack';
-import { StagingStack } from './staging-stack';
 import { ProdStack } from './prod-stack';
+import { StagingStack } from './staging-stack';
 import { EnvironmentConfig } from './types';
 
 interface TapStackProps {
@@ -84,11 +84,32 @@ export class TapStack extends TerraformStack {
     };
 
     // Create environment-specific stacks based on environmentSuffix
-    const config = environments[environmentSuffix];
+    let config = environments[environmentSuffix];
+
+    // Accept PR-style environments like 'pr7795' or 'pr-7795' and map them to a dev-style config
+    // while preserving a unique environment name for resources.
     if (!config) {
-      throw new Error(
-        `Unknown environment: ${environmentSuffix}. Valid values: dev, staging, prod`
-      );
+      // match prNNNN or pr-NNNN (case-insensitive)
+      const match = /^pr-?(\d+)$/i.exec(environmentSuffix);
+      if (match) {
+        const numericPart = parseInt(match[1], 10);
+        const devTemplate = environments.dev;
+        // Compute a unique CIDR second octet for the PR using a modulo to keep in range 1-254
+        const octet = (Number.isFinite(numericPart) && numericPart > 0)
+          ? (numericPart % 250) + 1
+          : 1;
+        const cidrBlock = `10.${octet}.0.0/16`;
+
+        config = {
+          ...devTemplate,
+          name: environmentSuffix,
+          cidrBlock,
+        } as EnvironmentConfig;
+      } else {
+        throw new Error(
+          `Unknown environment: ${environmentSuffix}. Valid values: dev, staging, prod or prNNNN`
+        );
+      }
     }
 
     // Instantiate appropriate stack based on environment
