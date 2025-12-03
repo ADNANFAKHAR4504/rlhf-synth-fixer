@@ -173,9 +173,11 @@ describe('ECS Infrastructure Optimization - Code Analysis', () => {
   const indexContent = fs.readFileSync(indexPath, 'utf-8');
 
   describe('Configuration Management', () => {
-    it('should use Pulumi config for environmentSuffix', () => {
-      expect(indexContent).toContain('config.require');
+    it('should read environmentSuffix from environment or config', () => {
+      expect(indexContent).toContain('ENVIRONMENT_SUFFIX');
       expect(indexContent).toContain('environmentSuffix');
+      // Should have fallback to config.get
+      expect(indexContent).toContain('config.get');
     });
 
     it('should define required exports', () => {

@@ -170,7 +170,8 @@ describe('ECS Optimization Integration Tests', () => {
     const indexContent = fs.readFileSync(indexPath, 'utf-8');
 
     it('should use Pulumi config for all environment-specific values', () => {
-      expect(indexContent).toContain('config.require');
+      // Should read from environment variable with config fallback
+      expect(indexContent).toContain('ENVIRONMENT_SUFFIX');
       expect(indexContent).toContain('config.get');
       expect(indexContent).toContain('environmentSuffix');
     });
