@@ -13,7 +13,6 @@ module.exports = {
     ecmaVersion: 2020,
     sourceType: 'module',
     project: './tsconfig.json',
-    tsconfigRootDir: __dirname,
   },
   settings: {
     'import/resolver': {
@@ -74,5 +73,7 @@ module.exports = {
     '*.d.ts',
     'worktree/',
     'test/',
+    'bin/',
+    'cli/',
   ],
 };
