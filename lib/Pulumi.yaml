@@ -1,8 +1,0 @@
-name: TapStack
-runtime: nodejs
-description: AWS Infrastructure Compliance Scanner
-config:
-  environmentSuffix:
-    description: Environment suffix for resource naming
-  awsRegion:
-    description: AWS region to deploy to
