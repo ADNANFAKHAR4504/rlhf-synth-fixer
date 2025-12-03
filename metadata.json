@@ -1,0 +1,16 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349812",
+  "team": "2",
+  "startedAt": "2025-12-03T18:16:23.616Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "EC2 Instance"
+  ]
+}
