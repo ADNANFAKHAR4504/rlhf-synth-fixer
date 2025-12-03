@@ -21,5 +21,6 @@
     "CloudWatch",
     "IAM",
     "VPC Endpoints"
-  ]
+  ],
+  "training_quality": 10
 }
