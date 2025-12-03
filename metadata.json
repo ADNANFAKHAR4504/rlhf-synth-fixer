@@ -1,5 +1,5 @@
 {
-  "platform": "CDKTF",
+  "platform": "cdktf",
   "language": "ts",
   "complexity": "expert",
   "team": "synth",
@@ -33,5 +33,7 @@
     "Systems Manager",
     "IAM"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing"
 }
