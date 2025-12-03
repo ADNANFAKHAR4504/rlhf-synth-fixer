@@ -11,6 +11,7 @@ describe('TapStack Integration Tests', () => {
   let dynamoClient: DynamoDBClient;
   let iamClient: IAMClient;
   let cloudwatchClient: CloudWatchClient;
+  let tableName: string;
 
   beforeAll(() => {
     if (!fs.existsSync(OUTPUTS_FILE)) {
@@ -18,6 +19,9 @@ describe('TapStack Integration Tests', () => {
     }
 
     outputs = JSON.parse(fs.readFileSync(OUTPUTS_FILE, 'utf-8'));
+
+    // Extract table name from tableArn: arn:aws:dynamodb:region:account:table/table-name
+    tableName = outputs.tableArn ? outputs.tableArn.split('/').pop() : undefined;
 
     const region = process.env.AWS_REGION || 'us-east-1';
     dynamoClient = new DynamoDBClient({ region });
@@ -27,7 +31,6 @@ describe('TapStack Integration Tests', () => {
 
   describe('DynamoDB Table', () => {
     it('should have table deployed with correct configuration', async () => {
-      const tableName = outputs.tableName;
       expect(tableName).toBeDefined();
 
       const command = new DescribeTableCommand({ TableName: tableName });
@@ -40,8 +43,6 @@ describe('TapStack Integration Tests', () => {
     });
 
     it('should have point-in-time recovery enabled', async () => {
-      const tableName = outputs.tableName;
-
       const command = new DescribeContinuousBackupsCommand({ TableName: tableName });
       const response = await dynamoClient.send(command);
 
@@ -49,8 +50,6 @@ describe('TapStack Integration Tests', () => {
     });
 
     it('should have Global Secondary Index configured', async () => {
-      const tableName = outputs.tableName;
-
       const command = new DescribeTableCommand({ TableName: tableName });
       const response = await dynamoClient.send(command);
 
@@ -63,8 +62,6 @@ describe('TapStack Integration Tests', () => {
     });
 
     it('should have server-side encryption enabled', async () => {
-      const tableName = outputs.tableName;
-
       const command = new DescribeTableCommand({ TableName: tableName });
       const response = await dynamoClient.send(command);
 
@@ -112,7 +109,6 @@ describe('TapStack Integration Tests', () => {
   describe('CloudWatch Alarms', () => {
     it('should have read capacity alarm configured', async () => {
       // Extract env suffix from table name
-      const tableName = outputs.tableName;
       const envSuffix = tableName.replace('optimized-table-', '');
       const alarmName = `table-read-alarm-${envSuffix}`;
 
@@ -125,7 +121,6 @@ describe('TapStack Integration Tests', () => {
 
     it('should have write capacity alarm configured', async () => {
       // Extract env suffix from table name
-      const tableName = outputs.tableName;
       const envSuffix = tableName.replace('optimized-table-', '');
       const alarmName = `table-write-alarm-${envSuffix}`;
 
