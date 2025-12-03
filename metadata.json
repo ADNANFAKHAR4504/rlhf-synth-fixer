@@ -1,5 +1,5 @@
 {
-  "platform": "CDKTF",
+  "platform": "cdktf",
   "language": "py",
   "complexity": "expert",
   "team": "synth",
@@ -24,5 +24,7 @@
     "CloudWatch",
     "ACM"
   ],
-  "training_quality": 9
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing"
 }
