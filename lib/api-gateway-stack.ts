@@ -2,7 +2,6 @@ import { Construct } from 'constructs';
 import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
 import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
-import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { ApiGatewayRestApi } from '@cdktf/provider-aws/lib/api-gateway-rest-api';
 import { ApiGatewayResource } from '@cdktf/provider-aws/lib/api-gateway-resource';
 import { ApiGatewayMethod } from '@cdktf/provider-aws/lib/api-gateway-method';
@@ -17,7 +16,6 @@ import { ApiGatewayMethodSettings } from '@cdktf/provider-aws/lib/api-gateway-me
 export interface ApiGatewayStackProps {
   environmentSuffix: string;
   lambdaFunction: LambdaFunction;
-  cloudwatchKey: KmsKey;
 }
 
 export class ApiGatewayStack extends Construct {
@@ -27,7 +25,7 @@ export class ApiGatewayStack extends Construct {
   constructor(scope: Construct, id: string, props: ApiGatewayStackProps) {
     super(scope, id);
 
-    const { environmentSuffix, lambdaFunction, cloudwatchKey } = props;
+    const { environmentSuffix, lambdaFunction } = props;
 
     // Create CloudWatch Log Group for API Gateway
     const apiLogGroup = new CloudwatchLogGroup(this, 'api-log-group', {

@@ -21,7 +21,6 @@ export interface LambdaStackProps {
   securityGroup: SecurityGroup;
   privateSubnets: Subnet[];
   kmsKey: KmsKey;
-  cloudwatchKey: KmsKey;
 }
 
 export class LambdaStack extends Construct {
@@ -39,7 +38,6 @@ export class LambdaStack extends Construct {
       securityGroup,
       privateSubnets,
       kmsKey,
-      cloudwatchKey,
     } = props;
 
     // Create Archive provider

@@ -95,14 +95,12 @@ export class TapStack extends TerraformStack {
       securityGroup: networkingStack.lambdaSecurityGroup,
       privateSubnets: networkingStack.privateSubnets,
       kmsKey: kmsStack.lambdaKey,
-      cloudwatchKey: kmsStack.cloudwatchKey,
     });
 
     // Create API Gateway stack
     const apiGatewayStack = new ApiGatewayStack(this, 'api-gateway', {
       environmentSuffix,
       lambdaFunction: lambdaStack.dataProcessorFunction,
-      cloudwatchKey: kmsStack.cloudwatchKey,
     });
 
     // Create outputs
