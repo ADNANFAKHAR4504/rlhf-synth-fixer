@@ -1,0 +1,10 @@
+{
+  "po_id": "c7d0o4v0",
+  "subtask": "iac-aws-compliance-monitoring",
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "region": "us-east-1",
+  "training_quality": 10,
+  "description": "AWS Compliance Monitoring System with Lambda-based periodic checks for S3 encryption, EC2 security groups, IAM password policy, CloudTrail logging, and VPC flow logs"
+}
