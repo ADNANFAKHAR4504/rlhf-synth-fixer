@@ -19,7 +19,6 @@
     "VPC"
   ],
   "training_quality": 8,
-  "synth_group": "pulumi-ts-hard",
   "coverage": {
     "lines": 100,
     "branches": 100
