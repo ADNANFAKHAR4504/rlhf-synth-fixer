@@ -1,5 +1,6 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as path from 'path';
 
 // Get configuration values
 const config = new pulumi.Config();
@@ -169,9 +170,7 @@ const imageProcessorLambda = new aws.lambda.Function(
     // In production, set this based on account-level unreserved concurrency availability
     // reservedConcurrentExecutions: lambdaConcurrency, // 5 for dev, 10 for prod
 
-    code: new pulumi.asset.AssetArchive({
-      '.': new pulumi.asset.FileArchive('./lib/lambda'),
-    }),
+    code: new pulumi.asset.FileArchive(path.join(__dirname, 'lambda')),
 
     tags: {
       Name: `image-processor-${environmentSuffix}`,
