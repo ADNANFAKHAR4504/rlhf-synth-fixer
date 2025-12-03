@@ -56,6 +56,9 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly clusterArn: pulumi.Output<string>;
   public readonly serviceArn: pulumi.Output<string>;
   public readonly taskDefinitionArn: pulumi.Output<string>;
+  public readonly cpuAlarmName: pulumi.Output<string>;
+  public readonly memoryAlarmName: pulumi.Output<string>;
+  public readonly logGroupName: pulumi.Output<string>;
 
   constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, args, opts);
@@ -404,14 +407,17 @@ export class TapStack extends pulumi.ComponentResource {
     this.clusterArn = cluster.arn;
     this.serviceArn = service.id;
     this.taskDefinitionArn = taskDefinition.arn;
+    this.cpuAlarmName = cpuAlarm.name;
+    this.memoryAlarmName = memoryAlarm.name;
+    this.logGroupName = logGroup.name;
 
     this.registerOutputs({
       clusterArn: this.clusterArn,
       serviceArn: this.serviceArn,
       taskDefinitionArn: this.taskDefinitionArn,
-      cpuAlarmName: cpuAlarm.name,
-      memoryAlarmName: memoryAlarm.name,
-      logGroupName: logGroup.name,
+      cpuAlarmName: this.cpuAlarmName,
+      memoryAlarmName: this.memoryAlarmName,
+      logGroupName: this.logGroupName,
     });
   }
 }

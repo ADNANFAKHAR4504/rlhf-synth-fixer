@@ -58,3 +58,6 @@ const stack = new TapStack(
 export const clusterArn = stack.clusterArn;
 export const serviceArn = stack.serviceArn;
 export const taskDefinitionArn = stack.taskDefinitionArn;
+export const cpuAlarmName = stack.cpuAlarmName;
+export const memoryAlarmName = stack.memoryAlarmName;
+export const logGroupName = stack.logGroupName;
