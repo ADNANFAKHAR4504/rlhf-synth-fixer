@@ -281,13 +281,8 @@ function createECSService(
           containerPort: containerPort,
         },
       ],
-      // Optimized placement strategy - binpack for cost efficiency
-      orderedPlacementStrategies: [
-        {
-          type: 'binpack',
-          field: 'memory',
-        },
-      ],
+      // Note: Placement strategies are not supported with FARGATE launch type
+      // FARGATE automatically optimizes placement across availability zones
       tags: commonTags,
     },
     { dependsOn: [listener] }
