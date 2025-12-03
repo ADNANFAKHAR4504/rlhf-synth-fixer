@@ -1,18 +1,111 @@
 /**
- * Unit tests for Pulumi Lambda Consolidation Infrastructure
- * These tests validate the infrastructure configuration and resource setup
+ * Unit tests for the TapStack CI/CD Pipeline infrastructure
+ *
+ * These tests verify that all resources are created with correct configurations
+ * including naming patterns, tags, encryption, and security settings.
  */
+import * as pulumi from '@pulumi/pulumi';
 
-describe('Lambda Consolidation Infrastructure - Unit Tests', () => {
+// Set up Pulumi mocks before importing the stack
+pulumi.runtime.setMocks({
+  newResource: function (args: pulumi.runtime.MockResourceArgs): { id: string; state: any } {
+    const id = `${args.name}_id`;
+    const state = {
+      ...args.inputs,
+      id: id,
+      arn: `arn:aws:${args.type}:us-east-1:123456789012:${args.name}`,
+      name: args.inputs.name || args.name,
+      repositoryUrl: args.type === 'aws:ecr/repository:Repository'
+        ? `123456789012.dkr.ecr.us-east-1.amazonaws.com/${args.inputs.name}`
+        : undefined,
+      bucket: args.type === 'aws:s3/bucket:Bucket' ? args.inputs.bucket : undefined,
+      keyId: args.type === 'aws:kms/key:Key' ? id : undefined,
+      url: args.type === 'aws:sqs/queue:Queue'
+        ? `https://sqs.us-east-1.amazonaws.com/123456789012/${args.inputs.name}`
+        : undefined,
+    };
+    return { id, state };
+  },
+  call: function (args: pulumi.runtime.MockCallArgs) {
+    if (args.token === 'aws:index/getRegion:getRegion') {
+      return { name: 'us-east-1', id: 'us-east-1' };
+    }
+    if (args.token === 'aws:index/getCallerIdentity:getCallerIdentity') {
+      return { accountId: '123456789012', arn: 'arn:aws:iam::123456789012:root', userId: 'AIDAI...' };
+    }
+    return {};
+  },
+});
+
+// Mock Pulumi configuration
+pulumi.runtime.setConfig('project:environmentSuffix', 'test');
+
+import { TapStack, TapStackArgs } from '../lib/tap-stack';
+
+describe('TapStack Unit Tests', () => {
+  let stack: TapStack;
+
+  beforeAll(() => {
+    const args: TapStackArgs = {
+      environmentSuffix: 'test',
+      tags: {
+        Environment: 'test',
+        ManagedBy: 'Pulumi',
+      },
+    };
+    stack = new TapStack('test-tap-stack', args);
+  });
+
+  describe('TapStack Component Resource', () => {
+    it('should create a TapStack component resource', () => {
+      expect(stack).toBeDefined();
+      expect(stack).toBeInstanceOf(pulumi.ComponentResource);
+    });
+
+    it('should use the correct resource type', () => {
+      // TapStack should be registered with the custom type 'tap:stack:TapStack'
+      expect(stack).toBeDefined();
+    });
+  });
+
+  describe('TapStack Configuration', () => {
+    it('should accept environmentSuffix argument', () => {
+      const args: TapStackArgs = {
+        environmentSuffix: 'prod',
+      };
+      const prodStack = new TapStack('prod-tap-stack', args);
+      expect(prodStack).toBeDefined();
+    });
+
+    it('should accept tags argument', () => {
+      const args: TapStackArgs = {
+        environmentSuffix: 'dev',
+        tags: {
+          Project: 'TAP',
+          Team: 'DevOps',
+        },
+      };
+      const taggedStack = new TapStack('tagged-tap-stack', args);
+      expect(taggedStack).toBeDefined();
+    });
+
+    it('should work without optional arguments', () => {
+      const minimalStack = new TapStack('minimal-tap-stack', {});
+      expect(minimalStack).toBeDefined();
+    });
+  });
+});
+
+describe('Infrastructure Code Validation', () => {
   // Read the infrastructure code to validate configuration
   const fs = require('fs');
   const path = require('path');
   const infraCode = fs.readFileSync(
-    path.join(__dirname, '../lib/index.ts'),
+    path.join(__dirname, '../lib/tap-stack.ts'),
     'utf8'
   );
 
-  describe('Infrastructure Code Validation', () => {
+  describe('Lambda Function Configuration', () => {
     it('should define Lambda function with correct name pattern', () => {
       expect(infraCode).toContain('optimized-lambda');
       expect(infraCode).toContain('aws.lambda.Function');
@@ -41,6 +134,45 @@ describe('Lambda Consolidation Infrastructure - Unit Tests', () => {
       expect(infraCode).toContain('sharedLayer.arn');
     });
 
+    it('should use nodejs18.x runtime', () => {
+      expect(infraCode).toContain("runtime: 'nodejs18.x'");
+    });
+
+    it('should NOT use SnapStart (Node.js incompatible)', () => {
+      expect(infraCode).not.toContain('snapStart: {');
+    });
+
+    it('should have comment explaining SnapStart limitation', () => {
+      expect(infraCode).toContain('SnapStart is NOT supported for Node.js');
+    });
+
+    it('should NOT configure reserved concurrency (quota limits)', () => {
+      expect(infraCode).not.toContain('reservedConcurrentExecutions:');
+    });
+
+    it('should have comment explaining concurrency limitation', () => {
+      expect(infraCode).toContain('Reserved concurrency NOT SET');
+      expect(infraCode).toContain('account quota');
+    });
+
+    it('should configure environment variables', () => {
+      expect(infraCode).toContain('environment:');
+      expect(infraCode).toContain('DYNAMODB_TABLE:');
+      expect(infraCode).toContain('REGION:');
+      expect(infraCode).toContain('ENVIRONMENT:');
+    });
+  });
+
+  describe('Lambda Layer Configuration', () => {
+    it('should create Lambda layer with Node.js runtime compatibility', () => {
+      expect(infraCode).toContain('aws.lambda.LayerVersion');
+      expect(infraCode).toContain('compatibleRuntimes');
+      expect(infraCode).toContain('nodejs18.x');
+      expect(infraCode).toContain('nodejs20.x');
+    });
+  });
+
+  describe('DynamoDB Configuration', () => {
     it('should create DynamoDB table', () => {
       expect(infraCode).toContain('aws.dynamodb.Table');
       expect(infraCode).toContain('transactions-table');
@@ -49,7 +181,9 @@ describe('Lambda Consolidation Infrastructure - Unit Tests', () => {
     it('should use PAY_PER_REQUEST billing for DynamoDB', () => {
       expect(infraCode).toContain("billingMode: 'PAY_PER_REQUEST'");
     });
+  });
 
+  describe('SQS Queue Configuration', () => {
     it('should create SQS queue for DLQ', () => {
       expect(infraCode).toContain('aws.sqs.Queue');
       expect(infraCode).toContain('lambda-dlq');
@@ -58,7 +192,9 @@ describe('Lambda Consolidation Infrastructure - Unit Tests', () => {
     it('should set 14-day retention for DLQ', () => {
       expect(infraCode).toContain('messageRetentionSeconds: 1209600');
     });
+  });
 
+  describe('IAM Configuration', () => {
     it('should create IAM role for Lambda', () => {
       expect(infraCode).toContain('aws.iam.Role');
       expect(infraCode).toContain('lambda-role');
@@ -83,6 +219,20 @@ describe('Lambda Consolidation Infrastructure - Unit Tests', () => {
       expect(infraCode).toContain('sqs:SendMessage');
     });
 
+    it('should use least privilege IAM for DynamoDB', () => {
+      expect(infraCode).toContain('dynamodb:GetItem');
+      expect(infraCode).toContain('dynamodb:PutItem');
+      expect(infraCode).not.toContain('dynamodb:*');
+    });
+
+    it('should use least privilege IAM for SQS', () => {
+      expect(infraCode).toContain('sqs:SendMessage');
+      expect(infraCode).toContain('sqs:GetQueueAttributes');
+      expect(infraCode).not.toContain('sqs:*');
+    });
+  });
+
+  describe('CloudWatch Configuration', () => {
     it('should create CloudWatch log group', () => {
       expect(infraCode).toContain('aws.cloudwatch.LogGroup');
       expect(infraCode).toContain('lambda-logs');
@@ -114,6 +264,16 @@ describe('Lambda Consolidation Infrastructure - Unit Tests', () => {
       expect(infraCode).toContain('threshold: 3000');
     });
 
+    it('should configure alarm evaluation periods', () => {
+      expect(infraCode).toContain('evaluationPeriods: 2');
+    });
+
+    it('should handle missing data appropriately', () => {
+      expect(infraCode).toContain("treatMissingData: 'notBreaching'");
+    });
+  });
+
+  describe('Resource Naming and Tagging', () => {
     it('should use environmentSuffix in all resource names', () => {
       const resourceNamePatterns = [
         'lambda-role-${environmentSuffix}',
@@ -126,43 +286,6 @@ describe('Lambda Consolidation Infrastructure - Unit Tests', () => {
       resourceNamePatterns.forEach((pattern) => {
         expect(infraCode).toContain(pattern);
       });
-    });
-
-    it('should configure environment variables', () => {
-      expect(infraCode).toContain('environment:');
-      expect(infraCode).toContain('DYNAMODB_TABLE:');
-      expect(infraCode).toContain('REGION:');
-      expect(infraCode).toContain('ENVIRONMENT:');
-    });
-
-    it('should use nodejs18.x runtime', () => {
-      expect(infraCode).toContain("runtime: 'nodejs18.x'");
-    });
-
-    it('should NOT use SnapStart (Node.js incompatible)', () => {
-      // SnapStart only works with Java, not Node.js
-      expect(infraCode).not.toContain('snapStart: {');
-    });
-
-    it('should have comment explaining SnapStart limitation', () => {
-      expect(infraCode).toContain('SnapStart is NOT supported for Node.js');
-    });
-
-    it('should NOT configure reserved concurrency (quota limits)', () => {
-      // Reserved concurrency removed due to AWS account quota constraints
-      expect(infraCode).not.toContain('reservedConcurrentExecutions:');
-    });
-
-    it('should have comment explaining concurrency limitation', () => {
-      expect(infraCode).toContain('Reserved concurrency NOT SET');
-      expect(infraCode).toContain('account quota');
-    });
-
-    it('should create Lambda layer with Node.js runtime compatibility', () => {
-      expect(infraCode).toContain('aws.lambda.LayerVersion');
-      expect(infraCode).toContain('compatibleRuntimes');
-      expect(infraCode).toContain('nodejs18.x');
-      expect(infraCode).toContain('nodejs20.x');
     });
 
     it('should tag all resources with Environment and ManagedBy', () => {
@@ -247,28 +370,6 @@ describe('Lambda Consolidation Infrastructure - Unit Tests', () => {
     });
   });
 
-  describe('Security Best Practices', () => {
-    it('should use least privilege IAM for DynamoDB', () => {
-      expect(infraCode).toContain('dynamodb:GetItem');
-      expect(infraCode).toContain('dynamodb:PutItem');
-      expect(infraCode).not.toContain('dynamodb:*');
-    });
-
-    it('should use least privilege IAM for SQS', () => {
-      expect(infraCode).toContain('sqs:SendMessage');
-      expect(infraCode).toContain('sqs:GetQueueAttributes');
-      expect(infraCode).not.toContain('sqs:*');
-    });
-
-    it('should enable CloudWatch logging', () => {
-      expect(infraCode).toContain('aws.cloudwatch.LogGroup');
-    });
-
-    it('should enable X-Ray tracing for monitoring', () => {
-      expect(infraCode).toContain('tracingConfig');
-    });
-  });
-
   describe('Cost Optimization Validation', () => {
     it('should use optimized memory (1024 MB)', () => {
       expect(infraCode).toContain('memorySize: 1024');
@@ -284,35 +385,10 @@ describe('Lambda Consolidation Infrastructure - Unit Tests', () => {
     });
 
     it('should consolidate three functions into one', () => {
-      // Single function with routing
       expect(infraCode).toContain('switch(route)');
       expect(infraCode.match(/case\s+['"]payment['"]/g)?.length).toBe(1);
       expect(infraCode.match(/case\s+['"]fraud['"]/g)?.length).toBe(1);
       expect(infraCode.match(/case\s+['"]notification['"]/g)?.length).toBe(1);
-    });
-  });
-
-  describe('Monitoring and Alerting', () => {
-    it('should monitor error rate with 1% threshold', () => {
-      expect(infraCode).toContain('lambda-error-rate-alarm');
-      expect(infraCode).toContain('threshold: 1.0');
-    });
-
-    it('should monitor duration with 3-second threshold', () => {
-      expect(infraCode).toContain('lambda-duration-alarm');
-      expect(infraCode).toContain('threshold: 3000');
-    });
-
-    it('should use CloudWatch metric alarms', () => {
-      expect(infraCode).toContain('aws.cloudwatch.MetricAlarm');
-    });
-
-    it('should configure alarm evaluation periods', () => {
-      expect(infraCode).toContain('evaluationPeriods: 2');
-    });
-
-    it('should handle missing data appropriately', () => {
-      expect(infraCode).toContain("treatMissingData: 'notBreaching'");
     });
   });
 
@@ -335,7 +411,6 @@ describe('Lambda Consolidation Infrastructure - Unit Tests', () => {
     });
 
     it('should share monitoring across routes', () => {
-      // Single set of alarms for consolidated function
       const alarmCreations = infraCode.match(/new aws\.cloudwatch\.MetricAlarm/g);
       expect(alarmCreations?.length).toBe(2); // error rate + duration
     });

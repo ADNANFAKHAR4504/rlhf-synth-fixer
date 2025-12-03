@@ -1,3 +1,0 @@
-encryptionsalt: v1:/te+3wbB3yg=:v1:KvFqxLnpLerCIS0f:V0tkhqQa6R2ShRxewAve+3WfMj/ffA==
-config:
-  aws:defaultTags: '{"tags":{"Environment":"synthw4d3i6q6","Repository":"synth-w4d3i6q6","Author":"mayanksethi-turing","PRNumber":"unknown","Team":"synth","CreatedAt":"2025-12-02T10:05:10Z","ManagedBy":"pulumi"}}'

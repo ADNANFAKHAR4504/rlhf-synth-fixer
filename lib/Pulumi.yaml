@@ -1,6 +1,0 @@
-name: tap
-runtime:
-  name: nodejs
-  options:
-    typescript: true
-description: Lambda consolidation and optimization infrastructure
