@@ -1,0 +1,13 @@
+{
+  "name": "compliance-stream-processor",
+  "version": "1.0.0",
+  "description": "DynamoDB stream processor for compliance violations",
+  "main": "index.js",
+  "dependencies": {
+    "@types/aws-lambda": "^8.10.119"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "typescript": "^5.0.0"
+  }
+}

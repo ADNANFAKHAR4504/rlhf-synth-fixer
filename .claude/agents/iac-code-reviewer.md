@@ -140,6 +140,53 @@ If `IS_OPTIMIZATION_TASK=true`:
 
 If optimization task detected, **SKIP to Step 5** (AWS Services Enhancement).
 
+#### Step 3.6: Check if Infrastructure Analysis Task
+
+**⚠️ SPECIAL HANDLING FOR ANALYSIS TASKS**
+
+Check if this is an analysis task:
+```bash
+SUBTASK=$(jq -r '.subtask' metadata.json)
+if [ "$SUBTASK" = "Infrastructure QA and Management" ]; then
+  IS_ANALYSIS_TASK=true
+else
+  IS_ANALYSIS_TASK=false
+fi
+```
+
+If `IS_ANALYSIS_TASK=true`:
+- **SKIP all infrastructure code validation** (Steps 4-5)
+- **SKIP platform/language compliance on IaC**
+- **PRIMARY FOCUS**: Evaluate analysis script quality (`lib/analyse.py` or `lib/analyse.sh`)
+
+**What to Validate for Analysis Tasks**:
+1. ✅ Analysis script exists in lib/ (`lib/analyse.py` or `lib/analyse.sh`)
+2. ✅ Script uses AWS SDK (boto3/AWS CLI) correctly
+3. ✅ Resource discovery logic implemented properly
+4. ✅ Metrics collection and analysis present
+5. ✅ Report generation functional and clear
+6. ✅ Error handling for missing resources
+7. ✅ Tests validate analysis logic effectively
+8. ✅ `lib/IDEAL_RESPONSE.md` shows the corrected analysis script
+9. ✅ `metadata.json` has `platform: "analysis"`
+10. ✅ `metadata.json` has `language: "py"` or `"sh"`
+
+**What NOT to Validate**:
+- ❌ No IaC platform detection (CDK/Terraform/Pulumi/CloudFormation)
+- ❌ No infrastructure deployment checks
+- ❌ No bin/ entry points expected
+- ❌ No cdk.json, Pulumi.yaml, cdktf.json expected
+- ❌ No infrastructure stack files
+
+**Training Quality Focus**:
+- Evaluate quality of analysis script (AWS SDK usage, logic correctness)
+- Check fixes in MODEL_FAILURES.md related to analysis logic
+- Verify IDEAL_RESPONSE.md contains the analysis script, not IaC code
+
+**Reference**: `.claude/docs/references/special-subtask-requirements.md` Section 3
+
+If analysis task detected, **SKIP to Step 6** (Test Coverage Validation).
+
 #### Step 4: Platform/Language Compliance Validation
 
 **CRITICAL** - Catches major training data quality issues.

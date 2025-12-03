@@ -1,0 +1,38 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350124",
+  "team": "4",
+  "startedAt": "2025-11-29T14:42:43.637Z",
+  "subtask": "IaC-Multi-Environment-Management",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "EBS",
+    "NAT Gateway",
+    "EIP",
+    "Security Groups",
+    "Subnets",
+    "Internet Gateway",
+    "Route Tables",
+    "Route Table Associations",
+    "AMI",
+    "Availability Zones"
+  ],
+  "task_config": {
+    "deploy_env": "dev.tfvars"
+  },
+  "training_quality": 9,
+  "background": "Complete Infrastructure as Code (IaC) QA pipeline implementation for Terraform-based AWS VPC infrastructure. This project demonstrates comprehensive testing strategies including 146 unit tests and 47 integration tests that gracefully handle both deployed and non-deployed infrastructure scenarios. The implementation covers VPC, subnets, NAT gateways, EC2 instances, security groups, and route tables with full AWS SDK integration for real resource validation. Features multi-environment support (dev, staging, prod), proper resource tagging, security best practices, and production-ready configurations with cost optimization considerations.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

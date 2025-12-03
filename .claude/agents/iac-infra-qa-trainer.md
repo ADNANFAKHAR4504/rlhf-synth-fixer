@@ -155,6 +155,99 @@ ls -t lib/MODEL_RESPONSE*.md | head -1
 
 **Detect**: Platform (CDK/CDKTF/CFN/Terraform/Pulumi) and language
 
+### 1.5: Special Task Type Detection and Handling
+
+**⚠️ CRITICAL**: Some subtasks have different workflows and validation rules.
+
+**Detect Special Task Types**:
+```bash
+# Read subtask and subject labels
+SUBTASK=$(jq -r '.subtask' metadata.json)
+SUBJECT_LABELS=$(jq -r '.subject_labels[]? // empty' metadata.json)
+
+IS_OPTIMIZATION_TASK=false
+IS_ANALYSIS_TASK=false
+IS_CICD_TASK=false
+
+if echo "$SUBJECT_LABELS" | grep -q "IaC Optimization"; then
+  IS_OPTIMIZATION_TASK=true
+  echo "📊 Detected IaC Optimization task"
+fi
+
+if [ "$SUBTASK" = "Infrastructure QA and Management" ]; then
+  IS_ANALYSIS_TASK=true
+  echo "🔍 Detected Infrastructure Analysis task"
+fi
+
+if [ "$SUBTASK" = "CI/CD Pipeline Integration" ]; then
+  IS_CICD_TASK=true
+  echo "🔄 Detected CI/CD Pipeline Integration task"
+fi
+```
+
+**Workflow Modifications Based on Task Type**:
+
+#### For Optimization Tasks (`IS_OPTIMIZATION_TASK=true`)
+
+**Special Requirements**:
+1. Deploy baseline infrastructure (non-optimized values are EXPECTED)
+2. Run `python lib/optimize.py --environment $ENVIRONMENT_SUFFIX` against deployed resources
+3. Verify optimizations via integration tests
+4. Do NOT penalize high resource allocations in stack files
+5. Focus validation on `lib/optimize.py` quality and effectiveness
+
+**Validation Focus**:
+- ✅ `lib/optimize.py` exists and uses boto3
+- ✅ Script reads ENVIRONMENT_SUFFIX correctly
+- ✅ Resource discovery using proper naming patterns
+- ✅ AWS API calls to modify resources (not file editing)
+- ✅ Cost savings calculations
+- ✅ Integration tests verify optimizations work
+
+**Reference**: `.claude/docs/references/special-subtask-requirements.md` Section 2
+
+#### For Analysis Tasks (`IS_ANALYSIS_TASK=true`)
+
+**Special Requirements**:
+1. **NO deployment step** - analysis tasks don't deploy infrastructure
+2. **NO synth step** - not generating infrastructure templates
+3. Run analysis script: `python lib/analyse.py` or `bash lib/analyse.sh`
+4. Verify script output and recommendations
+5. Tests validate analysis logic (may use mocks or test fixtures)
+
+**Validation Focus**:
+- ✅ `lib/analyse.py` or `lib/analyse.sh` exists
+- ✅ Script uses AWS SDK (boto3/AWS CLI) correctly
+- ✅ Resource discovery and metrics collection
+- ✅ Report generation functionality
+- ✅ Error handling for missing resources
+- ✅ Tests validate analysis logic
+
+**Workflow Changes**:
+- SKIP all deployment steps
+- SKIP synth validation
+- Run analysis script directly
+- Validate output format and content
+
+**Reference**: `.claude/docs/references/special-subtask-requirements.md` Section 3
+
+#### For CI/CD Pipeline Integration Tasks (`IS_CICD_TASK=true`)
+
+**Special Requirements**:
+1. Verify `lib/ci-cd.yml` exists and is valid
+2. Infrastructure should support multi-environment deployment
+3. Test with different environment parameters
+4. Validate IAM roles for cross-account access (if applicable)
+
+**Validation Focus**:
+- ✅ `lib/ci-cd.yml` contains valid GitHub Actions workflow
+- ✅ Infrastructure code supports environment parameters
+- ✅ Deployment works with CI/CD automation patterns
+
+**Reference**: `.claude/docs/references/special-subtask-requirements.md` Section 1
+
+---
+
 **Platform/Language Compliance Check**:
 
 **Validation**: Run Checkpoint E: Platform Code Compliance

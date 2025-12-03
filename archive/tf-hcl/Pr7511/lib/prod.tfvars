@@ -1,0 +1,16 @@
+env                       = "prod"
+aws_region                = "us-west-1"
+pr_number                 = "pr7511"
+kinesis_stream_mode       = "ON_DEMAND"
+dynamodb_billing_mode     = "PAY_PER_REQUEST"
+redis_node_type           = "cache.r7g.large"
+redis_num_cache_clusters  = 2
+aurora_min_capacity       = 1
+aurora_max_capacity       = 4
+fraud_scorer_memory       = 1024
+fraud_scorer_timeout      = 120
+analyzer_memory           = 2048
+analyzer_timeout          = 180
+log_retention_days        = 30
+lifecycle_expiration_days = 90
+enable_vpc_endpoints      = false

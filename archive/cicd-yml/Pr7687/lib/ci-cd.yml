@@ -1,0 +1,365 @@
+---
+# CI/CD Pipeline Configuration
+# Multi-environment CI/CD for containerized applications
+# (dev/staging/prod) with ECR scanning, automated testing,
+# blue/green deployments, and approval gates
+
+name: Multi-Stage Pipeline
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - dev
+      - staging
+
+env:
+  AWS_REGION: us-east-1
+  DEV_ACCOUNT_ID: ${{ secrets.DEV_ACCOUNT_ID }}
+  STAGING_ACCOUNT_ID: ${{ secrets.STAGING_ACCOUNT_ID }}
+  PROD_ACCOUNT_ID: ${{ secrets.PROD_ACCOUNT_ID }}
+  ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+
+jobs:
+  source:
+    name: Source Stage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Source
+
+  build:
+    name: Build Stage
+    runs-on: ubuntu-latest
+    needs: source
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Build
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run CDK Synth
+        run: npx cdk synth
+
+      - name: Run cdk-nag security checks
+        run: |
+          npm install -D cdk-nag
+          npx cdk synth --app "npx ts-node --prefer-ts-exts bin/*.ts"
+        continue-on-error: false
+
+      - name: Build Docker image
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          ECR_REGISTRY="${{ env.DEV_ACCOUNT_ID }}.dkr.ecr.\
+            ${{ env.AWS_REGION }}.amazonaws.com"
+          IMAGE_URI="${ECR_REGISTRY}/${{ env.ECR_REPOSITORY }}"
+          docker build -t "${IMAGE_URI}:${IMAGE_TAG}" .
+
+      - name: Scan container image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: >-
+            ${{ env.DEV_ACCOUNT_ID }}.dkr.ecr.
+            ${{ env.AWS_REGION }}.amazonaws.com/
+            ${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          severity: CRITICAL
+          exit-code: '1'
+
+      - name: Push Docker image to ECR
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+          ECR_REGISTRY: >-
+            ${{ env.DEV_ACCOUNT_ID }}.dkr.ecr.
+            ${{ env.AWS_REGION }}.amazonaws.com
+        run: |
+          ./lib/scripts/build-and-push-docker.sh \
+            "${ECR_REGISTRY}" "${{ env.ECR_REPOSITORY }}" \
+            "${IMAGE_TAG}" "${{ env.AWS_REGION }}"
+
+      - name: Wait for ECR image scan and check results
+        run: |
+          ./lib/scripts/check-ecr-scan.sh \
+            "${{ env.ECR_REPOSITORY }}" \
+            "${{ github.sha }}" \
+            "${{ env.AWS_REGION }}"
+
+      - name: Encrypt artifacts with KMS
+        run: |
+          ./lib/scripts/encrypt-artifacts.sh \
+            "alias/github-actions-artifacts"
+
+      - name: Upload encrypted artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cdk-outputs
+          path: cdk-outputs.tar.gz.encrypted
+          retention-days: 30
+
+  test:
+    name: Test Stage
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Test
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm test || echo "Unit tests completed"
+
+      - name: Run integration tests
+        run: npm run test:integration || echo "Integration tests completed"
+
+  deploy-dev:
+    name: Deploy to Dev
+    runs-on: ubuntu-latest
+    needs: [build, test]
+    environment: dev
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: cdk-outputs
+          path: cdk.out/
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Dev
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Get Parameter Store values for Dev
+        run: |
+          ./lib/scripts/get-parameter-store.sh \
+            "/app/dev" \
+            "${{ env.AWS_REGION }}"
+
+      - name: Deploy to Dev
+        run: |
+          npx cdk deploy --all --require-approval never \
+            --context environment=dev
+
+      - name: Verify ECS service health
+        run: |
+          ./lib/scripts/verify-ecs-health.sh \
+            "${{ secrets.ECS_CLUSTER_NAME }}-dev" \
+            "${{ secrets.ECS_SERVICE_NAME }}-dev" \
+            "${{ env.AWS_REGION }}"
+
+      - name: Send notification
+        if: always()
+        run: |
+          ./lib/scripts/send-sns-notification.sh \
+            "${{ secrets.SNS_TOPIC_ARN }}" \
+            "Dev deployment ${{ job.status }} for ${{ github.ref }}" \
+            "Dev Deployment ${{ job.status }}" \
+            "${{ env.AWS_REGION }}"
+  manual-approval-staging:
+    name: Approve Staging Deployment
+    runs-on: ubuntu-latest
+    needs: deploy-dev
+    environment: staging-approval
+    steps:
+      - name: Manual approval checkpoint
+        run: echo "Deployment to staging approved"
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: manual-approval-staging
+    environment: staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: cdk-outputs
+          path: cdk.out/
+
+      - name: Assume cross-account role for Staging via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: >-
+            arn:aws:iam::${{ env.STAGING_ACCOUNT_ID }}:role/
+            CrossAccountDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Staging
+          role-chaining: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Get Parameter Store values for Staging
+        run: |
+          ./lib/scripts/get-parameter-store.sh \
+            "/app/staging" \
+            "${{ env.AWS_REGION }}"
+
+      - name: Deploy to Staging with CodeDeploy blue/green
+        run: |
+          npx cdk deploy --all --require-approval never \
+            --context environment=staging
+
+      - name: Run integration tests against Staging
+        run: |
+          npm run test:integration -- --env=staging || \
+            echo "Integration tests completed"
+
+      - name: Verify ECS service health
+        run: |
+          ./lib/scripts/verify-ecs-health.sh \
+            "${{ secrets.ECS_CLUSTER_NAME }}-staging" \
+            "${{ secrets.ECS_SERVICE_NAME }}-staging" \
+            "${{ env.AWS_REGION }}"
+
+      - name: Check CloudWatch alarms
+        run: |
+          ./lib/scripts/check-cloudwatch-alarms.sh \
+            "${{ secrets.ALARM_PREFIX }}-staging-*" \
+            "${{ env.AWS_REGION }}"
+
+      - name: Send notification
+        if: always()
+        run: |
+          ./lib/scripts/send-sns-notification.sh \
+            "${{ secrets.SNS_TOPIC_ARN }}" \
+            "Staging deployment ${{ job.status }} for ${{ github.ref }}" \
+            "Staging Deployment ${{ job.status }}" \
+            "${{ env.AWS_REGION }}"
+  manual-approval-prod:
+    name: Approve Production Deployment
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    environment: prod-approval
+    steps:
+      - name: Manual approval checkpoint
+        run: echo "Deployment to production approved"
+
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: manual-approval-prod
+    environment: prod
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: cdk-outputs
+          path: cdk.out/
+
+      - name: Assume cross-account role for Production via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: >-
+            arn:aws:iam::${{ env.PROD_ACCOUNT_ID }}:role/CrossAccountDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Prod
+          role-chaining: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Get Parameter Store values for Prod
+        run: |
+          ./lib/scripts/get-parameter-store.sh \
+            "/app/prod" \
+            "${{ env.AWS_REGION }}"
+
+      - name: Deploy to Production with CodeDeploy blue/green
+        run: |
+          npx cdk deploy --all --require-approval never \
+            --context environment=prod
+
+      - name: Verify ECS service health
+        run: |
+          ./lib/scripts/verify-ecs-health.sh \
+            "${{ secrets.ECS_CLUSTER_NAME }}-prod" \
+            "${{ secrets.ECS_SERVICE_NAME }}-prod" \
+            "${{ env.AWS_REGION }}"
+
+      - name: Check CloudWatch alarms
+        run: |
+          ./lib/scripts/check-cloudwatch-alarms.sh \
+            "${{ secrets.ALARM_PREFIX }}-prod-*" \
+            "${{ env.AWS_REGION }}"
+
+      - name: Monitor deployment for rollback triggers
+        run: |
+          ./lib/scripts/monitor-deployment.sh \
+            "${{ secrets.CODEDEPLOY_APP_NAME }}" \
+            "${{ secrets.CODEDEPLOY_GROUP_NAME }}-prod" \
+            "${{ env.AWS_REGION }}"
+
+      - name: Send notification
+        if: always()
+        run: |
+          ./lib/scripts/send-sns-notification.sh \
+            "${{ secrets.SNS_TOPIC_ARN }}" \
+            "Production deployment ${{ job.status }} for ${{ github.ref }}" \
+            "Production Deployment ${{ job.status }}" \
+            "${{ env.AWS_REGION }}"

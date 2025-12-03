@@ -1,0 +1,30 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "x9d9o4t4",
+  "team": "synth",
+  "startedAt": "2025-12-02T13:47:04+05:30",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "S3",
+    "ECR",
+    "CodeBuild",
+    "CodePipeline",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "EventBridge"
+  ],
+  "author": "mayanksethi-turing",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
