@@ -1,4 +1,4 @@
-name: rds-optimization
+name: TapStack
 runtime:
   name: nodejs
   options:
