@@ -27,7 +27,7 @@ provider "aws" {
 }
 
 locals {
-  environment = terraform.workspace
+  environment = "dev"
 
   common_tags = {
     Project     = var.project_name
