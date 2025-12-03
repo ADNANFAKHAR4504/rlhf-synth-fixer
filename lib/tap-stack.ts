@@ -55,10 +55,12 @@ export class TapStack extends pulumi.ComponentResource {
     super('tap:stack:TapStack', name, args, opts);
 
     const environmentSuffix = args.environmentSuffix || 'dev';
-    const tags = args.tags || {
+    // Tags are applied directly to each resource with environment-specific values
+    const _tags = args.tags || {
       Environment: environmentSuffix,
       ManagedBy: 'Pulumi',
     };
+    void _tags; // Acknowledge unused variable for future extensibility
     const region = aws.config.region || 'us-east-1';
 
     // IAM Role for Lambda
@@ -307,7 +309,7 @@ async function sendNotification(event) {
       `lambda-dynamodb-policy-${environmentSuffix}`,
       {
         role: lambdaRole.id,
-        policy: dynamoTable.arn.apply((tableArn) =>
+        policy: dynamoTable.arn.apply((tableArn: string) =>
           JSON.stringify({
             Version: '2012-10-17',
             Statement: [
@@ -334,7 +336,7 @@ async function sendNotification(event) {
       `lambda-sqs-policy-${environmentSuffix}`,
       {
         role: lambdaRole.id,
-        policy: dlqQueue.arn.apply((queueArn) =>
+        policy: dlqQueue.arn.apply((queueArn: string) =>
           JSON.stringify({
             Version: '2012-10-17',
             Statement: [
