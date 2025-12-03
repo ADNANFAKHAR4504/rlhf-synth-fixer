@@ -53,3 +53,15 @@ stack = TapStack(
     args=TapStackArgs(environment_suffix=environment_suffix),
     opts=ResourceOptions(provider=provider)
 )
+
+# Export outputs for integration tests
+pulumi.export('vpc_id', stack.vpc.vpc_id)
+pulumi.export('kinesis_stream_name', stack.kinesis.stream_name)
+pulumi.export('kinesis_stream_arn', stack.kinesis.stream_arn)
+pulumi.export('redis_endpoint', stack.elasticache.redis_endpoint)
+pulumi.export('redis_port', stack.elasticache.redis_port)
+pulumi.export('rds_endpoint', stack.rds.address)
+pulumi.export('rds_port', stack.rds.port)
+pulumi.export('db_secret_arn', stack.secrets.db_secret_arn)
+pulumi.export('elasticache_security_group_id', stack.elasticache.security_group_id)
+pulumi.export('rds_security_group_id', stack.rds.security_group_id)
