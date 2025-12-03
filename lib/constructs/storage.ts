@@ -49,7 +49,7 @@ export class StorageConstruct extends Construct {
       },
     });
 
-    new S3BucketVersioningA(this, 'SecondaryBucketVersioning', {
+    const secondaryBucketVersioning = new S3BucketVersioningA(this, 'SecondaryBucketVersioning', {
       provider: secondaryProvider,
       bucket: secondaryBucket.id,
       versioningConfiguration: {
@@ -147,7 +147,7 @@ export class StorageConstruct extends Construct {
     });
 
     // S3 Replication Configuration with RTC
-    new S3BucketReplicationConfigurationA(this, 'BucketReplication', {
+    const replicationConfig = new S3BucketReplicationConfigurationA(this, 'BucketReplication', {
       provider: primaryProvider,
       bucket: primaryBucket.id,
       role: replicationRole.arn,
@@ -180,6 +180,9 @@ export class StorageConstruct extends Construct {
         },
       ],
     });
+
+    // Ensure secondary bucket versioning is enabled before replication
+    replicationConfig.node.addDependency(secondaryBucketVersioning);
 
     // Export values
     this.primaryBucketName = primaryBucket.bucket;
