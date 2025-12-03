@@ -34,7 +34,6 @@ import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
 import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
 import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
-import { SecretsmanagerSecretRotation } from '@cdktf/provider-aws/lib/secretsmanager-secret-rotation';
 import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
@@ -76,6 +75,38 @@ export class PaymentProcessingInfrastructure extends Construct {
       description: `Customer-managed key for payment processing ${environmentSuffix}`,
       enableKeyRotation: true,
       deletionWindowInDays: 7,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: {
+              AWS: 'arn:aws:iam::*:root',
+            },
+            Action: 'kms:*',
+            Resource: '*',
+          },
+          {
+            Effect: 'Allow',
+            Principal: {
+              Service: 'logs.amazonaws.com',
+            },
+            Action: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+            ],
+            Resource: '*',
+            Condition: {
+              ArnEquals: {
+                'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${awsRegion}:*:log-group:/ecs/payment-processing-${environmentSuffix}`,
+              },
+            },
+          },
+        ],
+      }),
       tags: {
         Name: `payment-kms-${environmentSuffix}`,
       },
@@ -610,13 +641,13 @@ export class PaymentProcessingInfrastructure extends Construct {
 
     // Note: Rotation requires Lambda function, simplified for this implementation
     // In production, implement rotation with Lambda function
-    new SecretsmanagerSecretRotation(this, 'db-secret-rotation', {
-      secretId: dbSecret.id,
-      rotationRules: {
-        automaticallyAfterDays: 30,
-      },
-      rotationLambdaArn: `arn:aws:lambda:${awsRegion}:123456789012:function:placeholder`, // Placeholder
-    });
+    // new SecretsmanagerSecretRotation(this, 'db-secret-rotation', {
+    //   secretId: dbSecret.id,
+    //   rotationRules: {
+    //     automaticallyAfterDays: 30,
+    //   },
+    //   rotationLambdaArn: `arn:aws:lambda:${awsRegion}:123456789012:function:placeholder`, // Placeholder
+    // });
 
     // ===========================
     // 11. RDS Aurora PostgreSQL
@@ -633,7 +664,6 @@ export class PaymentProcessingInfrastructure extends Construct {
       clusterIdentifier: `payment-db-${environmentSuffix}`,
       engine: 'aurora-postgresql',
       engineMode: 'provisioned',
-      engineVersion: '15.3',
       databaseName: 'paymentdb',
       masterUsername: 'paymentadmin',
       masterPassword: dbPassword,
@@ -659,7 +689,6 @@ export class PaymentProcessingInfrastructure extends Construct {
         clusterIdentifier: rdsCluster.id,
         instanceClass: 'db.t4g.medium',
         engine: 'aurora-postgresql',
-        engineVersion: '15.3',
         publiclyAccessible: false,
         tags: {
           Name: `payment-rds-instance-${i}-${environmentSuffix}`,
@@ -674,7 +703,7 @@ export class PaymentProcessingInfrastructure extends Construct {
     // ===========================
     const certificate = new AcmCertificate(this, 'certificate', {
       domainName: `payment-${environmentSuffix}.example.com`,
-      validationMethod: 'DNS',
+      validationMethod: 'EMAIL',
       tags: {
         Name: `payment-cert-${environmentSuffix}`,
       },
