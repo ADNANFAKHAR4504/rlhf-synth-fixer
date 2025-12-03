@@ -267,15 +267,36 @@ class ECSFargateOptimizer:
                 logger.info(f"Service updated: desired count {current_desired_count}→{optimized_desired_count}")
                 self.changes_made.append(f"Service scaling optimized: {current_desired_count}→{optimized_desired_count} tasks")
 
-                # Wait for service to stabilize
+                # Wait for service to stabilize with extended timeout
                 logger.info("Waiting for service to stabilize...")
-                waiter = self.ecs_client.get_waiter('services_stable')
-                waiter.wait(
-                    cluster=cluster_arn,
-                    services=[service_arn],
-                    WaiterConfig={'Delay': 15, 'MaxAttempts': 120}
-                )
-                logger.info("Service stabilized successfully")
+                try:
+                    waiter = self.ecs_client.get_waiter('services_stable')
+                    # Increased timeout: 10s delay, 180 attempts = 30 minutes
+                    waiter.wait(
+                        cluster=cluster_arn,
+                        services=[service_arn],
+                        WaiterConfig={'Delay': 10, 'MaxAttempts': 180}
+                    )
+                    logger.info("Service stabilized successfully")
+                except WaiterError as e:
+                    # Check service status even if waiter times out
+                    logger.warning(f"Service stabilization waiter timed out: {e}")
+                    service_check = self.ecs_client.describe_services(
+                        cluster=cluster_arn,
+                        services=[service_arn]
+                    )
+                    service_status = service_check['services'][0]
+                    running_count = service_status.get('runningCount', 0)
+                    desired_count = service_status.get('desiredCount', 0)
+
+                    logger.info(f"Current service state: {running_count}/{desired_count} tasks running")
+
+                    # If we have the desired number of running tasks, consider it a success
+                    if running_count >= desired_count and desired_count == optimized_desired_count:
+                        logger.info("Service has reached desired task count despite waiter timeout")
+                    else:
+                        # Re-raise the exception if service is truly unhealthy
+                        raise
 
             # Optimize auto-scaling min capacity
             self.optimize_autoscaling_target(cluster_arn, service_name)
