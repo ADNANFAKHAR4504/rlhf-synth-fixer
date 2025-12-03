@@ -1,6 +1,6 @@
 {
-  "platform": "CDKTF",
-  "language": "TypeScript",
+  "platform": "cdktf",
+  "language": "ts",
   "complexity": "expert",
   "team": "synth",
   "turn_type": "single",
@@ -22,5 +22,7 @@
     "KMS"
   ],
   "po_id": "70369941",
-  "training_quality": 9
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342"
 }
