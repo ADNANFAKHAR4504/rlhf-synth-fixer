@@ -83,6 +83,175 @@ All of the following MUST pass (adjusted based on task type):
 
 ## Workflow
 
+### Phase 0: File Cleanup (Run Before Fixes)
+
+**Purpose**: Remove auto-generated and unnecessary files that can cause CI/CD failures or confusion.
+
+**When to run**: After setting up worktree, before running any validations.
+
+1. **Clean up auto-generated Pulumi stack configs**:
+   ```bash
+   echo "🧹 Cleaning up unnecessary files..."
+   
+   # Remove Pulumi stack-specific configs (but keep Pulumi.yaml)
+   # Pattern: Pulumi.TapStack*.yaml, Pulumi.*Stack*.yaml
+   find . -maxdepth 1 -name "Pulumi.*.yaml" ! -name "Pulumi.yaml" -type f -delete 2>/dev/null && \
+     echo "✅ Removed auto-generated Pulumi stack configs" || \
+     echo "ℹ️  No Pulumi stack configs to clean"
+   ```
+
+2. **Clean up unnecessary lib/ files**:
+   ```bash
+   # Files in lib/ that are NOT required
+   UNNECESSARY_LIB_FILES=(
+     "lib/README.md"
+     "lib/AWS_REGION"
+     "lib/DEPLOYMENT_GUIDE.md"
+     "lib/.gitkeep"
+   )
+   
+   for file in "${UNNECESSARY_LIB_FILES[@]}"; do
+     if [ -f "$file" ]; then
+       rm -f "$file"
+       echo "✅ Removed unnecessary file: $file"
+     fi
+   done
+   ```
+
+3. **Clean up generated artifacts**:
+   ```bash
+   # Remove generated directories and files
+   GENERATED_ARTIFACTS=(
+     "coverage"
+     "dist"
+     "cdk.out"
+     ".pulumi"
+     "__pycache__"
+     ".pytest_cache"
+     ".terraform"
+     "terraform.tfstate*"
+     "cfn-outputs"
+     "node_modules/.cache"
+   )
+   
+   for artifact in "${GENERATED_ARTIFACTS[@]}"; do
+     if [ -d "$artifact" ]; then
+       rm -rf "$artifact"
+       echo "✅ Removed generated directory: $artifact"
+     elif ls $artifact 2>/dev/null; then
+       rm -f $artifact
+       echo "✅ Removed generated files: $artifact"
+     fi
+   done
+   
+   # Remove generated TypeScript declaration files (but keep in node_modules)
+   find lib -name "*.d.ts" -delete 2>/dev/null
+   find lib -name "*.js.map" -delete 2>/dev/null
+   echo "✅ Removed generated TypeScript files from lib/"
+   ```
+
+4. **Clean up duplicate/backup files**:
+   ```bash
+   # Remove backup and duplicate files
+   find . -name "*.bak" -type f -delete 2>/dev/null
+   find . -name "*.orig" -type f -delete 2>/dev/null
+   find . -name "*~" -type f -delete 2>/dev/null
+   find . -name ".DS_Store" -type f -delete 2>/dev/null
+   echo "✅ Removed backup and system files"
+   ```
+
+5. **Verify required files still exist**:
+   ```bash
+   echo "🔍 Verifying required files..."
+   
+   # Required files check
+   REQUIRED_FILES=(
+     "metadata.json"
+     "lib/PROMPT.md"
+   )
+   
+   for file in "${REQUIRED_FILES[@]}"; do
+     if [ ! -f "$file" ]; then
+       echo "❌ ERROR: Required file missing after cleanup: $file"
+       exit 1
+     fi
+   done
+   
+   # Check platform-specific required files
+   PLATFORM=$(jq -r '.platform' metadata.json)
+   case "$PLATFORM" in
+     "pulumi")
+       [ -f "Pulumi.yaml" ] || echo "⚠️  Warning: Pulumi.yaml missing"
+       ;;
+     "cdk")
+       [ -f "cdk.json" ] || echo "⚠️  Warning: cdk.json missing"
+       ;;
+     "cdktf")
+       [ -f "cdktf.json" ] || echo "⚠️  Warning: cdktf.json missing"
+       ;;
+   esac
+   
+   echo "✅ Required files verified"
+   ```
+
+6. **Commit cleanup changes** (if any):
+   ```bash
+   # Check if there are changes to commit
+   if [ -n "$(git status --porcelain)" ]; then
+     echo "📝 Committing cleanup changes..."
+     
+     # Get task ID for commit message
+     TASK_ID=$(jq -r '.po_id' metadata.json)
+     
+     git add -A
+     git commit -m "chore(synth-${TASK_ID}): cleanup auto-generated and unnecessary files
+
+- Removed Pulumi stack-specific configs (kept Pulumi.yaml)
+- Removed unnecessary lib/ files (README.md, AWS_REGION, etc.)
+- Cleaned generated artifacts (coverage, dist, cdk.out, etc.)
+- Removed backup and system files"
+     
+     git push origin ${BRANCH_NAME}
+     echo "✅ Cleanup changes committed and pushed"
+     
+     # Post cleanup comment to PR
+     CLEANUP_COMMENT="## 🧹 Automated File Cleanup
+
+**Removed unnecessary files before applying fixes:**
+
+- Auto-generated Pulumi stack configs (kept \`Pulumi.yaml\`)
+- Unnecessary documentation files in lib/ (\`README.md\`, \`AWS_REGION\`, etc.)
+- Generated artifacts (\`coverage\`, \`dist\`, \`cdk.out\`, \`__pycache__\`, etc.)
+- Backup files (\`*.bak\`, \`*.orig\`, \`*~\`, \`.DS_Store\`)
+
+**Protected files (not deleted):**
+- \`metadata.json\`, \`Pulumi.yaml\`, \`cdk.json\`, \`cdktf.json\`
+- \`lib/PROMPT.md\`, \`lib/MODEL_RESPONSE.md\`, \`lib/IDEAL_RESPONSE.md\`, \`lib/MODEL_FAILURES.md\`
+- \`lib/tap-stack.*\`, \`lib/ci-cd.yml\`, \`lib/optimize.py\`, \`lib/analyse.*\`
+- All files in \`bin/\`, \`test/\`, \`tests/\`
+
+---
+🤖 Automated by iac-synth-trainer"
+
+     gh pr comment ${PR_NUMBER} --body "${CLEANUP_COMMENT}"
+   else
+     echo "ℹ️  No cleanup changes needed"
+   fi
+   ```
+
+**Files Protected (Never Deleted)**:
+- ✅ `metadata.json`
+- ✅ `Pulumi.yaml` (main config, not stack-specific)
+- ✅ `cdk.json`, `cdktf.json`
+- ✅ `package.json`, `package-lock.json`
+- ✅ `lib/PROMPT.md`, `lib/MODEL_RESPONSE.md`, `lib/IDEAL_RESPONSE.md`, `lib/MODEL_FAILURES.md`
+- ✅ `lib/tap-stack.*`, `lib/ci-cd.yml`, `lib/optimize.py`, `lib/analyse.*`
+- ✅ `bin/*`
+- ✅ `test/*`, `tests/*`
+- ✅ `tap.py`, `tap.go`, `setup.js`
+- ✅ `Pipfile`, `Pipfile.lock`, `requirements.txt`
+- ✅ `build.gradle`, `pom.xml`, `go.mod`, `go.sum`
+
 ### Phase 1: Setup and Context
 
 1. **Accept PR context**:
@@ -150,6 +319,8 @@ All of the following MUST pass (adjusted based on task type):
    6. ✅ **Automatically resolves merge conflicts** (if possible)
    7. ✅ **Force-pushes rebased branch** (with lease for safety)
    8. ✅ Cleans up on any failure
+
+   **After worktree is set up**: Run **Phase 0: File Cleanup** to remove unnecessary files.
 
    **Automatic Conflict Resolution**:
    When rebase detects conflicts, the script:
