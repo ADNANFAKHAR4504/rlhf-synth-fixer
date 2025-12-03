@@ -3,10 +3,11 @@ import * as aws from '@pulumi/aws';
 import { RDSOptimizationStack } from '../lib/rds-stack';
 
 // Configuration - RDS PostgreSQL Optimization
+// Use environment variables for configuration (set by CI/CD deployment script)
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const config = new pulumi.Config();
-const environmentSuffix = config.require('environmentSuffix');
 const dbPassword = config.requireSecret('dbPassword');
-const region = aws.config.region || 'us-east-1';
+const region = process.env.AWS_REGION || 'us-east-1';
 
 // Create the RDS optimization stack
 const stack = new RDSOptimizationStack('rds-optimization', {
