@@ -12,6 +12,7 @@ interface TapStackProps {
   stateBucketRegion?: string;
   awsRegion?: string;
   defaultTags?: AwsProviderDefaultTags[];
+  awsRegionOverride?: string;
 }
 
 // If you need to override the AWS Region for the terraform provider for any particular task,
@@ -24,8 +25,9 @@ export class TapStack extends TerraformStack {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
-    const awsRegion = AWS_REGION_OVERRIDE
-      ? AWS_REGION_OVERRIDE
+    const regionOverride = props?.awsRegionOverride || AWS_REGION_OVERRIDE;
+    const awsRegion = regionOverride
+      ? regionOverride
       : props?.awsRegion || 'us-east-1';
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';

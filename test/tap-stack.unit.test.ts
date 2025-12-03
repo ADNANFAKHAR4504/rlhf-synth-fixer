@@ -42,6 +42,17 @@ describe('TapStack - Secure Payment Processing Infrastructure', () => {
       expect(synthesized).toContain('"region": "us-east-1"');
     });
 
+    test('uses AWS region override when provided', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestTapStackRegionOverride', {
+        awsRegionOverride: 'eu-west-1',
+        environmentSuffix: 'test',
+      });
+      synthesized = Testing.synth(stack);
+
+      expect(synthesized).toContain('"region": "eu-west-1"');
+    });
+
     test('configures S3 backend correctly', () => {
       app = new App();
       stack = new TapStack(app, 'TestTapStackBackend', {
