@@ -3,8 +3,8 @@
   "language": "ts",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "synth-k4p0o6s7",
-  "team": "iac-synth",
+  "po_id": "k4p0o6s7",
+  "team": "synth",
   "startedAt": "2025-12-02T12:39:26Z",
   "subtask": "CI/CD Pipeline Integration",
   "subject_labels": [
