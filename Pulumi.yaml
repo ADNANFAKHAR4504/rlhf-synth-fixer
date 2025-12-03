@@ -1,0 +1,5 @@
+name: tap
+runtime:
+  name: nodejs
+description: AWS CodeBuild and CodeCommit CI/CD Pipeline with Enhanced Monitoring
+main: bin/tap.ts

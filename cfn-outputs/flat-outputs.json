@@ -1,0 +1,12 @@
+{
+  "repositoryCloneUrl": "https://git-codecommit.us-east-1.amazonaws.com/v1/repos/app-repo-synthv5u2y1o4",
+  "buildProjectName": "build-project-synthv5u2y1o4",
+  "buildProjectArn": "arn:aws:codebuild:us-east-1:342597974367:project/build-project-synthv5u2y1o4",
+  "artifactsBucketName": "build-artifacts-synthv5u2y1o4",
+  "logGroupName": "/aws/codebuild/build-project-synthv5u2y1o4",
+  "serviceRoleArn": "arn:aws:iam::342597974367:role/codebuild-role-synthv5u2y1o4",
+  "snsTopicArn": "arn:aws:sns:us-east-1:342597974367:build-notifications-synthv5u2y1o4",
+  "kmsKeyArn": "arn:aws:kms:us-east-1:342597974367:key/d700de73-be76-43dd-9aab-0f09d6507ae1",
+  "eventBridgeRuleArn": "arn:aws:events:us-east-1:342597974367:rule/codecommit-build-trigger-synthv5u2y1o4",
+  "dashboardUrl": "https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=codebuild-dashboard-synthv5u2y1o4"
+}
