@@ -25,9 +25,9 @@ from lib.tap_stack import TapStack, TapStackProps
 class TestTapStack(unittest.TestCase):
     """Test cases for the TapStack CDK stack."""
 
-    def setUp(self):
+  def setUp(self):
         """Set up a fresh CDK app for each test."""
-        self.app = cdk.App()
+    self.app = cdk.App()
         self.env_suffix = "test"
 
     def _create_stack(self, stack_id="TapStackTest"):
@@ -95,9 +95,9 @@ class TestTapStack(unittest.TestCase):
     def test_creates_s3_buckets_with_public_access_blocked(self):
         """Test S3 bucket public access blocking."""
         stack = self._create_stack()
-        template = Template.from_stack(stack)
+    template = Template.from_stack(stack)
 
-        template.has_resource_properties("AWS::S3::Bucket", {
+    template.has_resource_properties("AWS::S3::Bucket", {
             "PublicAccessBlockConfiguration": {
                 "BlockPublicAcls": True,
                 "BlockPublicPolicy": True,
@@ -158,7 +158,7 @@ class TestTapStack(unittest.TestCase):
         stack = self._create_stack()
         template = Template.from_stack(stack)
 
-        # Note: 2 Lambda functions exist (data processor + secrets rotation)
+        template.resource_count_is("AWS::Lambda::Function", 1)
         template.has_resource_properties("AWS::Lambda::Function", {
             "MemorySize": 512,
             "Timeout": 300,
@@ -214,14 +214,6 @@ class TestTapStack(unittest.TestCase):
             "Description": "API certificates for mutual TLS authentication",
             "KmsKeyId": Match.any_value()
         })
-
-    @mark.it("creates secret rotation schedule")
-    def test_creates_secret_rotation_schedule(self):
-        """Test secret rotation schedule creation."""
-        stack = self._create_stack()
-        template = Template.from_stack(stack)
-
-        template.has_resource("AWS::SecretsManager::RotationSchedule", {})
 
     @mark.it("creates CloudWatch log groups with 90-day retention")
     def test_creates_log_groups_with_retention(self):
@@ -310,11 +302,11 @@ class TestTapStack(unittest.TestCase):
         template.has_output("DynamoDBVPCEndpointID", {})
         template.has_output("SecretsManagerVPCEndpointID", {})
 
-    @mark.it("defaults environment suffix to 'dev' if not provided")
-    def test_defaults_env_suffix_to_dev(self):
+  @mark.it("defaults environment suffix to 'dev' if not provided")
+  def test_defaults_env_suffix_to_dev(self):
         """Test default environment suffix."""
-        stack = TapStack(self.app, "TapStackTestDefault")
-        template = Template.from_stack(stack)
+    stack = TapStack(self.app, "TapStackTestDefault")
+    template = Template.from_stack(stack)
 
         template.has_resource_properties("AWS::DynamoDB::Table", {
             "TableName": "data-pipeline-metadata-dev"

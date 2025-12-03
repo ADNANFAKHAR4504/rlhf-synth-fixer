@@ -90,21 +90,25 @@ Gateway endpoints do not require subnet selection parameter.
 
 ## 7. Secrets Manager Rotation
 
-**Issue:** MODEL_RESPONSE creates a custom rotation Lambda function which is complex and error-prone.
+**Issue:** MODEL_RESPONSE creates a custom rotation Lambda function which is complex and error-prone. Hosted rotation generates Lambda function names that exceed 64 characters when combined with long stack names.
 
-**Fix:** Use hosted rotation for simpler setup:
+**Fix:** For test environments, remove rotation schedule entirely since:
+- API certificate rotation requires custom logic (hosted rotation is for database credentials)
+- Generated function names exceed AWS Lambda 64-character limit
+- Test environments use placeholder certificates that do not require rotation
 
 ```python
-secret.add_rotation_schedule(
-    "RotationSchedule",
-    automatically_after=Duration.days(30),
-    hosted_rotation=secretsmanager.HostedRotation.mysql_single_user(
-        vpc=self.vpc,
-        vpc_subnets=ec2.SubnetSelection(
-            subnet_type=ec2.SubnetType.PRIVATE_ISOLATED
-        )
-    )
+secret = secretsmanager.Secret(
+    self,
+    "APICertificateSecret",
+    secret_name=f"data-pipeline-api-certificates-{self.environment_suffix}",
+    description="API certificates for mutual TLS authentication",
+    encryption_key=self.kms_key,
+    generate_secret_string=secretsmanager.SecretStringGenerator(...),
+    removal_policy=RemovalPolicy.DESTROY
 )
+# No rotation schedule for test environment
+return secret
 ```
 
 ## 8. API Gateway Mutual TLS

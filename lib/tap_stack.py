@@ -39,25 +39,25 @@ from constructs import Construct
 class TapStackProps(cdk.StackProps):
     """Properties for the TapStack CDK stack."""
 
-    def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
-        super().__init__(**kwargs)
-        self.environment_suffix = environment_suffix
+  def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
+    super().__init__(**kwargs)
+    self.environment_suffix = environment_suffix
 
 
 class TapStack(cdk.Stack):
     """Secure Data Processing Pipeline Stack."""
 
-    def __init__(
-        self,
-        scope: Construct,
+  def __init__(
+          self,
+          scope: Construct,
         construct_id: str,
         props: Optional[TapStackProps] = None,
         **kwargs
     ):
-        super().__init__(scope, construct_id, **kwargs)
+    super().__init__(scope, construct_id, **kwargs)
 
         self.environment_suffix = (
-            props.environment_suffix if props else None
+        props.environment_suffix if props else None
         ) or self.node.try_get_context("environmentSuffix") or "dev"
 
         self.kms_key = self._create_kms_key()
@@ -290,17 +290,6 @@ class TapStack(cdk.Stack):
                 exclude_characters=" %+~`#$&*()|[]{}:;<>?!'/\\\""
             ),
             removal_policy=RemovalPolicy.DESTROY
-        )
-
-        secret.add_rotation_schedule(
-            "RotationSchedule",
-            automatically_after=Duration.days(30),
-            hosted_rotation=secretsmanager.HostedRotation.mysql_single_user(
-                vpc=self.vpc,
-                vpc_subnets=ec2.SubnetSelection(
-                    subnet_type=ec2.SubnetType.PRIVATE_ISOLATED
-                )
-            )
         )
 
         return secret

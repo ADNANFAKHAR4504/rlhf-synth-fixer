@@ -317,7 +317,7 @@ class TapStack(cdk.Stack):
         return table
 
     def _create_api_certificate_secret(self) -> secretsmanager.Secret:
-        """Creates a Secrets Manager secret for API certificates with rotation."""
+        """Creates a Secrets Manager secret for API certificates."""
         secret = secretsmanager.Secret(
             self,
             "APICertificateSecret",
@@ -334,18 +334,6 @@ class TapStack(cdk.Stack):
                 exclude_characters=" %+~`#$&*()|[]{}:;<>?!'/\\\""
             ),
             removal_policy=RemovalPolicy.DESTROY
-        )
-
-        # Add rotation schedule
-        secret.add_rotation_schedule(
-            "RotationSchedule",
-            automatically_after=Duration.days(30),
-            hosted_rotation=secretsmanager.HostedRotation.mysql_single_user(
-                vpc=self.vpc,
-                vpc_subnets=ec2.SubnetSelection(
-                    subnet_type=ec2.SubnetType.PRIVATE_ISOLATED
-                )
-            )
         )
 
         return secret
