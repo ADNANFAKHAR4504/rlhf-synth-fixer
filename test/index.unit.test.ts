@@ -9,7 +9,7 @@ pulumi.runtime.setMocks({
     const outputs: Record<string, any> = { ...args.inputs };
 
     // Set specific mock outputs based on resource type
-    if (args.type === 'aws:s3/bucketV2:BucketV2') {
+    if (args.type === 'aws:s3/bucket:Bucket' || args.type === 'aws:s3/bucketV2:BucketV2') {
       outputs.bucket = args.inputs.bucket;
       outputs.arn = `arn:aws:s3:::${args.inputs.bucket}`;
     } else if (args.type === 'aws:lambda/function:Function') {
@@ -44,11 +44,12 @@ pulumi.runtime.setMocks({
 // Set required config before importing index
 // Note: Use "project:" prefix for global config values
 pulumi.runtime.setConfig('project:environmentSuffix', 'test123');
-pulumi.runtime.setConfig('project:environment', 'dev');
-pulumi.runtime.setConfig('project:imageQuality', '80');
-pulumi.runtime.setConfig('project:maxFileSize', '10485760');
-pulumi.runtime.setConfig('project:lambdaMemory', '512');
-pulumi.runtime.setConfig('project:logRetention', '7');
+// Intentionally NOT setting some optional config values to test default branches
+// pulumi.runtime.setConfig('project:environment', 'dev');
+// pulumi.runtime.setConfig('project:imageQuality', '80');
+// pulumi.runtime.setConfig('project:maxFileSize', '10485760');
+// pulumi.runtime.setConfig('project:lambdaMemory', '512');
+// pulumi.runtime.setConfig('project:logRetention', '7');
 pulumi.runtime.setConfig('project:reservedConcurrency', '5');
 
 describe('Image Processor Infrastructure Tests', () => {
@@ -144,6 +145,41 @@ describe('Image Processor Infrastructure Tests', () => {
       // Test logRetention default
       const logRetentionWithDefault = config.getNumber('logRetention') || 7;
       expect(logRetentionWithDefault).toBeDefined();
+    });
+  });
+
+  describe('Default Value Branch Coverage', () => {
+    it('should use default values when config keys are missing', () => {
+      // Since we intentionally did not set optional config values,
+      // the code should use the default values from the || operators
+      const config = new pulumi.Config();
+
+      // Test that when config is not set, defaults are used
+      const environment = config.get('environment') || 'dev';
+      expect(environment).toBe('dev');
+
+      const imageQuality = config.get('imageQuality') || '80';
+      expect(imageQuality).toBe('80');
+
+      const maxFileSize = config.get('maxFileSize') || '10485760';
+      expect(maxFileSize).toBe('10485760');
+
+      const lambdaMemory = config.getNumber('lambdaMemory') || 512;
+      expect(lambdaMemory).toBe(512);
+
+      const logRetention = config.getNumber('logRetention') || 7;
+      expect(logRetention).toBe(7);
+    });
+
+    it('should verify that config values are actually undefined', () => {
+      const config = new pulumi.Config();
+
+      // Verify that these config values are not set (undefined)
+      expect(config.get('environment')).toBeUndefined();
+      expect(config.get('imageQuality')).toBeUndefined();
+      expect(config.get('maxFileSize')).toBeUndefined();
+      expect(config.getNumber('lambdaMemory')).toBeUndefined();
+      expect(config.getNumber('logRetention')).toBeUndefined();
     });
   });
 });

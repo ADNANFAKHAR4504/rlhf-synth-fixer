@@ -644,7 +644,6 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     echo "🔓 Clearing any stuck locks..."
     pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes 2>/dev/null || echo "No locks to clear or cancel failed"
 
-    pulumi config set environmentSuffix "$ENVIRONMENT_SUFFIX"
     pulumi config set aws:defaultTags "{\"tags\":{\"Environment\":\"$ENVIRONMENT_SUFFIX\",\"Repository\":\"$REPOSITORY\",\"Author\":\"$COMMIT_AUTHOR\",\"PRNumber\":\"$PR_NUMBER\",\"Team\":\"$TEAM\",\"CreatedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"ManagedBy\":\"pulumi\"}}"
 
     echo "Deploying infrastructure ..."
@@ -670,7 +669,6 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     echo "🔓 Clearing any stuck locks..."
     pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes 2>/dev/null || echo "No locks to clear or cancel failed"
 
-    pulumi config set environmentSuffix "$ENVIRONMENT_SUFFIX"
     pulumi config set aws:defaultTags "{\"tags\":{\"Environment\":\"$ENVIRONMENT_SUFFIX\",\"Repository\":\"$REPOSITORY\",\"Author\":\"$COMMIT_AUTHOR\",\"PRNumber\":\"$PR_NUMBER\",\"Team\":\"$TEAM\",\"CreatedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"ManagedBy\":\"pulumi\"}}"
 
     echo "Deploying infrastructure..."
@@ -692,9 +690,8 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     echo "🔓 Clearing any stuck locks..."
     pulumi cancel --yes 2>/dev/null || echo "No locks to clear or cancel failed"
 
-    pulumi config set environmentSuffix "$ENVIRONMENT_SUFFIX"
     pulumi config set aws:defaultTags "{\"tags\":{\"Environment\":\"$ENVIRONMENT_SUFFIX\",\"Repository\":\"$REPOSITORY\",\"Author\":\"$COMMIT_AUTHOR\",\"PRNumber\":\"$PR_NUMBER\",\"Team\":\"$TEAM\",\"CreatedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"ManagedBy\":\"pulumi\"}}"
-
+    
     echo "Deploying infrastructure ..."
     if ! pipenv run pulumi-deploy; then
       echo "⚠️ Deployment failed, attempting lock recovery..."

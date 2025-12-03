@@ -22,7 +22,7 @@ const logRetentionDays = logRetention;
 // const lambdaConcurrency = reservedConcurrency;
 
 // Create S3 bucket for image storage
-const imageBucket = new aws.s3.BucketV2(`image-bucket-${environmentSuffix}`, {
+const imageBucket = new aws.s3.Bucket(`image-bucket-${environmentSuffix}`, {
   bucket: `image-processor-bucket-${environmentSuffix}`,
   forceDestroy: true, // Ensures bucket is destroyable
   tags: {
@@ -32,7 +32,7 @@ const imageBucket = new aws.s3.BucketV2(`image-bucket-${environmentSuffix}`, {
 });
 
 // Enable versioning for the bucket
-const bucketVersioning = new aws.s3.BucketVersioningV2(
+const bucketVersioning = new aws.s3.BucketVersioning(
   `image-bucket-versioning-${environmentSuffix}`,
   {
     bucket: imageBucket.id,
