@@ -32,7 +32,7 @@ All resources use `${environmentSuffix}` for unique, idempotent naming to allow 
 
 ```
 /
-├── Pulumi.yaml                       # Pulumi project config (main: dist/bin/tap.js)
+├── Pulumi.yaml                       # Pulumi project config (main: bin/tap.ts)
 
 bin/
 └── tap.ts                            # Pulumi entry point (instantiates TapStack)
@@ -78,7 +78,7 @@ main: bin/tap.ts
  * based on the deployment environment.
  */
 import * as aws from '@pulumi/aws';
-import { TapStack } from '../lib/tap-stack';
+import { TapStack } from '../lib/TapStack';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
@@ -746,7 +746,182 @@ exports.handler = async event => {
   }
 };
 
-// Helper functions included in full implementation...
+// Get bucket location
+async function getBucketLocation(bucketName) {
+  try {
+    const command = new GetBucketLocationCommand({ Bucket: bucketName });
+    const response = await withRetry(() => s3Client.send(command));
+    return response.LocationConstraint || 'us-east-1';
+  } catch (error) {
+    console.error(`Error getting location for bucket ${bucketName}: ${error.message}`);
+    return null;
+  }
+}
+
+// Check if versioning is enabled
+async function checkVersioning(bucketName) {
+  try {
+    const command = new GetBucketVersioningCommand({ Bucket: bucketName });
+    const response = await withRetry(() => s3Client.send(command));
+    return response.Status === 'Enabled';
+  } catch (error) {
+    console.error(`Error checking versioning for ${bucketName}: ${error.message}`);
+    return false;
+  }
+}
+
+// Check if server-side encryption is configured
+async function checkEncryption(bucketName) {
+  try {
+    const command = new GetBucketEncryptionCommand({ Bucket: bucketName });
+    const response = await withRetry(() => s3Client.send(command));
+    if (response.ServerSideEncryptionConfiguration?.Rules) {
+      const rule = response.ServerSideEncryptionConfiguration.Rules[0];
+      const algorithm = rule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm;
+      return algorithm === 'AES256' || algorithm === 'aws:kms';
+    }
+    return false;
+  } catch (error) {
+    if (error.name === 'ServerSideEncryptionConfigurationNotFoundError') {
+      return false;
+    }
+    console.error(`Error checking encryption for ${bucketName}: ${error.message}`);
+    return false;
+  }
+}
+
+// Check if lifecycle policy exists
+async function checkLifecycle(bucketName) {
+  try {
+    const command = new GetBucketLifecycleConfigurationCommand({ Bucket: bucketName });
+    const response = await withRetry(() => s3Client.send(command));
+    if (response.Rules && response.Rules.length > 0) {
+      return response.Rules.some(rule => {
+        if (rule.Status !== 'Enabled') return false;
+        const hasValidTransition = rule.Transitions?.some(t => t.Days && t.Days <= LIFECYCLE_THRESHOLD);
+        const hasValidExpiration = rule.Expiration?.Days && rule.Expiration.Days <= LIFECYCLE_THRESHOLD;
+        return hasValidTransition || hasValidExpiration;
+      });
+    }
+    return false;
+  } catch (error) {
+    if (error.name === 'NoSuchLifecycleConfiguration') {
+      return false;
+    }
+    console.error(`Error checking lifecycle for ${bucketName}: ${error.message}`);
+    return false;
+  }
+}
+
+// Check if bucket policy allows public access
+async function checkPublicAccess(bucketName) {
+  try {
+    const command = new GetBucketPolicyCommand({ Bucket: bucketName });
+    const response = await withRetry(() => s3Client.send(command));
+    if (response.Policy) {
+      const policy = JSON.parse(response.Policy);
+      const hasPublicAccess = policy.Statement?.some(
+        stmt => stmt.Effect === 'Allow' &&
+          (stmt.Principal === '*' || stmt.Principal?.AWS === '*') &&
+          !stmt.Condition
+      );
+      return !hasPublicAccess;
+    }
+    return true;
+  } catch (error) {
+    if (error.name === 'NoSuchBucketPolicy') {
+      return true;
+    }
+    console.error(`Error checking public access for ${bucketName}: ${error.message}`);
+    return true;
+  }
+}
+
+// Check if CloudWatch metrics are configured
+async function checkCloudWatchMetrics(bucketName) {
+  try {
+    const command = new GetBucketMetricsConfigurationCommand({
+      Bucket: bucketName,
+      Id: 'EntireBucket',
+    });
+    const response = await withRetry(() => s3Client.send(command));
+    return response.MetricsConfiguration !== undefined;
+  } catch (error) {
+    if (error.name === 'NoSuchConfiguration') {
+      return false;
+    }
+    console.error(`Error checking CloudWatch metrics for ${bucketName}: ${error.message}`);
+    return false;
+  }
+}
+
+// Tag bucket with compliance status (idempotent)
+async function tagBucketIdempotent(bucketName, compliant) {
+  try {
+    let existingTags = [];
+    try {
+      const getCommand = new GetBucketTaggingCommand({ Bucket: bucketName });
+      const response = await withRetry(() => s3Client.send(getCommand));
+      existingTags = response.TagSet || [];
+    } catch (error) {
+      if (error.name !== 'NoSuchTagSet') {
+        throw error;
+      }
+    }
+
+    const existingStatus = existingTags.find(t => t.Key === 'compliance-status');
+    const newStatus = compliant ? 'passed' : 'failed';
+
+    if (existingStatus?.Value !== newStatus) {
+      const filteredTags = existingTags.filter(t => t.Key !== 'compliance-status');
+      const newTags = [...filteredTags, { Key: 'compliance-status', Value: newStatus }];
+
+      const putCommand = new PutBucketTaggingCommand({
+        Bucket: bucketName,
+        Tagging: { TagSet: newTags },
+      });
+      await withRetry(() => s3Client.send(putCommand));
+    }
+  } catch (error) {
+    console.error(`Error tagging bucket ${bucketName}: ${error.message}`);
+  }
+}
+
+// List all buckets with pagination support
+async function listAllBuckets() {
+  const buckets = [];
+  let nextToken = undefined;
+
+  do {
+    const command = new ListBucketsCommand({ ContinuationToken: nextToken });
+    const response = await withRetry(() => s3Client.send(command));
+
+    if (response.Buckets) {
+      buckets.push(...response.Buckets);
+    }
+
+    nextToken = response.NextContinuationToken;
+  } while (nextToken);
+
+  return buckets;
+}
+
+// Publish metrics to CloudWatch
+async function publishMetrics(totalBuckets, compliantBuckets) {
+  try {
+    const command = new PutMetricDataCommand({
+      Namespace: 'S3Compliance',
+      MetricData: [
+        { MetricName: 'TotalBuckets', Value: totalBuckets, Unit: 'Count', Timestamp: new Date() },
+        { MetricName: 'CompliantBuckets', Value: compliantBuckets, Unit: 'Count', Timestamp: new Date() },
+        { MetricName: 'NonCompliantBuckets', Value: totalBuckets - compliantBuckets, Unit: 'Count', Timestamp: new Date() },
+      ],
+    });
+    await cloudwatchClient.send(command);
+  } catch (error) {
+    console.error(`Error publishing metrics: ${error.message}`);
+  }
+}
 ```
 
 ### File: lib/lambda/compliance-checker/package.json
