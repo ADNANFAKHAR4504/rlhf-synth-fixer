@@ -123,38 +123,47 @@ export class RDSOptimizationStack {
           {
             name: 'shared_buffers',
             value: '524288', // 25% of memory for db.t3.large (2GB RAM = 512MB)
+            applyMethod: 'pending-reboot', // Static parameter
           },
           {
             name: 'effective_cache_size',
             value: '1572864', // 75% of memory (1.5GB)
+            applyMethod: 'immediate', // Dynamic parameter
           },
           {
             name: 'maintenance_work_mem',
             value: '131072', // 128MB
+            applyMethod: 'immediate', // Dynamic parameter
           },
           {
             name: 'checkpoint_completion_target',
             value: '0.9',
+            applyMethod: 'immediate', // Dynamic parameter
           },
           {
             name: 'wal_buffers',
             value: '16384', // 16MB
+            applyMethod: 'pending-reboot', // Static parameter
           },
           {
             name: 'default_statistics_target',
             value: '100',
+            applyMethod: 'immediate', // Dynamic parameter
           },
           {
             name: 'random_page_cost',
             value: '1.1', // For SSD storage
+            applyMethod: 'immediate', // Dynamic parameter
           },
           {
             name: 'effective_io_concurrency',
             value: '200',
+            applyMethod: 'immediate', // Dynamic parameter
           },
           {
             name: 'work_mem',
             value: '10485', // ~10MB
+            applyMethod: 'immediate', // Dynamic parameter
           },
         ],
         tags: {
