@@ -2,7 +2,7 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
+import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 import { PaymentProcessingInfrastructure } from './payment-processing-infrastructure';
 
@@ -55,7 +55,7 @@ export class TapStack extends TerraformStack {
     });
     // Using an escape hatch instead of S3Backend construct - CDKTF still does not support S3 state locking natively
     // ref - https://developer.hashicorp.com/terraform/cdktf/concepts/resources#escape-hatch
-    this.addOverride('terraform.backend.s3.use_lockfile', true);
+    this.addOverride('terraform.backend.s3.use_lockfile', false);
 
     // Create Payment Processing Infrastructure
     const infrastructure = new PaymentProcessingInfrastructure(
