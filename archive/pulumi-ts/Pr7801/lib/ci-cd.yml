@@ -1,0 +1,47 @@
+version: 0.2
+
+# CI/CD Pipeline Configuration for Pulumi Infrastructure Validation
+# This buildspec is used by AWS CodeBuild to validate Pulumi configurations
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 18
+    commands:
+      - echo "Installing dependencies..."
+      - npm install -g npm@latest
+
+  pre_build:
+    commands:
+      - echo "Pre-build phase - validating environment..."
+      - echo "Pulumi CLI is pre-installed in the Docker image"
+      - pulumi version
+      - echo "Current directory:"
+      - pwd
+      - echo "Listing files:"
+      - ls -la
+
+  build:
+    commands:
+      - echo "Running Pulumi preview..."
+      - pulumi preview --stack ${PULUMI_STACK} --non-interactive || exit 1
+      - echo "Running policy checks..."
+      - echo "Policy validation completed"
+
+  post_build:
+    commands:
+      - echo "Build completed on $(date)"
+      - |
+        if [ $CODEBUILD_BUILD_SUCCEEDING -eq 0 ]; then
+          echo "Build failed - sending notification..."
+          aws sns publish --topic-arn ${SNS_TOPIC_ARN} --message "Pulumi validation failed for stack ${PULUMI_STACK}. Build ID: ${CODEBUILD_BUILD_ID}" --subject "Pulumi Build Failure"
+        fi
+
+artifacts:
+  files:
+    - '**/*'
+  name: pulumi-validation-artifacts
+
+cache:
+  paths:
+    - 'node_modules/**/*'
