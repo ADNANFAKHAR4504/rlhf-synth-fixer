@@ -99,7 +99,13 @@ export const handler = async (event: any): Promise<any> => {
         };
     } catch (error) {
         console.error("Error during compliance scan:", error);
-        throw error;
+        return {
+            statusCode: 500,
+            body: JSON.stringify({
+                message: "Error during compliance scan",
+                error: error instanceof Error ? error.message : String(error),
+            }),
+        };
     }
 };
 

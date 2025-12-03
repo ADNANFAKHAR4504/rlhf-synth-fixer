@@ -70,7 +70,13 @@ const handler = async (event) => {
     }
     catch (error) {
         console.error("Error during compliance scan:", error);
-        throw error;
+        return {
+            statusCode: 500,
+            body: JSON.stringify({
+                message: "Error during compliance scan",
+                error: error instanceof Error ? error.message : String(error),
+            }),
+        };
     }
 };
 exports.handler = handler;
