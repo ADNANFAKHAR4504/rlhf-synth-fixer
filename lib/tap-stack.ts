@@ -3,8 +3,8 @@ import * as aws from '@pulumi/aws';
 
 // Stack configuration
 const config = new pulumi.Config();
-const environmentSuffix = config.require('environmentSuffix');
-const region = aws.config.region || 'us-east-1';
+const environmentSuffix = config.get('environmentSuffix') || process.env.ENVIRONMENT_SUFFIX || 'dev';
+const region = 'us-east-1';
 
 // Tags applied to all resources
 const commonTags = {

@@ -52,6 +52,7 @@ pulumi.runtime.setMocks({
 // Note: The config key format is namespace:key, where namespace can be project name or "project"
 pulumi.runtime.setConfig('TapStack:environmentSuffix', 'test');
 pulumi.runtime.setConfig('project:environmentSuffix', 'test');
+pulumi.runtime.setConfig('aws:region', 'us-east-1');
 
 // Now import the stack after mocking is set up
 import * as resources from '../lib/tap-stack';
