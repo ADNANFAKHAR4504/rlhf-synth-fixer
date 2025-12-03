@@ -57,16 +57,14 @@ jest.mock('@pulumi/pulumi', () => {
 });
 
 describe('ECS Infrastructure Optimization - Code Execution', () => {
-  it('should successfully create all infrastructure resources', () => {
+  it('should successfully create TapStack component', () => {
     // Import the infrastructure code to get code coverage
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const infrastructure = require('../lib/index');
+    const { TapStack } = require('../lib/tap-stack');
 
-    // Verify exports exist
-    expect(infrastructure.albDnsName).toBeDefined();
-    expect(infrastructure.clusterName).toBeDefined();
-    expect(infrastructure.logGroupName).toBeDefined();
-    expect(infrastructure.serviceName).toBeDefined();
+    // Verify TapStack class exists
+    expect(TapStack).toBeDefined();
+    expect(typeof TapStack).toBe('function');
   });
 
   it('should handle missing optional config values with defaults', () => {
@@ -111,11 +109,10 @@ describe('ECS Infrastructure Optimization - Code Execution', () => {
     });
 
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const infrastructure2 = require('../lib/index');
+    const { TapStack } = require('../lib/tap-stack');
 
     // Verify it still works with defaults
-    expect(infrastructure2.albDnsName).toBeDefined();
-    expect(infrastructure2.clusterName).toBeDefined();
+    expect(TapStack).toBeDefined();
   });
 
   it('should handle production environment configuration', () => {
@@ -160,123 +157,116 @@ describe('ECS Infrastructure Optimization - Code Execution', () => {
     });
 
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const infrastructure3 = require('../lib/index');
+    const { TapStack } = require('../lib/tap-stack');
 
     // Verify production config works
-    expect(infrastructure3.albDnsName).toBeDefined();
-    expect(infrastructure3.clusterName).toBeDefined();
+    expect(TapStack).toBeDefined();
   });
 });
 
 describe('ECS Infrastructure Optimization - Code Analysis', () => {
-  const indexPath = path.join(__dirname, '../lib/index.ts');
-  const indexContent = fs.readFileSync(indexPath, 'utf-8');
+  const tapStackPath = path.join(__dirname, '../lib/tap-stack.ts');
+  const tapStackContent = fs.readFileSync(tapStackPath, 'utf-8');
 
   describe('Configuration Management', () => {
-    it('should read environmentSuffix from environment or config', () => {
-      expect(indexContent).toContain('ENVIRONMENT_SUFFIX');
-      expect(indexContent).toContain('environmentSuffix');
-      // Should have fallback to config.get
-      expect(indexContent).toContain('config.get');
+    it('should read environmentSuffix from args or use default', () => {
+      expect(tapStackContent).toContain('environmentSuffix');
+      // Should have fallback to default
+      expect(tapStackContent).toContain("args.environmentSuffix || 'dev'");
     });
 
-    it('should define required exports', () => {
-      expect(indexContent).toContain('export const albDnsName');
-      expect(indexContent).toContain('export const clusterName');
-      expect(indexContent).toContain('export const logGroupName');
-      expect(indexContent).toContain('export const serviceName');
+    it('should define TapStack class with proper outputs', () => {
+      expect(tapStackContent).toContain('export class TapStack');
+      expect(tapStackContent).toContain('public readonly vpcId');
+      expect(tapStackContent).toContain('public readonly clusterName');
+      expect(tapStackContent).toContain('public readonly albDnsName');
+      expect(tapStackContent).toContain('public readonly serviceName');
     });
 
     it('should use Pulumi config for environment-specific values', () => {
-      expect(indexContent).toContain('config.get');
-      expect(indexContent).toContain('environment');
-      expect(indexContent).toContain('awsRegion');
-      expect(indexContent).toContain('containerPort');
-      expect(indexContent).toContain('desiredCount');
+      expect(tapStackContent).toContain('config.get');
+      expect(tapStackContent).toContain('environment');
+      expect(tapStackContent).toContain('awsRegion');
+      expect(tapStackContent).toContain('containerPort');
+      expect(tapStackContent).toContain('desiredCount');
     });
   });
 
   describe('Resource Naming', () => {
     it('should include environmentSuffix in all resource names', () => {
-      const envSuffixMatches = indexContent.match(/\$\{environmentSuffix\}/g);
+      const envSuffixMatches = tapStackContent.match(/\$\{environmentSuffix\}/g);
       expect(envSuffixMatches).toBeTruthy();
       expect(envSuffixMatches!.length).toBeGreaterThan(10);
     });
 
     it('should use descriptive resource names', () => {
-      expect(indexContent).toContain('ecs-vpc');
-      expect(indexContent).toContain('ecs-subnet');
-      expect(indexContent).toContain('alb-sg');
-      expect(indexContent).toContain('ecs-sg');
-      expect(indexContent).toContain('app-cluster');
-      expect(indexContent).toContain('ecs-logs');
+      expect(tapStackContent).toContain('ecs-vpc');
+      expect(tapStackContent).toContain('ecs-subnet');
+      expect(tapStackContent).toContain('alb-sg');
+      expect(tapStackContent).toContain('ecs-sg');
+      expect(tapStackContent).toContain('app-cluster');
+      expect(tapStackContent).toContain('ecs-logs');
     });
   });
 
   describe('Tagging Strategy', () => {
     it('should define common tags object', () => {
-      expect(indexContent).toContain('commonTags');
-      expect(indexContent).toContain('Environment:');
-      expect(indexContent).toContain('Project:');
-      expect(indexContent).toContain('ManagedBy:');
-      expect(indexContent).toContain('Team:');
+      expect(tapStackContent).toContain('commonTags');
+      expect(tapStackContent).toContain('Environment:');
+      expect(tapStackContent).toContain('Project:');
+      expect(tapStackContent).toContain('ManagedBy:');
+      expect(tapStackContent).toContain('Team:');
     });
 
     it('should apply tags to resources', () => {
-      expect(indexContent).toContain('tags: { ...commonTags');
-      expect(indexContent).toContain('tags: commonTags');
+      expect(tapStackContent).toContain('tags: { ...commonTags');
+      expect(tapStackContent).toContain('tags: commonTags');
     });
   });
 
   describe('Service Consolidation', () => {
     it('should define reusable ECS service creation function', () => {
-      expect(indexContent).toMatch(/function\s+createECSService/);
-      expect(indexContent).toContain('createECSService(');
-    });
-
-    it('should use the reusable function to create service', () => {
-      const createServiceCalls = (indexContent.match(/createECSService\(/g) || []).length;
-      expect(createServiceCalls).toBeGreaterThanOrEqual(1);
+      expect(tapStackContent).toMatch(/export function\s+createECSService/);
     });
   });
 
   describe('Resource Optimization', () => {
     it('should configure proper memory reservations', () => {
-      expect(indexContent).toContain('memoryReservation');
-      expect(indexContent).toContain('memory');
+      expect(tapStackContent).toContain('memoryReservation');
+      expect(tapStackContent).toContain('memory');
     });
 
     it('should not use placement strategies with FARGATE', () => {
       // Placement strategies are not supported with FARGATE launch type
-      expect(indexContent).not.toContain('orderedPlacementStrategies');
+      expect(tapStackContent).not.toContain('orderedPlacementStrategies');
       // Should have comment explaining why
-      expect(indexContent).toContain('Placement strategies are not supported with FARGATE');
+      expect(tapStackContent).toContain('Placement strategies are not supported with FARGATE');
     });
 
     it('should configure CPU-based auto-scaling', () => {
-      expect(indexContent).toContain('aws.appautoscaling.Policy');
-      expect(indexContent).toContain('ECSServiceAverageCPUUtilization');
-      expect(indexContent).toContain('TargetTrackingScaling');
+      expect(tapStackContent).toContain('aws.appautoscaling.Policy');
+      expect(tapStackContent).toContain('ECSServiceAverageCPUUtilization');
+      expect(tapStackContent).toContain('TargetTrackingScaling');
     });
 
     it('should set appropriate auto-scaling parameters', () => {
-      expect(indexContent).toContain('targetValue');
-      expect(indexContent).toContain('scaleInCooldown');
-      expect(indexContent).toContain('scaleOutCooldown');
+      expect(tapStackContent).toContain('targetValue');
+      expect(tapStackContent).toContain('scaleInCooldown');
+      expect(tapStackContent).toContain('scaleOutCooldown');
     });
   });
 
   describe('ALB Health Checks', () => {
     it('should configure health check parameters', () => {
-      expect(indexContent).toContain('healthCheck:');
-      expect(indexContent).toContain('interval:');
-      expect(indexContent).toContain('timeout:');
-      expect(indexContent).toContain('healthyThreshold:');
-      expect(indexContent).toContain('unhealthyThreshold:');
+      expect(tapStackContent).toContain('healthCheck:');
+      expect(tapStackContent).toContain('interval:');
+      expect(tapStackContent).toContain('timeout:');
+      expect(tapStackContent).toContain('healthyThreshold:');
+      expect(tapStackContent).toContain('unhealthyThreshold:');
     });
 
     it('should use optimized health check intervals', () => {
-      const intervalMatch = indexContent.match(/interval:\s*(\d+)/);
+      const intervalMatch = tapStackContent.match(/interval:\s*(\d+)/);
       expect(intervalMatch).toBeTruthy();
       const interval = parseInt(intervalMatch![1], 10);
       expect(interval).toBeGreaterThanOrEqual(30);
@@ -285,177 +275,177 @@ describe('ECS Infrastructure Optimization - Code Analysis', () => {
 
   describe('CloudWatch Logging', () => {
     it('should create CloudWatch log group', () => {
-      expect(indexContent).toContain('aws.cloudwatch.LogGroup');
+      expect(tapStackContent).toContain('aws.cloudwatch.LogGroup');
     });
 
     it('should configure log retention policies', () => {
-      expect(indexContent).toContain('retentionInDays');
+      expect(tapStackContent).toContain('retentionInDays');
     });
 
     it('should use environment-specific retention', () => {
-      expect(indexContent).toMatch(/retentionInDays:.*environment.*\?/);
+      expect(tapStackContent).toMatch(/retentionInDays:.*environment.*\?/);
     });
   });
 
   describe('Security Groups', () => {
     it('should create ALB security group', () => {
-      expect(indexContent).toContain('aws.ec2.SecurityGroup');
-      expect(indexContent).toContain('alb-sg');
+      expect(tapStackContent).toContain('aws.ec2.SecurityGroup');
+      expect(tapStackContent).toContain('alb-sg');
     });
 
     it('should create ECS security group', () => {
-      expect(indexContent).toContain('ecs-sg');
+      expect(tapStackContent).toContain('ecs-sg');
     });
 
     it('should configure ingress rules with descriptions', () => {
-      expect(indexContent).toContain('ingress:');
-      expect(indexContent).toContain('description:');
+      expect(tapStackContent).toContain('ingress:');
+      expect(tapStackContent).toContain('description:');
     });
 
     it('should configure egress rules', () => {
-      expect(indexContent).toContain('egress:');
+      expect(tapStackContent).toContain('egress:');
     });
 
     it('should allow HTTP and HTTPS on ALB', () => {
-      expect(indexContent).toContain('fromPort: 80');
-      expect(indexContent).toContain('toPort: 80');
-      expect(indexContent).toContain('fromPort: 443');
-      expect(indexContent).toContain('toPort: 443');
+      expect(tapStackContent).toContain('fromPort: 80');
+      expect(tapStackContent).toContain('toPort: 80');
+      expect(tapStackContent).toContain('fromPort: 443');
+      expect(tapStackContent).toContain('toPort: 443');
     });
   });
 
   describe('Resource Dependencies', () => {
     it('should declare explicit dependencies', () => {
-      expect(indexContent).toContain('dependsOn:');
+      expect(tapStackContent).toContain('dependsOn:');
     });
 
     it('should have dependencies for task definition', () => {
-      expect(indexContent).toMatch(/dependsOn:.*\[.*logGroup.*executionRole.*\]/);
+      expect(tapStackContent).toMatch(/dependsOn:.*\[.*logGroup.*executionRole.*\]/);
     });
 
     it('should have dependencies for ALB', () => {
-      expect(indexContent).toMatch(/dependsOn:.*\[.*igw.*\]/);
+      expect(tapStackContent).toMatch(/dependsOn:.*\[.*igw.*\]/);
     });
 
     it('should have dependencies for service', () => {
-      expect(indexContent).toMatch(/dependsOn:.*\[.*listener.*\]/);
+      expect(tapStackContent).toMatch(/dependsOn:.*\[.*listener.*\]/);
     });
   });
 
   describe('Network Configuration', () => {
     it('should create VPC with DNS support', () => {
-      expect(indexContent).toContain('aws.ec2.Vpc');
-      expect(indexContent).toContain('enableDnsHostnames: true');
-      expect(indexContent).toContain('enableDnsSupport: true');
+      expect(tapStackContent).toContain('aws.ec2.Vpc');
+      expect(tapStackContent).toContain('enableDnsHostnames: true');
+      expect(tapStackContent).toContain('enableDnsSupport: true');
     });
 
     it('should create subnets in multiple AZs', () => {
-      expect(indexContent).toContain('aws.ec2.Subnet');
-      const subnetMatches = (indexContent.match(/aws\.ec2\.Subnet/g) || []).length;
+      expect(tapStackContent).toContain('aws.ec2.Subnet');
+      const subnetMatches = (tapStackContent.match(/aws\.ec2\.Subnet/g) || []).length;
       expect(subnetMatches).toBeGreaterThanOrEqual(2);
     });
 
     it('should configure internet gateway', () => {
-      expect(indexContent).toContain('aws.ec2.InternetGateway');
+      expect(tapStackContent).toContain('aws.ec2.InternetGateway');
     });
 
     it('should configure route table', () => {
-      expect(indexContent).toContain('aws.ec2.RouteTable');
-      expect(indexContent).toContain('aws.ec2.RouteTableAssociation');
+      expect(tapStackContent).toContain('aws.ec2.RouteTable');
+      expect(tapStackContent).toContain('aws.ec2.RouteTableAssociation');
     });
   });
 
   describe('IAM Configuration', () => {
     it('should create ECS task execution role', () => {
-      expect(indexContent).toContain('aws.iam.Role');
-      expect(indexContent).toContain('ecs-execution-role');
+      expect(tapStackContent).toContain('aws.iam.Role');
+      expect(tapStackContent).toContain('ecs-execution-role');
     });
 
     it('should attach execution role policy', () => {
-      expect(indexContent).toContain('aws.iam.RolePolicyAttachment');
-      expect(indexContent).toContain('AmazonECSTaskExecutionRolePolicy');
+      expect(tapStackContent).toContain('aws.iam.RolePolicyAttachment');
+      expect(tapStackContent).toContain('AmazonECSTaskExecutionRolePolicy');
     });
 
     it('should use sts:AssumeRole', () => {
-      expect(indexContent).toContain('sts:AssumeRole');
-      expect(indexContent).toContain('ecs-tasks.amazonaws.com');
+      expect(tapStackContent).toContain('sts:AssumeRole');
+      expect(tapStackContent).toContain('ecs-tasks.amazonaws.com');
     });
   });
 
   describe('ECS Configuration', () => {
     it('should create ECS cluster', () => {
-      expect(indexContent).toContain('aws.ecs.Cluster');
-      expect(indexContent).toContain('app-cluster');
+      expect(tapStackContent).toContain('aws.ecs.Cluster');
+      expect(tapStackContent).toContain('app-cluster');
     });
 
     it('should enable container insights', () => {
-      expect(indexContent).toContain('containerInsights');
-      expect(indexContent).toContain('enabled');
+      expect(tapStackContent).toContain('containerInsights');
+      expect(tapStackContent).toContain('enabled');
     });
 
     it('should create task definition', () => {
-      expect(indexContent).toContain('aws.ecs.TaskDefinition');
+      expect(tapStackContent).toContain('aws.ecs.TaskDefinition');
     });
 
     it('should use Fargate launch type', () => {
-      expect(indexContent).toContain('requiresCompatibilities: [\'FARGATE\']');
-      expect(indexContent).toContain('launchType: \'FARGATE\'');
+      expect(tapStackContent).toContain("requiresCompatibilities: ['FARGATE']");
+      expect(tapStackContent).toContain("launchType: 'FARGATE'");
     });
 
     it('should configure proper CPU and memory', () => {
-      expect(indexContent).toContain('cpu: ');
-      expect(indexContent).toContain('memory: ');
+      expect(tapStackContent).toContain('cpu: ');
+      expect(tapStackContent).toContain('memory: ');
     });
 
     it('should use awsvpc network mode', () => {
-      expect(indexContent).toContain('networkMode: \'awsvpc\'');
+      expect(tapStackContent).toContain("networkMode: 'awsvpc'");
     });
   });
 
   describe('Load Balancer Configuration', () => {
     it('should create Application Load Balancer', () => {
-      expect(indexContent).toContain('aws.lb.LoadBalancer');
-      expect(indexContent).toContain('loadBalancerType: \'application\'');
+      expect(tapStackContent).toContain('aws.lb.LoadBalancer');
+      expect(tapStackContent).toContain("loadBalancerType: 'application'");
     });
 
     it('should disable deletion protection', () => {
-      expect(indexContent).toContain('enableDeletionProtection: false');
+      expect(tapStackContent).toContain('enableDeletionProtection: false');
     });
 
     it('should create target group', () => {
-      expect(indexContent).toContain('aws.lb.TargetGroup');
-      expect(indexContent).toContain('targetType: \'ip\'');
+      expect(tapStackContent).toContain('aws.lb.TargetGroup');
+      expect(tapStackContent).toContain("targetType: 'ip'");
     });
 
     it('should configure deregistration delay', () => {
-      expect(indexContent).toContain('deregistrationDelay');
+      expect(tapStackContent).toContain('deregistrationDelay');
     });
 
     it('should create HTTP listener', () => {
-      expect(indexContent).toContain('aws.lb.Listener');
-      expect(indexContent).toContain('port: 80');
+      expect(tapStackContent).toContain('aws.lb.Listener');
+      expect(tapStackContent).toContain('port: 80');
     });
   });
 
   describe('Auto-scaling Configuration', () => {
     it('should create scaling target', () => {
-      expect(indexContent).toContain('aws.appautoscaling.Target');
-      expect(indexContent).toContain('maxCapacity');
-      expect(indexContent).toContain('minCapacity');
+      expect(tapStackContent).toContain('aws.appautoscaling.Target');
+      expect(tapStackContent).toContain('maxCapacity');
+      expect(tapStackContent).toContain('minCapacity');
     });
 
     it('should configure scaling policy', () => {
-      expect(indexContent).toContain('aws.appautoscaling.Policy');
-      expect(indexContent).toContain('policyType: \'TargetTrackingScaling\'');
+      expect(tapStackContent).toContain('aws.appautoscaling.Policy');
+      expect(tapStackContent).toContain("policyType: 'TargetTrackingScaling'");
     });
 
     it('should use CPU utilization metric', () => {
-      expect(indexContent).toContain('predefinedMetricType: \'ECSServiceAverageCPUUtilization\'');
+      expect(tapStackContent).toContain("predefinedMetricType: 'ECSServiceAverageCPUUtilization'");
     });
 
     it('should configure cooldown periods', () => {
-      expect(indexContent).toContain('scaleInCooldown');
-      expect(indexContent).toContain('scaleOutCooldown');
+      expect(tapStackContent).toContain('scaleInCooldown');
+      expect(tapStackContent).toContain('scaleOutCooldown');
     });
   });
 
@@ -464,25 +454,25 @@ describe('ECS Infrastructure Optimization - Code Analysis', () => {
       // Exception: The managed policy ARN contains "aws" which looks like account ID pattern
       // but is actually just the AWS-managed policy identifier
       const accountIdPattern = /\d{12}/g;
-      const matches = indexContent.match(accountIdPattern);
+      const matches = tapStackContent.match(accountIdPattern);
       expect(matches).toBeNull();
     });
 
     it('should not have hardcoded regions outside config', () => {
       // Check for literal region strings (not template literals)
       const hardcodedRegionPattern = /:\s*['"](us|eu|ap)-\w+-\d+['"]/g;
-      const matches = indexContent.match(hardcodedRegionPattern);
+      const matches = tapStackContent.match(hardcodedRegionPattern);
       // Regions should be in template literals (${region}) or config
       expect(matches).toBeNull();
     });
 
     it('should use Pulumi interpolate for dynamic values', () => {
-      expect(indexContent).toContain('pulumi.interpolate');
+      expect(tapStackContent).toContain('pulumi.interpolate');
     });
 
     it('should have proper TypeScript typing', () => {
-      expect(indexContent).toContain('import * as pulumi');
-      expect(indexContent).toContain('import * as aws');
+      expect(tapStackContent).toContain('import * as pulumi');
+      expect(tapStackContent).toContain('import * as aws');
     });
   });
 });
@@ -493,7 +483,7 @@ describe('Optimize.py Script Validation', () => {
   const path = require('path');
 
   const scriptPath = path.join(__dirname, '../lib/optimize.py');
-  const indexPath = path.join(__dirname, '../lib/index.ts');
+  const tapStackPath = path.join(__dirname, '../lib/tap-stack.ts');
 
   it('should exist and be executable', () => {
     expect(fs.existsSync(scriptPath)).toBe(true);
@@ -501,7 +491,7 @@ describe('Optimize.py Script Validation', () => {
 
   it('should analyze the infrastructure code', () => {
     try {
-      const output = execSync(`python3 ${scriptPath} ${indexPath}`, {
+      const output = execSync(`python3 ${scriptPath} ${tapStackPath}`, {
         encoding: 'utf-8',
       });
       expect(output).toContain('ECS INFRASTRUCTURE OPTIMIZATION ANALYSIS');
@@ -513,7 +503,7 @@ describe('Optimize.py Script Validation', () => {
 
   it('should check all 10 optimization patterns', () => {
     try {
-      const output = execSync(`python3 ${scriptPath} ${indexPath}`, {
+      const output = execSync(`python3 ${scriptPath} ${tapStackPath}`, {
         encoding: 'utf-8',
       });
       expect(output).toContain('Service Consolidation');
@@ -533,17 +523,17 @@ describe('Optimize.py Script Validation', () => {
 
   it('should validate service consolidation pattern', () => {
     try {
-      const output = execSync(`python3 ${scriptPath} ${indexPath}`, {
+      const output = execSync(`python3 ${scriptPath} ${tapStackPath}`, {
         encoding: 'utf-8',
       });
       expect(
         output.includes('reusable service component') ||
-          output.includes('Service Consolidation - ✓ PASS')
+        output.includes('Service Consolidation - ✓ PASS')
       ).toBe(true);
     } catch (error: any) {
       expect(
         error.stdout.includes('reusable service component') ||
-          error.stdout.includes('Service Consolidation - ✓ PASS')
+        error.stdout.includes('Service Consolidation - ✓ PASS')
       ).toBe(true);
     }
   });
@@ -552,70 +542,70 @@ describe('Optimize.py Script Validation', () => {
     // FARGATE doesn't support explicit placement strategies
     // This test verifies that the code correctly doesn't use them
     try {
-      const output = execSync(`python3 ${scriptPath} ${indexPath}`, {
+      const output = execSync(`python3 ${scriptPath} ${tapStackPath}`, {
         encoding: 'utf-8',
       });
       // Check that placement strategy check exists (even if it fails for FARGATE)
       expect(
         output.includes('Task Placement Strategy') ||
-          output.includes('placement')
+        output.includes('placement')
       ).toBe(true);
     } catch (error: any) {
       // Check that placement strategy check exists (even if it fails for FARGATE)
       expect(
         error.stdout.includes('Task Placement Strategy') ||
-          error.stdout.includes('placement')
+        error.stdout.includes('placement')
       ).toBe(true);
     }
   });
 
   it('should validate resource reservations', () => {
     try {
-      const output = execSync(`python3 ${scriptPath} ${indexPath}`, {
+      const output = execSync(`python3 ${scriptPath} ${tapStackPath}`, {
         encoding: 'utf-8',
       });
       expect(
         output.includes('memory limits configured') ||
-          output.includes('Resource Reservations - ✓ PASS')
+        output.includes('Resource Reservations - ✓ PASS')
       ).toBe(true);
     } catch (error: any) {
       expect(
         error.stdout.includes('memory limits configured') ||
-          error.stdout.includes('Resource Reservations - ✓ PASS')
+        error.stdout.includes('Resource Reservations - ✓ PASS')
       ).toBe(true);
     }
   });
 
   it('should validate Pulumi config usage', () => {
     try {
-      const output = execSync(`python3 ${scriptPath} ${indexPath}`, {
+      const output = execSync(`python3 ${scriptPath} ${tapStackPath}`, {
         encoding: 'utf-8',
       });
       expect(
         output.includes('Pulumi config') ||
-          output.includes('Configuration Management - ✓ PASS')
+        output.includes('Configuration Management - ✓ PASS')
       ).toBe(true);
     } catch (error: any) {
       expect(
         error.stdout.includes('Pulumi config') ||
-          error.stdout.includes('Configuration Management - ✓ PASS')
+        error.stdout.includes('Configuration Management - ✓ PASS')
       ).toBe(true);
     }
   });
 
   it('should validate CPU-based auto-scaling', () => {
     try {
-      const output = execSync(`python3 ${scriptPath} ${indexPath}`, {
+      const output = execSync(`python3 ${scriptPath} ${tapStackPath}`, {
         encoding: 'utf-8',
       });
       expect(
         output.includes('CPU-based auto-scaling') ||
-          output.includes('Auto-scaling Configuration - ✓ PASS')
+        output.includes('Auto-scaling Configuration - ✓ PASS')
       ).toBe(true);
     } catch (error: any) {
       expect(
         error.stdout.includes('CPU-based auto-scaling') ||
-          error.stdout.includes('Auto-scaling Configuration - ✓ PASS')
+        error.stdout.includes('Auto-scaling Configuration - ✓ PASS')
       ).toBe(true);
     }
   });

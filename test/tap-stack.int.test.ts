@@ -4,12 +4,12 @@ import * as path from 'path';
 
 describe('ECS Optimization Integration Tests', () => {
   const scriptPath = path.join(__dirname, '../lib/optimize.py');
-  const indexPath = path.join(__dirname, '../lib/index.ts');
+  const tapStackPath = path.join(__dirname, '../lib/tap-stack.ts');
 
   describe('Optimization Script End-to-End', () => {
     it('should successfully analyze the infrastructure code', () => {
       try {
-        const output = execSync(`python3 ${scriptPath} ${indexPath}`, {
+        const output = execSync(`python3 ${scriptPath} ${tapStackPath}`, {
           encoding: 'utf-8',
         });
         expect(output).toContain('ECS INFRASTRUCTURE OPTIMIZATION ANALYSIS');
@@ -25,7 +25,7 @@ describe('ECS Optimization Integration Tests', () => {
 
     it('should validate all 10 optimization patterns are checked', () => {
       try {
-        const output = execSync(`python3 ${scriptPath} ${indexPath}`, {
+        const output = execSync(`python3 ${scriptPath} ${tapStackPath}`, {
           encoding: 'utf-8',
         });
         expect(output).toMatch(/Total Checks:\s*10/);
@@ -36,7 +36,7 @@ describe('ECS Optimization Integration Tests', () => {
 
     it('should provide detailed findings for each check', () => {
       try {
-        const output = execSync(`python3 ${scriptPath} ${indexPath}`, {
+        const output = execSync(`python3 ${scriptPath} ${tapStackPath}`, {
           encoding: 'utf-8',
         });
 
@@ -60,7 +60,7 @@ describe('ECS Optimization Integration Tests', () => {
 
     it('should pass service consolidation check', () => {
       try {
-        const output = execSync(`python3 ${scriptPath} ${indexPath}`, {
+        const output = execSync(`python3 ${scriptPath} ${tapStackPath}`, {
           encoding: 'utf-8',
         });
         expect(output).toContain('Service Consolidation - ✓ PASS');
@@ -73,7 +73,7 @@ describe('ECS Optimization Integration Tests', () => {
       // FARGATE doesn't support explicit placement strategies
       // This test just verifies the optimization check runs
       try {
-        const output = execSync(`python3 ${scriptPath} ${indexPath}`, {
+        const output = execSync(`python3 ${scriptPath} ${tapStackPath}`, {
           encoding: 'utf-8',
         });
         expect(output).toContain('Task Placement Strategy');
@@ -84,7 +84,7 @@ describe('ECS Optimization Integration Tests', () => {
 
     it('should pass resource reservations check', () => {
       try {
-        const output = execSync(`python3 ${scriptPath} ${indexPath}`, {
+        const output = execSync(`python3 ${scriptPath} ${tapStackPath}`, {
           encoding: 'utf-8',
         });
         expect(output).toContain('Resource Reservations - ✓ PASS');
@@ -95,7 +95,7 @@ describe('ECS Optimization Integration Tests', () => {
 
     it('should pass configuration management check', () => {
       try {
-        const output = execSync(`python3 ${scriptPath} ${indexPath}`, {
+        const output = execSync(`python3 ${scriptPath} ${tapStackPath}`, {
           encoding: 'utf-8',
         });
         expect(output).toContain('Configuration Management - ✓ PASS');
@@ -106,7 +106,7 @@ describe('ECS Optimization Integration Tests', () => {
 
     it('should pass ALB health check optimization', () => {
       try {
-        const output = execSync(`python3 ${scriptPath} ${indexPath}`, {
+        const output = execSync(`python3 ${scriptPath} ${tapStackPath}`, {
           encoding: 'utf-8',
         });
         expect(output).toContain('ALB Health Check Optimization - ✓ PASS');
@@ -117,7 +117,7 @@ describe('ECS Optimization Integration Tests', () => {
 
     it('should pass security group cleanup check', () => {
       try {
-        const output = execSync(`python3 ${scriptPath} ${indexPath}`, {
+        const output = execSync(`python3 ${scriptPath} ${tapStackPath}`, {
           encoding: 'utf-8',
         });
         expect(output).toContain('Security Group Cleanup - ✓ PASS');
@@ -128,7 +128,7 @@ describe('ECS Optimization Integration Tests', () => {
 
     it('should pass resource dependencies check', () => {
       try {
-        const output = execSync(`python3 ${scriptPath} ${indexPath}`, {
+        const output = execSync(`python3 ${scriptPath} ${tapStackPath}`, {
           encoding: 'utf-8',
         });
         expect(output).toContain('Resource Dependencies - ✓ PASS');
@@ -139,7 +139,7 @@ describe('ECS Optimization Integration Tests', () => {
 
     it('should pass auto-scaling configuration check', () => {
       try {
-        const output = execSync(`python3 ${scriptPath} ${indexPath}`, {
+        const output = execSync(`python3 ${scriptPath} ${tapStackPath}`, {
           encoding: 'utf-8',
         });
         expect(output).toContain('Auto-scaling Configuration - ✓ PASS');
@@ -150,7 +150,7 @@ describe('ECS Optimization Integration Tests', () => {
 
     it('should have a passing score of at least 70%', () => {
       try {
-        const output = execSync(`python3 ${scriptPath} ${indexPath}`, {
+        const output = execSync(`python3 ${scriptPath} ${tapStackPath}`, {
           encoding: 'utf-8',
         });
         const scoreMatch = output.match(/Score:\s*\d+\/\d+\s*\((\d+)%\)/);
@@ -169,84 +169,83 @@ describe('ECS Optimization Integration Tests', () => {
   });
 
   describe('Infrastructure Code Validation', () => {
-    const indexContent = fs.readFileSync(indexPath, 'utf-8');
+    const tapStackContent = fs.readFileSync(tapStackPath, 'utf-8');
 
     it('should use Pulumi config for all environment-specific values', () => {
-      // Should read from environment variable with config fallback
-      expect(indexContent).toContain('ENVIRONMENT_SUFFIX');
-      expect(indexContent).toContain('config.get');
-      expect(indexContent).toContain('environmentSuffix');
+      // Should read from args with config fallback
+      expect(tapStackContent).toContain('args.environmentSuffix');
+      expect(tapStackContent).toContain('config.get');
+      expect(tapStackContent).toContain('environmentSuffix');
     });
 
     it('should implement reusable ECS service creation', () => {
-      expect(indexContent).toContain('createECSService');
-      expect(indexContent).toMatch(/function\s+createECSService/);
+      expect(tapStackContent).toContain('createECSService');
+      expect(tapStackContent).toMatch(/export function\s+createECSService/);
     });
 
     it('should not use placement strategies with FARGATE', () => {
       // Placement strategies are not supported with FARGATE launch type
-      expect(indexContent).not.toContain('orderedPlacementStrategies');
-      expect(indexContent).toContain('Placement strategies are not supported with FARGATE');
+      expect(tapStackContent).not.toContain('orderedPlacementStrategies');
+      expect(tapStackContent).toContain('Placement strategies are not supported with FARGATE');
     });
 
     it('should configure memory reservations', () => {
-      expect(indexContent).toContain('memoryReservation');
-      expect(indexContent).toContain('memory');
+      expect(tapStackContent).toContain('memoryReservation');
+      expect(tapStackContent).toContain('memory');
     });
 
     it('should configure CloudWatch log retention', () => {
-      expect(indexContent).toContain('aws.cloudwatch.LogGroup');
-      expect(indexContent).toContain('retentionInDays');
+      expect(tapStackContent).toContain('aws.cloudwatch.LogGroup');
+      expect(tapStackContent).toContain('retentionInDays');
     });
 
     it('should use optimized ALB health checks', () => {
-      expect(indexContent).toContain('healthCheck');
-      expect(indexContent).toContain('interval');
-      expect(indexContent).toContain('timeout');
-      expect(indexContent).toContain('healthyThreshold');
-      expect(indexContent).toContain('unhealthyThreshold');
+      expect(tapStackContent).toContain('healthCheck');
+      expect(tapStackContent).toContain('interval');
+      expect(tapStackContent).toContain('timeout');
+      expect(tapStackContent).toContain('healthyThreshold');
+      expect(tapStackContent).toContain('unhealthyThreshold');
     });
 
     it('should implement comprehensive tagging', () => {
-      expect(indexContent).toContain('commonTags');
-      expect(indexContent).toContain('Environment');
-      expect(indexContent).toContain('Project');
-      expect(indexContent).toContain('ManagedBy');
+      expect(tapStackContent).toContain('commonTags');
+      expect(tapStackContent).toContain('Environment');
+      expect(tapStackContent).toContain('Project');
+      expect(tapStackContent).toContain('ManagedBy');
     });
 
     it('should use explicit resource dependencies', () => {
-      expect(indexContent).toContain('dependsOn');
+      expect(tapStackContent).toContain('dependsOn');
     });
 
     it('should configure CPU-based auto-scaling', () => {
-      expect(indexContent).toContain('aws.appautoscaling');
-      expect(indexContent).toContain('ECSServiceAverageCPUUtilization');
-      expect(indexContent).toContain('scaleInCooldown');
-      expect(indexContent).toContain('scaleOutCooldown');
+      expect(tapStackContent).toContain('aws.appautoscaling');
+      expect(tapStackContent).toContain('ECSServiceAverageCPUUtilization');
+      expect(tapStackContent).toContain('scaleInCooldown');
+      expect(tapStackContent).toContain('scaleOutCooldown');
     });
 
-    it('should export required stack outputs', () => {
-      expect(indexContent).toContain('export const albDnsName');
-      expect(indexContent).toContain('export const clusterName');
-      expect(indexContent).toContain('export const logGroupName');
-      expect(indexContent).toContain('export const serviceName');
+    it('should export required stack outputs as class properties', () => {
+      expect(tapStackContent).toContain('public readonly albDnsName');
+      expect(tapStackContent).toContain('public readonly clusterName');
+      expect(tapStackContent).toContain('public readonly logGroupName');
+      expect(tapStackContent).toContain('public readonly serviceName');
     });
 
     it('should include environmentSuffix in all resource names', () => {
-      const resourceDeclarations = indexContent.match(/new aws\.\w+\.\w+\(/g) || [];
-      const envSuffixCount = (indexContent.match(/\$\{environmentSuffix\}/g) || []).length;
+      const envSuffixCount = (tapStackContent.match(/\$\{environmentSuffix\}/g) || []).length;
 
       // Should have environmentSuffix used multiple times for resource naming
       expect(envSuffixCount).toBeGreaterThan(10);
     });
 
     it('should disable deletion protection for destroyability', () => {
-      expect(indexContent).toContain('enableDeletionProtection: false');
+      expect(tapStackContent).toContain('enableDeletionProtection: false');
     });
 
     it('should use Fargate launch type', () => {
-      expect(indexContent).toContain('launchType: ');
-      expect(indexContent).toContain('FARGATE');
+      expect(tapStackContent).toContain('launchType: ');
+      expect(tapStackContent).toContain('FARGATE');
     });
   });
 
@@ -275,7 +274,7 @@ describe('ECS Optimization Integration Tests', () => {
 
     it('should exit with appropriate code based on results', () => {
       try {
-        const result = execSync(`python3 ${scriptPath} ${indexPath}`, {
+        const result = execSync(`python3 ${scriptPath} ${tapStackPath}`, {
           encoding: 'utf-8',
         });
         // If all checks pass, should exit 0
@@ -289,27 +288,55 @@ describe('ECS Optimization Integration Tests', () => {
 
   describe('Code Quality Validation', () => {
     it('should have no hardcoded AWS account IDs', () => {
-      const indexContent = fs.readFileSync(indexPath, 'utf-8');
-      expect(indexContent).not.toMatch(/\d{12}/); // 12-digit account IDs
+      const tapStackContent = fs.readFileSync(tapStackPath, 'utf-8');
+      expect(tapStackContent).not.toMatch(/\d{12}/); // 12-digit account IDs
     });
 
     it('should have no hardcoded ARNs', () => {
-      const indexContent = fs.readFileSync(indexPath, 'utf-8');
-      expect(indexContent).not.toMatch(/arn:aws:[^:]+:[^:]+:\d{12}:/);
+      const tapStackContent = fs.readFileSync(tapStackPath, 'utf-8');
+      expect(tapStackContent).not.toMatch(/arn:aws:[^:]+:[^:]+:\d{12}:/);
     });
 
     it('should use template literals for dynamic values', () => {
-      const indexContent = fs.readFileSync(indexPath, 'utf-8');
-      expect(indexContent).toContain('pulumi.interpolate');
+      const tapStackContent = fs.readFileSync(tapStackPath, 'utf-8');
+      expect(tapStackContent).toContain('pulumi.interpolate');
     });
 
     it('should have descriptive resource names', () => {
-      const indexContent = fs.readFileSync(indexPath, 'utf-8');
-      expect(indexContent).toContain('ecs-vpc');
-      expect(indexContent).toContain('ecs-subnet');
-      expect(indexContent).toContain('alb-sg');
-      expect(indexContent).toContain('ecs-sg');
-      expect(indexContent).toContain('app-cluster');
+      const tapStackContent = fs.readFileSync(tapStackPath, 'utf-8');
+      expect(tapStackContent).toContain('ecs-vpc');
+      expect(tapStackContent).toContain('ecs-subnet');
+      expect(tapStackContent).toContain('alb-sg');
+      expect(tapStackContent).toContain('ecs-sg');
+      expect(tapStackContent).toContain('app-cluster');
+    });
+  });
+
+  describe('TapStack Component Resource', () => {
+    it('should define TapStack as a ComponentResource', () => {
+      const tapStackContent = fs.readFileSync(tapStackPath, 'utf-8');
+      expect(tapStackContent).toContain('extends pulumi.ComponentResource');
+      expect(tapStackContent).toContain('export class TapStack');
+    });
+
+    it('should define TapStackArgs interface', () => {
+      const tapStackContent = fs.readFileSync(tapStackPath, 'utf-8');
+      expect(tapStackContent).toContain('export interface TapStackArgs');
+      expect(tapStackContent).toContain('environmentSuffix');
+      expect(tapStackContent).toContain('tags');
+      expect(tapStackContent).toContain('costCenter');
+    });
+
+    it('should register outputs properly', () => {
+      const tapStackContent = fs.readFileSync(tapStackPath, 'utf-8');
+      expect(tapStackContent).toContain('this.registerOutputs');
+    });
+
+    it('should set parent for all resources', () => {
+      const tapStackContent = fs.readFileSync(tapStackPath, 'utf-8');
+      // All resources should have { parent: this }
+      const parentMatches = (tapStackContent.match(/\{ parent: this/g) || []).length;
+      expect(parentMatches).toBeGreaterThan(10);
     });
   });
 });
