@@ -26,6 +26,7 @@ class InfrastructureOptimizer:
             region_name: AWS region name (default: 'us-east-1')
         """
         self.environment_suffix = environment_suffix
+        self.resource_suffix = f'{environment_suffix}-j7'
         self.region_name = region_name
         
         # Initialize AWS clients
@@ -49,7 +50,7 @@ class InfrastructureOptimizer:
             # Find the ECS cluster using exact naming pattern: ecs-cluster-{environmentSuffix}
             clusters = self.ecs_client.list_clusters()
             cluster_arn = None
-            expected_cluster_name = f'ecs-cluster-{self.environment_suffix}'
+            expected_cluster_name = f'ecs-cluster-{self.resource_suffix}'
             
             # First try exact match
             for cluster in clusters['clusterArns']:
@@ -63,7 +64,7 @@ class InfrastructureOptimizer:
             if not cluster_arn:
                 for cluster in clusters['clusterArns']:
                     cluster_lower = cluster.lower()
-                    if 'ecs-cluster-' in cluster_lower and self.environment_suffix.lower() in cluster_lower:
+                    if 'ecs-cluster-' in cluster_lower and self.resource_suffix.lower() in cluster_lower:
                         cluster_arn = cluster
                         print(f"Found cluster (pattern match): {cluster.split('/')[-1]}")
                         break
@@ -76,7 +77,7 @@ class InfrastructureOptimizer:
             # Find the service by exact naming pattern: ecs-service-{environmentSuffix}
             services = self.ecs_client.list_services(cluster=cluster_arn)
             service_arn = None
-            expected_service_name = f'ecs-service-{self.environment_suffix}'
+            expected_service_name = f'ecs-service-{self.resource_suffix}'
             
             # First, try exact match
             for service in services['serviceArns']:
@@ -156,8 +157,8 @@ class InfrastructureOptimizer:
         
         try:
             # Find the scalable target for ECS service
-            cluster_name = f'ecs-cluster-{self.environment_suffix}'
-            service_name = f'ecs-service-{self.environment_suffix}'
+            cluster_name = f'ecs-cluster-{self.resource_suffix}'
+            service_name = f'ecs-service-{self.resource_suffix}'
             resource_id = f'service/{cluster_name}/{service_name}'
             
             targets = self.application_autoscaling_client.describe_scalable_targets(
@@ -206,8 +207,8 @@ class InfrastructureOptimizer:
         print("\n🔧 Updating CloudWatch Alarms...")
         
         try:
-            cpu_alarm_name = f'ecs-cpu-alarm-{self.environment_suffix}'
-            memory_alarm_name = f'ecs-memory-alarm-{self.environment_suffix}'
+            cpu_alarm_name = f'ecs-cpu-alarm-{self.resource_suffix}'
+            memory_alarm_name = f'ecs-memory-alarm-{self.resource_suffix}'
             
             # Get current alarm configurations
             alarms = self.cloudwatch_client.describe_alarms(
@@ -260,7 +261,7 @@ class InfrastructureOptimizer:
         try:
             iam_client = boto3.client('iam', region_name=self.region_name)
             
-            policy_name = f'ecs-s3-policy-{self.environment_suffix}'
+            policy_name = f'ecs-s3-policy-{self.resource_suffix}'
             
             # List policies to find ours
             policies = iam_client.list_policies(Scope='Local')

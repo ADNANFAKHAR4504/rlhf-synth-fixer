@@ -4,8 +4,8 @@
  * Optimized ECS deployment with proper resource allocation, autoscaling,
  * monitoring, and security best practices.
  */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
 
 /**
@@ -61,6 +61,7 @@ export class TapStack extends pulumi.ComponentResource {
     super('tap:stack:TapStack', name, args, opts);
 
     const environmentSuffix = args.environmentSuffix || 'dev';
+    const resourceSuffix = `${environmentSuffix}-j7`;
     const tags = args.tags || {};
     const containerImageUri =
       args.containerImageUri || pulumi.output('nginx:latest');
@@ -92,9 +93,9 @@ export class TapStack extends pulumi.ComponentResource {
 
     // ECS Cluster with Container Insights enabled
     const cluster = new aws.ecs.Cluster(
-      `ecs-cluster-${environmentSuffix}`,
+      `ecs-cluster-${resourceSuffix}`,
       {
-        name: `ecs-cluster-${environmentSuffix}`,
+        name: `ecs-cluster-${resourceSuffix}`,
         settings: [
           {
             name: 'containerInsights',
@@ -103,7 +104,7 @@ export class TapStack extends pulumi.ComponentResource {
         ],
         tags: {
           ...tags,
-          Name: `ecs-cluster-${environmentSuffix}`,
+          Name: `ecs-cluster-${resourceSuffix}`,
         },
       },
       { parent: this }
@@ -111,13 +112,13 @@ export class TapStack extends pulumi.ComponentResource {
 
     // CloudWatch Log Group for ECS tasks
     const logGroup = new aws.cloudwatch.LogGroup(
-      `ecs-log-group-${environmentSuffix}`,
+      `ecs-log-group-${resourceSuffix}`,
       {
-        name: `/ecs/tap-${environmentSuffix}`,
+        name: `/ecs/tap-${resourceSuffix}`,
         retentionInDays: 7,
         tags: {
           ...tags,
-          Name: `ecs-log-group-${environmentSuffix}`,
+          Name: `ecs-log-group-${resourceSuffix}`,
         },
       },
       { parent: this }
@@ -125,9 +126,9 @@ export class TapStack extends pulumi.ComponentResource {
 
     // IAM Role for ECS Task Execution (used by ECS agent)
     const taskExecutionRole = new aws.iam.Role(
-      `ecs-task-execution-role-${environmentSuffix}`,
+      `ecs-task-execution-role-${resourceSuffix}`,
       {
-        name: `ecs-task-execution-role-${environmentSuffix}`,
+        name: `ecs-task-execution-role-${resourceSuffix}`,
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
           Statement: [
@@ -142,7 +143,7 @@ export class TapStack extends pulumi.ComponentResource {
         }),
         tags: {
           ...tags,
-          Name: `ecs-task-execution-role-${environmentSuffix}`,
+          Name: `ecs-task-execution-role-${resourceSuffix}`,
         },
       },
       { parent: this }
@@ -150,7 +151,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Attach AWS managed policy for ECS task execution
     new aws.iam.RolePolicyAttachment(
-      `ecs-task-execution-policy-${environmentSuffix}`,
+      `ecs-task-execution-policy-${resourceSuffix}`,
       {
         role: taskExecutionRole.name,
         policyArn:
@@ -161,9 +162,9 @@ export class TapStack extends pulumi.ComponentResource {
 
     // IAM Role for ECS Task (used by application container)
     const taskRole = new aws.iam.Role(
-      `ecs-task-role-${environmentSuffix}`,
+      `ecs-task-role-${resourceSuffix}`,
       {
-        name: `ecs-task-role-${environmentSuffix}`,
+        name: `ecs-task-role-${resourceSuffix}`,
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
           Statement: [
@@ -178,7 +179,7 @@ export class TapStack extends pulumi.ComponentResource {
         }),
         tags: {
           ...tags,
-          Name: `ecs-task-role-${environmentSuffix}`,
+          Name: `ecs-task-role-${resourceSuffix}`,
         },
       },
       { parent: this }
@@ -186,9 +187,9 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Least privilege S3 policy - only GetObject permission
     const s3Policy = new aws.iam.Policy(
-      `ecs-s3-policy-${environmentSuffix}`,
+      `ecs-s3-policy-${resourceSuffix}`,
       {
-        name: `ecs-s3-policy-${environmentSuffix}`,
+        name: `ecs-s3-policy-${resourceSuffix}`,
         description: 'Least privilege S3 access for ECS tasks - GetObject only',
         policy: pulumi.all([s3BucketName]).apply(([bucketName]) =>
           JSON.stringify({
@@ -204,14 +205,14 @@ export class TapStack extends pulumi.ComponentResource {
         ),
         tags: {
           ...tags,
-          Name: `ecs-s3-policy-${environmentSuffix}`,
+          Name: `ecs-s3-policy-${resourceSuffix}`,
         },
       },
       { parent: this }
     );
 
     new aws.iam.RolePolicyAttachment(
-      `ecs-s3-policy-attachment-${environmentSuffix}`,
+      `ecs-s3-policy-attachment-${resourceSuffix}`,
       {
         role: taskRole.name,
         policyArn: s3Policy.arn,
@@ -221,9 +222,9 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Security Group for ECS tasks
     const securityGroup = new aws.ec2.SecurityGroup(
-      `ecs-sg-${environmentSuffix}`,
+      `ecs-sg-${resourceSuffix}`,
       {
-        name: `ecs-sg-${environmentSuffix}`,
+        name: `ecs-sg-${resourceSuffix}`,
         description: 'Security group for ECS tasks',
         vpcId: vpcId,
         egress: [
@@ -237,7 +238,7 @@ export class TapStack extends pulumi.ComponentResource {
         ],
         tags: {
           ...tags,
-          Name: `ecs-sg-${environmentSuffix}`,
+          Name: `ecs-sg-${resourceSuffix}`,
         },
       },
       { parent: this }
@@ -245,9 +246,9 @@ export class TapStack extends pulumi.ComponentResource {
 
     // ECS Task Definition with optimized CPU (512) and initial memory (1GB)
     const taskDefinition = new aws.ecs.TaskDefinition(
-      `ecs-task-def-${environmentSuffix}`,
+      `ecs-task-def-${resourceSuffix}`,
       {
-        family: `tap-${environmentSuffix}`,
+        family: `tap-${resourceSuffix}`,
         networkMode: 'awsvpc',
         requiresCompatibilities: ['FARGATE'],
         cpu: '512', // Optimized from 2048 to 512
@@ -287,7 +288,7 @@ export class TapStack extends pulumi.ComponentResource {
           ),
         tags: {
           ...tags,
-          Name: `ecs-task-def-${environmentSuffix}`,
+          Name: `ecs-task-def-${resourceSuffix}`,
         },
       },
       { parent: this }
@@ -295,9 +296,9 @@ export class TapStack extends pulumi.ComponentResource {
 
     // ECS Service
     const service = new aws.ecs.Service(
-      `ecs-service-${environmentSuffix}`,
+      `ecs-service-${resourceSuffix}`,
       {
-        name: `ecs-service-${environmentSuffix}`,
+        name: `ecs-service-${resourceSuffix}`,
         cluster: cluster.arn,
         taskDefinition: taskDefinition.arn,
         desiredCount: desiredCount,
@@ -309,7 +310,7 @@ export class TapStack extends pulumi.ComponentResource {
         },
         tags: {
           ...tags,
-          Name: `ecs-service-${environmentSuffix}`,
+          Name: `ecs-service-${resourceSuffix}`,
         },
       },
       { parent: this }
@@ -317,7 +318,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Application Auto Scaling Target for Memory
     const scalableTarget = new aws.appautoscaling.Target(
-      `ecs-autoscale-target-${environmentSuffix}`,
+      `ecs-autoscale-target-${resourceSuffix}`,
       {
         serviceNamespace: 'ecs',
         resourceId: pulumi.interpolate`service/${cluster.name}/${service.name}`,
@@ -330,9 +331,9 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Auto Scaling Policy for Memory Usage
     new aws.appautoscaling.Policy(
-      `ecs-memory-scaling-${environmentSuffix}`,
+      `ecs-memory-scaling-${resourceSuffix}`,
       {
-        name: `ecs-memory-scaling-${environmentSuffix}`,
+        name: `ecs-memory-scaling-${resourceSuffix}`,
         serviceNamespace: scalableTarget.serviceNamespace,
         resourceId: scalableTarget.resourceId,
         scalableDimension: scalableTarget.scalableDimension,
@@ -351,9 +352,9 @@ export class TapStack extends pulumi.ComponentResource {
 
     // CloudWatch Alarm for CPU Utilization (>80%)
     const cpuAlarm = new aws.cloudwatch.MetricAlarm(
-      `ecs-cpu-alarm-${environmentSuffix}`,
+      `ecs-cpu-alarm-${resourceSuffix}`,
       {
-        name: `ecs-cpu-alarm-${environmentSuffix}`,
+        name: `ecs-cpu-alarm-${resourceSuffix}`,
         comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 2,
         metricName: 'CPUUtilization',
@@ -368,7 +369,7 @@ export class TapStack extends pulumi.ComponentResource {
         },
         tags: {
           ...tags,
-          Name: `ecs-cpu-alarm-${environmentSuffix}`,
+          Name: `ecs-cpu-alarm-${resourceSuffix}`,
         },
       },
       { parent: this }
@@ -376,9 +377,9 @@ export class TapStack extends pulumi.ComponentResource {
 
     // CloudWatch Alarm for Memory Utilization (>90%)
     const memoryAlarm = new aws.cloudwatch.MetricAlarm(
-      `ecs-memory-alarm-${environmentSuffix}`,
+      `ecs-memory-alarm-${resourceSuffix}`,
       {
-        name: `ecs-memory-alarm-${environmentSuffix}`,
+        name: `ecs-memory-alarm-${resourceSuffix}`,
         comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 2,
         metricName: 'MemoryUtilization',
@@ -393,7 +394,7 @@ export class TapStack extends pulumi.ComponentResource {
         },
         tags: {
           ...tags,
-          Name: `ecs-memory-alarm-${environmentSuffix}`,
+          Name: `ecs-memory-alarm-${resourceSuffix}`,
         },
       },
       { parent: this }
