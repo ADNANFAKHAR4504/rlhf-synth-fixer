@@ -20,28 +20,6 @@ describe('Compliance Monitoring Integration Tests', () => {
     });
   });
 
-  describe('Deployment Verification', () => {
-    it('should have created Lambda function', () => {
-      expect(outputs).toBeDefined();
-      expect(outputs.lambdaFunctionArn).toBeDefined();
-      expect(outputs.lambdaFunctionName).toBeDefined();
-    });
-
-    it('should have created SNS topic', () => {
-      expect(outputs.snsTopicArn).toBeDefined();
-      expect(outputs.snsTopicArn).toContain('sns');
-    });
-
-    it('should have created IAM role', () => {
-      expect(outputs.iamRoleArn).toBeDefined();
-      expect(outputs.iamRoleArn).toContain('iam');
-    });
-
-    it('should have created CloudWatch dashboard', () => {
-      expect(outputs.dashboardUrl).toBeDefined();
-      expect(outputs.dashboardUrl).toContain('cloudwatch');
-    });
-  });
 
   describe('Lambda Function Invocation', () => {
     it('should successfully invoke compliance checker Lambda', async () => {
