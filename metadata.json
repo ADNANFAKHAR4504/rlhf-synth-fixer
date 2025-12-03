@@ -1,0 +1,31 @@
+{
+  "po_id": "a9a2c3g3",
+  "platform": "pulumi",
+  "language": "typescript",
+  "complexity": "hard",
+  "subtask": "CI/CD Pipeline Integration",
+  "region": "us-east-1",
+  "status": "PENDING",
+  "training_quality": 10,
+  "stack_name": "TapStack",
+  "turn_type": "single",
+  "team": "stf",
+  "startedAt": "2025-12-03T21:41:00.000Z",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "CodePipeline",
+    "CodeBuild",
+    "ECR",
+    "S3",
+    "IAM",
+    "CloudWatch"
+  ],
+  "aws_services": [
+    "S3",
+    "ECR",
+    "CodeBuild",
+    "CodePipeline",
+    "IAM",
+    "CloudWatch Logs"
+  ]
+}
