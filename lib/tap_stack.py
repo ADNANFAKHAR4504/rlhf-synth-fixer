@@ -37,39 +37,39 @@ from constructs import Construct
 
 
 class TapStackProps(cdk.StackProps):
-    """
+  """
     Properties for the TapStack CDK stack.
 
-    Args:
+  Args:
         environment_suffix: Suffix to identify the deployment environment.
-        **kwargs: Additional keyword arguments passed to the base cdk.StackProps.
-    """
+    **kwargs: Additional keyword arguments passed to the base cdk.StackProps.
+  """
 
-    def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
-        super().__init__(**kwargs)
-        self.environment_suffix = environment_suffix
+  def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
+    super().__init__(**kwargs)
+    self.environment_suffix = environment_suffix
 
 
 class TapStack(cdk.Stack):
-    """
+  """
     Secure Data Processing Pipeline Stack.
 
     Implements a zero-trust architecture with defense-in-depth security controls
     for financial services compliance in us-east-1 region.
-    """
+  """
 
-    def __init__(
-        self,
-        scope: Construct,
+  def __init__(
+          self,
+          scope: Construct,
         construct_id: str,
         props: Optional[TapStackProps] = None,
         **kwargs
     ):
-        super().__init__(scope, construct_id, **kwargs)
+    super().__init__(scope, construct_id, **kwargs)
 
         # Get environment suffix
         self.environment_suffix = (
-            props.environment_suffix if props else None
+        props.environment_suffix if props else None
         ) or self.node.try_get_context("environmentSuffix") or "dev"
 
         # Create KMS key first
@@ -348,16 +348,19 @@ class TapStack(cdk.Stack):
     def _create_isolated_lambda(self) -> lambda_.Function:
         """Creates a Lambda function with strict IAM controls."""
         # Create IAM role with minimal permissions
+        # Using from_managed_policy_arn to avoid CDK metadata warnings
+        vpc_access_policy = iam.ManagedPolicy.from_managed_policy_arn(
+            self,
+            "VPCAccessPolicy",
+            "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        )
+
         lambda_role = iam.Role(
             self,
             "DataProcessorRole",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             description="Least-privilege role for data processing Lambda",
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "service-role/AWSLambdaVPCAccessExecutionRole"
-                )
-            ],
+            managed_policies=[vpc_access_policy],
         )
 
         # Explicitly deny internet access via IAM

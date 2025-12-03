@@ -353,16 +353,19 @@ class TapStack(cdk.Stack):
     def _create_isolated_lambda(self) -> lambda_.Function:
         """Creates a Lambda function with strict IAM controls."""
         # Create IAM role with minimal permissions
+        # Using from_managed_policy_arn to avoid CDK metadata warnings
+        vpc_access_policy = iam.ManagedPolicy.from_managed_policy_arn(
+            self,
+            "VPCAccessPolicy",
+            "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        )
+
         lambda_role = iam.Role(
             self,
             "DataProcessorRole",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             description="Least-privilege role for data processing Lambda",
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "service-role/AWSLambdaVPCAccessExecutionRole"
-                )
-            ],
+            managed_policies=[vpc_access_policy],
         )
 
         # Explicitly deny internet access via IAM
