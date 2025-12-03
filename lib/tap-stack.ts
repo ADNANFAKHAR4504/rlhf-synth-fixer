@@ -29,8 +29,14 @@ export interface TapStackArgs {
  */
 export class TapStack extends pulumi.ComponentResource {
   public readonly reportsBucket: pulumi.Output<string>;
+  public readonly reportsBucketArn: pulumi.Output<string>;
   public readonly complianceRoleArn: pulumi.Output<string>;
+  public readonly complianceRoleName: pulumi.Output<string>;
   public readonly alertTopicArn: pulumi.Output<string>;
+  public readonly alertTopicName: pulumi.Output<string>;
+  public readonly dashboardName: pulumi.Output<string>;
+  public readonly logGroupName: string;
+  public readonly environmentSuffix: string;
 
   /**
    * Creates a new TapStack component.
@@ -39,6 +45,8 @@ export class TapStack extends pulumi.ComponentResource {
     super('tap:stack:TapStack', name, args, opts);
 
     const environmentSuffix = args.environmentSuffix || 'dev';
+    this.environmentSuffix = environmentSuffix;
+    this.logGroupName = `/aws/compliance/${environmentSuffix}`;
     const tags = args.tags || {};
 
     // 1. S3 Bucket for storing compliance reports and inventory data
@@ -255,19 +263,24 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Export outputs
     this.reportsBucket = reportsBucket.bucket;
+    this.reportsBucketArn = reportsBucket.arn;
     this.complianceRoleArn = complianceRole.arn;
+    this.complianceRoleName = complianceRole.name;
     this.alertTopicArn = alertTopic.arn;
+    this.alertTopicName = alertTopic.name;
+    this.dashboardName = dashboard.dashboardName;
 
     // Register outputs
     this.registerOutputs({
       reportsBucket: this.reportsBucket,
-      reportsBucketArn: reportsBucket.arn,
+      reportsBucketArn: this.reportsBucketArn,
       complianceRoleArn: this.complianceRoleArn,
-      complianceRoleName: complianceRole.name,
+      complianceRoleName: this.complianceRoleName,
       alertTopicArn: this.alertTopicArn,
-      alertTopicName: alertTopic.name,
-      dashboardName: dashboard.dashboardName,
-      logGroupName: `/aws/compliance/${environmentSuffix}`,
+      alertTopicName: this.alertTopicName,
+      dashboardName: this.dashboardName,
+      logGroupName: this.logGroupName,
+      environmentSuffix: this.environmentSuffix,
     });
   }
 }
