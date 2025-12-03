@@ -38,7 +38,7 @@ def mock_config_service(aws_credentials):
                 'roleARN': 'arn:aws:iam::123456789012:role/config-role',
                 'recordingGroup': {
                     'allSupported': True,
-                    'includeGlobalResources': True
+                    'includeGlobalResourceTypes': True
                 }
             }
         )
@@ -125,10 +125,31 @@ def mock_sns_topics(aws_credentials):
 def mock_lambda_functions(aws_credentials):
     """Mock Lambda functions for compliance processing."""
     with mock_aws():
-        client = boto3.client('lambda', region_name='us-east-1')
+        # Create IAM role first with proper trust policy
+        iam_client = boto3.client('iam', region_name='us-east-1')
+        trust_policy = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": "lambda.amazonaws.com"
+                    },
+                    "Action": "sts:AssumeRole"
+                }
+            ]
+        }
+
+        iam_client.create_role(
+            RoleName='lambda-role',
+            AssumeRolePolicyDocument=json.dumps(trust_policy),
+            Path='/'
+        )
+
+        lambda_client = boto3.client('lambda', region_name='us-east-1')
 
         # Create compliance analyzer Lambda
-        client.create_function(
+        lambda_client.create_function(
             FunctionName='compliance-analyzer-test-env',
             Runtime='nodejs18.x',
             Role='arn:aws:iam::123456789012:role/lambda-role',
@@ -139,7 +160,7 @@ def mock_lambda_functions(aws_credentials):
         )
 
         # Create resource tagger Lambda
-        client.create_function(
+        lambda_client.create_function(
             FunctionName='resource-tagger-test-env',
             Runtime='nodejs18.x',
             Role='arn:aws:iam::123456789012:role/lambda-role',
@@ -149,7 +170,7 @@ def mock_lambda_functions(aws_credentials):
             MemorySize=256
         )
 
-        yield client
+        yield lambda_client
 
 
 @pytest.fixture
