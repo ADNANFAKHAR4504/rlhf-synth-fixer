@@ -1,12 +1,21 @@
-import * as pulumi from '@pulumi/pulumi';
-import * as aws from '@pulumi/aws';
+import * as random from '@pulumi/random';
 import { RDSOptimizationStack } from '../lib/rds-stack';
 
 // Configuration - RDS PostgreSQL Optimization
 // Use environment variables for configuration (set by CI/CD deployment script)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const config = new pulumi.Config();
-const dbPassword = config.requireSecret('dbPassword');
+
+// Generate a random password for RDS (for synthetic tasks)
+const dbPasswordResource = new random.RandomPassword(
+  `db-password-${environmentSuffix}`,
+  {
+    length: 16,
+    special: true,
+    overrideSpecial: '!#$%&*()-_=+[]{}<>:?',
+  }
+);
+const dbPassword = dbPasswordResource.result;
+
 const region = process.env.AWS_REGION || 'us-east-1';
 
 // Create the RDS optimization stack
