@@ -170,19 +170,23 @@ export class MonitoringConstruct extends Construct {
               [
                 'AWS/DynamoDB',
                 'ConsumedReadCapacityUnits',
+                'TableName',
+                dynamoTableName,
                 {
                   stat: 'Sum',
-                  tableName: dynamoTableName,
                   region: 'us-east-1',
+                  label: 'Read Capacity',
                 },
               ],
               [
                 'AWS/DynamoDB',
                 'ConsumedWriteCapacityUnits',
+                'TableName',
+                dynamoTableName,
                 {
                   stat: 'Sum',
-                  tableName: dynamoTableName,
                   region: 'us-east-1',
+                  label: 'Write Capacity',
                 },
               ],
             ],
@@ -204,7 +208,9 @@ export class MonitoringConstruct extends Construct {
               [
                 'AWS/Route53',
                 'HealthCheckStatus',
-                { stat: 'Minimum', HealthCheckId: healthCheckId },
+                'HealthCheckId',
+                healthCheckId,
+                { stat: 'Minimum', label: 'Health Check Status' },
               ],
             ],
             period: 60,
