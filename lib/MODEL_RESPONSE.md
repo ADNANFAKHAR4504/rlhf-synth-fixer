@@ -1,919 +1,2236 @@
-I'll provide a comprehensive Terraform migration plan for moving your AWS application from us-west-1 to us-west-2. This approach uses `terraform import` to preserve resource identities and minimize downtime.
+### Reasoning Trace
+---
+
+This is a complex request for a complete, production-ready Terraform configuration. I need to create a modular setup with all the specified requirements. Let me break down what I need to deliver:
+
+1. Directory structure with all files
+2. Core infrastructure modules
+3. Environment-specific configurations
+4. Dynamic naming and no hardcoding
+5. Proper tagging and cross-account compatibility
+
+Let me start building each component systematically.
+
+Key requirements:
+- Multi-environment (dev, staging, prod)
+- Fully modular
+- No hardcoded values
+- Dynamic naming convention
+- Cross-account/region compatible
+- Complete tagging
+- VPC peering between environments
+- All specified AWS services
+
+I'll create each file in the specified structure.
+### Answer 
+---
+
+I'll generate a complete, production-ready Terraform configuration for your payment processing application. This will be a comprehensive multi-environment setup following all your requirements.
+
+## provider.tf
 
 ```hcl
-# main.tf
 terraform {
-  required_version = ">= 1.0"
+  required_version = ">= 1.5.0"
+  
   required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.5"
+    }
   }
 }
 
-# Primary provider for the new region (us-west-2)
 provider "aws" {
   region = var.aws_region
   
   default_tags {
-    tags = {
-      Environment   = var.environment
-      Project       = var.project_name
-      ManagedBy     = "terraform"
-      MigratedFrom  = "us-west-1"
-      MigrationDate = var.migration_date
-    }
+    tags = local.common_tags
   }
-}
-
-# Alias provider for the old region (for reference/cleanup)
-provider "aws" {
-  alias  = "old_region"
-  region = "us-west-1"
-}
-
-# Data sources for existing resources in new region
-data "aws_availability_zones" "available" {
-  state = "available"
 }
 
 data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
 
-# VPC and Networking
-resource "aws_vpc" "main" {
-  cidr_block           = var.vpc_cidr
-  enable_dns_hostnames = true
-  enable_dns_support   = true
-
-  tags = {
-    Name = "${var.project_name}-vpc"
-  }
-}
-
-resource "aws_internet_gateway" "main" {
-  vpc_id = aws_vpc.main.id
-
-  tags = {
-    Name = "${var.project_name}-igw"
-  }
-}
-
-resource "aws_subnet" "public" {
-  count = length(var.public_subnet_cidrs)
-
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.public_subnet_cidrs[count.index]
-  availability_zone       = data.aws_availability_zones.available.names[count.index]
-  map_public_ip_on_launch = true
-
-  tags = {
-    Name = "${var.project_name}-public-subnet-${count.index + 1}"
-    Type = "public"
-  }
-}
-
-resource "aws_subnet" "private" {
-  count = length(var.private_subnet_cidrs)
-
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = var.private_subnet_cidrs[count.index]
-  availability_zone = data.aws_availability_zones.available.names[count.index]
-
-  tags = {
-    Name = "${var.project_name}-private-subnet-${count.index + 1}"
-    Type = "private"
-  }
-}
-
-# Route Tables
-resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.main.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.main.id
-  }
-
-  tags = {
-    Name = "${var.project_name}-public-rt"
-  }
-}
-
-resource "aws_route_table" "private" {
-  count  = length(aws_subnet.private)
-  vpc_id = aws_vpc.main.id
-
-  tags = {
-    Name = "${var.project_name}-private-rt-${count.index + 1}"
-  }
-}
-
-resource "aws_route_table_association" "public" {
-  count = length(aws_subnet.public)
-
-  subnet_id      = aws_subnet.public[count.index].id
-  route_table_id = aws_route_table.public.id
-}
-
-resource "aws_route_table_association" "private" {
-  count = length(aws_subnet.private)
-
-  subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private[count.index].id
-}
-
-# Security Groups
-resource "aws_security_group" "web" {
-  name_prefix = "${var.project_name}-web-"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${var.project_name}-web-sg"
-  }
-}
-
-resource "aws_security_group" "app" {
-  name_prefix = "${var.project_name}-app-"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port       = 8080
-    to_port         = 8080
-    protocol        = "tcp"
-    security_groups = [aws_security_group.web.id]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${var.project_name}-app-sg"
-  }
-}
-
-resource "aws_security_group" "database" {
-  name_prefix = "${var.project_name}-db-"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port       = 3306
-    to_port         = 3306
-    protocol        = "tcp"
-    security_groups = [aws_security_group.app.id]
-  }
-
-  tags = {
-    Name = "${var.project_name}-db-sg"
-  }
-}
-
-# Application Load Balancer
-resource "aws_lb" "main" {
-  name               = "${var.project_name}-alb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.web.id]
-  subnets            = aws_subnet.public[*].id
-
-  enable_deletion_protection = var.enable_deletion_protection
-
-  tags = {
-    Name = "${var.project_name}-alb"
-  }
-}
-
-resource "aws_lb_target_group" "app" {
-  name     = "${var.project_name}-app-tg"
-  port     = 8080
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.main.id
-
-  health_check {
-    enabled             = true
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-    timeout             = 5
-    interval            = 30
-    path                = "/health"
-    matcher             = "200"
-  }
-
-  tags = {
-    Name = "${var.project_name}-app-tg"
-  }
-}
-
-resource "aws_lb_listener" "app" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = "80"
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
-  }
-}
-
-# Launch Template and Auto Scaling Group
-resource "aws_launch_template" "app" {
-  name_prefix   = "${var.project_name}-app-"
-  image_id      = var.ami_id
-  instance_type = var.instance_type
-  key_name      = var.key_pair_name
-
-  vpc_security_group_ids = [aws_security_group.app.id]
-
-  user_data = base64encode(var.user_data_script)
-
-  tag_specifications {
-    resource_type = "instance"
-    tags = {
-      Name = "${var.project_name}-app-instance"
-    }
-  }
-
-  tags = {
-    Name = "${var.project_name}-app-lt"
-  }
-}
-
-resource "aws_autoscaling_group" "app" {
-  name                = "${var.project_name}-app-asg"
-  vpc_zone_identifier = aws_subnet.private[*].id
-  target_group_arns   = [aws_lb_target_group.app.arn]
-  health_check_type   = "ELB"
-  health_check_grace_period = 300
-
-  min_size         = var.asg_min_size
-  max_size         = var.asg_max_size
-  desired_capacity = var.asg_desired_capacity
-
-  launch_template {
-    id      = aws_launch_template.app.id
-    version = "$Latest"
-  }
-
-  tag {
-    key                 = "Name"
-    value               = "${var.project_name}-app-asg"
-    propagate_at_launch = false
-  }
-}
-
-# RDS Subnet Group and Database
-resource "aws_db_subnet_group" "main" {
-  name       = "${var.project_name}-db-subnet-group"
-  subnet_ids = aws_subnet.private[*].id
-
-  tags = {
-    Name = "${var.project_name}-db-subnet-group"
-  }
-}
-
-resource "aws_db_instance" "main" {
-  identifier = "${var.project_name}-database"
-
-  engine         = "mysql"
-  engine_version = var.db_engine_version
-  instance_class = var.db_instance_class
-
-  allocated_storage     = var.db_allocated_storage
-  max_allocated_storage = var.db_max_allocated_storage
-  storage_type          = "gp2"
-  storage_encrypted     = true
-
-  db_name  = var.db_name
-  username = var.db_username
-  password = var.db_password
-
-  vpc_security_group_ids = [aws_security_group.database.id]
-  db_subnet_group_name   = aws_db_subnet_group.main.name
-
-  backup_retention_period = var.db_backup_retention_period
-  backup_window          = var.db_backup_window
-  maintenance_window     = var.db_maintenance_window
-
-  skip_final_snapshot = var.skip_final_snapshot
-  deletion_protection = var.enable_deletion_protection
-
-  tags = {
-    Name = "${var.project_name}-database"
+locals {
+  project_name = var.project_name
+  environment  = var.environment
+  region       = data.aws_region.current.name
+  account_id   = data.aws_caller_identity.current.account_id
+  
+  common_tags = {
+    Project     = local.project_name
+    Environment = local.environment
+    Owner       = "SecurityTeam"
+    ManagedBy   = "Terraform"
+    Region      = local.region
   }
 }
 ```
 
-```hcl
-# variables.tf
-variable "aws_region" {
-  description = "AWS region for resources"
-  type        = string
-  default     = "us-west-2"
-}
+## variables.tf
 
-variable "environment" {
-  description = "Environment name"
+```hcl
+variable "aws_region" {
+  description = "AWS region to deploy resources"
   type        = string
-  default     = "production"
 }
 
 variable "project_name" {
-  description = "Project name for resource naming"
+  description = "Name of the project"
   type        = string
-  default     = "myapp"
+  default     = "tap"
 }
 
-variable "migration_date" {
-  description = "Date of migration for tagging"
+variable "environment" {
+  description = "Environment name (dev, staging, prod)"
   type        = string
-  default     = "2024-01-15"
+  
+  validation {
+    condition     = contains(["dev", "staging", "prod"], var.environment)
+    error_message = "Environment must be dev, staging, or prod"
+  }
 }
 
-# Network Configuration
 variable "vpc_cidr" {
   description = "CIDR block for VPC"
   type        = string
-  default     = "10.0.0.0/16"
 }
 
-variable "public_subnet_cidrs" {
-  description = "CIDR blocks for public subnets"
-  type        = list(string)
-  default     = ["10.0.1.0/24", "10.0.2.0/24"]
+variable "enable_vpc_peering" {
+  description = "Enable VPC peering connections"
+  type        = bool
+  default     = true
 }
 
-variable "private_subnet_cidrs" {
-  description = "CIDR blocks for private subnets"
-  type        = list(string)
-  default     = ["10.0.10.0/24", "10.0.20.0/24"]
+variable "ecs_cpu" {
+  description = "CPU units for ECS tasks"
+  type        = number
 }
 
-# EC2 Configuration
-variable "ami_id" {
-  description = "AMI ID for EC2 instances"
-  type        = string
-  default     = "ami-0c02fb55956c7d316" # Amazon Linux 2 in us-west-2
+variable "ecs_memory" {
+  description = "Memory for ECS tasks in MB"
+  type        = number
 }
 
-variable "instance_type" {
-  description = "EC2 instance type"
-  type        = string
-  default     = "t3.medium"
-}
-
-variable "key_pair_name" {
-  description = "EC2 Key Pair name"
-  type        = string
-  default     = "myapp-keypair"
-}
-
-variable "user_data_script" {
-  description = "User data script for EC2 instances"
-  type        = string
-  default     = <<-EOF
-    #!/bin/bash
-    yum update -y
-    yum install -y docker
-    service docker start
-    usermod -a -G docker ec2-user
-    # Add your application startup commands here
-  EOF
-}
-
-# Auto Scaling Configuration
-variable "asg_min_size" {
-  description = "Minimum size of Auto Scaling Group"
+variable "ecs_desired_count" {
+  description = "Desired number of ECS tasks"
   type        = number
   default     = 2
 }
 
-variable "asg_max_size" {
-  description = "Maximum size of Auto Scaling Group"
+variable "ecs_min_capacity" {
+  description = "Minimum number of ECS tasks"
   type        = number
-  default     = 6
+  default     = 1
 }
 
-variable "asg_desired_capacity" {
-  description = "Desired capacity of Auto Scaling Group"
+variable "ecs_max_capacity" {
+  description = "Maximum number of ECS tasks"
   type        = number
-  default     = 2
+  default     = 10
 }
 
-# Database Configuration
-variable "db_engine_version" {
-  description = "RDS engine version"
-  type        = string
-  default     = "8.0.35"
-}
-
-variable "db_instance_class" {
+variable "rds_instance_class" {
   description = "RDS instance class"
   type        = string
-  default     = "db.t3.micro"
 }
 
-variable "db_allocated_storage" {
+variable "rds_allocated_storage" {
   description = "RDS allocated storage in GB"
   type        = number
   default     = 20
 }
 
-variable "db_max_allocated_storage" {
-  description = "RDS maximum allocated storage in GB"
+variable "rds_backup_retention_period" {
+  description = "RDS backup retention period in days"
   type        = number
-  default     = 100
 }
 
-variable "db_name" {
-  description = "Database name"
+variable "sns_email_endpoint" {
+  description = "Email endpoint for SNS notifications"
   type        = string
-  default     = "myappdb"
 }
 
-variable "db_username" {
-  description = "Database username"
+variable "company_name" {
+  description = "Company name for S3 bucket naming"
   type        = string
-  default     = "admin"
-  sensitive   = true
+  default     = "company"
 }
 
-variable "db_password" {
-  description = "Database password"
-  type        = string
-  sensitive   = true
-}
-
-variable "db_backup_retention_period" {
-  description = "Database backup retention period in days"
+variable "az_count" {
+  description = "Number of availability zones to use"
   type        = number
-  default     = 7
-}
-
-variable "db_backup_window" {
-  description = "Database backup window"
-  type        = string
-  default     = "03:00-04:00"
-}
-
-variable "db_maintenance_window" {
-  description = "Database maintenance window"
-  type        = string
-  default     = "sun:04:00-sun:05:00"
-}
-
-# General Configuration
-variable "enable_deletion_protection" {
-  description = "Enable deletion protection for critical resources"
-  type        = bool
-  default     = true
-}
-
-variable "skip_final_snapshot" {
-  description = "Skip final snapshot when destroying RDS instance"
-  type        = bool
-  default     = false
+  default     = 2
 }
 ```
 
+## tap_stack.tf
+
 ```hcl
-# backend.tf
-terraform {
-  backend "s3" {
-    bucket         = "PLACEHOLDER-terraform-state-bucket"
-    key            = "myapp/us-west-2/terraform.tfstate"
-    region         = "us-west-2"
-    encrypt        = true
-    dynamodb_table = "PLACEHOLDER-terraform-locks"
-    
-    # Optional: Use assume role for cross-account access
-    # role_arn = "arn:aws:iam::ACCOUNT-ID:role/TerraformRole"
+# VPC Module
+module "vpc" {
+  source = "./modules/vpc"
+  
+  project_name    = local.project_name
+  environment     = local.environment
+  region          = local.region
+  vpc_cidr        = var.vpc_cidr
+  az_count        = var.az_count
+  common_tags     = local.common_tags
+}
+
+# KMS Module
+module "kms" {
+  source = "./modules/kms"
+  
+  project_name = local.project_name
+  environment  = local.environment
+  region       = local.region
+  common_tags  = local.common_tags
+}
+
+# S3 Module
+module "s3" {
+  source = "./modules/s3"
+  
+  project_name     = local.project_name
+  environment      = local.environment
+  region           = local.region
+  company_name     = var.company_name
+  kms_key_arn      = module.kms.kms_key_arn
+  common_tags      = local.common_tags
+  
+  enable_replication = var.environment == "staging"
+  source_bucket_arn  = var.environment == "staging" ? data.aws_s3_bucket.prod_bucket[0].arn : null
+}
+
+# IAM Module
+module "iam" {
+  source = "./modules/iam"
+  
+  project_name         = local.project_name
+  environment          = local.environment
+  region               = local.region
+  kms_key_arn          = module.kms.kms_key_arn
+  s3_bucket_arn        = module.s3.s3_bucket_arn
+  rds_resource_name    = module.rds.db_instance_resource_id
+  common_tags          = local.common_tags
+}
+
+# RDS Module
+module "rds" {
+  source = "./modules/rds"
+  
+  project_name                = local.project_name
+  environment                 = local.environment
+  region                      = local.region
+  vpc_id                      = module.vpc.vpc_id
+  private_subnet_ids          = module.vpc.private_subnet_ids
+  instance_class              = var.rds_instance_class
+  allocated_storage           = var.rds_allocated_storage
+  backup_retention_period     = var.rds_backup_retention_period
+  kms_key_id                  = module.kms.kms_key_id
+  common_tags                 = local.common_tags
+}
+
+# ALB Module
+module "alb" {
+  source = "./modules/alb"
+  
+  project_name       = local.project_name
+  environment        = local.environment
+  region             = local.region
+  vpc_id             = module.vpc.vpc_id
+  public_subnet_ids  = module.vpc.public_subnet_ids
+  common_tags        = local.common_tags
+}
+
+# ECS Module
+module "ecs" {
+  source = "./modules/ecs"
+  
+  project_name              = local.project_name
+  environment               = local.environment
+  region                    = local.region
+  vpc_id                    = module.vpc.vpc_id
+  private_subnet_ids        = module.vpc.private_subnet_ids
+  alb_target_group_arn      = module.alb.target_group_arn
+  ecs_task_role_arn         = module.iam.ecs_task_role_arn
+  ecs_execution_role_arn    = module.iam.ecs_execution_role_arn
+  cpu                       = var.ecs_cpu
+  memory                    = var.ecs_memory
+  desired_count             = var.ecs_desired_count
+  min_capacity              = var.ecs_min_capacity
+  max_capacity              = var.ecs_max_capacity
+  db_secret_arn             = module.rds.db_secret_arn
+  common_tags               = local.common_tags
+}
+
+# SNS Module
+module "sns" {
+  source = "./modules/sns"
+  
+  project_name      = local.project_name
+  environment       = local.environment
+  region            = local.region
+  email_endpoint    = var.sns_email_endpoint
+  kms_key_id        = module.kms.kms_key_id
+  common_tags       = local.common_tags
+}
+
+# CloudWatch Module
+module "cloudwatch" {
+  source = "./modules/cloudwatch"
+  
+  project_name         = local.project_name
+  environment          = local.environment
+  region               = local.region
+  ecs_cluster_name     = module.ecs.cluster_name
+  ecs_service_name     = module.ecs.service_name
+  rds_instance_id      = module.rds.db_instance_id
+  alb_arn_suffix       = module.alb.alb_arn_suffix
+  target_group_arn_suffix = module.alb.target_group_arn_suffix
+  sns_topic_arn        = module.sns.sns_topic_arn
+  common_tags          = local.common_tags
+}
+
+# Data source for prod bucket (used for replication in staging)
+data "aws_s3_bucket" "prod_bucket" {
+  count  = var.environment == "staging" ? 1 : 0
+  bucket = "${var.company_name}-payment-processor-prod-${local.region}"
+}
+
+# Outputs
+output "vpc_id" {
+  value = module.vpc.vpc_id
+}
+
+output "alb_dns_name" {
+  value = module.alb.alb_dns_name
+}
+
+output "rds_endpoint" {
+  value     = module.rds.db_instance_endpoint
+  sensitive = true
+}
+
+output "ecs_cluster_name" {
+  value = module.ecs.cluster_name
+}
+```
+
+## dev.tfvars
+
+```hcl
+aws_region                  = "us-east-1"
+environment                 = "dev"
+vpc_cidr                    = "10.0.0.0/16"
+ecs_cpu                     = 256
+ecs_memory                  = 512
+ecs_desired_count           = 1
+ecs_min_capacity            = 1
+ecs_max_capacity            = 3
+rds_instance_class          = "db.t3.micro"
+rds_allocated_storage       = 20
+rds_backup_retention_period = 7
+sns_email_endpoint          = "dev-alerts@company.com"
+enable_vpc_peering          = true
+```
+
+## staging.tfvars
+
+```hcl
+aws_region                  = "us-east-1"
+environment                 = "staging"
+vpc_cidr                    = "10.1.0.0/16"
+ecs_cpu                     = 512
+ecs_memory                  = 1024
+ecs_desired_count           = 2
+ecs_min_capacity            = 2
+ecs_max_capacity            = 5
+rds_instance_class          = "db.t3.small"
+rds_allocated_storage       = 50
+rds_backup_retention_period = 7
+sns_email_endpoint          = "staging-alerts@company.com"
+enable_vpc_peering          = true
+```
+
+## prod.tfvars
+
+```hcl
+aws_region                  = "us-east-1"
+environment                 = "prod"
+vpc_cidr                    = "10.2.0.0/16"
+ecs_cpu                     = 1024
+ecs_memory                  = 2048
+ecs_desired_count           = 3
+ecs_min_capacity            = 3
+ecs_max_capacity            = 10
+rds_instance_class          = "db.m5.large"
+rds_allocated_storage       = 100
+rds_backup_retention_period = 30
+sns_email_endpoint          = "prod-alerts@company.com"
+enable_vpc_peering          = true
+```
+
+## modules/vpc/main.tf
+
+```hcl
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
+resource "aws_vpc" "main" {
+  cidr_block           = var.vpc_cidr
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-VPC-${var.region}-${var.environment}"
+  })
+}
+
+resource "aws_subnet" "public" {
+  count = var.az_count
+  
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index)
+  availability_zone       = data.aws_availability_zones.available.names[count.index]
+  map_public_ip_on_launch = true
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-PublicSubnet-${var.region}-${var.environment}-${count.index + 1}"
+    Type = "Public"
+  })
+}
+
+resource "aws_subnet" "private" {
+  count = var.az_count
+  
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + var.az_count)
+  availability_zone = data.aws_availability_zones.available.names[count.index]
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-PrivateSubnet-${var.region}-${var.environment}-${count.index + 1}"
+    Type = "Private"
+  })
+}
+
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-IGW-${var.region}-${var.environment}"
+  })
+}
+
+resource "aws_eip" "nat" {
+  count = var.az_count
+  
+  domain = "vpc"
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-NAT-EIP-${var.region}-${var.environment}-${count.index + 1}"
+  })
+}
+
+resource "aws_nat_gateway" "main" {
+  count = var.az_count
+  
+  allocation_id = aws_eip.nat[count.index].id
+  subnet_id     = aws_subnet.public[count.index].id
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-NAT-${var.region}-${var.environment}-${count.index + 1}"
+  })
+  
+  depends_on = [aws_internet_gateway.main]
+}
+
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+  
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-PublicRT-${var.region}-${var.environment}"
+  })
+}
+
+resource "aws_route_table" "private" {
+  count = var.az_count
+  
+  vpc_id = aws_vpc.main.id
+  
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main[count.index].id
+  }
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-PrivateRT-${var.region}-${var.environment}-${count.index + 1}"
+  })
+}
+
+resource "aws_route_table_association" "public" {
+  count = var.az_count
+  
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table_association" "private" {
+  count = var.az_count
+  
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private[count.index].id
+}
+
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id       = aws_vpc.main.id
+  service_name = "com.amazonaws.${var.region}.s3"
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-S3-Endpoint-${var.region}-${var.environment}"
+  })
+}
+
+resource "aws_vpc_endpoint_route_table_association" "private_s3" {
+  count = var.az_count
+  
+  route_table_id  = aws_route_table.private[count.index].id
+  vpc_endpoint_id = aws_vpc_endpoint.s3.id
+}
+```
+
+## modules/vpc/variables.tf
+
+```hcl
+variable "project_name" {
+  description = "Name of the project"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name"
+  type        = string
+}
+
+variable "region" {
+  description = "AWS region"
+  type        = string
+}
+
+variable "vpc_cidr" {
+  description = "CIDR block for VPC"
+  type        = string
+}
+
+variable "az_count" {
+  description = "Number of availability zones"
+  type        = number
+  default     = 2
+}
+
+variable "common_tags" {
+  description = "Common tags for all resources"
+  type        = map(string)
+}
+```
+
+## modules/vpc/outputs.tf
+
+```hcl
+output "vpc_id" {
+  description = "ID of the VPC"
+  value       = aws_vpc.main.id
+}
+
+output "public_subnet_ids" {
+  description = "List of public subnet IDs"
+  value       = aws_subnet.public[*].id
+}
+
+output "private_subnet_ids" {
+  description = "List of private subnet IDs"
+  value       = aws_subnet.private[*].id
+}
+
+output "nat_gateway_ids" {
+  description = "List of NAT Gateway IDs"
+  value       = aws_nat_gateway.main[*].id
+}
+
+output "vpc_cidr" {
+  description = "CIDR block of the VPC"
+  value       = aws_vpc.main.cidr_block
+}
+```
+
+## modules/kms/main.tf
+
+```hcl
+data "aws_caller_identity" "current" {}
+
+resource "aws_kms_key" "main" {
+  description              = "KMS key for ${var.project_name} ${var.environment} environment"
+  deletion_window_in_days  = 10
+  enable_key_rotation      = true
+  multi_region             = false
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-KMS-${var.region}-${var.environment}"
+  })
+}
+
+resource "aws_kms_alias" "main" {
+  name          = "alias/${var.project_name}-${var.environment}"
+  target_key_id = aws_kms_key.main.key_id
+}
+
+resource "aws_kms_key_policy" "main" {
+  key_id = aws_kms_key.main.id
+  
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Id      = "${var.project_name}-key-policy-${var.environment}"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow use of the key for encryption"
+        Effect = "Allow"
+        Principal = {
+          Service = [
+            "s3.amazonaws.com",
+            "rds.amazonaws.com",
+            "logs.${var.region}.amazonaws.com"
+          ]
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+```
+
+## modules/kms/variables.tf
+
+```hcl
+variable "project_name" {
+  description = "Name of the project"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name"
+  type        = string
+}
+
+variable "region" {
+  description = "AWS region"
+  type        = string
+}
+
+variable "common_tags" {
+  description = "Common tags for all resources"
+  type        = map(string)
+}
+```
+
+## modules/kms/outputs.tf
+
+```hcl
+output "kms_key_id" {
+  description = "ID of the KMS key"
+  value       = aws_kms_key.main.id
+}
+
+output "kms_key_arn" {
+  description = "ARN of the KMS key"
+  value       = aws_kms_key.main.arn
+}
+
+output "kms_alias_arn" {
+  description = "ARN of the KMS alias"
+  value       = aws_kms_alias.main.arn
+}
+```
+
+## modules/s3/main.tf
+
+```hcl
+data "aws_caller_identity" "current" {}
+
+resource "aws_s3_bucket" "main" {
+  bucket = "${var.company_name}-payment-processor-${var.environment}-${var.region}"
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-S3-${var.region}-${var.environment}"
+  })
+}
+
+resource "aws_s3_bucket_versioning" "main" {
+  bucket = aws_s3_bucket.main.id
+  
+  versioning_configuration {
+    status = "Enabled"
   }
 }
 
-# Alternative backend configuration for remote state management
-# terraform {
-#   backend "remote" {
-#     hostname     = "app.terraform.io"
-#     organization = "PLACEHOLDER-ORG-NAME"
-#
-#     workspaces {
-#       name = "myapp-us-west-2"
-#     }
-#   }
-# }
+resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
+  bucket = aws_s3_bucket.main.id
+  
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = var.kms_key_arn
+      sse_algorithm     = "aws:kms"
+    }
+  }
+}
 
-# Local backend for testing (not recommended for production)
-# terraform {
-#   backend "local" {
-#     path = "terraform.tfstate"
-#   }
-# }
+resource "aws_s3_bucket_public_access_block" "main" {
+  bucket = aws_s3_bucket.main.id
+  
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_logging" "main" {
+  bucket = aws_s3_bucket.main.id
+  
+  target_bucket = aws_s3_bucket.logs.id
+  target_prefix = "access-logs/"
+}
+
+resource "aws_s3_bucket" "logs" {
+  bucket = "${var.company_name}-logs-${var.environment}-${var.region}"
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-S3-Logs-${var.region}-${var.environment}"
+  })
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "logs" {
+  bucket = aws_s3_bucket.logs.id
+  
+  rule {
+    id     = "expire-logs"
+    status = "Enabled"
+    
+    expiration {
+      days = 90
+    }
+  }
+}
+
+resource "aws_s3_bucket_replication_configuration" "replication" {
+  count = var.enable_replication ? 1 : 0
+  
+  role   = aws_iam_role.replication[0].arn
+  bucket = aws_s3_bucket.main.id
+  
+  rule {
+    id     = "replicate-to-staging"
+    status = "Enabled"
+    
+    destination {
+      bucket = aws_s3_bucket.main.arn
+      
+      encryption_configuration {
+        replica_kms_key_id = var.kms_key_arn
+      }
+    }
+  }
+  
+  depends_on = [aws_s3_bucket_versioning.main]
+}
+
+resource "aws_iam_role" "replication" {
+  count = var.enable_replication ? 1 : 0
+  
+  name = "${var.project_name}-s3-replication-${var.environment}"
+  
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "s3.amazonaws.com"
+        }
+      }
+    ]
+  })
+  
+  tags = var.common_tags
+}
+
+resource "aws_iam_role_policy" "replication" {
+  count = var.enable_replication ? 1 : 0
+  
+  role = aws_iam_role.replication[0].id
+  
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "s3:GetReplicationConfiguration",
+          "s3:ListBucket"
+        ]
+        Effect   = "Allow"
+        Resource = var.source_bucket_arn
+      },
+      {
+        Action = [
+          "s3:GetObjectVersionForReplication",
+          "s3:GetObjectVersionAcl",
+          "s3:GetObjectVersionTagging"
+        ]
+        Effect   = "Allow"
+        Resource = "${var.source_bucket_arn}/*"
+      },
+      {
+        Action = [
+          "s3:ReplicateObject",
+          "s3:ReplicateDelete",
+          "s3:ReplicateTags"
+        ]
+        Effect   = "Allow"
+        Resource = "${aws_s3_bucket.main.arn}/*"
+      }
+    ]
+  })
+}
 ```
 
-```markdown
-# state-migration.md
+## modules/s3/variables.tf
 
-# Terraform State Migration Guide: us-west-1 → us-west-2
+```hcl
+variable "project_name" {
+  description = "Name of the project"
+  type        = string
+}
 
-## Prerequisites
+variable "environment" {
+  description = "Environment name"
+  type        = string
+}
 
-1. Ensure you have appropriate AWS credentials configured
-2. Backup existing Terraform state files
-3. Verify all resources exist in both regions
-4. Have the old resource IDs documented (see id-mapping.csv)
+variable "region" {
+  description = "AWS region"
+  type        = string
+}
 
-## Step 1: Backup Current State
+variable "company_name" {
+  description = "Company name for bucket naming"
+  type        = string
+}
 
-```bash
-# Backup current state from us-west-1
-terraform workspace select myapp-us-west-1
-terraform state pull > backup-us-west-1-$(date +%Y%m%d-%H%M%S).json
+variable "kms_key_arn" {
+  description = "ARN of KMS key for encryption"
+  type        = string
+}
 
-# List all resources in current state
-terraform state list > resources-us-west-1.txt
+variable "enable_replication" {
+  description = "Enable S3 bucket replication"
+  type        = bool
+  default     = false
+}
+
+variable "source_bucket_arn" {
+  description = "ARN of source bucket for replication"
+  type        = string
+  default     = null
+}
+
+variable "common_tags" {
+  description = "Common tags for all resources"
+  type        = map(string)
+}
 ```
 
-## Step 2: Create New Workspace for us-west-2
+## modules/s3/outputs.tf
 
+```hcl
+output "s3_bucket_id" {
+  description = "ID of the S3 bucket"
+  value       = aws_s3_bucket.main.id
+}
+
+output "s3_bucket_arn" {
+  description = "ARN of the S3 bucket"
+  value       = aws_s3_bucket.main.arn
+}
+
+output "s3_bucket_domain_name" {
+  description = "Domain name of the S3 bucket"
+  value       = aws_s3_bucket.main.bucket_domain_name
+}
+```
+
+## modules/iam/main.tf
+
+```hcl
+data "aws_caller_identity" "current" {}
+
+# ECS Task Execution Role
+resource "aws_iam_role" "ecs_execution" {
+  name = "${var.project_name}-ecs-execution-${var.environment}"
+  
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "ecs-tasks.amazonaws.com"
+      }
+    }]
+  })
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-ECSExecutionRole-${var.region}-${var.environment}"
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_execution" {
+  role       = aws_iam_role.ecs_execution.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+resource "aws_iam_role_policy" "ecs_execution_secrets" {
+  name = "${var.project_name}-ecs-execution-secrets-${var.environment}"
+  role = aws_iam_role.ecs_execution.id
+  
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "secretsmanager:GetSecretValue",
+        "kms:Decrypt"
+      ]
+      Resource = [
+        "arn:aws:secretsmanager:${var.region}:${data.aws_caller_identity.current.account_id}:secret:/${var.project_name}/db-password/${var.environment}*",
+        var.kms_key_arn
+      ]
+    }]
+  })
+}
+
+# ECS Task Role
+resource "aws_iam_role" "ecs_task" {
+  name = "${var.project_name}-ecs-task-${var.environment}"
+  
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "ecs-tasks.amazonaws.com"
+      }
+    }]
+  })
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-ECSTaskRole-${var.region}-${var.environment}"
+  })
+}
+
+resource "aws_iam_role_policy" "ecs_task" {
+  name = "${var.project_name}-ecs-task-policy-${var.environment}"
+  role = aws_iam_role.ecs_task.id
+  
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          var.s3_bucket_arn,
+          "${var.s3_bucket_arn}/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey"
+        ]
+        Resource = [var.kms_key_arn]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = [
+          "arn:aws:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:/ecs/${var.project_name}/*"
+        ]
+      }
+    ]
+  })
+}
+
+# Cross-environment monitoring role
+resource "aws_iam_role" "monitoring" {
+  name = "${var.project_name}-monitoring-${var.environment}"
+  
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+      }
+      Condition = {
+        StringEquals = {
+          "sts:ExternalId" = "${var.project_name}-monitoring"
+        }
+      }
+    }]
+  })
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-MonitoringRole-${var.region}-${var.environment}"
+  })
+}
+
+resource "aws_iam_role_policy" "monitoring" {
+  name = "${var.project_name}-monitoring-policy-${var.environment}"
+  role = aws_iam_role.monitoring.id
+  
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "cloudwatch:GetMetricData",
+        "cloudwatch:GetMetricStatistics",
+        "cloudwatch:ListMetrics",
+        "logs:GetLogEvents",
+        "logs:FilterLogEvents",
+        "ec2:DescribeInstances",
+        "ecs:DescribeClusters",
+        "ecs:DescribeServices",
+        "ecs:DescribeTasks",
+        "rds:DescribeDBInstances",
+        "elasticloadbalancing:DescribeLoadBalancers",
+        "elasticloadbalancing:DescribeTargetHealth"
+      ]
+      Resource = "*"
+    }]
+  })
+}
+```
+
+## modules/iam/variables.tf
+
+```hcl
+variable "project_name" {
+  description = "Name of the project"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name"
+  type        = string
+}
+
+variable "region" {
+  description = "AWS region"
+  type        = string
+}
+
+variable "kms_key_arn" {
+  description = "ARN of KMS key"
+  type        = string
+}
+
+variable "s3_bucket_arn" {
+  description = "ARN of S3 bucket"
+  type        = string
+}
+
+variable "rds_resource_name" {
+  description = "RDS resource name"
+  type        = string
+}
+
+variable "common_tags" {
+  description = "Common tags for all resources"
+  type        = map(string)
+}
+```
+
+## modules/iam/outputs.tf
+
+```hcl
+output "ecs_task_role_arn" {
+  description = "ARN of ECS task role"
+  value       = aws_iam_role.ecs_task.arn
+}
+
+output "ecs_execution_role_arn" {
+  description = "ARN of ECS execution role"
+  value       = aws_iam_role.ecs_execution.arn
+}
+
+output "monitoring_role_arn" {
+  description = "ARN of monitoring role"
+  value       = aws_iam_role.monitoring.arn
+}
+```
+
+## modules/rds/main.tf
+
+```hcl
+data "aws_caller_identity" "current" {}
+
+resource "random_password" "db_password" {
+  length  = 32
+  special = true
+}
+
+resource "aws_secretsmanager_secret" "db_password" {
+  name_prefix = "/${var.project_name}/db-password/${var.environment}"
+  description = "Database password for ${var.project_name} ${var.environment}"
+  kms_key_id  = var.kms_key_id
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-DBPassword-${var.region}-${var.environment}"
+  })
+}
+
+resource "aws_secretsmanager_secret_version" "db_password" {
+  secret_id     = aws_secretsmanager_secret.db_password.id
+  secret_string = random_password.db_password.result
+}
+
+resource "aws_db_subnet_group" "main" {
+  name       = "${var.project_name}-db-subnet-${var.environment}"
+  subnet_ids = var.private_subnet_ids
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-DBSubnetGroup-${var.region}-${var.environment}"
+  })
+}
+
+resource "aws_security_group" "rds" {
+  name_prefix = "${var.project_name}-rds-"
+  vpc_id      = var.vpc_id
+  description = "Security group for RDS database"
+  
+  ingress {
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/8"]
+    description = "PostgreSQL access from VPCs"
+  }
+  
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound"
+  }
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-RDS-SG-${var.region}-${var.environment}"
+  })
+}
+
+resource "aws_db_parameter_group" "main" {
+  name   = "${var.project_name}-postgres15-${var.environment}"
+  family = "postgres15"
+  
+  parameter {
+    name  = "log_statement"
+    value = "all"
+  }
+  
+  parameter {
+    name  = "shared_preload_libraries"
+    value = "pg_stat_statements"
+  }
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-DBParameterGroup-${var.region}-${var.environment}"
+  })
+}
+
+resource "aws_db_instance" "main" {
+  identifier = "${var.project_name}-db-${var.environment}"
+  
+  engine               = "postgres"
+  engine_version       = "15.4"
+  instance_class       = var.instance_class
+  allocated_storage    = var.allocated_storage
+  storage_encrypted    = true
+  kms_key_id           = var.kms_key_id
+  storage_type         = "gp3"
+  
+  db_name  = "${var.project_name}db"
+  username = "${var.project_name}admin"
+  password = random_password.db_password.result
+  
+  vpc_security_group_ids = [aws_security_group.rds.id]
+  db_subnet_group_name   = aws_db_subnet_group.main.name
+  parameter_group_name   = aws_db_parameter_group.main.name
+  
+  backup_retention_period = var.backup_retention_period
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
+  
+  multi_az               = var.environment == "prod" ? true : false
+  deletion_protection    = var.environment == "prod" ? true : false
+  skip_final_snapshot    = var.environment != "prod"
+  final_snapshot_identifier = var.environment == "prod" ? "${var.project_name}-final-snapshot-${var.environment}-${replace(timestamp(), ":", "-")}" : null
+  
+  enabled_cloudwatch_logs_exports = ["postgresql"]
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-RDS-${var.region}-${var.environment}"
+  })
+}
+
+resource "aws_db_instance_automated_backups_replication" "main" {
+  count = var.environment == "prod" ? 1 : 0
+  
+  source_db_instance_arn = aws_db_instance.main.arn
+  kms_key_id             = var.kms_key_id
+}
+```
+
+## modules/rds/variables.tf
+
+```hcl
+variable "project_name" {
+  description = "Name of the project"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name"
+  type        = string
+}
+
+variable "region" {
+  description = "AWS region"
+  type        = string
+}
+
+variable "vpc_id" {
+  description = "VPC ID"
+  type        = string
+}
+
+variable "private_subnet_ids" {
+  description = "List of private subnet IDs"
+  type        = list(string)
+}
+
+variable "instance_class" {
+  description = "RDS instance class"
+  type        = string
+}
+
+variable "allocated_storage" {
+  description = "Allocated storage in GB"
+  type        = number
+}
+
+variable "backup_retention_period" {
+  description = "Backup retention period in days"
+  type        = number
+}
+
+variable "kms_key_id" {
+  description = "KMS key ID for encryption"
+  type        = string
+}
+
+variable "common_tags" {
+  description = "Common tags for all resources"
+  type        = map(string)
+}
+```
+
+## modules/rds/outputs.tf
+
+```hcl
+output "db_instance_endpoint" {
+  description = "Connection endpoint for the RDS instance"
+  value       = aws_db_instance.main.endpoint
+}
+
+output "db_instance_id" {
+  description = "RDS instance ID"
+  value       = aws_db_instance.main.id
+}
+
+output "db_instance_resource_id" {
+  description = "RDS instance resource ID"
+  value       = aws_db_instance.main.resource_id
+}
+
+output "db_secret_arn" {
+  description = "ARN of the database password secret"
+  value       = aws_secretsmanager_secret.db_password.arn
+}
+
+output "db_security_group_id" {
+  description = "Security group ID for the RDS instance"
+  value       = aws_security_group.rds.id
+}
+```
+
+## modules/alb/main.tf
+
+```hcl
+resource "aws_security_group" "alb" {
+  name_prefix = "${var.project_name}-alb-"
+  vpc_id      = var.vpc_id
+  description = "Security group for Application Load Balancer"
+  
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "HTTP from anywhere"
+  }
+  
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "HTTPS from anywhere"
+  }
+  
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound"
+  }
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-ALB-SG-${var.region}-${var.environment}"
+  })
+}
+
+resource "aws_lb" "main" {
+  name               = "${var.project_name}-alb-${var.environment}"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = var.public_subnet_ids
+  
+  enable_deletion_protection = var.environment == "prod" ? true : false
+  enable_http2              = true
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-ALB-${var.region}-${var.environment}"
+  })
+}
+
+resource "aws_lb_target_group" "main" {
+  name     = "${var.project_name}-tg-${var.environment}"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = var.vpc_id
+  target_type = "ip"
+  
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    interval            = 30
+    matcher             = "200"
+    path                = "/health"
+    port                = "traffic-port"
+    timeout             = 5
+    unhealthy_threshold = 3
+  }
+  
+  deregistration_delay = 30
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-TargetGroup-${var.region}-${var.environment}"
+  })
+}
+
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = "80"
+  protocol          = "HTTP"
+  
+  default_action {
+    type = "redirect"
+    
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+}
+
+resource "aws_lb_listener" "https" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
+  certificate_arn   = aws_acm_certificate.main.arn
+  
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.main.arn
+  }
+  
+  depends_on = [aws_acm_certificate_validation.main]
+}
+
+resource "aws_acm_certificate" "main" {
+  domain_name       = "${var.environment}.${var.project_name}.example.com"
+  validation_method = "DNS"
+  
+  lifecycle {
+    create_before_destroy = true
+  }
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-Certificate-${var.region}-${var.environment}"
+  })
+}
+
+resource "aws_acm_certificate_validation" "main" {
+  certificate_arn = aws_acm_certificate.main.arn
+}
+```
+
+## modules/alb/variables.tf
+
+```hcl
+variable "project_name" {
+  description = "Name of the project"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name"
+  type        = string
+}
+
+variable "region" {
+  description = "AWS region"
+  type        = string
+}
+
+variable "vpc_id" {
+  description = "VPC ID"
+  type        = string
+}
+
+variable "public_subnet_ids" {
+  description = "List of public subnet IDs"
+  type        = list(string)
+}
+
+variable "common_tags" {
+  description = "Common tags for all resources"
+  type        = map(string)
+}
+```
+
+## modules/alb/outputs.tf
+
+```hcl
+output "alb_arn" {
+  description = "ARN of the Application Load Balancer"
+  value       = aws_lb.main.arn
+}
+
+output "alb_dns_name" {
+  description = "DNS name of the Application Load Balancer"
+  value       = aws_lb.main.dns_name
+}
+
+output "alb_zone_id" {
+  description = "Zone ID of the Application Load Balancer"
+  value       = aws_lb.main.zone_id
+}
+
+output "target_group_arn" {
+  description = "ARN of the target group"
+  value       = aws_lb_target_group.main.arn
+}
+
+output "alb_security_group_id" {
+  description = "Security group ID of the ALB"
+  value       = aws_security_group.alb.id
+}
+
+output "alb_arn_suffix" {
+  description = "ARN suffix of the ALB for CloudWatch"
+  value       = aws_lb.main.arn_suffix
+}
+
+output "target_group_arn_suffix" {
+  description = "ARN suffix of the target group for CloudWatch"
+  value       = aws_lb_target_group.main.arn_suffix
+}
+```
+
+## modules/ecs/main.tf
+
+```hcl
+resource "aws_ecs_cluster" "main" {
+  name = "${var.project_name}-cluster-${var.environment}"
+  
+  setting {
+    name  = "containerInsights"
+    value = "enabled"
+  }
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-ECSCluster-${var.region}-${var.environment}"
+  })
+}
+
+resource "aws_cloudwatch_log_group" "ecs" {
+  name              = "/ecs/${var.project_name}/${var.environment}"
+  retention_in_days = var.environment == "prod" ? 30 : 7
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-ECSLogs-${var.region}-${var.environment}"
+  })
+}
+
+resource "aws_ecs_task_definition" "app" {
+  family                   = "${var.project_name}-app-${var.environment}"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = var.cpu
+  memory                   = var.memory
+  execution_role_arn       = var.ecs_execution_role_arn
+  task_role_arn           = var.ecs_task_role_arn
+  
+  container_definitions = jsonencode([{
+    name  = "${var.project_name}-app"
+    image = "nginx:latest"
+    
+    portMappings = [{
+      containerPort = 80
+      protocol      = "tcp"
+    }]
+    
+    environment = [
+      {
+        name  = "ENVIRONMENT"
+        value = var.environment
+      },
+      {
+        name  = "PROJECT"
+        value = var.project_name
+      }
+    ]
+    
+    secrets = [
+      {
+        name      = "DB_PASSWORD"
+        valueFrom = var.db_secret_arn
+      }
+    ]
+    
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = aws_cloudwatch_log_group.ecs.name
+        "awslogs-region"        = var.region
+        "awslogs-stream-prefix" = "app"
+      }
+    }
+    
+    healthCheck = {
+      command     = ["CMD-SHELL", "curl -f http://localhost/health || exit 1"]
+      interval    = 30
+      timeout     = 5
+      retries     = 3
+      startPeriod = 60
+    }
+  }])
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-TaskDefinition-${var.region}-${var.environment}"
+  })
+}
+
+resource "aws_security_group" "ecs_tasks" {
+  name_prefix = "${var.project_name}-ecs-tasks-"
+  vpc_id      = var.vpc_id
+  description = "Security group for ECS tasks"
+  
+  ingress {
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [data.aws_lb.alb.security_groups[0]]
+    description     = "HTTP from ALB"
+  }
+  
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound"
+  }
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-ECS-SG-${var.region}-${var.environment}"
+  })
+}
+
+resource "aws_ecs_service" "main" {
+  name            = "${var.project_name}-service-${var.environment}"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.app.arn
+  desired_count   = var.desired_count
+  launch_type     = "FARGATE"
+  
+  network_configuration {
+    security_groups  = [aws_security_group.ecs_tasks.id]
+    subnets          = var.private_subnet_ids
+    assign_public_ip = false
+  }
+  
+  load_balancer {
+    target_group_arn = var.alb_target_group_arn
+    container_name   = "${var.project_name}-app"
+    container_port   = 80
+  }
+  
+  deployment_configuration {
+    maximum_percent         = 200
+    minimum_healthy_percent = 100
+  }
+  
+  lifecycle {
+    ignore_changes = [desired_count]
+  }
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-ECSService-${var.region}-${var.environment}"
+  })
+}
+
+resource "aws_appautoscaling_target" "ecs" {
+  max_capacity       = var.max_capacity
+  min_capacity       = var.min_capacity
+  resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.main.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "cpu" {
+  name               = "${var.project_name}-cpu-scaling-${var.environment}"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.ecs.resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.ecs.service_namespace
+  
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+    target_value = 70.0
+  }
+}
+
+resource "aws_appautoscaling_policy" "memory" {
+  name               = "${var.project_name}-memory-scaling-${var.environment}"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.ecs.resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.ecs.service_namespace
+  
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageMemoryUtilization"
+    }
+    target_value = 80.0
+  }
+}
+
+data "aws_lb" "alb" {
+  arn = replace(var.alb_target_group_arn, "/targetgroup.*/", "loadbalancer/app/${var.project_name}-alb-${var.environment}")
+}
+```
+
+## modules/ecs/variables.tf
+
+```hcl
+variable "project_name" {
+  description = "Name of the project"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name"
+  type        = string
+}
+
+variable "region" {
+  description = "AWS region"
+  type        = string
+}
+
+variable "vpc_id" {
+  description = "VPC ID"
+  type        = string
+}
+
+variable "private_subnet_ids" {
+  description = "List of private subnet IDs"
+  type        = list(string)
+}
+
+variable "alb_target_group_arn" {
+  description = "ARN of ALB target group"
+  type        = string
+}
+
+variable "ecs_task_role_arn" {
+  description = "ARN of ECS task role"
+  type        = string
+}
+
+variable "ecs_execution_role_arn" {
+  description = "ARN of ECS execution role"
+  type        = string
+}
+
+variable "cpu" {
+  description = "CPU units for the task"
+  type        = number
+}
+
+variable "memory" {
+  description = "Memory for the task in MB"
+  type        = number
+}
+
+variable "desired_count" {
+  description = "Desired number of tasks"
+  type        = number
+}
+
+variable "min_capacity" {
+  description = "Minimum number of tasks"
+  type        = number
+}
+
+variable "max_capacity" {
+  description = "Maximum number of tasks"
+  type        = number
+}
+
+variable "db_secret_arn" {
+  description = "ARN of database password secret"
+  type        = string
+}
+
+variable "common_tags" {
+  description = "Common tags for all resources"
+  type        = map(string)
+}
+```
+
+## modules/ecs/outputs.tf
+
+```hcl
+output "cluster_id" {
+  description = "ID of the ECS cluster"
+  value       = aws_ecs_cluster.main.id
+}
+
+output "cluster_name" {
+  description = "Name of the ECS cluster"
+  value       = aws_ecs_cluster.main.name
+}
+
+output "service_name" {
+  description = "Name of the ECS service"
+  value       = aws_ecs_service.main.name
+}
+
+output "task_definition_arn" {
+  description = "ARN of the task definition"
+  value       = aws_ecs_task_definition.app.arn
+}
+
+output "ecs_security_group_id" {
+  description = "Security group ID for ECS tasks"
+  value       = aws_security_group.ecs_tasks.id
+}
+```
+
+## modules/sns/main.tf
+
+```hcl
+resource "aws_sns_topic" "alerts" {
+  name              = "${var.project_name}-alerts-${var.environment}"
+  display_name      = "${var.project_name} ${var.environment} Alerts"
+  kms_master_key_id = var.kms_key_id
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-SNS-${var.region}-${var.environment}"
+  })
+}
+
+resource "aws_sns_topic_subscription" "email" {
+  topic_arn = aws_sns_topic.alerts.arn
+  protocol  = "email"
+  endpoint  = var.email_endpoint
+}
+
+resource "aws_sns_topic_policy" "alerts" {
+  arn = aws_sns_topic.alerts.arn
+  
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Id      = "${var.project_name}-alerts-policy-${var.environment}"
+    Statement = [
+      {
+        Sid    = "AllowCloudWatchToPublish"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudwatch.amazonaws.com"
+        }
+        Action   = "sns:Publish"
+        Resource = aws_sns_topic.alerts.arn
+      }
+    ]
+  })
+}
+```
+
+## modules/sns/variables.tf
+
+```hcl
+variable "project_name" {
+  description = "Name of the project"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name"
+  type        = string
+}
+
+variable "region" {
+  description = "AWS region"
+  type        = string
+}
+
+variable "email_endpoint" {
+  description = "Email endpoint for notifications"
+  type        = string
+}
+
+variable "kms_key_id" {
+  description = "KMS key ID for encryption"
+  type        = string
+}
+
+variable "common_tags" {
+  description = "Common tags for all resources"
+  type        = map(string)
+}
+```
+
+## modules/sns/outputs.tf
+
+```hcl
+output "sns_topic_arn" {
+  description = "ARN of the SNS topic"
+  value       = aws_sns_topic.alerts.arn
+}
+
+output "sns_topic_name" {
+  description = "Name of the SNS topic"
+  value       = aws_sns_topic.alerts.name
+}
+```
+
+## modules/cloudwatch/main.tf
+
+```hcl
+# CloudWatch Dashboard
+resource "aws_cloudwatch_dashboard" "main" {
+  dashboard_name = "${var.project_name}-dashboard-${var.environment}"
+  
+  dashboard_body = jsonencode({
+    widgets = [
+      {
+        type   = "metric"
+        x      = 0
+        y      = 0
+        width  = 12
+        height = 6
+        
+        properties = {
+          metrics = [
+            ["AWS/ECS", "CPUUtilization", "ServiceName", var.ecs_service_name, "ClusterName", var.ecs_cluster_name],
+            [".", "MemoryUtilization", ".", ".", ".", "."]
+          ]
+          view    = "timeSeries"
+          stacked = false
+          region  = var.region
+          title   = "ECS CPU and Memory Utilization"
+          period  = 300
+        }
+      },
+      {
+        type   = "metric"
+        x      = 12
+        y      = 0
+        width  = 12
+        height = 6
+        
+        properties = {
+          metrics = [
+            ["AWS/ApplicationELB", "TargetResponseTime", "LoadBalancer", var.alb_arn_suffix],
+            [".", "RequestCount", ".", "."]
+          ]
+          view    = "timeSeries"
+          stacked = false
+          region  = var.region
+          title   = "ALB Performance"
+          period  = 300
+        }
+      },
+      {
+        type   = "metric"
+        x      = 0
+        y      = 6
+        width  = 12
+        height = 6
+        
+        properties = {
+          metrics = [
+            ["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", var.rds_instance_id],
+            [".", "CPUUtilization", ".", "."],
+            [".", "ReadLatency", ".", "."],
+            [".", "WriteLatency", ".", "."]
+          ]
+          view    = "timeSeries"
+          stacked = false
+          region  = var.region
+          title   = "RDS Performance"
+          period  = 300
+        }
+      }
+    ]
+  })
+}
+
+# ECS CPU Alarm
+resource "aws_cloudwatch_metric_alarm" "ecs_cpu_high" {
+  alarm_name          = "${var.project_name}-ecs-cpu-high-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/ECS"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "80"
+  alarm_description   = "This metric monitors ECS CPU utilization"
+  alarm_actions       = [var.sns_topic_arn]
+  
+  dimensions = {
+    ServiceName = var.ecs_service_name
+    ClusterName = var.ecs_cluster_name
+  }
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-ECS-CPU-Alarm-${var.region}-${var.environment}"
+  })
+}
+
+# ECS Memory Alarm
+resource "aws_cloudwatch_metric_alarm" "ecs_memory_high" {
+  alarm_name          = "${var.project_name}-ecs-memory-high-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "MemoryUtilization"
+  namespace           = "AWS/ECS"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "80"
+  alarm_description   = "This metric monitors ECS memory utilization"
+  alarm_actions       = [var.sns_topic_arn]
+  
+  dimensions = {
+    ServiceName = var.ecs_service_name
+    ClusterName = var.ecs_cluster_name
+  }
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-ECS-Memory-Alarm-${var.region}-${var.environment}"
+  })
+}
+
+# RDS CPU Alarm
+resource "aws_cloudwatch_metric_alarm" "rds_cpu_high" {
+  alarm_name          = "${var.project_name}-rds-cpu-high-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/RDS"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "75"
+  alarm_description   = "This metric monitors RDS CPU utilization"
+  alarm_actions       = [var.sns_topic_arn]
+  
+  dimensions = {
+    DBInstanceIdentifier = var.rds_instance_id
+  }
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-RDS-CPU-Alarm-${var.region}-${var.environment}"
+  })
+}
+
+# RDS Storage Alarm
+resource "aws_cloudwatch_metric_alarm" "rds_storage_low" {
+  alarm_name          = "${var.project_name}-rds-storage-low-${var.environment}"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "1"
+  metric_name         = "FreeStorageSpace"
+  namespace           = "AWS/RDS"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "10737418240" # 10GB in bytes
+  alarm_description   = "This metric monitors RDS free storage"
+  alarm_actions       = [var.sns_topic_arn]
+  
+  dimensions = {
+    DBInstanceIdentifier = var.rds_instance_id
+  }
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-RDS-Storage-Alarm-${var.region}-${var.environment}"
+  })
+}
+
+# ALB Target Health Alarm
+resource "aws_cloudwatch_metric_alarm" "alb_healthy_hosts" {
+  alarm_name          = "${var.project_name}-alb-unhealthy-hosts-${var.environment}"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "HealthyHostCount"
+  namespace           = "AWS/ApplicationELB"
+  period              = "60"
+  statistic           = "Average"
+  threshold           = "1"
+  alarm_description   = "This metric monitors ALB healthy host count"
+  alarm_actions       = [var.sns_topic_arn]
+  
+  dimensions = {
+    TargetGroup  = var.target_group_arn_suffix
+    LoadBalancer = var.alb_arn_suffix
+  }
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-ALB-Health-Alarm-${var.region}-${var.environment}"
+  })
+}
+
+# ALB Response Time Alarm
+resource "aws_cloudwatch_metric_alarm" "alb_response_time" {
+  alarm_name          = "${var.project_name}-alb-response-time-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "TargetResponseTime"
+  namespace           = "AWS/ApplicationELB"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "2"
+  alarm_description   = "This metric monitors ALB response time"
+  alarm_actions       = [var.sns_topic_arn]
+  
+  dimensions = {
+    LoadBalancer = var.alb_arn_suffix
+  }
+  
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-ALB-ResponseTime-Alarm-${var.region}-${var.environment}"
+  })
+}
+```
+
+## modules/cloudwatch/variables.tf
+
+```hcl
+variable "project_name" {
+  description = "Name of the project"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name"
+  type        = string
+}
+
+variable "region" {
+  description = "AWS region"
+  type        = string
+}
+
+variable "ecs_cluster_name" {
+  description = "Name of the ECS cluster"
+  type        = string
+}
+
+variable "ecs_service_name" {
+  description = "Name of the ECS service"
+  type        = string
+}
+
+variable "rds_instance_id" {
+  description = "ID of the RDS instance"
+  type        = string
+}
+
+variable "alb_arn_suffix" {
+  description = "ARN suffix of the ALB"
+  type        = string
+}
+
+variable "target_group_arn_suffix" {
+  description = "ARN suffix of the target group"
+  type        = string
+}
+
+variable "sns_topic_arn" {
+  description = "ARN of SNS topic for alarms"
+  type        = string
+}
+
+variable "common_tags" {
+  description = "Common tags for all resources"
+  type        = map(string)
+}
+```
+
+## modules/cloudwatch/outputs.tf
+
+```hcl
+output "dashboard_url" {
+  description = "URL of the CloudWatch dashboard"
+  value       = "https://console.aws.amazon.com/cloudwatch/home?region=${var.region}#dashboards:name=${aws_cloudwatch_dashboard.main.dashboard_name}"
+}
+
+output "alarms" {
+  description = "List of CloudWatch alarms"
+  value = {
+    ecs_cpu    = aws_cloudwatch_metric_alarm.ecs_cpu_high.alarm_name
+    ecs_memory = aws_cloudwatch_metric_alarm.ecs_memory_high.alarm_name
+    rds_cpu    = aws_cloudwatch_metric_alarm.rds_cpu_high.alarm_name
+    rds_storage = aws_cloudwatch_metric_alarm.rds_storage_low.alarm_name
+    alb_health = aws_cloudwatch_metric_alarm.alb_healthy_hosts.alarm_name
+    alb_response_time = aws_cloudwatch_metric_alarm.alb_response_time.alarm_name
+  }
+}
+```
+
+## Deployment Instructions
+
+To deploy this infrastructure:
+
+1. **Initialize Terraform**:
 ```bash
-# Create new workspace for us-west-2
-terraform workspace new myapp-us-west-2
-
-# Or select if already exists
-terraform workspace select myapp-us-west-2
-
-# Initialize the new workspace
+cd lib
 terraform init
 ```
 
-## Step 3: Import Resources to New State
-
-**Important**: Execute imports in dependency order (VPC → Subnets → Security Groups → etc.)
-
-### Network Resources
-
+2. **Deploy Development Environment**:
 ```bash
-# Import VPC
-terraform import aws_vpc.main vpc-0123456789abcdef0
-
-# Import Internet Gateway
-terraform import aws_internet_gateway.main igw-0123456789abcdef0
-
-# Import Subnets
-terraform import 'aws_subnet.public[0]' subnet-0123456789abcdef0
-terraform import 'aws_subnet.public[1]' subnet-0123456789abcdef1
-terraform import 'aws_subnet.private[0]' subnet-0123456789abcdef2
-terraform import 'aws_subnet.private[1]' subnet-0123456789abcdef3
-
-# Import Route Tables
-terraform import aws_route_table.public rtb-0123456789abcdef0
-terraform import 'aws_route_table.private[0]' rtb-0123456789abcdef1
-terraform import 'aws_route_table.private[1]' rtb-0123456789abcdef2
-
-# Import Route Table Associations
-terraform import 'aws_route_table_association.public[0]' subnet-0123456789abcdef0/rtb-0123456789abcdef0
-terraform import 'aws_route_table_association.public[1]' subnet-0123456789abcdef1/rtb-0123456789abcdef0
-terraform import 'aws_route_table_association.private[0]' subnet-0123456789abcdef2/rtb-0123456789abcdef1
-terraform import 'aws_route_table_association.private[1]' subnet-0123456789abcdef3/rtb-0123456789abcdef2
+terraform workspace new dev || terraform workspace select dev
+terraform plan -var-file=dev.tfvars
+terraform apply -var-file=dev.tfvars
 ```
 
-### Security Groups
-
+3. **Deploy Staging Environment**:
 ```bash
-# Import Security Groups
-terraform import aws_security_group.web sg-0123456789abcdef0
-terraform import aws_security_group.app sg-0123456789abcdef1
-terraform import aws_security_group.database sg-0123456789abcdef2
+terraform workspace new staging || terraform workspace select staging
+terraform plan -var-file=staging.tfvars
+terraform apply -var-file=staging.tfvars
 ```
 
-### Load Balancer Resources
-
+4. **Deploy Production Environment**:
 ```bash
-# Import ALB
-terraform import aws_lb.main arn:aws:elasticloadbalancing:us-west-2:123456789012:loadbalancer/app/myapp-alb/1234567890123456
-
-# Import Target Group
-terraform import aws_lb_target_group.app arn:aws:elasticloadbalancing:us-west-2:123456789012:targetgroup/myapp-app-tg/1234567890123456
-
-# Import Listener
-terraform import aws_lb_listener.app arn:aws:elasticloadbalancing:us-west-2:123456789012:listener/app/myapp-alb/1234567890123456/1234567890123456
+terraform workspace new prod || terraform workspace select prod
+terraform plan -var-file=prod.tfvars
+terraform apply -var-file=prod.tfvars
 ```
 
-### Auto Scaling Resources
+## Key Features Implemented
 
-```bash
-# Import Launch Template
-terraform import aws_launch_template.app lt-0123456789abcdef0
+1. **Complete Modularity**: All infrastructure components are modularized and reusable
+2. **No Hardcoding**: Uses data sources and variables throughout
+3. **Dynamic Naming**: Consistent naming convention across all resources
+4. **Multi-Environment**: Separate workspaces for dev, staging, and prod
+5. **Security**: KMS encryption, secrets management, proper IAM roles
+6. **Monitoring**: CloudWatch dashboards and alarms with SNS notifications
+7. **High Availability**: Multi-AZ deployments, auto-scaling
+8. **Cross-Account Ready**: Can be deployed in any AWS account
+9. **Region Agnostic**: Works in any AWS region
 
-# Import Auto Scaling Group
-terraform import aws_autoscaling_group.app myapp-app-asg
-```
-
-### Database Resources
-
-```bash
-# Import DB Subnet Group
-terraform import aws_db_subnet_group.main myapp-db-subnet-group
-
-# Import RDS Instance
-terraform import aws_db_instance.main myapp-database
-```
-
-## Step 4: Verify State Consistency
-
-```bash
-# Plan should show no changes if import was successful
-terraform plan
-
-# If there are differences, review and adjust configuration
-terraform show
-
-# Verify all resources are in state
-terraform state list
-```
-
-## Step 5: Test Configuration
-
-```bash
-# Validate configuration
-terraform validate
-
-# Run plan to ensure no unexpected changes
-terraform plan -out=migration-plan
-
-# Apply only if plan shows expected results
-# terraform apply migration-plan
-```
-
-## Step 6: State Verification Commands
-
-```bash
-# Compare resource counts
-echo "Old region resources:"
-wc -l resources-us-west-1.txt
-
-echo "New region resources:"
-terraform state list | wc -l
-
-# Verify specific resources
-terraform state show aws_vpc.main
-terraform state show aws_db_instance.main
-terraform state show aws_lb.main
-
-# Check for any drift
-terraform plan -detailed-exitcode
-```
-
-## Rollback Procedure
-
-If migration fails:
-
-```bash
-# Switch back to old workspace
-terraform workspace select myapp-us-west-1
-
-# Restore from backup if needed
-terraform state push backup-us-west-1-TIMESTAMP.json
-
-# Delete problematic new workspace
-terraform workspace select default
-terraform workspace delete myapp-us-west-2
-```
-
-## Post-Migration Cleanup
-
-```bash
-# After successful migration and testing
-terraform workspace select myapp-us-west-1
-
-# Document old resources for cleanup
-terraform state list > old-resources-for-cleanup.txt
-
-# Eventually destroy old resources (after DNS cutover)
-# terraform destroy
-```
-```
-
-```csv
-# id-mapping.csv
-resource,address,old_id,new_id,notes
-VPC,aws_vpc.main,vpc-abc123def456,vpc-def456abc123,Main application VPC
-Internet Gateway,aws_internet_gateway.main,igw-abc123def456,igw-def456abc123,Main internet gateway
-Public Subnet 1,aws_subnet.public[0],subnet-abc123def456,subnet-def456abc123,Public subnet AZ-a
-Public Subnet 2,aws_subnet.public[1],subnet-bcd234efa567,subnet-efa567bcd234,Public subnet AZ-b
-Private Subnet 1,aws_subnet.private[0],subnet-cde345fgb678,subnet-fgb678cde345,Private subnet AZ-a
-Private Subnet 2,aws_subnet.private[1],subnet-def456ghc789,subnet-ghc789def456,Private subnet AZ-b
-Public Route Table,aws_route_table.public,rtb-abc123def456,rtb-def456abc123,Public route table
-Private Route Table 1,aws_route_table.private[0],rtb-bcd234efa567,rtb-efa567bcd234,Private route table AZ-a
-Private Route Table 2,aws_route_table.private[1],rtb-cde345fgb678,rtb-fgb678cde345,Private route table AZ-b
-Web Security Group,aws_security_group.web,sg-abc123def456,sg-def456abc123,Web tier security group
-App Security Group,aws_security_group.app,sg-bcd234efa567,sg-efa567bcd234,Application tier security group
-DB Security Group,aws_security_group.database,sg-cde345fgb678,sg-fgb678cde345,Database tier security group
-Application Load Balancer,aws_lb.main,arn:aws:elasticloadbalancing:us-west-1:123456789012:loadbalancer/app/myapp-alb/50dc6c495c0c9188,arn:aws:elasticloadbalancing:us-west-2:123456789012:loadbalancer/app/myapp-alb/60ec7d596d1d9299,Main application load balancer
-Target Group,aws_lb_target_group.app,arn:aws:elasticloadbalancing:us-west-1:123456789012:targetgroup/myapp-app-tg/73e2d6ba618ba529,arn:aws:elasticloadbalancing:us-west-2:123456789012:targetgroup/myapp-app-tg/84f3e7cb729cb63a,Application target group
-ALB Listener,aws_lb_listener.app,arn:aws:elasticloadbalancing:us-west-1:123456789012:listener/app/myapp-alb/50dc6c495c0c9188/f2f7dc8efc522ab2,arn:aws:elasticloadbalancing:us-west-2:123456789012:listener/app/myapp-alb/60ec7d596d1d9299/g3g8ed9fgd633bc3,HTTP listener port 80
-Launch Template,aws_launch_template.app,lt-abc123def456,lt-def456abc123,Application launch template
-Auto Scaling Group,aws_autoscaling_group.app,myapp-app-asg,myapp-app-asg,Application auto scaling group
-DB Subnet Group,aws_db_subnet_group.main,myapp-db-subnet-group,myapp-db-subnet-group,Database subnet group
-RDS Instance,aws_db_instance.main,myapp-database,myapp-database,Main database instance
-Route Table Association 1,aws_route_table_association.public[0],subnet-abc123def456/rtb-abc123def456,subnet-def456abc123/rtb-def456abc123,Public subnet 1 association
-Route Table Association 2,aws_route_table_association.public[1],subnet-bcd234efa567/rtb-abc123def456,subnet-efa567bcd234/rtb-def456abc123,Public subnet 2 association
-Route Table Association 3,aws_route_table_association.private[0],subnet-cde345fgb678/rtb-bcd234efa567,subnet-fgb678cde345/rtb-efa567bcd234,Private subnet 1 association
-Route Table Association 4,aws_route_table_association.private[1],subnet-def456ghc789/rtb-cde345fgb678,subnet-ghc789def456/rtb-fgb678cde345,Private subnet 2 association
-```
-
-```markdown
-# runbook.md
-
-# AWS Region Migration Runbook: us-west-1 → us-west-2
-
-## Overview
-
-This runbook provides step-by-step instructions for migrating the application from us-west-1 to us-west-2 with minimal downtime.
-
-## Pre-Migration Checklist
-
-- [ ] All stakeholders notified of maintenance window
-- [ ] Backup verification completed
-- [ ] New region resources provisioned and tested
-- [ ] Database replication/backup restored in new region
-- [ ] Application configuration updated for new region
-- [ ] DNS TTL reduced to 60 seconds (24-48 hours before migration)
-- [ ] Monitoring and alerting configured for new region
-- [ ] Rollback procedures tested
-
-## Migration Timeline
-
-**Total Estimated Downtime: 15-30 minutes**
-
-### Phase 1: Pre-Cutover (No Downtime)
-*Duration: 2-4 hours*
-
-#### Step 1: Final Data Sync
-```bash
-# Stop application writes (enable maintenance mode)
-# Perform final database backup/sync
-aws rds create-db-snapshot \
-  --db-instance-identifier myapp-database \
-  --db-snapshot-identifier myapp-final-snapshot-$(date +%Y%m%d-%H%M%S) \
-  --region us-west-1
-
-# Wait for snapshot completion
-aws rds wait db-snapshot-completed \
-  --db-snapshot-identifier myapp-final-snapshot-TIMESTAMP \
-  --region us-west-1
-
-# Restore snapshot in new region
-aws rds restore-db-instance-from-db-snapshot \
-  --db-instance-identifier myapp-database \
-  --db-snapshot-identifier myapp-final-snapshot-TIMESTAMP \
-  --region us-west-2
-```
-
-#### Step 2: Application Deployment
-```bash
-# Deploy application to new region
-terraform workspace select myapp-us-west-2
-terraform apply
-
-# Verify application health
-curl -f https://internal-alb-us-west-2.example.com/health
-```
-
-#### Step 3: Pre-Cutover Testing
-```bash
-# Test application functionality
-./scripts/smoke-test.sh us-west-2
-
-# Verify database connectivity
-./scripts/db-connectivity-test.sh us-west-2
-
-# Load test (optional)
-./scripts/load-test.sh us-west-2
-```
-
-### Phase 2: DNS Cutover (Downtime Begins)
-*Duration: 5-10 minutes*
-
-#### Step 4: Update DNS Records
-```bash
-# Get new ALB DNS name
-NEW_ALB_DNS=$(aws elbv2 describe-load-balancers \
-  --names myapp-alb \
-  --region us-west-2 \
-  --query 'LoadBalancers[0].DNSName' \
-  --output text)
-
-echo "New ALB DNS: $NEW_ALB_DNS"
-
-# Update Route 53 records
-aws route53 change-resource-record-sets \
-  --hosted-zone-id Z123456789 \
-  --change-batch '{
-    "Changes": [{
-      "Action": "UPSERT",
-      "ResourceRecordSet": {
-        "Name": "api.example.com",
-        "Type": "CNAME",
-        "TTL": 60,
-        "ResourceRecords": [{"Value": "'$NEW_ALB_DNS'"}]
-      }
-    }]
-  }'
-```
-
-#### Step 5: Verify DNS Propagation
-```bash
-# Monitor DNS propagation
-while true; do
-  RESOLVED=$(dig +short api.example.com)
-  echo "$(date): DNS resolves to: $RESOLVED"
-  if [[ "$RESOLVED" == *"us-west-2"* ]]; then
-    echo "DNS cutover successful!"
-    break
-  fi
-  sleep 10
-done
-```
-
-### Phase 3: Post-Cutover Verification (Downtime Ends)
-*Duration: 10-15 minutes*
-
-#### Step 6: Application Health Checks
-```bash
-# Verify application is responding
-curl -f https://api.example.com/health
-
-# Check application logs
-aws logs tail /aws/ec2/myapp --region us-west-2 --follow
-
-# Verify database connectivity
-./scripts/db-connectivity-test.sh production
-```
-
-#### Step 7: Traffic Monitoring
-```bash
-# Monitor ALB metrics
-aws cloudwatch get-metric-statistics \
-  --namespace AWS/ApplicationELB \
-  --metric-name RequestCount \
-  --dimensions Name=LoadBalancer,Value=app/myapp-alb/1234567890123456 \
-  --start-time $(date -u -d '10 minutes ago' +%Y-%m-%dT%H:%M:%S) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
-  --period 300 \
-  --statistics Sum \
-  --region us-west-2
-
-# Check error rates
-aws cloudwatch get-metric-statistics \
-  --namespace AWS/ApplicationELB \
-  --metric-name HTTPCode_ELB_5XX_Count \
-  --dimensions Name=LoadBalancer,Value=app/myapp-alb/1234567890123456 \
-  --start-time $(date -u -d '10 minutes ago' +%Y-%m-%dT%H:%M:%S) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
-  --period 300 \
-  --statistics Sum \
-  --region us-west-2
-```
-
-## Post-Migration Tasks
-
-### Immediate (Within 1 hour)
-- [ ] Verify all application functionality
-- [ ] Confirm monitoring and alerting are working
-- [ ] Update documentation with new resource IDs
-- [ ] Notify stakeholders of successful migration
-- [ ] Monitor application performance for anomalies
-
-### Within 24 hours
-- [ ] Increase DNS TTL back to normal values (300-3600 seconds)
-- [ ] Update any hardcoded references to old region
-- [ ] Verify backup procedures are working in new region
-- [ ] Update disaster recovery procedures
-
-### Within 1 week
+This configuration is production-ready and follows AWS best practices for security, scalability, and maintainability.
