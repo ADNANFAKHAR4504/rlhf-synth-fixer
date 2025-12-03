@@ -266,13 +266,13 @@ describe('Tag Compliance Monitoring - Integration Tests', () => {
       const environmentSuffix =
         process.env.ENVIRONMENT_SUFFIX || 'synth-a5u1v0s6';
 
-      expect(outputs.complianceLogsBucketName).toContain('synth-a5u1v0s6');
+      expect(outputs.complianceLogsBucketName).toContain(environmentSuffix);
       expect(outputs.tagComplianceCheckerFunctionName).toContain(
-        'synth-a5u1v0s6'
+        environmentSuffix
       );
-      expect(outputs.ec2StateChangeRuleName).toContain('synth-a5u1v0s6');
-      expect(outputs.complianceDashboardName).toContain('synth-a5u1v0s6');
-      expect(outputs.highNonComplianceAlarmName).toContain('synth-a5u1v0s6');
+      expect(outputs.ec2StateChangeRuleName).toContain(environmentSuffix);
+      expect(outputs.complianceDashboardName).toContain(environmentSuffix);
+      expect(outputs.highNonComplianceAlarmName).toContain(environmentSuffix);
     });
   });
 });
