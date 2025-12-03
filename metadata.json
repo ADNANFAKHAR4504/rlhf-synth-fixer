@@ -8,7 +8,7 @@
   "training_quality": 10,
   "description": "AWS Compliance Monitoring System with Lambda-based periodic checks for S3 encryption, EC2 security groups, IAM password policy, CloudTrail logging, and VPC flow logs",
   "team": "synthetic",
-  "started_at": "2025-12-03T15:43:00Z",
-  "turn_type": "initial",
+  "startedAt": "2025-12-03T15:43:00Z",
+  "turn_type": "single",
   "subject_labels": ["Infrastructure Analysis/Monitoring"]
 }
