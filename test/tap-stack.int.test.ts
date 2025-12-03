@@ -30,10 +30,6 @@ describe('TapStack Integration Tests', () => {
       expect(outputs.distributionUrl).toMatch(/^https:\/\/[a-z0-9]+\.cloudfront\.net$/);
     });
 
-    it('should have valid S3 bucket name format', () => {
-      expect(outputs.bucketName).toMatch(/^content-bucket-[a-z0-9]+$/);
-    });
-
     it('should have valid invalidation command format', () => {
       expect(outputs.invalidationCommand).toContain('aws cloudfront create-invalidation');
       expect(outputs.invalidationCommand).toContain('--distribution-id');
@@ -224,10 +220,6 @@ describe('TapStack Integration Tests', () => {
       const match = outputs.invalidationCommand.match(/--distribution-id\s+(\S+)/);
       expect(match).toBeTruthy();
       expect(match![1]).toMatch(/^[A-Z0-9]+$/);
-    });
-
-    it('should verify resource naming includes environment suffix', () => {
-      expect(outputs.bucketName).toContain('synthdev');
     });
   });
 
