@@ -34,9 +34,8 @@
     "worktree",
     "test",
     "tests",
-    "bin",
     "cli",
     "**/*.d.ts"
   ],
-  "include": ["index.ts", "lib/**/*.ts"]
+  "include": ["index.ts", "lib/**/*.ts", "bin/**/*.ts"]
 }
