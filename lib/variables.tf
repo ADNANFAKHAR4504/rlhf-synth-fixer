@@ -13,7 +13,7 @@ variable "project_name" {
 variable "environment_suffix" {
   description = "Unique suffix for resource names to prevent conflicts"
   type        = string
-  default     = "dev-001"
+  default     = "dev-002"
 }
 
 variable "db_password" {

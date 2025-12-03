@@ -1,1 +1,1 @@
-environment_suffix = "dev-001"
+environment_suffix = "dev-002"
