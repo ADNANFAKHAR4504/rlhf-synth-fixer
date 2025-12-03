@@ -6,8 +6,5 @@ runtime:
 main: bin/
 description: RDS PostgreSQL optimization with read replica and monitoring
 config:
-  aws:region:
-    description: AWS region for deployment
-    default: us-east-1
   environmentSuffix:
     description: Environment suffix for resource naming (required)
