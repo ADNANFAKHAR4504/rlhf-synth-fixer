@@ -1,1 +1,0 @@
-Ideal response goes here.
