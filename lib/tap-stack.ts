@@ -95,9 +95,10 @@ export class TapStack extends TerraformStack {
         const numericPart = parseInt(match[1], 10);
         const devTemplate = environments.dev;
         // Compute a unique CIDR second octet for the PR using a modulo to keep in range 1-254
-        const octet = (Number.isFinite(numericPart) && numericPart > 0)
-          ? (numericPart % 250) + 1
-          : 1;
+        const octet =
+          Number.isFinite(numericPart) && numericPart > 0
+            ? (numericPart % 250) + 1
+            : 1;
         const cidrBlock = `10.${octet}.0.0/16`;
 
         config = {
