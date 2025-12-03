@@ -910,7 +910,7 @@ Resources:
                   else:
                       data = event
                   
-                  logger.info(f"Processing request: {context.request_id}")
+                  logger.info(f"Processing request: {context.aws_request_id}")
                   
                   # Validate input
                   validate_input(data)
@@ -920,7 +920,7 @@ Resources:
                   
                   # Store in S3
                   bucket = os.environ['BUCKET_NAME']
-                  s3_key = store_in_s3(bucket, processed_data, context.request_id)
+                  s3_key = store_in_s3(bucket, processed_data, context.aws_request_id)
                   
                   # Send success metrics
                   send_metric('ProcessingSuccess', 1)
@@ -934,17 +934,17 @@ Resources:
                       'headers': {
                           'Content-Type': 'application/json',
                           'Access-Control-Allow-Origin': '*',
-                          'X-Request-Id': context.request_id
+                          'X-Request-Id': context.aws_request_id
                       },
                       'body': json.dumps({
                           'message': 'Data processed successfully',
-                          'requestId': context.request_id,
+                          'requestId': context.aws_request_id,
                           's3Key': s3_key,
                           'processingTime': processing_time
                       })
                   }
                   
-                  logger.info(f"Request completed successfully: {context.request_id}")
+                  logger.info(f"Request completed successfully: {context.aws_request_id}")
                   return response
                   
               except ValueError as ve:
@@ -971,7 +971,7 @@ Resources:
                           Subject='Data Processing Error Alert',
                           Message=json.dumps({
                               'error': str(e),
-                              'requestId': context.request_id,
+                              'requestId': context.aws_request_id,
                               'timestamp': datetime.utcnow().isoformat(),
                               'environment': os.environ['ENVIRONMENT']
                           }, indent=2)
@@ -984,7 +984,7 @@ Resources:
                       'headers': {'Content-Type': 'application/json'},
                       'body': json.dumps({
                           'error': 'Internal server error',
-                          'requestId': context.request_id
+                              'requestId': context.aws_request_id
                       })
                   }
       Tags:

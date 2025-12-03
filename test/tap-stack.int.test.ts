@@ -4,7 +4,7 @@ import {
   GetRestApiCommand,
   GetResourcesCommand,
   GetMethodCommand,
-  TestInvokeMethodCommand,
+  GetIntegrationCommand,
 } from '@aws-sdk/client-api-gateway';
 import {
   LambdaClient,
@@ -179,7 +179,16 @@ describe('TapStack Integration Tests - End-to-End Data Flow', () => {
       );
 
       expect(method.httpMethod).toBe('POST');
-      expect(method.integration?.type).toBe('AWS_PROXY');
+
+      const integration = await apiGatewayClient.send(
+        new GetIntegrationCommand({
+          restApiId: apiGatewayId,
+          resourceId: processResource!.id!,
+          httpMethod: 'POST',
+        })
+      );
+
+      expect(integration.type).toBe('AWS_PROXY');
     });
 
     test('Lambda function should be deployed and configured', async () => {
@@ -278,13 +287,12 @@ describe('TapStack Integration Tests - End-to-End Data Flow', () => {
         body: JSON.stringify(testData),
       });
 
-      // Handle potential 403 errors (API Gateway policy or deployment issues)
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`API Gateway returned ${response.status}: ${errorText}`);
       }
       expect(response.ok).toBe(true);
-      
+
       const responseBody = await response.json();
       expect(responseBody.message).toBe('Data processed successfully');
       expect(responseBody.requestId).toBeDefined();
@@ -329,7 +337,6 @@ describe('TapStack Integration Tests - End-to-End Data Flow', () => {
     });
 
     test('Lambda should retrieve credentials from Secrets Manager during processing', async () => {
-      // Verify by checking CloudWatch logs or by successful processing
       const response = await fetch(apiGatewayUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -339,12 +346,12 @@ describe('TapStack Integration Tests - End-to-End Data Flow', () => {
         }),
       });
 
-      // If Lambda successfully retrieves secrets, processing should succeed
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`API Gateway returned ${response.status}: ${errorText}`);
       }
       expect(response.ok).toBe(true);
+
       const responseBody = await response.json();
       expect(responseBody.message).toBe('Data processed successfully');
     });
@@ -358,8 +365,8 @@ describe('TapStack Integration Tests - End-to-End Data Flow', () => {
         body: JSON.stringify(invalidData1),
       });
 
-      // API Gateway may return 400 (validation error) or 403 (policy/access issue)
-      expect([400, 403]).toContain(response1.status);
+      // API Gateway should return 400 (validation error) for missing userId
+      expect(response1.status).toBe(400);
 
       // Test missing data field
       const invalidData2 = { userId: 'test-user' };
@@ -369,7 +376,7 @@ describe('TapStack Integration Tests - End-to-End Data Flow', () => {
         body: JSON.stringify(invalidData2),
       });
 
-      expect([400, 403]).toContain(response2.status);
+      expect(response2.status).toBe(400);
     });
 
     test('should handle API Gateway throttling', async () => {
@@ -392,12 +399,8 @@ describe('TapStack Integration Tests - End-to-End Data Flow', () => {
       }
 
       const responses = await Promise.all(requests);
-      // Some requests should succeed, some may be throttled or blocked
-      // Accept 403 as valid response (policy blocking) or 429 (throttling) or 200 (success)
-      const validResponses = responses.filter(
-        (r) => r.ok || r.status === 403 || r.status === 429
-      );
-      expect(validResponses.length).toBeGreaterThan(0);
+      const successCount = responses.filter((r) => r.ok).length;
+      expect(successCount).toBeGreaterThan(0);
     });
 
   });
@@ -718,13 +721,10 @@ describe('TapStack Integration Tests - End-to-End Data Flow', () => {
         );
 
       const responses = await Promise.all(requests);
-      // Accept 200 (success), 403 (policy blocking), or 429 (throttling) as valid responses
-      const validResponses = responses.filter(
-        (r) => r.ok || r.status === 403 || r.status === 429
-      );
+      const successCount = responses.filter((r) => r.ok).length;
 
-      expect(validResponses.length).toBeGreaterThan(0);
-      expect(validResponses.length).toBeLessThanOrEqual(concurrentRequests);
+      expect(successCount).toBeGreaterThan(0);
+      expect(successCount).toBeLessThanOrEqual(concurrentRequests);
     });
 
     test('should complete processing within timeout limits', async () => {
@@ -741,8 +741,8 @@ describe('TapStack Integration Tests - End-to-End Data Flow', () => {
       const endTime = Date.now();
       const duration = endTime - startTime;
 
-      // Accept 200 (success) or 403 (policy blocking) as valid responses
-      expect([200, 403]).toContain(response.status);
+      // Expect success response
+      expect(response.status).toBe(200);
       expect(duration).toBeLessThan(30000); // Should complete within 30 seconds
       
       if (response.ok) {
@@ -769,16 +769,12 @@ describe('TapStack Integration Tests - End-to-End Data Flow', () => {
         body: JSON.stringify(workflowTestData),
       });
 
-      // If 403, log the error for debugging
       if (!apiResponse.ok) {
         const errorText = await apiResponse.text();
         console.error(`API Gateway returned ${apiResponse.status}: ${errorText}`);
-        // Skip rest of test if API is not accessible
-        expect(apiResponse.status).toBe(200);
-        return;
       }
 
-      expect(apiResponse.ok).toBe(true);
+      expect(apiResponse.status).toBe(200);
       const apiBody = await apiResponse.json();
       expect(apiBody.s3Key).toBeDefined();
 
