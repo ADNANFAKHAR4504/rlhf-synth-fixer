@@ -37,6 +37,5 @@
     "bin",
     "cli",
     "**/*.d.ts"
-  ],
-  "include": ["index.ts", "lib/**/*.ts"]
+  ]
 }
