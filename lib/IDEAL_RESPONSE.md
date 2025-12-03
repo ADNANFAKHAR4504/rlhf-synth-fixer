@@ -169,7 +169,6 @@ Resources:
   DBSecret:
     Type: 'AWS::SecretsManager::Secret'
     Properties:
-      Name: !Sub '${ProjectName}-${Environment}-db-credentials-${AWS::StackName}'
       Description: !Sub 'RDS PostgreSQL credentials for ${ProjectName}'
       GenerateSecretString:
         SecretStringTemplate: !Sub |
@@ -285,7 +284,7 @@ Resources:
   S3KMSKeyAlias:
     Type: 'AWS::KMS::Alias'
     Properties:
-      AliasName: !Sub 'alias/${ProjectName}-${Environment}-s3-encryption'
+      AliasName: !Sub 'alias/${ProjectName}-${Environment}-s3-encryption-${AWS::StackName}'
       TargetKeyId: !Ref S3KMSKey
 
   # ========================
@@ -294,7 +293,6 @@ Resources:
   AlarmNotificationTopic:
     Type: 'AWS::SNS::Topic'
     Properties:
-      TopicName: !Sub '${ProjectName}-${Environment}-alarms'
       DisplayName: !Sub '${ProjectName} CloudWatch Alarms'
       KmsMasterKeyId: alias/aws/sns
       Subscription:
@@ -374,7 +372,6 @@ Resources:
   VPCFlowLogGroup:
     Type: 'AWS::Logs::LogGroup'
     Properties:
-      LogGroupName: !Sub '/aws/vpc/${ProjectName}/${Environment}'
       RetentionInDays: !If [IsProduction, 90, 30]
       KmsKeyId: !GetAtt CloudWatchLogsKMSKey.Arn
       Tags:
@@ -434,7 +431,7 @@ Resources:
       ResourceId: !Ref VPC
       TrafficType: ALL
       LogDestinationType: cloud-watch-logs
-      LogGroupName: !Ref VPCFlowLogGroup
+      LogDestination: !GetAtt VPCFlowLogGroup.Arn
       DeliverLogsPermissionArn: !GetAtt VPCFlowLogRole.Arn
       Tags:
         - Key: Name
@@ -831,7 +828,6 @@ Resources:
   EC2Role:
     Type: 'AWS::IAM::Role'
     Properties:
-      RoleName: !Sub '${ProjectName}-${Environment}-EC2-Role-${AWS::StackName}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -914,7 +910,6 @@ Resources:
   EC2InstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
-      InstanceProfileName: !Sub '${ProjectName}-${Environment}-EC2-InstanceProfile-${AWS::StackName}'
       Roles:
         - !Ref EC2Role
 
@@ -924,7 +919,6 @@ Resources:
   EC2SecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupName: !Sub '${ProjectName}-${Environment}-EC2-SG'
       GroupDescription: 'Security group for EC2 instances with restricted SSH access'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -967,7 +961,6 @@ Resources:
   RDSSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupName: !Sub '${ProjectName}-${Environment}-RDS-SG'
       GroupDescription: 'Security group for RDS PostgreSQL instance'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -994,7 +987,6 @@ Resources:
   EC2LaunchTemplate:
     Type: 'AWS::EC2::LaunchTemplate'
     Properties:
-      LaunchTemplateName: !Sub '${ProjectName}-${Environment}-LaunchTemplate'
       LaunchTemplateData:
         ImageId: !Ref LatestAmiId
         InstanceType: !Ref EC2InstanceType
@@ -1207,7 +1199,6 @@ Resources:
   DBSubnetGroup:
     Type: 'AWS::RDS::DBSubnetGroup'
     Properties:
-      DBSubnetGroupName: !Sub '${ProjectName}-${Environment}-db-subnet-group'
       DBSubnetGroupDescription: 'Subnet group for RDS PostgreSQL'
       SubnetIds:
         - !Ref PrivateSubnet1

@@ -216,9 +216,6 @@
         "DBSecret": {
             "Type": "AWS::SecretsManager::Secret",
             "Properties": {
-                "Name": {
-                    "Fn::Sub": "${ProjectName}-${Environment}-db-credentials-${AWS::StackName}"
-                },
                 "Description": {
                     "Fn::Sub": "RDS PostgreSQL credentials for ${ProjectName}"
                 },
@@ -433,7 +430,7 @@
             "Type": "AWS::KMS::Alias",
             "Properties": {
                 "AliasName": {
-                    "Fn::Sub": "alias/${ProjectName}-${Environment}-s3-encryption"
+                    "Fn::Sub": "alias/${ProjectName}-${Environment}-s3-encryption-${AWS::StackName}"
                 },
                 "TargetKeyId": {
                     "Ref": "S3KMSKey"
@@ -443,9 +440,6 @@
         "AlarmNotificationTopic": {
             "Type": "AWS::SNS::Topic",
             "Properties": {
-                "TopicName": {
-                    "Fn::Sub": "${ProjectName}-${Environment}-alarms"
-                },
                 "DisplayName": {
                     "Fn::Sub": "${ProjectName} CloudWatch Alarms"
                 },
@@ -607,9 +601,6 @@
         "VPCFlowLogGroup": {
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
-                "LogGroupName": {
-                    "Fn::Sub": "/aws/vpc/${ProjectName}/${Environment}"
-                },
                 "RetentionInDays": {
                     "Fn::If": [
                         "IsProduction",
@@ -737,8 +728,11 @@
                 },
                 "TrafficType": "ALL",
                 "LogDestinationType": "cloud-watch-logs",
-                "LogGroupName": {
-                    "Ref": "VPCFlowLogGroup"
+                "LogDestination": {
+                    "Fn::GetAtt": [
+                        "VPCFlowLogGroup",
+                        "Arn"
+                    ]
                 },
                 "DeliverLogsPermissionArn": {
                     "Fn::GetAtt": [
@@ -1620,9 +1614,6 @@
         "EC2Role": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${ProjectName}-${Environment}-EC2-Role-${AWS::StackName}"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -1786,9 +1777,6 @@
         "EC2InstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
-                "InstanceProfileName": {
-                    "Fn::Sub": "${ProjectName}-${Environment}-EC2-InstanceProfile-${AWS::StackName}"
-                },
                 "Roles": [
                     {
                         "Ref": "EC2Role"
@@ -1799,9 +1787,6 @@
         "EC2SecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupName": {
-                    "Fn::Sub": "${ProjectName}-${Environment}-EC2-SG"
-                },
                 "GroupDescription": "Security group for EC2 instances with restricted SSH access",
                 "VpcId": {
                     "Ref": "VPC"
@@ -1880,9 +1865,6 @@
         "RDSSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupName": {
-                    "Fn::Sub": "${ProjectName}-${Environment}-RDS-SG"
-                },
                 "GroupDescription": "Security group for RDS PostgreSQL instance",
                 "VpcId": {
                     "Ref": "VPC"
@@ -1933,9 +1915,6 @@
         "EC2LaunchTemplate": {
             "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
-                "LaunchTemplateName": {
-                    "Fn::Sub": "${ProjectName}-${Environment}-LaunchTemplate"
-                },
                 "LaunchTemplateData": {
                     "ImageId": {
                         "Ref": "LatestAmiId"
@@ -2174,9 +2153,6 @@
         "DBSubnetGroup": {
             "Type": "AWS::RDS::DBSubnetGroup",
             "Properties": {
-                "DBSubnetGroupName": {
-                    "Fn::Sub": "${ProjectName}-${Environment}-db-subnet-group"
-                },
                 "DBSubnetGroupDescription": "Subnet group for RDS PostgreSQL",
                 "SubnetIds": [
                     {
