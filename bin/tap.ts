@@ -48,6 +48,7 @@ const provider = new aws.Provider('aws', {
 new TapStack(
   'pulumi-infra',
   {
+    environmentSuffix,
     tags: defaultTags,
   },
   { provider }
