@@ -26,5 +26,11 @@
   ],
   "task_config": {
     "deploy_env": "dev.tfvars"
-  }
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
 }
