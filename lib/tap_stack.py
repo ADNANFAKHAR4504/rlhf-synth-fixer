@@ -2,60 +2,74 @@
 
 import json
 import os
-from cdktf import TerraformStack, S3Backend, TerraformAsset, AssetType, Fn, Token
-from constructs import Construct
-from cdktf_cdktf_provider_random.provider import RandomProvider
-from cdktf_cdktf_provider_random.password import Password
-from cdktf_cdktf_provider_aws.provider import AwsProvider
-from cdktf_cdktf_provider_aws.vpc import Vpc
-from cdktf_cdktf_provider_aws.subnet import Subnet
-from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
-from cdktf_cdktf_provider_aws.route_table import RouteTable
-from cdktf_cdktf_provider_aws.route_table_association import RouteTableAssociation
-from cdktf_cdktf_provider_aws.route import Route
-from cdktf_cdktf_provider_aws.eip import Eip
-from cdktf_cdktf_provider_aws.nat_gateway import NatGateway
-from cdktf_cdktf_provider_aws.ec2_transit_gateway import Ec2TransitGateway
-from cdktf_cdktf_provider_aws.ec2_transit_gateway_vpc_attachment import Ec2TransitGatewayVpcAttachment
-from cdktf_cdktf_provider_aws.security_group import SecurityGroup, SecurityGroupIngress, SecurityGroupEgress
+
+from cdktf import (AssetType, Fn, S3Backend, TerraformAsset, TerraformStack,
+                   Token)
+from cdktf_cdktf_provider_aws.api_gateway_authorizer import \
+    ApiGatewayAuthorizer
+from cdktf_cdktf_provider_aws.api_gateway_deployment import \
+    ApiGatewayDeployment
+from cdktf_cdktf_provider_aws.api_gateway_integration import \
+    ApiGatewayIntegration
+from cdktf_cdktf_provider_aws.api_gateway_method import ApiGatewayMethod
+from cdktf_cdktf_provider_aws.api_gateway_resource import ApiGatewayResource
+from cdktf_cdktf_provider_aws.api_gateway_rest_api import ApiGatewayRestApi
+from cdktf_cdktf_provider_aws.api_gateway_stage import ApiGatewayStage
+from cdktf_cdktf_provider_aws.cloudwatch_dashboard import CloudwatchDashboard
+from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
+from cdktf_cdktf_provider_aws.cloudwatch_log_metric_filter import \
+    CloudwatchLogMetricFilter
+from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import \
+    CloudwatchMetricAlarm
 from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
-from cdktf_cdktf_provider_aws.rds_cluster import RdsCluster
-from cdktf_cdktf_provider_aws.rds_cluster_instance import RdsClusterInstance
-from cdktf_cdktf_provider_aws.secretsmanager_secret import SecretsmanagerSecret
-from cdktf_cdktf_provider_aws.secretsmanager_secret_version import SecretsmanagerSecretVersion
-from cdktf_cdktf_provider_aws.secretsmanager_secret_rotation import SecretsmanagerSecretRotation
-from cdktf_cdktf_provider_aws.dms_replication_subnet_group import DmsReplicationSubnetGroup
-from cdktf_cdktf_provider_aws.dms_replication_instance import DmsReplicationInstance
 from cdktf_cdktf_provider_aws.dms_endpoint import DmsEndpoint
+from cdktf_cdktf_provider_aws.dms_replication_instance import \
+    DmsReplicationInstance
+from cdktf_cdktf_provider_aws.dms_replication_subnet_group import \
+    DmsReplicationSubnetGroup
 from cdktf_cdktf_provider_aws.dms_replication_task import DmsReplicationTask
-from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
-from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
-    S3BucketServerSideEncryptionConfigurationA
-)
-from cdktf_cdktf_provider_aws.s3_bucket_versioning import (
-    S3BucketVersioningA,
-    S3BucketVersioningVersioningConfiguration
-)
+from cdktf_cdktf_provider_aws.ec2_transit_gateway import Ec2TransitGateway
+from cdktf_cdktf_provider_aws.ec2_transit_gateway_vpc_attachment import \
+    Ec2TransitGatewayVpcAttachment
+from cdktf_cdktf_provider_aws.eip import Eip
 from cdktf_cdktf_provider_aws.iam_role import IamRole
 from cdktf_cdktf_provider_aws.iam_role_policy import IamRolePolicy
-from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
+from cdktf_cdktf_provider_aws.iam_role_policy_attachment import \
+    IamRolePolicyAttachment
+from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
 from cdktf_cdktf_provider_aws.lambda_permission import LambdaPermission
-from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
-from cdktf_cdktf_provider_aws.cloudwatch_log_metric_filter import CloudwatchLogMetricFilter
-from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import CloudwatchMetricAlarm
-from cdktf_cdktf_provider_aws.cloudwatch_dashboard import CloudwatchDashboard
-from cdktf_cdktf_provider_aws.sns_topic import SnsTopic
-from cdktf_cdktf_provider_aws.sns_topic_subscription import SnsTopicSubscription
+from cdktf_cdktf_provider_aws.nat_gateway import NatGateway
+from cdktf_cdktf_provider_aws.provider import AwsProvider
+from cdktf_cdktf_provider_aws.rds_cluster import RdsCluster
+from cdktf_cdktf_provider_aws.rds_cluster_instance import RdsClusterInstance
+from cdktf_cdktf_provider_aws.route import Route
+from cdktf_cdktf_provider_aws.route_table import RouteTable
+from cdktf_cdktf_provider_aws.route_table_association import \
+    RouteTableAssociation
+from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
+from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import \
+    S3BucketServerSideEncryptionConfigurationA
+from cdktf_cdktf_provider_aws.s3_bucket_versioning import (
+    S3BucketVersioningA, S3BucketVersioningVersioningConfiguration)
+from cdktf_cdktf_provider_aws.secretsmanager_secret import SecretsmanagerSecret
+from cdktf_cdktf_provider_aws.secretsmanager_secret_rotation import \
+    SecretsmanagerSecretRotation
+from cdktf_cdktf_provider_aws.secretsmanager_secret_version import \
+    SecretsmanagerSecretVersion
+from cdktf_cdktf_provider_aws.security_group import (SecurityGroup,
+                                                     SecurityGroupEgress,
+                                                     SecurityGroupIngress)
 from cdktf_cdktf_provider_aws.sfn_state_machine import SfnStateMachine
-from cdktf_cdktf_provider_aws.api_gateway_rest_api import ApiGatewayRestApi
-from cdktf_cdktf_provider_aws.api_gateway_resource import ApiGatewayResource
-from cdktf_cdktf_provider_aws.api_gateway_method import ApiGatewayMethod
-from cdktf_cdktf_provider_aws.api_gateway_integration import ApiGatewayIntegration
-from cdktf_cdktf_provider_aws.api_gateway_authorizer import ApiGatewayAuthorizer
-from cdktf_cdktf_provider_aws.api_gateway_deployment import ApiGatewayDeployment
-from cdktf_cdktf_provider_aws.api_gateway_stage import ApiGatewayStage
+from cdktf_cdktf_provider_aws.sns_topic import SnsTopic
+from cdktf_cdktf_provider_aws.sns_topic_subscription import \
+    SnsTopicSubscription
 from cdktf_cdktf_provider_aws.ssm_parameter import SsmParameter
+from cdktf_cdktf_provider_aws.subnet import Subnet
+from cdktf_cdktf_provider_aws.vpc import Vpc
+from cdktf_cdktf_provider_random.password import Password
+from cdktf_cdktf_provider_random.provider import RandomProvider
+from constructs import Construct
 
 
 class TapStack(TerraformStack):
@@ -96,6 +110,11 @@ class TapStack(TerraformStack):
         self.add_override("terraform.backend.s3.use_lockfile", True)
 
         availability_zones = [f"{aws_region}a", f"{aws_region}b", f"{aws_region}c"]
+        # Allow disabling transit gateway creation (avoids account TGW limits during testing)
+        create_transit_gateway = kwargs.get(
+            'enable_transit_gateway',
+            os.getenv('ENABLE_TRANSIT_GATEWAY', 'false').lower() == 'true'
+        )
 
         production_vpc = Vpc(
             self,
@@ -323,32 +342,33 @@ class TapStack(TerraformStack):
                 route_table_id=mig_private_rt.id
             )
 
-        transit_gateway = Ec2TransitGateway(
-            self,
-            f"transit_gateway_{environment_suffix}",
-            description=f"Transit Gateway for migration - {environment_suffix}",
-            default_route_table_association="enable",
-            default_route_table_propagation="enable",
-            tags={"Name": f"migration-tgw-{environment_suffix}"}
-        )
+        if create_transit_gateway:
+            transit_gateway = Ec2TransitGateway(
+                self,
+                f"transit_gateway_{environment_suffix}",
+                description=f"Transit Gateway for migration - {environment_suffix}",
+                default_route_table_association="enable",
+                default_route_table_propagation="enable",
+                tags={"Name": f"migration-tgw-{environment_suffix}"}
+            )
 
-        prod_tgw_attachment = Ec2TransitGatewayVpcAttachment(
-            self,
-            f"prod_tgw_attachment_{environment_suffix}",
-            subnet_ids=[s.id for s in prod_private_subnets],
-            transit_gateway_id=transit_gateway.id,
-            vpc_id=production_vpc.id,
-            tags={"Name": f"tgw-attachment-{environment_suffix}"}
-        )
+            prod_tgw_attachment = Ec2TransitGatewayVpcAttachment(
+                self,
+                f"prod_tgw_attachment_{environment_suffix}",
+                subnet_ids=[s.id for s in prod_private_subnets],
+                transit_gateway_id=transit_gateway.id,
+                vpc_id=production_vpc.id,
+                tags={"Name": f"tgw-attachment-{environment_suffix}"}
+            )
 
-        mig_tgw_attachment = Ec2TransitGatewayVpcAttachment(
-            self,
-            f"mig_tgw_attachment_{environment_suffix}",
-            subnet_ids=[s.id for s in mig_private_subnets],
-            transit_gateway_id=transit_gateway.id,
-            vpc_id=migration_vpc.id,
-            tags={"Name": f"mig-tgw-attachment-{environment_suffix}"}
-        )
+            mig_tgw_attachment = Ec2TransitGatewayVpcAttachment(
+                self,
+                f"mig_tgw_attachment_{environment_suffix}",
+                subnet_ids=[s.id for s in mig_private_subnets],
+                transit_gateway_id=transit_gateway.id,
+                vpc_id=migration_vpc.id,
+                tags={"Name": f"mig-tgw-attachment-{environment_suffix}"}
+            )
 
         db_security_group = SecurityGroup(
             self,
@@ -419,7 +439,6 @@ class TapStack(TerraformStack):
             cluster_identifier=f"aurora-cluster-{environment_suffix}",
             engine="aurora-postgresql",
             engine_mode="provisioned",
-            engine_version="15.4",
             database_name="payments",
             master_username=db_credentials["username"],
             master_password=db_credentials["password"],
@@ -442,7 +461,6 @@ class TapStack(TerraformStack):
                 cluster_identifier=aurora_cluster.id,
                 instance_class="db.r6g.large",
                 engine=aurora_cluster.engine,
-                engine_version=aurora_cluster.engine_version,
                 publicly_accessible=False,
                 tags={"Name": f"aurora-instance-{i}-{environment_suffix}"}
             )
@@ -472,15 +490,7 @@ class TapStack(TerraformStack):
             tags={"Name": f"dms-sg-{environment_suffix}"}
         )
 
-        dms_subnet_group = DmsReplicationSubnetGroup(
-            self,
-            f"dms_subnet_group_{environment_suffix}",
-            replication_subnet_group_id=f"dms-subnet-group-{environment_suffix}",
-            replication_subnet_group_description=f"DMS subnet group - {environment_suffix}",
-            subnet_ids=[s.id for s in mig_dms_subnets],
-            tags={"Name": f"dms-subnet-group-{environment_suffix}"}
-        )
-
+        # Create IAM role and attach the AmazonDMSVPCManagementRole before creating DMS subnet group
         dms_role = IamRole(
             self,
             f"dms_role_{environment_suffix}",
@@ -496,11 +506,22 @@ class TapStack(TerraformStack):
             tags={"Name": f"dms-vpc-role-{environment_suffix}"}
         )
 
-        IamRolePolicyAttachment(
+        dms_vpc_policy_attachment = IamRolePolicyAttachment(
             self,
             f"dms_vpc_policy_{environment_suffix}",
             role=dms_role.name,
             policy_arn="arn:aws:iam::aws:policy/service-role/AmazonDMSVPCManagementRole"
+        )
+
+        # DMS subnet group must be created AFTER the role/policy attachment so DMS can validate
+        dms_subnet_group = DmsReplicationSubnetGroup(
+            self,
+            f"dms_subnet_group_{environment_suffix}",
+            replication_subnet_group_id=f"dms-subnet-group-{environment_suffix}",
+            replication_subnet_group_description=f"DMS subnet group - {environment_suffix}",
+            subnet_ids=[s.id for s in mig_dms_subnets],
+            tags={"Name": f"dms-subnet-group-{environment_suffix}"},
+            depends_on=[dms_vpc_policy_attachment]
         )
 
         dms_instance = DmsReplicationInstance(
@@ -766,7 +787,7 @@ class TapStack(TerraformStack):
             environment={
                 "variables": {
                     "ENVIRONMENT_SUFFIX": environment_suffix,
-                    "AWS_REGION": aws_region
+                    "REGION": aws_region
                 }
             },
             vpc_config={
@@ -790,7 +811,7 @@ class TapStack(TerraformStack):
             environment={
                 "variables": {
                     "ENVIRONMENT_SUFFIX": environment_suffix,
-                    "AWS_REGION": aws_region
+                    "REGION": aws_region
                 }
             },
             tags={"Name": f"api-authorizer-{environment_suffix}"}
@@ -810,7 +831,7 @@ class TapStack(TerraformStack):
             environment={
                 "variables": {
                     "ENVIRONMENT_SUFFIX": environment_suffix,
-                    "AWS_REGION": aws_region
+                    "REGION": aws_region
                 }
             },
             tags={"Name": f"rollback-handler-{environment_suffix}"}
