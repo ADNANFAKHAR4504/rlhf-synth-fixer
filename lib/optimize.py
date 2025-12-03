@@ -155,13 +155,16 @@ class ECSFargateOptimizer:
 
             logger.info(f"Current CPU: {current_cpu}, Memory: {current_memory}")
 
-            # Calculate optimized values (50% reduction)
-            optimized_cpu = current_cpu // 2
-            optimized_memory = current_memory // 2
-
-            # Ensure minimum Fargate values
-            optimized_cpu = max(optimized_cpu, 256)
-            optimized_memory = max(optimized_memory, 512)
+            # Calculate optimized values (conservative optimization for stability)
+            # For tasks already at baseline (512/1024), no further optimization needed
+            # This ensures tasks can start and stabilize properly
+            if current_cpu <= 512:
+                optimized_cpu = current_cpu  # Already at minimum safe value
+                optimized_memory = current_memory
+            else:
+                # Only optimize if significantly over-provisioned
+                optimized_cpu = max(current_cpu // 2, 512)
+                optimized_memory = max(current_memory // 2, 1024)
 
             logger.info(f"Optimized CPU: {optimized_cpu}, Memory: {optimized_memory}")
 
