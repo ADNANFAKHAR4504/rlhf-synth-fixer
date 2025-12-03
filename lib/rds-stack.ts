@@ -186,7 +186,7 @@ export class RDSOptimizationStack {
     const dbInstance = new aws.rds.Instance(`rds-${environmentSuffix}`, {
       identifier: `rds-${environmentSuffix}`,
       engine: 'postgres',
-      engineVersion: '15.4',
+      engineVersion: '15', // Use major version, AWS will use latest minor version
       instanceClass: 'db.t3.large',
       allocatedStorage: 100,
       storageType: 'gp3',
