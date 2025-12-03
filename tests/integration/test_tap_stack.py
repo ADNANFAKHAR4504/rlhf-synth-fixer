@@ -80,12 +80,23 @@ class TestInfrastructureDeployment(unittest.TestCase):
 
         self.assertEqual(vpc['State'], 'available', "VPC is not available")
         self.assertEqual(vpc['CidrBlock'], '10.0.0.0/16', "VPC CIDR incorrect")
+
+        # Check DNS attributes using describe_vpc_attribute
+        dns_hostnames = self.ec2_client.describe_vpc_attribute(
+            VpcId=vpc_id,
+            Attribute='enableDnsHostnames'
+        )
+        dns_support = self.ec2_client.describe_vpc_attribute(
+            VpcId=vpc_id,
+            Attribute='enableDnsSupport'
+        )
+
         self.assertTrue(
-            vpc['EnableDnsHostnames'],
+            dns_hostnames['EnableDnsHostnames']['Value'],
             "DNS hostnames not enabled"
         )
         self.assertTrue(
-            vpc['EnableDnsSupport'],
+            dns_support['EnableDnsSupport']['Value'],
             "DNS support not enabled"
         )
 
@@ -365,16 +376,12 @@ class TestInfrastructureDeployment(unittest.TestCase):
 
     def test_cloudwatch_alarms_exist(self):
         """Test that CloudWatch alarms are configured."""
-        # Get alarms
-        response = self.cloudwatch_client.describe_alarms()
-        alarms = response['MetricAlarms']
-
         # Extract environment suffix from stream name for alarm filtering
         stream_name = self.outputs['kinesis_stream_name']
         # Assuming format: transaction-stream-{env_suffix}
         env_suffix = stream_name.split('-')[-1]
 
-        # Expected alarm name patterns
+        # Expected alarm name patterns (exact names from monitoring_stack.py)
         expected_alarm_patterns = [
             f'kinesis-iterator-age-{env_suffix}',
             f'kinesis-write-throughput-{env_suffix}',
@@ -385,28 +392,40 @@ class TestInfrastructureDeployment(unittest.TestCase):
             f'rds-connection-{env_suffix}'
         ]
 
-        alarm_names = [alarm['AlarmName'] for alarm in alarms]
+        # Check each alarm individually
+        found_alarms = []
+        missing_alarms = []
 
-        found_alarms = 0
-        for pattern in expected_alarm_patterns:
-            if pattern in alarm_names:
-                found_alarms += 1
+        for alarm_name in expected_alarm_patterns:
+            try:
+                response = self.cloudwatch_client.describe_alarms(
+                    AlarmNames=[alarm_name]
+                )
+                if response['MetricAlarms']:
+                    found_alarms.append(alarm_name)
+                else:
+                    missing_alarms.append(alarm_name)
+            except Exception:
+                missing_alarms.append(alarm_name)
 
+        # Assert at least some alarms exist (deployment may be in progress)
         self.assertGreater(
-            found_alarms,
+            len(found_alarms),
             0,
-            "No CloudWatch alarms found"
+            f"No CloudWatch alarms found. Expected: {expected_alarm_patterns}, Missing: {missing_alarms}"
         )
 
     def test_redis_port_is_6379(self):
         """Test that Redis port is correctly set to 6379."""
         redis_port = self.outputs['redis_port']
-        self.assertEqual(redis_port, 6379, "Redis port incorrect")
+        # Port may be string or int depending on platform
+        self.assertEqual(int(redis_port), 6379, "Redis port incorrect")
 
     def test_rds_port_is_5432(self):
         """Test that RDS port is correctly set to 5432."""
         rds_port = self.outputs['rds_port']
-        self.assertEqual(rds_port, 5432, "RDS port incorrect")
+        # Port may be string or int depending on platform
+        self.assertEqual(int(rds_port), 5432, "RDS port incorrect")
 
     def test_kinesis_stream_arn_format(self):
         """Test that Kinesis stream ARN has correct format."""
