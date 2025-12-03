@@ -219,7 +219,7 @@ function extractConfigFromOutputs(outputs: any): { region: string; environment: 
   }
 
   // Extract account ID from ARNs
-  let detectedAccountId = '000000000000';
+  let detectedAccountId: string | null = null;
   const arnSources = [outputs.kms_key_arn, outputs.alb_arn, outputs.rds_arn, outputs.asg_arn];
 
   for (const arn of arnSources) {
@@ -232,13 +232,17 @@ function extractConfigFromOutputs(outputs: any): { region: string; environment: 
     }
   }
 
+  // If no account ID found from ARNs, try from STS if available
+  // Otherwise, use a fallback that will be replaced at runtime
+  const finalAccountId = detectedAccountId || 'dynamic-from-sts';
+
   // Extract project name
   const detectedProjectName = outputs.project_name || 'payments';
 
   return {
     region: detectedRegion,
     environment: detectedEnvironment || 'dev',
-    accountId: detectedAccountId,
+    accountId: finalAccountId,
     projectName: detectedProjectName
   };
 }
@@ -265,7 +269,7 @@ describe('Terraform Payment Platform Infrastructure - Live Integration Tests', (
       console.log('No Terraform outputs found - all tests will be skipped gracefully');
       region = process.env.AWS_REGION || 'us-east-1';
       environment = process.env.ENVIRONMENT || 'dev';
-      accountId = '000000000000';
+      accountId = 'unknown-will-be-detected-at-runtime';
       projectName = 'payments';
       return;
     }
@@ -296,15 +300,24 @@ describe('Terraform Payment Platform Infrastructure - Live Integration Tests', (
     kmsClient = new KMSClient(clientConfig);
     stsClient = new STSClient(clientConfig);
 
-    // Verify AWS account identity
+    // Verify AWS account identity and update accountId if needed
     try {
       const identity = await stsClient.send(new GetCallerIdentityCommand({}));
-      console.log(`AWS Account Identity Verified: ${identity.Account}`);
-      if (identity.Account !== accountId) {
-        console.warn(`Account ID mismatch: Expected ${accountId}, got ${identity.Account}`);
+      const actualAccountId = identity.Account;
+      console.log(`AWS Account Identity Verified: ${actualAccountId}`);
+
+      // Update accountId if it was not properly detected from outputs
+      if (accountId === 'dynamic-from-sts' || accountId === 'unknown-will-be-detected-at-runtime') {
+        if (actualAccountId) {
+          accountId = actualAccountId;
+          console.log(`Account ID dynamically updated to: ${accountId}`);
+        }
+      } else if (actualAccountId && actualAccountId !== accountId) {
+        console.warn(`Account ID mismatch: Expected ${accountId}, got ${actualAccountId}. Using actual account ID: ${actualAccountId}`);
+        accountId = actualAccountId;
       }
     } catch (error) {
-      console.warn('Could not verify AWS account identity');
+      console.warn('Could not verify AWS account identity - tests will continue with extracted account ID');
     }
   });
 
