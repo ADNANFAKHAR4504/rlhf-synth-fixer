@@ -32,7 +32,7 @@ import time
 
 
 class TapStack(TerraformStack):
-    def __init__(self, scope: Construct, stack_id: str, environment_suffix: str = "dev"):
+    def __init__(self, scope: Construct, stack_id: str, environment_suffix: str = "dev", **kwargs):
         super().__init__(scope, stack_id)
 
         self.environment_suffix = environment_suffix
@@ -614,7 +614,7 @@ class TapStack(TerraformStack):
         trading_flow_logs_bucket = S3Bucket(
             self,
             f"trading-flow-logs-{environment_suffix}",
-            bucket=f"trading-flow-logs-{environment_suffix}",
+            bucket=f"trading-flow-logs-{environment_suffix}-{self.unique_suffix}",
             force_destroy=True,
             tags={
                 "Name": f"trading-flow-logs-{environment_suffix}",
@@ -639,7 +639,7 @@ class TapStack(TerraformStack):
         analytics_flow_logs_bucket = S3Bucket(
             self,
             f"analytics-flow-logs-{environment_suffix}",
-            bucket=f"analytics-flow-logs-{environment_suffix}",
+            bucket=f"analytics-flow-logs-{environment_suffix}-{self.unique_suffix}",
             force_destroy=True,
             tags={
                 "Name": f"analytics-flow-logs-{environment_suffix}",
@@ -760,7 +760,7 @@ class TapStack(TerraformStack):
         config_role = IamRole(
             self,
             f"config-role-{environment_suffix}",
-            name=f"config-role-{environment_suffix}",
+            name=f"config-role-{environment_suffix}-{self.unique_suffix}",
             assume_role_policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [{
