@@ -3,7 +3,9 @@ import { TapStack } from '../lib/tap-stack';
 
 // Mock Pulumi runtime
 pulumi.runtime.setMocks({
-  newResource: (args: pulumi.runtime.MockResourceArgs): { id: string; state: any } => {
+  newResource: (
+    args: pulumi.runtime.MockResourceArgs
+  ): { id: string; state: any } => {
     // Return mock IDs and states for resources
     const state: any = {
       ...args.inputs,
@@ -35,12 +37,14 @@ pulumi.runtime.setMocks({
         break;
       case 'aws:lb/targetGroup:TargetGroup':
         state.id = 'tg-mock123';
-        state.arn = 'arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/tg-mock/1234567890abcdef';
+        state.arn =
+          'arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/tg-mock/1234567890abcdef';
         state.arnSuffix = 'targetgroup/tg-mock/1234567890abcdef';
         break;
       case 'aws:ecr/repository:Repository':
         state.id = 'ecr-mock123';
-        state.repositoryUrl = '123456789012.dkr.ecr.us-east-1.amazonaws.com/mock-repo';
+        state.repositoryUrl =
+          '123456789012.dkr.ecr.us-east-1.amazonaws.com/mock-repo';
         state.arn = 'arn:aws:ecr:us-east-1:123456789012:repository/mock-repo';
         break;
       case 'aws:ecs/cluster:Cluster':
@@ -368,8 +372,8 @@ describe('TapStack Unit Tests', () => {
  * Helper function to convert Pulumi Output to Promise
  */
 function promiseOf<T>(output: pulumi.Output<T>): Promise<T> {
-  return new Promise((resolve) => {
-    output.apply((value) => {
+  return new Promise(resolve => {
+    output.apply(value => {
       resolve(value);
       return value;
     });

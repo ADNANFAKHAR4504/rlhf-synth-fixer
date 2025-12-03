@@ -30,7 +30,10 @@ import {
   DescribeScalableTargetsCommand,
   DescribeScalingPoliciesCommand,
 } from '@aws-sdk/client-application-auto-scaling';
-import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+} from '@aws-sdk/client-cloudwatch';
 import { EC2Client, DescribeVpcsCommand } from '@aws-sdk/client-ec2';
 
 const REGION = process.env.AWS_REGION || 'us-east-1';
@@ -131,7 +134,7 @@ describe('Infrastructure Deployment Validation', () => {
       const cluster = response.clusters![0];
 
       const containerInsightsSetting = cluster.settings?.find(
-        (s) => s.name === 'containerInsights'
+        s => s.name === 'containerInsights'
       );
 
       expect(containerInsightsSetting).toBeDefined();
@@ -191,7 +194,9 @@ describe('Infrastructure Deployment Validation', () => {
       const response = await ecsClient.send(command);
       const service = response.services![0];
 
-      expect(service.deploymentConfiguration?.deploymentCircuitBreaker).toBeDefined();
+      expect(
+        service.deploymentConfiguration?.deploymentCircuitBreaker
+      ).toBeDefined();
       expect(
         service.deploymentConfiguration?.deploymentCircuitBreaker?.enable
       ).toBe(true);
@@ -323,7 +328,7 @@ describe('Infrastructure Deployment Validation', () => {
       const response = await elbClient.send(command);
 
       const alb = response.LoadBalancers?.find(
-        (lb) => lb.DNSName === stackOutputs.loadBalancerDns
+        lb => lb.DNSName === stackOutputs.loadBalancerDns
       );
 
       expect(alb).toBeDefined();
@@ -336,7 +341,7 @@ describe('Infrastructure Deployment Validation', () => {
       const listCommand = new DescribeLoadBalancersCommand({});
       const listResponse = await elbClient.send(listCommand);
       const alb = listResponse.LoadBalancers?.find(
-        (lb) => lb.DNSName === stackOutputs.loadBalancerDns
+        lb => lb.DNSName === stackOutputs.loadBalancerDns
       );
 
       expect(alb).toBeDefined();
@@ -347,7 +352,9 @@ describe('Infrastructure Deployment Validation', () => {
       });
       const attrsResponse = await elbClient.send(attrsCommand);
 
-      expect(attrsResponse.LoadBalancers![0].LoadBalancerName).toContain(ENVIRONMENT_SUFFIX);
+      expect(attrsResponse.LoadBalancers![0].LoadBalancerName).toContain(
+        ENVIRONMENT_SUFFIX
+      );
     });
 
     it('should have target group configured', async () => {
@@ -355,7 +362,7 @@ describe('Infrastructure Deployment Validation', () => {
       const command = new DescribeTargetGroupsCommand({});
       const response = await elbClient.send(command);
 
-      const tg = response.TargetGroups?.find((group) =>
+      const tg = response.TargetGroups?.find(group =>
         group.TargetGroupName?.includes(ENVIRONMENT_SUFFIX)
       );
 
@@ -438,7 +445,7 @@ describe('Infrastructure Deployment Validation', () => {
 
       expect(response.ScalingPolicies).toBeDefined();
 
-      const cpuPolicy = response.ScalingPolicies!.find((p) =>
+      const cpuPolicy = response.ScalingPolicies!.find(p =>
         p.PolicyName?.includes('cpu')
       );
 
@@ -454,7 +461,7 @@ describe('Infrastructure Deployment Validation', () => {
 
       const response = await asgClient.send(command);
 
-      const memoryPolicy = response.ScalingPolicies!.find((p) =>
+      const memoryPolicy = response.ScalingPolicies!.find(p =>
         p.PolicyName?.includes('memory')
       );
 
