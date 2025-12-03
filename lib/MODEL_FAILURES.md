@@ -42,18 +42,20 @@ point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
 
 **Issue:** MODEL_RESPONSE uses `add_managed_policy()` method which triggers CDK warnings.
 
-**Fix:** Pass managed policies directly in the Role constructor:
+**Fix:** Use `from_managed_policy_arn` and pass managed policies directly in the Role constructor:
 
 ```python
+vpc_access_policy = iam.ManagedPolicy.from_managed_policy_arn(
+    self,
+    "VPCAccessPolicy",
+    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+)
+
 lambda_role = iam.Role(
     self,
     "DataProcessorRole",
     assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
-    managed_policies=[
-        iam.ManagedPolicy.from_aws_managed_policy_name(
-            "service-role/AWSLambdaVPCAccessExecutionRole"
-        )
-    ],
+    managed_policies=[vpc_access_policy],
 )
 ```
 
@@ -164,6 +166,28 @@ CfnOutput(self, "LambdaFunctionName", value=self.lambda_function.function_name)
 alias=f"alias/data-pipeline-key-{self.environment_suffix}"
 ```
 
+## 13. CDK Synthesizer for CI/CD Deployment
+
+**Issue:** MODEL_RESPONSE uses default synthesizer which attempts to assume CDK bootstrap roles that may not be accessible in all CI/CD environments.
+
+**Fix:** Use CliCredentialsStackSynthesizer in tap.py to use CLI credentials directly:
+
+```python
+from aws_cdk import CliCredentialsStackSynthesizer
+
+TapStack(
+    app,
+    stack_name,
+    props=TapStackProps(environment_suffix=environment_suffix),
+    stack_name=stack_name,
+    synthesizer=CliCredentialsStackSynthesizer(),
+    env=cdk.Environment(
+        account=os.getenv("CDK_DEFAULT_ACCOUNT"),
+        region=os.getenv("CDK_DEFAULT_REGION"),
+    ),
+)
+```
+
 ## Summary
 
 The primary changes transform the MODEL_RESPONSE from a production-focused implementation with retained resources to a test-environment-focused implementation with:
@@ -173,3 +197,4 @@ The primary changes transform the MODEL_RESPONSE from a production-focused imple
 - Updated DynamoDB PITR configuration
 - Fixed Lambda role managed policy assignment
 - Corrected resource creation order
+- CliCredentialsStackSynthesizer for CI/CD compatibility

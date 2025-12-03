@@ -13,14 +13,15 @@ import os
 from datetime import datetime, timezone
 
 import aws_cdk as cdk
-from aws_cdk import Tags
+from aws_cdk import CliCredentialsStackSynthesizer, Tags
+
 from lib.tap_stack import TapStack, TapStackProps
 
 app = cdk.App()
 
 # Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
 environment_suffix = app.node.try_get_context("environmentSuffix") or "dev"
-STACK_NAME = f"TapStack{environment_suffix}"
+stack_name = f"TapStack{environment_suffix}"
 
 repository_name = os.getenv("REPOSITORY", "unknown")
 commit_author = os.getenv("COMMIT_AUTHOR", "unknown")
@@ -28,7 +29,7 @@ pr_number = os.getenv("PR_NUMBER", "unknown")
 team = os.getenv("TEAM", "unknown")
 created_at = datetime.now(timezone.utc).isoformat()
 
-# Apply tags to all stacks in this app (optional - you can do this at stack level instead)
+# Apply tags to all stacks in this app
 Tags.of(app).add("Environment", environment_suffix)
 Tags.of(app).add("Repository", repository_name)
 Tags.of(app).add("Author", commit_author)
@@ -36,17 +37,17 @@ Tags.of(app).add("PRNumber", pr_number)
 Tags.of(app).add("Team", team)
 Tags.of(app).add("CreatedAt", created_at)
 
-# Create a TapStackProps object to pass environment_suffix
-
-props = TapStackProps(
-    environment_suffix=environment_suffix,
+# Create stack with CLI credentials synthesizer to avoid role assumption issues
+TapStack(
+    app,
+    stack_name,
+    props=TapStackProps(environment_suffix=environment_suffix),
+    stack_name=stack_name,
+    synthesizer=CliCredentialsStackSynthesizer(),
     env=cdk.Environment(
         account=os.getenv("CDK_DEFAULT_ACCOUNT"),
-        region=os.getenv("CDK_DEFAULT_REGION")
-    )
+        region=os.getenv("CDK_DEFAULT_REGION"),
+    ),
 )
-
-# Initialize the stack with proper parameters
-TapStack(app, STACK_NAME, props=props)
 
 app.synth()
