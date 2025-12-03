@@ -25,8 +25,25 @@ class TestComplianceInfraAnalyzer(unittest.TestCase):
     def test_analyze_lambda_functions(self):
         """Test detection of Lambda scanner functions"""
         # Setup
+        iam_client = boto3.client('iam', region_name='us-east-1')
         lambda_client = boto3.client('lambda', region_name='us-east-1')
         analyzer = ComplianceInfraAnalyzer()
+
+        # Create IAM role with proper trust policy for Lambda
+        assume_role_policy_document = json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [{
+                "Effect": "Allow",
+                "Principal": {"Service": "lambda.amazonaws.com"},
+                "Action": "sts:AssumeRole"
+            }]
+        })
+
+        iam_client.create_role(
+            RoleName='lambda-role',
+            AssumeRolePolicyDocument=assume_role_policy_document,
+            Path='/',
+        )
 
         # Create scanner functions
         lambda_client.create_function(
@@ -225,9 +242,26 @@ class TestComplianceInfraAnalyzer(unittest.TestCase):
     def test_analyze_eventbridge_rules(self):
         """Test detection of EventBridge scanner rules"""
         # Setup
+        iam_client = boto3.client('iam', region_name='us-east-1')
         events_client = boto3.client('events', region_name='us-east-1')
         lambda_client = boto3.client('lambda', region_name='us-east-1')
         analyzer = ComplianceInfraAnalyzer()
+
+        # Create IAM role with proper trust policy for Lambda
+        assume_role_policy_document = json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [{
+                "Effect": "Allow",
+                "Principal": {"Service": "lambda.amazonaws.com"},
+                "Action": "sts:AssumeRole"
+            }]
+        })
+
+        iam_client.create_role(
+            RoleName='lambda-role',
+            AssumeRolePolicyDocument=assume_role_policy_document,
+            Path='/',
+        )
 
         # Create Lambda function to target
         lambda_client.create_function(
@@ -280,12 +314,29 @@ class TestComplianceInfraAnalyzer(unittest.TestCase):
     def test_full_analysis_and_reporting(self):
         """Test complete analysis workflow including report generation"""
         # Setup
+        iam_client = boto3.client('iam', region_name='us-east-1')
         lambda_client = boto3.client('lambda', region_name='us-east-1')
         dynamodb_client = boto3.client('dynamodb', region_name='us-east-1')
         sns_client = boto3.client('sns', region_name='us-east-1')
         cloudwatch_client = boto3.client('cloudwatch', region_name='us-east-1')
         events_client = boto3.client('events', region_name='us-east-1')
         analyzer = ComplianceInfraAnalyzer()
+
+        # Create IAM role with proper trust policy for Lambda
+        assume_role_policy_document = json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [{
+                "Effect": "Allow",
+                "Principal": {"Service": "lambda.amazonaws.com"},
+                "Action": "sts:AssumeRole"
+            }]
+        })
+
+        iam_client.create_role(
+            RoleName='lambda-role',
+            AssumeRolePolicyDocument=assume_role_policy_document,
+            Path='/',
+        )
 
         # Create test infrastructure
         # Lambda scanner
