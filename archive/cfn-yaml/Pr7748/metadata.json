@@ -23,7 +23,7 @@
     "S3 Bucket",
     "Secrets Manager",
     "SNS",
-    "VPC" 
+    "VPC"
   ],
   "training_quality": 10,
   "coverage": {
