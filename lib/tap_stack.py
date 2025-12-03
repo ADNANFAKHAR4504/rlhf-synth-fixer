@@ -415,7 +415,8 @@ class TapStack(TerraformStack):
             self,
             f"db_master_password_{environment_suffix}",
             length=32,
-            special=True
+            special=True,
+            override_special="!#$%&*()-_=+[]{}<>:?"
         )
 
         db_credentials = {
@@ -773,6 +774,13 @@ class TapStack(TerraformStack):
             tags={"Name": f"lambda-sg-{environment_suffix}"}
         )
 
+        validator_asset = TerraformAsset(
+            self,
+            f"validator_asset_{environment_suffix}",
+            path=os.path.join(os.path.dirname(__file__), "lambda"),
+            type=AssetType.ARCHIVE
+        )
+
         validator_lambda = LambdaFunction(
             self,
             f"validator_lambda_{environment_suffix}",
@@ -782,8 +790,8 @@ class TapStack(TerraformStack):
             runtime="python3.11",
             timeout=300,
             memory_size=512,
-            filename=os.path.join(os.path.dirname(__file__), "lambda/data_validator.py"),
-            source_code_hash=Fn.filebase64sha256(os.path.join(os.path.dirname(__file__), "lambda/data_validator.py")),
+            filename=validator_asset.path,
+            source_code_hash=validator_asset.asset_hash,
             environment={
                 "variables": {
                     "ENVIRONMENT_SUFFIX": environment_suffix,
@@ -797,6 +805,13 @@ class TapStack(TerraformStack):
             tags={"Name": f"data-validator-{environment_suffix}"}
         )
 
+        authorizer_asset = TerraformAsset(
+            self,
+            f"authorizer_asset_{environment_suffix}",
+            path=os.path.join(os.path.dirname(__file__), "lambda"),
+            type=AssetType.ARCHIVE
+        )
+
         authorizer_lambda = LambdaFunction(
             self,
             f"authorizer_lambda_{environment_suffix}",
@@ -806,8 +821,8 @@ class TapStack(TerraformStack):
             runtime="python3.11",
             timeout=30,
             memory_size=256,
-            filename=os.path.join(os.path.dirname(__file__), "lambda/api_authorizer.py"),
-            source_code_hash=Fn.filebase64sha256(os.path.join(os.path.dirname(__file__), "lambda/api_authorizer.py")),
+            filename=authorizer_asset.path,
+            source_code_hash=authorizer_asset.asset_hash,
             environment={
                 "variables": {
                     "ENVIRONMENT_SUFFIX": environment_suffix,
@@ -815,6 +830,13 @@ class TapStack(TerraformStack):
                 }
             },
             tags={"Name": f"api-authorizer-{environment_suffix}"}
+        )
+
+        rollback_asset = TerraformAsset(
+            self,
+            f"rollback_asset_{environment_suffix}",
+            path=os.path.join(os.path.dirname(__file__), "lambda"),
+            type=AssetType.ARCHIVE
         )
 
         rollback_lambda = LambdaFunction(
@@ -826,8 +848,8 @@ class TapStack(TerraformStack):
             runtime="python3.11",
             timeout=300,
             memory_size=512,
-            filename=os.path.join(os.path.dirname(__file__), "lambda/rollback_handler.py"),
-            source_code_hash=Fn.filebase64sha256(os.path.join(os.path.dirname(__file__), "lambda/rollback_handler.py")),
+            filename=rollback_asset.path,
+            source_code_hash=rollback_asset.asset_hash,
             environment={
                 "variables": {
                     "ENVIRONMENT_SUFFIX": environment_suffix,
