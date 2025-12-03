@@ -46,10 +46,11 @@ class TapStack(TerraformStack):
         self.add_override("terraform.backend.s3.use_lockfile", True)
 
         # Create S3 bucket for demonstration
+        # S3 bucket names must be lowercase
         S3Bucket(
             self,
             "tap_bucket",
-            bucket=f"tap-bucket-{environment_suffix}-{construct_id}",
+            bucket=f"tap-bucket-{environment_suffix}-{construct_id}".lower(),
             versioning={"enabled": True},
             server_side_encryption_configuration={
                 "rule": {
