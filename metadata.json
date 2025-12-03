@@ -5,6 +5,16 @@
   "region": "us-east-1",
   "complexity": "hard",
   "subtask": "Infrastructure QA and Management",
+  "team": "infrastructure",
+  "startedAt": "2025-12-03T18:00:00Z",
+  "turn_type": "single",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring",
+    "S3 Bucket Analysis",
+    "CloudWatch Dashboard",
+    "Lambda Function",
+    "Security Compliance"
+  ],
   "training_quality": 10,
   "po_quality_report_url": "",
   "test_cases": [
