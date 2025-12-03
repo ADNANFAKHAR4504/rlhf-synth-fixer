@@ -1,0 +1,10 @@
+{
+  "name": "compliance-aggregation",
+  "version": "1.0.0",
+  "description": "Aggregate compliance data across resources",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-config-service": "^3.0.0",
+    "@aws-sdk/client-s3": "^3.0.0"
+  }
+}

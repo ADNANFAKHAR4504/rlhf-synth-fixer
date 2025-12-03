@@ -1,0 +1,39 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-12-01T00:00:00+00:00",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "po_id": "101912957",
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "InternetGateway",
+    "NatGateway",
+    "RouteTable",
+    "SecurityGroup",
+    "NetworkAcl",
+    "ECS",
+    "ApplicationLoadBalancer",
+    "TargetGroup",
+    "AutoScaling",
+    "CloudWatch",
+    "Logs",
+    "SNS",
+    "CloudMap",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

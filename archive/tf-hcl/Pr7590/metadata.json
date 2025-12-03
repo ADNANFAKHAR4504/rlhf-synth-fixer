@@ -1,0 +1,35 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912188",
+  "team": "4",
+  "startedAt": "2025-12-01T12:08:25.947Z",
+  "subtask": "IaC-Multi-Environment-Management",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "VPC",
+    "DynamoDB",
+    "Lambda",
+    "API Gateway",
+    "S3",
+    "KMS",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "IAM",
+    "EC2"
+  ],
+  "task_config": {
+    "deploy_env": "dev.tfvars"
+  },
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "jpoola-turing",
+  "dockerS3Location": ""
+}

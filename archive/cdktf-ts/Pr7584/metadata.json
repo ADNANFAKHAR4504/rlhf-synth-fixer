@@ -1,0 +1,31 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-12-01T18:31:00+00:00",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "po_id": "d3l0d4k9",
+  "aws_services": [
+    "VPC",
+    "ECS",
+    "RDS",
+    "ElastiCache",
+    "SecretsManager",
+    "KMS",
+    "CloudWatch",
+    "IAM"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
