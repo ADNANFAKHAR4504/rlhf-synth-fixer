@@ -1,0 +1,11 @@
+{
+  "language": "python",
+  "app": "/home/arpit/.local/bin/pipenv run python lib/main.py",
+  "projectId": "fraud-detection-api",
+  "sendCrashReports": "false",
+  "terraformProviders": [
+    "aws@~> 5.0"
+  ],
+  "terraformModules": [],
+  "context": {}
+}
