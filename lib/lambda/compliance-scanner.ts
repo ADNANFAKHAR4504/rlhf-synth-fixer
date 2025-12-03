@@ -14,6 +14,13 @@ import {
   CloudWatchClient,
   PutMetricDataCommand,
 } from '@aws-sdk/client-cloudwatch';
+import {
+  S3Client,
+  ListBucketsCommand,
+  GetBucketVersioningCommand,
+  GetBucketEncryptionCommand,
+  GetPublicAccessBlockCommand,
+} from '@aws-sdk/client-s3';
 
 export interface ComplianceViolation {
   resourceId: string;
@@ -41,6 +48,7 @@ export class ComplianceScanner {
   private ec2Client: EC2Client;
   private ssmClient: SSMClient;
   private cloudWatchClient: CloudWatchClient;
+  private s3Client: S3Client;
   private violations: ComplianceViolation[] = [];
   private region: string;
   private environmentSuffix: string;
@@ -57,6 +65,7 @@ export class ComplianceScanner {
     this.ec2Client = new EC2Client({ region });
     this.ssmClient = new SSMClient({ region });
     this.cloudWatchClient = new CloudWatchClient({ region });
+    this.s3Client = new S3Client({ region });
   }
 
   // 1. Check for unencrypted EBS volumes
@@ -104,29 +113,102 @@ export class ComplianceScanner {
     }
   }
 
-  // 2. Check security groups for unrestricted inbound rules
-  async checkSecurityGroups(): Promise<void> {
+  // 2. Check S3 bucket compliance
+  async checkS3Buckets(): Promise<void> {
     try {
-      const instancesResponse = await this.ec2Client.send(
-        new DescribeInstancesCommand({})
+      const bucketsResponse = await this.s3Client.send(
+        new ListBucketsCommand({})
       );
 
-      const instances =
-        instancesResponse.Reservations?.flatMap(r => r.Instances || []) || [];
+      const buckets = bucketsResponse.Buckets || [];
 
-      const sgIds = new Set<string>();
-      instances.forEach(instance => {
-        instance.SecurityGroups?.forEach(sg => {
-          if (sg.GroupId) sgIds.add(sg.GroupId);
-        });
-      });
+      for (const bucket of buckets) {
+        if (!bucket.Name) continue;
 
-      if (sgIds.size === 0) return;
+        // Check versioning
+        try {
+          const versioningResponse = await this.s3Client.send(
+            new GetBucketVersioningCommand({ Bucket: bucket.Name })
+          );
 
+          if (versioningResponse.Status !== 'Enabled') {
+            this.violations.push({
+              resourceId: bucket.Name,
+              resourceType: 'S3::Bucket',
+              violationType: 'VersioningDisabled',
+              severity: 'MEDIUM',
+              details: 'S3 bucket does not have versioning enabled',
+              timestamp: new Date().toISOString(),
+            });
+          }
+        } catch (error) {
+          // Versioning check failed - may not have permissions
+        }
+
+        // Check encryption
+        try {
+          await this.s3Client.send(
+            new GetBucketEncryptionCommand({ Bucket: bucket.Name })
+          );
+        } catch (error: any) {
+          if (error.name === 'ServerSideEncryptionConfigurationNotFoundError') {
+            this.violations.push({
+              resourceId: bucket.Name,
+              resourceType: 'S3::Bucket',
+              violationType: 'EncryptionDisabled',
+              severity: 'HIGH',
+              details: 'S3 bucket does not have encryption enabled',
+              timestamp: new Date().toISOString(),
+            });
+          }
+        }
+
+        // Check public access block
+        try {
+          const publicAccessResponse = await this.s3Client.send(
+            new GetPublicAccessBlockCommand({ Bucket: bucket.Name })
+          );
+
+          const config = publicAccessResponse.PublicAccessBlockConfiguration;
+          if (
+            !config?.BlockPublicAcls ||
+            !config?.BlockPublicPolicy ||
+            !config?.IgnorePublicAcls ||
+            !config?.RestrictPublicBuckets
+          ) {
+            this.violations.push({
+              resourceId: bucket.Name,
+              resourceType: 'S3::Bucket',
+              violationType: 'PublicAccessNotBlocked',
+              severity: 'HIGH',
+              details: 'S3 bucket does not have all public access blocked',
+              timestamp: new Date().toISOString(),
+            });
+          }
+        } catch (error: any) {
+          if (error.name === 'NoSuchPublicAccessBlockConfiguration') {
+            this.violations.push({
+              resourceId: bucket.Name,
+              resourceType: 'S3::Bucket',
+              violationType: 'PublicAccessNotBlocked',
+              severity: 'HIGH',
+              details: 'S3 bucket does not have public access block configured',
+              timestamp: new Date().toISOString(),
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error checking S3 buckets:', error);
+    }
+  }
+
+  // 3. Check security groups for unrestricted inbound rules
+  async checkSecurityGroups(): Promise<void> {
+    try {
+      // Get all security groups (not just those attached to instances)
       const sgResponse = await this.ec2Client.send(
-        new DescribeSecurityGroupsCommand({
-          GroupIds: Array.from(sgIds),
-        })
+        new DescribeSecurityGroupsCommand({})
       );
 
       const sensitivePorts = [22, 3389, 3306];
@@ -164,7 +246,7 @@ export class ComplianceScanner {
     }
   }
 
-  // 3. Check required tags
+  // 4. Check required tags
   async checkRequiredTags(): Promise<void> {
     try {
       const requiredTags = ['Environment', 'Owner', 'CostCenter'];
@@ -199,7 +281,7 @@ export class ComplianceScanner {
     }
   }
 
-  // 4. Check for approved AMIs
+  // 5. Check for approved AMIs
   async checkApprovedAmis(): Promise<void> {
     try {
       const instancesResponse = await this.ec2Client.send(
@@ -228,7 +310,7 @@ export class ComplianceScanner {
     }
   }
 
-  // 5. Check SSM agent status
+  // 6. Check SSM agent status
   async checkSsmAgentStatus(): Promise<void> {
     try {
       const instancesResponse = await this.ec2Client.send(
@@ -268,7 +350,7 @@ export class ComplianceScanner {
     }
   }
 
-  // 6. Check VPC flow logs
+  // 7. Check VPC flow logs
   async checkVpcFlowLogs(): Promise<void> {
     try {
       const vpcsResponse = await this.ec2Client.send(
@@ -309,7 +391,7 @@ export class ComplianceScanner {
     }
   }
 
-  // 7. Generate compliance report
+  // 8. Generate compliance report
   async generateReport(): Promise<ComplianceReport> {
     const totalResourcesScanned = await this.getTotalResourcesScanned();
 
@@ -353,14 +435,19 @@ export class ComplianceScanner {
       );
       const vpcs = vpcsResponse.Vpcs || [];
 
-      return instances.length + vpcs.length;
+      const bucketsResponse = await this.s3Client.send(
+        new ListBucketsCommand({})
+      );
+      const buckets = bucketsResponse.Buckets || [];
+
+      return instances.length + vpcs.length + buckets.length;
     } catch (error) {
       console.error('Error getting total resources:', error);
       return 0;
     }
   }
 
-  // 8. Export CloudWatch metrics
+  // 9. Export CloudWatch metrics
   async exportMetrics(report: ComplianceReport): Promise<void> {
     try {
       await this.cloudWatchClient.send(
@@ -399,6 +486,7 @@ export class ComplianceScanner {
     console.log('Starting compliance scan...');
 
     await this.checkEbsEncryption();
+    await this.checkS3Buckets();
     await this.checkSecurityGroups();
     await this.checkRequiredTags();
     await this.checkApprovedAmis();
