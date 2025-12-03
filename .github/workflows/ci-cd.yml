@@ -124,6 +124,15 @@ jobs:
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
+      - name: Validate Stack Naming
+        run: |
+          echo "🔍 Validating stack naming conventions..."
+          if [ -f "scripts/validate-stack-naming.sh" ]; then
+            ./scripts/validate-stack-naming.sh || echo "⚠️ Stack naming validation found issues (non-blocking)"
+          else
+            echo "⚠️ validate-stack-naming.sh not found, skipping"
+          fi
+
       - name: Build
         run: ./scripts/build.sh
 
@@ -373,6 +382,20 @@ jobs:
         with:
           name: build-dist
           path: dist
+
+      - name: Validate Stack Naming Before Deploy
+        run: |
+          echo "🔍 Validating stack naming conventions before deployment..."
+          if [ -f "scripts/validate-stack-naming.sh" ]; then
+            ./scripts/validate-stack-naming.sh || echo "⚠️ Stack naming validation found issues (non-blocking)"
+          fi
+          
+          # Source and print stack configuration
+          if [ -f "scripts/stack-config.sh" ]; then
+            source scripts/stack-config.sh
+            bash scripts/stack-config.sh --print
+          fi
+
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
         with:
@@ -726,7 +749,7 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: "Review this pull request's infrastructure code changes, validate file formats and compliance, and provide a comprehensive code review. You MUST post your review findings as a comment on this pull request when complete."
-          allowed_tools: "Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite"
+          allowed_tools: "Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite,mcp__github_comment"
           custom_instructions: "${{ env.SYSTEM_PROMPT_CONTENT }}"
 
       - name: Check for Critical Issues in Claude Review

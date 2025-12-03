@@ -1,0 +1,10 @@
+name: TapStack
+runtime: nodejs
+description: Infrastructure compliance analysis and validation system
+config:
+  TapStack:environmentSuffix:
+    description: Environment suffix for resource naming
+    default: dev
+  TapStack:approvedAmiIds:
+    description: List of approved AMI IDs
+    default: []

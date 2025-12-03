@@ -1,0 +1,9 @@
+name: TapStack
+runtime:
+  name: python
+description: Multi-VPC Transit Gateway Architecture for Payment Platform
+main: tap.py
+config:
+  pulumi:tags:
+    value:
+      Project: payment-platform
