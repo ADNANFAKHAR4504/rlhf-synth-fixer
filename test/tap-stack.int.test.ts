@@ -1,18 +1,8 @@
 // test/tap-stack.int.test.ts
-// TapStack — Live Integration Tests (single file, 26 tests)
 //
-// Reads outputs from: cfn-outputs/all-outputs.json
-// Verifies live AWS resources created by TapStack.yml using AWS SDK v3.
-// Tests are tolerant (with retries) yet meaningful, so they pass cleanly in CI.
-//
-// npm deps (dev): jest @types/jest ts-jest
-// runtime deps: @aws-sdk/client-ec2 @aws-sdk/client-s3 @aws-sdk/client-elastic-load-balancing-v2
-//               @aws-sdk/client-autoscaling @aws-sdk/client-cloudtrail @aws-sdk/client-cloudwatch
-//               @aws-sdk/client-rds @aws-sdk/client-secrets-manager @aws-sdk/client-config-service
-//               @aws-sdk/client-api-gateway @aws-sdk/client-logs @aws-sdk/client-sns
-//               @aws-sdk/client-guardduty @aws-sdk/client-kms
-//
-// Jest timeout is extended because some APIs (e.g., CloudTrail status) can be slow.
+// Integration tests for live TapStack resources.
+// NOTE: Ensure your package.json includes "@aws-sdk/client-cloudwatch-logs"
+// and that AWS creds/region are configured in the CI environment.
 
 import fs from "fs";
 import path from "path";
@@ -54,10 +44,7 @@ import {
   ListMetricsCommand,
   DescribeAlarmsCommand,
 } from "@aws-sdk/client-cloudwatch";
-import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-} from "@aws-sdk/client-rds";
+import { RDSClient, DescribeDBInstancesCommand } from "@aws-sdk/client-rds";
 import {
   SecretsManagerClient,
   DescribeSecretCommand,
@@ -75,19 +62,10 @@ import {
 import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
-} from "@aws-sdk/client-logs";
-import {
-  SNSClient,
-  GetTopicAttributesCommand,
-} from "@aws-sdk/client-sns";
-import {
-  GuardDutyClient,
-  GetDetectorCommand,
-} from "@aws-sdk/client-guardduty";
-import {
-  KMSClient,
-  DescribeKeyCommand,
-} from "@aws-sdk/client-kms";
+} from "@aws-sdk/client-cloudwatch-logs";
+import { SNSClient, GetTopicAttributesCommand } from "@aws-sdk/client-sns";
+import { GuardDutyClient, GetDetectorCommand } from "@aws-sdk/client-guardduty";
+import { KMSClient, DescribeKeyCommand } from "@aws-sdk/client-kms";
 
 /* ---------------------------- Load Outputs ---------------------------- */
 
@@ -104,20 +82,16 @@ for (const o of outputsArray) outputs[o.OutputKey] = o.OutputValue;
 /* ---------------------------- Helpers -------------------------------- */
 
 function deduceRegion(): string {
-  // Prefer region in API Gateway invoke URL: https://<restid>.execute-api.<region>.amazonaws.com/v1
   const invoke = outputs.APIGatewayInvokeURL || "";
   const mFromApi = invoke.match(/execute-api\.([a-z0-9-]+)\.amazonaws\.com/);
   if (mFromApi) return mFromApi[1];
 
-  // Fallback to ALB DNS: dualstack.<name>-<id>.<region>.elb.amazonaws.com
   const albDns = outputs.ALBDNSName || "";
   const mFromAlb = albDns.match(/\.([a-z0-9-]+)\.elb\.amazonaws\.com$/);
   if (mFromAlb) return mFromAlb[1];
 
-  // Env fallbacks
   if (process.env.AWS_REGION) return process.env.AWS_REGION;
   if (process.env.AWS_DEFAULT_REGION) return process.env.AWS_DEFAULT_REGION;
-
   return "us-east-1";
 }
 const region = deduceRegion();
@@ -151,15 +125,13 @@ async function retry<T>(fn: () => Promise<T>, attempts = 5, baseMs = 800): Promi
   throw lastErr;
 }
 
-function isId(v: string | undefined, prefix: string) {
-  return typeof v === "string" && v.startsWith(prefix);
-}
-
 function parseLogGroupNameFromArn(arn: string): string | null {
-  // arn:aws:logs:region:acct:log-group:NAME
+  // arn:aws:logs:region:acct:log-group:NAME or arn:aws:logs:region:acct:log-group:NAME:*
   const idx = arn.indexOf(":log-group:");
   if (idx === -1) return null;
-  return arn.substring(idx + ":log-group:".length);
+  const tail = arn.substring(idx + ":log-group:".length);
+  const name = tail.split(":")[0]; // strip any trailing ":*"
+  return name || null;
 }
 
 async function httpsGet(url: string, timeoutMs = 5000): Promise<{ status: number; body: string }> {
@@ -169,9 +141,7 @@ async function httpsGet(url: string, timeoutMs = 5000): Promise<{ status: number
       res.on("data", (chunk) => (data += chunk.toString("utf8")));
       res.on("end", () => resolve({ status: res.statusCode || 0, body: data }));
     });
-    req.on("timeout", () => {
-      req.destroy(new Error("timeout"));
-    });
+    req.on("timeout", () => req.destroy(new Error("timeout")));
     req.on("error", (e) => reject(e));
   });
 }
@@ -179,7 +149,6 @@ async function httpsGet(url: string, timeoutMs = 5000): Promise<{ status: number
 /* -------------------------------- Tests ------------------------------- */
 
 describe("TapStack — Live Integration Suite", () => {
-  // Allow enough time for all AWS calls
   jest.setTimeout(10 * 60 * 1000);
 
   /* ---------- Outputs & Region ---------- */
@@ -279,7 +248,6 @@ describe("TapStack — Live Integration Suite", () => {
     const resp = await retry(() => ec2.send(new DescribeSecurityGroupsCommand({ GroupIds: [id] })));
     const sg = (resp.SecurityGroups || [])[0];
     expect(sg).toBeDefined();
-    // Either explicit 443 to 0.0.0.0/0 or allow-all (-1)
     const e = sg.IpPermissionsEgress || [];
     const ok =
       e.some((r) => r.IpProtocol === "-1") ||
@@ -288,7 +256,8 @@ describe("TapStack — Live Integration Suite", () => {
           r.IpProtocol === "tcp" &&
           r.FromPort === 443 &&
           r.ToPort === 443 &&
-          ((r.IpRanges || []).some((x) => x.CidrIp === "0.0.0.0/0") || (r.UserIdGroupPairs || []).length >= 0)
+          ((r.IpRanges || []).some((x) => x.CidrIp === "0.0.0.0/0") ||
+            (r.UserIdGroupPairs || []).length >= 0)
       );
     expect(ok).toBe(true);
   });
@@ -300,7 +269,6 @@ describe("TapStack — Live Integration Suite", () => {
     await retry(() => s3.send(new HeadBucketCommand({ Bucket: b })));
     const ver = await retry(() => s3.send(new GetBucketVersioningCommand({ Bucket: b })));
     expect(ver.Status === "Enabled" || ver.Status === "Suspended").toBe(true);
-    // We expect Enabled per template, but tolerate Suspended if account policy changed
   });
 
   test("11) Logging bucket encryption is configured (if permissions allow)", async () => {
@@ -309,19 +277,17 @@ describe("TapStack — Live Integration Suite", () => {
       const enc = await retry(() => s3.send(new GetBucketEncryptionCommand({ Bucket: b })));
       expect(enc.ServerSideEncryptionConfiguration).toBeDefined();
     } catch {
-      // If GetBucketEncryption is denied but bucket exists (checked above), still pass
       expect(true).toBe(true);
     }
   });
 
-  test("12) Application bucket exists (HEAD) and KMS encryption is likely in place", async () => {
+  test("12) Application bucket exists (HEAD) and encryption likely configured", async () => {
     const b = outputs.ApplicationBucketName;
     await retry(() => s3.send(new HeadBucketCommand({ Bucket: b })));
     try {
       const enc = await retry(() => s3.send(new GetBucketEncryptionCommand({ Bucket: b })));
       expect(enc.ServerSideEncryptionConfiguration).toBeDefined();
     } catch {
-      // Access may be restricted; existence is verified
       expect(true).toBe(true);
     }
   });
@@ -347,7 +313,6 @@ describe("TapStack — Live Integration Suite", () => {
     const tg = (resp.TargetGroups || [])[0];
     expect(tg).toBeDefined();
     expect(tg.Protocol).toBe("HTTP");
-    // HealthCheckPath may be "/" or "/health" per your stack; both are accepted
     const okPath = !tg.HealthCheckPath || tg.HealthCheckPath === "/" || tg.HealthCheckPath === "/health";
     expect(okPath).toBe(true);
   });
@@ -355,19 +320,18 @@ describe("TapStack — Live Integration Suite", () => {
   test("15) An Auto Scaling Group is attached to the target group", async () => {
     const tgArn = outputs.ALBTargetGroupArn;
     const groups = await retry(() => asg.send(new DescribeAutoScalingGroupsCommand({})));
-    const found = (groups.AutoScalingGroups || []).some((g) =>
-      (g.TargetGroupARNs || []).includes(tgArn)
-    );
+    const found = (groups.AutoScalingGroups || []).some((g) => (g.TargetGroupARNs || []).includes(tgArn));
     expect(found).toBe(true);
   });
 
   /* ---------- CloudTrail & Logs ---------- */
 
-  test("16) CloudTrail trail exists, is multi-region and logging status query works", async () => {
+  test("16) CloudTrail trail exists and logging status query works", async () => {
     const trails = await retry(() => ct.send(new DescribeTrailsCommand({ includeShadowTrails: true })));
     expect(Array.isArray(trails.trailList)).toBe(true);
-    const trail = (trails.trailList || []).find((t) => t.S3BucketName === outputs.LoggingBucketName) ||
-                  (trails.trailList || [])[0];
+    const trail =
+      (trails.trailList || []).find((t) => t.S3BucketName === outputs.LoggingBucketName) ||
+      (trails.trailList || [])[0];
     expect(trail).toBeDefined();
     const status = await retry(() => ct.send(new GetTrailStatusCommand({ Name: trail!.Name! })));
     expect(typeof status.IsLogging === "boolean").toBe(true);
@@ -377,16 +341,14 @@ describe("TapStack — Live Integration Suite", () => {
     const arn = outputs.CloudTrailLogGroupArn;
     const name = parseLogGroupNameFromArn(arn);
     expect(name).toBeTruthy();
-    const resp = await retry(() =>
-      logs.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: name! }))
-    );
+    const resp = await retry(() => logs.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: name! })));
     const found = (resp.logGroups || []).some((g) => g.logGroupName === name);
     expect(found).toBe(true);
   });
 
   /* ---------- API Gateway ---------- */
 
-  test("18) REST API and stage 'v1' exist; stage has access logs configured", async () => {
+  test("18) REST API and stage 'v1' exist; stages call succeeds", async () => {
     const restApiId = outputs.APIGatewayId;
     const api = await retry(() => apigw.send(new GetRestApiCommand({ restApiId })));
     expect(api).toBeDefined();
@@ -394,16 +356,13 @@ describe("TapStack — Live Integration Suite", () => {
     const stages = await retry(() => apigw.send(new GetStagesCommand({ restApiId })));
     const v1 = (stages.item || []).find((s) => s.stageName === "v1");
     expect(v1).toBeDefined();
-    // AccessLogSetting is not returned by GetStages in v1 SDK—tolerate absence and assert successful call
-    expect(Array.isArray(stages.item)).toBe(true);
   });
 
-  test("19) APIGW invoke URL responds 2xx/4xx (DNS reachable)", async () => {
+  test("19) APIGW invoke URL responds (any HTTP status proves reachability)", async () => {
     const url = outputs.APIGatewayInvokeURL;
-    // The method is IAM-protected (AuthorizationType AWS_IAM), so 403 is acceptable.
     const { status } = await retry(() => httpsGet(url), 3, 1000);
     expect(typeof status).toBe("number");
-    expect(status).toBeGreaterThan(0); // any HTTP response proves route/DNS works
+    expect(status).toBeGreaterThan(0);
   });
 
   /* ---------- KMS & Secrets & RDS ---------- */
@@ -414,7 +373,7 @@ describe("TapStack — Live Integration Suite", () => {
     expect(k.KeyMetadata?.Arn).toBeDefined();
   });
 
-  test("21) RDS Secret exists and is attached to RDS (metadata visible)", async () => {
+  test("21) RDS Secret exists (DescribeSecret)", async () => {
     const arn = outputs.RDSSecretArn;
     const sec = await retry(() => sm.send(new DescribeSecretCommand({ SecretId: arn })));
     expect(sec.ARN).toBeDefined();
@@ -456,31 +415,24 @@ describe("TapStack — Live Integration Suite", () => {
   test("26) GuardDuty detector is enabled", async () => {
     const id = outputs.GuardDutyDetectorId;
     const det = await retry(() => gd.send(new GetDetectorCommand({ DetectorId: id })));
-    // det.Status can be "ENABLED"|"DISABLED"
-    expect(det.Status === "ENABLED" || det.Status === "ENABLED_WITH_SERVICE_ROLE").toBe(true);
+    expect(det.Status).toBe("ENABLED");
   });
 
-  // Optional soft validations without introducing flakiness (still assert API success)
-
   test("27) CloudWatch namespace for security metrics is queryable", async () => {
-    // Namespace pattern: ${ProjectName}-${EnvironmentSuffix}/Security — we can't know exact values,
-    // so infer from one of the metric filters outputs if present, else use a safe fallback.
-    // We'll try a few common variants to ensure API works without failing tests.
     const candidates = [
-      `${(outputs.ProjectName || "tapstack")}-${outputs.EnvironmentSuffix || "prod"}/Security`,
-      `${(outputs.ProjectName || "tapstack")}-${(outputs.EnvironmentSuffix || "prod").toLowerCase()}/Security`,
-      `${(outputs.ProjectName || "tapstack")}-${(outputs.EnvironmentSuffix || "prod").toUpperCase()}/Security`,
+      `tapstack-prod/Security`,
+      `tapstack-pr/Security`,
+      `tapstack/Security`,
     ];
     const results = await Promise.all(
       candidates.map((ns) =>
         retry(() => cw.send(new ListMetricsCommand({ Namespace: ns })), 2, 500).catch(() => null)
       )
     );
-    // At least one query completed (even if metrics list is empty)
     expect(results.some((r) => r !== null)).toBe(true);
   });
 
-  test("28) DescribeAlarms API responds (alarms may or may not exist yet)", async () => {
+  test("28) DescribeAlarms API responds", async () => {
     const resp = await retry(() => cw.send(new DescribeAlarmsCommand({})));
     expect(Array.isArray(resp.MetricAlarms)).toBe(true);
   });
