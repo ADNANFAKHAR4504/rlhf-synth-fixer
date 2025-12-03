@@ -160,9 +160,9 @@ export class VPCModule extends Construct {
 
     // S3 Bucket for VPC Flow Logs
     this.flowLogsBucket = new aws.s3Bucket.S3Bucket(this, 'flow-logs-bucket', {
-      bucket: resourceName('payment-vpc-flow-logs').toLowerCase(),
+      bucket: resourceName('pay-vpc-flowlogs').toLowerCase(),
       forceDestroy: true,
-      tags: { ...props.tags, Name: resourceName('payment-flow-logs') },
+      tags: { ...props.tags, Name: resourceName('pay-flowlogs') },
     });
 
     // S3 Bucket Versioning
@@ -354,10 +354,10 @@ export class SecretsModule extends Construct {
       this,
       'rds-secret',
       {
-        name: resourceName('payment-db-credentials'),
+        name: resourceName('pay-db-secret'),
         description: 'Master password for RDS Aurora MySQL cluster',
         recoveryWindowInDays: 7,
-        tags: { ...props.tags, Name: resourceName('payment-rds-secret') },
+        tags: { ...props.tags, Name: resourceName('pay-rds-secret') },
       }
     );
 
@@ -457,7 +457,7 @@ export class RDSModule extends Construct {
 
     // RDS Aurora Cluster
     this.cluster = new aws.rdsCluster.RdsCluster(this, 'aurora-cluster', {
-      clusterIdentifier: resourceName('payment-db').toLowerCase(),
+      clusterIdentifier: resourceName('pay-aurora-db').toLowerCase(),
       engine: 'aurora-mysql',
       engineVersion: '8.0.mysql_aurora.3.04.0',
       databaseName: 'paymentdb',
@@ -481,7 +481,7 @@ export class RDSModule extends Construct {
       this,
       'cluster-instance-1',
       {
-        identifier: `${resourceName('payment-db')}-instance-1`.toLowerCase(),
+        identifier: `${resourceName('pay-aurora-db')}-instance-1`.toLowerCase(),
         clusterIdentifier: this.cluster.id,
         instanceClass: 'db.t3.medium',
         engine: this.cluster.engine,
@@ -493,7 +493,7 @@ export class RDSModule extends Construct {
 
     // Second instance for Multi-AZ
     new aws.rdsClusterInstance.RdsClusterInstance(this, 'cluster-instance-2', {
-      identifier: `${resourceName('payment-db')}-instance-2`.toLowerCase(),
+      identifier: `${resourceName('pay-aurora-db')}-instance-2`.toLowerCase(),
       clusterIdentifier: this.cluster.id,
       instanceClass: 'db.t3.small',
       engine: this.cluster.engine,
