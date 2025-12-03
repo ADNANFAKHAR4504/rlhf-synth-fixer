@@ -68,27 +68,12 @@ module.exports = {
   ignorePatterns: [
     'node_modules/',
     'cdk.out/',
-    'cdktf.out/',
-    '.cdktf/',
     'coverage/',
     '*.js',
     '*.d.ts',
     'worktree/',
     'test/',
-    'bin/**/*',
+    'bin/',
     'cli/',
-    'templates/',
-  ],
-  overrides: [
-    {
-      files: ['bin/**/*.ts'],
-      parserOptions: {
-        project: null,
-      },
-      rules: {
-        '@typescript-eslint/no-unsafe-assignment': 'off',
-        '@typescript-eslint/no-unsafe-member-access': 'off',
-      },
-    },
   ],
 };
