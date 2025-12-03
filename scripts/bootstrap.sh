@@ -91,6 +91,7 @@ elif [ "$PLATFORM" = "tf" ]; then
   # Set up PR-specific state management
   STATE_KEY="prs/${ENVIRONMENT_SUFFIX}/terraform.tfstate"
   echo "Using state key: $STATE_KEY"
+
   cd lib
   
   # Set up backend configuration with PR-specific settings
