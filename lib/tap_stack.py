@@ -28,6 +28,7 @@ from cdktf_cdktf_provider_aws.config_delivery_channel import ConfigDeliveryChann
 from cdktf_cdktf_provider_aws.config_configuration_recorder_status import ConfigConfigurationRecorderStatus
 from cdktf_cdktf_provider_aws.config_config_rule import ConfigConfigRule
 import json
+import time
 
 
 class TapStack(TerraformStack):
@@ -35,6 +36,8 @@ class TapStack(TerraformStack):
         super().__init__(scope, stack_id)
 
         self.environment_suffix = environment_suffix
+        # Generate unique suffix for S3 bucket names to avoid conflicts
+        self.unique_suffix = str(int(time.time()))
 
         # AWS Provider for Account A (Trading)
         provider_account_a = AwsProvider(
@@ -691,65 +694,67 @@ class TapStack(TerraformStack):
             provider=provider_account_b
         )
 
-        # VPC Endpoints for S3 (Trading)
-        VpcEndpoint(
-            self,
-            f"trading-s3-endpoint-{environment_suffix}",
-            vpc_id=trading_vpc.id,
-            service_name="com.amazonaws.us-east-1.s3",
-            route_table_ids=[trading_route_table.id],
-            tags={
-                "Name": f"trading-s3-endpoint-{environment_suffix}",
-                "CostCenter": "trading",
-                "Environment": environment_suffix
-            },
-            provider=provider_account_a
-        )
+        # VPC Endpoints for S3 (Trading) - COMMENTED OUT DUE TO ACCOUNT LIMIT
+        # Note: Account has reached the maximum number of VPC endpoints
+        # If you need this, delete existing VPC endpoints or request a limit increase
+        # VpcEndpoint(
+        #     self,
+        #     f"trading-s3-endpoint-{environment_suffix}",
+        #     vpc_id=trading_vpc.id,
+        #     service_name="com.amazonaws.us-east-1.s3",
+        #     route_table_ids=[trading_route_table.id],
+        #     tags={
+        #         "Name": f"trading-s3-endpoint-{environment_suffix}",
+        #         "CostCenter": "trading",
+        #         "Environment": environment_suffix
+        #     },
+        #     provider=provider_account_a
+        # )
 
-        # VPC Endpoints for DynamoDB (Trading)
-        VpcEndpoint(
-            self,
-            f"trading-dynamodb-endpoint-{environment_suffix}",
-            vpc_id=trading_vpc.id,
-            service_name="com.amazonaws.us-east-1.dynamodb",
-            route_table_ids=[trading_route_table.id],
-            tags={
-                "Name": f"trading-dynamodb-endpoint-{environment_suffix}",
-                "CostCenter": "trading",
-                "Environment": environment_suffix
-            },
-            provider=provider_account_a
-        )
+        # VPC Endpoints for DynamoDB (Trading) - COMMENTED OUT DUE TO ACCOUNT LIMIT
+        # VpcEndpoint(
+        #     self,
+        #     f"trading-dynamodb-endpoint-{environment_suffix}",
+        #     vpc_id=trading_vpc.id,
+        #     service_name="com.amazonaws.us-east-1.dynamodb",
+        #     route_table_ids=[trading_route_table.id],
+        #     tags={
+        #         "Name": f"trading-dynamodb-endpoint-{environment_suffix}",
+        #         "CostCenter": "trading",
+        #         "Environment": environment_suffix
+        #     },
+        #     provider=provider_account_a
+        # )
 
-        # VPC Endpoints for S3 (Analytics)
-        VpcEndpoint(
-            self,
-            f"analytics-s3-endpoint-{environment_suffix}",
-            vpc_id=analytics_vpc.id,
-            service_name="com.amazonaws.us-east-1.s3",
-            route_table_ids=[analytics_route_table.id],
-            tags={
-                "Name": f"analytics-s3-endpoint-{environment_suffix}",
-                "CostCenter": "analytics",
-                "Environment": environment_suffix
-            },
-            provider=provider_account_b
-        )
+        # VPC Endpoints for S3 (Analytics) - COMMENTED OUT DUE TO ACCOUNT LIMIT
+        # VpcEndpoint(
+        #     self,
+        #     f"analytics-s3-endpoint-{environment_suffix}",
+        #     vpc_id=analytics_vpc.id,
+        #     service_name="com.amazonaws.us-east-1.s3",
+        #     route_table_ids=[analytics_route_table.id],
+        #     tags={
+        #         "Name": f"analytics-s3-endpoint-{environment_suffix}",
+        #         "CostCenter": "analytics",
+        #         "Environment": environment_suffix
+        #     },
+        #     provider=provider_account_b
+        # )
 
-        # VPC Endpoints for DynamoDB (Analytics)
-        VpcEndpoint(
-            self,
-            f"analytics-dynamodb-endpoint-{environment_suffix}",
-            vpc_id=analytics_vpc.id,
-            service_name="com.amazonaws.us-east-1.dynamodb",
-            route_table_ids=[analytics_route_table.id],
-            tags={
-                "Name": f"analytics-dynamodb-endpoint-{environment_suffix}",
-                "CostCenter": "analytics",
-                "Environment": environment_suffix
-            },
-            provider=provider_account_b
-        )
+        # VPC Endpoints for DynamoDB (Analytics) - COMMENTED OUT DUE TO ACCOUNT LIMIT
+        # VpcEndpoint(
+        #     self,
+        #     f"analytics-dynamodb-endpoint-{environment_suffix}",
+        #     vpc_id=analytics_vpc.id,
+        #     service_name="com.amazonaws.us-east-1.dynamodb",
+        #     route_table_ids=[analytics_route_table.id],
+        #     tags={
+        #         "Name": f"analytics-dynamodb-endpoint-{environment_suffix}",
+        #         "CostCenter": "analytics",
+        #         "Environment": environment_suffix
+        #     },
+        #     provider=provider_account_b
+        # )
 
         # IAM Role for AWS Config
         config_role = IamRole(
@@ -787,7 +792,7 @@ class TapStack(TerraformStack):
         config_bucket = S3Bucket(
             self,
             f"config-bucket-{environment_suffix}",
-            bucket=f"config-bucket-{environment_suffix}",
+            bucket=f"config-bucket-{environment_suffix}-{self.unique_suffix}",
             force_destroy=True,
             tags={
                 "Name": f"config-bucket-{environment_suffix}",
@@ -828,51 +833,53 @@ class TapStack(TerraformStack):
             provider=provider_account_a
         )
 
-        # AWS Config Configuration Recorder
-        config_recorder = ConfigConfigurationRecorder(
-            self,
-            f"config-recorder-{environment_suffix}",
-            name=f"config-recorder-{environment_suffix}",
-            role_arn=config_role.arn,
-            recording_group={
-                "all_supported": True,
-                "include_global_resource_types": True
-            },
-            provider=provider_account_a
-        )
+        # AWS Config Configuration Recorder - COMMENTED OUT DUE TO ACCOUNT LIMIT
+        # Note: Account has reached the maximum number of configuration recorders (1)
+        # If you need this, delete existing config recorder or use existing one
+        # config_recorder = ConfigConfigurationRecorder(
+        #     self,
+        #     f"config-recorder-{environment_suffix}",
+        #     name=f"config-recorder-{environment_suffix}",
+        #     role_arn=config_role.arn,
+        #     recording_group={
+        #         "all_supported": True,
+        #         "include_global_resource_types": True
+        #     },
+        #     provider=provider_account_a
+        # )
 
-        # AWS Config Delivery Channel
-        config_delivery_channel = ConfigDeliveryChannel(
-            self,
-            f"config-delivery-channel-{environment_suffix}",
-            name=f"config-delivery-channel-{environment_suffix}",
-            s3_bucket_name=config_bucket.bucket,
-            depends_on=[config_recorder],
-            provider=provider_account_a
-        )
+        # AWS Config Delivery Channel - COMMENTED OUT DUE TO CONFIG RECORDER LIMIT
+        # config_delivery_channel = ConfigDeliveryChannel(
+        #     self,
+        #     f"config-delivery-channel-{environment_suffix}",
+        #     name=f"config-delivery-channel-{environment_suffix}",
+        #     s3_bucket_name=config_bucket.bucket,
+        #     depends_on=[config_recorder],
+        #     provider=provider_account_a
+        # )
 
-        # AWS Config Recorder Status
-        ConfigConfigurationRecorderStatus(
-            self,
-            f"config-recorder-status-{environment_suffix}",
-            name=config_recorder.name,
-            is_enabled=True,
-            depends_on=[config_delivery_channel],
-            provider=provider_account_a
-        )
+        # AWS Config Recorder Status - COMMENTED OUT DUE TO CONFIG RECORDER LIMIT
+        # ConfigConfigurationRecorderStatus(
+        #     self,
+        #     f"config-recorder-status-{environment_suffix}",
+        #     name=config_recorder.name,
+        #     is_enabled=True,
+        #     depends_on=[config_delivery_channel],
+        #     provider=provider_account_a
+        # )
 
-        # AWS Config Rule for VPC Peering Compliance
-        ConfigConfigRule(
-            self,
-            f"vpc-peering-compliance-rule-{environment_suffix}",
-            name=f"vpc-peering-compliance-rule-{environment_suffix}",
-            source={
-                "owner": "AWS",
-                "source_identifier": "VPC_PEERING_DNS_RESOLUTION_CHECK"
-            },
-            depends_on=[config_recorder],
-            provider=provider_account_a
-        )
+        # AWS Config Rule for VPC Peering Compliance - COMMENTED OUT DUE TO CONFIG RECORDER LIMIT
+        # ConfigConfigRule(
+        #     self,
+        #     f"vpc-peering-compliance-rule-{environment_suffix}",
+        #     name=f"vpc-peering-compliance-rule-{environment_suffix}",
+        #     source={
+        #         "owner": "AWS",
+        #         "source_identifier": "VPC_PEERING_DNS_RESOLUTION_CHECK"
+        #     },
+        #     depends_on=[config_recorder],
+        #     provider=provider_account_a
+        # )
 
         # CloudWatch Alarm for Unusual Network Traffic (Trading VPC)
         CloudwatchMetricAlarm(
