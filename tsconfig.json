@@ -35,6 +35,7 @@
     "worktree",
     "test",
     "tests",
+    "bin",
     "cli",
     "**/*.d.ts"
   ]
