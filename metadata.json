@@ -25,5 +25,7 @@
     "X-Ray"
   ],
   "region": "us-east-1",
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
   "training_quality": 10
 }

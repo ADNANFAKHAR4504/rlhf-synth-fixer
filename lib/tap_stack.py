@@ -510,6 +510,7 @@ class TapStack(TerraformStack):
         )
 
         # 11. CloudWatch Log Groups for all Lambda functions
+        # CloudWatch Log Groups - must be created after KMS key policy
         api_log_group = CloudwatchLogGroup(
             self,
             "api_lambda_log_group",
