@@ -39,17 +39,23 @@ class TestComplianceInfraAnalyzer(unittest.TestCase):
             }]
         })
 
-        iam_client.create_role(
-            RoleName='lambda-role',
-            AssumeRolePolicyDocument=assume_role_policy_document,
-            Path='/',
-        )
+        # Use unique role name to avoid conflicts with other tests
+        role_name = 'lambda-role-test-analyze-lambda-functions'
+        try:
+            iam_client.create_role(
+                RoleName=role_name,
+                AssumeRolePolicyDocument=assume_role_policy_document,
+                Path='/',
+            )
+        except iam_client.exceptions.EntityAlreadyExistsException:
+            # Role already exists from previous test run, continue
+            pass
 
-        # Create scanner functions
+        # Create scanner functions with unique names
         lambda_client.create_function(
-            FunctionName='ec2-scanner-pr7708',
+            FunctionName='ec2-scanner-test1',
             Runtime='nodejs18.x',
-            Role='arn:aws:iam::123456789012:role/lambda-role',
+            Role=f'arn:aws:iam::123456789012:role/{role_name}',
             Handler='index.handler',
             Code={'ZipFile': b'fake code'},
             MemorySize=256,
@@ -57,9 +63,9 @@ class TestComplianceInfraAnalyzer(unittest.TestCase):
         )
 
         lambda_client.create_function(
-            FunctionName='s3-compliance-scanner-pr7708',
+            FunctionName='s3-compliance-scanner-test1',
             Runtime='nodejs18.x',
-            Role='arn:aws:iam::123456789012:role/lambda-role',
+            Role=f'arn:aws:iam::123456789012:role/{role_name}',
             Handler='index.handler',
             Code={'ZipFile': b'fake code'},
             MemorySize=512,
@@ -68,9 +74,9 @@ class TestComplianceInfraAnalyzer(unittest.TestCase):
 
         # Create non-scanner function
         lambda_client.create_function(
-            FunctionName='other-function',
+            FunctionName='other-function-test1',
             Runtime='python3.9',
-            Role='arn:aws:iam::123456789012:role/lambda-role',
+            Role=f'arn:aws:iam::123456789012:role/{role_name}',
             Handler='main.handler',
             Code={'ZipFile': b'fake code'}
         )
@@ -81,11 +87,11 @@ class TestComplianceInfraAnalyzer(unittest.TestCase):
         # Assertions
         self.assertEqual(lambda_analysis['total_count'], 3)
         self.assertEqual(len(lambda_analysis['scanner_functions']), 2)
-        self.assertIn('ec2-scanner-pr7708', lambda_analysis['scanner_functions'])
-        self.assertIn('s3-compliance-scanner-pr7708', lambda_analysis['scanner_functions'])
+        self.assertIn('ec2-scanner-test1', lambda_analysis['scanner_functions'])
+        self.assertIn('s3-compliance-scanner-test1', lambda_analysis['scanner_functions'])
 
         # Check function details
-        ec2_scanner = next((f for f in lambda_analysis['functions'] if f['name'] == 'ec2-scanner-pr7708'), None)
+        ec2_scanner = next((f for f in lambda_analysis['functions'] if f['name'] == 'ec2-scanner-test1'), None)
         self.assertIsNotNone(ec2_scanner)
         self.assertEqual(ec2_scanner['runtime'], 'nodejs18.x')
         self.assertEqual(ec2_scanner['memory'], 256)
@@ -332,18 +338,24 @@ class TestComplianceInfraAnalyzer(unittest.TestCase):
             }]
         })
 
-        iam_client.create_role(
-            RoleName='lambda-role',
-            AssumeRolePolicyDocument=assume_role_policy_document,
-            Path='/',
-        )
+        # Use unique role name to avoid conflicts with other tests
+        role_name = 'lambda-role-test-full-analysis'
+        try:
+            iam_client.create_role(
+                RoleName=role_name,
+                AssumeRolePolicyDocument=assume_role_policy_document,
+                Path='/',
+            )
+        except iam_client.exceptions.EntityAlreadyExistsException:
+            # Role already exists from previous test run, continue
+            pass
 
         # Create test infrastructure
         # Lambda scanner
         lambda_client.create_function(
-            FunctionName='ec2-scanner-pr7708',
+            FunctionName='ec2-scanner-test-full',
             Runtime='nodejs18.x',
-            Role='arn:aws:iam::123456789012:role/lambda-role',
+            Role=f'arn:aws:iam::123456789012:role/{role_name}',
             Handler='index.handler',
             Code={'ZipFile': b'fake code'}
         )
