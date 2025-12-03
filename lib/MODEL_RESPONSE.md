@@ -1,328 +1,647 @@
-# Payment Processing Infrastructure - CloudFormation JSON Implementation
+# Secure Data Processing Pipeline - CloudFormation JSON Implementation# Secure Data Processing Pipeline - CloudFormation JSON Implementation
 
-This implementation creates a complete PCI DSS compliant payment processing infrastructure using CloudFormation JSON format.
+This implementation creates a PCI DSS compliant serverless data processing pipeline using CloudFormation JSON format.This implementation creates a PCI DSS compliant serverless data processing pipeline using CloudFormation JSON format.
 
-## Architecture Overview
+## Architecture Overview## Architecture Overview
 
-The solution implements a three-tier architecture:
-- **Network Layer**: VPC with public, private, and database subnets across 3 AZs
-- **Application Layer**: EC2 instances behind an Application Load Balancer
-- **Data Layer**: RDS Aurora MySQL cluster with encryption and backups
+The solution implements a secure serverless architecture with complete network isolation:The solution implements a secure serverless architecture:
 
-## File: lib/TapStack.json
+- **Network Layer**: VPC with 3 private subnets across 3 AZs, VPC endpoints for private AWS service access
 
-```json
-{
-  "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Payment Processing System Migration - PCI DSS Compliant Infrastructure",
-  "Parameters": {
+### Network Layer- **Processing Layer**: AWS Lambda function in private subnets for payment card data validation
+
+- **VPC** with CIDR 10.0.0.0/16 across 3 availability zones- **Security Layer**: KMS encryption, security groups, IAM roles, VPC Flow Logs
+
+- **3 Private Subnets** (10.0.1.0/24, 10.0.2.0/24, 10.0.3.0/24) - NO public subnets- **Compliance Layer**: AWS Config rules, SNS alerts, Systems Manager Parameter Store
+
+- **VPC Endpoints**: Gateway endpoint for S3, Interface endpoint for KMS
+
+- **VPC Flow Logs**: All network traffic logged to CloudWatch Logs with 90-day retention## File: lib/TapStack.json
+
+### Processing Layer```json
+
+- **AWS Lambda Function**: Payment card data validation function{
+
+- **VPC Configuration**: Lambda deployed in private subnets for network isolation  "AWSTemplateFormatVersion": "2010-09-09",
+
+- **Runtime**: Node.js 22.x with 1024 MB memory, 60-second timeout  "Description": "Payment Processing System Migration - PCI DSS Compliant Infrastructure",
+
+- **IAM Role**: Least privilege access to S3, KMS, and CloudWatch Logs  "Parameters": {
+
     "EnvironmentSuffix": {
-      "Type": "String",
-      "Description": "Unique suffix for resource naming to enable parallel deployments",
-      "MinLength": 4,
-      "MaxLength": 20,
-      "AllowedPattern": "[a-z0-9-]+",
+
+### Security & Encryption      "Type": "String",
+
+- **KMS Customer-Managed Key**: Encryption for S3, SNS, and CloudWatch Logs      "Description": "Unique suffix for resource naming to enable parallel deployments",
+
+- **Security Groups**: Separate groups for Lambda and KMS endpoint with least privilege rules      "MinLength": 4,
+
+- **IAM Roles**: Dedicated roles for Lambda, VPC Flow Logs, and AWS Config      "MaxLength": 20,
+
+- **S3 Bucket Policies**: Enforce encrypted uploads and secure transport (HTTPS only)      "AllowedPattern": "[a-z0-9-]+",
+
       "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
-    },
-    "LatestAmiId": {
-      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
-      "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
-      "Description": "Latest Amazon Linux 2 AMI ID"
+
+### Compliance & Monitoring    },
+
+- **AWS Config Rule**: IAM password policy compliance check    "LatestAmiId": {
+
+- **SNS Topic**: Security alerts with KMS encryption      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+
+- **VPC Flow Logs**: Network traffic monitoring in CloudWatch Logs      "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+
+- **Parameter Store**: Configuration management for bucket name and KMS key ID      "Description": "Latest Amazon Linux 2 AMI ID"
+
     }
-  },
-  "Resources": {
-    "VPC": {
+
+### Storage  },
+
+- **PCI Data Bucket**: S3 bucket with KMS encryption, versioning, and lifecycle policies  "Resources": {
+
+- **Config Bucket**: Separate S3 bucket for AWS Config snapshots    "VPC": {
+
       "Type": "AWS::EC2::VPC",
-      "Properties": {
+
+## Key Implementation Details      "Properties": {
+
         "CidrBlock": "10.0.0.0/16",
-        "EnableDnsHostnames": true,
+
+### 1. Network Isolation        "EnableDnsHostnames": true,
+
         "EnableDnsSupport": true,
-        "Tags": [
+
+The architecture uses **private subnets only** with no internet access. All three private subnets (10.0.1.0/24, 10.0.2.0/24, 10.0.3.0/24) are associated with a single private route table with no default route to the internet.        "Tags": [
+
           {
-            "Key": "Name",
+
+### 2. VPC Endpoints for Private Connectivity            "Key": "Name",
+
             "Value": {
-              "Fn::Sub": "payment-vpc-${EnvironmentSuffix}"
-            }
+
+- **S3 Gateway Endpoint**: Enables private S3 access from Lambda without internet              "Fn::Sub": "payment-vpc-${EnvironmentSuffix}"
+
+- **KMS Interface Endpoint**: Provides private KMS API access across all 3 AZs            }
+
           },
-          {
+
+### 3. Security Groups with Least Privilege          {
+
             "Key": "Environment",
-            "Value": "Production"
-          },
+
+- **Lambda Security Group**: Allows outbound HTTPS (443) to KMS endpoint only            "Value": "Production"
+
+- **KMS Endpoint Security Group**: Allows inbound HTTPS (443) from Lambda security group only          },
+
           {
-            "Key": "CostCenter",
+
+### 4. KMS Encryption for All Data            "Key": "CostCenter",
+
             "Value": "FinancialServices"
-          },
-          {
-            "Key": "MigrationPhase",
-            "Value": "Phase1"
+
+Customer-managed KMS key with:          },
+
+- Retention policy (DeletionPolicy: Retain, UpdateReplacePolicy: Retain)          {
+
+- Key policies for S3, Lambda, CloudWatch Logs access            "Key": "MigrationPhase",
+
+- Used for encrypting S3 buckets, SNS topic, CloudWatch Logs            "Value": "Phase1"
+
           }
-        ]
+
+### 5. S3 Buckets with Encryption and Policies        ]
+
       }
-    },
-    "InternetGateway": {
-      "Type": "AWS::EC2::InternetGateway",
-      "Properties": {
-        "Tags": [
-          {
+
+**PCI Data Bucket**:    },
+
+- KMS encryption with bucket key enabled    "InternetGateway": {
+
+- Versioning enabled      "Type": "AWS::EC2::InternetGateway",
+
+- Lifecycle policy: Delete old versions after 90 days      "Properties": {
+
+- Block all public access        "Tags": [
+
+- Retention policy to prevent accidental deletion          {
+
             "Key": "Name",
-            "Value": {
-              "Fn::Sub": "payment-igw-${EnvironmentSuffix}"
-            }
+
+**Bucket Policy** enforces:            "Value": {
+
+- Deny unencrypted uploads              "Fn::Sub": "payment-igw-${EnvironmentSuffix}"
+
+- Deny insecure transport (require HTTPS)            }
+
           }
-        ]
+
+### 6. Lambda Function for Data Validation        ]
+
       }
-    },
-    "AttachGateway": {
-      "Type": "AWS::EC2::VPCGatewayAttachment",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
+
+The Lambda function is deployed in private subnets with:    },
+
+- VPC configuration across 3 AZs    "AttachGateway": {
+
+- Security group for KMS endpoint access      "Type": "AWS::EC2::VPCGatewayAttachment",
+
+- IAM role with least privilege permissions      "Properties": {
+
+- Environment variables for bucket name and KMS key ID        "VpcId": {
+
+- Node.js 22.x runtime with inline validation code          "Ref": "VPC"
+
         },
-        "InternetGatewayId": {
-          "Ref": "InternetGateway"
-        }
-      }
+
+**Lambda Execution Role**:        "InternetGatewayId": {
+
+- AWSLambdaVPCAccessExecutionRole managed policy          "Ref": "InternetGateway"
+
+- Custom S3 policy (GetObject, PutObject, ListBucket)        }
+
+- Custom KMS policy (Decrypt, Encrypt, GenerateDataKey, DescribeKey)      }
+
     },
-    "PublicSubnet1": {
+
+### 7. VPC Flow Logs    "PublicSubnet1": {
+
       "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
+
+VPC Flow Logs capture all network traffic:      "Properties": {
+
+- Send to CloudWatch Logs with 90-day retention        "VpcId": {
+
+- Encrypted with customer-managed KMS key          "Ref": "VPC"
+
+- Dedicated IAM role for Flow Logs service        },
+
         "CidrBlock": "10.0.1.0/24",
-        "AvailabilityZone": {
+
+### 8. SNS Topic for Security Alerts        "AvailabilityZone": {
+
           "Fn::Select": [
-            0,
-            {
-              "Fn::GetAZs": ""
-            }
+
+SNS topic with:            0,
+
+- KMS encryption for message content            {
+
+- Tagged for PCI compliance              "Fn::GetAZs": ""
+
+- Available for security alert subscriptions            }
+
           ]
-        },
+
+### 9. AWS Config for Compliance        },
+
         "MapPublicIpOnLaunch": true,
-        "Tags": [
-          {
-            "Key": "Name",
+
+- **Config Rule**: IAM password policy compliance check        "Tags": [
+
+- **Config Bucket**: Stores compliance snapshots with KMS encryption          {
+
+- **Config Role**: IAM role with permissions for S3, SNS, KMS access            "Key": "Name",
+
             "Value": {
-              "Fn::Sub": "payment-public-subnet-1-${EnvironmentSuffix}"
+
+### 10. Parameter Store for Configuration Management              "Fn::Sub": "payment-public-subnet-1-${EnvironmentSuffix}"
+
             }
-          }
-        ]
-      }
-    },
+
+Stores configuration values:          }
+
+- Data bucket name at `/pci/config/${EnvironmentSuffix}/data-bucket`        ]
+
+- KMS key ID at `/pci/config/${EnvironmentSuffix}/kms-key-id`      }
+
+- Tagged for PCI compliance    },
+
     "PublicSubnet2": {
-      "Type": "AWS::EC2::Subnet",
+
+### 11. Resource Tagging      "Type": "AWS::EC2::Subnet",
+
       "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "CidrBlock": "10.0.2.0/24",
+
+All resources tagged with:        "VpcId": {
+
+- `Name`: Resource identifier with v7 and environmentSuffix          "Ref": "VPC"
+
+- `DataClassification`: PCI        },
+
+- `ComplianceScope`: Payment        "CidrBlock": "10.0.2.0/24",
+
         "AvailabilityZone": {
-          "Fn::Select": [
+
+### 12. Stack Outputs          "Fn::Select": [
+
             1,
-            {
-              "Fn::GetAZs": ""
-            }
-          ]
-        },
-        "MapPublicIpOnLaunch": true,
-        "Tags": [
-          {
-            "Key": "Name",
+
+Template exports:            {
+
+- VPC ID              "Fn::GetAZs": ""
+
+- Private subnet IDs (3 subnets)            }
+
+- Data bucket name          ]
+
+- Config bucket name        },
+
+- KMS key ID and ARN        "MapPublicIpOnLaunch": true,
+
+- Lambda function name and ARN        "Tags": [
+
+- SNS topic ARN          {
+
+- VPC Flow Logs log group name            "Key": "Name",
+
             "Value": {
-              "Fn::Sub": "payment-public-subnet-2-${EnvironmentSuffix}"
+
+## Deployment Instructions              "Fn::Sub": "payment-public-subnet-2-${EnvironmentSuffix}"
+
             }
-          }
+
+### Deploy the Stack          }
+
         ]
-      }
-    },
+
+```bash      }
+
+export ENVIRONMENT_SUFFIX="dev"    },
+
     "PublicSubnet3": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "CidrBlock": "10.0.3.0/24",
-        "AvailabilityZone": {
+
+aws cloudformation create-stack \      "Type": "AWS::EC2::Subnet",
+
+  --stack-name pci-data-pipeline-${ENVIRONMENT_SUFFIX} \      "Properties": {
+
+  --template-body file://lib/TapStack.json \        "VpcId": {
+
+  --parameters ParameterKey=EnvironmentSuffix,ParameterValue=${ENVIRONMENT_SUFFIX} \          "Ref": "VPC"
+
+  --capabilities CAPABILITY_NAMED_IAM \        },
+
+  --region us-east-1        "CidrBlock": "10.0.3.0/24",
+
+```        "AvailabilityZone": {
+
           "Fn::Select": [
-            2,
+
+### Monitor Deployment            2,
+
             {
-              "Fn::GetAZs": ""
-            }
-          ]
-        },
-        "MapPublicIpOnLaunch": true,
-        "Tags": [
+
+```bash              "Fn::GetAZs": ""
+
+aws cloudformation describe-stacks \            }
+
+  --stack-name pci-data-pipeline-${ENVIRONMENT_SUFFIX} \          ]
+
+  --region us-east-1 \        },
+
+  --query 'Stacks[0].StackStatus'        "MapPublicIpOnLaunch": true,
+
+```        "Tags": [
+
           {
-            "Key": "Name",
+
+### Get Stack Outputs            "Key": "Name",
+
             "Value": {
-              "Fn::Sub": "payment-public-subnet-3-${EnvironmentSuffix}"
-            }
-          }
-        ]
-      }
-    },
+
+```bash              "Fn::Sub": "payment-public-subnet-3-${EnvironmentSuffix}"
+
+aws cloudformation describe-stacks \            }
+
+  --stack-name pci-data-pipeline-${ENVIRONMENT_SUFFIX} \          }
+
+  --region us-east-1 \        ]
+
+  --query 'Stacks[0].Outputs'      }
+
+```    },
+
     "PrivateSubnet1": {
-      "Type": "AWS::EC2::Subnet",
+
+### Test the Lambda Function      "Type": "AWS::EC2::Subnet",
+
       "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "CidrBlock": "10.0.11.0/24",
-        "AvailabilityZone": {
-          "Fn::Select": [
-            0,
+
+```bash        "VpcId": {
+
+# Get Lambda function name from outputs          "Ref": "VPC"
+
+LAMBDA_FUNCTION=$(aws cloudformation describe-stacks \        },
+
+  --stack-name pci-data-pipeline-${ENVIRONMENT_SUFFIX} \        "CidrBlock": "10.0.11.0/24",
+
+  --region us-east-1 \        "AvailabilityZone": {
+
+  --query 'Stacks[0].Outputs[?OutputKey==`DataValidationFunctionName`].OutputValue' \          "Fn::Select": [
+
+  --output text)            0,
+
             {
-              "Fn::GetAZs": ""
-            }
-          ]
-        },
-        "Tags": [
-          {
+
+# Invoke the function              "Fn::GetAZs": ""
+
+aws lambda invoke \            }
+
+  --function-name ${LAMBDA_FUNCTION} \          ]
+
+  --region us-east-1 \        },
+
+  --payload '{"test": "data"}' \        "Tags": [
+
+  response.json          {
+
             "Key": "Name",
-            "Value": {
-              "Fn::Sub": "payment-private-subnet-1-${EnvironmentSuffix}"
-            }
+
+# View the response            "Value": {
+
+cat response.json              "Fn::Sub": "payment-private-subnet-1-${EnvironmentSuffix}"
+
+```            }
+
           }
-        ]
+
+### View VPC Flow Logs        ]
+
       }
-    },
-    "PrivateSubnet2": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
+
+```bash    },
+
+# Get log group name    "PrivateSubnet2": {
+
+LOG_GROUP=$(aws cloudformation describe-stacks \      "Type": "AWS::EC2::Subnet",
+
+  --stack-name pci-data-pipeline-${ENVIRONMENT_SUFFIX} \      "Properties": {
+
+  --region us-east-1 \        "VpcId": {
+
+  --query 'Stacks[0].Outputs[?OutputKey==`VPCFlowLogsLogGroup`].OutputValue' \          "Ref": "VPC"
+
+  --output text)        },
+
         "CidrBlock": "10.0.12.0/24",
-        "AvailabilityZone": {
-          "Fn::Select": [
-            1,
+
+# View recent logs        "AvailabilityZone": {
+
+aws logs tail ${LOG_GROUP} --follow --region us-east-1          "Fn::Select": [
+
+```            1,
+
             {
-              "Fn::GetAZs": ""
+
+### Access Parameter Store Values              "Fn::GetAZs": ""
+
             }
-          ]
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "payment-private-subnet-2-${EnvironmentSuffix}"
+
+```bash          ]
+
+aws ssm get-parameter \        },
+
+  --name "/pci/config/${ENVIRONMENT_SUFFIX}/data-bucket" \        "Tags": [
+
+  --region us-east-1 \          {
+
+  --query 'Parameter.Value' \            "Key": "Name",
+
+  --output text            "Value": {
+
+```              "Fn::Sub": "payment-private-subnet-2-${EnvironmentSuffix}"
+
             }
-          }
+
+## Architecture Highlights          }
+
         ]
-      }
-    },
-    "PrivateSubnet3": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
+
+### PCI DSS Compliance      }
+
+✅ **Encryption at Rest**: KMS customer-managed keys for S3, SNS, CloudWatch Logs      },
+
+✅ **Encryption in Transit**: HTTPS/TLS for all AWS service communications      "PrivateSubnet3": {
+
+✅ **Network Isolation**: Private subnets only, no internet access        "Type": "AWS::EC2::Subnet",
+
+✅ **Least Privilege**: IAM roles and security groups with minimal permissions        "Properties": {
+
+✅ **Audit Logging**: VPC Flow Logs and AWS Config for compliance monitoring          "VpcId": {
+
+✅ **Secure Storage**: S3 bucket policies enforce encryption and secure transport            "Ref": "VPC"
+
         },
-        "CidrBlock": "10.0.13.0/24",
-        "AvailabilityZone": {
-          "Fn::Select": [
-            2,
-            {
-              "Fn::GetAZs": ""
+
+### Security Features        "CidrBlock": "10.0.13.0/24",
+
+- **No Public Internet Access**: Lambda in private subnets, VPC endpoints for AWS services        "AvailabilityZone": {
+
+- **Security Groups**: Granular network controls between Lambda and KMS endpoint          "Fn::Select": [
+
+- **Bucket Policies**: Deny unencrypted uploads and insecure transport            2,
+
+- **KMS Key Policies**: Service-specific permissions for S3, Lambda, CloudWatch            {
+
+- **Public Access Block**: All S3 buckets block public access              "Fn::GetAZs": ""
+
             }
-          ]
-        },
-        "Tags": [
-          {
-            "Key": "Name",
+
+### Reliability          ]
+
+- **Multi-AZ Deployment**: Lambda deployed across 3 availability zones        },
+
+- **VPC Endpoints**: Interface endpoints in all 3 AZs for high availability        "Tags": [
+
+- **S3 Versioning**: Data protection with 90-day lifecycle for old versions          {
+
+- **Retention Policies**: KMS key and data buckets use Retain to prevent accidental deletion            "Key": "Name",
+
             "Value": {
-              "Fn::Sub": "payment-private-subnet-3-${EnvironmentSuffix}"
-            }
-          }
-        ]
-      }
+
+### Monitoring & Compliance              "Fn::Sub": "payment-private-subnet-3-${EnvironmentSuffix}"
+
+- **VPC Flow Logs**: 90-day retention in CloudWatch Logs with KMS encryption            }
+
+- **AWS Config**: IAM password policy compliance monitoring          }
+
+- **SNS Alerts**: Encrypted security notifications        ]
+
+- **Parameter Store**: Centralized configuration management      }
+
     },
-    "DatabaseSubnet1": {
+
+## Resource Summary    "DatabaseSubnet1": {
+
       "Type": "AWS::EC2::Subnet",
-      "Properties": {
+
+This CloudFormation template creates **27 AWS resources**:      "Properties": {
+
         "VpcId": {
-          "Ref": "VPC"
-        },
-        "CidrBlock": "10.0.21.0/24",
-        "AvailabilityZone": {
-          "Fn::Select": [
+
+### Networking (7 resources)          "Ref": "VPC"
+
+- 1 VPC        },
+
+- 3 Private Subnets        "CidrBlock": "10.0.21.0/24",
+
+- 1 Private Route Table        "AvailabilityZone": {
+
+- 3 Subnet Route Table Associations          "Fn::Select": [
+
             0,
-            {
-              "Fn::GetAZs": ""
-            }
+
+### VPC Endpoints (2 resources)            {
+
+- 1 S3 Gateway Endpoint              "Fn::GetAZs": ""
+
+- 1 KMS Interface Endpoint            }
+
           ]
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
+
+### Security Groups (4 resources)        },
+
+- 1 KMS Endpoint Security Group        "Tags": [
+
+- 1 Lambda Security Group          {
+
+- 1 KMS Endpoint Security Group Ingress Rule            "Key": "Name",
+
+- 1 Lambda Security Group Egress Rule            "Value": {
+
               "Fn::Sub": "payment-database-subnet-1-${EnvironmentSuffix}"
-            }
-          }
-        ]
+
+### Encryption (2 resources)            }
+
+- 1 KMS Key (customer-managed)          }
+
+- 1 KMS Key Alias        ]
+
       }
-    },
-    "DatabaseSubnet2": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {
+
+### Storage (4 resources)    },
+
+- 1 S3 Bucket for PCI data    "DatabaseSubnet2": {
+
+- 1 S3 Bucket Policy for PCI data bucket      "Type": "AWS::EC2::Subnet",
+
+- 1 S3 Bucket for AWS Config      "Properties": {
+
+- 1 S3 Bucket Policy for Config bucket        "VpcId": {
+
           "Ref": "VPC"
-        },
-        "CidrBlock": "10.0.22.0/24",
-        "AvailabilityZone": {
+
+### Compute (2 resources)        },
+
+- 1 Lambda Function        "CidrBlock": "10.0.22.0/24",
+
+- 1 Lambda Execution Role (IAM)        "AvailabilityZone": {
+
           "Fn::Select": [
-            1,
-            {
-              "Fn::GetAZs": ""
-            }
+
+### Logging (3 resources)            1,
+
+- 1 CloudWatch Log Group for VPC Flow Logs            {
+
+- 1 VPC Flow Logs Role (IAM)              "Fn::GetAZs": ""
+
+- 1 VPC Flow Log            }
+
           ]
-        },
-        "Tags": [
-          {
-            "Key": "Name",
+
+### Compliance (3 resources)        },
+
+- 1 AWS Config Role (IAM)        "Tags": [
+
+- 1 AWS Config Rule (IAM password policy)          {
+
+- 1 SNS Topic for security alerts            "Key": "Name",
+
             "Value": {
-              "Fn::Sub": "payment-database-subnet-2-${EnvironmentSuffix}"
-            }
-          }
+
+### Configuration Management (2 resources)              "Fn::Sub": "payment-database-subnet-2-${EnvironmentSuffix}"
+
+- 1 SSM Parameter for data bucket name            }
+
+- 1 SSM Parameter for KMS key ID          }
+
         ]
-      }
+
+## Testing & Validation      }
+
     },
-    "DatabaseSubnet3": {
-      "Type": "AWS::EC2::Subnet",
-      "Properties": {
-        "VpcId": {
-          "Ref": "VPC"
-        },
-        "CidrBlock": "10.0.23.0/24",
-        "AvailabilityZone": {
-          "Fn::Select": [
-            2,
+
+### Unit Tests    "DatabaseSubnet3": {
+
+The implementation includes comprehensive Jest unit tests covering:      "Type": "AWS::EC2::Subnet",
+
+- VPC and subnet configuration      "Properties": {
+
+- Security group rules and network isolation        "VpcId": {
+
+- KMS key policies and encryption          "Ref": "VPC"
+
+- S3 bucket policies and lifecycle rules        },
+
+- Lambda function configuration and IAM roles        "CidrBlock": "10.0.23.0/24",
+
+- VPC Flow Logs and CloudWatch integration        "AvailabilityZone": {
+
+- AWS Config rules and compliance monitoring          "Fn::Select": [
+
+- Parameter Store configuration            2,
+
             {
-              "Fn::GetAZs": ""
-            }
-          ]
-        },
-        "Tags": [
-          {
-            "Key": "Name",
+
+### Security Validation              "Fn::GetAZs": ""
+
+- ✅ No public subnets or internet gateways            }
+
+- ✅ All data encrypted with customer-managed KMS keys          ]
+
+- ✅ S3 bucket policies deny unencrypted uploads        },
+
+- ✅ VPC endpoints provide private AWS service connectivity        "Tags": [
+
+- ✅ Security groups enforce least privilege network access          {
+
+- ✅ IAM roles follow principle of least privilege            "Key": "Name",
+
             "Value": {
-              "Fn::Sub": "payment-database-subnet-3-${EnvironmentSuffix}"
-            }
-          }
-        ]
-      }
-    },
+
+### Compliance Validation              "Fn::Sub": "payment-database-subnet-3-${EnvironmentSuffix}"
+
+- ✅ VPC Flow Logs enabled with 90-day retention            }
+
+- ✅ AWS Config rule monitors IAM password policy          }
+
+- ✅ All resources tagged with DataClassification and ComplianceScope        ]
+
+- ✅ CloudWatch Logs encrypted with KMS      }
+
+- ✅ SNS topic encrypted for security alerts    },
+
     "PublicRouteTable": {
-      "Type": "AWS::EC2::RouteTable",
+
+## Conclusion      "Type": "AWS::EC2::RouteTable",
+
       "Properties": {
-        "VpcId": {
+
+This implementation provides a **production-ready, PCI DSS compliant** serverless data processing pipeline using CloudFormation JSON. The architecture emphasizes:        "VpcId": {
+
           "Ref": "VPC"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
+
+1. **Complete Network Isolation**: Private subnets with VPC endpoints, no internet access        },
+
+2. **Comprehensive Encryption**: KMS customer-managed keys for all data at rest and in transit        "Tags": [
+
+3. **Least Privilege Security**: IAM roles and security groups with minimal permissions          {
+
+4. **Compliance Monitoring**: VPC Flow Logs, AWS Config, and SNS alerts            "Key": "Name",
+
+5. **Data Protection**: S3 versioning, lifecycle policies, and retention policies for KMS and buckets            "Value": {
+
               "Fn::Sub": "payment-public-rt-${EnvironmentSuffix}"
-            }
+
+The template is parameterized with `EnvironmentSuffix` for parallel deployments and includes comprehensive tagging for cost allocation and compliance tracking.            }
+
           }
         ]
       }
@@ -1496,7 +1815,7 @@ aws cloudformation describe-stacks \
 - **Multi-AZ High Availability**: Resources deployed across 3 availability zones
 - **PCI DSS Compliance**: Encryption at rest (KMS), encryption in transit (TLS 1.2+), secure network architecture
 - **Security**: WAF rate limiting, security groups with least privilege, private subnets for compute
-- **Monitoring**: CloudWatch alarms for CPU and database connections, VPC Flow Logs, application logs
+- **Monitoring**: CloudWatch alarms for CPU and database connections, VPC Flow Logs, application losgs
 - **Scalability**: Auto Scaling based on CPU utilization (70% target)
 - **Scalability**: Application Load Balancer with appropriately sized EC2 instances (manual or external scaling)
 - **Backup and Recovery**: 7-day backup retention with point-in-time recovery

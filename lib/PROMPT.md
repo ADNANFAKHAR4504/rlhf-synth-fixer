@@ -1,121 +1,129 @@
-# Payment Processing System Migration to AWS
+# Secure Data Processing Pipeline for PCI Compliance
 
 Hey team,
 
-We need to migrate a legacy on-premises payment processing system to AWS. The current system processes about 50,000 transactions daily and we're dealing with strict PCI DSS compliance requirements. The business wants this migration done in phases to keep downtime minimal during the transition.
+We need to build a secure data processing pipeline for handling PCI-compliant payment card data on AWS. The system must enforce strict encryption at rest and in transit, network isolation, and comprehensive audit logging to meet PCI DSS requirements. The business requires a serverless architecture that can scale automatically while maintaining security controls.
 
-This is a critical migration for a financial services company. The existing infrastructure has been running on-premises for years, and moving to AWS will give us better scalability and disaster recovery capabilities. We need to maintain the same security posture while taking advantage of cloud-native services. The architecture needs to support the current transaction volume with room to scale as the business grows.
+This is a critical security infrastructure for a financial services company. The system needs to validate payment card data as it arrives in S3, trigger security alerts, and maintain detailed audit trails. We need to leverage AWS serverless services while ensuring complete network isolation and encryption throughout the data processing pipeline.
 
 ## What we need to build
 
-Create a complete payment processing infrastructure using **CloudFormation with JSON** for a phased migration approach. The solution must maintain PCI DSS compliance throughout the migration process.
+Create a secure data processing infrastructure using **CloudFormation with JSON** for PCI DSS compliant payment card data validation. The solution must enforce encryption, network isolation, and comprehensive audit logging.
 
 ### Core Requirements
 
 1. **Network Infrastructure**
    - VPC with CIDR 10.0.0.0/16 across 3 availability zones in us-east-1
-   - Public subnets (10.0.1.0/24, 10.0.2.0/24, 10.0.3.0/24) for load balancers
-   - Private subnets (10.0.11.0/24, 10.0.12.0/24, 10.0.13.0/24) for application servers
-   - Database subnets (10.0.21.0/24, 10.0.22.0/24, 10.0.23.0/24) for RDS
-   - NAT Gateways in each availability zone for outbound connectivity
-   - Internet Gateway for public subnet access
+   - Private subnets (10.0.1.0/24, 10.0.2.0/24, 10.0.3.0/24) for Lambda functions
+   - No public subnets or internet access (fully isolated network)
+   - VPC endpoints for S3 and KMS to enable private connectivity
+   - VPC Flow Logs to CloudWatch for network traffic analysis
 
-2. **Application Tier**
-   - Application Load Balancer in public subnets with SSL termination (TLS 1.2 minimum)
-   - EC2 instances (t3.large) in private subnets behind the ALB (no Auto Scaling group)
-   - EC2 instances must have no direct internet access (private subnet only)
-   - Instances use gp3 EBS volumes (100GB, 3000 IOPS)
+2. **Data Processing Tier**
+   - AWS Lambda function for payment card data validation
+   - Function deployed in private subnets with VPC configuration
+   - Lambda execution role with least privilege permissions for S3, KMS, and CloudWatch
+   - Function triggered by S3 events when new data arrives
+   - 1024 MB memory allocation with 60-second timeout
 
-3. **Database Layer**
-   - RDS Aurora MySQL cluster in database subnets
-   - One writer instance and one reader instance
-   - Encryption at rest using customer-managed KMS keys
-   - Point-in-time recovery enabled with 7-day backup retention period
-   - Database connections limited to 100 (CloudWatch alarm threshold)
+3. **Encryption and Key Management**
+   - Customer-managed KMS key for encryption at rest
+   - KMS key policy allowing S3, Lambda, CloudWatch Logs access
+   - All data encrypted in transit using HTTPS/TLS
+   - KMS VPC endpoint for private key access from Lambda
 
 4. **Security Configuration**
    - Security groups with least privilege access:
-     - HTTPS (443) from internet to Application Load Balancer
-     - HTTP (80) from ALB to EC2 instances
-     - MySQL (3306) from EC2 instances to RDS Aurora
-   - AWS WAF attached to ALB with rate limiting rules (2000 requests per 5-minute window)
-   - IAM roles for EC2 instances with permissions to access Parameter Store and S3
+     - Lambda security group allowing HTTPS (443) to KMS endpoint
+     - KMS endpoint security group accepting connections from Lambda
+   - IAM roles with scoped permissions for S3, KMS, Parameter Store
    - All sensitive configuration values stored in AWS Systems Manager Parameter Store
-   - VPC Flow Logs enabled to S3 with 90-day lifecycle policy
+   - VPC Flow Logs enabled to CloudWatch with 90-day retention
+   - Block all public access to S3 buckets
 
-5. **Storage and Artifacts**
-   - S3 bucket for application artifacts with versioning enabled
-   - S3 bucket encryption using default SSE-S3
-   - Proper IAM policies for EC2 instances to access the bucket
+5. **Storage and Data Management**
+   - S3 bucket for PCI data with versioning enabled
+   - S3 bucket encryption using customer-managed KMS keys
+   - Bucket policies enforcing encrypted uploads and secure transport
+   - Lifecycle policy for old versions (90-day deletion)
+   - Separate S3 bucket for AWS Config compliance data
 
-6. **Monitoring and Logging**
-   - CloudWatch Log Groups for application logs with 30-day retention period
-   - CloudWatch alarms for CPU utilization > 80%
-   - CloudWatch alarms for database connections > 100
-   - Centralized logging for troubleshooting and compliance
+6. **Monitoring and Compliance**
+   - CloudWatch Log Groups for VPC flow logs with 90-day retention
+   - SNS topic for security alerts with KMS encryption
+   - AWS Config rules for IAM password policy compliance
+   - AWS Config bucket for compliance snapshots
+   - Systems Manager Parameter Store for configuration management
+   - Comprehensive resource tagging (DataClassification: PCI, ComplianceScope: Payment)
 
 ### Technical Requirements
 
 - All infrastructure defined using **CloudFormation with JSON format**
-- Use **Application Load Balancer** for traffic distribution with SSL termination
--- Use **EC2 instances** (t3.large) in private subnets (no Auto Scaling Group)
-- Use **RDS Aurora MySQL** cluster with one writer and one reader
-- Use **KMS** customer-managed keys for database encryption
-- Use **AWS WAF** with rate limiting for DDoS protection
+- Use **AWS Lambda** for serverless data validation in private subnets
+- Use **AWS SNS** for security alert notifications with encryption
+- Use **AWS Config** for compliance monitoring and IAM policy checks
+- Use **KMS** customer-managed keys for encryption at rest (S3, SNS, CloudWatch Logs)
+- Use **VPC Endpoints** (Gateway for S3, Interface for KMS) for private connectivity
 - Use **Systems Manager Parameter Store** for configuration management
-- Use **S3** for application artifacts with versioning
-- Use **CloudWatch** for logging and monitoring
-- Use **VPC Flow Logs** for network traffic analysis
+- Use **S3** for PCI data storage with versioning and KMS encryption
+- Use **CloudWatch Logs** for VPC flow logs with 90-day retention
+- Use **Security Groups** for network segmentation between Lambda and KMS endpoint
 - Deploy to **us-east-1** region across 3 availability zones
 - Resource names must include **environmentSuffix** for uniqueness
-- Follow naming convention: `resourceType-environment-suffix`
-- All resources must be destroyable (no Retain policies or deletion protection)
+- Follow naming convention: `resourceType-v7-suffix`
+- Most resources destroyable; KMS key and data buckets use Retain policy for safety
 
 ### Deployment Requirements (CRITICAL)
 
 - **environmentSuffix Parameter**: Template must accept an environmentSuffix parameter and all named resources must include it for uniqueness
-- **Destroyability**: All resources must use RemovalPolicy: Delete (CloudFormation default) - no Retain policies
-- **RDS Deletion**: Set DeletionPolicy to Delete and SkipFinalSnapshot to true for Aurora cluster
-- **S3 Deletion**: Buckets should allow deletion (no retention policies that block cleanup)
-- **KMS Keys**: Use DeletionPolicy: Delete with PendingWindowInDays set to 7 days minimum
+- **KMS Keys**: Use DeletionPolicy: Retain and UpdateReplacePolicy: Retain for data protection
+- **S3 Buckets**: Data and Config buckets use DeletionPolicy: Retain to prevent accidental data loss
+- **Lambda Functions**: Can be deleted without retention policies
+- **VPC Resources**: Can be deleted without retention policies
 - **No GuardDuty**: Do not create GuardDuty detector (account-level resource, one per account)
+- **No CloudFormation Recorder**: AWS Config recorder is account-level, use only Config Rules
 
 ### Constraints
 
 - PCI DSS compliance required - encryption at rest and in transit
-- EC2 instances must be in private subnets with no direct internet access
-- All database connections must be encrypted using SSL/TLS
-- Rate limiting to prevent DDoS attacks (2000 requests per 5 minutes)
-- NAT Gateways required for outbound connectivity from private subnets
-- All resources must be properly tagged with Environment, CostCenter, and MigrationPhase
-- CloudWatch alarms for proactive monitoring of CPU and database connections
-- 7-day backup retention for point-in-time recovery
-- All resources must be destroyable for cleanup after testing
+- Lambda functions must be in private subnets with VPC configuration
+- No public internet access - use VPC endpoints for AWS service connectivity
+- All S3 uploads must use KMS encryption
+- All S3 access must use secure transport (HTTPS only)
+- No NAT Gateways - fully isolated network using VPC endpoints
+- All resources must be properly tagged with DataClassification and ComplianceScope
+- VPC Flow Logs for network traffic monitoring with 90-day retention
+- Lifecycle policies for S3 versioned objects (90-day deletion of old versions)
+- KMS key and data buckets use Retain policy to prevent accidental data loss
 
 ## Success Criteria
 
--- **Functionality**: Complete multi-tier architecture with ALB and RDS Aurora
--- **Performance**: Appropriate instance sizing and ALB configuration keep CPU within acceptable limits under load
-- **Reliability**: Multi-AZ deployment across 3 availability zones for high availability
-- **Security**: PCI DSS compliant with encryption, WAF protection, least privilege IAM, and security groups
-- **Resource Naming**: All resources include environmentSuffix for parallel deployment support
-- **Monitoring**: CloudWatch logs and alarms provide visibility into system health
+- **Functionality**: Complete serverless data processing pipeline with Lambda, SNS, and Config
+- **Network Isolation**: Private subnets with VPC endpoints, no public internet access
+- **Reliability**: Multi-AZ deployment across 3 availability zones for Lambda
+- **Security**: PCI DSS compliant with encryption at rest/transit, least privilege IAM, security groups, and VPC isolation
+- **Resource Naming**: All resources include environmentSuffix (v7) for parallel deployment support
+- **Monitoring**: VPC Flow Logs and AWS Config provide visibility into network and compliance status
 - **Code Quality**: Well-structured CloudFormation JSON template with proper dependencies and parameters
 
 ## What to deliver
 
 - Complete CloudFormation JSON template implementation
-- VPC with public, private, and database subnet tiers across 3 AZs
-- Application Load Balancer with SSL termination and WAF protection
- - EC2 instances (t3.large) configured via Launch Template; scaling handled outside this template
-- RDS Aurora MySQL cluster with encryption and backup configuration
-- Security groups implementing least privilege access
-- IAM roles with policies for Parameter Store and S3 access
-- CloudWatch Log Groups with 30-day retention
-- S3 bucket for artifacts with versioning enabled
-- CloudWatch alarms for CPU and database monitoring
-- VPC Flow Logs to S3 with lifecycle policy
-- KMS customer-managed keys for database encryption
-- Template parameters for environmentSuffix and environment-specific values
-- Template outputs for ALB DNS name and key resource identifiers
-- Comprehensive documentation explaining the architecture and deployment process
+- VPC with 3 private subnets across 3 availability zones (no public subnets)
+- Private route table with associations for all private subnets
+- VPC endpoints (S3 Gateway endpoint, KMS Interface endpoint) for private AWS service access
+- AWS Lambda function for data validation with VPC configuration
+- Lambda execution role with IAM policies for S3, KMS, and CloudWatch access
+- Security groups for Lambda and KMS endpoint with least privilege rules
+- SNS topic for security alerts with KMS encryption
+- AWS Config rule for IAM password policy compliance
+- S3 bucket for PCI data with KMS encryption, versioning, and lifecycle policies
+- S3 bucket for AWS Config snapshots with encryption
+- Bucket policies enforcing encrypted uploads and secure transport
+- KMS customer-managed key with key policy for S3, Lambda, and CloudWatch
+- VPC Flow Logs to CloudWatch Logs with 90-day retention and KMS encryption
+- IAM roles for VPC Flow Logs and AWS Config
+- Systems Manager Parameter Store parameters for bucket name and KMS key ID
+- Template parameters for environmentSuffix
+- Template outputs for VPC ID, subnet IDs, bucket names, Lambda ARN, SNS topic ARN, and KMS key
+- Comprehensive tagging with DataClassification and ComplianceScope
