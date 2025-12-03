@@ -16,6 +16,9 @@ export class TapStack {
   public readonly lambdaFailureAlarm: aws.cloudwatch.MetricAlarm;
 
   constructor() {
+    // Get AWS region for dashboard configuration (use default if not set)
+    const dashboardRegion = aws.config.region || 'us-east-1';
+
     // Create S3 bucket for storing analysis results
     this.resultsBucket = new aws.s3.Bucket('analysis-results-bucket', {
       bucket: pulumi.interpolate`s3-analysis-results-${aws.getCallerIdentity().then(id => id.accountId)}`,
@@ -175,7 +178,7 @@ export class TapStack {
                     ],
                   ],
                   view: 'timeSeries',
-                  region: aws.config.region || 'us-east-1',
+                  region: dashboardRegion,
                   title: 'Lambda Function Metrics',
                   period: 300,
                   dimensions: {
@@ -194,7 +197,7 @@ export class TapStack {
                     ['.', 'BucketsWithoutLogging', { stat: 'Sum' }],
                   ],
                   view: 'singleValue',
-                  region: aws.config.region || 'us-east-1',
+                  region: dashboardRegion,
                   title: 'Analysis Summary',
                   period: 300,
                 },
@@ -210,7 +213,7 @@ export class TapStack {
                     ],
                   ],
                   view: 'timeSeries',
-                  region: aws.config.region || 'us-east-1',
+                  region: dashboardRegion,
                   title: 'Analysis Execution Time',
                   period: 300,
                   yAxis: {
