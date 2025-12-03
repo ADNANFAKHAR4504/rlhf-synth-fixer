@@ -15,7 +15,7 @@
     "branches": 100
   },
   "training_quality": 10,
-  "author": "claude-code",
+  "author": "mayanksethi-turing",
   "dockerS3Location": "",
   "aws_services": [
     "kinesis",
