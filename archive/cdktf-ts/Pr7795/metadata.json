@@ -1,0 +1,33 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "expert",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-12-03T00:00:00Z",
+  "po_id": "10967158",
+  "aws_services": [
+    "VPC",
+    "RDS",
+    "Aurora",
+    "ECS",
+    "ALB",
+    "S3",
+    "ECR",
+    "CloudWatch",
+    "IAM",
+    "SSM"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
