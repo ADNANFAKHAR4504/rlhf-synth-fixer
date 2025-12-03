@@ -21,9 +21,89 @@ from analyse import ComplianceInfraAnalyzer
 class TestComplianceInfraAnalyzer(unittest.TestCase):
     """Test cases for ComplianceInfraAnalyzer using moto mocks"""
 
+    def _cleanup_all_lambda_functions(self):
+        """Delete ALL Lambda functions from Moto to ensure test isolation"""
+        try:
+            lambda_client = boto3.client('lambda', region_name='us-east-1')
+            paginator = lambda_client.get_paginator('list_functions')
+            for page in paginator.paginate():
+                for func in page.get('Functions', []):
+                    try:
+                        lambda_client.delete_function(FunctionName=func['FunctionName'])
+                    except Exception:
+                        pass  # Ignore errors during cleanup
+        except Exception:
+            pass  # If pagination fails, continue
+
+    def _cleanup_all_dynamodb_tables(self):
+        """Delete ALL DynamoDB tables from Moto to ensure test isolation"""
+        try:
+            dynamodb_client = boto3.client('dynamodb', region_name='us-east-1')
+            response = dynamodb_client.list_tables()
+            for table_name in response.get('TableNames', []):
+                try:
+                    dynamodb_client.delete_table(TableName=table_name)
+                except Exception:
+                    pass  # Ignore errors during cleanup
+        except Exception:
+            pass  # If list fails, continue
+
+    def _cleanup_all_sns_topics(self):
+        """Delete ALL SNS topics from Moto to ensure test isolation"""
+        try:
+            sns_client = boto3.client('sns', region_name='us-east-1')
+            response = sns_client.list_topics()
+            for topic in response.get('Topics', []):
+                try:
+                    sns_client.delete_topic(TopicArn=topic['TopicArn'])
+                except Exception:
+                    pass  # Ignore errors during cleanup
+        except Exception:
+            pass  # If list fails, continue
+
+    def _cleanup_all_cloudwatch_alarms(self):
+        """Delete ALL CloudWatch alarms from Moto to ensure test isolation"""
+        try:
+            cloudwatch_client = boto3.client('cloudwatch', region_name='us-east-1')
+            response = cloudwatch_client.describe_alarms()
+            alarm_names = [alarm['AlarmName'] for alarm in response.get('MetricAlarms', [])]
+            if alarm_names:
+                try:
+                    cloudwatch_client.delete_alarms(AlarmNames=alarm_names)
+                except Exception:
+                    pass  # Ignore errors during cleanup
+        except Exception:
+            pass  # If describe fails, continue
+
+    def _cleanup_all_eventbridge_rules(self):
+        """Delete ALL EventBridge rules from Moto to ensure test isolation"""
+        try:
+            events_client = boto3.client('events', region_name='us-east-1')
+            response = events_client.list_rules()
+            for rule in response.get('Rules', []):
+                rule_name = rule['Name']
+                try:
+                    # Remove targets first
+                    targets_response = events_client.list_targets_by_rule(Rule=rule_name)
+                    target_ids = [target['Id'] for target in targets_response.get('Targets', [])]
+                    if target_ids:
+                        events_client.remove_targets(Rule=rule_name, Ids=target_ids)
+                except Exception:
+                    pass  # Ignore errors during target cleanup
+                try:
+                    # Delete rule
+                    events_client.delete_rule(Name=rule_name)
+                except Exception:
+                    pass  # Ignore errors during rule cleanup
+        except Exception:
+            pass  # If list fails, continue
+
     @mock_aws
     def test_analyze_lambda_functions(self):
         """Test detection of Lambda scanner functions"""
+        # Clean ALL resources from previous tests to ensure isolation
+        self._cleanup_all_lambda_functions()
+
         # Setup
         iam_client = boto3.client('iam', region_name='us-east-1')
         lambda_client = boto3.client('lambda', region_name='us-east-1')
@@ -107,6 +187,9 @@ class TestComplianceInfraAnalyzer(unittest.TestCase):
     @mock_aws
     def test_analyze_dynamodb_tables(self):
         """Test detection of compliance DynamoDB tables"""
+        # Clean ALL resources from previous tests to ensure isolation
+        self._cleanup_all_dynamodb_tables()
+
         # Setup
         dynamodb_client = boto3.client('dynamodb', region_name='us-east-1')
         analyzer = ComplianceInfraAnalyzer()
@@ -165,6 +248,9 @@ class TestComplianceInfraAnalyzer(unittest.TestCase):
     @mock_aws
     def test_analyze_sns_topics(self):
         """Test detection of SNS alert topics"""
+        # Clean ALL resources from previous tests to ensure isolation
+        self._cleanup_all_sns_topics()
+
         # Setup
         sns_client = boto3.client('sns', region_name='us-east-1')
         analyzer = ComplianceInfraAnalyzer()
@@ -205,6 +291,9 @@ class TestComplianceInfraAnalyzer(unittest.TestCase):
     @mock_aws
     def test_analyze_cloudwatch_alarms(self):
         """Test detection of compliance CloudWatch alarms"""
+        # Clean ALL resources from previous tests to ensure isolation
+        self._cleanup_all_cloudwatch_alarms()
+
         # Setup
         cloudwatch_client = boto3.client('cloudwatch', region_name='us-east-1')
         analyzer = ComplianceInfraAnalyzer()
@@ -254,6 +343,10 @@ class TestComplianceInfraAnalyzer(unittest.TestCase):
     @mock_aws
     def test_analyze_eventbridge_rules(self):
         """Test detection of EventBridge scanner rules"""
+        # Clean ALL resources from previous tests to ensure isolation
+        self._cleanup_all_lambda_functions()
+        self._cleanup_all_eventbridge_rules()
+
         # Setup
         iam_client = boto3.client('iam', region_name='us-east-1')
         events_client = boto3.client('events', region_name='us-east-1')
@@ -326,6 +419,13 @@ class TestComplianceInfraAnalyzer(unittest.TestCase):
     @mock_aws
     def test_full_analysis_and_reporting(self):
         """Test complete analysis workflow including report generation"""
+        # Clean ALL resources from previous tests to ensure isolation
+        self._cleanup_all_lambda_functions()
+        self._cleanup_all_dynamodb_tables()
+        self._cleanup_all_sns_topics()
+        self._cleanup_all_cloudwatch_alarms()
+        self._cleanup_all_eventbridge_rules()
+
         # Setup
         iam_client = boto3.client('iam', region_name='us-east-1')
         lambda_client = boto3.client('lambda', region_name='us-east-1')
