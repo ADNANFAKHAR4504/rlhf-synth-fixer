@@ -1,6 +1,6 @@
 {
   "language": "python",
-  "app": "/home/arpit/.local/share/virtualenvs/synth-69639564-1xaoSciO/bin/python tap.py",
+  "app": "python tap.py",
   "projectId": "18754d04-9786-40f1-92a2-6ec8b0ebc00a",
   "sendCrashReports": "false",
   "terraformProviders": [
