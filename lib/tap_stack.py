@@ -588,8 +588,8 @@ class TapStack(TerraformStack):
                 "subnet_ids": [subnet.id for subnet in vpc_resources['private_subnets']],
                 "security_group_ids": [vpc_resources['lambda_security_group'].id]
             },
-            filename="lib/lambda_validation.zip",
-            source_code_hash=Fn.filebase64sha256("lib/lambda_validation.zip"),
+            filename="../../../lib/lambda_validation.zip",
+            source_code_hash=Fn.filebase64sha256("../../../lib/lambda_validation.zip"),
             tags={
                 "Name": f"payment-validation-{environment_suffix}-{region}",
                 "Environment": environment_suffix,
@@ -622,8 +622,8 @@ class TapStack(TerraformStack):
                 "subnet_ids": [subnet.id for subnet in vpc_resources['private_subnets']],
                 "security_group_ids": [vpc_resources['lambda_security_group'].id]
             },
-            filename="lib/lambda_processing.zip",
-            source_code_hash=Fn.filebase64sha256("lib/lambda_processing.zip"),
+            filename="../../../lib/lambda_processing.zip",
+            source_code_hash=Fn.filebase64sha256("../../../lib/lambda_processing.zip"),
             tags={
                 "Name": f"payment-processing-{environment_suffix}-{region}",
                 "Environment": environment_suffix,
@@ -1034,8 +1034,8 @@ class TapStack(TerraformStack):
                     "SECONDARY_REGION": secondary_region
                 }
             ),
-            filename="lib/lambda_failover.zip",
-            source_code_hash=Fn.filebase64sha256("lib/lambda_failover.zip"),
+            filename="../../../lib/lambda_failover.zip",
+            source_code_hash=Fn.filebase64sha256("../../../lib/lambda_failover.zip"),
             tags={
                 "Name": f"payment-failover-orchestration-{environment_suffix}",
                 "Environment": environment_suffix
