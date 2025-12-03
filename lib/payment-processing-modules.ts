@@ -160,9 +160,9 @@ export class VPCModule extends Construct {
 
     // S3 Bucket for VPC Flow Logs
     this.flowLogsBucket = new aws.s3Bucket.S3Bucket(this, 'flow-logs-bucket', {
-      bucket: resourceName('eu-vpc-flowlogs').toLowerCase(),
+      bucket: resourceName('v2-vpc-flowlogs').toLowerCase(),
       forceDestroy: true,
-      tags: { ...props.tags, Name: resourceName('eu-flowlogs') },
+      tags: { ...props.tags, Name: resourceName('v2-flowlogs') },
     });
 
     // S3 Bucket Versioning
@@ -328,7 +328,7 @@ export class KMSModule extends Construct {
 
     // KMS Alias
     this.alias = new aws.kmsAlias.KmsAlias(this, 'rds-key-alias', {
-      name: `alias/${resourceName('eu-rds-kms')}`,
+      name: `alias/${resourceName('v2-rds-kms')}`,
       targetKeyId: this.key.id,
     });
   }
@@ -354,10 +354,10 @@ export class SecretsModule extends Construct {
       this,
       'rds-secret',
       {
-        name: resourceName('eu-db-secret'),
+        name: resourceName('v2-db-secret'),
         description: 'Master password for RDS Aurora MySQL cluster',
         recoveryWindowInDays: 7,
-        tags: { ...props.tags, Name: resourceName('eu-rds-secret') },
+        tags: { ...props.tags, Name: resourceName('v2-rds-secret') },
       }
     );
 
@@ -406,7 +406,7 @@ export class RDSModule extends Construct {
       this,
       'rds-log-group',
       {
-        name: `/aws/rds/cluster/${resourceName('eu-db')}/slowquery`,
+        name: `/aws/rds/cluster/${resourceName('v2-db')}/slowquery`,
         retentionInDays: 2557,
         tags: { ...props.tags, Name: resourceName('payment-rds-logs') },
       }
@@ -448,16 +448,16 @@ export class RDSModule extends Construct {
       this,
       'db-subnet-group',
       {
-        name: resourceName('eu-db-subnets').toLowerCase(),
+        name: resourceName('v2-db-subnets').toLowerCase(),
         subnetIds: props.privateSubnetIds,
         description: 'Subnet group for RDS Aurora MySQL cluster',
-        tags: { ...props.tags, Name: resourceName('eu-db-subnets') },
+        tags: { ...props.tags, Name: resourceName('v2-db-subnets') },
       }
     );
 
     // RDS Aurora Cluster
     this.cluster = new aws.rdsCluster.RdsCluster(this, 'aurora-cluster', {
-      clusterIdentifier: resourceName('eu-aurora-db').toLowerCase(),
+      clusterIdentifier: resourceName('v2-aurora-db').toLowerCase(),
       engine: 'aurora-mysql',
       engineVersion: '8.0.mysql_aurora.3.04.0',
       databaseName: 'paymentdb',
@@ -481,7 +481,7 @@ export class RDSModule extends Construct {
       this,
       'cluster-instance-1',
       {
-        identifier: `${resourceName('eu-aurora-db')}-instance-1`.toLowerCase(),
+        identifier: `${resourceName('v2-aurora-db')}-instance-1`.toLowerCase(),
         clusterIdentifier: this.cluster.id,
         instanceClass: 'db.t3.medium',
         engine: this.cluster.engine,
@@ -493,7 +493,7 @@ export class RDSModule extends Construct {
 
     // Second instance for Multi-AZ
     new aws.rdsClusterInstance.RdsClusterInstance(this, 'cluster-instance-2', {
-      identifier: `${resourceName('eu-aurora-db')}-instance-2`.toLowerCase(),
+      identifier: `${resourceName('v2-aurora-db')}-instance-2`.toLowerCase(),
       clusterIdentifier: this.cluster.id,
       instanceClass: 'db.t3.medium',
       engine: this.cluster.engine,
@@ -685,13 +685,13 @@ export class ALBModule extends Construct {
 
     // Application Load Balancer
     this.alb = new aws.lb.Lb(this, 'alb', {
-      name: resourceName('eu-loadbalancer'),
+      name: resourceName('v2-loadbalancer'),
       loadBalancerType: 'application',
       securityGroups: [this.securityGroup.id],
       subnets: props.publicSubnetIds,
       enableDeletionProtection: false,
       enableHttp2: true,
-      tags: { ...props.tags, Name: resourceName('eu-loadbalancer') },
+      tags: { ...props.tags, Name: resourceName('v2-loadbalancer') },
     });
 
     // Target Group for ECS tasks
@@ -699,7 +699,7 @@ export class ALBModule extends Construct {
       this,
       'target-group',
       {
-        name: resourceName('eu-tg'),
+        name: resourceName('v2-tg'),
         port: 8080,
         protocol: 'HTTP',
         vpcId: props.vpcId,
@@ -716,7 +716,7 @@ export class ALBModule extends Construct {
           interval: 30,
           matcher: '200',
         },
-        tags: { ...props.tags, Name: resourceName('eu-tg') },
+        tags: { ...props.tags, Name: resourceName('v2-tg') },
       }
     );
 
@@ -767,7 +767,7 @@ export class ECSModule extends Construct {
       this,
       'ecs-log-group',
       {
-        name: `/aws/ecs/${resourceName('eu-service')}`,
+        name: `/aws/ecs/${resourceName('v2-service')}`,
         retentionInDays: 2557,
         tags: { ...props.tags, Name: resourceName('payment-ecs-logs') },
       }
