@@ -2,8 +2,9 @@ import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
 const config = new pulumi.Config();
-const environmentSuffix = config.require('environmentSuffix');
-const awsRegion = config.get('awsRegion');
+const environmentSuffix =
+  config.get('environmentSuffix') || process.env.ENVIRONMENT_SUFFIX || 'dev';
+const awsRegion = config.get('awsRegion') || process.env.AWS_REGION;
 const region = awsRegion || 'us-east-1';
 
 // Required tags for compliance
