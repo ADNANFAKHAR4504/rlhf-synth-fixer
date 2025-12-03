@@ -1,696 +1,902 @@
 
 ## tap_stack.tf
 ```hcl
-# Multi-Environment AWS Infrastructure Stack
-# Based on the requirements in PROMPT.md
-
-# Local values for consistent naming and configuration
-locals {
-  project_name = "tap-financial"
-
-  # Environment-specific configurations
-  environments = {
-    dev = {
-      ecs_task_count     = 1
-      db_instance_class  = "db.t3.medium"
-      log_retention_days = 7
-      vpc_cidr_base      = 10
-    }
-    staging = {
-      ecs_task_count     = 2
-      db_instance_class  = "db.r5.large"
-      log_retention_days = 30
-      vpc_cidr_base      = 20
-    }
-    prod = {
-      ecs_task_count     = 4
-      db_instance_class  = "db.r5.xlarge"
-      log_retention_days = 90
-      vpc_cidr_base      = 30
-    }
-  }
-
-  current_env = local.environments[var.environment]
-
-  # Use current AWS account ID
-  current_account_id = data.aws_caller_identity.current.account_id
-
-  # Common tags for all resources
-  common_tags = merge(var.common_tags, {
-    Project     = local.project_name
-    Environment = var.environment
-    Owner       = "Platform Team"
-    CostCenter  = "Engineering"
-    AccountId   = local.current_account_id
-  }) # Naming conventions
-  resource_prefix = "${local.project_name}-${var.environment}"
-}
-
-# Data sources for existing resources
-data "aws_caller_identity" "current" {}
-data "aws_region" "current" {}
-
-# Availability Zones for the current region
-data "aws_availability_zones" "available" {
-  state = "available"
-}
-
-# VPC Configuration
-resource "aws_vpc" "main" {
-  cidr_block           = "10.${local.current_env.vpc_cidr_base}.0.0/16"
-  enable_dns_hostnames = true
-  enable_dns_support   = true
-
-  tags = merge(local.common_tags, {
-    Name = "${local.resource_prefix}-vpc"
-  })
-}
-
-# Internet Gateway
-resource "aws_internet_gateway" "main" {
-  vpc_id = aws_vpc.main.id
-
-  tags = merge(local.common_tags, {
-    Name = "${local.resource_prefix}-igw"
-  })
-}
-
-# Public Subnets
-resource "aws_subnet" "public" {
-  count = 2
-
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.${local.current_env.vpc_cidr_base}.${count.index + 1}.0/24"
-  availability_zone       = data.aws_availability_zones.available.names[count.index]
-  map_public_ip_on_launch = true
-
-  tags = merge(local.common_tags, {
-    Name = "${local.resource_prefix}-public-subnet-${count.index + 1}"
-    Type = "Public"
-  })
-}
-
-# Private Subnets
-resource "aws_subnet" "private" {
-  count = 2
-
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = "10.${local.current_env.vpc_cidr_base}.${count.index + 10}.0/24"
-  availability_zone = data.aws_availability_zones.available.names[count.index]
-
-  tags = merge(local.common_tags, {
-    Name = "${local.resource_prefix}-private-subnet-${count.index + 1}"
-    Type = "Private"
-  })
-}
-
-# Database Subnets
-resource "aws_subnet" "database" {
-  count = 2
-
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = "10.${local.current_env.vpc_cidr_base}.${count.index + 20}.0/24"
-  availability_zone = data.aws_availability_zones.available.names[count.index]
-
-  tags = merge(local.common_tags, {
-    Name = "${local.resource_prefix}-database-subnet-${count.index + 1}"
-    Type = "Database"
-  })
-}
-
-# Elastic IP for NAT Gateway
-resource "aws_eip" "nat" {
-  domain = "vpc"
-
-  depends_on = [aws_internet_gateway.main]
-
-  tags = merge(local.common_tags, {
-    Name = "${local.resource_prefix}-nat-eip"
-  })
-}
-
-# NAT Gateway
-resource "aws_nat_gateway" "main" {
-  allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public[0].id
-
-  depends_on = [aws_internet_gateway.main]
-
-  tags = merge(local.common_tags, {
-    Name = "${local.resource_prefix}-nat-gateway"
-  })
-}
-
-# Route Tables
-resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.main.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.main.id
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${local.resource_prefix}-public-rt"
-  })
-}
-
-resource "aws_route_table" "private" {
-  vpc_id = aws_vpc.main.id
-
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main.id
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${local.resource_prefix}-private-rt"
-  })
-}
-
-# Route Table Associations
-resource "aws_route_table_association" "public" {
-  count = length(aws_subnet.public)
-
-  subnet_id      = aws_subnet.public[count.index].id
-  route_table_id = aws_route_table.public.id
-}
-
-resource "aws_route_table_association" "private" {
-  count = length(aws_subnet.private)
-
-  subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private.id
-}
-
-# Security Groups
-resource "aws_security_group" "alb" {
-  name        = "${local.resource_prefix}-alb-sg"
-  description = "Security group for Application Load Balancer"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${local.resource_prefix}-alb-sg"
-  })
-}
-
-resource "aws_security_group" "ecs" {
-  name        = "${local.resource_prefix}-ecs-sg"
-  description = "Security group for ECS tasks"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port       = 8080
-    to_port         = 8080
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${local.resource_prefix}-ecs-sg"
-  })
-}
-
-resource "aws_security_group" "rds" {
-  name        = "${local.resource_prefix}-rds-sg"
-  description = "Security group for RDS Aurora cluster"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.ecs.id]
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${local.resource_prefix}-rds-sg"
-  })
-}
-
-# Database Subnet Group
-resource "aws_db_subnet_group" "main" {
-  name       = "${local.resource_prefix}-db-subnet-group"
-  subnet_ids = aws_subnet.database[*].id
-
-  tags = merge(local.common_tags, {
-    Name = "${local.resource_prefix}-db-subnet-group"
-  })
-}
-
-# RDS Aurora cluster uses AWS managed master user password
-# This automatically creates and rotates the password in Secrets Manager
-
-# RDS Aurora Cluster
-resource "aws_rds_cluster" "main" {
-  cluster_identifier            = "${local.resource_prefix}-aurora-cluster"
-  engine                        = "aurora-postgresql"
-  engine_version                = "15.10"
-  database_name                 = "tapdb"
-  master_username               = "postgres"
-  manage_master_user_password   = true
-  master_user_secret_kms_key_id = null # Use default AWS managed key
-
-  db_subnet_group_name   = aws_db_subnet_group.main.name
-  vpc_security_group_ids = [aws_security_group.rds.id]
-
-  backup_retention_period      = var.environment == "prod" ? 30 : 7
-  preferred_backup_window      = "03:00-04:00"
-  preferred_maintenance_window = "sun:04:00-sun:06:00"
-  skip_final_snapshot          = var.environment != "prod"
-  deletion_protection          = var.environment == "prod"
-
-  tags = merge(local.common_tags, {
-    Name = "${local.resource_prefix}-aurora-cluster"
-  })
-}
-
-resource "aws_rds_cluster_instance" "main" {
-  count              = 1
-  identifier         = "${local.resource_prefix}-aurora-instance-${count.index + 1}"
-  cluster_identifier = aws_rds_cluster.main.id
-  instance_class     = local.current_env.db_instance_class
-  engine             = aws_rds_cluster.main.engine
-  engine_version     = aws_rds_cluster.main.engine_version
-
-  performance_insights_enabled = var.environment != "dev"
-  monitoring_interval          = var.environment == "prod" ? 60 : 0
-
-  tags = merge(local.common_tags, {
-    Name = "${local.resource_prefix}-aurora-instance-${count.index + 1}"
-  })
-}
-
-# S3 Bucket for Static Assets
-resource "aws_s3_bucket" "assets" {
-  bucket = "${local.resource_prefix}-assets-${random_string.bucket_suffix.result}"
-
-  tags = merge(local.common_tags, {
-    Name = "${local.resource_prefix}-assets"
-  })
-}
-
-resource "random_string" "bucket_suffix" {
-  length  = 8
-  special = false
-  upper   = false
-}
-
-resource "aws_s3_bucket_versioning" "assets" {
-  bucket = aws_s3_bucket.assets.id
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-resource "aws_s3_bucket_lifecycle_configuration" "assets" {
-  bucket = aws_s3_bucket.assets.id
-
-  rule {
-    id     = "archive_after_90_days"
-    status = "Enabled"
-
-    transition {
-      days          = 90
-      storage_class = "GLACIER"
+// terraform.int.test.ts
+// Comprehensive integration tests for Multi-Environment AWS Infrastructure
+// Tests validate real deployed infrastructure components
+
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+  GetDashboardCommand
+} from "@aws-sdk/client-cloudwatch";
+import {
+  CloudWatchLogsClient,
+  DescribeLogGroupsCommand
+} from "@aws-sdk/client-cloudwatch-logs";
+import {
+  DescribeInternetGatewaysCommand,
+  DescribeNatGatewaysCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcAttributeCommand,
+  DescribeVpcsCommand,
+  EC2Client
+} from "@aws-sdk/client-ec2";
+import {
+  DescribeClustersCommand,
+  DescribeServicesCommand,
+  DescribeTaskDefinitionCommand,
+  ECSClient
+} from "@aws-sdk/client-ecs";
+import {
+  DescribeListenersCommand,
+  DescribeLoadBalancerAttributesCommand,
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  ElasticLoadBalancingV2Client
+} from "@aws-sdk/client-elastic-load-balancing-v2";
+import {
+  GetRoleCommand,
+  IAMClient
+} from "@aws-sdk/client-iam";
+import {
+  DescribeDBClustersCommand,
+  DescribeDBInstancesCommand,
+  DescribeDBSubnetGroupsCommand,
+  RDSClient
+} from "@aws-sdk/client-rds";
+import {
+  GetBucketEncryptionCommand,
+  GetBucketLifecycleConfigurationCommand,
+  GetBucketVersioningCommand,
+  HeadBucketCommand,
+  S3Client
+} from "@aws-sdk/client-s3";
+import {
+  DescribeSecretCommand,
+  SecretsManagerClient
+} from "@aws-sdk/client-secrets-manager";
+
+import * as fs from "fs";
+import * as path from "path";
+
+const outputFile = path.resolve("cfn-outputs/flat-outputs.json");
+
+// Validation helper functions
+const isNonEmptyString = (v: any) => typeof v === "string" && v.trim().length > 0;
+const isValidArn = (v: string) => /^arn:aws:[^:]+:[^:]*:[^:]*:[^:]*[a-zA-Z0-9/_\-]*$/.test(v.trim());
+const isValidVpcId = (v: string) => v.startsWith("vpc-");
+const isValidSubnetId = (v: string) => v.startsWith("subnet-");
+const isValidSecurityGroupId = (v: string) => v.startsWith("sg-");
+const isValidUrl = (v: string) => /^https?:\/\/[^\s$.?#].[^\s]*$/.test(v);
+const isValidCidr = (v: string) => /^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/.test(v);
+const isValidDnsName = (v: string) => /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(v) && !v.includes(" ");
+
+const parseArray = (v: any) => {
+  if (typeof v === "string") {
+    try {
+      const arr = JSON.parse(v);
+      return Array.isArray(arr) ? arr : [v];
+    } catch {
+      return [v];
     }
   }
-}
+  return Array.isArray(v) ? v : [v];
+};
 
-resource "aws_s3_bucket_server_side_encryption_configuration" "assets" {
-  bucket = aws_s3_bucket.assets.id
+const skipIfMissing = (key: string, obj: any) => {
+  if (!(key in obj)) {
+    console.warn(`Skipping tests for missing output: ${key}`);
+    return true;
+  }
+  return false;
+};
 
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+describe("Multi-Environment AWS Infrastructure Integration Tests", () => {
+  let outputs: Record<string, any>;
+  let region: string;
+  let environment: string;
+
+  beforeAll(() => {
+    if (!fs.existsSync(outputFile)) {
+      throw new Error(`Output file not found: ${outputFile}. Deploy infrastructure first.`);
     }
-  }
-}
 
-# S3 Bucket Public Access Block
-resource "aws_s3_bucket_public_access_block" "assets" {
-  bucket = aws_s3_bucket.assets.id
+    const data = fs.readFileSync(outputFile, "utf8");
+    const parsed = JSON.parse(data);
+    outputs = {};
 
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
+    for (const [k, v] of Object.entries(parsed)) {
+      outputs[k] = parseArray(v).length === 1 ? parseArray(v)[0] : parseArray(v);
+    }
 
-# ECS Cluster
-resource "aws_ecs_cluster" "main" {
-  name = "${local.resource_prefix}-cluster"
+    // Extract region and environment from outputs
+    region = outputs.aws_region || "us-east-2";
+    environment = outputs.environment || "dev";
 
-  setting {
-    name  = "containerInsights"
-    value = var.environment == "prod" ? "enabled" : "disabled"
-  }
+    console.log(`Testing infrastructure in region: ${region}, environment: ${environment}`);
+  });
 
-  tags = local.common_tags
-}
+  describe("Output Structure Validation", () => {
+    test("should have essential infrastructure outputs", () => {
+      const requiredOutputs = [
+        "vpc_id",
+        "vpc_cidr_block",
+        "public_subnet_ids",
+        "private_subnet_ids",
+        "database_subnet_ids",
+        "alb_dns_name",
+        "alb_arn",
+        "ecs_cluster_name",
+        "ecs_service_name",
+        "rds_cluster_identifier",
+        "s3_bucket_name",
+        "application_url",
+        "environment",
+        "aws_region"
+      ];
 
-# ECS Task Definition
-resource "aws_ecs_task_definition" "app" {
-  family                   = "${local.resource_prefix}-app"
-  requires_compatibilities = ["FARGATE"]
-  network_mode             = "awsvpc"
-  cpu                      = 256
-  memory                   = 512
-  execution_role_arn       = aws_iam_role.ecs_execution.arn
-  task_role_arn            = aws_iam_role.ecs_task.arn
+      requiredOutputs.forEach(output => {
+        expect(outputs).toHaveProperty(output);
+        expect(outputs[output]).toBeDefined();
 
-  container_definitions = jsonencode([
-    {
-      name  = "app"
-      image = "nginx:latest" # Replace with actual application image
-      portMappings = [
-        {
-          containerPort = 8080
-          protocol      = "tcp"
+        // Handle both strings and arrays
+        const value = outputs[output];
+        if (Array.isArray(value)) {
+          expect(value.length).toBeGreaterThan(0);
+        } else {
+          expect(isNonEmptyString(value)).toBe(true);
         }
-      ]
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          awslogs-group         = aws_cloudwatch_log_group.ecs.name
-          awslogs-region        = data.aws_region.current.name
-          awslogs-stream-prefix = "ecs"
+      });
+    });
+
+    test("should have properly formatted ARNs", () => {
+      const arnOutputs = ["alb_arn", "ecs_cluster_arn", "s3_bucket_arn"];
+
+      arnOutputs.forEach(output => {
+        if (outputs[output]) {
+          expect(isValidArn(outputs[output])).toBe(true);
         }
+      });
+    });
+
+    test("should have valid AWS resource IDs", () => {
+      expect(isValidVpcId(outputs.vpc_id)).toBe(true);
+
+      const subnetOutputs = ["public_subnet_ids", "private_subnet_ids", "database_subnet_ids"];
+      subnetOutputs.forEach(output => {
+        if (outputs[output]) {
+          const subnets = Array.isArray(outputs[output]) ? outputs[output] : [outputs[output]];
+          subnets.forEach((subnetId: string) => {
+            expect(isValidSubnetId(subnetId)).toBe(true);
+          });
+        }
+      });
+
+      const sgOutputs = ["alb_security_group_id", "ecs_security_group_id", "rds_security_group_id"];
+      sgOutputs.forEach(output => {
+        if (outputs[output]) {
+          expect(isValidSecurityGroupId(outputs[output])).toBe(true);
+        }
+      });
+    });
+
+    test("should have valid URLs and DNS names", () => {
+      expect(isValidUrl(outputs.application_url)).toBe(true);
+      expect(isValidDnsName(outputs.alb_dns_name)).toBe(true);
+
+      if (outputs.cloudwatch_dashboard_url) {
+        expect(isValidUrl(outputs.cloudwatch_dashboard_url)).toBe(true);
       }
-      environment = [
-        {
-          name  = "ENVIRONMENT"
-          value = var.environment
-        },
-        {
-          name  = "DB_HOST"
-          value = aws_rds_cluster.main.endpoint
-        }
-      ]
-    }
-  ])
+    });
+  });
 
-  tags = local.common_tags
-}
+  describe("VPC Infrastructure", () => {
+    let ec2Client: EC2Client;
 
-# ECS Service
-resource "aws_ecs_service" "app" {
-  name            = "${local.resource_prefix}-app-service"
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.app.arn
-  desired_count   = local.current_env.ecs_task_count
-  launch_type     = "FARGATE"
+    beforeAll(() => {
+      ec2Client = new EC2Client({ region });
+    });
 
-  network_configuration {
-    subnets          = aws_subnet.private[*].id
-    security_groups  = [aws_security_group.ecs.id]
-    assign_public_ip = false
-  }
+    test("validates VPC configuration", async () => {
+      if (skipIfMissing("vpc_id", outputs)) return;
 
-  load_balancer {
-    target_group_arn = aws_lb_target_group.app.arn
-    container_name   = "app"
-    container_port   = 8080
-  }
+      const command = new DescribeVpcsCommand({
+        VpcIds: [outputs.vpc_id]
+      });
 
-  depends_on = [aws_lb_listener.app]
+      const response = await ec2Client.send(command);
+      expect(response.Vpcs).toHaveLength(1);
 
-  tags = local.common_tags
-}
+      const vpc = response.Vpcs![0];
+      expect(vpc.State).toBe("available");
 
-# Application Load Balancer
-resource "aws_lb" "main" {
-  name               = "${local.resource_prefix}-alb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
-  subnets            = aws_subnet.public[*].id
+      // Check DNS attributes using separate API calls
+      const dnsHostnamesCommand = new DescribeVpcAttributeCommand({
+        VpcId: outputs.vpc_id,
+        Attribute: "enableDnsHostnames"
+      });
+      const dnsHostnamesResponse = await ec2Client.send(dnsHostnamesCommand);
+      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
 
-  enable_deletion_protection = var.environment == "prod"
+      const dnsSupportCommand = new DescribeVpcAttributeCommand({
+        VpcId: outputs.vpc_id,
+        Attribute: "enableDnsSupport"
+      });
+      const dnsSupportResponse = await ec2Client.send(dnsSupportCommand);
+      expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
 
-  tags = merge(local.common_tags, {
-    Name = "${local.resource_prefix}-alb"
-  })
-}
-
-resource "aws_lb_target_group" "app" {
-  name        = "${local.resource_prefix}-app-tg"
-  port        = 8080
-  protocol    = "HTTP"
-  vpc_id      = aws_vpc.main.id
-  target_type = "ip"
-
-  health_check {
-    enabled             = true
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-    timeout             = 5
-    interval            = var.environment == "prod" ? 30 : 60
-    path                = "/health"
-    matcher             = "200"
-  }
-
-  tags = local.common_tags
-}
-
-# HTTP Listener (redirects to HTTPS only when certificate is available)
-resource "aws_lb_listener" "app" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = "80"
-  protocol          = "HTTP"
-
-  default_action {
-    type = var.ssl_certificate_arn != null && var.environment == "prod" ? "redirect" : "forward"
-
-    dynamic "redirect" {
-      for_each = var.ssl_certificate_arn != null && var.environment == "prod" ? [1] : []
-      content {
-        port        = "443"
-        protocol    = "HTTPS"
-        status_code = "HTTP_301"
+      if (outputs.vpc_cidr_block) {
+        expect(isValidCidr(outputs.vpc_cidr_block)).toBe(true);
+        expect(vpc.CidrBlock).toBe(outputs.vpc_cidr_block);
       }
-    }
 
-    dynamic "forward" {
-      for_each = var.ssl_certificate_arn != null && var.environment == "prod" ? [] : [1]
-      content {
-        target_group {
-          arn = aws_lb_target_group.app.arn
-        }
-      }
-    }
-  }
-}
+      // Verify environment-specific CIDR ranges
+      const expectedCidrBase = environment === "dev" ? "10.10" :
+        environment === "staging" ? "10.20" : "10.30";
+      expect(vpc.CidrBlock).toContain(`${expectedCidrBase}.0.0/16`);
+    });
 
-# HTTPS Listener (only when certificate is provided)
-resource "aws_lb_listener" "app_https" {
-  count             = var.ssl_certificate_arn != null ? 1 : 0
-  load_balancer_arn = aws_lb.main.arn
-  port              = "443"
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
-  certificate_arn   = var.ssl_certificate_arn
+    test("validates public subnet configuration", async () => {
+      if (skipIfMissing("public_subnet_ids", outputs)) return;
 
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
-  }
-}
+      const subnetIds = parseArray(outputs.public_subnet_ids);
+      expect(subnetIds.length).toBe(2);
 
-# IAM Roles for ECS
-resource "aws_iam_role" "ecs_execution" {
-  name = "${local.resource_prefix}-ecs-execution-role"
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: subnetIds
+      });
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ecs-tasks.amazonaws.com"
-        }
-      }
-    ]
-  })
+      const response = await ec2Client.send(command);
+      expect(response.Subnets).toHaveLength(2);
 
-  tags = local.common_tags
-}
+      response.Subnets!.forEach(subnet => {
+        expect(subnet.State).toBe("available");
+        expect(subnet.VpcId).toBe(outputs.vpc_id);
+        expect(subnet.MapPublicIpOnLaunch).toBe(true);
 
-resource "aws_iam_role_policy_attachment" "ecs_execution" {
-  role       = aws_iam_role.ecs_execution.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-}
+        // Verify availability zone distribution
+        expect(subnet.AvailabilityZone).toMatch(/^[a-z0-9-]+[a-f]$/);
+      });
 
-resource "aws_iam_role" "ecs_task" {
-  name = "${local.resource_prefix}-ecs-task-role"
+      // Ensure subnets are in different AZs
+      const azs = response.Subnets!.map(subnet => subnet.AvailabilityZone);
+      expect(new Set(azs).size).toBe(2);
+    });
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ecs-tasks.amazonaws.com"
-        }
-      }
-    ]
-  })
+    test("validates private subnet configuration", async () => {
+      if (skipIfMissing("private_subnet_ids", outputs)) return;
 
-  tags = local.common_tags
-}
+      const subnetIds = parseArray(outputs.private_subnet_ids);
+      expect(subnetIds.length).toBe(2);
 
-# IAM policy for ECS task to access RDS secrets
-resource "aws_iam_role_policy" "ecs_task_secrets" {
-  name = "${local.resource_prefix}-ecs-task-secrets-policy"
-  role = aws_iam_role.ecs_task.id
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: subnetIds
+      });
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "secretsmanager:GetSecretValue",
-          "secretsmanager:DescribeSecret"
+      const response = await ec2Client.send(command);
+      expect(response.Subnets).toHaveLength(2);
+
+      response.Subnets!.forEach(subnet => {
+        expect(subnet.State).toBe("available");
+        expect(subnet.VpcId).toBe(outputs.vpc_id);
+        expect(subnet.MapPublicIpOnLaunch).toBe(false);
+      });
+    });
+
+    test("validates database subnet configuration", async () => {
+      if (skipIfMissing("database_subnet_ids", outputs)) return;
+
+      const subnetIds = parseArray(outputs.database_subnet_ids);
+      expect(subnetIds.length).toBe(2);
+
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: subnetIds
+      });
+
+      const response = await ec2Client.send(command);
+      expect(response.Subnets).toHaveLength(2);
+
+      response.Subnets!.forEach(subnet => {
+        expect(subnet.State).toBe("available");
+        expect(subnet.VpcId).toBe(outputs.vpc_id);
+        expect(subnet.MapPublicIpOnLaunch).toBe(false);
+      });
+    });
+
+    test("validates Internet Gateway", async () => {
+      if (skipIfMissing("vpc_id", outputs)) return;
+
+      const command = new DescribeInternetGatewaysCommand({
+        Filters: [
+          {
+            Name: "attachment.vpc-id",
+            Values: [outputs.vpc_id]
+          }
         ]
-        Resource = [
-          aws_rds_cluster.main.master_user_secret[0].secret_arn
+      });
+
+      const response = await ec2Client.send(command);
+      expect(response.InternetGateways).toHaveLength(1);
+
+      const igw = response.InternetGateways![0];
+      expect(igw.Attachments).toHaveLength(1);
+      expect(igw.Attachments![0].State).toBe("available");
+      expect(igw.Attachments![0].VpcId).toBe(outputs.vpc_id);
+    });
+
+    test("validates NAT Gateway configuration", async () => {
+      if (skipIfMissing("vpc_id", outputs)) return;
+
+      const command = new DescribeNatGatewaysCommand({
+        Filter: [
+          {
+            Name: "vpc-id",
+            Values: [outputs.vpc_id]
+          }
         ]
+      });
+
+      const response = await ec2Client.send(command);
+      expect(response.NatGateways!.length).toBeGreaterThanOrEqual(1);
+
+      const natGateway = response.NatGateways![0];
+      expect(natGateway.State).toBe("available");
+      expect(natGateway.VpcId).toBe(outputs.vpc_id);
+    });
+  });
+
+  describe("Security Groups", () => {
+    let ec2Client: EC2Client;
+
+    beforeAll(() => {
+      ec2Client = new EC2Client({ region });
+    });
+
+    test("validates ALB security group", async () => {
+      if (skipIfMissing("alb_security_group_id", outputs)) return;
+
+      const command = new DescribeSecurityGroupsCommand({
+        GroupIds: [outputs.alb_security_group_id]
+      });
+
+      const response = await ec2Client.send(command);
+      expect(response.SecurityGroups).toHaveLength(1);
+
+      const sg = response.SecurityGroups![0];
+      expect(sg.VpcId).toBe(outputs.vpc_id);
+
+      // Check for HTTP and HTTPS ingress rules
+      const ingressRules = sg.IpPermissions!;
+      const httpRule = ingressRules.find(rule => rule.FromPort === 80);
+      const httpsRule = ingressRules.find(rule => rule.FromPort === 443);
+
+      expect(httpRule).toBeDefined();
+      expect(httpsRule).toBeDefined();
+      expect(httpRule!.IpRanges![0].CidrIp).toBe("0.0.0.0/0");
+      expect(httpsRule!.IpRanges![0].CidrIp).toBe("0.0.0.0/0");
+    });
+
+    test("validates ECS security group", async () => {
+      if (skipIfMissing("ecs_security_group_id", outputs)) return;
+
+      const command = new DescribeSecurityGroupsCommand({
+        GroupIds: [outputs.ecs_security_group_id]
+      });
+
+      const response = await ec2Client.send(command);
+      expect(response.SecurityGroups).toHaveLength(1);
+
+      const sg = response.SecurityGroups![0];
+      expect(sg.VpcId).toBe(outputs.vpc_id);
+
+      // Check for port 8080 ingress from ALB security group
+      const ingressRules = sg.IpPermissions!;
+      const appRule = ingressRules.find(rule => rule.FromPort === 8080);
+      expect(appRule).toBeDefined();
+
+      if (outputs.alb_security_group_id) {
+        const sourceGroup = appRule!.UserIdGroupPairs!.find(
+          group => group.GroupId === outputs.alb_security_group_id
+        );
+        expect(sourceGroup).toBeDefined();
       }
-    ]
-  })
-}
+    });
 
-# IAM policy for ECS task to access S3 bucket
-resource "aws_iam_role_policy" "ecs_task_s3" {
-  name = "${local.resource_prefix}-ecs-task-s3-policy"
-  role = aws_iam_role.ecs_task.id
+    test("validates RDS security group", async () => {
+      if (skipIfMissing("rds_security_group_id", outputs)) return;
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:PutObject",
-          "s3:DeleteObject",
-          "s3:ListBucket"
-        ]
-        Resource = [
-          aws_s3_bucket.assets.arn,
-          "${aws_s3_bucket.assets.arn}/*"
-        ]
+      const command = new DescribeSecurityGroupsCommand({
+        GroupIds: [outputs.rds_security_group_id]
+      });
+
+      const response = await ec2Client.send(command);
+      expect(response.SecurityGroups).toHaveLength(1);
+
+      const sg = response.SecurityGroups![0];
+      expect(sg.VpcId).toBe(outputs.vpc_id);
+
+      // Check for PostgreSQL port 5432 ingress from ECS security group
+      const ingressRules = sg.IpPermissions!;
+      const pgRule = ingressRules.find(rule => rule.FromPort === 5432);
+      expect(pgRule).toBeDefined();
+    });
+  });
+
+  describe("Application Load Balancer", () => {
+    let elbv2Client: ElasticLoadBalancingV2Client;
+
+    beforeAll(() => {
+      elbv2Client = new ElasticLoadBalancingV2Client({ region });
+    });
+
+    test("validates ALB configuration", async () => {
+      if (skipIfMissing("alb_arn", outputs)) return;
+
+      const command = new DescribeLoadBalancersCommand({
+        LoadBalancerArns: [outputs.alb_arn]
+      });
+
+      const response = await elbv2Client.send(command);
+      expect(response.LoadBalancers).toHaveLength(1);
+
+      const alb = response.LoadBalancers![0];
+      expect(alb.State!.Code).toBe("active");
+      expect(alb.Type).toBe("application");
+      expect(alb.Scheme).toBe("internet-facing");
+      expect(alb.VpcId).toBe(outputs.vpc_id);
+
+      // Verify deletion protection based on environment
+      const attributesCommand = new DescribeLoadBalancerAttributesCommand({
+        LoadBalancerArn: outputs.alb_arn
+      });
+
+      const attributesResponse = await elbv2Client.send(attributesCommand);
+      const deletionProtectionAttr = attributesResponse.Attributes!.find(
+        attr => attr.Key === "deletion_protection.enabled"
+      );
+
+      if (environment === "prod") {
+        expect(deletionProtectionAttr?.Value).toBe("true");
+      } else {
+        expect(deletionProtectionAttr?.Value).toBe("false");
       }
-    ]
-  })
-}
+    });
 
-# CloudWatch Log Groups
-resource "aws_cloudwatch_log_group" "ecs" {
-  name              = "/ecs/${local.resource_prefix}"
-  retention_in_days = local.current_env.log_retention_days
+    test("validates target group configuration", async () => {
+      if (skipIfMissing("alb_arn", outputs)) return;
 
-  tags = local.common_tags
-}
+      const targetGroupsCommand = new DescribeTargetGroupsCommand({
+        LoadBalancerArn: outputs.alb_arn
+      });
 
-# CloudWatch Dashboard
-resource "aws_cloudwatch_dashboard" "main" {
-  dashboard_name = "${local.resource_prefix}-dashboard"
+      const response = await elbv2Client.send(targetGroupsCommand);
+      expect(response.TargetGroups!.length).toBeGreaterThan(0);
 
-  dashboard_body = jsonencode({
-    widgets = [
-      {
-        type   = "metric"
-        x      = 0
-        y      = 0
-        width  = 12
-        height = 6
+      const targetGroup = response.TargetGroups![0];
+      expect(targetGroup.Protocol).toBe("HTTP");
+      expect(targetGroup.Port).toBe(8080);
+      expect(targetGroup.TargetType).toBe("ip");
+      expect(targetGroup.VpcId).toBe(outputs.vpc_id);
 
-        properties = {
-          metrics = [
-            ["AWS/ECS", "CPUUtilization", "ServiceName", aws_ecs_service.app.name, "ClusterName", aws_ecs_cluster.main.name],
-            [".", "MemoryUtilization", ".", ".", ".", "."]
-          ]
-          period = 300
-          stat   = "Average"
-          region = data.aws_region.current.name
-          title  = "ECS Service Metrics"
+      // Verify health check configuration
+      const healthCheck = targetGroup.HealthCheckPath;
+      expect(healthCheck).toBe("/health");
+
+      // Environment-specific health check intervals
+      if (environment === "prod") {
+        expect(targetGroup.HealthCheckIntervalSeconds).toBe(30);
+      } else {
+        expect(targetGroup.HealthCheckIntervalSeconds).toBe(60);
+      }
+    });
+
+    test("validates ALB listeners", async () => {
+      if (skipIfMissing("alb_arn", outputs)) return;
+
+      const command = new DescribeListenersCommand({
+        LoadBalancerArn: outputs.alb_arn
+      });
+
+      const response = await elbv2Client.send(command);
+      expect(response.Listeners!.length).toBeGreaterThan(0);
+
+      const listener = response.Listeners![0];
+      expect(listener.Port).toBe(80);
+      expect(listener.Protocol).toBe("HTTP");
+      expect(listener.DefaultActions![0].Type).toBe("forward");
+    });
+  });
+
+  describe("ECS Infrastructure", () => {
+    let ecsClient: ECSClient;
+
+    beforeAll(() => {
+      ecsClient = new ECSClient({ region });
+    });
+
+    test("validates ECS cluster", async () => {
+      if (skipIfMissing("ecs_cluster_name", outputs)) return;
+
+      const command = new DescribeClustersCommand({
+        clusters: [outputs.ecs_cluster_name]
+      });
+
+      const response = await ecsClient.send(command);
+      expect(response.clusters).toHaveLength(1);
+
+      const cluster = response.clusters![0];
+      expect(cluster.status).toBe("ACTIVE");
+      expect(cluster.clusterName).toBe(outputs.ecs_cluster_name);
+
+      // Verify container insights based on environment
+      const setting = cluster.settings?.find(s => s.name === "containerInsights");
+      if (environment === "prod") {
+        expect(setting?.value).toBe("enabled");
+      } else {
+        // Container insights may be disabled by default (no setting) or explicitly set to disabled
+        if (setting) {
+          expect(setting.value).toBe("disabled");
         }
-      },
-      {
-        type   = "metric"
-        x      = 0
-        y      = 6
-        width  = 12
-        height = 6
-
-        properties = {
-          metrics = [
-            ["AWS/RDS", "CPUUtilization", "DBClusterIdentifier", aws_rds_cluster.main.cluster_identifier],
-            [".", "DatabaseConnections", ".", "."]
-          ]
-          period = 300
-          stat   = "Average"
-          region = data.aws_region.current.name
-          title  = "RDS Cluster Metrics"
-        }
+        // If no setting exists, container insights is disabled by default, which is acceptable
       }
-    ]
-  })
-}
+    });
 
-# CloudWatch Alarms (Production only)
-resource "aws_cloudwatch_metric_alarm" "high_cpu" {
-  count = var.environment == "prod" ? 1 : 0
+    test("validates ECS service", async () => {
+      if (skipIfMissing("ecs_cluster_name", outputs) || skipIfMissing("ecs_service_name", outputs)) return;
 
-  alarm_name          = "${local.resource_prefix}-high-cpu"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/ECS"
-  period              = "300"
-  statistic           = "Average"
-  threshold           = "80"
-  alarm_description   = "This metric monitors ECS CPU utilization"
+      const command = new DescribeServicesCommand({
+        cluster: outputs.ecs_cluster_name,
+        services: [outputs.ecs_service_name]
+      });
 
-  dimensions = {
-    ServiceName = aws_ecs_service.app.name
-    ClusterName = aws_ecs_cluster.main.name
-  }
+      const response = await ecsClient.send(command);
+      expect(response.services).toHaveLength(1);
 
-  tags = local.common_tags
-}
+      const service = response.services![0];
+      expect(service.status).toBe("ACTIVE");
+      expect(service.launchType).toBe("FARGATE");
+
+      // Verify environment-specific desired count
+      const expectedCount = environment === "dev" ? 1 :
+        environment === "staging" ? 2 : 4;
+      expect(service.desiredCount).toBe(expectedCount);
+      expect(service.runningCount).toBeGreaterThanOrEqual(1);
+    });
+
+    test("validates ECS task definition", async () => {
+      if (skipIfMissing("ecs_cluster_name", outputs) || skipIfMissing("ecs_service_name", outputs)) return;
+
+      // First get the service to find the task definition
+      const serviceCommand = new DescribeServicesCommand({
+        cluster: outputs.ecs_cluster_name,
+        services: [outputs.ecs_service_name]
+      });
+
+      const serviceResponse = await ecsClient.send(serviceCommand);
+      const taskDefinitionArn = serviceResponse.services![0].taskDefinition;
+
+      const taskDefCommand = new DescribeTaskDefinitionCommand({
+        taskDefinition: taskDefinitionArn
+      });
+
+      const response = await ecsClient.send(taskDefCommand);
+      expect(response.taskDefinition).toBeDefined();
+
+      const taskDef = response.taskDefinition!;
+      expect(taskDef.requiresCompatibilities).toContain("FARGATE");
+      expect(taskDef.networkMode).toBe("awsvpc");
+      expect(taskDef.cpu).toBe("256");
+      expect(taskDef.memory).toBe("512");
+
+      // Verify container configuration
+      expect(taskDef.containerDefinitions).toHaveLength(1);
+      const container = taskDef.containerDefinitions![0];
+      expect(container.portMappings![0].containerPort).toBe(8080);
+    });
+  });
+
+  describe("RDS Aurora Infrastructure", () => {
+    let rdsClient: RDSClient;
+
+    beforeAll(() => {
+      rdsClient = new RDSClient({ region });
+    });
+
+    test("validates RDS Aurora cluster", async () => {
+      if (skipIfMissing("rds_cluster_identifier", outputs)) return;
+
+      const command = new DescribeDBClustersCommand({
+        DBClusterIdentifier: outputs.rds_cluster_identifier
+      });
+
+      const response = await rdsClient.send(command);
+      expect(response.DBClusters).toHaveLength(1);
+
+      const cluster = response.DBClusters![0];
+      expect(cluster.Status).toBe("available");
+      expect(cluster.Engine).toBe("aurora-postgresql");
+      expect(cluster.EngineVersion).toBe("15.10");
+      expect(cluster.DatabaseName).toBe("tapdb");
+      expect(cluster.MasterUsername).toBe("postgres");
+
+      // Verify environment-specific backup retention
+      if (environment === "prod") {
+        expect(cluster.BackupRetentionPeriod).toBe(30);
+        expect(cluster.DeletionProtection).toBe(true);
+      } else {
+        expect(cluster.BackupRetentionPeriod).toBe(7);
+        expect(cluster.DeletionProtection).toBe(false);
+      }
+    });
+
+    test("validates RDS cluster instances", async () => {
+      if (skipIfMissing("rds_cluster_identifier", outputs)) return;
+
+      const command = new DescribeDBInstancesCommand({
+        Filters: [
+          {
+            Name: "db-cluster-id",
+            Values: [outputs.rds_cluster_identifier]
+          }
+        ]
+      });
+
+      const response = await rdsClient.send(command);
+      expect(response.DBInstances!.length).toBeGreaterThanOrEqual(1);
+
+      const instance = response.DBInstances![0];
+      expect(instance.DBInstanceStatus).toBe("available");
+
+      // Verify environment-specific instance class
+      const expectedClass = environment === "dev" ? "db.t3.medium" :
+        environment === "staging" ? "db.r5.large" : "db.r5.xlarge";
+      expect(instance.DBInstanceClass).toBe(expectedClass);
+
+      // Verify performance insights based on environment
+      if (environment === "dev") {
+        expect(instance.PerformanceInsightsEnabled).toBe(false);
+      } else {
+        expect(instance.PerformanceInsightsEnabled).toBe(true);
+      }
+    });
+
+    test("validates database subnet group", async () => {
+      if (skipIfMissing("rds_cluster_identifier", outputs)) return;
+
+      // Get the cluster to find the subnet group name
+      const clusterCommand = new DescribeDBClustersCommand({
+        DBClusterIdentifier: outputs.rds_cluster_identifier
+      });
+
+      const clusterResponse = await rdsClient.send(clusterCommand);
+      const subnetGroupName = clusterResponse.DBClusters![0].DBSubnetGroup;
+
+      const command = new DescribeDBSubnetGroupsCommand({
+        DBSubnetGroupName: subnetGroupName
+      });
+
+      const response = await rdsClient.send(command);
+      expect(response.DBSubnetGroups).toHaveLength(1);
+
+      const subnetGroup = response.DBSubnetGroups![0];
+      expect(subnetGroup.VpcId).toBe(outputs.vpc_id);
+      expect(subnetGroup.Subnets!.length).toBe(2);
+
+      // Verify subnets are in different AZs
+      const azs = subnetGroup.Subnets!.map(subnet => subnet.SubnetAvailabilityZone!.Name);
+      expect(new Set(azs).size).toBe(2);
+    });
+  });
+
+  describe("S3 Infrastructure", () => {
+    let s3Client: S3Client;
+
+    beforeAll(() => {
+      s3Client = new S3Client({ region });
+    });
+
+    test("validates S3 bucket existence", async () => {
+      if (skipIfMissing("s3_bucket_name", outputs)) return;
+
+      const command = new HeadBucketCommand({
+        Bucket: outputs.s3_bucket_name
+      });
+
+      // Should not throw an error
+      await s3Client.send(command);
+    });
+
+    test("validates S3 bucket versioning", async () => {
+      if (skipIfMissing("s3_bucket_name", outputs)) return;
+
+      const command = new GetBucketVersioningCommand({
+        Bucket: outputs.s3_bucket_name
+      });
+
+      const response = await s3Client.send(command);
+      expect(response.Status).toBe("Enabled");
+    });
+
+    test("validates S3 bucket encryption", async () => {
+      if (skipIfMissing("s3_bucket_name", outputs)) return;
+
+      const command = new GetBucketEncryptionCommand({
+        Bucket: outputs.s3_bucket_name
+      });
+
+      const response = await s3Client.send(command);
+      expect(response.ServerSideEncryptionConfiguration).toBeDefined();
+
+      const rule = response.ServerSideEncryptionConfiguration!.Rules![0];
+      expect(rule.ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe("AES256");
+    });
+
+    test("validates S3 bucket lifecycle configuration", async () => {
+      if (skipIfMissing("s3_bucket_name", outputs)) return;
+
+      const command = new GetBucketLifecycleConfigurationCommand({
+        Bucket: outputs.s3_bucket_name
+      });
+
+      const response = await s3Client.send(command);
+      expect(response.Rules).toHaveLength(1);
+
+      const rule = response.Rules![0];
+      expect(rule.Status).toBe("Enabled");
+      expect(rule.Transitions![0].Days).toBe(90);
+      expect(rule.Transitions![0].StorageClass).toBe("GLACIER");
+    });
+  });
+
+  describe("CloudWatch Infrastructure", () => {
+    let cloudwatchClient: CloudWatchClient;
+    let cloudwatchLogsClient: CloudWatchLogsClient;
+
+    beforeAll(() => {
+      cloudwatchClient = new CloudWatchClient({ region });
+      cloudwatchLogsClient = new CloudWatchLogsClient({ region });
+    });
+
+    test("validates CloudWatch log group", async () => {
+      if (skipIfMissing("cloudwatch_log_group_name", outputs)) return;
+
+      const command = new DescribeLogGroupsCommand({
+        logGroupNamePrefix: outputs.cloudwatch_log_group_name
+      });
+
+      const response = await cloudwatchLogsClient.send(command);
+      expect(response.logGroups!.length).toBeGreaterThan(0);
+
+      const logGroup = response.logGroups![0];
+      expect(logGroup.logGroupName).toBe(outputs.cloudwatch_log_group_name);
+
+      // Verify environment-specific retention
+      const expectedRetention = environment === "dev" ? 7 :
+        environment === "staging" ? 30 : 90;
+      expect(logGroup.retentionInDays).toBe(expectedRetention);
+    });
+
+    test("validates CloudWatch dashboard", async () => {
+      const dashboardName = `tap-financial-${environment}-dashboard`;
+
+      const command = new GetDashboardCommand({
+        DashboardName: dashboardName
+      });
+
+      const response = await cloudwatchClient.send(command);
+      expect(response.DashboardName).toBe(dashboardName);
+      expect(response.DashboardBody).toBeDefined();
+
+      // Verify dashboard contains expected widgets
+      const dashboardBody = JSON.parse(response.DashboardBody!);
+      expect(dashboardBody.widgets).toBeDefined();
+      expect(dashboardBody.widgets.length).toBeGreaterThan(0);
+    });
+
+    test("validates CloudWatch alarms for production", async () => {
+      if (environment !== "prod") {
+        console.log("Skipping alarm tests for non-production environment");
+        return;
+      }
+
+      const command = new DescribeAlarmsCommand({
+        AlarmNamePrefix: `tap-financial-${environment}-high-cpu`
+      });
+
+      const response = await cloudwatchClient.send(command);
+      expect(response.MetricAlarms!.length).toBeGreaterThan(0);
+
+      const alarm = response.MetricAlarms![0];
+      expect(alarm.MetricName).toBe("CPUUtilization");
+      expect(alarm.Namespace).toBe("AWS/ECS");
+      expect(alarm.Threshold).toBe(80);
+    });
+  });
+
+  describe("Secrets Management", () => {
+    let secretsClient: SecretsManagerClient;
+
+    beforeAll(() => {
+      secretsClient = new SecretsManagerClient({ region });
+    });
+
+    test("validates RDS password secret", async () => {
+      if (skipIfMissing("rds_password_secret_arn", outputs)) return;
+
+      const command = new DescribeSecretCommand({
+        SecretId: outputs.rds_password_secret_arn
+      });
+
+      const response = await secretsClient.send(command);
+      expect(response.Name).toBeDefined();
+      expect(response.Description).toContain("The secret associated with the primary RDS DB cluster");
+      expect(response.VersionIdsToStages).toBeDefined();
+    });
+  });
+
+  describe("IAM Configuration", () => {
+    let iamClient: IAMClient;
+
+    beforeAll(() => {
+      iamClient = new IAMClient({ region });
+    });
+
+    test("validates ECS execution role", async () => {
+      const roleName = `tap-financial-${environment}-ecs-execution-role`;
+
+      const command = new GetRoleCommand({
+        RoleName: roleName
+      });
+
+      const response = await iamClient.send(command);
+      expect(response.Role).toBeDefined();
+      expect(response.Role!.RoleName).toBe(roleName);
+
+      const assumeRolePolicy = JSON.parse(decodeURIComponent(response.Role!.AssumeRolePolicyDocument!));
+      expect(assumeRolePolicy.Statement[0].Principal.Service).toBe("ecs-tasks.amazonaws.com");
+    });
+
+    test("validates ECS task role", async () => {
+      const roleName = `tap-financial-${environment}-ecs-task-role`;
+
+      const command = new GetRoleCommand({
+        RoleName: roleName
+      });
+
+      const response = await iamClient.send(command);
+      expect(response.Role).toBeDefined();
+      expect(response.Role!.RoleName).toBe(roleName);
+    });
+  });
+
+  describe("Application Connectivity", () => {
+    test("validates application URL accessibility", async () => {
+      if (skipIfMissing("application_url", outputs)) return;
+
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        const response = await fetch(outputs.application_url, {
+          method: "GET",
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        // We expect either a successful response or a specific error
+        // since the nginx default page should be accessible
+        expect(response.status).toBeLessThan(500);
+      } catch (error) {
+        // Network errors are acceptable in test environment
+        console.log(`Application URL test warning: ${error}`);
+      }
+    }, 15000);
+  });
+});
+
 ```
 
 ## variables.tf

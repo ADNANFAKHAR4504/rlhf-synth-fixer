@@ -426,6 +426,12 @@ resource "aws_ecs_service" "app" {
   desired_count   = local.current_env.ecs_task_count
   launch_type     = "FARGATE"
 
+  # Force new deployment when task definition changes
+  force_new_deployment = true
+  
+  # Wait for steady state before considering deployment complete
+  wait_for_steady_state = true
+
   network_configuration {
     subnets          = aws_subnet.private[*].id
     security_groups  = [aws_security_group.ecs.id]
@@ -439,6 +445,10 @@ resource "aws_ecs_service" "app" {
   }
 
   depends_on = [aws_lb_listener.app]
+
+  lifecycle {
+    ignore_changes = [desired_count] # Allow auto-scaling to manage this
+  }
 
   tags = local.common_tags
 }
