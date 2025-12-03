@@ -1,1 +1,0 @@
-{"clusterArn": "arn:aws:ecs:us-east-1:123456789012:cluster/tap-cluster-dev", "serviceArn": "arn:aws:ecs:us-east-1:123456789012:service/tap-service-dev", "taskDefinitionArn": "arn:aws:ecs:us-east-1:123456789012:task-definition/tap-service-dev", "repositoryUrl": "123456789012.dkr.ecr.us-east-1.amazonaws.com/tap-app-dev", "logGroupName": "/ecs/tap-service-dev"}
