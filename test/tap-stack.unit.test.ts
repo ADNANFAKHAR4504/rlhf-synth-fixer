@@ -22,11 +22,8 @@ pulumi.runtime.setMocks({
 });
 
 describe('TapStack', () => {
-  let stack: typeof import('../lib/tap-stack');
-
-  beforeAll(async () => {
-    stack = await import('../lib/tap-stack');
-  });
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const stack = require('../lib/tap-stack') as typeof import('../lib/tap-stack');
 
   describe('TapStack Resource Creation', () => {
     it('should create TapStack with default values', async () => {
