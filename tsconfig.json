@@ -1,3 +1,4 @@
+
 {
   "compilerOptions": {
     "target": "ES2022",
@@ -25,6 +26,17 @@
     "esModuleInterop": true,
     "outDir": "dist"
   },
-  "include": ["lib/**/*.ts"],
-  "exclude": ["node_modules", "cdk.out", "dist", "test", "tests", "**/*.d.ts", "**/*.test.ts"]
+  "exclude": [
+    "node_modules",
+    "cdk.out",
+    "templates",
+    "archive",
+    "subcategory-references",
+    "worktree",
+    "test",
+    "tests",
+    "bin",
+    "cli",
+    "**/*.d.ts"
+  ]
 }
