@@ -7,8 +7,8 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-// Read the index.ts file for pattern matching
-const indexCode = readFileSync(join(__dirname, '../lib/index.ts'), 'utf-8');
+// Read the tap-stack.ts file for pattern matching
+const indexCode = readFileSync(join(__dirname, '../lib/tap-stack.ts'), 'utf-8');
 const lambdaCode = readFileSync(
   join(__dirname, '../lib/lambda/compliance-checker/index.js'),
   'utf-8'
@@ -16,13 +16,13 @@ const lambdaCode = readFileSync(
 
 describe('S3 Compliance Analysis Stack - Code Patterns', () => {
   describe('Configuration', () => {
-    test('should require environmentSuffix from config', () => {
-      expect(indexCode).toMatch(/config\.require\(['"]environmentSuffix['"]\)/);
+    test('should get environmentSuffix from args with default', () => {
+      expect(indexCode).toMatch(/args\.environmentSuffix\s*\|\|\s*['"]dev['"]/);
     });
 
     test('should have optional region configuration', () => {
       expect(indexCode).toMatch(
-        /config\.get\(['"]region['"]\)\s*\|\|\s*['"]us-east-1['"]/
+        /process\.env\.AWS_REGION\s*\|\|\s*['"]us-east-1['"]/
       );
     });
 
@@ -369,33 +369,37 @@ describe('S3 Compliance Analysis Stack - Code Patterns', () => {
     });
   });
 
-  describe('Exports', () => {
-    test('should export SNS topic ARN', () => {
-      expect(indexCode).toMatch(/export\s+const\s+snsTopicArn\s*=/);
+  describe('Outputs', () => {
+    test('should define snsTopicArn as public readonly', () => {
+      expect(indexCode).toMatch(/public\s+readonly\s+snsTopicArn:/);
     });
 
-    test('should export SQS queue URL', () => {
-      expect(indexCode).toMatch(/export\s+const\s+sqsQueueUrl\s*=/);
+    test('should define sqsQueueUrl as public readonly', () => {
+      expect(indexCode).toMatch(/public\s+readonly\s+sqsQueueUrl:/);
     });
 
-    test('should export Lambda function ARN', () => {
-      expect(indexCode).toMatch(/export\s+const\s+lambdaFunctionArn\s*=/);
+    test('should define lambdaFunctionArn as public readonly', () => {
+      expect(indexCode).toMatch(/public\s+readonly\s+lambdaFunctionArn:/);
     });
 
-    test('should export state machine ARN', () => {
-      expect(indexCode).toMatch(/export\s+const\s+stateMachineArn\s*=/);
+    test('should define stateMachineArn as public readonly', () => {
+      expect(indexCode).toMatch(/public\s+readonly\s+stateMachineArn:/);
     });
 
-    test('should export CloudWatch alarm ARN', () => {
-      expect(indexCode).toMatch(/export\s+const\s+complianceAlarmArn\s*=/);
+    test('should define complianceAlarmArn as public readonly', () => {
+      expect(indexCode).toMatch(/public\s+readonly\s+complianceAlarmArn:/);
     });
 
-    test('should export region', () => {
-      expect(indexCode).toMatch(/export\s+const\s+regionDeployed\s*=/);
+    test('should define regionDeployed as public readonly', () => {
+      expect(indexCode).toMatch(/public\s+readonly\s+regionDeployed:/);
     });
 
-    test('should export environmentSuffix', () => {
-      expect(indexCode).toMatch(/export\s+const\s+environmentSuffixOutput\s*=/);
+    test('should define environmentSuffixOutput as public readonly', () => {
+      expect(indexCode).toMatch(/public\s+readonly\s+environmentSuffixOutput:/);
+    });
+
+    test('should register outputs', () => {
+      expect(indexCode).toMatch(/this\.registerOutputs\s*\(\s*\{/);
     });
   });
 
