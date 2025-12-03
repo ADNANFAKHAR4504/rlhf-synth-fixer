@@ -158,7 +158,7 @@ export class TapStack extends pulumi.ComponentResource {
     // All PRs share the same recorder to avoid quota limits
     const sharedRecorderName = 'config-recorder-shared';
     const configRecorder = new aws.cfg.Recorder(
-      `config-recorder-shared`,
+      'config-recorder-shared',
       {
         name: sharedRecorderName,
         roleArn: configRole.arn,
@@ -179,7 +179,7 @@ export class TapStack extends pulumi.ComponentResource {
     // AWS Config only allows 1 delivery channel per region per account
     const sharedChannelName = 'config-delivery-channel-shared';
     const deliveryChannel = new aws.cfg.DeliveryChannel(
-      `config-delivery-channel-shared`,
+      'config-delivery-channel-shared',
       {
         name: sharedChannelName,
         s3BucketName: configBucket.bucket,
@@ -192,7 +192,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Start the AWS Config Recorder
     const recorderStatus = new aws.cfg.RecorderStatus(
-      `config-recorder-status-shared`,
+      'config-recorder-status-shared',
       {
         name: sharedRecorderName,
         isEnabled: true,
