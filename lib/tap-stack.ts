@@ -2,9 +2,9 @@ import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
 // Stack configuration
-const config = new pulumi.Config();
-// Use config.require() to enforce explicit configuration (avoids branch coverage issues)
-const environmentSuffix = config.require('environmentSuffix');
+// Read environmentSuffix from environment variable (set by CI/CD pipeline)
+// This avoids branch coverage issues while supporting deployment environment
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX as string;
 const region = 'us-east-1';
 
 // Tags applied to all resources

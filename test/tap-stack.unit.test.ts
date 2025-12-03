@@ -53,6 +53,8 @@ pulumi.runtime.setMocks({
 pulumi.runtime.setConfig('TapStack:environmentSuffix', 'test');
 pulumi.runtime.setConfig('project:environmentSuffix', 'test');
 pulumi.runtime.setConfig('aws:region', 'us-east-1');
+// Set environment variable for environmentSuffix (used by stack)
+process.env.ENVIRONMENT_SUFFIX = 'test';
 
 // Now import the stack after mocking is set up
 import * as resources from '../lib/tap-stack';
