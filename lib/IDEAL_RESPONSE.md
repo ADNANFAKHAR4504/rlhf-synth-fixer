@@ -31,6 +31,12 @@ All resources use `${environmentSuffix}` for unique, idempotent naming to allow 
 ## Implementation Structure
 
 ```
+/
+├── Pulumi.yaml                       # Pulumi project config (main: dist/bin/tap.js)
+
+bin/
+└── tap.ts                            # Pulumi entry point (instantiates TapStack)
+
 lib/
 ├── tap-stack.ts                      # Main Pulumi TapStack component
 ├── analyse.py                        # CI/CD analysis script
@@ -43,9 +49,6 @@ lib/
 ├── MODEL_FAILURES.md                 # Failure analysis
 └── IDEAL_RESPONSE.md                 # This file
 
-bin/
-└── tap.ts                            # Pulumi entry point (instantiates TapStack)
-
 test/
 ├── pulumi.unit.test.ts               # Unit tests (112 tests)
 └── pulumi.int.test.ts                # Integration tests
@@ -55,6 +58,46 @@ tests/
 ```
 
 ## Complete Source Code
+
+### File: Pulumi.yaml
+
+```yaml
+name: TapStack
+runtime: nodejs
+description: S3 bucket compliance analysis and reporting system
+main: bin/tap.ts
+```
+
+### File: bin/tap.ts (Entry Point)
+
+```typescript
+/**
+ * Pulumi application entry point for the TAP infrastructure.
+ *
+ * This module instantiates the TapStack with appropriate configuration
+ * based on the deployment environment.
+ */
+import * as aws from '@pulumi/aws';
+import { TapStack } from '../lib/tap-stack';
+
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+
+const defaultTags = {
+  Environment: environmentSuffix,
+  Repository: process.env.REPOSITORY || 'unknown',
+  Author: process.env.COMMIT_AUTHOR || 'unknown',
+  PRNumber: process.env.PR_NUMBER || 'unknown',
+  Team: process.env.TEAM || 'unknown',
+  CreatedAt: new Date().toISOString(),
+};
+
+const provider = new aws.Provider('aws', {
+  region: process.env.AWS_REGION || 'us-east-1',
+  defaultTags: { tags: defaultTags },
+});
+
+new TapStack('pulumi-infra', { environmentSuffix, tags: defaultTags }, { provider });
+```
 
 ### File: lib/tap-stack.ts
 
