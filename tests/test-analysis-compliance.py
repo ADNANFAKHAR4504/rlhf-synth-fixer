@@ -458,9 +458,13 @@ class TestComplianceInfraAnalyzer(unittest.TestCase):
             pass
 
         # Clean up existing resources from previous test runs
-        # Delete Lambda function if exists
+        # Delete Lambda functions if exist
         try:
             lambda_client.delete_function(FunctionName='ec2-scanner-test-full')
+        except lambda_client.exceptions.ResourceNotFoundException:
+            pass
+        try:
+            lambda_client.delete_function(FunctionName='s3-compliance-scanner-test-full')
         except lambda_client.exceptions.ResourceNotFoundException:
             pass
 
@@ -496,12 +500,20 @@ class TestComplianceInfraAnalyzer(unittest.TestCase):
             pass
 
         # Create test infrastructure
-        # Lambda scanner
+        # Lambda scanners (need at least 2 for health check)
         lambda_client.create_function(
             FunctionName='ec2-scanner-test-full',
             Runtime='nodejs18.x',
             Role=f'arn:aws:iam::123456789012:role/{role_name}',
             Handler='index.handler',
+            Code={'ZipFile': b'fake code'}
+        )
+
+        lambda_client.create_function(
+            FunctionName='s3-compliance-scanner-test-full',
+            Runtime='python3.9',
+            Role=f'arn:aws:iam::123456789012:role/{role_name}',
+            Handler='handler.main',
             Code={'ZipFile': b'fake code'}
         )
 
@@ -556,7 +568,7 @@ class TestComplianceInfraAnalyzer(unittest.TestCase):
 
         # Verify summary
         summary = results['summary']
-        self.assertEqual(summary['scanner_functions_count'], 1)
+        self.assertEqual(summary['scanner_functions_count'], 2)  # 2 scanner functions created
         self.assertEqual(summary['compliance_tables_count'], 1)
         self.assertEqual(summary['alert_topics_count'], 1)
         self.assertEqual(summary['compliance_alarms_count'], 1)
