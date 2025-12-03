@@ -1,0 +1,21 @@
+{
+  "name": "compliance-scanner",
+  "version": "1.0.0",
+  "description": "AWS infrastructure compliance scanner Lambda function",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@aws-sdk/client-ec2": "^3.450.0",
+    "@aws-sdk/client-s3": "^3.450.0",
+    "@aws-sdk/client-iam": "^3.450.0",
+    "@aws-sdk/client-cloudwatch": "^3.450.0",
+    "@aws-sdk/client-sns": "^3.450.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}
