@@ -92,21 +92,38 @@ This document tracks issues found in the initial implementation and the fixes ap
     - **Cause**: Only lib/ files were documented, not bin/ or Python files
     - **Fix**: Added complete code sections for:
       - bin/tap.ts with all exports
-      - lib/analysis.py with compliance utilities
+      - lib/analyse.py with compliance utilities (renamed from analysis.py)
+
+13. **Unreachable Code in checkCloudWatchLogging** - Line 456 never executed
+    - **Cause**: `checkCloudWatchLogging` had a fallback `return false` that was unreachable
+    - **Symptoms**: 99.66% line coverage instead of 100%
+    - **Root Cause**: The applicableTypes filter only allows LAMBDA_FUNCTION and RDS_INSTANCE, and both were handled before the fallback
+    - **Fix**: Removed the unreachable `if (resource.type === ResourceType.RDS_INSTANCE)` check and made the final return handle RDS implicitly since Lambda is already handled
+
+14. **Python Analysis Script Naming** - Script was named analysis.py instead of analyse.py
+    - **Cause**: Initial implementation used analysis.py but scripts/analysis.sh expects analyse.py
+    - **Fix**: Renamed lib/analysis.py to lib/analyse.py and updated all references
+
+15. **Branch Coverage for Error Handling Ternaries** - Lines 165, 329, 369, 425 not covered
+    - **Cause**: Inline ternary expressions `error instanceof Error ? error.message : String(error)` difficult for Istanbul to track
+    - **Symptoms**: 91.11% branch coverage for compliance-checker.ts
+    - **Root Cause**: Jest/Istanbul tracks ternary branches inside function arguments differently
+    - **Fix**: Extracted error message logic into exported `getErrorMessage()` helper function with explicit if/else, added unit tests directly testing both branches
 
 ## All Critical Issues Resolved
 
 - Builds successfully (`npm run build`)
 - Passes lint checks (`npm run lint`)
-- Unit tests pass with 99%+ coverage
+- Unit tests pass with 100% coverage (statements, branches, functions, lines)
+- 100 unit tests total across all modules
 - Integration tests ready for CI/CD execution
 - Stack exports all required outputs
 - Properly configured for Pulumi deployment
 - Complete documentation in IDEAL_RESPONSE.md
+- Python analysis tests (51 tests) pass with 92% coverage
 
 ## Remaining Considerations
 
 - Integration tests designed to skip gracefully when resources not deployed
-- Test coverage thresholds realistic for production code
 - All AWS resources follow naming conventions with environment suffix
 - Resources are idempotent and destroyable

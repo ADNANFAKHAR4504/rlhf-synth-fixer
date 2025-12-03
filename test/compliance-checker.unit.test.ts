@@ -7,7 +7,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { EC2Client, DescribeSecurityGroupsCommand } from '@aws-sdk/client-ec2';
 
-import { ComplianceChecker } from '../lib/compliance-checker';
+import { ComplianceChecker, getErrorMessage } from '../lib/compliance-checker';
 import {
   AWSResource,
   ResourceType,
@@ -1132,6 +1132,171 @@ describe('ComplianceChecker', () => {
         v => v.rule === 'CLOUDWATCH_LOGGING'
       );
       expect(loggingViolation).toBeUndefined();
+    });
+
+    it('should return 100% compliance score for empty resources array', async () => {
+      const resources: AWSResource[] = [];
+
+      const report = await checker.checkResources(resources);
+
+      expect(report.complianceScore).toBe(100);
+      expect(report.totalResources).toBe(0);
+      expect(report.compliantResources).toBe(0);
+      expect(report.nonCompliantResources).toBe(0);
+    });
+
+    it('should handle S3 encryption check error with non-Error object thrown', async () => {
+      // Mock throwing a non-Error object directly to hit String(error) branch
+      s3Mock.on(GetBucketEncryptionCommand).callsFake(() => {
+        // eslint-disable-next-line @typescript-eslint/no-throw-literal
+        throw { customError: 'This is not an Error instance', code: 'CustomCode' };
+      });
+
+      const resource: AWSResource = {
+        id: 'test-bucket-non-error-obj',
+        arn: 'arn:aws:s3:::test-bucket-non-error-obj',
+        type: ResourceType.S3_BUCKET,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+      };
+
+      // The error is caught in checkResource and creates INFO violation
+      const result = await checker.checkResource(resource);
+
+      // Should have INFO violations for the failed checks
+      const infoViolations = result.violations.filter(
+        v => v.severity === ViolationSeverity.INFO
+      );
+      expect(infoViolations.length).toBeGreaterThan(0);
+    });
+
+    it('should handle S3 public access check error with non-Error object thrown', async () => {
+      // First mock encryption to pass, then public access to throw non-Error
+      s3Mock.on(GetBucketEncryptionCommand).resolves({
+        ServerSideEncryptionConfiguration: {
+          Rules: [{ ApplyServerSideEncryptionByDefault: { SSEAlgorithm: 'AES256' } }],
+        },
+      });
+      s3Mock.on(GetPublicAccessBlockCommand).callsFake(() => {
+        // eslint-disable-next-line @typescript-eslint/no-throw-literal
+        throw 42; // Throw a number to hit the String(error) branch
+      });
+
+      const resource: AWSResource = {
+        id: 'test-bucket-public-access-number',
+        arn: 'arn:aws:s3:::test-bucket-public-access-number',
+        type: ResourceType.S3_BUCKET,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      // Should have INFO violation for the failed public access check
+      const infoViolation = result.violations.find(
+        v => v.severity === ViolationSeverity.INFO && v.rule === 'S3_PUBLIC_ACCESS'
+      );
+      expect(infoViolation).toBeDefined();
+    });
+
+    it('should handle security group check error with non-Error object thrown', async () => {
+      // Mock throwing a non-Error value
+      ec2Mock.on(DescribeSecurityGroupsCommand).callsFake(() => {
+        // eslint-disable-next-line @typescript-eslint/no-throw-literal
+        throw null; // Throw null to hit the String(error) branch
+      });
+
+      const resource: AWSResource = {
+        id: 'sg-null-error',
+        arn: 'arn:aws:ec2:us-east-1:123456789012:security-group/sg-null-error',
+        type: ResourceType.SECURITY_GROUP,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+      };
+
+      const result = await checker.checkResource(resource);
+
+      // Should have INFO violation for the failed security group check
+      const infoViolation = result.violations.find(
+        v => v.severity === ViolationSeverity.INFO && v.rule === 'SG_OPEN_ACCESS'
+      );
+      expect(infoViolation).toBeDefined();
+    });
+
+    it('should handle policy check error with string thrown in checkResource', async () => {
+      // Throw a plain string to hit the String(error) branch at line 165
+      s3Mock.on(GetBucketEncryptionCommand).callsFake(() => {
+        // eslint-disable-next-line @typescript-eslint/no-throw-literal
+        throw 'Plain string error';
+      });
+
+      const resource: AWSResource = {
+        id: 'test-bucket-string-throw',
+        arn: 'arn:aws:s3:::test-bucket-string-throw',
+        type: ResourceType.S3_BUCKET,
+        region: 'us-east-1',
+        tags: {
+          Environment: 'dev',
+          Owner: 'test',
+          Team: 'test',
+          Project: 'test',
+          CreatedAt: '2025-01-01',
+        },
+      };
+
+      // The checkResource should handle the non-Error and add INFO violation
+      const result = await checker.checkResource(resource);
+
+      // Should have an INFO violation for the failed check
+      const infoViolation = result.violations.find(
+        v => v.severity === ViolationSeverity.INFO
+      );
+      expect(infoViolation).toBeDefined();
+    });
+  });
+
+  describe('getErrorMessage', () => {
+    it('should return error message for Error instances', () => {
+      const error = new Error('Test error message');
+      expect(getErrorMessage(error)).toBe('Test error message');
+    });
+
+    it('should return stringified value for non-Error objects', () => {
+      expect(getErrorMessage({ custom: 'object' })).toBe('[object Object]');
+    });
+
+    it('should return string representation for numbers', () => {
+      expect(getErrorMessage(42)).toBe('42');
+    });
+
+    it('should return string representation for null', () => {
+      expect(getErrorMessage(null)).toBe('null');
+    });
+
+    it('should return string representation for undefined', () => {
+      expect(getErrorMessage(undefined)).toBe('undefined');
+    });
+
+    it('should return the string itself when a string is passed', () => {
+      expect(getErrorMessage('Plain string error')).toBe('Plain string error');
     });
   });
 });

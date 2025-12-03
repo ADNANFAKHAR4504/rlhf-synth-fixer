@@ -25,6 +25,17 @@ import {
 } from './types';
 
 /**
+ * Safely extracts error message from any thrown value
+ * Handles both Error instances and non-Error throws (strings, objects, etc.)
+ */
+export function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
+
+/**
  * Compliance policy definitions
  */
 interface CompliancePolicy {
@@ -162,7 +173,7 @@ export class ComplianceChecker {
       } catch (error) {
         console.error(
           `Error checking policy ${policy.id} for ${resource.id}:`,
-          error instanceof Error ? error.message : String(error)
+          getErrorMessage(error)
         );
         violations.push({
           resourceId: resource.id,
@@ -326,7 +337,7 @@ export class ComplianceChecker {
       }
       throw new ComplianceError('Failed to check S3 encryption', {
         bucketName: resource.id,
-        error: error instanceof Error ? error.message : String(error),
+        error: getErrorMessage(error),
       });
     }
   }
@@ -366,7 +377,7 @@ export class ComplianceChecker {
       }
       throw new ComplianceError('Failed to check S3 public access', {
         bucketName: resource.id,
-        error: error instanceof Error ? error.message : String(error),
+        error: getErrorMessage(error),
       });
     }
   }
@@ -422,7 +433,7 @@ export class ComplianceChecker {
     } catch (error) {
       throw new ComplianceError('Failed to check security group rules', {
         groupId: resource.id,
-        error: error instanceof Error ? error.message : String(error),
+        error: getErrorMessage(error),
       });
     }
   }
@@ -447,13 +458,9 @@ export class ComplianceChecker {
     }
 
     // RDS instances can have CloudWatch logging configured
-    if (resource.type === ResourceType.RDS_INSTANCE) {
-      // Check if logging is configured in metadata
-      return !!resource.metadata?.loggingEnabled;
-    }
-
-    // Should not reach here due to applicableTypes filter, but return false as fallback
-    return false;
+    // Note: This is the only remaining case since LAMBDA_FUNCTION is handled above
+    // and applicableTypes filter ensures only LAMBDA_FUNCTION and RDS_INSTANCE reach here
+    return !!resource.metadata?.loggingEnabled;
   }
 
   /**
