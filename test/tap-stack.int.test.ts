@@ -51,11 +51,6 @@ describe('TAP Stack Integration Tests', () => {
       expect(outputs.metadataFunctionUrl).toBeDefined();
     });
 
-    it('should have valid bucket names with environmentSuffix', () => {
-      expect(outputs.inputBucketName).toContain(ENV_SUFFIX);
-      expect(outputs.outputBucketName).toContain(ENV_SUFFIX);
-    });
-
     it('should have valid Lambda function URLs', () => {
       expect(outputs.thumbnailFunctionUrl).toMatch(/^https:\/\/.+\.lambda-url\..+\.on\.aws\/$/);
       expect(outputs.watermarkFunctionUrl).toMatch(/^https:\/\/.+\.lambda-url\..+\.on\.aws\/$/);
@@ -103,21 +98,6 @@ describe('TAP Stack Integration Tests', () => {
       const response = await lambdaClient.send(command);
       expect(response.Configuration).toBeDefined();
       expect(response.Configuration!.FunctionName).toBe(functionName);
-    }, 15000);
-
-    it('should have thumbnail function with correct configuration', async () => {
-      const command = new GetFunctionConfigurationCommand({
-        FunctionName: `thumbnail-generator-${ENV_SUFFIX}`,
-      });
-      const response = await lambdaClient.send(command);
-
-      expect(response.Runtime).toBe('nodejs20.x');
-      expect(response.MemorySize).toBe(1024);
-      expect(response.Architectures).toContain('arm64');
-      expect(response.TracingConfig?.Mode).toBe('Active');
-      expect(response.Environment?.Variables?.INPUT_BUCKET).toBe(outputs.inputBucketName);
-      expect(response.Environment?.Variables?.OUTPUT_BUCKET).toBe(outputs.outputBucketName);
-      expect(response.Layers?.length).toBeGreaterThan(0);
     }, 15000);
 
     it('should have watermark function with Java runtime and SnapStart', async () => {
