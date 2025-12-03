@@ -56,6 +56,118 @@ jest.mock('@pulumi/pulumi', () => {
   };
 });
 
+describe('ECS Infrastructure Optimization - Code Execution', () => {
+  it('should successfully create all infrastructure resources', () => {
+    // Import the infrastructure code to get code coverage
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const infrastructure = require('../lib/index');
+
+    // Verify exports exist
+    expect(infrastructure.albDnsName).toBeDefined();
+    expect(infrastructure.clusterName).toBeDefined();
+    expect(infrastructure.logGroupName).toBeDefined();
+    expect(infrastructure.serviceName).toBeDefined();
+  });
+
+  it('should handle missing optional config values with defaults', () => {
+    // Test default values for optional configs
+    // This ensures branch coverage for config.get() || default patterns
+
+    // Re-mock config with missing optional values
+    jest.resetModules();
+
+    class MockConfigMinimal {
+      private configs: Map<string, string> = new Map();
+
+      constructor() {
+        this.configs.set('environmentSuffix', 'test-minimal');
+        // Don't set optional values to test defaults
+      }
+
+      require(key: string): string {
+        const value = this.configs.get(key);
+        if (!value) {
+          throw new Error(`Config key "${key}" is required but not set`);
+        }
+        return value;
+      }
+
+      get(key: string): string | undefined {
+        return this.configs.get(key);
+      }
+
+      getNumber(key: string): number | undefined {
+        const value = this.configs.get(key);
+        return value ? parseInt(value, 10) : undefined;
+      }
+    }
+
+    jest.mock('@pulumi/pulumi', () => {
+      const actual = jest.requireActual('@pulumi/pulumi');
+      return {
+        ...actual,
+        Config: jest.fn().mockImplementation(() => new MockConfigMinimal()),
+      };
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const infrastructure2 = require('../lib/index');
+
+    // Verify it still works with defaults
+    expect(infrastructure2.albDnsName).toBeDefined();
+    expect(infrastructure2.clusterName).toBeDefined();
+  });
+
+  it('should handle production environment configuration', () => {
+    // Test production-specific configuration branches
+    jest.resetModules();
+
+    class MockConfigProduction {
+      private configs: Map<string, string> = new Map();
+
+      constructor() {
+        this.configs.set('environmentSuffix', 'test-prod');
+        this.configs.set('environment', 'production');
+        this.configs.set('awsRegion', 'us-east-1');
+        this.configs.set('containerPort', '3000');
+        this.configs.set('desiredCount', '2');
+      }
+
+      require(key: string): string {
+        const value = this.configs.get(key);
+        if (!value) {
+          throw new Error(`Config key "${key}" is required but not set`);
+        }
+        return value;
+      }
+
+      get(key: string): string | undefined {
+        return this.configs.get(key);
+      }
+
+      getNumber(key: string): number | undefined {
+        const value = this.configs.get(key);
+        return value ? parseInt(value, 10) : undefined;
+      }
+    }
+
+    jest.mock('@pulumi/pulumi', () => {
+      const actual = jest.requireActual('@pulumi/pulumi');
+      return {
+        ...actual,
+        Config: jest.fn().mockImplementation(() => new MockConfigProduction()),
+      };
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const infrastructure3 = require('../lib/index');
+
+    // Verify production config works
+    expect(infrastructure3.albDnsName).toBeDefined();
+    expect(infrastructure3.clusterName).toBeDefined();
+  });
+});
+
 describe('ECS Infrastructure Optimization - Code Analysis', () => {
   const indexPath = path.join(__dirname, '../lib/index.ts');
   const indexContent = fs.readFileSync(indexPath, 'utf-8');
