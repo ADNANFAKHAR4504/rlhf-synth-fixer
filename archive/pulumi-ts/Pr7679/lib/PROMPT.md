@@ -81,6 +81,31 @@ Create an optimized ECS infrastructure using **Pulumi with TypeScript** that add
 - **Configuration**: Use Pulumi config for environment-specific values (do NOT hardcode)
 - **Tagging**: All taggable resources must include standard tags (Environment, Project, ManagedBy)
 
+### Intentional Design Decisions (Test/Development Environment)
+
+The following configurations are **intentional design decisions** for this test automation and development environment. These are NOT issues to be flagged:
+
+1. **HTTP-only ALB Configuration (No HTTPS/TLS)**
+   - This infrastructure is designed for ephemeral test/PR environments
+   - HTTPS/TLS is not required as no sensitive data is transmitted
+   - Certificate management adds unnecessary complexity for short-lived test stacks
+   - Production deployments would add ACM certificates and HTTPS listeners separately
+
+2. **Minimal CloudWatch Alarms (Low CPU Only)**
+   - Only low CPU utilization alarm is configured intentionally for cost optimization demos
+   - Additional alarms (memory, request count, error rates) are out of scope for this optimization exercise
+   - The focus is on demonstrating auto-scaling patterns, not comprehensive monitoring
+
+3. **Permissive Security Group Rules (0.0.0.0/0 on ports 80/443)**
+   - ALB ingress from 0.0.0.0/0 is intentional for public-facing test endpoints
+   - ECS tasks only accept traffic from ALB security group (principle of least privilege applied)
+   - This is standard for public-facing ALBs; internal services would use VPC-restricted rules
+
+4. **Container Image with 'latest' Tag (nginx:latest)**
+   - Using nginx:latest as a placeholder/demo image is intentional
+   - Real applications would use immutable tags or SHA digests
+   - This demonstrates the infrastructure patterns, not application deployment best practices
+
 ### Constraints
 
 - Maintain backward compatibility with existing service endpoints

@@ -32,7 +32,6 @@
     "test:unit": "jest --coverage --testPathPattern=\\.unit\\.test\\.ts$",
     "test:unit-js": "jest --coverage --testPathPattern=\\.unit\\.test\\.mjs$",
     "test:unit-cdktf": "jest --coverage --testPathPattern=\\.unit\\.test\\.ts$",
-    "optimize": "python3 lib/optimize.py lib/index.ts",
     "test:integration": "jest --testPathPattern=\\.int\\.test\\.ts$ --testTimeout=30000",
     "test:integration-js": "jest --testPathPattern=\\.int\\.test\\.mjs$ --testTimeout=30000",
     "test:integration-cdktf": "jest --testPathPattern=\\.int\\.test\\.ts$ --testTimeout=30000",

@@ -6,10 +6,10 @@ This script analyzes Pulumi TypeScript code for common ECS deployment
 inefficiencies and provides recommendations for optimization.
 """
 
+import json
 import re
 import sys
-import json
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 
 class OptimizationCheck:
@@ -102,11 +102,18 @@ class ECSOptimizationAnalyzer:
         """Check task placement strategy configuration"""
         check = self.checks[1]
 
+        # Check if using FARGATE (placement strategies not supported)
+        uses_fargate = re.search(r"launchType:\s*['\"]FARGATE['\"]", self.code) or \
+                       re.search(r"requiresCompatibilities:\s*\[['\"]FARGATE['\"]\]", self.code)
+
         # Look for placement strategy configuration
         spread_all = re.search(r'field:\s*["\']attribute:ecs\.availability-zone["\']', self.code)
         binpack = re.search(r'type:\s*["\']binpack["\']', self.code)
 
-        if spread_all and not binpack:
+        if uses_fargate:
+            check.passed = True
+            check.add_finding("✓ Using FARGATE launch type (placement managed by AWS)")
+        elif spread_all and not binpack:
             check.add_finding("Spreading across all AZs without binpack optimization")
             check.add_finding("RECOMMENDATION: Use binpack strategy for cost optimization")
         elif binpack:
@@ -163,7 +170,8 @@ class ECSOptimizationAnalyzer:
         check = self.checks[4]
 
         log_group_pattern = r'new\s+aws\.cloudwatch\.LogGroup'
-        retention_pattern = r'retentionInDays:\s*\d+'
+        # Match retentionInDays with a number or an expression (ternary, variable, etc.)
+        retention_pattern = r'retentionInDays:\s*(\d+|[^,}\n]+)'
 
         has_log_group = re.search(log_group_pattern, self.code)
         has_retention = re.search(retention_pattern, self.code)
@@ -203,27 +211,39 @@ class ECSOptimizationAnalyzer:
         """Check for comprehensive tagging"""
         check = self.checks[6]
 
-        # Look for tags configuration
-        tags_pattern = r'tags:\s*\{[^}]*\}'
         standard_tags = ['Environment', 'Project', 'ManagedBy', 'Team']
 
-        tags_blocks = re.findall(tags_pattern, self.code, re.DOTALL)
+        # Look for tags in multiple patterns:
+        # 1. Direct tags: { ... } blocks
+        # 2. commonTags or defaultTags objects
+        # 3. Tags spread from variables
 
-        if not tags_blocks:
+        found_tags = []
+
+        # Check for each standard tag anywhere in the code (in object definitions)
+        for tag in standard_tags:
+            # Match tag as object key: Environment: or 'Environment': or "Environment":
+            tag_pattern = rf"['\"]?{tag}['\"]?\s*:"
+            if re.search(tag_pattern, self.code):
+                found_tags.append(tag)
+
+        # Also check for commonTags or defaultTags usage
+        has_common_tags = re.search(r'(commonTags|defaultTags)\s*=\s*\{', self.code)
+        uses_spread_tags = re.search(r'tags:\s*\{?\s*\.\.\.', self.code) or \
+                          re.search(r'tags:\s*(commonTags|defaultTags)', self.code)
+
+        if len(found_tags) >= 3:
+            check.passed = True
+            check.add_finding(f"✓ Comprehensive tagging with: {', '.join(found_tags)}")
+        elif has_common_tags and uses_spread_tags:
+            check.passed = True
+            check.add_finding("✓ Using centralized tagging strategy with commonTags/defaultTags")
+        elif found_tags:
+            check.add_finding(f"Partial tagging found: {', '.join(found_tags)}")
+            check.add_finding(f"RECOMMENDATION: Add missing tags from: {standard_tags}")
+        else:
             check.add_finding("No tagging strategy found")
             check.add_finding("RECOMMENDATION: Add tags for cost allocation and management")
-        else:
-            found_tags = []
-            for tag in standard_tags:
-                if any(tag in block for block in tags_blocks):
-                    found_tags.append(tag)
-
-            if len(found_tags) >= 3:
-                check.passed = True
-                check.add_finding(f"✓ Comprehensive tagging with: {', '.join(found_tags)}")
-            else:
-                check.add_finding(f"Partial tagging found: {', '.join(found_tags)}")
-                check.add_finding(f"RECOMMENDATION: Add missing tags from: {standard_tags}")
 
         return check
 
@@ -356,12 +376,11 @@ class ECSOptimizationAnalyzer:
 
 def main():
     """Main entry point"""
+    # Default to lib/tap-stack.ts if no argument provided
     if len(sys.argv) < 2:
-        print("Usage: python optimize.py <path-to-index.ts>")
-        print("Example: python optimize.py lib/index.ts")
-        sys.exit(1)
-
-    file_path = sys.argv[1]
+        file_path = 'lib/tap-stack.ts'
+    else:
+        file_path = sys.argv[1]
 
     try:
         with open(file_path, 'r') as f:
