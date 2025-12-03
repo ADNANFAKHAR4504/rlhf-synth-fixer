@@ -112,13 +112,14 @@ describe('TapStack', () => {
   });
 
   describe('Resource naming with environmentSuffix', () => {
-    it('should include environmentSuffix in resource names', done => {
+    it('should use shared Config recorder name', done => {
       const tapStack = new stack.TapStack('suffix-test-stack', {
         environmentSuffix: 'test123',
       });
 
       pulumi.all([tapStack.configRecorderName]).apply(([name]) => {
-        expect(name).toContain('test123'); // environmentSuffix from args
+        // Config recorder uses shared name to avoid AWS quota limits
+        expect(name).toBe('config-recorder-shared');
         done();
       });
     });

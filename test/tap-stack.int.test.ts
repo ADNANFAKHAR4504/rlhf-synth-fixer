@@ -61,6 +61,7 @@ describe('AWS Config Compliance Monitoring - Integration Tests', () => {
 
     it('should have correct name with environmentSuffix', () => {
       expect(outputs.configBucketName).toContain('config-bucket-');
+      // Bucket should have environment suffix for isolation
       expect(outputs.configBucketName).toMatch(/synthk6j3p4g8$/);
     });
   });
@@ -156,6 +157,7 @@ describe('AWS Config Compliance Monitoring - Integration Tests', () => {
 
       const response = await lambdaClient.send(command);
       expect(response.Configuration?.Role).toBeDefined();
+      // Role should contain environment suffix
       expect(response.Configuration?.Role).toContain(
         'lambda-config-role-synthk6j3p4g8'
       );
@@ -173,6 +175,7 @@ describe('AWS Config Compliance Monitoring - Integration Tests', () => {
     });
 
     it('should have Config IAM role with correct name', async () => {
+      // Config role has environment suffix for isolation
       const roleName = 'config-role-synthk6j3p4g8';
       const command = new GetRoleCommand({ RoleName: roleName });
 
@@ -242,9 +245,9 @@ describe('AWS Config Compliance Monitoring - Integration Tests', () => {
       expect(outputs.tagCheckerLambdaArn).toMatch(/^arn:aws:lambda:/);
     });
 
-    it('should have config recorder name with environmentSuffix', () => {
-      expect(outputs.configRecorderName).toContain('config-recorder-');
-      expect(outputs.configRecorderName).toMatch(/synthk6j3p4g8$/);
+    it('should have shared config recorder name', () => {
+      // Config recorder uses shared name to avoid AWS quota limits
+      expect(outputs.configRecorderName).toBe('config-recorder-shared');
     });
   });
 });
