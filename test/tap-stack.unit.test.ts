@@ -15,11 +15,13 @@ import {
   CloudWatchClient,
   PutMetricDataCommand,
 } from '@aws-sdk/client-cloudwatch';
+import {  S3Client,  ListBucketsCommand,} from '@aws-sdk/client-s3';
 import { mockClient } from 'aws-sdk-client-mock';
 
 const ec2Mock = mockClient(EC2Client);
 const ssmMock = mockClient(SSMClient);
 const cloudWatchMock = mockClient(CloudWatchClient);
+const s3Mock = mockClient(S3Client);
 
 describe('ComplianceScanner', () => {
   let scanner: ComplianceScanner;
@@ -28,6 +30,8 @@ describe('ComplianceScanner', () => {
     ec2Mock.reset();
     ssmMock.reset();
     cloudWatchMock.reset();
+    s3Mock.reset();
+    s3Mock.on(ListBucketsCommand).resolves({ Buckets: [] });
     scanner = new ComplianceScanner('us-east-1', 'test', [
       'ami-approved1',
       'ami-approved2',

@@ -32,7 +32,6 @@ module.exports = {
     '<rootDir>/lib/**/*.mjs',
     '<rootDir>/lib/**/*.js',
     '!<rootDir>/bin/**/*.ts',
-    '!<rootDir>/lib/lambda/**',
     '!<rootDir>/**/*.d.ts',
     '!<rootDir>/**/*.test.ts',
     '!<rootDir>/**/*.test.js',
