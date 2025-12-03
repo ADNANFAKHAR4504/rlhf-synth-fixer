@@ -1,5 +1,9 @@
 name: rds-optimization
-runtime: nodejs
+runtime:
+  name: nodejs
+  options:
+    typescript: true
+main: bin/
 description: RDS PostgreSQL optimization with read replica and monitoring
 config:
   aws:region:
