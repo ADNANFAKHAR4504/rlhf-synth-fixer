@@ -15,7 +15,11 @@ import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
-import { IAMClient, GetRoleCommand, GetRolePolicyCommand } from '@aws-sdk/client-iam';
+import {
+  IAMClient,
+  GetRoleCommand,
+  GetRolePolicyCommand,
+} from '@aws-sdk/client-iam';
 
 // Load outputs from deployment
 const loadOutputs = () => {
@@ -238,7 +242,9 @@ describe('Image Processor Integration Tests', () => {
     it('should include environmentSuffix in all resource names', () => {
       // Extract the actual environmentSuffix from deployed resource names
       // The bucket name format is: image-processor-bucket-{environmentSuffix}
-      const bucketNameMatch = outputs.bucketName.match(/image-processor-bucket-(.+)$/);
+      const bucketNameMatch = outputs.bucketName.match(
+        /image-processor-bucket-(.+)$/
+      );
       expect(bucketNameMatch).toBeTruthy();
 
       const environmentSuffix = bucketNameMatch![1];

@@ -9,7 +9,10 @@ pulumi.runtime.setMocks({
     const outputs: Record<string, any> = { ...args.inputs };
 
     // Set specific mock outputs based on resource type
-    if (args.type === 'aws:s3/bucket:Bucket' || args.type === 'aws:s3/bucketV2:BucketV2') {
+    if (
+      args.type === 'aws:s3/bucket:Bucket' ||
+      args.type === 'aws:s3/bucketV2:BucketV2'
+    ) {
       outputs.bucket = args.inputs.bucket;
       outputs.arn = `arn:aws:s3:::${args.inputs.bucket}`;
     } else if (args.type === 'aws:lambda/function:Function') {
@@ -61,7 +64,7 @@ describe('Image Processor Infrastructure Tests', () => {
   });
 
   describe('Exports', () => {
-    it('should export bucketName', (done) => {
+    it('should export bucketName', done => {
       pulumi.all([module.bucketName]).apply(([bucketName]) => {
         expect(bucketName).toBeDefined();
         expect(bucketName).toContain('test123');
@@ -69,7 +72,7 @@ describe('Image Processor Infrastructure Tests', () => {
       });
     });
 
-    it('should export bucketArn', (done) => {
+    it('should export bucketArn', done => {
       pulumi.all([module.bucketArn]).apply(([bucketArn]) => {
         expect(bucketArn).toBeDefined();
         expect(bucketArn).toContain('arn:aws:s3:::');
@@ -77,7 +80,7 @@ describe('Image Processor Infrastructure Tests', () => {
       });
     });
 
-    it('should export lambdaFunctionName', (done) => {
+    it('should export lambdaFunctionName', done => {
       pulumi.all([module.lambdaFunctionName]).apply(([functionName]) => {
         expect(functionName).toBeDefined();
         expect(functionName).toContain('test123');
@@ -85,7 +88,7 @@ describe('Image Processor Infrastructure Tests', () => {
       });
     });
 
-    it('should export lambdaFunctionArn', (done) => {
+    it('should export lambdaFunctionArn', done => {
       pulumi.all([module.lambdaFunctionArn]).apply(([functionArn]) => {
         expect(functionArn).toBeDefined();
         expect(functionArn).toContain('arn:aws:lambda:');
@@ -93,7 +96,7 @@ describe('Image Processor Infrastructure Tests', () => {
       });
     });
 
-    it('should export logGroupName', (done) => {
+    it('should export logGroupName', done => {
       pulumi.all([module.logGroupName]).apply(([logGroupName]) => {
         expect(logGroupName).toBeDefined();
         expect(logGroupName).toContain('/aws/lambda/');
@@ -101,7 +104,7 @@ describe('Image Processor Infrastructure Tests', () => {
       });
     });
 
-    it('should export lambdaRoleArn', (done) => {
+    it('should export lambdaRoleArn', done => {
       pulumi.all([module.lambdaRoleArn]).apply(([roleArn]) => {
         expect(roleArn).toBeDefined();
         expect(roleArn).toContain('arn:aws:iam::');
@@ -111,14 +114,14 @@ describe('Image Processor Infrastructure Tests', () => {
   });
 
   describe('Configuration Tests', () => {
-    it('should use environmentSuffix in resource names', (done) => {
-      pulumi.all([module.bucketName, module.lambdaFunctionName]).apply(
-        ([bucketName, functionName]) => {
+    it('should use environmentSuffix in resource names', done => {
+      pulumi
+        .all([module.bucketName, module.lambdaFunctionName])
+        .apply(([bucketName, functionName]) => {
           expect(bucketName).toContain('test123');
           expect(functionName).toContain('test123');
           done();
-        }
-      );
+        });
     });
 
     it('should handle default values when config is not provided', () => {
