@@ -13,7 +13,7 @@ capabilities deployed by this Pulumi infrastructure.
   AWS_REGION: us-east-1
   AWS_ACCESS_KEY_ID: ***
   AWS_SECRET_ACCESS_KEY: ***
-  ENVIRONMENT_SUFFIX: test
+  ENVIRONMENT_SUFFIX: pr7702
 
 [PASS] Environment variables configured
 
@@ -116,9 +116,9 @@ Analyzing AWS resources...
   Infrastructure Compliance Analysis Report
 ======================================================================
 
-Scan ID: compliance-scan-20251203T205343
-Timestamp: 2025-12-03T20:53:43.723901Z
-Environment: test
+Scan ID: compliance-scan-20251203T173947
+Timestamp: 2025-12-03T17:39:47.989076Z
+Environment: pr7702
 Region: us-east-1
 Required Tags: Environment, Owner, Team, Project, CreatedAt
 
