@@ -1,480 +1,128 @@
-# CodeBuild Automated Build Infrastructure - Pulumi TypeScript Implementation
+# Model Response
 
-This document contains the complete implementation of a CodeBuild-based automated build infrastructure using Pulumi with TypeScript.
+This file should contain the initial model output for the CI/CD Pipeline YAML configuration task.
 
-## File: lib/tap-stack.ts
+## Expected Content
 
-```typescript
-/**
- * tap-stack.ts
- *
- * Main Pulumi ComponentResource for the CodeBuild automated build infrastructure.
- * Orchestrates S3 artifact storage, CodeBuild project, IAM roles, CloudWatch Logs,
- * SNS notifications, and EventBridge rules for build failure detection.
- */
-import * as pulumi from '@pulumi/pulumi';
-import { ResourceOptions } from '@pulumi/pulumi';
-import { ArtifactBucket } from './artifact-bucket';
-import { CodeBuildProject } from './codebuild-project';
-import { BuildNotifications } from './build-notifications';
+The model's response should include:
 
-/**
- * TapStackArgs defines the input arguments for the TapStack Pulumi component.
- */
-export interface TapStackArgs {
-  /**
-   * An optional suffix for identifying the deployment environment (e.g., 'dev', 'prod').
-   * Defaults to 'dev' if not provided.
-   */
-  environmentSuffix?: string;
+1. **Analysis Phase**
+   - Understanding the platform requirements
+   - Identifying the Node.js application needs
+   - Determining the deployment target (AWS ECR + infrastructure)
 
-  /**
-   * Optional default tags to apply to resources.
-   */
-  tags?: pulumi.Input<{ [key: string]: string }>;
-}
+2. **Pipeline Design**
+   - Multi-stage pipeline architecture
+   - Build → Scan → Deploy flow
+   - Environment-specific configurations
 
-/**
- * Represents the main Pulumi component resource for the CodeBuild infrastructure.
- *
- * This component orchestrates the instantiation of:
- * - S3 bucket for build artifacts
- * - CodeBuild project with Node.js configuration
- * - IAM roles and policies
- * - CloudWatch Logs for build output
- * - SNS topic for notifications
- * - EventBridge rule for failure detection
- */
-export class TapStack extends pulumi.ComponentResource {
-  public readonly artifactBucketName: pulumi.Output<string>;
-  public readonly codeBuildProjectName: pulumi.Output<string>;
-  public readonly snsTopicArn: pulumi.Output<string>;
+3. **Implementation**
+   - Complete `lib/ci-cd.yml` file
+   - Platform-specific syntax (GitHub Actions, GitLab CI, etc.)
+   - External scripts in `scripts/` directory if needed
 
-  /**
-   * Creates a new TapStack component.
-   * @param name The logical name of this Pulumi component.
-   * @param args Configuration arguments including environment suffix and tags.
-   * @param opts Pulumi options.
-   */
-  constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
-    super('tap:stack:TapStack', name, args, opts);
+4. **Key Components**
+   - Source checkout
+   - Docker image build
+   - Container vulnerability scanning
+   - Private registry push (ECR)
+   - Multi-environment deployment
+   - Manual approval gates
+   - Notifications
 
-    const environmentSuffix = args.environmentSuffix || 'dev';
-    const tags = args.tags || {
-      Environment: 'production',
-      Team: 'devops'
-    };
+## Example Initial Response Structure
 
-    // Create S3 bucket for build artifacts
-    const artifactBucket = new ArtifactBucket('artifact-bucket', {
-      environmentSuffix: environmentSuffix,
-      tags: tags
-    }, { parent: this });
+```yaml
+# lib/ci-cd.yml
 
-    // Create CodeBuild project with IAM role and CloudWatch Logs
-    const codeBuildProject = new CodeBuildProject('codebuild-project', {
-      environmentSuffix: environmentSuffix,
-      artifactBucketName: artifactBucket.bucketName,
-      artifactBucketArn: artifactBucket.bucketArn,
-      tags: tags
-    }, { parent: this });
+name: Docker Build and Deploy Pipeline
 
-    // Create SNS topic and EventBridge rule for build failure notifications
-    const buildNotifications = new BuildNotifications('build-notifications', {
-      environmentSuffix: environmentSuffix,
-      codeBuildProjectArn: codeBuildProject.projectArn,
-      tags: tags
-    }, { parent: this });
+on:
+  push:
+    branches: [main, dev]
 
-    // Export outputs
-    this.artifactBucketName = artifactBucket.bucketName;
-    this.codeBuildProjectName = codeBuildProject.projectName;
-    this.snsTopicArn = buildNotifications.snsTopicArn;
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
 
-    // Register the outputs of this component
-    this.registerOutputs({
-      artifactBucketName: this.artifactBucketName,
-      codeBuildProjectName: this.codeBuildProjectName,
-      snsTopicArn: this.snsTopicArn
-    });
-  }
-}
-```
-
-## File: lib/artifact-bucket.ts
-
-```typescript
-/**
- * artifact-bucket.ts
- *
- * Creates an S3 bucket for storing CodeBuild artifacts with versioning enabled.
- */
-import * as pulumi from '@pulumi/pulumi';
-import * as aws from '@pulumi/aws';
-
-export interface ArtifactBucketArgs {
-  environmentSuffix: string;
-  tags: pulumi.Input<{ [key: string]: string }>;
-}
-
-export class ArtifactBucket extends pulumi.ComponentResource {
-  public readonly bucketName: pulumi.Output<string>;
-  public readonly bucketArn: pulumi.Output<string>;
-
-  constructor(name: string, args: ArtifactBucketArgs, opts?: pulumi.ComponentResourceOptions) {
-    super('tap:s3:ArtifactBucket', name, {}, opts);
-
-    // Create S3 bucket for artifacts
-    const bucket = new aws.s3.Bucket(`artifacts-${args.environmentSuffix}`, {
-      bucket: `codebuild-artifacts-${args.environmentSuffix}`,
-      tags: args.tags,
-      forceDestroy: true // Enable destroyability - bucket can be deleted even with objects
-    }, { parent: this });
-
-    // Enable versioning on the bucket
-    const bucketVersioning = new aws.s3.BucketVersioningV2(`artifacts-versioning-${args.environmentSuffix}`, {
-      bucket: bucket.id,
-      versioningConfiguration: {
-        status: 'Enabled'
-      }
-    }, { parent: this });
-
-    // Enable server-side encryption
-    const bucketEncryption = new aws.s3.BucketServerSideEncryptionConfigurationV2(`artifacts-encryption-${args.environmentSuffix}`, {
-      bucket: bucket.id,
-      rules: [{
-        applyServerSideEncryptionByDefault: {
-          sseAlgorithm: 'AES256'
-        }
-      }]
-    }, { parent: this });
-
-    // Block public access
-    const bucketPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(`artifacts-public-access-${args.environmentSuffix}`, {
-      bucket: bucket.id,
-      blockPublicAcls: true,
-      blockPublicPolicy: true,
-      ignorePublicAcls: true,
-      restrictPublicBuckets: true
-    }, { parent: this });
-
-    this.bucketName = bucket.id;
-    this.bucketArn = bucket.arn;
-
-    this.registerOutputs({
-      bucketName: this.bucketName,
-      bucketArn: this.bucketArn
-    });
-  }
-}
-```
-
-## File: lib/codebuild-project.ts
-
-```typescript
-/**
- * codebuild-project.ts
- *
- * Creates CodeBuild project with IAM role, CloudWatch Logs, and proper configuration
- * for Node.js application builds.
- */
-import * as pulumi from '@pulumi/pulumi';
-import * as aws from '@pulumi/aws';
-
-export interface CodeBuildProjectArgs {
-  environmentSuffix: string;
-  artifactBucketName: pulumi.Output<string>;
-  artifactBucketArn: pulumi.Output<string>;
-  tags: pulumi.Input<{ [key: string]: string }>;
-}
-
-export class CodeBuildProject extends pulumi.ComponentResource {
-  public readonly projectName: pulumi.Output<string>;
-  public readonly projectArn: pulumi.Output<string>;
-
-  constructor(name: string, args: CodeBuildProjectArgs, opts?: pulumi.ComponentResourceOptions) {
-    super('tap:codebuild:CodeBuildProject', name, {}, opts);
-
-    // Create CloudWatch Logs group for build output
-    const logGroup = new aws.cloudwatch.LogGroup(`codebuild-logs-${args.environmentSuffix}`, {
-      name: `/aws/codebuild/nodejs-build-${args.environmentSuffix}`,
-      retentionInDays: 7, // 7-day retention for cost optimization
-      tags: args.tags
-    }, { parent: this });
-
-    // Create IAM role for CodeBuild
-    const codeBuildRole = new aws.iam.Role(`codebuild-role-${args.environmentSuffix}`, {
-      name: `codebuild-role-${args.environmentSuffix}`,
-      assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [{
-          Effect: 'Allow',
-          Principal: {
-            Service: 'codebuild.amazonaws.com'
-          },
-          Action: 'sts:AssumeRole'
-        }]
-      }),
-      tags: args.tags
-    }, { parent: this });
-
-    // Create IAM policy for S3 access
-    const s3Policy = new aws.iam.RolePolicy(`codebuild-s3-policy-${args.environmentSuffix}`, {
-      role: codeBuildRole.id,
-      policy: pulumi.all([args.artifactBucketArn]).apply(([bucketArn]) => JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [{
-          Effect: 'Allow',
-          Action: [
-            's3:PutObject',
-            's3:GetObject',
-            's3:GetObjectVersion',
-            's3:ListBucket'
-          ],
-          Resource: [
-            bucketArn,
-            `${bucketArn}/*`
-          ]
-        }]
-      }))
-    }, { parent: this });
-
-    // Create IAM policy for CloudWatch Logs access
-    const logsPolicy = new aws.iam.RolePolicy(`codebuild-logs-policy-${args.environmentSuffix}`, {
-      role: codeBuildRole.id,
-      policy: pulumi.all([logGroup.arn]).apply(([logGroupArn]) => JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [{
-          Effect: 'Allow',
-          Action: [
-            'logs:CreateLogGroup',
-            'logs:CreateLogStream',
-            'logs:PutLogEvents'
-          ],
-          Resource: [
-            logGroupArn,
-            `${logGroupArn}:*`
-          ]
-        }]
-      }))
-    }, { parent: this });
-
-    // Create CodeBuild project
-    const project = new aws.codebuild.Project(`nodejs-build-${args.environmentSuffix}`, {
-      name: `nodejs-build-${args.environmentSuffix}`,
-      serviceRole: codeBuildRole.arn,
-      artifacts: {
-        type: 'S3',
-        location: args.artifactBucketName,
-        namespaceType: 'BUILD_ID',
-        packaging: 'ZIP'
-      },
-      environment: {
-        computeType: 'BUILD_GENERAL1_SMALL', // 3 GB memory
-        image: 'aws/codebuild/standard:6.0',
-        type: 'LINUX_CONTAINER',
-        environmentVariables: [
-          {
-            name: 'NODE_ENV',
-            value: 'production',
-            type: 'PLAINTEXT'
-          },
-          {
-            name: 'BUILD_NUMBER',
-            value: '#{CODEBUILD_BUILD_NUMBER}',
-            type: 'PLAINTEXT'
-          }
-        ]
-      },
-      source: {
-        type: 'NO_SOURCE',
-        buildspec: `version: 0.2
-phases:
-  install:
-    runtime-versions:
-      nodejs: 18
-  pre_build:
-    commands:
-      - echo "Installing dependencies..."
-      - npm install
+jobs:
   build:
-    commands:
-      - echo "Building application..."
-      - npm run build
-  post_build:
-    commands:
-      - echo "Build completed on \`date\`"
-artifacts:
-  files:
-    - '**/*'
-  name: build-artifact-$BUILD_NUMBER
-`
-      },
-      logsConfig: {
-        cloudwatchLogs: {
-          groupName: logGroup.name,
-          status: 'ENABLED'
-        }
-      },
-      buildTimeout: 15, // 15 minutes timeout
-      tags: args.tags
-    }, {
-      parent: this,
-      dependsOn: [s3Policy, logsPolicy]
-    });
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-    this.projectName = project.name;
-    this.projectArn = project.arn;
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
 
-    this.registerOutputs({
-      projectName: this.projectName,
-      projectArn: this.projectArn
-    });
-  }
-}
+      - name: Build Docker image
+        run: |
+          docker build -t nodejs-app:${{ github.sha }} .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: nodejs-app-${{ github.sha }}.tar
+
+  scan:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+
+      - name: Run Trivy scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: nodejs-app:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          exit-code: 1
+
+  deploy-dev:
+    needs: scan
+    environment: dev
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Dev
+        run: ./scripts/deploy.sh dev
+
+  deploy-staging:
+    needs: deploy-dev
+    environment: staging
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Staging
+        run: ./scripts/deploy.sh staging
+
+  deploy-prod:
+    needs: deploy-staging
+    environment: production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Production
+        run: ./scripts/deploy.sh prod
+
+      - name: Notify on success
+        if: success()
+        run: |
+          curl -X POST ${{ secrets.SLACK_WEBHOOK }} \
+            -H 'Content-Type: application/json' \
+            -d '{"text":"Production deployment successful"}'
 ```
 
-## File: lib/build-notifications.ts
+## Evaluation Criteria
 
-```typescript
-/**
- * build-notifications.ts
- *
- * Creates SNS topic and EventBridge rule to detect and notify on CodeBuild failures.
- */
-import * as pulumi from '@pulumi/pulumi';
-import * as aws from '@pulumi/aws';
-
-export interface BuildNotificationsArgs {
-  environmentSuffix: string;
-  codeBuildProjectArn: pulumi.Output<string>;
-  tags: pulumi.Input<{ [key: string]: string }>;
-}
-
-export class BuildNotifications extends pulumi.ComponentResource {
-  public readonly snsTopicArn: pulumi.Output<string>;
-
-  constructor(name: string, args: BuildNotificationsArgs, opts?: pulumi.ComponentResourceOptions) {
-    super('tap:notifications:BuildNotifications', name, {}, opts);
-
-    // Create SNS topic for build failure notifications
-    const snsTopic = new aws.sns.Topic(`build-failures-${args.environmentSuffix}`, {
-      name: `build-failures-${args.environmentSuffix}`,
-      displayName: 'CodeBuild Failure Notifications',
-      tags: args.tags
-    }, { parent: this });
-
-    // Create EventBridge rule to detect build failures
-    const eventRule = new aws.cloudwatch.EventRule(`build-failure-rule-${args.environmentSuffix}`, {
-      name: `build-failure-rule-${args.environmentSuffix}`,
-      description: 'Detect CodeBuild build failures',
-      eventPattern: pulumi.all([args.codeBuildProjectArn]).apply(([projectArn]) => {
-        const projectName = projectArn.split('/').pop();
-        return JSON.stringify({
-          source: ['aws.codebuild'],
-          'detail-type': ['CodeBuild Build State Change'],
-          detail: {
-            'build-status': ['FAILED'],
-            'project-name': [projectName]
-          }
-        });
-      }),
-      tags: args.tags
-    }, { parent: this });
-
-    // Create EventBridge target to send to SNS
-    const eventTarget = new aws.cloudwatch.EventTarget(`build-failure-target-${args.environmentSuffix}`, {
-      rule: eventRule.name,
-      arn: snsTopic.arn,
-      inputTransformer: {
-        inputPaths: {
-          buildId: '$.detail.build-id',
-          projectName: '$.detail.project-name',
-          buildStatus: '$.detail.build-status',
-          region: '$.region',
-          account: '$.account'
-        },
-        inputTemplate: `"Build <buildId> for project <projectName> has FAILED. Status: <buildStatus>. AWS Account: <account>, Region: <region>"`
-      }
-    }, { parent: this });
-
-    // Allow EventBridge to publish to SNS topic
-    const snsTopicPolicy = new aws.sns.TopicPolicy(`build-failures-policy-${args.environmentSuffix}`, {
-      arn: snsTopic.arn,
-      policy: pulumi.all([snsTopic.arn, eventRule.arn]).apply(([topicArn, ruleArn]) => JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [{
-          Effect: 'Allow',
-          Principal: {
-            Service: 'events.amazonaws.com'
-          },
-          Action: 'SNS:Publish',
-          Resource: topicArn,
-          Condition: {
-            ArnEquals: {
-              'aws:SourceArn': ruleArn
-            }
-          }
-        }]
-      }))
-    }, { parent: this });
-
-    this.snsTopicArn = snsTopic.arn;
-
-    this.registerOutputs({
-      snsTopicArn: this.snsTopicArn
-    });
-  }
-}
-```
-
-## Architecture Overview
-
-### Components
-
-1. **S3 Artifact Bucket** (`artifact-bucket.ts`)
-   - Versioning enabled for artifact history
-   - Server-side encryption (AES256)
-   - Public access blocked
-   - Force destroy enabled for clean teardown
-
-2. **CodeBuild Project** (`codebuild-project.ts`)
-   - Node.js 18 runtime with aws/codebuild/standard:6.0 image
-   - BUILD_GENERAL1_SMALL compute type (3 GB memory)
-   - 15-minute build timeout
-   - Environment variables: NODE_ENV=production, BUILD_NUMBER
-   - CloudWatch Logs with 7-day retention
-   - IAM role with least privilege (S3 + CloudWatch Logs)
-
-3. **Build Notifications** (`build-notifications.ts`)
-   - SNS topic for failure alerts
-   - EventBridge rule detecting FAILED build status
-   - Input transformer for readable notifications
-   - Proper IAM policies for EventBridge → SNS
-
-### Resource Naming
-
-All resources follow the pattern: `{resource-type}-${environmentSuffix}` to ensure uniqueness across parallel deployments.
-
-### Destroyability
-
-All resources are configured to be fully destroyable:
-- S3 bucket has `forceDestroy: true`
-- CloudWatch Logs has explicit retention period (7 days)
-- No deletion protection on any resources
-- No RETAIN policies
-
-### Security
-
-- S3 bucket encryption enabled (SSE-S3)
-- Public access blocked on artifact bucket
-- IAM roles follow least privilege principle
-- Separate policies for S3 and CloudWatch Logs access
-- EventBridge rule scoped to specific CodeBuild project
-
-### Cost Optimization
-
-- CloudWatch Logs retention: 7 days only
-- BUILD_GENERAL1_SMALL compute type (smallest with 3 GB memory)
-- No NAT Gateways or expensive resources
-- Serverless services (S3, CloudWatch, SNS, EventBridge)
+The response will be evaluated against:
+- Platform syntax correctness
+- Script length compliance (>5 lines external)
+- Private registry usage
+- Secret management
+- Container scanning
+- Environment declarations
+- Artifact handling
+- Notifications

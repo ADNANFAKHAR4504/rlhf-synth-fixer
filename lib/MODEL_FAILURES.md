@@ -1,334 +1,211 @@
-# Model Response Failures Analysis
+# Model Failures
 
-This document analyzes the failures in the MODEL_RESPONSE.md that prevented successful deployment and testing of the Pulumi-based CodeBuild infrastructure. The model generated structurally correct component files but failed to properly integrate them in the Pulumi entry point, which is a critical oversight in infrastructure-as-code projects.
+This file documents common issues, errors, or failures encountered during CI/CD Pipeline YAML implementation.
 
-## Critical Failures
+## Critical Failures (Auto-Fail)
 
-### 1. Missing environmentSuffix Parameter in Pulumi Entry Point
+### 1. Hardcoded Secrets
+**Issue**: Credentials hardcoded directly in YAML configuration
 
-**Impact Level**: Critical
-
-**MODEL_RESPONSE Issue**:
-The MODEL_RESPONSE did not include a `bin/tap.ts` entry point file, which is specified in `Pulumi.yaml` as the main program entry. When this file was created (presumably by the model or template), it instantiated TapStack without passing the `environmentSuffix` parameter:
-
-```typescript
-// INCORRECT - Missing environmentSuffix
-new TapStack(
-  'pulumi-infra',
-  {
-    tags: defaultTags,
-  },
-  { provider }
-);
+**Examples of Violations**:
+```yaml
+env:
+  AWS_ACCESS_KEY_ID: AKIAIOSFODNN7EXAMPLE
+  AWS_SECRET_ACCESS_KEY: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+  DATABASE_PASSWORD: MySecretPassword123
 ```
 
-This caused TapStack to always use the default value of "dev" (line 62 in tap-stack.ts: `const environmentSuffix = args.environmentSuffix || 'dev';`), completely ignoring the `ENVIRONMENT_SUFFIX` environment variable. As a result:
-- All AWS resources were created with "dev" suffix instead of the unique task ID "j9x1a6q2"
-- Parallel deployments would conflict, overwriting each other's resources
-- Resource naming convention requirement was violated
+**Impact**: Security breach, credential exposure in version control
+**Fix**: Use platform-specific secret management
 
-**IDEAL_RESPONSE Fix**:
-```typescript
-// CORRECT - Pass environmentSuffix from environment variable
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+### 2. Inline Scripts >5 Lines
+**Issue**: Complex logic embedded directly in pipeline YAML
 
-const stack = new TapStack(
-  'pulumi-infra',
-  {
-    environmentSuffix: environmentSuffix,
-    tags: defaultTags,
-  },
-  { provider }
-);
+**Example of Violation**:
+```yaml
+- name: Deploy Application
+  run: |
+    echo "Starting deployment"
+    aws ecr get-login-password --region us-east-1 | docker login ...
+    docker build -t myapp:latest .
+    docker tag myapp:latest $ECR_REGISTRY/myapp:latest
+    docker push $ECR_REGISTRY/myapp:latest
+    kubectl apply -f k8s/deployment.yml
+    kubectl rollout status deployment/myapp
 ```
 
-**Root Cause**:
-The model failed to understand that Pulumi programs require an entry point file (specified in `Pulumi.yaml` as `main: bin/tap.ts`) that reads configuration from environment variables and passes them to the stack constructor. While the model correctly implemented the TapStack component with proper parameter handling, it did not generate or document the entry point file that bridges environment configuration to the stack instantiation.
+**Impact**: Unmaintainable, untestable, hard to debug
+**Fix**: Move to `scripts/deploy.sh`
 
-**AWS Documentation Reference**: N/A (This is a Pulumi-specific pattern, not AWS-specific)
+### 3. Public DockerHub Images for Deployment
+**Issue**: Using public container registry instead of private registry
 
-**Cost/Security/Performance Impact**:
-- **Deployment Failure**: Unable to deploy with unique resource names, causing conflicts with existing "dev" resources
-- **Parallel Deployment Risk**: Critical failure for CI/CD pipelines that run parallel deployments
-- **Resource Isolation**: Severe security risk as different environments/PRs would share resources
-- **Estimated Cost**: Deployment failures wasted 2-3 deployment attempts (~$0.50 in CodeBuild time)
-
----
-
-### 2. Missing Stack Output Exports
-
-**Impact Level**: Critical
-
-**MODEL_RESPONSE Issue**:
-The bin/tap.ts entry point (when created) did not export the stack outputs, resulting in empty Pulumi state outputs:
-
-```typescript
-// INCORRECT - Stack outputs not exported
-new TapStack(
-  'pulumi-infra',
-  {
-    environmentSuffix: environmentSuffix,
-    tags: defaultTags,
-  },
-  { provider }
-);
-// Missing: export statements
+**Example of Violation**:
+```yaml
+- name: Build and Deploy
+  run: |
+    docker build -t myusername/myapp:latest .
+    docker push myusername/myapp:latest
 ```
 
-This caused:
-- `pulumi stack output --json` returned empty object `{}`
-- Integration tests could not load `cfn-outputs/flat-outputs.json`
-- No way to reference deployed resources from external tools or tests
-- Complete failure of the testing phase
+**Impact**: No access control, potential security risks
+**Fix**: Use ECR, GCR, ACR, or other private registries
 
-**IDEAL_RESPONSE Fix**:
-```typescript
-// CORRECT - Export all stack outputs
-const stack = new TapStack(
-  'pulumi-infra',
-  {
-    environmentSuffix: environmentSuffix,
-    tags: defaultTags,
-  },
-  { provider }
-);
+### 4. Missing Container Scanning
+**Issue**: Building and deploying containers without vulnerability scanning
 
-// Export outputs for external consumption
-export const artifactBucketName = stack.artifactBucketName;
-export const codeBuildProjectName = stack.codeBuildProjectName;
-export const snsTopicArn = stack.snsTopicArn;
+**Example of Violation**:
+```yaml
+- name: Build
+  run: docker build -t myapp:latest .
+- name: Deploy
+  run: ./scripts/deploy.sh
 ```
 
-**Root Cause**:
-The model did not recognize that Pulumi entry points must export stack outputs using TypeScript `export` statements for them to be accessible via `pulumi stack output`. While TapStack correctly defined public readonly properties and called `registerOutputs()`, this only registers outputs within the component tree. Top-level exports are required to make outputs available to the Pulumi CLI and external consumers.
+**Impact**: Deploying vulnerable containers to production
+**Fix**: Add Trivy, Grype, Snyk, or Anchore scanning
 
-**AWS Documentation Reference**: N/A (This is a Pulumi-specific requirement)
+## Security Failures
 
-**Cost/Security/Performance Impact**:
-- **Testing Blocked**: Integration tests completely blocked without outputs
-- **Operational Risk**: No way to retrieve resource identifiers for operations/debugging
-- **CI/CD Failure**: Automated pipelines cannot access deployed resource information
-- **Training Impact**: Critical failure that would require complete code regeneration in production
+### 5. Missing Environment Declarations
+**Issue**: Deploying to production without environment protection
 
----
-
-## High Severity Failures
-
-### 3. Deprecated S3 Resource Types
-
-**Impact Level**: High
-
-**MODEL_RESPONSE Issue**:
-The model used deprecated Pulumi S3 resource types that trigger warnings during deployment:
-
-```typescript
-// DEPRECATED
-const bucketVersioning = new aws.s3.BucketVersioningV2(...);
-const bucketEncryption = new aws.s3.BucketServerSideEncryptionConfigurationV2(...);
+**Example of Violation**:
+```yaml
+deploy-prod:
+  runs-on: ubuntu-latest
+  steps:
+    - run: ./scripts/deploy.sh prod
 ```
 
-Warning messages:
-```
-warning: BucketVersioningV2 is deprecated: aws.s3/bucketversioningv2.BucketVersioningV2 has been deprecated in favor of aws.s3/bucketversioning.BucketVersioning
+**Impact**: No deployment protection, accidental production deployments
+**Fix**: Add `environment: production`
 
-warning: BucketServerSideEncryptionConfigurationV2 is deprecated: aws.s3/bucketserversideencryptionconfigurationv2.BucketServerSideEncryptionConfigurationV2 has been deprecated in favor of aws.s3/bucketserversideencryptionconfiguration.BucketServerSideEncryptionConfiguration
-```
+### 6. Incorrect Platform Syntax
+**Issue**: Using wrong syntax for detected CI/CD platform
 
-**IDEAL_RESPONSE Fix**:
-```typescript
-// CURRENT - Use non-deprecated resource types
-const bucketVersioning = new aws.s3.BucketVersioning(...);
-const bucketEncryption = new aws.s3.BucketServerSideEncryptionConfiguration(...);
-```
-
-**Root Cause**:
-The model's training data likely includes older Pulumi AWS provider versions where these V2 resources were current. The Pulumi AWS provider has since moved away from V2 suffixes, consolidating to cleaner resource names. The model failed to use the latest Pulumi AWS provider API.
-
-**AWS Documentation Reference**:
-- [AWS S3 Bucket Versioning Documentation](https://docs.aws.amazon.com/AmazonS3/latest/userguide/Versioning.html)
-- [Pulumi AWS S3 Package Documentation](https://www.pulumi.com/registry/packages/aws/api-docs/s3/)
-
-**Cost/Security/Performance Impact**:
-- **Future Compatibility Risk**: Deprecated resources may be removed in future Pulumi versions
-- **Code Quality**: Warning messages clutter deployment logs and obscure real issues
-- **Maintenance Burden**: Technical debt that must be addressed in future updates
-- **No Immediate Functional Impact**: Resources work correctly despite deprecation
-
----
-
-## Medium Severity Failures
-
-### 4. Lint Errors Due to Unused Variables
-
-**Impact Level**: Medium
-
-**MODEL_RESPONSE Issue**:
-The model correctly created S3 configuration resources (versioning, encryption, public access block) but did not reference them after creation, causing ESLint violations:
-
-```typescript
-// INCORRECT - Variable assigned but never used
-const bucketVersioning = new aws.s3.BucketVersioningV2(...);
-const bucketEncryption = new aws.s3.BucketServerSideEncryptionConfigurationV2(...);
-const bucketPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(...);
+**Example of Violation** (GitLab CI using GitHub Actions syntax):
+```yaml
+name: Pipeline
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
 ```
 
-ESLint errors:
-```
-'bucketVersioning' is assigned a value but never used
-'bucketEncryption' is assigned a value but never used
-'bucketPublicAccessBlock' is assigned a value but never used
-```
+**Impact**: Pipeline won't execute, syntax errors
+**Fix**: Use platform-specific syntax
 
-**IDEAL_RESPONSE Fix**:
-```typescript
-// CORRECT - Prefix with underscore and add ESLint directive
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const _bucketVersioning = new aws.s3.BucketVersioningV2(...);
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const _bucketEncryption = new aws.s3.BucketServerSideEncryptionConfigurationV2(...);
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const _bucketPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(...);
-```
+## Functional Failures
 
-**Root Cause**:
-In declarative infrastructure frameworks like Pulumi, resources are created for their side effects (provisioning AWS resources), not for their return values. The model correctly understood this pattern but did not account for JavaScript/TypeScript linters that flag unused variables. The underscore prefix convention signals intentional side-effect-only usage, and the ESLint directive explicitly acknowledges this pattern.
+### 7. Missing Job Dependencies
+**Issue**: Jobs running without proper dependency chain
 
-**AWS Documentation Reference**: N/A (This is a code quality issue, not AWS-specific)
+**Example of Violation**:
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps: [...]
 
-**Cost/Security/Performance Impact**:
-- **Build Pipeline Blocked**: Lint failures prevent deployment in strict CI/CD pipelines
-- **Code Quality Gate**: Violates project code quality standards
-- **Developer Experience**: Forces manual lint fixes before deployment
-- **No Functional Impact**: Code works correctly despite lint errors
-
----
-
-### 5. Missing Pulumi Entry Point File
-
-**Impact Level**: Medium
-
-**MODEL_RESPONSE Issue**:
-The MODEL_RESPONSE document only provided the component files (lib/tap-stack.ts, lib/artifact-bucket.ts, lib/codebuild-project.ts, lib/build-notifications.ts) but did not include the `bin/tap.ts` entry point file that Pulumi.yaml references as the main program. This omission meant:
-
-- No file to execute when running `pulumi up`
-- No bridge between environment variables and stack configuration
-- No mechanism to export stack outputs
-- Incomplete implementation that cannot be deployed as-is
-
-**IDEAL_RESPONSE Fix**:
-Include complete bin/tap.ts file in MODEL_RESPONSE documentation:
-
-```typescript
-/**
- * Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
- */
-import * as aws from '@pulumi/aws';
-import { TapStack } from '../lib/tap-stack';
-
-// Get the environment suffix from environment variables, defaulting to 'dev'.
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
-// Get metadata from environment variables for tagging purposes.
-const repository = process.env.REPOSITORY || 'unknown';
-const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
-const prNumber = process.env.PR_NUMBER || 'unknown';
-const team = process.env.TEAM || 'unknown';
-const createdAt = new Date().toISOString();
-
-// Define default tags to apply to all resources.
-const defaultTags = {
-  Environment: environmentSuffix,
-  Repository: repository,
-  Author: commitAuthor,
-  PRNumber: prNumber,
-  Team: team,
-  CreatedAt: createdAt,
-};
-
-// Configure AWS provider with default tags
-const provider = new aws.Provider('aws', {
-  region: process.env.AWS_REGION || 'us-east-1',
-  defaultTags: {
-    tags: defaultTags,
-  },
-});
-
-// Instantiate the main stack component.
-const stack = new TapStack(
-  'pulumi-infra',
-  {
-    environmentSuffix: environmentSuffix,
-    tags: defaultTags,
-  },
-  { provider }
-);
-
-// Export stack outputs for external consumption
-export const artifactBucketName = stack.artifactBucketName;
-export const codeBuildProjectName = stack.codeBuildProjectName;
-export const snsTopicArn = stack.snsTopicArn;
+  deploy:
+    runs-on: ubuntu-latest
+    steps: [...]  # Missing 'needs: build'
 ```
 
-**Root Cause**:
-The model focused on generating the component architecture (which it did well) but failed to include the glue code that makes a Pulumi program executable. This suggests the model understands componentization and modular design but has gaps in understanding complete Pulumi project structure. The entry point is critical infrastructure that bridges OS environment, CLI configuration, and application code.
+**Impact**: Deploy job might run before build completes
+**Fix**: Add proper job dependencies with `needs:`
 
-**AWS Documentation Reference**: N/A (Pulumi-specific requirement)
+### 8. Missing Artifact Handling
+**Issue**: Not passing build artifacts to deployment stages
 
-**Cost/Security/Performance Impact**:
-- **Incomplete Deliverable**: Code cannot be used without manual entry point creation
-- **Developer Time**: Requires understanding Pulumi patterns to complete
-- **Training Quality**: Reduces training value as implementation is incomplete
-- **Deployment Blocked**: Cannot deploy without entry point file
+**Example of Violation**:
+```yaml
+build:
+  runs-on: ubuntu-latest
+  steps:
+    - run: npm run build
+    # Missing artifact upload
 
----
-
-## Low Severity Failures
-
-### 6. Prettier Formatting Issues
-
-**Impact Level**: Low
-
-**MODEL_RESPONSE Issue**:
-The generated code had minor formatting inconsistencies that violated Prettier rules:
-- Inconsistent line wrapping
-- Extra/missing spaces
-- Single vs double quotes in one location
-
-Example:
-```typescript
-// BEFORE PRETTIER
-inputTemplate: `"Build <buildId>..."`  // Template literal with quoted string
-
-// AFTER PRETTIER
-inputTemplate: '"Build <buildId>..."'  // Single-quoted string
+deploy:
+  needs: build
+  runs-on: ubuntu-latest
+  steps:
+    - run: ./scripts/deploy.sh
+    # Missing artifact download
 ```
 
-**IDEAL_RESPONSE Fix**:
-Run `npm run format` (Prettier) on all generated code before delivery.
+**Impact**: Deploy stage has no artifacts to deploy
+**Fix**: Use actions/upload-artifact and actions/download-artifact
 
-**Root Cause**:
-The model generates syntactically correct code but does not apply project-specific formatting rules. This is expected for AI-generated code, as formatting is typically handled by automated tooling (Prettier, ESLint auto-fix) in modern development workflows.
+### 9. Missing Manual Approval for Production
+**Issue**: No manual approval gate before production deployment
 
-**AWS Documentation Reference**: N/A (Code formatting issue)
+**Example of Violation**:
+```yaml
+deploy-prod:
+  needs: deploy-staging
+  runs-on: ubuntu-latest
+  # Missing environment approval
+```
 
-**Cost/Security/Performance Impact**:
-- **Trivial Impact**: Automatically fixed by running `npm run format`
-- **CI/CD Noise**: May cause initial CI check failures if formatting is enforced
-- **Code Review Friction**: Minor diff noise in pull requests
-- **Zero Functional Impact**: No effect on deployment or runtime behavior
+**Impact**: Automated deployments to production without review
+**Fix**: Add environment with required reviewers
 
----
+### 10. No Failure Notifications
+**Issue**: Pipeline failures go unnoticed
+
+**Example of Violation**:
+```yaml
+jobs:
+  deploy:
+    steps:
+      - run: ./scripts/deploy.sh
+    # Missing notification on failure
+```
+
+**Impact**: Team unaware of deployment failures
+**Fix**: Add Slack/email notifications with `if: failure()`
+
+## Platform-Specific Issues
+
+### 11. GitHub Actions - Missing Checkout
+**Issue**: Not checking out code before use
+
+**Example of Violation**:
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm install  # No code checked out!
+```
+
+### 12. GitLab CI - Missing Image Declaration
+**Issue**: Not specifying Docker image for job execution
+
+**Example of Violation**:
+```yaml
+build:
+  script:
+    - npm install  # No image specified
+```
+
+### 13. CircleCI - Incorrect Version Format
+**Issue**: Using wrong version declaration
+
+**Example of Violation**:
+```yaml
+version: 3.0  # CircleCI uses 2.1
+```
 
 ## Summary
 
-- **Total failures**: 2 Critical, 1 High, 2 Medium, 1 Low
-- **Primary knowledge gaps**:
-  1. **Pulumi Entry Point Patterns**: Model understands component design but fails to generate complete, executable Pulumi programs with proper entry points, environment variable integration, and output exports
-  2. **Deprecated API Usage**: Model relies on outdated Pulumi AWS provider APIs (V2 resource types) instead of current best practices
-  3. **Lint Tool Awareness**: Model doesn't account for JavaScript/TypeScript code quality tools that flag declarative infrastructure patterns as unused variables
+Common failure categories:
+- **Security**: Hardcoded secrets, no scanning, public registries
+- **Maintainability**: Long inline scripts, poor organization
+- **Reliability**: Missing dependencies, no artifacts, no approvals
+- **Compliance**: Missing environment protection, no notifications
+- **Platform**: Incorrect syntax, missing required elements
 
-- **Training value**: High
-  The core infrastructure architecture is well-designed with proper componentization, least-privilege IAM, and all required AWS services. The failures are integration/glue code issues rather than fundamental design problems. Fixing these gaps would significantly improve the model's ability to generate production-ready Pulumi code that deploys and tests successfully without manual intervention. The issues identified are systematic patterns that could be corrected through targeted training on:
-  - Pulumi project structure and entry point requirements
-  - Current Pulumi AWS provider API versions
-  - Common IaC linting patterns and conventions
+All issues must be resolved for production-ready pipeline configuration.
