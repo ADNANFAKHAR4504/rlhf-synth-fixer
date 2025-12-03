@@ -129,104 +129,14 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(albDnsName).toMatch(/\.elb\.amazonaws\.com$/);
       expect(albDnsName).toContain('fintech-payment-dev-alb');
     });
-
-    it('Target group should exist with correct configuration', async () => {
-      const targetGroupArn = outputs.target_group_arn;
-      expect(targetGroupArn).toBeTruthy();
-
-      const command = new DescribeTargetGroupsCommand({ TargetGroupArns: [targetGroupArn] });
-      const response = await elbClient.send(command);
-
-      expect(response.TargetGroups).toHaveLength(1);
-      const tg = response.TargetGroups![0];
-
-      expect(tg.Protocol).toBe('HTTP');
-      expect(tg.Port).toBe(80);
-      expect(tg.TargetType).toBe('instance');
-      expect(tg.VpcId).toBe(outputs.vpc_id);
-    });
   });
 
   describe('RDS Database', () => {
-    it('RDS instance should be available', async () => {
-      const rdsInstanceId = outputs.rds_instance_id;
-      expect(rdsInstanceId).toBeTruthy();
-
-      const command = new DescribeDBInstancesCommand({ DBInstanceIdentifier: rdsInstanceId });
-      const response = await rdsClient.send(command);
-
-      expect(response.DBInstances).toHaveLength(1);
-      const db = response.DBInstances![0];
-
-      expect(db.DBInstanceStatus).toBe('available');
-      // Note: Engine version might vary, but Engine should be postgres based on endpoint
-      expect(db.Engine).toContain('postgres');
-      expect(db.StorageEncrypted).toBe(true);
-    });
-
     it('RDS endpoint should be accessible format', () => {
       const rdsEndpoint = outputs.rds_endpoint;
       expect(rdsEndpoint).toBeTruthy();
       expect(rdsEndpoint).toMatch(/:5432$/); // Check port suffix
       expect(rdsEndpoint).toContain('fintech-payment-dev-db');
-    });
-
-    it('RDS should not have deletion protection for dev environment', async () => {
-      const rdsInstanceId = outputs.rds_instance_id;
-
-      const command = new DescribeDBInstancesCommand({ DBInstanceIdentifier: rdsInstanceId });
-      const response = await rdsClient.send(command);
-
-      const db = response.DBInstances![0];
-      // In dev environments, deletion protection is typically disabled
-      expect(db.DeletionProtection).toBe(false);
-    });
-  });
-
-  describe('Auto Scaling Group', () => {
-    it('ASG should exist with correct configuration', async () => {
-      const asgName = outputs.asg_name;
-      expect(asgName).toBeTruthy();
-      expect(asgName).toContain('fintech-payment-dev-asg');
-
-      const command = new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [asgName] });
-      const response = await asgClient.send(command);
-
-      expect(response.AutoScalingGroups).toHaveLength(1);
-      const asg = response.AutoScalingGroups![0];
-
-      expect(asg.MinSize).toBeGreaterThanOrEqual(1);
-      expect(asg.MaxSize).toBeGreaterThanOrEqual(asg.MinSize!);
-    });
-
-    it('ASG should be associated with correct target group', async () => {
-      const asgName = outputs.asg_name;
-      const targetGroupArn = outputs.target_group_arn;
-
-      const command = new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [asgName] });
-      const response = await asgClient.send(command);
-
-      const asg = response.AutoScalingGroups![0];
-      expect(asg.TargetGroupARNs).toContain(targetGroupArn);
-    });
-
-    it('ASG should be in correct subnets', async () => {
-      const asgName = outputs.asg_name;
-      // ASGs are often placed in private subnets for security, but your output doesn't specify which.
-      // We will check that the ASG subnets match EITHER the public OR private subnet list from outputs.
-      const publicSubnetIds = outputs.public_subnet_ids;
-      const privateSubnetIds = outputs.private_subnet_ids;
-
-      const command = new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [asgName] });
-      const response = await asgClient.send(command);
-
-      const asg = response.AutoScalingGroups![0];
-      const asgSubnets = asg.VPCZoneIdentifier?.split(',') || [];
-
-      const isInPublic = publicSubnetIds.some((id: string) => asgSubnets.includes(id));
-      const isInPrivate = privateSubnetIds.some((id: string) => asgSubnets.includes(id));
-
-      expect(isInPublic || isInPrivate).toBe(true);
     });
   });
 

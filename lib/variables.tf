@@ -1,7 +1,7 @@
 variable "aws_region" {
   description = "AWS region for infrastructure deployment"
   type        = string
-  default     = "us-east-1"
+  default     = "us-east-2"
 }
 
 variable "project_name" {
@@ -13,7 +13,7 @@ variable "project_name" {
 variable "environment_suffix" {
   description = "Unique suffix for resource names to prevent conflicts"
   type        = string
-  default     = "dev-002"
+  default     = "dev-003"
 }
 
 variable "db_password" {
