@@ -416,7 +416,7 @@ class TapStack(TerraformStack):
             f"db_master_password_{environment_suffix}",
             length=32,
             special=True,
-            override_special="!#$%&*()-_=+[]{}<>:?"
+            override_special="!#$&*()-_=[]{}:?"
         )
 
         db_credentials = {
@@ -514,7 +514,33 @@ class TapStack(TerraformStack):
             policy_arn="arn:aws:iam::aws:policy/service-role/AmazonDMSVPCManagementRole"
         )
 
-        # DMS subnet group must be created AFTER the role/policy attachment so DMS can validate
+        # Add inline policy for VPC management if needed
+        dms_vpc_inline_policy = IamRolePolicy(
+            self,
+            f"dms_vpc_inline_policy_{environment_suffix}",
+            name=f"dms-vpc-inline-policy-{environment_suffix}",
+            role=dms_role.id,
+            policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "ec2:CreateNetworkInterface",
+                            "ec2:DescribeNetworkInterfaces",
+                            "ec2:DeleteNetworkInterface",
+                            "ec2:DescribeSubnets",
+                            "ec2:DescribeSecurityGroups",
+                            "ec2:DescribeVpcs",
+                            "ec2:ModifyNetworkInterfaceAttribute"
+                        ],
+                        "Resource": "*"
+                    }
+                ]
+            })
+        )
+
+        # DMS subnet group must be created AFTER the role/policy attachments so DMS can validate
         dms_subnet_group = DmsReplicationSubnetGroup(
             self,
             f"dms_subnet_group_{environment_suffix}",
@@ -522,7 +548,7 @@ class TapStack(TerraformStack):
             replication_subnet_group_description=f"DMS subnet group - {environment_suffix}",
             subnet_ids=[s.id for s in mig_dms_subnets],
             tags={"Name": f"dms-subnet-group-{environment_suffix}"},
-            depends_on=[dms_vpc_policy_attachment]
+            depends_on=[dms_vpc_policy_attachment, dms_vpc_inline_policy]
         )
 
         dms_instance = DmsReplicationInstance(
@@ -536,7 +562,16 @@ class TapStack(TerraformStack):
             publicly_accessible=False,
             multi_az=True,
             engine_version="3.5.1",
-            tags={"Name": f"dms-instance-{environment_suffix}"}
+            tags={"Name": f"dms-instance-{environment_suffix}"},
+            depends_on=[dms_subnet_group]
+        )
+
+        source_password = Password(
+            self,
+            f"source_db_password_{environment_suffix}",
+            length=32,
+            special=True,
+            override_special="!#$&*()-_=[]{}:?"
         )
 
         source_endpoint = DmsEndpoint(
@@ -549,9 +584,10 @@ class TapStack(TerraformStack):
             port=5432,
             database_name="payments",
             username="sourceuser",
-            password="sourcepassword",
+            password=source_password.result,
             ssl_mode="require",
-            tags={"Name": f"source-endpoint-{environment_suffix}"}
+            tags={"Name": f"source-endpoint-{environment_suffix}"},
+            depends_on=[dms_instance]
         )
 
         target_endpoint = DmsEndpoint(
@@ -566,7 +602,8 @@ class TapStack(TerraformStack):
             username=db_credentials["username"],
             password=db_credentials["password"],
             ssl_mode="require",
-            tags={"Name": f"target-endpoint-{environment_suffix}"}
+            tags={"Name": f"target-endpoint-{environment_suffix}"},
+            depends_on=[dms_instance, aurora_cluster]
         )
 
         dms_task = DmsReplicationTask(
