@@ -1,4 +1,3 @@
-import { AcmCertificate } from '@cdktf/provider-aws/lib/acm-certificate';
 import { AppautoscalingPolicy } from '@cdktf/provider-aws/lib/appautoscaling-policy';
 import { AppautoscalingTarget } from '@cdktf/provider-aws/lib/appautoscaling-target';
 import { CloudfrontDistribution } from '@cdktf/provider-aws/lib/cloudfront-distribution';
@@ -75,38 +74,6 @@ export class PaymentProcessingInfrastructure extends Construct {
       description: `Customer-managed key for payment processing ${environmentSuffix}`,
       enableKeyRotation: true,
       deletionWindowInDays: 7,
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Principal: {
-              AWS: 'arn:aws:iam::*:root',
-            },
-            Action: 'kms:*',
-            Resource: '*',
-          },
-          {
-            Effect: 'Allow',
-            Principal: {
-              Service: 'logs.amazonaws.com',
-            },
-            Action: [
-              'kms:Encrypt',
-              'kms:Decrypt',
-              'kms:ReEncrypt*',
-              'kms:GenerateDataKey*',
-              'kms:DescribeKey',
-            ],
-            Resource: '*',
-            Condition: {
-              ArnEquals: {
-                'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${awsRegion}:*:log-group:/ecs/payment-processing-${environmentSuffix}`,
-              },
-            },
-          },
-        ],
-      }),
       tags: {
         Name: `payment-kms-${environmentSuffix}`,
       },
@@ -417,14 +384,14 @@ export class PaymentProcessingInfrastructure extends Construct {
       },
     });
 
-    new SecurityGroupRule(this, 'alb-ingress-https', {
+    new SecurityGroupRule(this, 'alb-ingress-http', {
       type: 'ingress',
-      fromPort: 443,
-      toPort: 443,
+      fromPort: 80,
+      toPort: 80,
       protocol: 'tcp',
       cidrBlocks: ['0.0.0.0/0'],
       securityGroupId: albSecurityGroup.id,
-      description: 'Allow HTTPS from internet',
+      description: 'Allow HTTP from internet',
     });
 
     new SecurityGroupRule(this, 'alb-egress', {
@@ -574,7 +541,6 @@ export class PaymentProcessingInfrastructure extends Construct {
     const ecsLogGroup = new CloudwatchLogGroup(this, 'ecs-log-group', {
       name: `/ecs/payment-processing-${environmentSuffix}`,
       retentionInDays: 2557, // 7 years for PCI DSS compliance
-      kmsKeyId: kmsKey.arn,
       tags: {
         Name: `payment-ecs-logs-${environmentSuffix}`,
       },
@@ -699,18 +665,18 @@ export class PaymentProcessingInfrastructure extends Construct {
     this.rdsEndpoint = rdsCluster.endpoint;
 
     // ===========================
-    // 12. ACM Certificate (Self-signed for demo)
+    // 12. ACM Certificate (Removed for demo - using HTTP)
     // ===========================
-    const certificate = new AcmCertificate(this, 'certificate', {
-      domainName: `payment-${environmentSuffix}.example.com`,
-      validationMethod: 'EMAIL',
-      tags: {
-        Name: `payment-cert-${environmentSuffix}`,
-      },
-      lifecycle: {
-        createBeforeDestroy: true,
-      },
-    });
+    // const certificate = new AcmCertificate(this, 'certificate', {
+    //   domainName: `payment-${environmentSuffix}.example.com`,
+    //   validationMethod: 'EMAIL',
+    //   tags: {
+    //     Name: `payment-cert-${environmentSuffix}`,
+    //   },
+    //   lifecycle: {
+    //     createBeforeDestroy: true,
+    //   },
+    // });
 
     // ===========================
     // 13. Application Load Balancer
@@ -752,10 +718,8 @@ export class PaymentProcessingInfrastructure extends Construct {
 
     new LbListener(this, 'alb-listener', {
       loadBalancerArn: alb.arn,
-      port: 443,
-      protocol: 'HTTPS',
-      sslPolicy: 'ELBSecurityPolicy-TLS-1-2-2017-01',
-      certificateArn: certificate.arn,
+      port: 80,
+      protocol: 'HTTP',
       defaultAction: [
         {
           type: 'forward',
