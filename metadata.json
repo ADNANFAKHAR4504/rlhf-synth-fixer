@@ -26,5 +26,7 @@
     "AWS Config"
   ],
   "region": "us-east-1",
-  "training_quality": 8
+  "training_quality": 8,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing"
 }
