@@ -37,73 +37,44 @@ from constructs import Construct
 
 
 class TapStackProps(cdk.StackProps):
-  """
-    Properties for the TapStack CDK stack.
+    """Properties for the TapStack CDK stack."""
 
-  Args:
-        environment_suffix: Suffix to identify the deployment environment.
-    **kwargs: Additional keyword arguments passed to the base cdk.StackProps.
-  """
-
-  def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
-    super().__init__(**kwargs)
-    self.environment_suffix = environment_suffix
+    def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        self.environment_suffix = environment_suffix
 
 
 class TapStack(cdk.Stack):
-  """
-    Secure Data Processing Pipeline Stack.
+    """Secure Data Processing Pipeline Stack."""
 
-    Implements a zero-trust architecture with defense-in-depth security controls
-    for financial services compliance in us-east-1 region.
-  """
-
-  def __init__(
-          self,
-          scope: Construct,
+    def __init__(
+        self,
+        scope: Construct,
         construct_id: str,
         props: Optional[TapStackProps] = None,
         **kwargs
     ):
-    super().__init__(scope, construct_id, **kwargs)
+        super().__init__(scope, construct_id, **kwargs)
 
-        # Get environment suffix
         self.environment_suffix = (
-        props.environment_suffix if props else None
+            props.environment_suffix if props else None
         ) or self.node.try_get_context("environmentSuffix") or "dev"
 
-        # Create KMS key first
         self.kms_key = self._create_kms_key()
-
-        # Create VPC with endpoints
         self.vpc, self.vpc_endpoints = self._create_isolated_vpc()
-
-        # Create S3 buckets
         self.audit_logs_bucket = self._create_audit_logs_bucket()
         self.raw_data_bucket = self._create_secure_s3_bucket("raw-data")
         self.processed_data_bucket = self._create_secure_s3_bucket("processed-data")
-
-        # Create CloudWatch log groups
         self.lambda_log_group = self._create_encrypted_log_group(
             f"/aws/lambda/data-processor-{self.environment_suffix}"
         )
         self.api_gateway_log_group = self._create_encrypted_log_group(
             f"/aws/apigateway/data-pipeline-{self.environment_suffix}"
         )
-
-        # Create DynamoDB table
         self.dynamodb_table = self._create_dynamodb_table()
-
-        # Create Secrets Manager secret
         self.api_certificate_secret = self._create_api_certificate_secret()
-
-        # Create Lambda function
         self.lambda_function = self._create_isolated_lambda()
-
-        # Create API Gateway
         self.api_gateway = self._create_api_gateway()
-
-        # Create stack outputs
         self._create_outputs()
 
     def _create_kms_key(self) -> kms.Key:
@@ -118,13 +89,10 @@ class TapStack(cdk.Stack):
             removal_policy=RemovalPolicy.DESTROY,
         )
 
-        # Add key policy for CloudWatch Logs encryption
         key.add_to_resource_policy(
             iam.PolicyStatement(
                 sid="EnableCloudWatchLogsEncryption",
-                principals=[
-                    iam.ServicePrincipal("logs.us-east-1.amazonaws.com")
-                ],
+                principals=[iam.ServicePrincipal("logs.us-east-1.amazonaws.com")],
                 actions=[
                     "kms:Encrypt",
                     "kms:Decrypt",
@@ -163,7 +131,6 @@ class TapStack(cdk.Stack):
             enable_dns_support=True,
         )
 
-        # Security group for VPC endpoints
         endpoint_sg = ec2.SecurityGroup(
             self,
             "VPCEndpointSecurityGroup",
@@ -180,7 +147,6 @@ class TapStack(cdk.Stack):
 
         vpc_endpoints = {}
 
-        # S3 Gateway Endpoint
         vpc_endpoints["s3"] = ec2.GatewayVpcEndpoint(
             self,
             "S3VPCEndpoint",
@@ -188,7 +154,6 @@ class TapStack(cdk.Stack):
             service=ec2.GatewayVpcEndpointAwsService.S3,
         )
 
-        # DynamoDB Gateway Endpoint
         vpc_endpoints["dynamodb"] = ec2.GatewayVpcEndpoint(
             self,
             "DynamoDBVPCEndpoint",
@@ -196,7 +161,6 @@ class TapStack(cdk.Stack):
             service=ec2.GatewayVpcEndpointAwsService.DYNAMODB,
         )
 
-        # Secrets Manager Interface Endpoint
         vpc_endpoints["secrets_manager"] = ec2.InterfaceVpcEndpoint(
             self,
             "SecretsManagerVPCEndpoint",
@@ -207,7 +171,6 @@ class TapStack(cdk.Stack):
             subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_ISOLATED)
         )
 
-        # CloudWatch Logs Interface Endpoint
         vpc_endpoints["logs"] = ec2.InterfaceVpcEndpoint(
             self,
             "CloudWatchLogsVPCEndpoint",
@@ -276,7 +239,7 @@ class TapStack(cdk.Stack):
         )
 
     def _create_encrypted_log_group(self, log_group_name: str) -> logs.LogGroup:
-        """Creates a CloudWatch log group with KMS encryption and 90-day retention."""
+        """Creates a CloudWatch log group with KMS encryption."""
         return logs.LogGroup(
             self,
             f"{log_group_name.replace('/', '').replace('-', '')}LogGroup",
@@ -288,7 +251,7 @@ class TapStack(cdk.Stack):
 
     def _create_dynamodb_table(self) -> dynamodb.Table:
         """Creates a DynamoDB table with point-in-time recovery."""
-        table = dynamodb.Table(
+        return dynamodb.Table(
             self,
             "ProcessingMetadataTable",
             table_name=f"data-pipeline-metadata-{self.environment_suffix}",
@@ -309,10 +272,8 @@ class TapStack(cdk.Stack):
             removal_policy=RemovalPolicy.DESTROY,
         )
 
-        return table
-
     def _create_api_certificate_secret(self) -> secretsmanager.Secret:
-        """Creates a Secrets Manager secret for API certificates with rotation."""
+        """Creates a Secrets Manager secret for API certificates."""
         secret = secretsmanager.Secret(
             self,
             "APICertificateSecret",
@@ -331,7 +292,6 @@ class TapStack(cdk.Stack):
             removal_policy=RemovalPolicy.DESTROY
         )
 
-        # Add rotation schedule
         secret.add_rotation_schedule(
             "RotationSchedule",
             automatically_after=Duration.days(30),
@@ -347,8 +307,6 @@ class TapStack(cdk.Stack):
 
     def _create_isolated_lambda(self) -> lambda_.Function:
         """Creates a Lambda function with strict IAM controls."""
-        # Create IAM role with minimal permissions
-        # Using from_managed_policy_arn to avoid CDK metadata warnings
         vpc_access_policy = iam.ManagedPolicy.from_managed_policy_arn(
             self,
             "VPCAccessPolicy",
@@ -363,7 +321,6 @@ class TapStack(cdk.Stack):
             managed_policies=[vpc_access_policy],
         )
 
-        # Explicitly deny internet access via IAM
         lambda_role.add_to_policy(
             iam.PolicyStatement(
                 sid="DenyInternetAccess",
@@ -374,28 +331,19 @@ class TapStack(cdk.Stack):
                     "ec2:DescribeNetworkInterfaces"
                 ],
                 resources=["*"],
-                conditions={
-                    "ForAnyValue:StringEquals": {
-                        "ec2:SubnetID": []
-                    }
-                }
+                conditions={"ForAnyValue:StringEquals": {"ec2:SubnetID": []}}
             )
         )
 
-        # Grant minimal S3 read permissions
         lambda_role.add_to_policy(
             iam.PolicyStatement(
                 sid="MinimalS3Read",
                 effect=iam.Effect.ALLOW,
-                actions=[
-                    "s3:GetObject",
-                    "s3:GetObjectVersion"
-                ],
+                actions=["s3:GetObject", "s3:GetObjectVersion"],
                 resources=[f"{self.raw_data_bucket.bucket_arn}/*"]
             )
         )
 
-        # Grant minimal S3 write permissions
         lambda_role.add_to_policy(
             iam.PolicyStatement(
                 sid="MinimalS3Write",
@@ -405,16 +353,11 @@ class TapStack(cdk.Stack):
             )
         )
 
-        # Grant minimal DynamoDB permissions
         lambda_role.add_to_policy(
             iam.PolicyStatement(
                 sid="MinimalDynamoDBAccess",
                 effect=iam.Effect.ALLOW,
-                actions=[
-                    "dynamodb:PutItem",
-                    "dynamodb:GetItem",
-                    "dynamodb:Query"
-                ],
+                actions=["dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:Query"],
                 resources=[
                     self.dynamodb_table.table_arn,
                     f"{self.dynamodb_table.table_arn}/index/*"
@@ -422,10 +365,8 @@ class TapStack(cdk.Stack):
             )
         )
 
-        # Grant KMS permissions
         self.kms_key.grant_encrypt_decrypt(lambda_role)
 
-        # Create security group for Lambda
         lambda_sg = ec2.SecurityGroup(
             self,
             "LambdaSecurityGroup",
@@ -440,8 +381,7 @@ class TapStack(cdk.Stack):
             description="Allow HTTPS to VPC endpoints"
         )
 
-        # Create Lambda function
-        lambda_function = lambda_.Function(
+        return lambda_.Function(
             self,
             "DataProcessorFunction",
             function_name=f"secure-data-processor-{self.environment_suffix}",
@@ -465,11 +405,9 @@ class TapStack(cdk.Stack):
             log_group=self.lambda_log_group,
         )
 
-        return lambda_function
-
     def _get_lambda_code(self) -> str:
         """Returns the Lambda function code."""
-        return '''
+        return """
 import json
 import boto3
 import os
@@ -483,7 +421,6 @@ def handler(event, context):
         processing_id = context.aws_request_id
         timestamp = int(datetime.now().timestamp())
 
-        # Record processing start
         dynamodb.put_item(
             TableName=os.environ['DYNAMODB_TABLE_NAME'],
             Item={
@@ -494,12 +431,10 @@ def handler(event, context):
             }
         )
 
-        # Process request body
         body = event.get('body', '{}')
         if isinstance(body, str):
             body = json.loads(body)
 
-        # Record processing complete
         dynamodb.put_item(
             TableName=os.environ['DYNAMODB_TABLE_NAME'],
             Item={
@@ -525,7 +460,7 @@ def handler(event, context):
             'headers': {'Content-Type': 'application/json'},
             'body': json.dumps({'error': str(e)})
         }
-'''
+"""
 
     def _create_api_gateway(self) -> apigateway.RestApi:
         """Creates an API Gateway REST API with Lambda integration."""
@@ -559,13 +494,11 @@ def handler(event, context):
             endpoint_types=[apigateway.EndpointType.REGIONAL],
         )
 
-        # Create Lambda integration
         lambda_integration = apigateway.LambdaIntegration(
             self.lambda_function,
             proxy=True,
         )
 
-        # Add /process resource
         process_resource = api.root.add_resource("process")
         process_resource.add_method(
             "POST",
@@ -573,7 +506,6 @@ def handler(event, context):
             authorization_type=apigateway.AuthorizationType.IAM,
         )
 
-        # Add API key for additional security
         api_key = apigateway.ApiKey(
             self,
             "DataPipelineAPIKey",
@@ -610,73 +542,65 @@ def handler(event, context):
     def _create_outputs(self) -> None:
         """Creates stack outputs."""
         CfnOutput(
-            self,
-            "KMSKeyARN",
+            self, "KMSKeyARN",
             value=self.kms_key.key_arn,
             description="ARN of the customer-managed KMS key",
             export_name=f"DataPipelineKMSKeyARN-{self.environment_suffix}"
         )
 
         CfnOutput(
-            self,
-            "APIGatewayEndpoint",
+            self, "APIGatewayEndpoint",
             value=self.api_gateway.url,
             description="API Gateway endpoint URL",
             export_name=f"DataPipelineAPIEndpoint-{self.environment_suffix}"
         )
 
         CfnOutput(
-            self,
-            "S3VPCEndpointID",
+            self, "S3VPCEndpointID",
             value=self.vpc_endpoints["s3"].vpc_endpoint_id,
             description="S3 VPC Endpoint ID",
             export_name=f"S3VPCEndpointID-{self.environment_suffix}"
         )
 
         CfnOutput(
-            self,
-            "DynamoDBVPCEndpointID",
+            self, "DynamoDBVPCEndpointID",
             value=self.vpc_endpoints["dynamodb"].vpc_endpoint_id,
             description="DynamoDB VPC Endpoint ID",
             export_name=f"DynamoDBVPCEndpointID-{self.environment_suffix}"
         )
 
         CfnOutput(
-            self,
-            "SecretsManagerVPCEndpointID",
+            self, "SecretsManagerVPCEndpointID",
             value=self.vpc_endpoints["secrets_manager"].vpc_endpoint_id,
             description="Secrets Manager VPC Endpoint ID",
             export_name=f"SecretsManagerVPCEndpointID-{self.environment_suffix}"
         )
 
         CfnOutput(
-            self,
-            "RawDataBucketName",
+            self, "RawDataBucketName",
             value=self.raw_data_bucket.bucket_name,
             description="Raw data S3 bucket name",
             export_name=f"RawDataBucketName-{self.environment_suffix}"
         )
 
         CfnOutput(
-            self,
-            "ProcessedDataBucketName",
+            self, "ProcessedDataBucketName",
             value=self.processed_data_bucket.bucket_name,
             description="Processed data S3 bucket name",
             export_name=f"ProcessedDataBucketName-{self.environment_suffix}"
         )
 
         CfnOutput(
-            self,
-            "DynamoDBTableName",
+            self, "DynamoDBTableName",
             value=self.dynamodb_table.table_name,
             description="DynamoDB table name",
             export_name=f"DynamoDBTableName-{self.environment_suffix}"
         )
 
         CfnOutput(
-            self,
-            "LambdaFunctionName",
+            self, "LambdaFunctionName",
             value=self.lambda_function.function_name,
             description="Lambda function name",
             export_name=f"LambdaFunctionName-{self.environment_suffix}"
         )
+
