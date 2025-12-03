@@ -289,6 +289,183 @@ describe('TapStack Component Resource', () => {
       expect(createECSService).toBeDefined();
       expect(typeof createECSService).toBe('function');
     });
+
+    it('should create an ECS service when called with valid parameters', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { createECSService } = require('../lib/tap-stack');
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const aws = require('@pulumi/aws');
+
+      // Create mock resources
+      const mockCluster = new aws.ecs.Cluster('test-cluster', {
+        name: 'test-cluster',
+      });
+
+      const mockTaskDef = new aws.ecs.TaskDefinition('test-task', {
+        family: 'test-task',
+        cpu: '256',
+        memory: '512',
+        networkMode: 'awsvpc',
+        requiresCompatibilities: ['FARGATE'],
+        containerDefinitions: JSON.stringify([]),
+      });
+
+      const mockVpc = new aws.ec2.Vpc('test-vpc', {
+        cidrBlock: '10.0.0.0/16',
+      });
+
+      const mockTargetGroup = new aws.lb.TargetGroup('test-tg', {
+        port: 3000,
+        protocol: 'HTTP',
+        vpcId: mockVpc.id,
+        targetType: 'ip',
+      });
+
+      const mockSecurityGroup = new aws.ec2.SecurityGroup('test-sg', {
+        vpcId: mockVpc.id,
+        description: 'Test security group',
+      });
+
+      const mockSubnet = new aws.ec2.Subnet('test-subnet', {
+        vpcId: mockVpc.id,
+        cidrBlock: '10.0.1.0/24',
+      });
+
+      const mockAlb = new aws.lb.LoadBalancer('test-alb', {
+        loadBalancerType: 'application',
+        securityGroups: [mockSecurityGroup.id],
+        subnets: [mockSubnet.id],
+      });
+
+      const mockListener = new aws.lb.Listener('test-listener', {
+        loadBalancerArn: mockAlb.arn,
+        port: 80,
+        defaultActions: [
+          {
+            type: 'forward',
+            targetGroupArn: mockTargetGroup.arn,
+          },
+        ],
+      });
+
+      const commonTags = {
+        Environment: 'test',
+        Project: 'unit-test',
+        ManagedBy: 'Pulumi',
+        Team: 'test-team',
+      };
+
+      // Call createECSService function
+      const service = createECSService(
+        'test-service',
+        mockCluster,
+        mockTaskDef,
+        mockTargetGroup,
+        [mockSubnet.id],
+        mockSecurityGroup,
+        2,
+        3000,
+        commonTags,
+        mockListener
+      );
+
+      // Verify service was created
+      expect(service).toBeDefined();
+
+      // Wait for resource creation
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Verify the service is in created resources
+      const serviceResources = Array.from(createdResources.keys()).filter((k) =>
+        k.includes('test-service')
+      );
+      expect(serviceResources.length).toBeGreaterThan(0);
+    });
+
+    it('should create an ECS service with parent resource', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { createECSService, TapStack } = require('../lib/tap-stack');
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const aws = require('@pulumi/aws');
+
+      // Create a parent TapStack
+      const parentStack = new TapStack('parent-stack', {});
+
+      // Create mock resources
+      const mockCluster = new aws.ecs.Cluster('child-cluster', {
+        name: 'child-cluster',
+      });
+
+      const mockTaskDef = new aws.ecs.TaskDefinition('child-task', {
+        family: 'child-task',
+        cpu: '256',
+        memory: '512',
+        networkMode: 'awsvpc',
+        requiresCompatibilities: ['FARGATE'],
+        containerDefinitions: JSON.stringify([]),
+      });
+
+      const mockVpc = new aws.ec2.Vpc('child-vpc', {
+        cidrBlock: '10.0.0.0/16',
+      });
+
+      const mockTargetGroup = new aws.lb.TargetGroup('child-tg', {
+        port: 3000,
+        protocol: 'HTTP',
+        vpcId: mockVpc.id,
+        targetType: 'ip',
+      });
+
+      const mockSecurityGroup = new aws.ec2.SecurityGroup('child-sg', {
+        vpcId: mockVpc.id,
+        description: 'Child security group',
+      });
+
+      const mockSubnet = new aws.ec2.Subnet('child-subnet', {
+        vpcId: mockVpc.id,
+        cidrBlock: '10.0.1.0/24',
+      });
+
+      const mockAlb = new aws.lb.LoadBalancer('child-alb', {
+        loadBalancerType: 'application',
+        securityGroups: [mockSecurityGroup.id],
+        subnets: [mockSubnet.id],
+      });
+
+      const mockListener = new aws.lb.Listener('child-listener', {
+        loadBalancerArn: mockAlb.arn,
+        port: 80,
+        defaultActions: [
+          {
+            type: 'forward',
+            targetGroupArn: mockTargetGroup.arn,
+          },
+        ],
+      });
+
+      const commonTags = {
+        Environment: 'test',
+        Project: 'unit-test',
+      };
+
+      // Call createECSService function with parent
+      const service = createECSService(
+        'child-service',
+        mockCluster,
+        mockTaskDef,
+        mockTargetGroup,
+        [mockSubnet.id],
+        mockSecurityGroup,
+        1,
+        8080,
+        commonTags,
+        mockListener,
+        parentStack
+      );
+
+      // Verify service was created
+      expect(service).toBeDefined();
+    });
   });
 });
 
