@@ -573,7 +573,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ### File: lib/lambda/compliance-checker/index.js
 
-```javascript
+```js
 /**
  * S3 Compliance Checker Lambda Function
  *
