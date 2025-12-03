@@ -9,7 +9,7 @@
  * different deployment environments (development, staging, production, etc.).
  */
 import * as aws from '@pulumi/aws';
-import { TapStack } from '../lib/tap-stack';
+import { TapStack } from '../lib/TapStack';
 
 // Get the environment suffix from environment variables, defaulting to 'dev'.
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';

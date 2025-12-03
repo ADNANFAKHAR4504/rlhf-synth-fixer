@@ -1,5 +1,5 @@
 /**
- * tap-stack.ts
+ * TapStack.ts
  *
  * S3 Compliance Analysis Tool - Pulumi TypeScript Implementation
  *
@@ -13,6 +13,7 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';
+import * as path from 'path';
 
 /**
  * TapStackArgs defines the input arguments for the TapStack Pulumi component.
@@ -268,7 +269,9 @@ export class TapStack extends pulumi.ComponentResource {
           },
         },
         code: new pulumi.asset.AssetArchive({
-          '.': new pulumi.asset.FileArchive('./lib/lambda/compliance-checker'),
+          '.': new pulumi.asset.FileArchive(
+            path.join(__dirname, 'lambda', 'compliance-checker')
+          ),
         }),
         tags: {
           Environment: environmentSuffix,

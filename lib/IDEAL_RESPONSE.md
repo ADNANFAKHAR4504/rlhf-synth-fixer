@@ -38,7 +38,7 @@ bin/
 └── tap.ts                            # Pulumi entry point (instantiates TapStack)
 
 lib/
-├── tap-stack.ts                      # Main Pulumi TapStack component
+├── TapStack.ts                       # Main Pulumi TapStack component
 ├── analyse.py                        # CI/CD analysis script
 ├── lambda/
 │   └── compliance-checker/
@@ -99,11 +99,11 @@ const provider = new aws.Provider('aws', {
 new TapStack('pulumi-infra', { environmentSuffix, tags: defaultTags }, { provider });
 ```
 
-### File: lib/tap-stack.ts
+### File: lib/TapStack.ts
 
 ```typescript
 /**
- * tap-stack.ts
+ * TapStack.ts
  *
  * S3 Compliance Analysis Tool - Pulumi TypeScript Implementation
  *
@@ -117,6 +117,7 @@ new TapStack('pulumi-infra', { environmentSuffix, tags: defaultTags }, { provide
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';
+import * as path from 'path';
 
 /**
  * TapStackArgs defines the input arguments for the TapStack Pulumi component.
@@ -344,7 +345,9 @@ export class TapStack extends pulumi.ComponentResource {
           },
         },
         code: new pulumi.asset.AssetArchive({
-          '.': new pulumi.asset.FileArchive('./lib/lambda/compliance-checker'),
+          '.': new pulumi.asset.FileArchive(
+            path.join(__dirname, 'lambda', 'compliance-checker')
+          ),
         }),
         tags: {
           Environment: environmentSuffix,

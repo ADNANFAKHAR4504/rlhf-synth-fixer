@@ -7,8 +7,8 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-// Read the tap-stack.ts file for pattern matching
-const indexCode = readFileSync(join(__dirname, '../lib/tap-stack.ts'), 'utf-8');
+// Read the TapStack.ts file for pattern matching
+const indexCode = readFileSync(join(__dirname, '../lib/TapStack.ts'), 'utf-8');
 const lambdaCode = readFileSync(
   join(__dirname, '../lib/lambda/compliance-checker/index.js'),
   'utf-8'
