@@ -1,0 +1,27 @@
+S3 Compliance Analysis Report
+======================================================================
+
+Scan ID: s3-compliance-scan-20251203141547
+Timestamp: 2025-12-03T14:15:47.069113Z
+Environment: test
+Region: us-east-1
+
+Overall Compliance Score: 80.0%
+Total Buckets: 20
+Compliant Buckets: 16
+Non-Compliant Buckets: 4
+
+Violations by Severity:
+  CRITICAL: 1
+  HIGH: 2
+  MEDIUM: 1
+  LOW: 0
+
+Violations by Type:
+  versioning: 2
+  encryption: 2
+  lifecycle: 3
+  publicAccess: 1
+  cloudwatchMetrics: 4
+
+======================================================================
