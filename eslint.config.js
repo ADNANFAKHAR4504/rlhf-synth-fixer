@@ -48,10 +48,54 @@ module.exports = [
       'no-new': 'off',
     },
   },
-  // Main project configuration (excludes templates)
+  // Separate configuration for bin folder (entry points - basic linting only)
+  {
+    files: ['bin/**/*.ts'],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        ecmaVersion: 2020,
+        sourceType: 'module',
+        // Don't use project-specific TypeScript config for entry points
+      },
+    },
+    plugins: {
+      '@typescript-eslint': typescriptEslint,
+      prettier: prettierPlugin,
+      import: importPlugin,
+    },
+    rules: {
+      // Prettier
+      'prettier/prettier': 'error',
+
+      // Basic TypeScript rules without project-specific parsing
+      ...typescriptEslint.configs.recommended.rules,
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_' },
+      ],
+      '@typescript-eslint/explicit-function-return-type': 'off',
+      '@typescript-eslint/explicit-module-boundary-types': 'off',
+      '@typescript-eslint/no-explicit-any': 'warn',
+
+      // Quote preferences
+      quotes: ['error', 'single', { avoidEscape: true }],
+      '@typescript-eslint/quotes': ['error', 'single', { avoidEscape: true }],
+
+      // Import rules (simplified for entry points)
+      'import/prefer-default-export': 'off',
+      'import/no-unresolved': 'off',
+
+      // General rules
+      'no-console': 'off',
+      'class-methods-use-this': 'off',
+      'no-new': 'off',
+    },
+  },
+  // Main project configuration (excludes templates and bin - entry points don't need typed linting)
   {
     files: ['**/*.ts'],
-    ignores: ['templates/**/*.ts'],
+    ignores: ['templates/**/*.ts', 'bin/**/*.ts'],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
