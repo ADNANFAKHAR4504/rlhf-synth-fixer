@@ -2,7 +2,7 @@ import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { RDSOptimizationStack } from '../lib/rds-stack';
 
-// Configuration
+// Configuration - RDS PostgreSQL Optimization
 const config = new pulumi.Config();
 const environmentSuffix = config.require('environmentSuffix');
 const dbPassword = config.requireSecret('dbPassword');
