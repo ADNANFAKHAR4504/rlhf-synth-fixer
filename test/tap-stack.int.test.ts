@@ -249,22 +249,17 @@ describe('Big Data Pipeline Integration Tests', () => {
       expect(getResponse.Body).toBeDefined();
 
       // Step 3: Manually trigger Glue job (EventBridge trigger verification)
-      const jobRunResponse = await glueClient.send(
-        new StartJobRunCommand({
-          JobName: glueJobName,
-          Arguments: {
-            '--raw_bucket': rawBucketName,
-            '--processed_bucket': processedBucketName,
-            '--failed_bucket': failedBucketName,
-            '--dlq_url': dlqUrl,
-          },
-        })
-      );
+      const jobRunId = await startGlueJobWithRetry({
+        '--raw_bucket': rawBucketName,
+        '--processed_bucket': processedBucketName,
+        '--failed_bucket': failedBucketName,
+        '--dlq_url': dlqUrl,
+      });
 
-      expect(jobRunResponse.JobRunId).toBeDefined();
+      expect(jobRunId).toBeDefined();
 
       // Step 4: Wait for job completion
-      const jobState = await waitForJobCompletion(jobRunResponse.JobRunId!);
+      const jobState = await waitForJobCompletion(jobRunId);
       expect(['SUCCEEDED', 'FAILED']).toContain(jobState);
     }, 700000);
   });
@@ -558,21 +553,16 @@ E2E_TXN_${timestamp},E2E_CUST_001,999.99,2024-01-15 15:00:00,E2E_MERCH_001,PURCH
       );
       expect(uploadVerify.Body).toBeDefined();
 
-      // Step 4: Trigger ETL job
-      const jobRun = await glueClient.send(
-        new StartJobRunCommand({
-          JobName: glueJobName,
-          Arguments: {
-            '--raw_bucket': rawBucketName,
-            '--processed_bucket': processedBucketName,
-            '--failed_bucket': failedBucketName,
-            '--dlq_url': dlqUrl,
-          },
-        })
-      );
+      // Step 4: Trigger ETL job with retry logic
+      const jobRunId = await startGlueJobWithRetry({
+        '--raw_bucket': rawBucketName,
+        '--processed_bucket': processedBucketName,
+        '--failed_bucket': failedBucketName,
+        '--dlq_url': dlqUrl,
+      });
 
       // Step 5: Wait for completion
-      const finalState = await waitForJobCompletion(jobRun.JobRunId!);
+      const finalState = await waitForJobCompletion(jobRunId);
 
       // Step 6: Log result
       console.log(`E2E test job completed with state: ${finalState}`);
