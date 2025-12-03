@@ -12,13 +12,14 @@ module.exports = {
   parserOptions: {
     ecmaVersion: 2020,
     sourceType: 'module',
-    project: './tsconfig.eslint.json',
+    project: './tsconfig.json',
+    tsconfigRootDir: __dirname,
   },
   settings: {
     'import/resolver': {
       typescript: {
         alwaysTryTypes: true,
-        project: './tsconfig.eslint.json',
+        project: './tsconfig.json',
       },
     },
   },
@@ -73,7 +74,5 @@ module.exports = {
     '*.d.ts',
     'worktree/',
     'test/',
-    'bin/',
-    'cli/',
   ],
 };
