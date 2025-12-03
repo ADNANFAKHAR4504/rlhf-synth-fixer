@@ -261,20 +261,23 @@ describe('ECS Optimization Integration Tests', () => {
       }
     });
 
-    it('should require file path argument', () => {
+    it('should use default file path when no argument provided', () => {
+      // The script now defaults to lib/tap-stack.ts when no argument is provided
       try {
-        execSync(`python3 ${scriptPath}`, {
+        const output = execSync(`python3 ${scriptPath}`, {
           encoding: 'utf-8',
+          cwd: path.join(__dirname, '..'),
         });
-        fail('Should have thrown error for missing argument');
+        expect(output).toContain('ECS INFRASTRUCTURE OPTIMIZATION ANALYSIS');
       } catch (error: any) {
-        expect(error.stderr || error.stdout).toContain('Usage');
+        // Script may exit with non-zero but should still analyze
+        expect(error.stdout).toContain('ECS INFRASTRUCTURE OPTIMIZATION ANALYSIS');
       }
     });
 
     it('should exit with appropriate code based on results', () => {
       try {
-        const result = execSync(`python3 ${scriptPath} ${tapStackPath}`, {
+        execSync(`python3 ${scriptPath} ${tapStackPath}`, {
           encoding: 'utf-8',
         });
         // If all checks pass, should exit 0
@@ -337,6 +340,182 @@ describe('ECS Optimization Integration Tests', () => {
       // All resources should have { parent: this }
       const parentMatches = (tapStackContent.match(/\{ parent: this/g) || []).length;
       expect(parentMatches).toBeGreaterThan(10);
+    });
+  });
+});
+
+describe('Live Deployment Output Validation', () => {
+  const flatOutputPath = path.join(__dirname, '../cfn-outputs/flat-output.json');
+
+  // Skip these tests if flat-output.json doesn't exist (pre-deployment)
+  const flatOutputExists = fs.existsSync(flatOutputPath);
+
+  const conditionalDescribe = flatOutputExists ? describe : describe.skip;
+
+  conditionalDescribe('Deployed Resource Validation', () => {
+    let outputs: Record<string, any>;
+
+    beforeAll(() => {
+      if (flatOutputExists) {
+        const content = fs.readFileSync(flatOutputPath, 'utf-8');
+        outputs = JSON.parse(content);
+      }
+    });
+
+    describe('VPC and Networking', () => {
+      it('should have a valid VPC ID', () => {
+        expect(outputs.vpcId).toBeDefined();
+        expect(outputs.vpcId).toMatch(/^vpc-[a-f0-9]+$/);
+      });
+    });
+
+    describe('ECS Cluster', () => {
+      it('should have a valid cluster ARN', () => {
+        expect(outputs.clusterArn).toBeDefined();
+        expect(outputs.clusterArn).toMatch(/^arn:aws:ecs:[a-z0-9-]+:\d+:cluster\/.+$/);
+      });
+
+      it('should have a valid cluster ID', () => {
+        expect(outputs.clusterId).toBeDefined();
+        expect(outputs.clusterId).toContain('cluster');
+      });
+
+      it('should have a cluster name with environment suffix', () => {
+        expect(outputs.clusterName).toBeDefined();
+        expect(outputs.clusterName).toMatch(/^app-cluster-.+$/);
+      });
+    });
+
+    describe('Application Load Balancer', () => {
+      it('should have a valid ALB ARN', () => {
+        expect(outputs.albArn).toBeDefined();
+        expect(outputs.albArn).toMatch(/^arn:aws:elasticloadbalancing:[a-z0-9-]+:\d+:loadbalancer\/app\/.+$/);
+      });
+
+      it('should have a valid ALB DNS name', () => {
+        expect(outputs.albDnsName).toBeDefined();
+        expect(outputs.albDnsName).toMatch(/\.elb\.amazonaws\.com$/);
+      });
+
+      it('should have a valid target group ARN', () => {
+        expect(outputs.targetGroupArn).toBeDefined();
+        expect(outputs.targetGroupArn).toMatch(/^arn:aws:elasticloadbalancing:[a-z0-9-]+:\d+:targetgroup\/.+$/);
+      });
+    });
+
+    describe('ECS Service and Task', () => {
+      it('should have a valid service ARN', () => {
+        expect(outputs.serviceArn).toBeDefined();
+        expect(outputs.serviceArn).toMatch(/^arn:aws:ecs:[a-z0-9-]+:\d+:service\/.+$/);
+      });
+
+      it('should have a valid task definition ARN', () => {
+        expect(outputs.taskDefinitionArn).toBeDefined();
+        expect(outputs.taskDefinitionArn).toMatch(/^arn:aws:ecs:[a-z0-9-]+:\d+:task-definition\/.+:\d+$/);
+      });
+    });
+
+    describe('FARGATE Configuration', () => {
+      it('should use FARGATE as instance type', () => {
+        expect(outputs.instanceType).toBe('FARGATE');
+      });
+
+      it('should use FARGATE as capacity provider', () => {
+        expect(outputs.capacityProviderName).toBe('FARGATE');
+      });
+
+      it('should have fargate-managed launch template', () => {
+        expect(outputs.launchTemplateId).toBe('fargate-managed');
+      });
+
+      it('should have fargate-managed auto scaling group', () => {
+        expect(outputs.autoScalingGroupName).toBe('fargate-managed');
+      });
+    });
+
+    describe('CloudWatch Monitoring', () => {
+      it('should have a valid low CPU alarm ARN', () => {
+        expect(outputs.lowCpuAlarmArn).toBeDefined();
+        expect(outputs.lowCpuAlarmArn).toMatch(/^arn:aws:cloudwatch:[a-z0-9-]+:\d+:alarm:.+$/);
+      });
+    });
+
+    describe('Resource Naming Convention', () => {
+      it('should have environment suffix in cluster name', () => {
+        const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr';
+        expect(outputs.clusterName).toContain(envSuffix.substring(0, 2));
+      });
+
+      it('should have consistent naming across resources', () => {
+        // All resources should contain the same environment identifier
+        const clusterEnv = outputs.clusterName.split('-').pop();
+        expect(outputs.serviceArn).toContain(clusterEnv);
+      });
+    });
+
+    describe('Cross-Resource References', () => {
+      it('should have service running in the correct cluster', () => {
+        // Service ARN should reference the cluster name
+        expect(outputs.serviceArn).toContain(outputs.clusterName);
+      });
+
+      it('should have task definition family matching naming convention', () => {
+        // Task definition should follow app-task-{env} pattern
+        expect(outputs.taskDefinitionArn).toMatch(/app-task-/);
+      });
+    });
+  });
+
+  conditionalDescribe('Deployment Output Structure', () => {
+    let outputs: Record<string, any>;
+
+    beforeAll(() => {
+      if (flatOutputExists) {
+        const content = fs.readFileSync(flatOutputPath, 'utf-8');
+        outputs = JSON.parse(content);
+      }
+    });
+
+    it('should have all required output keys', () => {
+      const requiredKeys = [
+        'vpcId',
+        'clusterId',
+        'clusterName',
+        'clusterArn',
+        'albDnsName',
+        'albArn',
+        'targetGroupArn',
+        'serviceArn',
+        'taskDefinitionArn',
+        'launchTemplateId',
+        'autoScalingGroupName',
+        'capacityProviderName',
+        'lowCpuAlarmArn',
+        'instanceType',
+      ];
+
+      for (const key of requiredKeys) {
+        expect(outputs).toHaveProperty(key);
+        expect(outputs[key]).toBeDefined();
+        expect(outputs[key]).not.toBe('');
+      }
+    });
+
+    it('should not expose sensitive information', () => {
+      // Check that no full account IDs are exposed (should be masked with ***)
+      const outputString = JSON.stringify(outputs);
+      // Account IDs in ARNs should be masked
+      expect(outputString).not.toMatch(/:\d{12}:/);
+    });
+
+    it('should have valid ARN format for all ARN outputs', () => {
+      const arnKeys = ['clusterArn', 'albArn', 'targetGroupArn', 'serviceArn', 'taskDefinitionArn', 'lowCpuAlarmArn'];
+
+      for (const key of arnKeys) {
+        if (outputs[key]) {
+          expect(outputs[key]).toMatch(/^arn:aws:/);
+        }
+      }
     });
   });
 });
