@@ -274,7 +274,7 @@ class TapStack(TerraformStack):
 
     def _create_global_dynamodb_table(self, environment_suffix, primary_provider, secondary_provider):
         """Create DynamoDB global table with replication."""
-        table_name = f"payment-transactions-{environment_suffix}"
+        table_name = f"v2-payment-transactions-{environment_suffix}"
 
         # Create DynamoDB table with global table configuration
         table = DynamodbTable(
@@ -357,7 +357,7 @@ class TapStack(TerraformStack):
         lambda_sg = SecurityGroup(
             self,
             f"lambda-sg-{region}",
-            name=f"payment-lambda-sg-{environment_suffix}-{region}",
+            name=f"v2-payment-lambda-sg-{environment_suffix}-{region}",
             description="Security group for Lambda functions",
             vpc_id=vpc.id,
             egress=[
@@ -408,7 +408,7 @@ class TapStack(TerraformStack):
         role = IamRole(
             self,
             "lambda-execution-role",
-            name=f"payment-lambda-role-{environment_suffix}",
+            name=f"v2-payment-lambda-role-{environment_suffix}",
             assume_role_policy=assume_role_policy.json,
             tags={
                 "Name": f"payment-lambda-role-{environment_suffix}",
@@ -449,7 +449,7 @@ class TapStack(TerraformStack):
                         "dynamodb:Scan"
                     ],
                     "Resource": [
-                        f"arn:aws:dynamodb:*:*:table/payment-transactions-{environment_suffix}"
+                        f"arn:aws:dynamodb:*:*:table/v2-payment-transactions-{environment_suffix}"
                     ]
                 },
                 {
@@ -461,8 +461,8 @@ class TapStack(TerraformStack):
                         "sqs:GetQueueAttributes"
                     ],
                     "Resource": [
-                        f"arn:aws:sqs:*:*:payment-processing-queue-{environment_suffix}-*",
-                        f"arn:aws:sqs:*:*:payment-dlq-{environment_suffix}-*"
+                        f"arn:aws:sqs:*:*:v2-payment-processing-queue-{environment_suffix}-*",
+                        f"arn:aws:sqs:*:*:v2-payment-dlq-{environment_suffix}-*"
                     ]
                 },
                 {
@@ -471,7 +471,7 @@ class TapStack(TerraformStack):
                         "sns:Publish"
                     ],
                     "Resource": [
-                        f"arn:aws:sns:*:*:payment-alerts-{environment_suffix}"
+                        f"arn:aws:sns:*:*:v2-payment-alerts-{environment_suffix}-*"
                     ]
                 },
                 {
@@ -509,7 +509,7 @@ class TapStack(TerraformStack):
         dlq = SqsQueue(
             self,
             f"payment-dlq-{region}",
-            name=f"payment-dlq-{environment_suffix}-{region}",
+            name=f"v2-payment-dlq-{environment_suffix}-{region}",
             message_retention_seconds=1209600,  # 14 days
             tags={
                 "Name": f"payment-dlq-{environment_suffix}-{region}",
@@ -523,7 +523,7 @@ class TapStack(TerraformStack):
         processing_queue = SqsQueue(
             self,
             f"processing-queue-{region}",
-            name=f"payment-processing-queue-{environment_suffix}-{region}",
+            name=f"v2-payment-processing-queue-{environment_suffix}-{region}",
             visibility_timeout_seconds=300,
             message_retention_seconds=345600,  # 4 days
             redrive_policy=json.dumps({
@@ -548,7 +548,7 @@ class TapStack(TerraformStack):
         topic = SnsTopic(
             self,
             f"alerts-topic-{region}",
-            name=f"payment-alerts-{environment_suffix}-{region}",
+            name=f"v2-payment-alerts-{environment_suffix}-{region}",
             tags={
                 "Name": f"payment-alerts-{environment_suffix}-{region}",
                 "Environment": environment_suffix,
@@ -571,7 +571,7 @@ class TapStack(TerraformStack):
         validation_lambda = LambdaFunction(
             self,
             f"validation-lambda-{region}",
-            function_name=f"payment-validation-{environment_suffix}-{region}",
+            function_name=f"v2-payment-validation-{environment_suffix}-{region}",
             runtime="python3.11",
             handler="index.lambda_handler",
             role=role.arn,
@@ -605,7 +605,7 @@ class TapStack(TerraformStack):
         processing_lambda = LambdaFunction(
             self,
             f"processing-lambda-{region}",
-            function_name=f"payment-processing-{environment_suffix}-{region}",
+            function_name=f"v2-payment-processing-{environment_suffix}-{region}",
             runtime="python3.11",
             handler="index.lambda_handler",
             role=role.arn,
@@ -654,7 +654,7 @@ class TapStack(TerraformStack):
         api = ApiGatewayRestApi(
             self,
             f"payment-api-{region}",
-            name=f"payment-api-{environment_suffix}-{region}",
+            name=f"v2-payment-api-{environment_suffix}-{region}",
             description=f"Payment Processing API - {region}",
             tags={
                 "Name": f"payment-api-{environment_suffix}-{region}",
@@ -749,7 +749,7 @@ class TapStack(TerraformStack):
         hosted_zone = Route53Zone(
             self,
             "payment-hosted-zone",
-            name=f"payment-api-{environment_suffix}.testing.internal",
+            name=f"v2-payment-api-{environment_suffix}.testing.internal",
             comment=f"Hosted zone for payment API - {environment_suffix}",
             tags={
                 "Name": f"payment-hosted-zone-{environment_suffix}",
@@ -801,7 +801,7 @@ class TapStack(TerraformStack):
             self,
             "primary-failover-record",
             zone_id=hosted_zone.zone_id,
-            name=f"api.payment-api-{environment_suffix}.testing.internal",
+            name=f"api.v2-payment-api-{environment_suffix}.testing.internal",
             type="CNAME",
             ttl=60,
             records=[f"{primary_api['api'].id}.execute-api.us-east-1.amazonaws.com"],
@@ -818,7 +818,7 @@ class TapStack(TerraformStack):
             self,
             "secondary-failover-record",
             zone_id=hosted_zone.zone_id,
-            name=f"api.payment-api-{environment_suffix}.testing.internal",
+            name=f"api.v2-payment-api-{environment_suffix}.testing.internal",
             type="CNAME",
             ttl=60,
             records=[f"{secondary_api['api'].id}.execute-api.us-east-2.amazonaws.com"],
@@ -838,7 +838,7 @@ class TapStack(TerraformStack):
         CloudwatchMetricAlarm(
             self,
             f"api-latency-alarm-{region}",
-            alarm_name=f"payment-api-latency-{environment_suffix}-{region}",
+            alarm_name=f"v2-payment-api-latency-{environment_suffix}-{region}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=2,
             metric_name="Latency",
@@ -863,7 +863,7 @@ class TapStack(TerraformStack):
         CloudwatchMetricAlarm(
             self,
             f"validation-lambda-errors-alarm-{region}",
-            alarm_name=f"payment-validation-errors-{environment_suffix}-{region}",
+            alarm_name=f"v2-payment-validation-errors-{environment_suffix}-{region}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=1,
             metric_name="Errors",
@@ -888,7 +888,7 @@ class TapStack(TerraformStack):
         CloudwatchMetricAlarm(
             self,
             f"processing-lambda-errors-alarm-{region}",
-            alarm_name=f"payment-processing-errors-{environment_suffix}-{region}",
+            alarm_name=f"v2-payment-processing-errors-{environment_suffix}-{region}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=1,
             metric_name="Errors",
@@ -913,7 +913,7 @@ class TapStack(TerraformStack):
         CloudwatchMetricAlarm(
             self,
             f"dynamodb-throttle-alarm-{region}",
-            alarm_name=f"payment-dynamodb-throttle-{environment_suffix}-{region}",
+            alarm_name=f"v2-payment-dynamodb-throttle-{environment_suffix}-{region}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=1,
             metric_name="UserErrors",
@@ -1004,7 +1004,7 @@ class TapStack(TerraformStack):
         CloudwatchDashboard(
             self,
             f"payment-dashboard-{region}",
-            dashboard_name=f"payment-dashboard-{environment_suffix}-{region}",
+            dashboard_name=f"v2-payment-dashboard-{environment_suffix}-{region}",
             dashboard_body=json.dumps(dashboard_body),
             provider=provider
         )
@@ -1019,7 +1019,7 @@ class TapStack(TerraformStack):
         failover_lambda = LambdaFunction(
             self,
             "failover-orchestration-lambda",
-            function_name=f"payment-failover-orchestration-{environment_suffix}",
+            function_name=f"v2-payment-failover-orchestration-{environment_suffix}",
             runtime="python3.11",
             handler="index.lambda_handler",
             role=role.arn,
@@ -1028,7 +1028,7 @@ class TapStack(TerraformStack):
             environment=LambdaFunctionEnvironment(
                 variables={
                     "HOSTED_ZONE_ID": hosted_zone.zone_id,
-                    "PRIMARY_RECORD_NAME": f"api.payment-api-{environment_suffix}.testing.internal",
+                    "PRIMARY_RECORD_NAME": f"api.v2-payment-api-{environment_suffix}.testing.internal",
                     "ALERTS_TOPIC_ARN": sns_topic.arn,
                     "PRIMARY_REGION": primary_region,
                     "SECONDARY_REGION": secondary_region
