@@ -561,7 +561,6 @@ class TapStack(TerraformStack):
             replication_subnet_group_id=dms_subnet_group.replication_subnet_group_id,
             publicly_accessible=False,
             multi_az=True,
-            engine_version="3.5.1",
             tags={"Name": f"dms-instance-{environment_suffix}"},
             depends_on=[dms_subnet_group]
         )
