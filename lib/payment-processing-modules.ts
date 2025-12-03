@@ -217,9 +217,11 @@ export class VPCModule extends Construct {
           {
             id: 'transition-to-glacier',
             status: 'Enabled',
-            filter: {
-              prefix: '',
-            },
+            filter: [
+              {
+                prefix: '',
+              },
+            ],
             transition: [
               {
                 days: 90,
