@@ -495,7 +495,7 @@ export class RDSModule extends Construct {
     new aws.rdsClusterInstance.RdsClusterInstance(this, 'cluster-instance-2', {
       identifier: `${resourceName('eu-aurora-db')}-instance-2`.toLowerCase(),
       clusterIdentifier: this.cluster.id,
-      instanceClass: 'db.t3.small',
+      instanceClass: 'db.t3.medium',
       engine: this.cluster.engine,
       engineVersion: this.cluster.engineVersion,
       publiclyAccessible: false,

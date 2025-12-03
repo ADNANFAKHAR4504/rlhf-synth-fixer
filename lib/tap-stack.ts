@@ -70,7 +70,11 @@ export class TapStack extends TerraformStack {
       'arn:aws:acm:eu-central-1:123456789012:certificate/example';
 
     // Availability Zones for eu-central-1
-    const availabilityZones = ['eu-central-1a', 'eu-central-1b', 'eu-central-1c'];
+    const availabilityZones = [
+      'eu-central-1a',
+      'eu-central-1b',
+      'eu-central-1c',
+    ];
 
     // VPC Module
     const vpc = new VPCModule(this, 'vpc', {
