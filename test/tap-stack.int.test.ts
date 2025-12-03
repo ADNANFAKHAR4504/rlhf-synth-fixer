@@ -47,8 +47,22 @@ let deployedOutputs: any = {};
 try {
   const fs = require('fs');
   const path = require('path');
-  const outputsPath = path.join(__dirname, '../../cfn-outputs/flat-outputs.json');
-  deployedOutputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+  // Try multiple paths to handle both local development and CI environments
+  const possiblePaths = [
+    path.join(__dirname, '../cfn-outputs/flat-outputs.json'),
+    path.join(__dirname, '../../cfn-outputs/flat-outputs.json'),
+    path.join(process.cwd(), 'cfn-outputs/flat-outputs.json'),
+  ];
+  for (const outputsPath of possiblePaths) {
+    if (fs.existsSync(outputsPath)) {
+      deployedOutputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+      console.log(`Loaded outputs from: ${outputsPath}`);
+      break;
+    }
+  }
+  if (Object.keys(deployedOutputs).length === 0) {
+    console.warn('Warning: Could not load cfn-outputs/flat-outputs.json from any path. Tests may fail.');
+  }
 } catch (error) {
   console.warn('Warning: Could not load cfn-outputs/flat-outputs.json. Tests may fail.');
 }
