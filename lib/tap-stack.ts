@@ -303,7 +303,7 @@ export class TapStack extends TerraformStack {
 
     services.forEach(service => {
       const repo = new EcrRepository(this, `ecr-${service}`, {
-        name: `app-${service}-${environmentSuffix}`,
+        name: `v2-${service}-${environmentSuffix}`,
         imageTagMutability: 'IMMUTABLE',
         forceDelete: true,
         tags: {
@@ -338,7 +338,7 @@ export class TapStack extends TerraformStack {
     const logGroups: { [key: string]: CloudwatchLogGroup } = {};
     services.forEach(service => {
       logGroups[service] = new CloudwatchLogGroup(this, `log-${service}`, {
-        name: `/ecs/app-${service}-${environmentSuffix}`,
+        name: `/ecs/v2-${service}-${environmentSuffix}`,
         retentionInDays: 30,
         tags: {
           Name: `${service}-logs-${environmentSuffix}`,
@@ -348,11 +348,11 @@ export class TapStack extends TerraformStack {
 
     // Secrets Manager Secrets
     const dbSecret = new SecretsmanagerSecret(this, 'db-secret', {
-      name: `app-db-creds-${environmentSuffix}`,
+      name: `v2-db-creds-${environmentSuffix}`,
       description: 'Database credentials for trading application',
       forceOverwriteReplicaSecret: true,
       tags: {
-        Name: `app-db-creds-${environmentSuffix}`,
+        Name: `v2-db-creds-${environmentSuffix}`,
       },
     });
 
@@ -367,11 +367,11 @@ export class TapStack extends TerraformStack {
     });
 
     const apiKeySecret = new SecretsmanagerSecret(this, 'api-key-secret', {
-      name: `app-api-keys-${environmentSuffix}`,
+      name: `v2-api-keys-${environmentSuffix}`,
       description: 'API keys for external services',
       forceOverwriteReplicaSecret: true,
       tags: {
-        Name: `app-api-keys-${environmentSuffix}`,
+        Name: `v2-api-keys-${environmentSuffix}`,
       },
     });
 
@@ -551,20 +551,20 @@ export class TapStack extends TerraformStack {
 
     // Application Load Balancer
     const alb = new Lb(this, 'alb', {
-      name: `app-alb-${environmentSuffix}`,
+      name: `v2-alb-${environmentSuffix}`,
       internal: false,
       loadBalancerType: 'application',
       securityGroups: [albSg.id],
       subnets: publicSubnets.map(s => s.id),
       enableDeletionProtection: false,
       tags: {
-        Name: `app-alb-${environmentSuffix}`,
+        Name: `v2-alb-${environmentSuffix}`,
       },
     });
 
     // Target Group for Frontend
     const frontendTargetGroup = new LbTargetGroup(this, 'frontend-tg', {
-      name: `app-fe-tg-${environmentSuffix}`,
+      name: `v2-fe-tg-${environmentSuffix}`,
       port: 3000,
       protocol: 'HTTP',
       targetType: 'ip',
@@ -580,13 +580,13 @@ export class TapStack extends TerraformStack {
         unhealthyThreshold: 3,
       },
       tags: {
-        Name: `app-fe-tg-${environmentSuffix}`,
+        Name: `v2-fe-tg-${environmentSuffix}`,
       },
     });
 
     // Target Group for API Gateway
     const apiGatewayTargetGroup = new LbTargetGroup(this, 'api-gateway-tg', {
-      name: `app-apigw-tg-${environmentSuffix}`,
+      name: `v2-apigw-tg-${environmentSuffix}`,
       port: 8080,
       protocol: 'HTTP',
       targetType: 'ip',
@@ -602,7 +602,7 @@ export class TapStack extends TerraformStack {
         unhealthyThreshold: 3,
       },
       tags: {
-        Name: `app-apigw-tg-${environmentSuffix}`,
+        Name: `v2-apigw-tg-${environmentSuffix}`,
       },
     });
 
@@ -855,7 +855,7 @@ export class TapStack extends TerraformStack {
 
     // ECS Service for Frontend
     const frontendService = new EcsService(this, 'frontend-service', {
-      name: `app-fe-${environmentSuffix}`,
+      name: `v2-fe-${environmentSuffix}`,
       cluster: cluster.id,
       taskDefinition: frontendTaskDef.arn,
       desiredCount: 2,
@@ -886,7 +886,7 @@ export class TapStack extends TerraformStack {
 
     // ECS Service for API Gateway
     const apiGatewayService = new EcsService(this, 'api-gateway-service', {
-      name: `app-apigw-${environmentSuffix}`,
+      name: `v2-apigw-${environmentSuffix}`,
       cluster: cluster.id,
       taskDefinition: apiGatewayTaskDef.arn,
       desiredCount: 2,
@@ -919,7 +919,7 @@ export class TapStack extends TerraformStack {
 
     // ECS Service for Processing Service
     const processingService = new EcsService(this, 'processing-service', {
-      name: `app-proc-${environmentSuffix}`,
+      name: `v2-proc-${environmentSuffix}`,
       cluster: cluster.id,
       taskDefinition: processingTaskDef.arn,
       desiredCount: 2,
