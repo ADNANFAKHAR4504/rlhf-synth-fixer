@@ -164,6 +164,7 @@ module.exports = [
       'subcategory-references/**', // Exclude reference files from linting
       'lambda/**', // Exclude lambda folder from linting
       'cli/**', // Exclude CLI tooling scripts from linting
+      'bin/**', // Exclude bin folder from linting (excluded from tsconfig.json)
       '**/*.js',
       '**/*.d.ts',
       '**/*.test.ts', // Exclude test files from linting
