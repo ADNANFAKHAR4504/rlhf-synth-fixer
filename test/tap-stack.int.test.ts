@@ -21,6 +21,7 @@ import {
   GlueClient,
   StartJobRunCommand,
   GetJobRunCommand,
+  GetJobRunsCommand,
   StartCrawlerCommand,
   GetCrawlerCommand,
 } from '@aws-sdk/client-glue';
@@ -118,6 +119,33 @@ async function waitForJobCompletion(
     await new Promise(resolve => setTimeout(resolve, 10000));
   }
   throw new Error('Job timed out');
+}
+
+async function waitForJobAvailable(timeoutMs: number = 600000): Promise<void> {
+  const startTime = Date.now();
+  while (Date.now() - startTime < timeoutMs) {
+    const response = await glueClient.send(
+      new GetJobRunsCommand({
+        JobName: glueJobName,
+        MaxResults: 10,
+      })
+    );
+
+    const runningJobs = response.JobRuns?.filter(
+      run =>
+        run.JobRunState === 'RUNNING' ||
+        run.JobRunState === 'STARTING' ||
+        run.JobRunState === 'WAITING'
+    );
+
+    if (!runningJobs || runningJobs.length === 0) {
+      return; // No running jobs, safe to start a new one
+    }
+
+    // Wait and check again
+    await new Promise(resolve => setTimeout(resolve, 15000));
+  }
+  throw new Error('Timeout waiting for running jobs to complete');
 }
 
 async function waitForQueryCompletion(
@@ -330,6 +358,9 @@ describe('Big Data Pipeline Integration Tests', () => {
 
   describe('Flow 4: Failed Record Handling', () => {
     test('should send invalid records to DLQ and failed bucket', async () => {
+      // Wait for any running jobs to complete first
+      await waitForJobAvailable();
+
       // Upload invalid data
       const testKey = `test-invalid-${Date.now()}.csv`;
       await s3Client.send(
@@ -525,6 +556,9 @@ E2E_TXN_${timestamp},E2E_CUST_001,999.99,2024-01-15 15:00:00,E2E_MERCH_001,PURCH
 
   describe('Flow 8: Data Validation Rules', () => {
     test('should reject transactions with negative amounts', async () => {
+      // Wait for any running jobs to complete first
+      await waitForJobAvailable();
+
       const negativeAmountData = `transaction_id,customer_id,amount,timestamp,merchant_id,transaction_type,status
 NEG_TXN_001,CUST001,-100.00,2024-01-15 10:30:00,MERCH001,PURCHASE,COMPLETED`;
 
