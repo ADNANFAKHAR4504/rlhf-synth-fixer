@@ -5,6 +5,7 @@ import { RdsGlobalCluster } from '@cdktf/provider-aws/lib/rds-global-cluster';
 import { RdsCluster } from '@cdktf/provider-aws/lib/rds-cluster';
 import { RdsClusterInstance } from '@cdktf/provider-aws/lib/rds-cluster-instance';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
+import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 
 export interface DatabaseConstructProps {
   environmentSuffix: string;
@@ -141,6 +142,17 @@ export class DatabaseConstruct extends Construct {
       },
     });
 
+    // KMS Key for Secondary Region RDS encryption
+    const secondaryKmsKey = new KmsKey(this, 'SecondaryRdsKmsKey', {
+      provider: secondaryProvider,
+      description: `KMS key for Aurora secondary cluster encryption - ${environmentSuffix}`,
+      enableKeyRotation: true,
+      deletionWindowInDays: 7,
+      tags: {
+        Name: `aurora-secondary-kms-${environmentSuffix}`,
+      },
+    });
+
     // Secondary Aurora Cluster
     const secondaryCluster = new RdsCluster(this, 'SecondaryAuroraCluster', {
       provider: secondaryProvider,
@@ -152,6 +164,7 @@ export class DatabaseConstruct extends Construct {
       vpcSecurityGroupIds: [secondaryDbSecurityGroupId],
       skipFinalSnapshot: true,
       storageEncrypted: true,
+      kmsKeyId: secondaryKmsKey.arn,
       deletionProtection: false,
       enabledCloudwatchLogsExports: ['postgresql'],
       dependsOn: [primaryCluster],

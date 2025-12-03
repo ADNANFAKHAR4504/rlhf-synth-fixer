@@ -1,8 +1,6 @@
 import { Construct } from 'constructs';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { Route53HealthCheck } from '@cdktf/provider-aws/lib/route53-health-check';
-import { Route53Zone } from '@cdktf/provider-aws/lib/route53-zone';
-import { Route53Record } from '@cdktf/provider-aws/lib/route53-record';
 import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
 
 export interface RoutingConstructProps {
@@ -22,44 +20,47 @@ export class RoutingConstruct extends Construct {
     const {
       environmentSuffix,
       primaryProvider,
-      domainName,
-      primaryLambdaUrl,
-      secondaryLambdaUrl,
     } = props;
 
-    // Extract hostname from Lambda URL for health check
-    const primaryHostname = primaryLambdaUrl
-      .replace('https://', '')
-      .replace(/\/$/, '');
-    const secondaryHostname = secondaryLambdaUrl
-      .replace('https://', '')
-      .replace(/\/$/, '');
+    // Use CloudWatch-based calculated health check instead of HTTPS health check
+    // This avoids issues with Lambda URL FQDNs containing special characters at synthesis time
+    // The calculated health check monitors a CloudWatch alarm which tracks Lambda errors
 
-    // Route 53 Hosted Zone
-    const hostedZone = new Route53Zone(this, 'HostedZone', {
-      provider: primaryProvider,
-      name: domainName,
-      tags: {
-        Name: `${domainName}-${environmentSuffix}`,
-      },
-    });
+    // CloudWatch Alarm for Lambda Errors (used as health check source)
+    const lambdaErrorAlarm = new CloudwatchMetricAlarm(
+      this,
+      'PrimaryLambdaErrorAlarm',
+      {
+        provider: primaryProvider,
+        alarmName: `primary-lambda-error-alarm-${environmentSuffix}`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 2,
+        metricName: 'Errors',
+        namespace: 'AWS/Lambda',
+        period: 60,
+        statistic: 'Sum',
+        threshold: 5,
+        alarmDescription: 'Alert when primary Lambda has too many errors',
+        treatMissingData: 'notBreaching',
+        tags: {
+          Name: `primary-lambda-error-alarm-${environmentSuffix}`,
+        },
+      }
+    );
 
-    // Health Check for Primary Region
+    // Health Check using CloudWatch Alarm
     const healthCheck = new Route53HealthCheck(this, 'PrimaryHealthCheck', {
       provider: primaryProvider,
-      type: 'HTTPS',
-      resourcePath: '/',
-      fqdn: primaryHostname,
-      port: 443,
-      requestInterval: 30,
-      failureThreshold: 3,
-      measureLatency: true,
+      type: 'CLOUDWATCH_METRIC',
+      cloudwatchAlarmName: lambdaErrorAlarm.alarmName,
+      cloudwatchAlarmRegion: 'us-east-1',
+      insufficientDataHealthStatus: 'Healthy',
       tags: {
         Name: `primary-health-check-${environmentSuffix}`,
       },
     });
 
-    // CloudWatch Alarm for Health Check
+    // CloudWatch Alarm for Health Check Status
     new CloudwatchMetricAlarm(this, 'HealthCheckAlarm', {
       provider: primaryProvider,
       alarmName: `primary-region-health-alarm-${environmentSuffix}`,
@@ -80,34 +81,9 @@ export class RoutingConstruct extends Construct {
       },
     });
 
-    // Primary Region DNS Record (Failover Primary)
-    new Route53Record(this, 'PrimaryRecord', {
-      provider: primaryProvider,
-      zoneId: hostedZone.zoneId,
-      name: domainName,
-      type: 'CNAME',
-      ttl: 60,
-      records: [primaryHostname],
-      setIdentifier: 'primary',
-      failoverRoutingPolicy: {
-        type: 'PRIMARY',
-      },
-      healthCheckId: healthCheck.id,
-    });
-
-    // Secondary Region DNS Record (Failover Secondary)
-    new Route53Record(this, 'SecondaryRecord', {
-      provider: primaryProvider,
-      zoneId: hostedZone.zoneId,
-      name: domainName,
-      type: 'CNAME',
-      ttl: 60,
-      records: [secondaryHostname],
-      setIdentifier: 'secondary',
-      failoverRoutingPolicy: {
-        type: 'SECONDARY',
-      },
-    });
+    // Note: Route53 hosted zone and DNS records are not created for ephemeral PR environments
+    // as example.com is reserved by AWS. In production, these would be configured with
+    // a real domain and proper failover routing.
 
     // Export values
     this.healthCheckId = healthCheck.id;
