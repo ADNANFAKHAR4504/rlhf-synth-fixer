@@ -29,7 +29,7 @@ All of the following MUST pass (adjusted based on task type):
 5. ✅ **Code Health Check** - No known failure patterns
 6. ✅ **Deployment Success** - All resources deployed without errors
 7. ✅ **Test Coverage** - 100% coverage (statements, functions, lines)
-8. ✅ **Integration Tests** - All tests passing, using real outputs
+8. ✅ **Integration Tests** - 100% pass rate (NO partial passes like 8/12)
 9. ✅ **Documentation** - MODEL_FAILURES.md and IDEAL_RESPONSE.md complete
 10. ✅ **Training Quality** - Score >= 8
 11. ✅ **File Location Compliance** - All files in allowed directories
@@ -73,7 +73,7 @@ All of the following MUST pass (adjusted based on task type):
 7. ✅ **Deployment Success** - Baseline infrastructure deployed
 8. ✅ **Optimization Success** - lib/optimize.py runs successfully
 9. ✅ **Test Coverage** - 100% coverage (statements, functions, lines)
-10. ✅ **Integration Tests** - All tests passing, verify optimizations
+10. ✅ **Integration Tests** - 100% pass rate, verify optimizations (NO partial passes)
 11. ✅ **Documentation** - MODEL_FAILURES.md and IDEAL_RESPONSE.md complete
 12. ✅ **Training Quality** - Score >= 8
 13. ✅ **File Location Compliance** - All files in allowed directories
@@ -627,7 +627,62 @@ All of the following MUST pass (adjusted based on task type):
            if [ "$IS_CICD_TASK" = "true" ] || [ "$IS_ANALYSIS_TASK" = "true" ]; then
              echo "⏭️ Skipping integration tests (no deployment for this task type)"
            else
-             bash .claude/scripts/integration-tests.sh
+             echo "🧪 Running integration tests..."
+             
+             # Run integration tests and capture output
+             bash .claude/scripts/integration-tests.sh > integration_test_output.log 2>&1
+             INTEGRATION_EXIT_CODE=$?
+             
+             # Check exit code first
+             if [ $INTEGRATION_EXIT_CODE -ne 0 ]; then
+               echo "❌ Integration tests FAILED (exit code: $INTEGRATION_EXIT_CODE)"
+               cat integration_test_output.log
+               exit 1
+             fi
+             
+             # Parse test results for 100% pass rate
+             # Look for patterns like "Tests: X passed, Y failed" or "X/Y passed"
+             TOTAL_TESTS=$(grep -oP '(\d+) (total|tests)' integration_test_output.log | head -1 | grep -oP '\d+' || echo "0")
+             PASSED_TESTS=$(grep -oP '(\d+) passed' integration_test_output.log | head -1 | grep -oP '\d+' || echo "0")
+             FAILED_TESTS=$(grep -oP '(\d+) failed' integration_test_output.log | head -1 | grep -oP '\d+' || echo "0")
+             
+             # Alternative pattern: "X/Y PASS" format (common in test outputs)
+             if [ "$TOTAL_TESTS" = "0" ]; then
+               PASS_RATIO=$(grep -oP '\d+/\d+' integration_test_output.log | tail -1 || echo "")
+               if [ -n "$PASS_RATIO" ]; then
+                 PASSED_TESTS=$(echo "$PASS_RATIO" | cut -d'/' -f1)
+                 TOTAL_TESTS=$(echo "$PASS_RATIO" | cut -d'/' -f2)
+                 FAILED_TESTS=$((TOTAL_TESTS - PASSED_TESTS))
+               fi
+             fi
+             
+             echo "Integration Test Results: ${PASSED_TESTS}/${TOTAL_TESTS} passed, ${FAILED_TESTS} failed"
+             
+             # CRITICAL: Require 100% pass rate - NO PARTIAL PASSES ALLOWED
+             if [ "$FAILED_TESTS" != "0" ]; then
+               echo "❌ ERROR: Integration tests PARTIAL PASS (${PASSED_TESTS}/${TOTAL_TESTS})"
+               echo "❌ ALL integration tests must pass (100% pass rate required)"
+               echo "❌ ${FAILED_TESTS} test(s) failed - this is NOT acceptable"
+               echo ""
+               echo "Failed test details:"
+               grep -i "fail\|error\|FAILED" integration_test_output.log | head -20 || true
+               echo ""
+               echo "Full test output available in: integration_test_output.log"
+               exit 1
+             fi
+             
+             if [ "$PASSED_TESTS" != "$TOTAL_TESTS" ]; then
+               echo "❌ ERROR: Test count mismatch (${PASSED_TESTS} passed vs ${TOTAL_TESTS} total)"
+               echo "❌ ALL integration tests must pass (100% pass rate required)"
+               exit 1
+             fi
+             
+             if [ "$TOTAL_TESTS" = "0" ]; then
+               echo "⚠️ WARNING: No integration tests detected. Verify test file exists."
+               # Don't fail, but warn - some platforms may not have integration tests yet
+             else
+               echo "✅ Integration tests: ${PASSED_TESTS}/${TOTAL_TESTS} PASSED (100% pass rate achieved)"
+             fi
            fi
            ;;
          "cicd-pipeline-optimization")
@@ -1564,6 +1619,7 @@ Report BLOCKED with:
 - **Maximum 10 iterations** for fixes (increased from 5 to handle complex issues)
 - **Maximum 5 deployment attempts per iteration**
 - **Must achieve 100% test coverage** (non-negotiable)
+- **Must achieve 100% integration test pass rate** (non-negotiable - NO PARTIAL PASSES)
 - **Training quality >= 8** (required for merge)
 - **All CI/CD jobs must pass** (no failures, no pending)
 - **All files must be in allowed directories**
@@ -1632,8 +1688,9 @@ The agent MUST detect and handle three special task types differently:
 1. ✅ All local validations pass (pre-submission-check.sh = 0)
 2. ✅ All CI/CD jobs pass (ready_for_merge = true)
 3. ✅ 100% test coverage achieved
-4. ✅ Training quality >= 8
-5. ✅ No pending or in-progress CI/CD jobs
+4. ✅ 100% integration test pass rate achieved (NO partial passes)
+5. ✅ Training quality >= 8
+6. ✅ No pending or in-progress CI/CD jobs
 
 **Adjusted for task type**:
 - **CI/CD tasks**: Skip deployment/integration test requirements
