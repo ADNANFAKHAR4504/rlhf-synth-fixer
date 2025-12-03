@@ -428,7 +428,7 @@ resource "aws_ecs_service" "app" {
 
   # Force new deployment when task definition changes
   force_new_deployment = true
-  
+
   # Wait for steady state before considering deployment complete
   wait_for_steady_state = true
 
