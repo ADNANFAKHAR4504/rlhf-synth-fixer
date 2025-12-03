@@ -1,0 +1,106 @@
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:69: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  'scanId': f"scan-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:70: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  'timestamp': datetime.utcnow().isoformat() + 'Z',
+
+============================================================
+  AWS Infrastructure Compliance Analyzer
+============================================================
+
+This script demonstrates the compliance analysis capabilities
+deployed by this Pulumi infrastructure.
+
+
+============================================================
+  Environment Check
+============================================================
+
+  AWS_REGION: us-east-1
+  AWS_ACCESS_KEY_ID: ***
+  AWS_SECRET_ACCESS_KEY: ***
+  ENVIRONMENT_SUFFIX: pr7625
+
+✅ Environment variables configured
+
+============================================================
+  Infrastructure Validation
+============================================================
+
+🏗️ Required Pulumi Resources:
+  ✓ S3 Bucket (compliance reports storage)
+  ✓ DynamoDB Table (violations tracking)
+  ✓ DynamoDB Streams (violation processing)
+  ✓ Lambda Function (compliance scanner)
+  ✓ Lambda Function (stream processor)
+  ✓ EventBridge Rule (scheduled scans)
+  ✓ CloudWatch Log Group (Lambda logging)
+  ✓ IAM Role (read-only compliance checks)
+
+✅ All required infrastructure components defined
+
+============================================================
+  Simulating Compliance Scan
+============================================================
+
+📋 Scanning AWS resources...
+  ✓ EC2 instances: Checking required tags
+  ✓ Security groups: Analyzing ingress rules
+  ✓ S3 buckets: Validating encryption settings
+  ✓ IAM users: Checking access key age
+  ✓ EBS volumes: Finding unattached volumes
+  ✓ VPC flow logs: Verifying CloudWatch logging
+
+✅ Compliance scan completed
+
+============================================================
+  Compliance Analysis Report
+============================================================
+
+Scan ID: scan-20251201232913
+Timestamp: 2025-12-01T23:29:13.996047Z
+Environment: pr7625
+
+📊 Overall Compliance Score
+  Score: 79.5%
+  Total Resources: 44
+  Compliant: 35
+  Violations: 9
+
+📈 Service-Level Scores
+  ⚠️ EC2: 60.0%
+  ⚠️ SECURITYGROUPS: 75.0%
+  ✅ S3: 83.3%
+  ⚠️ IAM: 66.7%
+  ✅ EBS: 90.0%
+  ✅ VPC: 100.0%
+
+🔍 Violations by Service
+
+  EC2: 2 violation(s)
+    • EC2 instance i-0abc123 missing required tag: Environment
+    • EC2 instance i-0def456 missing required tag: Owner
+
+  SECURITYGROUPS: 2 violation(s)
+    • Security group sg-0abc123 allows 0.0.0.0/0 on port 22
+    • Security group sg-0def456 allows 0.0.0.0/0 on port 3389
+
+  S3: 2 violation(s)
+    • S3 bucket example-bucket-1 encryption not enabled
+    • S3 bucket example-bucket-2 public access block not configured
+
+  IAM: 2 violation(s)
+    • IAM user john.doe has access key older than 90 days (created 120 days ago)
+    • IAM user jane.smith has access key older than 90 days (created 95 days ago)
+
+  EBS: 1 violation(s)
+    • EBS volume vol-0abc123 is unattached (created 30 days ago)
+
+📄 Report saved to: lib/analysis-results.txt
+
+============================================================
+  Analysis Complete
+============================================================
+
+⚠️  WARNING: Some violations detected
+   Overall compliance score: 79.5%
+   Recommendation: Review and remediate violations

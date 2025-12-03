@@ -1,0 +1,644 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "RDS Aurora MySQL cluster for database migration with KMS encryption, Multi-AZ deployment, and security controls",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Environment suffix for resource naming to ensure uniqueness",
+      "AllowedPattern": "^[a-zA-Z0-9-]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters and hyphens"
+    },
+    "MasterUsername": {
+      "Type": "String",
+      "Description": "Master username for the Aurora cluster",
+      "Default": "admin",
+      "MinLength": 1,
+      "MaxLength": 16,
+      "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9]*$",
+      "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters"
+    }
+  },
+  "Resources": {
+    "DatabaseMasterPasswordSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "aurora-master-password-${EnvironmentSuffix}"
+        },
+        "Description": "Master password for Aurora MySQL cluster",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\":\"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 16,
+          "ExcludeCharacters": "\"@/\\",
+          "RequireEachIncludedType": true
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-master-password-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-vpc-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-private-subnet-1-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-private-subnet-2-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet3": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.3.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-private-subnet-3-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "DatabaseEncryptionKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for Aurora MySQL cluster encryption - ${EnvironmentSuffix}"
+        },
+        "EnableKeyRotation": true,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow RDS to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "rds.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey",
+                "kms:CreateGrant",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "kms:ViaService": {
+                    "Fn::Sub": "rds.${AWS::Region}.amazonaws.com"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-kms-key-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "DatabaseEncryptionKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/aurora-mysql-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "DatabaseEncryptionKey"
+        }
+      }
+    },
+    "DatabaseSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "aurora-mysql-sg-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for Aurora MySQL cluster allowing access from application subnets",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "CidrIp": "10.0.1.0/24",
+            "Description": "MySQL access from application subnet 1"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "CidrIp": "10.0.2.0/24",
+            "Description": "MySQL access from application subnet 2"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "CidrIp": "10.0.3.0/24",
+            "Description": "MySQL access from application subnet 3"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-mysql-sg-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "DatabaseSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupName": {
+          "Fn::Sub": "aurora-subnet-group-${EnvironmentSuffix}"
+        },
+        "DBSubnetGroupDescription": "Subnet group for Aurora MySQL cluster spanning three availability zones",
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          },
+          {
+            "Ref": "PrivateSubnet3"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-subnet-group-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "DatabaseClusterParameterGroup": {
+      "Type": "AWS::RDS::DBClusterParameterGroup",
+      "Properties": {
+        "Description": "Aurora MySQL 8.0 cluster parameter group with UTF8MB4 character set",
+        "Family": "aurora-mysql8.0",
+        "Parameters": {
+          "character_set_server": "utf8mb4",
+          "character_set_client": "utf8mb4",
+          "character_set_connection": "utf8mb4",
+          "character_set_database": "utf8mb4",
+          "character_set_results": "utf8mb4",
+          "collation_server": "utf8mb4_unicode_ci",
+          "collation_connection": "utf8mb4_unicode_ci"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-cluster-params-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "DatabaseInstanceParameterGroup": {
+      "Type": "AWS::RDS::DBParameterGroup",
+      "Properties": {
+        "Description": "Aurora MySQL 8.0 instance parameter group",
+        "Family": "aurora-mysql8.0",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-instance-params-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "AuroraCluster": {
+      "Type": "AWS::RDS::DBCluster",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Engine": "aurora-mysql",
+        "EngineVersion": "8.0.mysql_aurora.3.04.0",
+        "DatabaseName": "financialdb",
+        "MasterUsername": {
+          "Ref": "MasterUsername"
+        },
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:${DatabaseMasterPasswordSecret}:SecretString:password}}"
+        },
+        "DBClusterIdentifier": {
+          "Fn::Sub": "aurora-mysql-cluster-${EnvironmentSuffix}"
+        },
+        "DBClusterParameterGroupName": {
+          "Ref": "DatabaseClusterParameterGroup"
+        },
+        "DBSubnetGroupName": {
+          "Ref": "DatabaseSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "DatabaseSecurityGroup"
+          }
+        ],
+        "StorageEncrypted": true,
+        "KmsKeyId": {
+          "Ref": "DatabaseEncryptionKey"
+        },
+        "BackupRetentionPeriod": 30,
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+        "EnableCloudwatchLogsExports": [
+          "audit",
+          "error",
+          "general",
+          "slowquery"
+        ],
+        "DeletionProtection": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-mysql-cluster-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "AuroraWriterInstance": {
+      "Type": "AWS::RDS::DBInstance",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "aurora-writer-${EnvironmentSuffix}"
+        },
+        "DBInstanceClass": "db.r5.large",
+        "Engine": "aurora-mysql",
+        "DBClusterIdentifier": {
+          "Ref": "AuroraCluster"
+        },
+        "DBParameterGroupName": {
+          "Ref": "DatabaseInstanceParameterGroup"
+        },
+        "PubliclyAccessible": false,
+        "EnablePerformanceInsights": true,
+        "PerformanceInsightsRetentionPeriod": 7,
+        "PerformanceInsightsKMSKeyId": {
+          "Ref": "DatabaseEncryptionKey"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-writer-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Role",
+            "Value": "Writer"
+          }
+        ]
+      }
+    },
+    "AuroraReaderInstance1": {
+      "Type": "AWS::RDS::DBInstance",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "aurora-reader1-${EnvironmentSuffix}"
+        },
+        "DBInstanceClass": "db.r5.large",
+        "Engine": "aurora-mysql",
+        "DBClusterIdentifier": {
+          "Ref": "AuroraCluster"
+        },
+        "DBParameterGroupName": {
+          "Ref": "DatabaseInstanceParameterGroup"
+        },
+        "PubliclyAccessible": false,
+        "EnablePerformanceInsights": true,
+        "PerformanceInsightsRetentionPeriod": 7,
+        "PerformanceInsightsKMSKeyId": {
+          "Ref": "DatabaseEncryptionKey"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-reader1-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Role",
+            "Value": "Reader"
+          }
+        ]
+      }
+    },
+    "AuroraReaderInstance2": {
+      "Type": "AWS::RDS::DBInstance",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "aurora-reader2-${EnvironmentSuffix}"
+        },
+        "DBInstanceClass": "db.r5.large",
+        "Engine": "aurora-mysql",
+        "DBClusterIdentifier": {
+          "Ref": "AuroraCluster"
+        },
+        "DBParameterGroupName": {
+          "Ref": "DatabaseInstanceParameterGroup"
+        },
+        "PubliclyAccessible": false,
+        "EnablePerformanceInsights": true,
+        "PerformanceInsightsRetentionPeriod": 7,
+        "PerformanceInsightsKMSKeyId": {
+          "Ref": "DatabaseEncryptionKey"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-reader2-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Role",
+            "Value": "Reader"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "ClusterEndpoint": {
+      "Description": "Aurora MySQL cluster writer endpoint for write operations",
+      "Value": {
+        "Fn::GetAtt": [
+          "AuroraCluster",
+          "Endpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ClusterEndpoint"
+        }
+      }
+    },
+    "ReaderEndpoint": {
+      "Description": "Aurora MySQL cluster reader endpoint for read operations",
+      "Value": {
+        "Fn::GetAtt": [
+          "AuroraCluster",
+          "ReadEndpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ReaderEndpoint"
+        }
+      }
+    },
+    "ClusterPort": {
+      "Description": "Aurora MySQL cluster port",
+      "Value": {
+        "Fn::GetAtt": [
+          "AuroraCluster",
+          "Endpoint.Port"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ClusterPort"
+        }
+      }
+    },
+    "KmsKeyArn": {
+      "Description": "ARN of the KMS key used for encryption",
+      "Value": {
+        "Fn::GetAtt": [
+          "DatabaseEncryptionKey",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-KmsKeyArn"
+        }
+      }
+    },
+    "ClusterIdentifier": {
+      "Description": "Aurora MySQL cluster identifier",
+      "Value": {
+        "Ref": "AuroraCluster"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ClusterIdentifier"
+        }
+      }
+    },
+    "SecurityGroupId": {
+      "Description": "Security group ID for the Aurora cluster",
+      "Value": {
+        "Ref": "DatabaseSecurityGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SecurityGroupId"
+        }
+      }
+    },
+    "DatabasePasswordSecretArn": {
+      "Description": "ARN of the Secrets Manager secret containing the database password",
+      "Value": {
+        "Ref": "DatabaseMasterPasswordSecret"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DatabasePasswordSecretArn"
+        }
+      }
+    }
+  }
+}

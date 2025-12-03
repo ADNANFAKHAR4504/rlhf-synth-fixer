@@ -1,0 +1,666 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Automated Infrastructure Compliance Monitoring System with AWS Config, Lambda, S3, EventBridge, SNS, CloudWatch, and Systems Manager",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource naming to avoid conflicts",
+      "Default": "dev",
+      "AllowedPattern": "^[a-z0-9-]{1,20}$",
+      "ConstraintDescription": "Must be lowercase alphanumeric with hyphens, max 20 characters"
+    },
+    "SecurityTeamEmail": {
+      "Type": "String",
+      "Description": "Email address for security team notifications",
+      "Default": "security@example.com",
+      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+      "ConstraintDescription": "Must be a valid email address"
+    },
+    "ApprovedAMIs": {
+      "Type": "CommaDelimitedList",
+      "Description": "Comma-separated list of approved AMI IDs",
+      "Default": "ami-0c55b159cbfafe1f0,ami-0abcdef1234567890"
+    }
+  },
+  "Resources": {
+    "ComplianceReportBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "compliance-reports-${AWS::AccountId}-${EnvironmentSuffix}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "TransitionToGlacier",
+              "Status": "Enabled",
+              "Transitions": [
+                {
+                  "TransitionInDays": 30,
+                  "StorageClass": "GLACIER"
+                }
+              ],
+              "ExpirationInDays": 90
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        }
+      }
+    },
+    "ConfigBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "aws-config-bucket-${AWS::AccountId}-${EnvironmentSuffix}"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        }
+      }
+    },
+    "ConfigBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "ConfigBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AWSConfigBucketPermissionsCheck",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "config.amazonaws.com"
+              },
+              "Action": "s3:GetBucketAcl",
+              "Resource": {
+                "Fn::GetAtt": ["ConfigBucket", "Arn"]
+              }
+            },
+            {
+              "Sid": "AWSConfigBucketExistenceCheck",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "config.amazonaws.com"
+              },
+              "Action": "s3:ListBucket",
+              "Resource": {
+                "Fn::GetAtt": ["ConfigBucket", "Arn"]
+              }
+            },
+            {
+              "Sid": "AWSConfigBucketPutObject",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "config.amazonaws.com"
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${ConfigBucket.Arn}/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "ConfigRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "config-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "config.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "ConfigS3Policy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetBucketVersioning",
+                    "s3:PutObject",
+                    "s3:GetObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": ["ConfigBucket", "Arn"]
+                    },
+                    {
+                      "Fn::Sub": "${ConfigBucket.Arn}/*"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ConfigRecorder": {
+      "Type": "AWS::Config::ConfigurationRecorder",
+      "DependsOn": ["ConfigBucketPolicy"],
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "config-recorder-${EnvironmentSuffix}"
+        },
+        "RoleARN": {
+          "Fn::GetAtt": ["ConfigRole", "Arn"]
+        },
+        "RecordingGroup": {
+          "AllSupported": true,
+          "IncludeGlobalResourceTypes": true
+        }
+      }
+    },
+    "ConfigDeliveryChannel": {
+      "Type": "AWS::Config::DeliveryChannel",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "config-delivery-${EnvironmentSuffix}"
+        },
+        "S3BucketName": {
+          "Ref": "ConfigBucket"
+        }
+      }
+    },
+    "ComplianceAlertTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "compliance-alerts-${EnvironmentSuffix}"
+        },
+        "DisplayName": "Infrastructure Compliance Alerts",
+        "Subscription": [
+          {
+            "Protocol": "email",
+            "Endpoint": {
+              "Ref": "SecurityTeamEmail"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "compliance-lambda-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "ComplianceValidationPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "config:GetComplianceDetailsByConfigRule",
+                    "config:DescribeConfigRules",
+                    "config:GetResourceConfigHistory"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:GetObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${ComplianceReportBucket.Arn}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sns:Publish"
+                  ],
+                  "Resource": {
+                    "Ref": "ComplianceAlertTopic"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameter",
+                    "ssm:GetParameters"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/compliance/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ec2:DescribeInstances",
+                    "ec2:DescribeSecurityGroups",
+                    "ec2:DescribeImages"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudformation:DescribeStacks",
+                    "cloudformation:DescribeStackResources",
+                    "cloudformation:DetectStackDrift"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "TagComplianceFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "tag-compliance-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.9",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": ["LambdaExecutionRole", "Arn"]
+        },
+        "MemorySize": 256,
+        "Timeout": 300,
+        "Environment": {
+          "Variables": {
+            "SNS_TOPIC_ARN": {
+              "Ref": "ComplianceAlertTopic"
+            },
+            "S3_BUCKET": {
+              "Ref": "ComplianceReportBucket"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\n\nec2 = boto3.client('ec2')\nsns = boto3.client('sns')\ns3 = boto3.client('s3')\n\nREQUIRED_TAGS = ['Environment', 'Owner', 'CostCenter']\n\ndef lambda_handler(event, context):\n    print(f'Received event: {json.dumps(event)}')\n    \n    non_compliant_resources = []\n    \n    try:\n        # Check EC2 instances for required tags\n        instances = ec2.describe_instances()\n        \n        for reservation in instances['Reservations']:\n            for instance in reservation['Instances']:\n                instance_id = instance['InstanceId']\n                tags = {tag['Key']: tag['Value'] for tag in instance.get('Tags', [])}\n                \n                missing_tags = [tag for tag in REQUIRED_TAGS if tag not in tags]\n                \n                if missing_tags:\n                    non_compliant_resources.append({\n                        'ResourceType': 'EC2Instance',\n                        'ResourceId': instance_id,\n                        'MissingTags': missing_tags,\n                        'ExistingTags': list(tags.keys())\n                    })\n        \n        # Generate compliance report\n        report = {\n            'Timestamp': datetime.utcnow().isoformat(),\n            'TotalResourcesChecked': len(instances['Reservations']),\n            'NonCompliantResources': len(non_compliant_resources),\n            'Details': non_compliant_resources\n        }\n        \n        # Store report in S3\n        report_key = f\"tag-compliance/{datetime.utcnow().strftime('%Y/%m/%d/%H%M%S')}.json\"\n        s3.put_object(\n            Bucket=os.environ['S3_BUCKET'],\n            Key=report_key,\n            Body=json.dumps(report, indent=2),\n            ContentType='application/json'\n        )\n        \n        # Send SNS notification if non-compliant resources found\n        if non_compliant_resources:\n            message = f\"Tag Compliance Violation Detected\\n\\n\"\n            message += f\"Total Non-Compliant Resources: {len(non_compliant_resources)}\\n\\n\"\n            message += \"Details:\\n\"\n            for resource in non_compliant_resources[:10]:  # Limit to first 10\n                message += f\"- {resource['ResourceType']}: {resource['ResourceId']}\\n\"\n                message += f\"  Missing Tags: {', '.join(resource['MissingTags'])}\\n\"\n            \n            sns.publish(\n                TopicArn=os.environ['SNS_TOPIC_ARN'],\n                Subject='Infrastructure Tag Compliance Alert',\n                Message=message\n            )\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'Tag compliance check completed',\n                'nonCompliantResources': len(non_compliant_resources)\n            })\n        }\n        \n    except Exception as e:\n        print(f'Error: {str(e)}')\n        raise\n"
+        }
+      }
+    },
+    "AMIComplianceFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "ami-compliance-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.9",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": ["LambdaExecutionRole", "Arn"]
+        },
+        "MemorySize": 256,
+        "Timeout": 300,
+        "Environment": {
+          "Variables": {
+            "SNS_TOPIC_ARN": {
+              "Ref": "ComplianceAlertTopic"
+            },
+            "S3_BUCKET": {
+              "Ref": "ComplianceReportBucket"
+            },
+            "APPROVED_AMIS_PARAM": "/compliance/approved-amis"
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\n\nec2 = boto3.client('ec2')\nsns = boto3.client('sns')\ns3 = boto3.client('s3')\nssm = boto3.client('ssm')\n\ndef lambda_handler(event, context):\n    print(f'Received event: {json.dumps(event)}')\n    \n    non_compliant_instances = []\n    \n    try:\n        # Get approved AMIs from Parameter Store\n        try:\n            param = ssm.get_parameter(Name=os.environ['APPROVED_AMIS_PARAM'])\n            approved_amis = json.loads(param['Parameter']['Value'])\n        except:\n            approved_amis = []\n            print('No approved AMIs configured in Parameter Store')\n        \n        # Check all running instances\n        instances = ec2.describe_instances(\n            Filters=[{'Name': 'instance-state-name', 'Values': ['running', 'stopped']}]\n        )\n        \n        for reservation in instances['Reservations']:\n            for instance in reservation['Instances']:\n                instance_id = instance['InstanceId']\n                ami_id = instance['ImageId']\n                \n                if approved_amis and ami_id not in approved_amis:\n                    non_compliant_instances.append({\n                        'InstanceId': instance_id,\n                        'AMI': ami_id,\n                        'State': instance['State']['Name'],\n                        'LaunchTime': instance['LaunchTime'].isoformat()\n                    })\n        \n        # Generate compliance report\n        report = {\n            'Timestamp': datetime.utcnow().isoformat(),\n            'ApprovedAMIs': approved_amis,\n            'TotalInstancesChecked': sum(len(r['Instances']) for r in instances['Reservations']),\n            'NonCompliantInstances': len(non_compliant_instances),\n            'Details': non_compliant_instances\n        }\n        \n        # Store report in S3\n        report_key = f\"ami-compliance/{datetime.utcnow().strftime('%Y/%m/%d/%H%M%S')}.json\"\n        s3.put_object(\n            Bucket=os.environ['S3_BUCKET'],\n            Key=report_key,\n            Body=json.dumps(report, indent=2),\n            ContentType='application/json'\n        )\n        \n        # Send SNS notification if non-compliant instances found\n        if non_compliant_instances:\n            message = f\"AMI Compliance Violation Detected\\n\\n\"\n            message += f\"Total Non-Compliant Instances: {len(non_compliant_instances)}\\n\\n\"\n            message += \"Details:\\n\"\n            for instance in non_compliant_instances[:10]:\n                message += f\"- Instance: {instance['InstanceId']} using unapproved AMI: {instance['AMI']}\\n\"\n            \n            sns.publish(\n                TopicArn=os.environ['SNS_TOPIC_ARN'],\n                Subject='Infrastructure AMI Compliance Alert',\n                Message=message\n            )\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'AMI compliance check completed',\n                'nonCompliantInstances': len(non_compliant_instances)\n            })\n        }\n        \n    except Exception as e:\n        print(f'Error: {str(e)}')\n        raise\n"
+        }
+      }
+    },
+    "DriftDetectionFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "drift-detection-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.9",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": ["LambdaExecutionRole", "Arn"]
+        },
+        "MemorySize": 256,
+        "Timeout": 300,
+        "Environment": {
+          "Variables": {
+            "SNS_TOPIC_ARN": {
+              "Ref": "ComplianceAlertTopic"
+            },
+            "S3_BUCKET": {
+              "Ref": "ComplianceReportBucket"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\n\ncfn = boto3.client('cloudformation')\nsns = boto3.client('sns')\ns3 = boto3.client('s3')\n\ndef lambda_handler(event, context):\n    print(f'Received event: {json.dumps(event)}')\n    \n    drift_results = []\n    \n    try:\n        # Get all CloudFormation stacks\n        paginator = cfn.get_paginator('list_stacks')\n        page_iterator = paginator.paginate(\n            StackStatusFilter=['CREATE_COMPLETE', 'UPDATE_COMPLETE', 'UPDATE_ROLLBACK_COMPLETE']\n        )\n        \n        for page in page_iterator:\n            for stack in page['StackSummaries']:\n                stack_name = stack['StackName']\n                \n                try:\n                    # Check drift status\n                    drift_info = cfn.detect_stack_drift(StackName=stack_name)\n                    drift_detection_id = drift_info['StackDriftDetectionId']\n                    \n                    # Wait for drift detection to complete\n                    import time\n                    for _ in range(30):\n                        status = cfn.describe_stack_drift_detection_status(\n                            StackDriftDetectionId=drift_detection_id\n                        )\n                        if status['DetectionStatus'] == 'DETECTION_COMPLETE':\n                            break\n                        time.sleep(2)\n                    \n                    drift_status = status.get('StackDriftStatus', 'UNKNOWN')\n                    \n                    if drift_status in ['DRIFTED', 'UNKNOWN']:\n                        drift_results.append({\n                            'StackName': stack_name,\n                            'DriftStatus': drift_status,\n                            'Timestamp': datetime.utcnow().isoformat()\n                        })\n                        \n                except Exception as e:\n                    print(f'Error checking drift for {stack_name}: {str(e)}')\n                    continue\n        \n        # Generate report\n        report = {\n            'Timestamp': datetime.utcnow().isoformat(),\n            'DriftedStacks': len(drift_results),\n            'Details': drift_results\n        }\n        \n        # Store report in S3\n        report_key = f\"drift-detection/{datetime.utcnow().strftime('%Y/%m/%d/%H%M%S')}.json\"\n        s3.put_object(\n            Bucket=os.environ['S3_BUCKET'],\n            Key=report_key,\n            Body=json.dumps(report, indent=2),\n            ContentType='application/json'\n        )\n        \n        # Send SNS notification if drift detected\n        if drift_results:\n            message = f\"CloudFormation Stack Drift Detected\\n\\n\"\n            message += f\"Total Drifted Stacks: {len(drift_results)}\\n\\n\"\n            message += \"Details:\\n\"\n            for result in drift_results:\n                message += f\"- Stack: {result['StackName']} - Status: {result['DriftStatus']}\\n\"\n            \n            sns.publish(\n                TopicArn=os.environ['SNS_TOPIC_ARN'],\n                Subject='CloudFormation Stack Drift Alert',\n                Message=message\n            )\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'Drift detection completed',\n                'driftedStacks': len(drift_results)\n            })\n        }\n        \n    except Exception as e:\n        print(f'Error: {str(e)}')\n        raise\n"
+        }
+      }
+    },
+    "TagComplianceFunctionLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/tag-compliance-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30
+      }
+    },
+    "AMIComplianceFunctionLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/ami-compliance-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30
+      }
+    },
+    "DriftDetectionFunctionLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/drift-detection-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30
+      }
+    },
+    "ConfigComplianceEventRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "config-compliance-changes-${EnvironmentSuffix}"
+        },
+        "Description": "Trigger Lambda on AWS Config compliance changes",
+        "EventPattern": {
+          "source": ["aws.config"],
+          "detail-type": ["Config Rules Compliance Change"]
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": ["TagComplianceFunction", "Arn"]
+            },
+            "Id": "TagComplianceTarget"
+          }
+        ]
+      }
+    },
+    "ScheduledComplianceCheckRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "scheduled-compliance-check-${EnvironmentSuffix}"
+        },
+        "Description": "Run compliance checks every 6 hours",
+        "ScheduleExpression": "rate(6 hours)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": ["TagComplianceFunction", "Arn"]
+            },
+            "Id": "TagComplianceScheduled"
+          },
+          {
+            "Arn": {
+              "Fn::GetAtt": ["AMIComplianceFunction", "Arn"]
+            },
+            "Id": "AMIComplianceScheduled"
+          },
+          {
+            "Arn": {
+              "Fn::GetAtt": ["DriftDetectionFunction", "Arn"]
+            },
+            "Id": "DriftDetectionScheduled"
+          }
+        ]
+      }
+    },
+    "TagComplianceFunctionEventPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "TagComplianceFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": ["ConfigComplianceEventRule", "Arn"]
+        }
+      }
+    },
+    "TagComplianceFunctionSchedulePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "TagComplianceFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": ["ScheduledComplianceCheckRule", "Arn"]
+        }
+      }
+    },
+    "AMIComplianceFunctionSchedulePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "AMIComplianceFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": ["ScheduledComplianceCheckRule", "Arn"]
+        }
+      }
+    },
+    "DriftDetectionFunctionSchedulePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "DriftDetectionFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": ["ScheduledComplianceCheckRule", "Arn"]
+        }
+      }
+    },
+    "RequiredTagsConfigRule": {
+      "Type": "AWS::Config::ConfigRule",
+      "DependsOn": ["ConfigRecorder"],
+      "Properties": {
+        "ConfigRuleName": {
+          "Fn::Sub": "required-tags-${EnvironmentSuffix}"
+        },
+        "Description": "Checks that resources have required tags: Environment, Owner, CostCenter",
+        "Source": {
+          "Owner": "AWS",
+          "SourceIdentifier": "REQUIRED_TAGS"
+        },
+        "InputParameters": {
+          "tag1Key": "Environment",
+          "tag2Key": "Owner",
+          "tag3Key": "CostCenter"
+        }
+      }
+    },
+    "ApprovedAMIsParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": "/compliance/approved-amis",
+        "Description": "List of approved AMI IDs for EC2 instances",
+        "Type": "String",
+        "Value": {
+          "Fn::Sub": [
+            "[\"${AMI1}\", \"${AMI2}\"]",
+            {
+              "AMI1": {
+                "Fn::Select": [0, {"Ref": "ApprovedAMIs"}]
+              },
+              "AMI2": {
+                "Fn::Select": [1, {"Ref": "ApprovedAMIs"}]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "ComplianceThresholdParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": "/compliance/threshold",
+        "Description": "Compliance threshold percentage for alerting",
+        "Type": "String",
+        "Value": "95"
+      }
+    },
+    "ComplianceDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": {
+          "Fn::Sub": "compliance-dashboard-${EnvironmentSuffix}"
+        },
+        "DashboardBody": {
+          "Fn::Sub": [
+            "{\"widgets\":[{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/Lambda\",\"Invocations\",{\"stat\":\"Sum\",\"label\":\"Tag Compliance Checks\"}],[\"AWS/Lambda\",\"Errors\",{\"stat\":\"Sum\",\"label\":\"Lambda Errors\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${Region}\",\"title\":\"Lambda Execution Metrics\",\"yAxis\":{\"left\":{\"min\":0}}}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/Lambda\",\"Duration\",{\"stat\":\"Average\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${Region}\",\"title\":\"Lambda Duration\",\"yAxis\":{\"left\":{\"min\":0}}}},{\"type\":\"log\",\"properties\":{\"query\":\"SOURCE '/aws/lambda/tag-compliance-${Suffix}'\\n| fields @timestamp, @message\\n| filter @message like /non-compliant/\\n| sort @timestamp desc\\n| limit 20\",\"region\":\"${Region}\",\"title\":\"Recent Compliance Violations\"}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/Config\",\"ConfigRuleEvaluations\",{\"stat\":\"Sum\"}]],\"period\":300,\"stat\":\"Sum\",\"region\":\"${Region}\",\"title\":\"AWS Config Rule Evaluations\"}}]}",
+            {
+              "Region": {"Ref": "AWS::Region"},
+              "Suffix": {"Ref": "EnvironmentSuffix"}
+            }
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "ComplianceReportBucketName": {
+      "Description": "S3 bucket for compliance reports",
+      "Value": {
+        "Ref": "ComplianceReportBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ComplianceReportBucket"
+        }
+      }
+    },
+    "ComplianceAlertTopicArn": {
+      "Description": "SNS topic ARN for compliance alerts",
+      "Value": {
+        "Ref": "ComplianceAlertTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ComplianceAlertTopic"
+        }
+      }
+    },
+    "TagComplianceFunctionArn": {
+      "Description": "ARN of Tag Compliance Lambda function",
+      "Value": {
+        "Fn::GetAtt": ["TagComplianceFunction", "Arn"]
+      }
+    },
+    "AMIComplianceFunctionArn": {
+      "Description": "ARN of AMI Compliance Lambda function",
+      "Value": {
+        "Fn::GetAtt": ["AMIComplianceFunction", "Arn"]
+      }
+    },
+    "DriftDetectionFunctionArn": {
+      "Description": "ARN of Drift Detection Lambda function",
+      "Value": {
+        "Fn::GetAtt": ["DriftDetectionFunction", "Arn"]
+      }
+    },
+    "ConfigRecorderName": {
+      "Description": "Name of AWS Config recorder",
+      "Value": {
+        "Ref": "ConfigRecorder"
+      }
+    },
+    "ComplianceDashboardURL": {
+      "Description": "CloudWatch Dashboard URL",
+      "Value": {
+        "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=compliance-dashboard-${EnvironmentSuffix}"
+      }
+    }
+  }
+}

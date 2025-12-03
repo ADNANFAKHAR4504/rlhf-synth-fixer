@@ -1,0 +1,857 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Optimized three-tier web application infrastructure with all best practices",
+  "Metadata": {
+    "AWS::CloudFormation::Designer": {
+      "VPC": {"id": "vpc-001"},
+      "InternetGateway": {"id": "igw-001"},
+      "PublicSubnet1": {"id": "pub-subnet-1"},
+      "PublicSubnet2": {"id": "pub-subnet-2"},
+      "PublicSubnet3": {"id": "pub-subnet-3"},
+      "PrivateSubnet1": {"id": "priv-subnet-1"},
+      "PrivateSubnet2": {"id": "priv-subnet-2"},
+      "PrivateSubnet3": {"id": "priv-subnet-3"}
+    }
+  },
+  "Parameters": {
+    "Environment": {
+      "Type": "String",
+      "Default": "dev",
+      "AllowedValues": ["dev", "staging", "prod"],
+      "Description": "Environment name for conditional resource creation"
+    },
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource naming to ensure uniqueness",
+      "MinLength": 3,
+      "MaxLength": 10,
+      "AllowedPattern": "[a-z0-9-]+",
+      "ConstraintDescription": "Must contain only lowercase alphanumeric characters and hyphens"
+    },
+    "VpcCIDR": {
+      "Type": "String",
+      "Default": "10.0.0.0/16",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "Description": "CIDR block for VPC",
+      "ConstraintDescription": "Must be a valid CIDR block"
+    },
+    "PublicSubnet1CIDR": {
+      "Type": "String",
+      "Default": "10.0.1.0/24",
+      "Description": "CIDR block for public subnet 1"
+    },
+    "PublicSubnet2CIDR": {
+      "Type": "String",
+      "Default": "10.0.2.0/24",
+      "Description": "CIDR block for public subnet 2"
+    },
+    "PublicSubnet3CIDR": {
+      "Type": "String",
+      "Default": "10.0.3.0/24",
+      "Description": "CIDR block for public subnet 3"
+    },
+    "PrivateSubnet1CIDR": {
+      "Type": "String",
+      "Default": "10.0.11.0/24",
+      "Description": "CIDR block for private subnet 1"
+    },
+    "PrivateSubnet2CIDR": {
+      "Type": "String",
+      "Default": "10.0.12.0/24",
+      "Description": "CIDR block for private subnet 2"
+    },
+    "PrivateSubnet3CIDR": {
+      "Type": "String",
+      "Default": "10.0.13.0/24",
+      "Description": "CIDR block for private subnet 3"
+    },
+    "DBMasterUsername": {
+      "Type": "String",
+      "Default": "admin",
+      "MinLength": 1,
+      "MaxLength": 16,
+      "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+      "Description": "Master username for RDS Aurora cluster"
+    }
+  },
+  "Mappings": {
+    "EnvironmentConfig": {
+      "dev": {
+        "InstanceType": "t3.micro",
+        "MinSize": "1",
+        "MaxSize": "2",
+        "DesiredCapacity": "1",
+        "DBInstanceClass": "db.t3.medium",
+        "CacheNodeType": "cache.t3.micro",
+        "MultiAZ": "false"
+      },
+      "staging": {
+        "InstanceType": "t3.small",
+        "MinSize": "2",
+        "MaxSize": "4",
+        "DesiredCapacity": "2",
+        "DBInstanceClass": "db.t3.large",
+        "CacheNodeType": "cache.t3.small",
+        "MultiAZ": "false"
+      },
+      "prod": {
+        "InstanceType": "t3.medium",
+        "MinSize": "2",
+        "MaxSize": "6",
+        "DesiredCapacity": "2",
+        "DBInstanceClass": "db.r5.large",
+        "CacheNodeType": "cache.r5.large",
+        "MultiAZ": "true"
+      }
+    },
+    "RegionAMI": {
+      "us-east-1": {
+        "HVM64": "ami-0453ec754f44f9a4a"
+      },
+      "us-east-2": {
+        "HVM64": "ami-0c20d88b0021158c6"
+      },
+      "us-west-1": {
+        "HVM64": "ami-0f50b947eed049732"
+      },
+      "us-west-2": {
+        "HVM64": "ami-0b6edd8449255b799"
+      },
+      "eu-west-1": {
+        "HVM64": "ami-0dfdc165e7af15242"
+      },
+      "eu-west-2": {
+        "HVM64": "ami-0acc77abdfc7ed5a6"
+      },
+      "eu-central-1": {
+        "HVM64": "ami-0a628e1e89aaedf80"
+      },
+      "ap-northeast-1": {
+        "HVM64": "ami-0599b6e53ca798bb2"
+      },
+      "ap-southeast-1": {
+        "HVM64": "ami-0497a974f8d5dcef8"
+      },
+      "ap-southeast-2": {
+        "HVM64": "ami-0375ab65ee943a2a6"
+      }
+    }
+  },
+  "Conditions": {
+    "IsProduction": {"Fn::Equals": [{"Ref": "Environment"}, "prod"]},
+    "IsNotProduction": {"Fn::Not": [{"Fn::Equals": [{"Ref": "Environment"}, "prod"]}]},
+    "EnableMultiAZ": {"Fn::Equals": [{"Fn::FindInMap": ["EnvironmentConfig", {"Ref": "Environment"}, "MultiAZ"]}, "true"]}
+  },
+  "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": {"Ref": "VpcCIDR"},
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "vpc-${EnvironmentSuffix}"}
+          },
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "Environment"}
+          }
+        ]
+      },
+      "Metadata": {
+        "AWS::CloudFormation::Designer": {
+          "id": "vpc-001"
+        }
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "igw-${EnvironmentSuffix}"}
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "InternetGatewayId": {"Ref": "InternetGateway"}
+      }
+    },
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": {"Ref": "PublicSubnet1CIDR"},
+        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": {"Ref": "AWS::Region"}}]},
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "public-subnet-1-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": {"Ref": "PublicSubnet2CIDR"},
+        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": {"Ref": "AWS::Region"}}]},
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "public-subnet-2-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "PublicSubnet3": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": {"Ref": "PublicSubnet3CIDR"},
+        "AvailabilityZone": {"Fn::Select": [2, {"Fn::GetAZs": {"Ref": "AWS::Region"}}]},
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "public-subnet-3-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": {"Ref": "PrivateSubnet1CIDR"},
+        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": {"Ref": "AWS::Region"}}]},
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "private-subnet-1-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": {"Ref": "PrivateSubnet2CIDR"},
+        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": {"Ref": "AWS::Region"}}]},
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "private-subnet-2-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "PrivateSubnet3": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "CidrBlock": {"Ref": "PrivateSubnet3CIDR"},
+        "AvailabilityZone": {"Fn::Select": [2, {"Fn::GetAZs": {"Ref": "AWS::Region"}}]},
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "private-subnet-3-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {"Ref": "VPC"},
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "public-rt-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "RouteTableId": {"Ref": "PublicRouteTable"},
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {"Ref": "InternetGateway"}
+      }
+    },
+    "PublicSubnetRouteTableAssociation1": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {"Ref": "PublicSubnet1"},
+        "RouteTableId": {"Ref": "PublicRouteTable"}
+      }
+    },
+    "PublicSubnetRouteTableAssociation2": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {"Ref": "PublicSubnet2"},
+        "RouteTableId": {"Ref": "PublicRouteTable"}
+      }
+    },
+    "PublicSubnetRouteTableAssociation3": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {"Ref": "PublicSubnet3"},
+        "RouteTableId": {"Ref": "PublicRouteTable"}
+      }
+    },
+    "WebSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {"Fn::Sub": "web-sg-${EnvironmentSuffix}"},
+        "GroupDescription": "Security group for web tier - ALB",
+        "VpcId": {"Ref": "VPC"},
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow HTTP from internet"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow HTTPS from internet"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "web-sg-${EnvironmentSuffix}"}
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "AppSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {"Fn::Sub": "app-sg-${EnvironmentSuffix}"},
+        "GroupDescription": "Security group for application tier - EC2 instances",
+        "VpcId": {"Ref": "VPC"},
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 8080,
+            "ToPort": 8080,
+            "SourceSecurityGroupId": {"Ref": "WebSecurityGroup"},
+            "Description": "Allow traffic from web tier"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": {"Ref": "VpcCIDR"},
+            "Description": "Allow SSH from VPC"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "app-sg-${EnvironmentSuffix}"}
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "DataSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {"Fn::Sub": "data-sg-${EnvironmentSuffix}"},
+        "GroupDescription": "Security group for data tier - RDS and ElastiCache",
+        "VpcId": {"Ref": "VPC"},
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "SourceSecurityGroupId": {"Ref": "AppSecurityGroup"},
+            "Description": "Allow MySQL from app tier"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 6379,
+            "ToPort": 6379,
+            "SourceSecurityGroupId": {"Ref": "AppSecurityGroup"},
+            "Description": "Allow Redis from app tier"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "data-sg-${EnvironmentSuffix}"}
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "ApplicationLoadBalancer": {
+      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "Properties": {
+        "Name": {"Fn::Sub": "alb-${EnvironmentSuffix}"},
+        "Subnets": [
+          {"Ref": "PublicSubnet1"},
+          {"Ref": "PublicSubnet2"},
+          {"Ref": "PublicSubnet3"}
+        ],
+        "SecurityGroups": [{"Ref": "WebSecurityGroup"}],
+        "Scheme": "internet-facing",
+        "Type": "application",
+        "IpAddressType": "ipv4",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "alb-${EnvironmentSuffix}"}
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "TargetGroup": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties": {
+        "Name": {"Fn::Sub": "tg-${EnvironmentSuffix}"},
+        "Port": 8080,
+        "Protocol": "HTTP",
+        "VpcId": {"Ref": "VPC"},
+        "HealthCheckEnabled": true,
+        "HealthCheckPath": "/health",
+        "HealthCheckIntervalSeconds": 30,
+        "HealthCheckTimeoutSeconds": 5,
+        "HealthyThresholdCount": 2,
+        "UnhealthyThresholdCount": 3,
+        "TargetType": "instance",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "tg-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "LoadBalancerListener": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties": {
+        "DefaultActions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": {"Ref": "TargetGroup"}
+          }
+        ],
+        "LoadBalancerArn": {"Ref": "ApplicationLoadBalancer"},
+        "Port": 80,
+        "Protocol": "HTTP"
+      }
+    },
+    "LaunchTemplate": {
+      "Type": "AWS::EC2::LaunchTemplate",
+      "Properties": {
+        "LaunchTemplateName": {"Fn::Sub": "lt-${EnvironmentSuffix}"},
+        "LaunchTemplateData": {
+          "ImageId": {"Fn::FindInMap": ["RegionAMI", {"Ref": "AWS::Region"}, "HVM64"]},
+          "InstanceType": {"Fn::FindInMap": ["EnvironmentConfig", {"Ref": "Environment"}, "InstanceType"]},
+          "SecurityGroupIds": [{"Ref": "AppSecurityGroup"}],
+          "MetadataOptions": {
+            "HttpTokens": "required",
+            "HttpPutResponseHopLimit": 1,
+            "HttpEndpoint": "enabled"
+          },
+          "UserData": {
+            "Fn::Base64": {
+              "Fn::Sub": [
+                "#!/bin/bash\nyum update -y\nyum install -y java-11-openjdk\necho 'Instance in ${ENV} environment' > /var/www/html/index.html\necho 'Region: ${REGION}' >> /var/www/html/index.html\necho 'Account: ${ACCOUNT}' >> /var/www/html/index.html\n",
+                {
+                  "ENV": {"Ref": "Environment"},
+                  "REGION": {"Ref": "AWS::Region"},
+                  "ACCOUNT": {"Ref": "AWS::AccountId"}
+                }
+              ]
+            }
+          },
+          "TagSpecifications": [
+            {
+              "ResourceType": "instance",
+              "Tags": [
+                {
+                  "Key": "Name",
+                  "Value": {"Fn::Sub": "app-instance-${EnvironmentSuffix}"}
+                },
+                {
+                  "Key": "Environment",
+                  "Value": {"Ref": "Environment"}
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "AutoScalingGroup": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "AutoScalingGroupName": {"Fn::Sub": "asg-${EnvironmentSuffix}"},
+        "LaunchTemplate": {
+          "LaunchTemplateId": {"Ref": "LaunchTemplate"},
+          "Version": {"Fn::GetAtt": ["LaunchTemplate", "LatestVersionNumber"]}
+        },
+        "MinSize": {"Fn::FindInMap": ["EnvironmentConfig", {"Ref": "Environment"}, "MinSize"]},
+        "MaxSize": {"Fn::FindInMap": ["EnvironmentConfig", {"Ref": "Environment"}, "MaxSize"]},
+        "DesiredCapacity": {"Fn::FindInMap": ["EnvironmentConfig", {"Ref": "Environment"}, "DesiredCapacity"]},
+        "TargetGroupARNs": [{"Ref": "TargetGroup"}],
+        "VPCZoneIdentifier": [
+          {"Ref": "PrivateSubnet1"},
+          {"Ref": "PrivateSubnet2"},
+          {"Ref": "PrivateSubnet3"}
+        ],
+        "HealthCheckType": "ELB",
+        "HealthCheckGracePeriod": 300,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "app-instance-${EnvironmentSuffix}"},
+            "PropagateAtLaunch": true
+          },
+          {
+            "Key": "Environment",
+            "Value": {"Ref": "Environment"},
+            "PropagateAtLaunch": true
+          }
+        ]
+      },
+      "UpdatePolicy": {
+        "AutoScalingRollingUpdate": {
+          "MinInstancesInService": 1,
+          "MaxBatchSize": 2,
+          "PauseTime": "PT5M",
+          "WaitOnResourceSignals": false
+        }
+      }
+    },
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupName": {"Fn::Sub": "db-subnet-group-${EnvironmentSuffix}"},
+        "DBSubnetGroupDescription": "Subnet group for RDS Aurora",
+        "SubnetIds": [
+          {"Ref": "PrivateSubnet1"},
+          {"Ref": "PrivateSubnet2"},
+          {"Ref": "PrivateSubnet3"}
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "db-subnet-group-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "DBClusterParameterGroup": {
+      "Type": "AWS::RDS::DBClusterParameterGroup",
+      "Properties": {
+        "Description": {"Fn::Sub": "Cluster parameter group for Aurora MySQL - ${EnvironmentSuffix}"},
+        "Family": "aurora-mysql8.0",
+        "Parameters": {
+          "character_set_server": "utf8mb4",
+          "collation_server": "utf8mb4_unicode_ci"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "aurora-cluster-params-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "DBParameterGroup": {
+      "Type": "AWS::RDS::DBParameterGroup",
+      "Properties": {
+        "Description": {"Fn::Sub": "Parameter group for Aurora MySQL instances - ${EnvironmentSuffix}"},
+        "Family": "aurora-mysql8.0",
+        "Parameters": {
+          "max_connections": "150",
+          "slow_query_log": "1"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "aurora-instance-params-${EnvironmentSuffix}"}
+          }
+        ]
+      }
+    },
+    "AuroraCluster": {
+      "Type": "AWS::RDS::DBCluster",
+      "Properties": {
+        "DBClusterIdentifier": {"Fn::Sub": "aurora-cluster-${EnvironmentSuffix}"},
+        "Engine": "aurora-mysql",
+        "EngineVersion": "8.0.mysql_aurora.3.04.0",
+        "DatabaseName": "appdb",
+        "MasterUsername": {"Ref": "DBMasterUsername"},
+        "ManageMasterUserPassword": true,
+        "DBSubnetGroupName": {"Ref": "DBSubnetGroup"},
+        "DBClusterParameterGroupName": {"Ref": "DBClusterParameterGroup"},
+        "VpcSecurityGroupIds": [{"Ref": "DataSecurityGroup"}],
+        "BackupRetentionPeriod": 7,
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "mon:04:00-mon:05:00",
+        "StorageEncrypted": true,
+        "EnableCloudwatchLogsExports": ["audit", "error", "slowquery"],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "aurora-cluster-${EnvironmentSuffix}"}
+          }
+        ]
+      },
+      "DeletionPolicy": "Snapshot",
+      "UpdateReplacePolicy": "Snapshot"
+    },
+    "AuroraInstance1": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBInstanceIdentifier": {"Fn::Sub": "aurora-instance-1-${EnvironmentSuffix}"},
+        "Engine": "aurora-mysql",
+        "DBClusterIdentifier": {"Ref": "AuroraCluster"},
+        "DBInstanceClass": {"Fn::FindInMap": ["EnvironmentConfig", {"Ref": "Environment"}, "DBInstanceClass"]},
+        "DBParameterGroupName": {"Ref": "DBParameterGroup"},
+        "PubliclyAccessible": false,
+        "EnablePerformanceInsights": {"Fn::If": ["IsProduction", true, false]},
+        "PerformanceInsightsRetentionPeriod": {"Fn::If": ["IsProduction", 7, {"Ref": "AWS::NoValue"}]},
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "aurora-instance-1-${EnvironmentSuffix}"}
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "AuroraInstance2": {
+      "Type": "AWS::RDS::DBInstance",
+      "Condition": "EnableMultiAZ",
+      "Properties": {
+        "DBInstanceIdentifier": {"Fn::Sub": "aurora-instance-2-${EnvironmentSuffix}"},
+        "Engine": "aurora-mysql",
+        "DBClusterIdentifier": {"Ref": "AuroraCluster"},
+        "DBInstanceClass": {"Fn::FindInMap": ["EnvironmentConfig", {"Ref": "Environment"}, "DBInstanceClass"]},
+        "DBParameterGroupName": {"Ref": "DBParameterGroup"},
+        "PubliclyAccessible": false,
+        "EnablePerformanceInsights": true,
+        "PerformanceInsightsRetentionPeriod": 7,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "aurora-instance-2-${EnvironmentSuffix}"}
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "CacheSubnetGroup": {
+      "Type": "AWS::ElastiCache::SubnetGroup",
+      "Properties": {
+        "CacheSubnetGroupName": {"Fn::Sub": "cache-subnet-group-${EnvironmentSuffix}"},
+        "Description": "Subnet group for ElastiCache Redis",
+        "SubnetIds": [
+          {"Ref": "PrivateSubnet1"},
+          {"Ref": "PrivateSubnet2"},
+          {"Ref": "PrivateSubnet3"}
+        ]
+      }
+    },
+    "RedisReplicationGroup": {
+      "Type": "AWS::ElastiCache::ReplicationGroup",
+      "Condition": "IsProduction",
+      "Properties": {
+        "ReplicationGroupId": {"Fn::Sub": "redis-${EnvironmentSuffix}"},
+        "ReplicationGroupDescription": {"Fn::Sub": "Redis cluster for ${Environment}"},
+        "Engine": "redis",
+        "CacheNodeType": {"Fn::FindInMap": ["EnvironmentConfig", {"Ref": "Environment"}, "CacheNodeType"]},
+        "NumCacheClusters": 2,
+        "AutomaticFailoverEnabled": true,
+        "MultiAZEnabled": true,
+        "CacheSubnetGroupName": {"Ref": "CacheSubnetGroup"},
+        "SecurityGroupIds": [{"Ref": "DataSecurityGroup"}],
+        "AtRestEncryptionEnabled": true,
+        "TransitEncryptionEnabled": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "redis-replication-${EnvironmentSuffix}"}
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "RedisCluster": {
+      "Type": "AWS::ElastiCache::CacheCluster",
+      "Condition": "IsNotProduction",
+      "Properties": {
+        "ClusterName": {"Fn::Sub": "redis-${EnvironmentSuffix}"},
+        "CacheNodeType": {"Fn::FindInMap": ["EnvironmentConfig", {"Ref": "Environment"}, "CacheNodeType"]},
+        "Engine": "redis",
+        "NumCacheNodes": 1,
+        "CacheSubnetGroupName": {"Ref": "CacheSubnetGroup"},
+        "VpcSecurityGroupIds": [{"Ref": "DataSecurityGroup"}],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "redis-${EnvironmentSuffix}"}
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "LogBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {"Fn::Sub": "logs-${EnvironmentSuffix}-${AWS::AccountId}"},
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldLogs",
+              "Status": "Enabled",
+              "ExpirationInDays": 90,
+              "NoncurrentVersionExpirationInDays": 30
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {"Fn::Sub": "logs-${EnvironmentSuffix}"}
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete"
+    }
+  },
+  "Outputs": {
+    "VPCId": {
+      "Description": "VPC ID",
+      "Value": {"Ref": "VPC"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-VPCId"}
+      }
+    },
+    "LoadBalancerDNS": {
+      "Description": "DNS name of the Application Load Balancer",
+      "Value": {"Fn::GetAtt": ["ApplicationLoadBalancer", "DNSName"]},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-LoadBalancerDNS"}
+      }
+    },
+    "LoadBalancerURL": {
+      "Description": "URL of the Application Load Balancer",
+      "Value": {"Fn::Sub": "http://${ApplicationLoadBalancer.DNSName}"}
+    },
+    "AuroraClusterEndpoint": {
+      "Description": "Aurora cluster writer endpoint",
+      "Value": {"Fn::GetAtt": ["AuroraCluster", "Endpoint.Address"]},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-AuroraClusterEndpoint"}
+      }
+    },
+    "AuroraClusterReadEndpoint": {
+      "Description": "Aurora cluster reader endpoint",
+      "Value": {"Fn::GetAtt": ["AuroraCluster", "ReadEndpoint.Address"]},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-AuroraReadEndpoint"}
+      }
+    },
+    "RedisEndpoint": {
+      "Description": "Redis cluster endpoint",
+      "Value": {
+        "Fn::If": [
+          "IsProduction",
+          {"Fn::GetAtt": ["RedisReplicationGroup", "PrimaryEndPoint.Address"]},
+          {"Fn::GetAtt": ["RedisCluster", "RedisEndpoint.Address"]}
+        ]
+      },
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-RedisEndpoint"}
+      }
+    },
+    "LogBucketName": {
+      "Description": "Name of the S3 bucket for logs",
+      "Value": {"Ref": "LogBucket"},
+      "Export": {
+        "Name": {"Fn::Sub": "${AWS::StackName}-LogBucket"}
+      }
+    },
+    "Environment": {
+      "Description": "Environment name",
+      "Value": {"Ref": "Environment"}
+    },
+    "Region": {
+      "Description": "AWS Region",
+      "Value": {"Ref": "AWS::Region"}
+    },
+    "AccountId": {
+      "Description": "AWS Account ID",
+      "Value": {"Ref": "AWS::AccountId"}
+    }
+  }
+}

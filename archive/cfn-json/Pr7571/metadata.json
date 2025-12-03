@@ -1,0 +1,34 @@
+{
+  "task_id": "101912942",
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "aws_services": [
+    "KMS",
+    "Lambda",
+    "S3",
+    "DynamoDB",
+    "VPC",
+    "IAM",
+    "CloudWatch Logs",
+    "CloudTrail",
+    "VPC Endpoints"
+  ],
+  "description": "A financial services company requires a secure data processing pipeline that meets PCI-DSS compliance standards. The infrastructure must encrypt all data at rest and in transit, implement strict access controls, and maintain detailed audit logs for regulatory compliance.",
+  "po_id": "secure-payment-processing",
+  "team": "synth",
+  "startedAt": "2025-11-18T13:48:59.602705+00:00",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

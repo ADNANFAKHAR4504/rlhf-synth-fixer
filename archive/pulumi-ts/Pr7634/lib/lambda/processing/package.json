@@ -1,0 +1,10 @@
+{
+  "name": "compliance-processing",
+  "version": "1.0.0",
+  "description": "Process compliance events from AWS Config",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-config-service": "^3.0.0",
+    "@aws-sdk/client-s3": "^3.0.0"
+  }
+}

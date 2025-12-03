@@ -1,5 +1,0 @@
-name: TapStack
-runtime:
-  name: python
-  description: Multi-region disaster recovery infrastructure using CDKTF
-  main: tap.py

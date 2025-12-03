@@ -1,0 +1,295 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Compute Stack - Lambda Functions with ECR Container Images",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource names",
+      "AllowedPattern": "^[a-z0-9]{6,12}$"
+    },
+    "PrivateSubnetIds": {
+      "Type": "CommaDelimitedList",
+      "Description": "Comma-separated list of private subnet IDs"
+    },
+    "LambdaSecurityGroupId": {
+      "Type": "String",
+      "Description": "Security group ID for Lambda functions"
+    },
+    "AuroraEndpoint": {
+      "Type": "String",
+      "Description": "Aurora cluster write endpoint"
+    },
+    "AuroraReadEndpoint": {
+      "Type": "String",
+      "Description": "Aurora cluster read endpoint"
+    },
+    "DatabaseName": {
+      "Type": "String",
+      "Description": "Database name"
+    },
+    "DynamoDBTableName": {
+      "Type": "String",
+      "Description": "DynamoDB session table name"
+    },
+    "AuditLogBucketName": {
+      "Type": "String",
+      "Description": "S3 audit log bucket name"
+    }
+  },
+  "Resources": {
+    "TransactionValidatorECRRepository": {
+      "Type": "AWS::ECR::Repository",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "RepositoryName": { "Fn::Sub": "transaction-validator-${EnvironmentSuffix}" },
+        "ImageScanningConfiguration": {
+          "ScanOnPush": true
+        },
+        "LifecyclePolicy": {
+          "LifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"description\":\"Keep last 5 images\",\"selection\":{\"tagStatus\":\"any\",\"countType\":\"imageCountMoreThan\",\"countNumber\":5},\"action\":{\"type\":\"expire\"}}]}"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "transaction-validator-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "SchemaMigrationECRRepository": {
+      "Type": "AWS::ECR::Repository",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "RepositoryName": { "Fn::Sub": "schema-migration-${EnvironmentSuffix}" },
+        "ImageScanningConfiguration": {
+          "ScanOnPush": true
+        },
+        "LifecyclePolicy": {
+          "LifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"description\":\"Keep last 3 images\",\"selection\":{\"tagStatus\":\"any\",\"countType\":\"imageCountMoreThan\",\"countNumber\":3},\"action\":{\"type\":\"expire\"}}]}"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "schema-migration-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": { "Fn::Sub": "lambda-execution-role-${EnvironmentSuffix}" },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "LambdaExecutionPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:Query"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:GetObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::${AuditLogBucketName}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": "arn:aws:logs:*:*:*"
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "lambda-execution-role-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "SchemaMigrationRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": { "Fn::Sub": "schema-migration-role-${EnvironmentSuffix}" },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "SchemaMigrationPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameter",
+                    "ssm:GetParameters"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/transaction-processing/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": "arn:aws:logs:*:*:*"
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "schema-migration-role-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "TransactionValidatorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": { "Fn::Sub": "transaction-validator-${EnvironmentSuffix}" },
+        "PackageType": "Image",
+        "Code": {
+          "ImageUri": { "Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${TransactionValidatorECRRepository}:latest" }
+        },
+        "Role": { "Fn::GetAtt": ["LambdaExecutionRole", "Arn"] },
+        "Timeout": 60,
+        "MemorySize": 512,
+        "Environment": {
+          "Variables": {
+            "TRANSACTION_TABLE_NAME": { "Ref": "DynamoDBTableName" },
+            "AUDIT_BUCKET_NAME": { "Ref": "AuditLogBucketName" },
+            "AURORA_ENDPOINT": { "Ref": "AuroraEndpoint" },
+            "AURORA_READ_ENDPOINT": { "Ref": "AuroraReadEndpoint" },
+            "DATABASE_NAME": { "Ref": "DatabaseName" }
+          }
+        },
+        "VpcConfig": {
+          "SecurityGroupIds": [{ "Ref": "LambdaSecurityGroupId" }],
+          "SubnetIds": { "Ref": "PrivateSubnetIds" }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "transaction-validator-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "TransactionValidatorLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": { "Fn::Sub": "/aws/lambda/transaction-validator-${EnvironmentSuffix}" },
+        "RetentionInDays": 7
+      }
+    },
+    "TransactionValidatorErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": { "Fn::Sub": "transaction-validator-errors-${EnvironmentSuffix}" },
+        "AlarmDescription": "Triggers when Lambda has high error rate",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": { "Ref": "TransactionValidatorFunction" }
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    }
+  },
+  "Outputs": {
+    "TransactionValidatorArn": {
+      "Description": "Transaction Validator Lambda Function ARN",
+      "Value": { "Fn::GetAtt": ["TransactionValidatorFunction", "Arn"] },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-TransactionValidatorArn" }
+      }
+    },
+    "TransactionValidatorName": {
+      "Description": "Transaction Validator Lambda Function Name",
+      "Value": { "Ref": "TransactionValidatorFunction" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-TransactionValidatorName" }
+      }
+    },
+    "TransactionValidatorECRRepositoryUri": {
+      "Description": "ECR Repository URI for Transaction Validator",
+      "Value": { "Fn::GetAtt": ["TransactionValidatorECRRepository", "RepositoryUri"] },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-TransactionValidatorECRUri" }
+      }
+    },
+    "SchemaMigrationECRRepositoryUri": {
+      "Description": "ECR Repository URI for Schema Migration",
+      "Value": { "Fn::GetAtt": ["SchemaMigrationECRRepository", "RepositoryUri"] },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-SchemaMigrationECRUri" }
+      }
+    }
+  }
+}
