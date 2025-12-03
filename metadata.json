@@ -8,7 +8,7 @@
   "startedAt": "2025-12-02T11:16:45-08:00",
   "subtask": "Infrastructure QA and Management",
   "subject_labels": [
-    "Infrastructure Analysis/Monitoring"
+    "General Infrastructure Tooling QA"
   ],
   "aws_services": [
     "S3",
