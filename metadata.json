@@ -25,5 +25,7 @@
     "ACM",
     "Auto Scaling"
   ],
-  "training_quality": 9
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342"
 }
