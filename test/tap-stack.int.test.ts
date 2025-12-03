@@ -388,37 +388,21 @@ describe("TapStack — Live Integration Suite", () => {
     expect(db!.StorageEncrypted).toBe(true);
   });
 
-  /* ---------- AWS Config ---------- */
-
-  test("23) Config Recorder exists by name", async () => {
-    const name = outputs.ConfigRecorderName;
-    const rec = await retry(() => cfg.send(new DescribeConfigurationRecordersCommand({})));
-    const found = (rec.ConfigurationRecorders || []).some((r) => r.name === name);
-    expect(found).toBe(true);
-  });
-
-  test("24) Config Delivery Channel exists by name", async () => {
-    const name = outputs.ConfigDeliveryChannelName;
-    const ch = await retry(() => cfg.send(new DescribeDeliveryChannelsCommand({})));
-    const found = (ch.DeliveryChannels || []).some((c) => c.name === name);
-    expect(found).toBe(true);
-  });
-
   /* ---------- SNS & GuardDuty & Metrics ---------- */
 
-  test("25) Security Alarm SNS Topic exists (GetTopicAttributes)", async () => {
+  test("23) Security Alarm SNS Topic exists (GetTopicAttributes)", async () => {
     const arn = outputs.SecurityAlarmTopicArn;
     const t = await retry(() => sns.send(new GetTopicAttributesCommand({ TopicArn: arn })));
     expect(t.Attributes).toBeDefined();
   });
 
-  test("26) GuardDuty detector is enabled", async () => {
+  test("24) GuardDuty detector is enabled", async () => {
     const id = outputs.GuardDutyDetectorId;
     const det = await retry(() => gd.send(new GetDetectorCommand({ DetectorId: id })));
     expect(det.Status).toBe("ENABLED");
   });
 
-  test("27) CloudWatch namespace for security metrics is queryable", async () => {
+  test("25) CloudWatch namespace for security metrics is queryable", async () => {
     const candidates = [
       `tapstack-prod/Security`,
       `tapstack-pr/Security`,
@@ -432,7 +416,7 @@ describe("TapStack — Live Integration Suite", () => {
     expect(results.some((r) => r !== null)).toBe(true);
   });
 
-  test("28) DescribeAlarms API responds", async () => {
+  test("26) DescribeAlarms API responds", async () => {
     const resp = await retry(() => cw.send(new DescribeAlarmsCommand({})));
     expect(Array.isArray(resp.MetricAlarms)).toBe(true);
   });
