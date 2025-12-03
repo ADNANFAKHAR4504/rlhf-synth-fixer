@@ -5,6 +5,7 @@ from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.kms_key import KmsKey
 from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
+from cdktf_cdktf_provider_aws.kms_key_policy import KmsKeyPolicy
 from cdktf_cdktf_provider_aws.vpc import Vpc
 from cdktf_cdktf_provider_aws.subnet import Subnet
 from cdktf_cdktf_provider_aws.security_group import SecurityGroup, SecurityGroupEgress
@@ -41,6 +42,7 @@ from cdktf_cdktf_provider_aws.cloudwatch_event_target import CloudwatchEventTarg
 import json
 import os
 import base64
+import boto3
 
 
 class TapStack(TerraformStack):
@@ -96,6 +98,56 @@ class TapStack(TerraformStack):
             "fraud_detection_kms_alias",
             name=f"alias/fraud-detection-{environment_suffix}",
             target_key_id=kms_key.key_id,
+        )
+
+        # Get AWS account ID for KMS key policy
+        try:
+            sts_client = boto3.client('sts', region_name=aws_region)
+            account_id = sts_client.get_caller_identity()['Account']
+        except Exception:
+            # Fallback: try to extract from ARN if available
+            account_id = "069919905910"  # Fallback account ID
+
+        # KMS Key Policy to allow CloudWatch Logs to use the key
+        KmsKeyPolicy(
+            self,
+            "kms_key_policy",
+            key_id=kms_key.id,
+            policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Sid": "Enable IAM User Permissions",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "AWS": f"arn:aws:iam::{account_id}:root"
+                        },
+                        "Action": "kms:*",
+                        "Resource": "*"
+                    },
+                    {
+                        "Sid": "Allow CloudWatch Logs",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": f"logs.{aws_region}.amazonaws.com"
+                        },
+                        "Action": [
+                            "kms:Encrypt",
+                            "kms:Decrypt",
+                            "kms:ReEncrypt*",
+                            "kms:GenerateDataKey*",
+                            "kms:CreateGrant",
+                            "kms:DescribeKey"
+                        ],
+                        "Resource": "*",
+                        "Condition": {
+                            "ArnLike": {
+                                "kms:EncryptionContext:aws:logs:arn": f"arn:aws:logs:{aws_region}:{account_id}:log-group:*"
+                            }
+                        }
+                    }
+                ]
+            })
         )
 
         # 2. VPC for Lambda functions processing sensitive data
@@ -626,7 +678,7 @@ class TapStack(TerraformStack):
         )
 
         # API Gateway Integration
-        ApiGatewayIntegration(
+        api_integration = ApiGatewayIntegration(
             self,
             "transactions_lambda_integration",
             rest_api_id=api.id,
@@ -653,7 +705,7 @@ class TapStack(TerraformStack):
             self,
             "api_deployment",
             rest_api_id=api.id,
-            depends_on=[post_method],
+            depends_on=[post_method, api_integration],
             lifecycle={
                 "create_before_destroy": True
             }
