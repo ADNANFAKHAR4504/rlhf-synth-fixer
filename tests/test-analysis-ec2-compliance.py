@@ -541,9 +541,10 @@ class TestGlueDataCatalog:
         s3 = boto3.client('s3', region_name='us-east-1')
 
         suffix = os.environ['ENVIRONMENT_SUFFIX']
-        database_name = f"ec2_compliance_db_{suffix}"
+        # Use unique names for crawler test to avoid collision with database test
+        database_name = f"ec2_compliance_crawler_db_{suffix}"
         crawler_name = f"ec2-compliance-crawler-{suffix}"
-        bucket_name = f"ec2-compliance-reports-{suffix}"
+        bucket_name = f"ec2-compliance-crawler-reports-{suffix}"
         role_name = f"glue-crawler-role-{suffix}"
 
         # Create S3 bucket
@@ -566,11 +567,11 @@ class TestGlueDataCatalog:
 
         role_arn = f"arn:aws:iam::123456789012:role/{role_name}"
 
-        # Create database
+        # Create database for crawler
         glue.create_database(
             DatabaseInput={
                 'Name': database_name,
-                'Description': 'Database for EC2 tag compliance reports'
+                'Description': 'Database for Glue crawler test'
             }
         )
 
