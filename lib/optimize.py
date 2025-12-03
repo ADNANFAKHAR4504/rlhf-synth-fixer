@@ -6,10 +6,10 @@ This script analyzes Pulumi TypeScript code for common ECS deployment
 inefficiencies and provides recommendations for optimization.
 """
 
+import json
 import re
 import sys
-import json
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 
 class OptimizationCheck:
@@ -356,12 +356,11 @@ class ECSOptimizationAnalyzer:
 
 def main():
     """Main entry point"""
+    # Default to lib/tap-stack.ts if no argument provided
     if len(sys.argv) < 2:
-        print("Usage: python optimize.py <path-to-index.ts>")
-        print("Example: python optimize.py lib/index.ts")
-        sys.exit(1)
-
-    file_path = sys.argv[1]
+        file_path = 'lib/tap-stack.ts'
+    else:
+        file_path = sys.argv[1]
 
     try:
         with open(file_path, 'r') as f:

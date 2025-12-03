@@ -2,165 +2,293 @@ import * as pulumi from '@pulumi/pulumi';
 import * as fs from 'fs';
 import * as path from 'path';
 
+// Track created resources for verification
+const createdResources: Map<string, any> = new Map();
+
 // Mock Pulumi runtime before any imports
-pulumi.runtime.setMocks({
-  newResource: (args: pulumi.runtime.MockResourceArgs): {
-    id: string;
-    state: any;
-  } => {
-    return {
-      id: `${args.name}_id`,
-      state: args.inputs,
-    };
+pulumi.runtime.setMocks(
+  {
+    newResource: (args: pulumi.runtime.MockResourceArgs): {
+      id: string;
+      state: Record<string, any>;
+    } => {
+      // Store resource for verification
+      createdResources.set(args.name, {
+        type: args.type,
+        inputs: args.inputs,
+      });
+
+      // Return mock outputs based on resource type
+      const outputs: Record<string, any> = { ...args.inputs };
+
+      // Add common outputs
+      outputs.id = `${args.name}-id`;
+      outputs.arn = `arn:aws:service:us-east-1:123456789012:${args.name}`;
+
+      // Add specific outputs based on resource type
+      if (args.type.includes('Vpc')) {
+        outputs.id = `vpc-${args.name}`;
+      } else if (args.type.includes('Subnet')) {
+        outputs.id = `subnet-${args.name}`;
+      } else if (args.type.includes('SecurityGroup')) {
+        outputs.id = `sg-${args.name}`;
+      } else if (args.type.includes('LoadBalancer')) {
+        outputs.dnsName = `${args.name}.us-east-1.elb.amazonaws.com`;
+        outputs.arn = `arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/${args.name}`;
+      } else if (args.type.includes('TargetGroup')) {
+        outputs.arn = `arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/${args.name}`;
+      } else if (args.type.includes('Cluster')) {
+        outputs.name = args.inputs.name || args.name;
+        outputs.arn = `arn:aws:ecs:us-east-1:123456789012:cluster/${args.name}`;
+      } else if (args.type.includes('Service')) {
+        outputs.name = args.name;
+        outputs.id = `arn:aws:ecs:us-east-1:123456789012:service/${args.name}`;
+      } else if (args.type.includes('TaskDefinition')) {
+        outputs.arn = `arn:aws:ecs:us-east-1:123456789012:task-definition/${args.name}`;
+      } else if (args.type.includes('LogGroup')) {
+        outputs.name = args.inputs.name || `/ecs/${args.name}`;
+        outputs.arn = `arn:aws:logs:us-east-1:123456789012:log-group:${args.name}`;
+      } else if (args.type.includes('Role')) {
+        outputs.name = args.name;
+        outputs.arn = `arn:aws:iam::123456789012:role/${args.name}`;
+      } else if (args.type.includes('MetricAlarm')) {
+        outputs.arn = `arn:aws:cloudwatch:us-east-1:123456789012:alarm:${args.name}`;
+      } else if (args.type.includes('InternetGateway')) {
+        outputs.id = `igw-${args.name}`;
+      } else if (args.type.includes('RouteTable')) {
+        outputs.id = `rtb-${args.name}`;
+      }
+
+      return {
+        id: outputs.id || `${args.name}-id`,
+        state: outputs,
+      };
+    },
+    call: (args: pulumi.runtime.MockCallArgs) => {
+      return args.inputs;
+    },
   },
-  call: (args: pulumi.runtime.MockCallArgs) => {
-    return args.inputs;
-  },
-});
+  'project',
+  'stack',
+  false
+);
 
-// Mock Pulumi config
-class MockConfig {
-  private configs: Map<string, string> = new Map();
-
-  constructor() {
-    this.configs.set('environmentSuffix', 'test');
-    this.configs.set('environment', 'dev');
-    this.configs.set('awsRegion', 'us-east-1');
-    this.configs.set('containerPort', '3000');
-    this.configs.set('desiredCount', '2');
-  }
-
-  require(key: string): string {
-    const value = this.configs.get(key);
-    if (!value) {
-      throw new Error(`Config key "${key}" is required but not set`);
-    }
-    return value;
-  }
-
-  get(key: string): string | undefined {
-    return this.configs.get(key);
-  }
-
-  getNumber(key: string): number | undefined {
-    const value = this.configs.get(key);
-    return value ? parseInt(value, 10) : undefined;
-  }
+// Helper function to get output value
+function promiseOf<T>(output: pulumi.Output<T>): Promise<T> {
+  return new Promise((resolve) => output.apply(resolve));
 }
 
-jest.mock('@pulumi/pulumi', () => {
-  const actual = jest.requireActual('@pulumi/pulumi');
-  return {
-    ...actual,
-    Config: jest.fn().mockImplementation(() => new MockConfig()),
-  };
-});
-
-describe('ECS Infrastructure Optimization - Code Execution', () => {
-  it('should successfully create TapStack component', () => {
-    // Import the infrastructure code to get code coverage
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { TapStack } = require('../lib/tap-stack');
-
-    // Verify TapStack class exists
-    expect(TapStack).toBeDefined();
-    expect(typeof TapStack).toBe('function');
+describe('TapStack Component Resource', () => {
+  // Clear created resources before each test
+  beforeEach(() => {
+    createdResources.clear();
   });
 
-  it('should handle missing optional config values with defaults', () => {
-    // Test default values for optional configs
-    // This ensures branch coverage for config.get() || default patterns
+  describe('Instantiation with default args', () => {
+    it('should create TapStack with default environment suffix', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { TapStack } = require('../lib/tap-stack');
 
-    // Re-mock config with missing optional values
-    jest.resetModules();
+      const stack = new TapStack('test-stack', {});
 
-    class MockConfigMinimal {
-      private configs: Map<string, string> = new Map();
+      // Verify stack was created
+      expect(stack).toBeDefined();
 
-      constructor() {
-        this.configs.set('environmentSuffix', 'test-minimal');
-        // Don't set optional values to test defaults
-      }
-
-      require(key: string): string {
-        const value = this.configs.get(key);
-        if (!value) {
-          throw new Error(`Config key "${key}" is required but not set`);
-        }
-        return value;
-      }
-
-      get(key: string): string | undefined {
-        return this.configs.get(key);
-      }
-
-      getNumber(key: string): number | undefined {
-        const value = this.configs.get(key);
-        return value ? parseInt(value, 10) : undefined;
-      }
-    }
-
-    jest.mock('@pulumi/pulumi', () => {
-      const actual = jest.requireActual('@pulumi/pulumi');
-      return {
-        ...actual,
-        Config: jest.fn().mockImplementation(() => new MockConfigMinimal()),
-      };
+      // Verify outputs exist
+      expect(stack.vpcId).toBeDefined();
+      expect(stack.clusterId).toBeDefined();
+      expect(stack.clusterName).toBeDefined();
+      expect(stack.clusterArn).toBeDefined();
+      expect(stack.albDnsName).toBeDefined();
+      expect(stack.albArn).toBeDefined();
+      expect(stack.targetGroupArn).toBeDefined();
+      expect(stack.serviceArn).toBeDefined();
+      expect(stack.serviceName).toBeDefined();
+      expect(stack.taskDefinitionArn).toBeDefined();
+      expect(stack.logGroupName).toBeDefined();
+      expect(stack.lowCpuAlarmArn).toBeDefined();
+      expect(stack.launchTemplateId).toBeDefined();
+      expect(stack.autoScalingGroupName).toBeDefined();
+      expect(stack.capacityProviderName).toBeDefined();
+      expect(stack.instanceType).toBeDefined();
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { TapStack } = require('../lib/tap-stack');
+    it('should create all required AWS resources', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { TapStack } = require('../lib/tap-stack');
 
-    // Verify it still works with defaults
-    expect(TapStack).toBeDefined();
+      new TapStack('test-resources', {});
+
+      // Allow async resource creation to complete
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Verify VPC resources
+      const vpcResources = Array.from(createdResources.keys()).filter((k) =>
+        k.includes('vpc')
+      );
+      expect(vpcResources.length).toBeGreaterThan(0);
+
+      // Verify subnet resources
+      const subnetResources = Array.from(createdResources.keys()).filter((k) =>
+        k.includes('subnet')
+      );
+      expect(subnetResources.length).toBeGreaterThanOrEqual(2);
+
+      // Verify security group resources
+      const sgResources = Array.from(createdResources.keys()).filter((k) =>
+        k.includes('sg')
+      );
+      expect(sgResources.length).toBeGreaterThanOrEqual(2);
+
+      // Verify ECS cluster
+      const clusterResources = Array.from(createdResources.keys()).filter((k) =>
+        k.includes('cluster')
+      );
+      expect(clusterResources.length).toBeGreaterThan(0);
+
+      // Verify ALB resources
+      const albResources = Array.from(createdResources.keys()).filter((k) =>
+        k.includes('alb')
+      );
+      expect(albResources.length).toBeGreaterThan(0);
+    });
   });
 
-  it('should handle production environment configuration', () => {
-    // Test production-specific configuration branches
-    jest.resetModules();
+  describe('Instantiation with custom args', () => {
+    it('should create TapStack with custom environment suffix', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { TapStack } = require('../lib/tap-stack');
 
-    class MockConfigProduction {
-      private configs: Map<string, string> = new Map();
+      const stack = new TapStack('custom-stack', {
+        environmentSuffix: 'production',
+      });
 
-      constructor() {
-        this.configs.set('environmentSuffix', 'test-prod');
-        this.configs.set('environment', 'production');
-        this.configs.set('awsRegion', 'us-east-1');
-        this.configs.set('containerPort', '3000');
-        this.configs.set('desiredCount', '2');
-      }
-
-      require(key: string): string {
-        const value = this.configs.get(key);
-        if (!value) {
-          throw new Error(`Config key "${key}" is required but not set`);
-        }
-        return value;
-      }
-
-      get(key: string): string | undefined {
-        return this.configs.get(key);
-      }
-
-      getNumber(key: string): number | undefined {
-        const value = this.configs.get(key);
-        return value ? parseInt(value, 10) : undefined;
-      }
-    }
-
-    jest.mock('@pulumi/pulumi', () => {
-      const actual = jest.requireActual('@pulumi/pulumi');
-      return {
-        ...actual,
-        Config: jest.fn().mockImplementation(() => new MockConfigProduction()),
-      };
+      expect(stack).toBeDefined();
+      expect(stack.vpcId).toBeDefined();
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { TapStack } = require('../lib/tap-stack');
+    it('should create TapStack with custom tags', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { TapStack } = require('../lib/tap-stack');
 
-    // Verify production config works
-    expect(TapStack).toBeDefined();
+      const customTags = {
+        CustomTag: 'CustomValue',
+        Owner: 'TestTeam',
+      };
+
+      const stack = new TapStack('tagged-stack', {
+        environmentSuffix: 'staging',
+        tags: customTags,
+      });
+
+      expect(stack).toBeDefined();
+    });
+
+    it('should create TapStack with costCenter', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { TapStack } = require('../lib/tap-stack');
+
+      const stack = new TapStack('cost-center-stack', {
+        environmentSuffix: 'dev',
+        costCenter: 'engineering',
+      });
+
+      expect(stack).toBeDefined();
+    });
+
+    it('should create TapStack with all args provided', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { TapStack } = require('../lib/tap-stack');
+
+      const stack = new TapStack('full-stack', {
+        environmentSuffix: 'test',
+        tags: {
+          Environment: 'test',
+          Project: 'unit-test',
+        },
+        costCenter: 'qa',
+      });
+
+      expect(stack).toBeDefined();
+      expect(stack.vpcId).toBeDefined();
+      expect(stack.clusterName).toBeDefined();
+    });
+  });
+
+  describe('Output values', () => {
+    it('should return valid VPC ID output', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { TapStack } = require('../lib/tap-stack');
+
+      const stack = new TapStack('vpc-test', {});
+      const vpcId = await promiseOf(stack.vpcId);
+
+      expect(vpcId).toBeDefined();
+      expect(typeof vpcId).toBe('string');
+    });
+
+    it('should return valid cluster outputs', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { TapStack } = require('../lib/tap-stack');
+
+      const stack = new TapStack('cluster-test', {});
+
+      const clusterName = await promiseOf(stack.clusterName);
+      const clusterArn = await promiseOf(stack.clusterArn);
+
+      expect(clusterName).toBeDefined();
+      expect(clusterArn).toBeDefined();
+      expect(clusterArn).toContain('arn:aws:ecs');
+    });
+
+    it('should return valid ALB outputs', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { TapStack } = require('../lib/tap-stack');
+
+      const stack = new TapStack('alb-test', {});
+
+      const albDnsName = await promiseOf(stack.albDnsName);
+      const albArn = await promiseOf(stack.albArn);
+
+      expect(albDnsName).toBeDefined();
+      expect(albArn).toBeDefined();
+    });
+
+    it('should return FARGATE for instanceType output', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { TapStack } = require('../lib/tap-stack');
+
+      const stack = new TapStack('instance-test', {});
+
+      const instanceType = await promiseOf(stack.instanceType);
+      const capacityProviderName = await promiseOf(stack.capacityProviderName);
+
+      expect(instanceType).toBe('FARGATE');
+      expect(capacityProviderName).toBe('FARGATE');
+    });
+
+    it('should return fargate-managed for launch template and ASG', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { TapStack } = require('../lib/tap-stack');
+
+      const stack = new TapStack('fargate-test', {});
+
+      const launchTemplateId = await promiseOf(stack.launchTemplateId);
+      const autoScalingGroupName = await promiseOf(stack.autoScalingGroupName);
+
+      expect(launchTemplateId).toBe('fargate-managed');
+      expect(autoScalingGroupName).toBe('fargate-managed');
+    });
+  });
+
+  describe('createECSService helper function', () => {
+    it('should export createECSService function', () => {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { createECSService } = require('../lib/tap-stack');
+
+      expect(createECSService).toBeDefined();
+      expect(typeof createECSService).toBe('function');
+    });
   });
 });
 
@@ -171,7 +299,6 @@ describe('ECS Infrastructure Optimization - Code Analysis', () => {
   describe('Configuration Management', () => {
     it('should read environmentSuffix from args or use default', () => {
       expect(tapStackContent).toContain('environmentSuffix');
-      // Should have fallback to default
       expect(tapStackContent).toContain("args.environmentSuffix || 'dev'");
     });
 
@@ -237,10 +364,10 @@ describe('ECS Infrastructure Optimization - Code Analysis', () => {
     });
 
     it('should not use placement strategies with FARGATE', () => {
-      // Placement strategies are not supported with FARGATE launch type
       expect(tapStackContent).not.toContain('orderedPlacementStrategies');
-      // Should have comment explaining why
-      expect(tapStackContent).toContain('Placement strategies are not supported with FARGATE');
+      expect(tapStackContent).toContain(
+        'Placement strategies are not supported with FARGATE'
+      );
     });
 
     it('should configure CPU-based auto-scaling', () => {
@@ -320,7 +447,9 @@ describe('ECS Infrastructure Optimization - Code Analysis', () => {
     });
 
     it('should have dependencies for task definition', () => {
-      expect(tapStackContent).toMatch(/dependsOn:.*\[.*logGroup.*executionRole.*\]/);
+      expect(tapStackContent).toMatch(
+        /dependsOn:.*\[.*logGroup.*executionRole.*\]/
+      );
     });
 
     it('should have dependencies for ALB', () => {
@@ -341,7 +470,9 @@ describe('ECS Infrastructure Optimization - Code Analysis', () => {
 
     it('should create subnets in multiple AZs', () => {
       expect(tapStackContent).toContain('aws.ec2.Subnet');
-      const subnetMatches = (tapStackContent.match(/aws\.ec2\.Subnet/g) || []).length;
+      const subnetMatches = (
+        tapStackContent.match(/aws\.ec2\.Subnet/g) || []
+      ).length;
       expect(subnetMatches).toBeGreaterThanOrEqual(2);
     });
 
@@ -440,7 +571,9 @@ describe('ECS Infrastructure Optimization - Code Analysis', () => {
     });
 
     it('should use CPU utilization metric', () => {
-      expect(tapStackContent).toContain("predefinedMetricType: 'ECSServiceAverageCPUUtilization'");
+      expect(tapStackContent).toContain(
+        "predefinedMetricType: 'ECSServiceAverageCPUUtilization'"
+      );
     });
 
     it('should configure cooldown periods', () => {
@@ -451,18 +584,14 @@ describe('ECS Infrastructure Optimization - Code Analysis', () => {
 
   describe('Code Quality', () => {
     it('should not have hardcoded AWS account IDs', () => {
-      // Exception: The managed policy ARN contains "aws" which looks like account ID pattern
-      // but is actually just the AWS-managed policy identifier
       const accountIdPattern = /\d{12}/g;
       const matches = tapStackContent.match(accountIdPattern);
       expect(matches).toBeNull();
     });
 
     it('should not have hardcoded regions outside config', () => {
-      // Check for literal region strings (not template literals)
       const hardcodedRegionPattern = /:\s*['"](us|eu|ap)-\w+-\d+['"]/g;
       const matches = tapStackContent.match(hardcodedRegionPattern);
-      // Regions should be in template literals (${region}) or config
       expect(matches).toBeNull();
     });
 
@@ -478,9 +607,8 @@ describe('ECS Infrastructure Optimization - Code Analysis', () => {
 });
 
 describe('Optimize.py Script Validation', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { execSync } = require('child_process');
-  const fs = require('fs');
-  const path = require('path');
 
   const scriptPath = path.join(__dirname, '../lib/optimize.py');
   const tapStackPath = path.join(__dirname, '../lib/tap-stack.ts');
@@ -539,19 +667,15 @@ describe('Optimize.py Script Validation', () => {
   });
 
   it('should validate task placement for FARGATE', () => {
-    // FARGATE doesn't support explicit placement strategies
-    // This test verifies that the code correctly doesn't use them
     try {
       const output = execSync(`python3 ${scriptPath} ${tapStackPath}`, {
         encoding: 'utf-8',
       });
-      // Check that placement strategy check exists (even if it fails for FARGATE)
       expect(
         output.includes('Task Placement Strategy') ||
         output.includes('placement')
       ).toBe(true);
     } catch (error: any) {
-      // Check that placement strategy check exists (even if it fails for FARGATE)
       expect(
         error.stdout.includes('Task Placement Strategy') ||
         error.stdout.includes('placement')
