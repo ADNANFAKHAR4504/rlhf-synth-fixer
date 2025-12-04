@@ -17,9 +17,9 @@ export function createCloudWatchDashboards(
   // Create a dashboard for each region
   args.monitoringRegions.forEach(region => {
     const dashboard = new aws.cloudwatch.Dashboard(
-      `infrastructure-monitoring-${region}-${args.environmentSuffix}`,
+      `infra-mon-e4-${region}-${args.environmentSuffix}`,
       {
-        dashboardName: `infrastructure-monitoring-${region}-${args.environmentSuffix}`,
+        dashboardName: `infra-mon-e4-${region}-${args.environmentSuffix}`,
         dashboardBody: JSON.stringify({
           widgets: [
             {

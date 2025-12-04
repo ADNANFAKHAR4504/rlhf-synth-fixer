@@ -216,10 +216,10 @@ describe('Infrastructure Analysis and Monitoring System - Integration Tests', ()
       // Check that alarms exist by looking for specific patterns
       const allAlarmNames = response.MetricAlarms!.map(a => a.AlarmName).join(',');
 
-      expect(allAlarmNames).toContain('infrastructure-db-connections');
-      expect(allAlarmNames).toContain('infrastructure-api-latency');
-      expect(allAlarmNames).toContain('infrastructure-lambda-errors');
-      expect(allAlarmNames).toContain('infrastructure-ec2-cpu-warning');
+      expect(allAlarmNames).toContain('infra-db-conn-alarm-e4');
+      expect(allAlarmNames).toContain('infra-api-latency-alarm-e4');
+      expect(allAlarmNames).toContain('infra-lambda-err-alarm-e4');
+      expect(allAlarmNames).toContain('infra-ec2-cpu-warn-alarm-e4');
     });
 
     it('should verify database connections alarm exists', async () => {
@@ -229,7 +229,7 @@ describe('Infrastructure Analysis and Monitoring System - Integration Tests', ()
       const response = await cloudwatch.send(command);
       const dbAlarm = response.MetricAlarms!.find(
         alarm =>
-          alarm.AlarmName?.includes('infrastructure-db-connections')
+          alarm.AlarmName?.includes('infra-db-conn-alarm-e4')
       );
 
       expect(dbAlarm).toBeDefined();
@@ -245,7 +245,7 @@ describe('Infrastructure Analysis and Monitoring System - Integration Tests', ()
       const response = await cloudwatch.send(command);
       const apiAlarm = response.MetricAlarms!.find(
         alarm =>
-          alarm.AlarmName?.includes('infrastructure-api-latency')
+          alarm.AlarmName?.includes('infra-api-latency-alarm-e4')
       );
 
       expect(apiAlarm).toBeDefined();
@@ -261,7 +261,7 @@ describe('Infrastructure Analysis and Monitoring System - Integration Tests', ()
       const response = await cloudwatch.send(command);
       const lambdaAlarm = response.MetricAlarms!.find(
         alarm =>
-          alarm.AlarmName?.includes('infrastructure-lambda-errors')
+          alarm.AlarmName?.includes('infra-lambda-err-alarm-e4')
       );
 
       expect(lambdaAlarm).toBeDefined();
@@ -277,7 +277,7 @@ describe('Infrastructure Analysis and Monitoring System - Integration Tests', ()
       const response = await cloudwatch.send(command);
       const stackAlarms = response.MetricAlarms!.filter(
         alarm =>
-          alarm.AlarmName?.includes('infrastructure-')
+          alarm.AlarmName?.includes('infra-') && alarm.AlarmName?.includes('-e4')
       );
 
       stackAlarms.forEach(alarm => {
@@ -310,7 +310,7 @@ describe('Infrastructure Analysis and Monitoring System - Integration Tests', ()
 
       const response = await logs.send(command);
       const errorQuery = response.queryDefinitions!.find(query =>
-        query.name?.includes('error-pattern')
+        query.name?.includes('err-pattern-e4')
       );
 
       expect(errorQuery).toBeDefined();
@@ -325,7 +325,7 @@ describe('Infrastructure Analysis and Monitoring System - Integration Tests', ()
 
       const response = await logs.send(command);
       const latencyQuery = response.queryDefinitions!.find(query =>
-        query.name?.includes('high-latency')
+        query.name?.includes('latency-req-e4')
       );
 
       expect(latencyQuery).toBeDefined();
@@ -356,13 +356,13 @@ describe('Infrastructure Analysis and Monitoring System - Integration Tests', ()
 
       const response = await logs.send(command);
       const apiFilter = response.metricFilters!.find(filter =>
-        filter.filterName?.includes('api-usage')
+        filter.filterName?.includes('api-use-e4')
       );
 
       expect(apiFilter).toBeDefined();
       expect(apiFilter!.metricTransformations).toBeDefined();
       expect(apiFilter!.metricTransformations![0].metricNamespace).toBe(
-        'Infrastructure/Custom'
+        'Infra/Custom'
       );
     });
 
@@ -372,13 +372,13 @@ describe('Infrastructure Analysis and Monitoring System - Integration Tests', ()
 
       const response = await logs.send(command);
       const errorFilter = response.metricFilters!.find(filter =>
-        filter.filterName?.includes('app-errors')
+        filter.filterName?.includes('app-err-e4')
       );
 
       expect(errorFilter).toBeDefined();
       expect(errorFilter!.metricTransformations).toBeDefined();
       expect(errorFilter!.metricTransformations![0].metricNamespace).toBe(
-        'Infrastructure/Custom'
+        'Infra/Custom'
       );
     });
   });

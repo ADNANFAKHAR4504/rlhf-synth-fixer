@@ -48,9 +48,9 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Create a shared application log group
     const appLogGroup = new aws.cloudwatch.LogGroup(
-      `infrastructure-app-logs-${environmentSuffix}`,
+      `infra-app-logs-e4-${environmentSuffix}`,
       {
-        name: `/infrastructure/app-${environmentSuffix}`,
+        name: `/infra/app-e4-${environmentSuffix}`,
         retentionInDays: 7,
         tags: tags,
       },

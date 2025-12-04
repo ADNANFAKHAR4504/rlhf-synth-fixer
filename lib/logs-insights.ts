@@ -9,9 +9,9 @@ export function createLogsInsightsQueries(
 ) {
   // Query for error patterns in application logs
   const errorPatternQuery = new aws.cloudwatch.QueryDefinition(
-    `infrastructure-error-pattern-query-${environmentSuffix}`,
+    `infra-err-pattern-query-e4-${environmentSuffix}`,
     {
-      name: `error-pattern-detection-${environmentSuffix}`,
+      name: `err-pattern-e4-${environmentSuffix}`,
       logGroupNames: [appLogGroup.name],
       queryString: `
 fields @timestamp, @message, @logStream
@@ -26,9 +26,9 @@ fields @timestamp, @message, @logStream
 
   // Query for high latency requests
   const latencyQuery = new aws.cloudwatch.QueryDefinition(
-    `infrastructure-high-latency-query-${environmentSuffix}`,
+    `infra-latency-query-e4-${environmentSuffix}`,
     {
-      name: `high-latency-requests-${environmentSuffix}`,
+      name: `latency-req-e4-${environmentSuffix}`,
       logGroupNames: [appLogGroup.name],
       queryString: `
 fields @timestamp, @message, @duration
@@ -42,9 +42,9 @@ fields @timestamp, @message, @duration
 
   // Query for failed API requests
   const failedApiQuery = new aws.cloudwatch.QueryDefinition(
-    `infrastructure-failed-api-query-${environmentSuffix}`,
+    `infra-failed-api-query-e4-${environmentSuffix}`,
     {
-      name: `failed-api-requests-${environmentSuffix}`,
+      name: `failed-api-e4-${environmentSuffix}`,
       logGroupNames: [appLogGroup.name],
       queryString: `
 fields @timestamp, @message, status
@@ -58,9 +58,9 @@ fields @timestamp, @message, status
 
   // Query for Lambda cold starts
   const coldStartQuery = new aws.cloudwatch.QueryDefinition(
-    `infrastructure-lambda-cold-start-query-${environmentSuffix}`,
+    `infra-cold-start-query-e4-${environmentSuffix}`,
     {
-      name: `lambda-cold-starts-${environmentSuffix}`,
+      name: `cold-starts-e4-${environmentSuffix}`,
       logGroupNames: [appLogGroup.name],
       queryString: `
 fields @timestamp, @message, @initDuration

@@ -9,14 +9,14 @@ export function createMetricFilters(
 ) {
   // Metric filter for API usage patterns
   const apiUsageFilter = new aws.cloudwatch.LogMetricFilter(
-    `infrastructure-api-usage-filter-${environmentSuffix}`,
+    `infra-api-use-e4-${environmentSuffix}`,
     {
-      name: `api-usage-${environmentSuffix}`,
+      name: `api-use-e4-${environmentSuffix}`,
       logGroupName: appLogGroup.name,
       pattern: '[timestamp, request_id, api_endpoint, status_code, duration]',
       metricTransformation: {
-        name: `APIUsageCount-${environmentSuffix}`,
-        namespace: 'Infrastructure/Custom',
+        name: `APIUseCount-e4-${environmentSuffix}`,
+        namespace: 'Infra/Custom',
         value: '1',
         unit: 'Count',
         dimensions: {
@@ -30,14 +30,14 @@ export function createMetricFilters(
 
   // Metric filter for custom application errors
   const appErrorFilter = new aws.cloudwatch.LogMetricFilter(
-    `infrastructure-app-error-filter-${environmentSuffix}`,
+    `infra-app-err-e4-${environmentSuffix}`,
     {
-      name: `app-errors-${environmentSuffix}`,
+      name: `app-err-e4-${environmentSuffix}`,
       logGroupName: appLogGroup.name,
       pattern: '[timestamp, level = "ERROR", ...]',
       metricTransformation: {
-        name: `ApplicationErrors-${environmentSuffix}`,
-        namespace: 'Infrastructure/Custom',
+        name: `AppErrors-e4-${environmentSuffix}`,
+        namespace: 'Infra/Custom',
         value: '1',
         defaultValue: '0',
         unit: 'Count',
@@ -48,14 +48,14 @@ export function createMetricFilters(
 
   // Metric filter for response time tracking
   const responseTimeFilter = new aws.cloudwatch.LogMetricFilter(
-    `infrastructure-response-time-filter-${environmentSuffix}`,
+    `infra-resp-time-e4-${environmentSuffix}`,
     {
-      name: `response-time-${environmentSuffix}`,
+      name: `resp-time-e4-${environmentSuffix}`,
       logGroupName: appLogGroup.name,
       pattern: '[timestamp, request_id, api_endpoint, status_code, duration]',
       metricTransformation: {
-        name: `APIResponseTime-${environmentSuffix}`,
-        namespace: 'Infrastructure/Custom',
+        name: `APIRespTime-e4-${environmentSuffix}`,
+        namespace: 'Infra/Custom',
         value: '$duration',
         unit: 'Milliseconds',
         dimensions: {
@@ -68,15 +68,15 @@ export function createMetricFilters(
 
   // Metric filter for business metrics
   const businessMetricFilter = new aws.cloudwatch.LogMetricFilter(
-    `infrastructure-business-metric-filter-${environmentSuffix}`,
+    `infra-biz-metric-e4-${environmentSuffix}`,
     {
-      name: `business-transactions-${environmentSuffix}`,
+      name: `biz-txn-e4-${environmentSuffix}`,
       logGroupName: appLogGroup.name,
       pattern:
         '[timestamp, metric_type = "BUSINESS", metric_name, metric_value]',
       metricTransformation: {
-        name: `BusinessMetrics-${environmentSuffix}`,
-        namespace: 'Infrastructure/Custom',
+        name: `BizMetrics-e4-${environmentSuffix}`,
+        namespace: 'Infra/Custom',
         value: '$metric_value',
         dimensions: {
           MetricName: '$metric_name',

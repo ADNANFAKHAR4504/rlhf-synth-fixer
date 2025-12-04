@@ -22,7 +22,7 @@ export function createLambdaAnalysisFunctions(
 ) {
   // Lambda function for hourly metric analysis
   const metricAnalysisFunction = new aws.lambda.Function(
-    `infrastructure-metric-analysis-${args.environmentSuffix}`,
+    `infra-metric-analysis-e4-${args.environmentSuffix}`,
     {
       runtime: 'python3.11',
       handler: 'metric_analysis.handler',
@@ -51,7 +51,7 @@ export function createLambdaAnalysisFunctions(
 
   // EventBridge rule for hourly execution
   const metricAnalysisRule = new aws.cloudwatch.EventRule(
-    `infrastructure-metric-analysis-schedule-${args.environmentSuffix}`,
+    `infrastructure-metric-analysis-schedule-e4-${args.environmentSuffix}`,
     {
       scheduleExpression: args.analysisSchedule,
       description: 'Trigger infrastructure metric analysis every hour',
@@ -61,7 +61,7 @@ export function createLambdaAnalysisFunctions(
   );
 
   new aws.cloudwatch.EventTarget(
-    `infrastructure-metric-analysis-target-${args.environmentSuffix}`,
+    `infrastructure-metric-analysis-target-e4-${args.environmentSuffix}`,
     {
       rule: metricAnalysisRule.name,
       arn: metricAnalysisFunction.arn,
@@ -70,7 +70,7 @@ export function createLambdaAnalysisFunctions(
   );
 
   new aws.lambda.Permission(
-    `infrastructure-metric-analysis-permission-${args.environmentSuffix}`,
+    `infrastructure-metric-analysis-permission-e4-${args.environmentSuffix}`,
     {
       action: 'lambda:InvokeFunction',
       function: metricAnalysisFunction.name,
@@ -82,7 +82,7 @@ export function createLambdaAnalysisFunctions(
 
   // Lambda function for weekly health reports
   const healthReportFunction = new aws.lambda.Function(
-    `infrastructure-health-report-${args.environmentSuffix}`,
+    `infra-health-report-e4-${args.environmentSuffix}`,
     {
       runtime: 'python3.11',
       handler: 'health_report.handler',
@@ -108,7 +108,7 @@ export function createLambdaAnalysisFunctions(
 
   // EventBridge rule for weekly execution
   const healthReportRule = new aws.cloudwatch.EventRule(
-    `infrastructure-health-report-schedule-${args.environmentSuffix}`,
+    `infrastructure-health-report-schedule-e4-${args.environmentSuffix}`,
     {
       scheduleExpression: args.reportSchedule,
       description: 'Generate weekly infrastructure health report',
@@ -118,7 +118,7 @@ export function createLambdaAnalysisFunctions(
   );
 
   new aws.cloudwatch.EventTarget(
-    `infrastructure-health-report-target-${args.environmentSuffix}`,
+    `infrastructure-health-report-target-e4-${args.environmentSuffix}`,
     {
       rule: healthReportRule.name,
       arn: healthReportFunction.arn,
@@ -127,7 +127,7 @@ export function createLambdaAnalysisFunctions(
   );
 
   new aws.lambda.Permission(
-    `infrastructure-health-report-permission-${args.environmentSuffix}`,
+    `infrastructure-health-report-permission-e4-${args.environmentSuffix}`,
     {
       action: 'lambda:InvokeFunction',
       function: healthReportFunction.name,

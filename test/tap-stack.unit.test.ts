@@ -759,8 +759,8 @@ describe('createLogsInsightsQueries', () => {
   let mockLogGroup: aws.cloudwatch.LogGroup;
 
   beforeAll(() => {
-    mockLogGroup = new aws.cloudwatch.LogGroup('test-log-group-insights', {
-      name: '/test/app-logs',
+    mockLogGroup = new aws.cloudwatch.LogGroup('test-log-group-insights-e4', {
+      name: '/infra/app-e4-test',
     });
   });
 
@@ -888,8 +888,8 @@ describe('createMetricFilters', () => {
   let mockLogGroup: aws.cloudwatch.LogGroup;
 
   beforeAll(() => {
-    mockLogGroup = new aws.cloudwatch.LogGroup('test-log-group-filters', {
-      name: '/test/app-logs',
+    mockLogGroup = new aws.cloudwatch.LogGroup('test-log-group-filters-e4', {
+      name: '/infra/app-e4-test',
     });
   });
 
@@ -995,7 +995,7 @@ describe('createMetricFilters', () => {
       { Environment: 'test' }
     );
 
-    // All filters should use Infrastructure/Custom namespace
+    // All filters should use Infra/Custom namespace
     expect(result.filters.length).toBe(4);
   });
 

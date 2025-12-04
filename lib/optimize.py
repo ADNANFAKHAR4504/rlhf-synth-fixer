@@ -54,10 +54,10 @@ class InfrastructureOptimizer:
             
             # Look for metric-analysis and health-report functions
             target_patterns = [
-                f'metric-analysis-{self.environment_suffix}',
-                f'health-report-{self.environment_suffix}',
-                f'tap-metric-analysis-{self.environment_suffix}',
-                f'tap-health-report-{self.environment_suffix}',
+                f'infra-metric-analysis-e4-{self.environment_suffix}',
+                f'infra-health-report-e4-{self.environment_suffix}',
+                f'metric-analysis-e4-{self.environment_suffix}',
+                f'health-report-e4-{self.environment_suffix}',
             ]
             
             matching_functions = []
@@ -117,7 +117,7 @@ class InfrastructureOptimizer:
         try:
             # Find log groups matching TapStack naming pattern
             log_groups = self.logs_client.describe_log_groups(
-                logGroupNamePrefix=f'/infrastructure/app-{self.environment_suffix}'
+                logGroupNamePrefix=f'/infra/app-e4-{self.environment_suffix}'
             )
             
             # Also check for aws/lambda log groups
@@ -126,9 +126,9 @@ class InfrastructureOptimizer:
             )
             
             target_patterns = [
-                f'/infrastructure/app-{self.environment_suffix}',
-                f'metric-analysis-{self.environment_suffix}',
-                f'health-report-{self.environment_suffix}',
+                f'/infra/app-e4-{self.environment_suffix}',
+                f'infra-metric-analysis-e4-{self.environment_suffix}',
+                f'infra-health-report-e4-{self.environment_suffix}',
             ]
             
             all_log_groups = log_groups.get('logGroups', [])
@@ -185,11 +185,10 @@ class InfrastructureOptimizer:
             alarms = self.cloudwatch_client.describe_alarms()
             
             target_patterns = [
-                f'db-connections-{self.environment_suffix}',
-                f'api-latency-{self.environment_suffix}',
-                f'lambda-errors-{self.environment_suffix}',
-                f'ec2-cpu-{self.environment_suffix}',
-                self.environment_suffix,
+                f'infra-db-conn-alarm-e4-{self.environment_suffix}',
+                f'infra-api-latency-alarm-e4-{self.environment_suffix}',
+                f'infra-lambda-err-alarm-e4-{self.environment_suffix}',
+                f'infra-ec2-cpu-warn-alarm-e4-{self.environment_suffix}',
             ]
             
             matching_alarms = []
@@ -257,12 +256,9 @@ class InfrastructureOptimizer:
             topics = self.sns_client.list_topics()
             
             target_patterns = [
-                f'critical-alerts-{self.environment_suffix}',
-                f'warning-alerts-{self.environment_suffix}',
-                f'info-alerts-{self.environment_suffix}',
-                f'tap-critical-{self.environment_suffix}',
-                f'tap-warning-{self.environment_suffix}',
-                f'tap-info-{self.environment_suffix}',
+                f'infra-alerts-crit-e4-{self.environment_suffix}',
+                f'infra-alerts-warn-e4-{self.environment_suffix}',
+                f'infra-alerts-info-e4-{self.environment_suffix}',
             ]
             
             matching_topics = []

@@ -7,27 +7,27 @@ export function createSNSTopics(
   opts?: pulumi.ComponentResourceOptions
 ) {
   const criticalTopic = new aws.sns.Topic(
-    `infrastructure-alerts-critical-${environmentSuffix}`,
+    `infra-alerts-crit-e4-${environmentSuffix}`,
     {
-      displayName: `Infrastructure Critical Alerts - ${environmentSuffix}`,
+      displayName: `Infra Critical Alerts - e4-${environmentSuffix}`,
       tags: tags,
     },
     opts
   );
 
   const warningTopic = new aws.sns.Topic(
-    `infrastructure-alerts-warning-${environmentSuffix}`,
+    `infra-alerts-warn-e4-${environmentSuffix}`,
     {
-      displayName: `Infrastructure Warning Alerts - ${environmentSuffix}`,
+      displayName: `Infra Warning Alerts - e4-${environmentSuffix}`,
       tags: tags,
     },
     opts
   );
 
   const infoTopic = new aws.sns.Topic(
-    `infrastructure-alerts-info-${environmentSuffix}`,
+    `infra-alerts-info-e4-${environmentSuffix}`,
     {
-      displayName: `Infrastructure Info Alerts - ${environmentSuffix}`,
+      displayName: `Infra Info Alerts - e4-${environmentSuffix}`,
       tags: tags,
     },
     opts
@@ -35,7 +35,7 @@ export function createSNSTopics(
 
   // Create subscriptions (email endpoints would be provided via configuration)
   new aws.sns.TopicSubscription(
-    `infrastructure-alerts-critical-sub-${environmentSuffix}`,
+    `infra-alerts-crit-sub-e4-${environmentSuffix}`,
     {
       topic: criticalTopic.arn,
       protocol: 'email',
@@ -47,7 +47,7 @@ export function createSNSTopics(
   );
 
   new aws.sns.TopicSubscription(
-    `infrastructure-alerts-warning-sub-${environmentSuffix}`,
+    `infra-alerts-warn-sub-e4-${environmentSuffix}`,
     {
       topic: warningTopic.arn,
       protocol: 'email',
@@ -59,7 +59,7 @@ export function createSNSTopics(
   );
 
   new aws.sns.TopicSubscription(
-    `infrastructure-alerts-info-sub-${environmentSuffix}`,
+    `infra-alerts-info-sub-e4-${environmentSuffix}`,
     {
       topic: infoTopic.arn,
       protocol: 'email',

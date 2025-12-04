@@ -17,7 +17,7 @@ export function createCloudWatchAlarms(
 ) {
   // Alarm for database connections
   const dbConnectionAlarm = new aws.cloudwatch.MetricAlarm(
-    `infrastructure-db-connections-alarm-${args.environmentSuffix}`,
+    `infra-db-conn-alarm-e4-${args.environmentSuffix}`,
     {
       comparisonOperator: 'GreaterThanThreshold',
       evaluationPeriods: 2,
@@ -35,7 +35,7 @@ export function createCloudWatchAlarms(
 
   // Alarm for API Gateway latency
   const apiLatencyAlarm = new aws.cloudwatch.MetricAlarm(
-    `infrastructure-api-latency-alarm-${args.environmentSuffix}`,
+    `infra-api-latency-alarm-e4-${args.environmentSuffix}`,
     {
       comparisonOperator: 'GreaterThanThreshold',
       evaluationPeriods: 2,
@@ -53,7 +53,7 @@ export function createCloudWatchAlarms(
 
   // Alarm for Lambda error rates
   const lambdaErrorAlarm = new aws.cloudwatch.MetricAlarm(
-    `infrastructure-lambda-errors-alarm-${args.environmentSuffix}`,
+    `infra-lambda-err-alarm-e4-${args.environmentSuffix}`,
     {
       comparisonOperator: 'GreaterThanThreshold',
       evaluationPeriods: 2,
@@ -71,7 +71,7 @@ export function createCloudWatchAlarms(
 
   // Warning alarm for EC2 CPU utilization
   const ec2CpuWarningAlarm = new aws.cloudwatch.MetricAlarm(
-    `infrastructure-ec2-cpu-warning-alarm-${args.environmentSuffix}`,
+    `infra-ec2-cpu-warn-alarm-e4-${args.environmentSuffix}`,
     {
       comparisonOperator: 'GreaterThanThreshold',
       evaluationPeriods: 3,

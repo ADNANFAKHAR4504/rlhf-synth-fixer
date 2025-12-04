@@ -8,7 +8,7 @@ export function createIAMRoles(
 ) {
   // IAM role for Lambda functions with least-privilege access
   const lambdaRole = new aws.iam.Role(
-    `infrastructure-analysis-lambda-role-${environmentSuffix}`,
+    `infra-lambda-role-e4-${environmentSuffix}`,
     {
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
@@ -27,7 +27,7 @@ export function createIAMRoles(
 
   // Policy for CloudWatch Metrics read access
   new aws.iam.RolePolicy(
-    `infrastructure-analysis-metrics-policy-${environmentSuffix}`,
+    `infra-metrics-policy-e4-${environmentSuffix}`,
     {
       role: lambdaRole.id,
       policy: JSON.stringify({
@@ -63,7 +63,7 @@ export function createIAMRoles(
 
   // Policy for CloudWatch Logs
   new aws.iam.RolePolicy(
-    `infrastructure-analysis-logs-policy-${environmentSuffix}`,
+    `infra-logs-policy-e4-${environmentSuffix}`,
     {
       role: lambdaRole.id,
       policy: JSON.stringify({
@@ -89,7 +89,7 @@ export function createIAMRoles(
 
   // Policy for SNS publish
   new aws.iam.RolePolicy(
-    `infrastructure-analysis-sns-policy-${environmentSuffix}`,
+    `infra-sns-policy-e4-${environmentSuffix}`,
     {
       role: lambdaRole.id,
       policy: JSON.stringify({
@@ -98,7 +98,7 @@ export function createIAMRoles(
           {
             Effect: 'Allow',
             Action: ['sns:Publish'],
-            Resource: `arn:aws:sns:*:*:infrastructure-alerts-*-${environmentSuffix}`,
+            Resource: `arn:aws:sns:*:*:infra-alerts-*-e4-${environmentSuffix}`,
           },
         ],
       }),
