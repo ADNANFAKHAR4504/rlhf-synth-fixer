@@ -24,5 +24,10 @@
   ],
   "training_quality": 8,
   "author": "iamarpit-turing",
-  "reviewer": "adnan-turing"
+  "reviewer": "adnan-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
