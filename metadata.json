@@ -10,7 +10,16 @@
   "subject_labels": [
     "CI/CD Pipeline"
   ],
-  "aws_services": [],
+  "aws_services": [
+    "S3",
+    "CodeCommit",
+    "CodeBuild",
+    "CodePipeline",
+    "CloudWatch",
+    "IAM",
+    "SNS",
+    "EventBridge"
+  ],
   "po_id": "z7t4z7r9",
   "training_quality": 10
 }
