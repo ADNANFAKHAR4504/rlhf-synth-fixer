@@ -385,13 +385,13 @@ export class TapStack extends cdk.Stack {
     // Bastion EC2 Instance with Elastic IP
     // ====================================================================================
 
-    // Use BastionHostLinux - a higher-level construct that handles stabilization properly
+    // Use minimal BastionHostLinux with just basic SSM access
     const bastionHost = new ec2.BastionHostLinux(this, 'BastionHost', {
       vpc,
       subnetSelection: { subnetType: ec2.SubnetType.PUBLIC },
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
+        ec2.InstanceSize.SMALL  // Changed from MICRO to SMALL for better stability
       ),
       machineImage: ec2.MachineImage.latestAmazonLinux2023(),
       securityGroup: ec2SecurityGroup,
@@ -407,18 +407,18 @@ export class TapStack extends cdk.Stack {
       requireImdsv2: true,
     });
 
-    // Attach the IAM role policies to the bastion's role
+    // Only attach essential SSM policy for now - remove complex policies temporarily
     bastionHost.role.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore')
     );
-    bastionHost.role.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy')
-    );
 
-    // Attach custom policies
-    secretsPolicy.attachToRole(bastionHost.role);
-    s3Policy.attachToRole(bastionHost.role);
-    logsPolicy.attachToRole(bastionHost.role);
+    // TODO: Re-add these policies after basic bastion works
+    // bastionHost.role.addManagedPolicy(
+    //   iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy')
+    // );
+    // secretsPolicy.attachToRole(bastionHost.role);
+    // s3Policy.attachToRole(bastionHost.role);
+    // logsPolicy.attachToRole(bastionHost.role);
 
     // Create Elastic IP separately
     const elasticIp = new ec2.CfnEIP(this, 'ElasticIP', {
