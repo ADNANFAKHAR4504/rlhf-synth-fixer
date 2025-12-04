@@ -108,10 +108,10 @@ class ComplianceAnalyzer:
 
                 # Determine success based on invocation status
                 # Lambda can return with statusCode 200 but have an error in FunctionError field
-                invocation_success = (
-                    invoke_response['StatusCode'] == 200 and
-                    'FunctionError' not in invoke_response
-                )
+                has_function_error = 'FunctionError' in invoke_response
+                status_ok = invoke_response['StatusCode'] == 200
+
+                invocation_success = status_ok and not has_function_error
 
                 lambda_analysis['invocation_result'] = {
                     'status_code': invoke_response['StatusCode'],
@@ -126,7 +126,10 @@ class ComplianceAnalyzer:
                         logger.info(f"  Total violations: {body.get('totalViolations', 0)}")
                         logger.info(f"  Critical violations: {body.get('criticalViolations', 0)}")
                 else:
-                    logger.warning(f"Lambda invocation returned status: {invoke_response['StatusCode']}")
+                    error_msg = f"Lambda invocation status: {invoke_response['StatusCode']}"
+                    if has_function_error:
+                        error_msg += f", FunctionError: {invoke_response.get('FunctionError', 'Unknown')}"
+                    logger.warning(error_msg)
 
             except Exception as e:
                 logger.error(f"Error invoking Lambda function: {str(e)}")
