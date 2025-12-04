@@ -266,7 +266,7 @@ export class RDSOptimizationStack {
       {
         dependsOn: [dbInstance],
         deleteBeforeReplace: true, // Delete old replica before creating replacement
-        ignoreChanges: ['tagsAll', 'storageEncrypted'], // Ignore AWS-managed tags and inherited properties
+        ignoreChanges: ['tagsAll'], // Ignore AWS-managed tags to prevent unnecessary updates
       }
     );
 
