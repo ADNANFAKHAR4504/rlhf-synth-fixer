@@ -99,7 +99,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // IAM role for AWS Config with correct managed policy
-    void new aws.iam.Role(
+    const configRole = new aws.iam.Role(
       `config-role-${envSuffix}`,
       {
         assumeRolePolicy: JSON.stringify({
@@ -120,21 +120,70 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // AWS Config Recorder - use existing if present (account limitation: 1 per account)
-    // If no recorder exists, create one; otherwise reference the existing one
-    const configRecorder = aws.cfg.Recorder.get(
-      `config-recorder-${envSuffix}`,
-      pulumi.output('config-recorder-synthw7b4r1s3-134ff69'), // Use existing recorder name
-      {},
+    // Additional policy for Config role to write to S3
+    new aws.iam.RolePolicy(
+      `config-s3-policy-${envSuffix}`,
+      {
+        role: configRole.id,
+        policy: configBucket.arn.apply((bucketArn) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: ['s3:PutObject', 's3:PutObjectAcl'],
+                Resource: `${bucketArn}/*`,
+                Condition: {
+                  StringLike: {
+                    's3:x-amz-acl': 'bucket-owner-full-control',
+                  },
+                },
+              },
+              {
+                Effect: 'Allow',
+                Action: ['s3:GetBucketAcl'],
+                Resource: bucketArn,
+              },
+            ],
+          })
+        ),
+      },
       { parent: this }
     );
 
-    // AWS Config Delivery Channel - use existing if present (account limitation: 1 per account)
-    const deliveryChannel = aws.cfg.DeliveryChannel.get(
-      `config-delivery-${envSuffix}`,
-      pulumi.output('config-delivery-synthw7b4r1s3-1a39b6c'), // Use existing delivery channel name
-      {},
+    // AWS Config Recorder - creates new recorder for this environment
+    const configRecorder = new aws.cfg.Recorder(
+      `config-recorder-${envSuffix}`,
+      {
+        roleArn: configRole.arn,
+        recordingGroup: {
+          allSupported: true,
+          includeGlobalResourceTypes: true,
+        },
+      },
       { parent: this }
+    );
+
+    // AWS Config Delivery Channel - delivers config snapshots to S3
+    const deliveryChannel = new aws.cfg.DeliveryChannel(
+      `config-delivery-${envSuffix}`,
+      {
+        s3BucketName: configBucket.bucket,
+        snapshotDeliveryProperties: {
+          deliveryFrequency: 'TwentyFour_Hours',
+        },
+      },
+      { parent: this, dependsOn: [configRecorder] }
+    );
+
+    // Enable the Config Recorder
+    new aws.cfg.RecorderStatus(
+      `config-recorder-status-${envSuffix}`,
+      {
+        name: configRecorder.name,
+        isEnabled: true,
+      },
+      { parent: this, dependsOn: [deliveryChannel] }
     );
 
     // Config rule for S3 encryption
