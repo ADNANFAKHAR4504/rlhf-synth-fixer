@@ -11,5 +11,15 @@
     "IaC Optimization"
   ],
   "training_quality": 9,
-  "po_id": "t8k1e8u9"
+  "po_id": "t8k1e8u9",
+  "aws_services": [
+    "ECS",
+    "EC2",
+    "VPC",
+    "Elastic Load Balancing",
+    "CloudWatch",
+    "IAM",
+    "CloudWatch Logs",
+    "Application Auto Scaling"
+  ]
 }
