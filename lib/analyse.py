@@ -81,11 +81,13 @@ class ComplianceMonitoringAnalyzer:
                     if function_config.get('Timeout', 0) < 30:
                         results['issues'].append(f"Lambda {func_name}: Timeout might be too short")
 
-                except self.lambda_client.exceptions.ResourceNotFoundException:
-                    results['issues'].append(f"Lambda {func_name}: Not found")
                 except Exception as e:
-                    logger.error(f"Error checking Lambda {func_name}: {str(e)}")
-                    results['issues'].append(f"Lambda {func_name}: Error - {str(e)}")
+                    error_msg = str(e)
+                    if 'ResourceNotFoundException' in error_msg or 'not found' in error_msg.lower():
+                        results['issues'].append(f"Lambda {func_name}: Not found")
+                    else:
+                        logger.error(f"Error checking Lambda {func_name}: {error_msg}")
+                        results['issues'].append(f"Lambda {func_name}: Error - {error_msg}")
 
         except Exception as e:
             logger.error(f"Error analyzing Lambda functions: {str(e)}")
@@ -189,9 +191,19 @@ class ComplianceMonitoringAnalyzer:
             for bucket in buckets_response.get('Buckets', []):
                 bucket_name = bucket['Name']
                 if environment_suffix in bucket_name and 'compliance' in bucket_name:
+                    creation_date = bucket.get('CreationDate')
+                    if creation_date:
+                        # Handle both datetime object and string
+                        if hasattr(creation_date, 'isoformat'):
+                            creation_date_str = creation_date.isoformat()
+                        else:
+                            creation_date_str = str(creation_date)
+                    else:
+                        creation_date_str = None
+
                     bucket_info = {
                         'name': bucket_name,
-                        'creation_date': bucket.get('CreationDate', '').isoformat() if bucket.get('CreationDate') else None
+                        'creation_date': creation_date_str
                     }
 
                     # Check bucket versioning
@@ -206,12 +218,14 @@ class ComplianceMonitoringAnalyzer:
                     try:
                         encryption = self.s3_client.get_bucket_encryption(Bucket=bucket_name)
                         bucket_info['encryption'] = 'Enabled'
-                    except self.s3_client.exceptions.ServerSideEncryptionConfigurationNotFoundError:
-                        bucket_info['encryption'] = 'Disabled'
-                        results['issues'].append(f"S3 bucket {bucket_name}: Encryption not enabled")
                     except Exception as e:
-                        logger.warning(f"Could not check encryption for {bucket_name}: {str(e)}")
-                        bucket_info['encryption'] = 'Unknown'
+                        error_msg = str(e)
+                        if 'ServerSideEncryptionConfigurationNotFoundError' in error_msg or 'encryption' in error_msg.lower():
+                            bucket_info['encryption'] = 'Disabled'
+                            results['issues'].append(f"S3 bucket {bucket_name}: Encryption not enabled")
+                        else:
+                            logger.warning(f"Could not check encryption for {bucket_name}: {error_msg}")
+                            bucket_info['encryption'] = 'Unknown'
 
                     results['buckets'].append(bucket_info)
 
