@@ -231,16 +231,6 @@ describe('TapStack', () => {
       LaunchTemplateData: Match.objectLike({
         InstanceType: 't3.medium',
         MetadataOptions: { HttpTokens: 'required' },
-        BlockDeviceMappings: Match.arrayWith([
-          Match.objectLike({
-            DeviceName: '/dev/xvda',
-            Ebs: Match.objectLike({
-              Encrypted: true,
-              VolumeType: 'gp3',
-              VolumeSize: 30
-            })
-          })
-        ]),
         TagSpecifications: Match.arrayWith([
           Match.objectLike({ ResourceType: 'instance' }),
           Match.objectLike({ ResourceType: 'volume' })

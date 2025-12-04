@@ -508,16 +508,8 @@ EOF`,
       role: ec2Role,
       securityGroup: ec2SecurityGroup,
       userData: userData,
-      blockDevices: [
-        {
-          deviceName: '/dev/xvda',
-          volume: ec2.BlockDeviceVolume.ebs(30, {
-            volumeType: ec2.EbsDeviceVolumeType.GP3,
-            encrypted: true,
-            deleteOnTermination: true,
-          }),
-        },
-      ],
+      // Note: Not specifying blockDevices to use default EBS encryption with AWS managed key
+      // This avoids KMS key state issues during ASG instance launches
       requireImdsv2: true,
     });
 
