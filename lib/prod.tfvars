@@ -1,34 +1,34 @@
-env                 = "prod"
-aws_region          = "us-east-1"
-project_name        = "tap"
-owner               = "platform-team"
-cost_center         = "production-operations"
-user_pool_id        = "us-east-1_ABC123PRD"
-pr_number           = "pr7883"
+env          = "prod"
+aws_region   = "us-east-1"
+project_name = "tap"
+owner        = "platform-team"
+cost_center  = "production-operations"
+user_pool_id = "us-east-1_ABC123PRD"
+pr_number    = "pr7883"
 
 # Production capacity
 request_handler_memory = 1024
-scheduler_memory      = 1024
-notifier_memory       = 512
-billing_memory        = 512
-session_memory        = 512
-prescription_memory   = 1024
-approval_memory       = 1024
-pharmacy_memory       = 512
-compliance_memory     = 1024
-reminder_memory       = 512
-analytics_memory      = 1024
-document_memory       = 1024
-node_type             = "cache.r6g.large"
-instance_class        = "db.r6g.large"
-min_capacity          = 2
-max_capacity          = 8
-backup_retention_days = 30
-deletion_protection   = true
-log_retention_days    = 90
+scheduler_memory       = 1024
+notifier_memory        = 512
+billing_memory         = 512
+session_memory         = 512
+prescription_memory    = 1024
+approval_memory        = 1024
+pharmacy_memory        = 512
+compliance_memory      = 1024
+reminder_memory        = 512
+analytics_memory       = 1024
+document_memory        = 1024
+node_type              = "cache.r6g.large"
+instance_class         = "db.r6g.large"
+min_capacity           = 2
+max_capacity           = 8
+backup_retention_days  = 30
+deletion_protection    = true
+log_retention_days     = 90
 
 # Production schedules
-compliance_schedule_expression = "cron(0 2 * * ? *)"  # 2 AM daily
+compliance_schedule_expression = "cron(0 2 * * ? *)" # 2 AM daily
 reminders_schedule_expression  = "rate(30 minutes)"
 
 # Production subnet configuration

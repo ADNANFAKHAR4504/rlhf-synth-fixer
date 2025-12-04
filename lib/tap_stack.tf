@@ -3,7 +3,7 @@
 
 terraform {
   required_version = ">= 1.5.0"
-  
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -19,7 +19,7 @@ terraform {
     }
   }
 
-  # backend "s3" {}
+  backend "s3" {}
 }
 
 # ============================================================================
@@ -525,41 +525,41 @@ variable "log_retention_days" {
 locals {
   # Common naming prefix
   prefix = "${var.project_name}-${var.env}-${var.pr_number}"
-  
+
   # Environment-specific capacity mappings
   env_config = {
     dev = {
-      api_throttle_burst = 100
-      api_throttle_rate  = 50
-      lambda_reserved_concurrent = 10
-      redis_nodes = 1
-      aurora_min_capacity = 0.5
-      aurora_max_capacity = 1
-      sqs_retention_days = 4
-      alarm_evaluation_periods = 1
+      api_throttle_burst         = 100
+      api_throttle_rate          = 50
+      lambda_reserved_concurrent = -1
+      redis_nodes                = 1
+      aurora_min_capacity        = 0.5
+      aurora_max_capacity        = 1
+      sqs_retention_days         = 4
+      alarm_evaluation_periods   = 1
     }
     staging = {
-      api_throttle_burst = 500
-      api_throttle_rate  = 100
+      api_throttle_burst         = 500
+      api_throttle_rate          = 100
       lambda_reserved_concurrent = 50
-      redis_nodes = 2
-      aurora_min_capacity = 1
-      aurora_max_capacity = 2
-      sqs_retention_days = 7
-      alarm_evaluation_periods = 2
+      redis_nodes                = 2
+      aurora_min_capacity        = 1
+      aurora_max_capacity        = 2
+      sqs_retention_days         = 7
+      alarm_evaluation_periods   = 2
     }
     prod = {
-      api_throttle_burst = 2000
-      api_throttle_rate  = 1000
+      api_throttle_burst         = 2000
+      api_throttle_rate          = 1000
       lambda_reserved_concurrent = 100
-      redis_nodes = 3
-      aurora_min_capacity = 2
-      aurora_max_capacity = 8
-      sqs_retention_days = 14
-      alarm_evaluation_periods = 3
+      redis_nodes                = 3
+      aurora_min_capacity        = 2
+      aurora_max_capacity        = 8
+      sqs_retention_days         = 14
+      alarm_evaluation_periods   = 3
     }
   }
-  
+
   # Common tags
   tags = merge(
     var.common_tags,
@@ -572,7 +572,7 @@ locals {
       Compliance  = "HIPAA"
     }
   )
-  
+
   # Lambda environment variables (common across functions)
   lambda_env_vars = {
     ENVIRONMENT = var.env
@@ -920,8 +920,8 @@ resource "aws_secretsmanager_secret_version" "aurora_master" {
 
 # Redis Auth Token
 resource "random_password" "redis_auth" {
-  length  = 32
-  special = false
+  length           = 32
+  special          = false
   override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 
@@ -948,8 +948,8 @@ resource "aws_s3_bucket" "audit_logs" {
   bucket = "${local.prefix}-${var.audit_logs_bucket}-${data.aws_caller_identity.current.account_id}"
 
   tags = merge(local.tags, {
-    Name        = "${local.prefix}-${var.audit_logs_bucket}"
-    Compliance  = "HIPAA-Audit"
+    Name       = "${local.prefix}-${var.audit_logs_bucket}"
+    Compliance = "HIPAA-Audit"
   })
 }
 
@@ -978,6 +978,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "audit_logs" {
   rule {
     id     = "archive-old-logs"
     status = "Enabled"
+    filter {}
 
     transition {
       days          = var.lifecycle_archive_days
@@ -985,7 +986,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "audit_logs" {
     }
 
     expiration {
-      days = 2555  # 7 years for HIPAA compliance
+      days = 2555 # 7 years for HIPAA compliance
     }
   }
 }
@@ -1349,24 +1350,24 @@ resource "aws_db_subnet_group" "aurora" {
 }
 
 resource "aws_rds_cluster" "aurora" {
-  cluster_identifier              = "${local.prefix}-${var.cluster_identifier}"
-  engine                          = "aurora-postgresql"
-  engine_mode                     = "provisioned"
-  engine_version                  = "15.4"
-  database_name                   = var.database_name
-  master_username                 = var.master_username
-  master_password                 = random_password.aurora_master.result
-  db_subnet_group_name            = aws_db_subnet_group.aurora.name
-  vpc_security_group_ids          = [aws_security_group.aurora.id]
-  backup_retention_period         = var.backup_retention_days
-  preferred_backup_window         = "03:00-04:00"
-  preferred_maintenance_window    = "sun:04:00-sun:05:00"
-  storage_encrypted               = true
-  kms_key_id                      = aws_kms_key.phi_encryption.arn
-  enabled_cloudwatch_logs_exports = ["postgresql"]
-  deletion_protection             = var.deletion_protection
-  skip_final_snapshot             = var.env == "dev"
-  final_snapshot_identifier       = var.env != "dev" ? "${local.prefix}-aurora-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}" : null
+  cluster_identifier                  = "${local.prefix}-${var.cluster_identifier}"
+  engine                              = "aurora-postgresql"
+  engine_mode                         = "provisioned"
+  engine_version                      = "15.4"
+  database_name                       = var.database_name
+  master_username                     = var.master_username
+  master_password                     = random_password.aurora_master.result
+  db_subnet_group_name                = aws_db_subnet_group.aurora.name
+  vpc_security_group_ids              = [aws_security_group.aurora.id]
+  backup_retention_period             = var.backup_retention_days
+  preferred_backup_window             = "03:00-04:00"
+  preferred_maintenance_window        = "sun:04:00-sun:05:00"
+  storage_encrypted                   = true
+  kms_key_id                          = aws_kms_key.phi_encryption.arn
+  enabled_cloudwatch_logs_exports     = ["postgresql"]
+  deletion_protection                 = var.deletion_protection
+  skip_final_snapshot                 = var.env == "dev"
+  final_snapshot_identifier           = var.env != "dev" ? "${local.prefix}-aurora-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}" : null
   iam_database_authentication_enabled = true
 
   serverlessv2_scaling_configuration {
@@ -1382,14 +1383,14 @@ resource "aws_rds_cluster" "aurora" {
 resource "aws_rds_cluster_instance" "aurora" {
   count = var.env == "prod" ? 2 : 1
 
-  identifier              = "${local.prefix}-aurora-instance-${count.index + 1}"
-  cluster_identifier      = aws_rds_cluster.aurora.id
-  instance_class          = "db.serverless"
-  engine                  = aws_rds_cluster.aurora.engine
-  engine_version          = aws_rds_cluster.aurora.engine_version
+  identifier                   = "${local.prefix}-aurora-instance-${count.index + 1}"
+  cluster_identifier           = aws_rds_cluster.aurora.id
+  instance_class               = "db.serverless"
+  engine                       = aws_rds_cluster.aurora.engine
+  engine_version               = aws_rds_cluster.aurora.engine_version
   performance_insights_enabled = var.env == "prod"
-  monitoring_interval     = var.env == "prod" ? 60 : 0
-  monitoring_role_arn     = var.env == "prod" ? aws_iam_role.rds_monitoring.arn : null
+  monitoring_interval          = var.env == "prod" ? 60 : 0
+  monitoring_role_arn          = var.env == "prod" ? aws_iam_role.rds_monitoring.arn : null
 
   tags = merge(local.tags, {
     Name = "${local.prefix}-aurora-instance-${count.index + 1}"
@@ -1495,7 +1496,7 @@ resource "aws_sqs_queue" "patient_notifications" {
   visibility_timeout_seconds = var.visibility_timeout
   message_retention_seconds  = local.env_config[var.env].sqs_retention_days * 86400
   kms_master_key_id          = aws_kms_key.phi_encryption.id
-  sqs_managed_sse_enabled    = false
+
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.patient_notifications_dlq.arn
@@ -1509,9 +1510,9 @@ resource "aws_sqs_queue" "patient_notifications" {
 
 resource "aws_sqs_queue" "patient_notifications_dlq" {
   name                      = "${local.prefix}-${var.patient_notifications_queue}-dlq"
-  message_retention_seconds = 1209600  # 14 days
+  message_retention_seconds = 1209600 # 14 days
   kms_master_key_id         = aws_kms_key.phi_encryption.id
-  sqs_managed_sse_enabled   = false
+
 
   tags = merge(local.tags, {
     Name = "${local.prefix}-${var.patient_notifications_queue}-dlq"
@@ -1524,7 +1525,7 @@ resource "aws_sqs_queue" "provider_notifications" {
   visibility_timeout_seconds = var.visibility_timeout
   message_retention_seconds  = local.env_config[var.env].sqs_retention_days * 86400
   kms_master_key_id          = aws_kms_key.phi_encryption.id
-  sqs_managed_sse_enabled    = false
+
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.provider_notifications_dlq.arn
@@ -1540,7 +1541,7 @@ resource "aws_sqs_queue" "provider_notifications_dlq" {
   name                      = "${local.prefix}-${var.provider_notifications_queue}-dlq"
   message_retention_seconds = 1209600
   kms_master_key_id         = aws_kms_key.phi_encryption.id
-  sqs_managed_sse_enabled   = false
+
 
   tags = merge(local.tags, {
     Name = "${local.prefix}-${var.provider_notifications_queue}-dlq"
@@ -1553,7 +1554,7 @@ resource "aws_sqs_queue" "billing" {
   visibility_timeout_seconds = var.visibility_timeout
   message_retention_seconds  = local.env_config[var.env].sqs_retention_days * 86400
   kms_master_key_id          = aws_kms_key.phi_encryption.id
-  sqs_managed_sse_enabled    = false
+
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.billing_dlq.arn
@@ -1569,7 +1570,7 @@ resource "aws_sqs_queue" "billing_dlq" {
   name                      = "${local.prefix}-${var.billing_queue}-dlq"
   message_retention_seconds = 1209600
   kms_master_key_id         = aws_kms_key.phi_encryption.id
-  sqs_managed_sse_enabled   = false
+
 
   tags = merge(local.tags, {
     Name = "${local.prefix}-${var.billing_queue}-dlq"
@@ -1582,7 +1583,7 @@ resource "aws_sqs_queue" "pharmacist_review" {
   visibility_timeout_seconds = var.visibility_timeout
   message_retention_seconds  = local.env_config[var.env].sqs_retention_days * 86400
   kms_master_key_id          = aws_kms_key.phi_encryption.id
-  sqs_managed_sse_enabled    = false
+
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.pharmacist_review_dlq.arn
@@ -1598,7 +1599,7 @@ resource "aws_sqs_queue" "pharmacist_review_dlq" {
   name                      = "${local.prefix}-${var.pharmacist_queue}-dlq"
   message_retention_seconds = 1209600
   kms_master_key_id         = aws_kms_key.phi_encryption.id
-  sqs_managed_sse_enabled   = false
+
 
   tags = merge(local.tags, {
     Name = "${local.prefix}-${var.pharmacist_queue}-dlq"
@@ -1613,7 +1614,7 @@ resource "aws_sqs_queue" "pharmacy_fulfillment" {
   visibility_timeout_seconds  = var.visibility_timeout
   message_retention_seconds   = local.env_config[var.env].sqs_retention_days * 86400
   kms_master_key_id           = aws_kms_key.phi_encryption.id
-  sqs_managed_sse_enabled     = false
+
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.pharmacy_fulfillment_dlq.arn
@@ -1631,7 +1632,7 @@ resource "aws_sqs_queue" "pharmacy_fulfillment_dlq" {
   content_based_deduplication = true
   message_retention_seconds   = 1209600
   kms_master_key_id           = aws_kms_key.phi_encryption.id
-  sqs_managed_sse_enabled     = false
+
 
   tags = merge(local.tags, {
     Name = "${local.prefix}-${var.pharmacy_queue}-dlq"
@@ -1644,7 +1645,7 @@ resource "aws_sqs_queue" "patient_prescriptions" {
   visibility_timeout_seconds = var.visibility_timeout
   message_retention_seconds  = local.env_config[var.env].sqs_retention_days * 86400
   kms_master_key_id          = aws_kms_key.phi_encryption.id
-  sqs_managed_sse_enabled    = false
+
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.patient_prescriptions_dlq.arn
@@ -1660,7 +1661,7 @@ resource "aws_sqs_queue" "patient_prescriptions_dlq" {
   name                      = "${local.prefix}-${var.patient_prescriptions_queue}-dlq"
   message_retention_seconds = 1209600
   kms_master_key_id         = aws_kms_key.phi_encryption.id
-  sqs_managed_sse_enabled   = false
+
 
   tags = merge(local.tags, {
     Name = "${local.prefix}-${var.patient_prescriptions_queue}-dlq"
@@ -1721,12 +1722,12 @@ resource "aws_sns_topic_subscription" "patient_prescriptions" {
 # SQS Queue Policies for SNS
 resource "aws_sqs_queue_policy" "sns_access" {
   for_each = {
-    patient_notifications = aws_sqs_queue.patient_notifications.arn
+    patient_notifications  = aws_sqs_queue.patient_notifications.arn
     provider_notifications = aws_sqs_queue.provider_notifications.arn
-    billing = aws_sqs_queue.billing.arn
-    pharmacist_review = aws_sqs_queue.pharmacist_review.arn
-    pharmacy_fulfillment = aws_sqs_queue.pharmacy_fulfillment.arn
-    patient_prescriptions = aws_sqs_queue.patient_prescriptions.arn
+    billing                = aws_sqs_queue.billing.arn
+    pharmacist_review      = aws_sqs_queue.pharmacist_review.arn
+    pharmacy_fulfillment   = aws_sqs_queue.pharmacy_fulfillment.arn
+    patient_prescriptions  = aws_sqs_queue.patient_prescriptions.arn
   }
 
   queue_url = each.value
@@ -1739,7 +1740,7 @@ resource "aws_sqs_queue_policy" "sns_access" {
         Principal = {
           Service = "sns.amazonaws.com"
         }
-        Action = "sqs:SendMessage"
+        Action   = "sqs:SendMessage"
         Resource = each.value
       }
     ]
@@ -1980,7 +1981,7 @@ resource "aws_iam_role_policy_attachment" "lambda_step_functions" {
 data "archive_file" "lambda_code" {
   type        = "zip"
   output_path = "/tmp/lambda_function.zip"
-  
+
   source {
     content  = <<-EOT
 import json
@@ -2128,13 +2129,13 @@ EOT
 
 # Lambda Functions
 resource "aws_lambda_function" "request_handler" {
-  filename         = data.archive_file.lambda_code.output_path
-  function_name    = "${local.prefix}-request-handler"
-  role            = aws_iam_role.lambda_execution.arn
-  handler         = "lambda_function.handler"
-  runtime         = var.runtime
-  memory_size     = var.request_handler_memory
-  timeout         = var.timeout_s
+  filename                       = data.archive_file.lambda_code.output_path
+  function_name                  = "${local.prefix}-request-handler"
+  role                           = aws_iam_role.lambda_execution.arn
+  handler                        = "lambda_function.handler"
+  runtime                        = var.runtime
+  memory_size                    = var.request_handler_memory
+  timeout                        = var.timeout_s
   reserved_concurrent_executions = local.env_config[var.env].lambda_reserved_concurrent
 
   environment {
@@ -2150,13 +2151,13 @@ resource "aws_lambda_function" "request_handler" {
 }
 
 resource "aws_lambda_function" "scheduler" {
-  filename         = data.archive_file.lambda_code.output_path
-  function_name    = "${local.prefix}-scheduler"
-  role            = aws_iam_role.lambda_vpc_execution.arn
-  handler         = "lambda_function.handler"
-  runtime         = var.runtime
-  memory_size     = var.scheduler_memory
-  timeout         = var.timeout_s
+  filename      = data.archive_file.lambda_code.output_path
+  function_name = "${local.prefix}-scheduler"
+  role          = aws_iam_role.lambda_vpc_execution.arn
+  handler       = "lambda_function.handler"
+  runtime       = var.runtime
+  memory_size   = var.scheduler_memory
+  timeout       = var.timeout_s
 
   vpc_config {
     subnet_ids         = aws_subnet.private[*].id
@@ -2179,13 +2180,13 @@ resource "aws_lambda_function" "scheduler" {
 }
 
 resource "aws_lambda_function" "notifier" {
-  filename         = data.archive_file.lambda_code.output_path
-  function_name    = "${local.prefix}-notifier"
-  role            = aws_iam_role.lambda_execution.arn
-  handler         = "lambda_function.handler"
-  runtime         = var.runtime
-  memory_size     = var.notifier_memory
-  timeout         = var.timeout_s
+  filename      = data.archive_file.lambda_code.output_path
+  function_name = "${local.prefix}-notifier"
+  role          = aws_iam_role.lambda_execution.arn
+  handler       = "lambda_function.handler"
+  runtime       = var.runtime
+  memory_size   = var.notifier_memory
+  timeout       = var.timeout_s
 
   environment {
     variables = merge(local.lambda_env_vars, {
@@ -2199,13 +2200,13 @@ resource "aws_lambda_function" "notifier" {
 }
 
 resource "aws_lambda_function" "billing" {
-  filename         = data.archive_file.lambda_code.output_path
-  function_name    = "${local.prefix}-billing"
-  role            = aws_iam_role.lambda_vpc_execution.arn
-  handler         = "lambda_function.handler"
-  runtime         = var.runtime
-  memory_size     = var.billing_memory
-  timeout         = var.timeout_s
+  filename      = data.archive_file.lambda_code.output_path
+  function_name = "${local.prefix}-billing"
+  role          = aws_iam_role.lambda_vpc_execution.arn
+  handler       = "lambda_function.handler"
+  runtime       = var.runtime
+  memory_size   = var.billing_memory
+  timeout       = var.timeout_s
 
   vpc_config {
     subnet_ids         = aws_subnet.private[*].id
@@ -2214,9 +2215,9 @@ resource "aws_lambda_function" "billing" {
 
   environment {
     variables = merge(local.lambda_env_vars, {
-      AURORA_ENDPOINT    = aws_rds_cluster.aurora.endpoint
-      AURORA_SECRET      = aws_secretsmanager_secret.aurora_master.id
-      SQS_QUEUE_URL      = aws_sqs_queue.billing.url
+      AURORA_ENDPOINT = aws_rds_cluster.aurora.endpoint
+      AURORA_SECRET   = aws_secretsmanager_secret.aurora_master.id
+      SQS_QUEUE_URL   = aws_sqs_queue.billing.url
     })
   }
 
@@ -2226,13 +2227,13 @@ resource "aws_lambda_function" "billing" {
 }
 
 resource "aws_lambda_function" "session_manager" {
-  filename         = data.archive_file.lambda_code.output_path
-  function_name    = "${local.prefix}-session-manager"
-  role            = aws_iam_role.lambda_vpc_execution.arn
-  handler         = "lambda_function.handler"
-  runtime         = var.runtime
-  memory_size     = var.session_memory
-  timeout         = var.timeout_s
+  filename      = data.archive_file.lambda_code.output_path
+  function_name = "${local.prefix}-session-manager"
+  role          = aws_iam_role.lambda_vpc_execution.arn
+  handler       = "lambda_function.handler"
+  runtime       = var.runtime
+  memory_size   = var.session_memory
+  timeout       = var.timeout_s
 
   vpc_config {
     subnet_ids         = aws_subnet.private[*].id
@@ -2241,10 +2242,10 @@ resource "aws_lambda_function" "session_manager" {
 
   environment {
     variables = merge(local.lambda_env_vars, {
-      SESSIONS_TABLE     = aws_dynamodb_table.sessions.name
-      AURORA_ENDPOINT    = aws_rds_cluster.aurora.endpoint
-      AURORA_SECRET      = aws_secretsmanager_secret.aurora_master.id
-      SNS_TOPIC_ARN      = aws_sns_topic.session_events.arn
+      SESSIONS_TABLE  = aws_dynamodb_table.sessions.name
+      AURORA_ENDPOINT = aws_rds_cluster.aurora.endpoint
+      AURORA_SECRET   = aws_secretsmanager_secret.aurora_master.id
+      SNS_TOPIC_ARN   = aws_sns_topic.session_events.arn
     })
   }
 
@@ -2254,13 +2255,13 @@ resource "aws_lambda_function" "session_manager" {
 }
 
 resource "aws_lambda_function" "prescription_handler" {
-  filename         = data.archive_file.lambda_code.output_path
-  function_name    = "${local.prefix}-prescription-handler"
-  role            = aws_iam_role.lambda_execution.arn
-  handler         = "lambda_function.handler"
-  runtime         = var.runtime
-  memory_size     = var.prescription_memory
-  timeout         = var.timeout_s
+  filename      = data.archive_file.lambda_code.output_path
+  function_name = "${local.prefix}-prescription-handler"
+  role          = aws_iam_role.lambda_execution.arn
+  handler       = "lambda_function.handler"
+  runtime       = var.runtime
+  memory_size   = var.prescription_memory
+  timeout       = var.timeout_s
 
   environment {
     variables = merge(local.lambda_env_vars, {
@@ -2275,13 +2276,13 @@ resource "aws_lambda_function" "prescription_handler" {
 }
 
 resource "aws_lambda_function" "approval_checker" {
-  filename         = data.archive_file.lambda_code.output_path
-  function_name    = "${local.prefix}-approval-checker"
-  role            = aws_iam_role.lambda_vpc_execution.arn
-  handler         = "lambda_function.handler"
-  runtime         = var.runtime
-  memory_size     = var.approval_memory
-  timeout         = var.timeout_s
+  filename      = data.archive_file.lambda_code.output_path
+  function_name = "${local.prefix}-approval-checker"
+  role          = aws_iam_role.lambda_vpc_execution.arn
+  handler       = "lambda_function.handler"
+  runtime       = var.runtime
+  memory_size   = var.approval_memory
+  timeout       = var.timeout_s
 
   vpc_config {
     subnet_ids         = aws_subnet.private[*].id
@@ -2304,13 +2305,13 @@ resource "aws_lambda_function" "approval_checker" {
 }
 
 resource "aws_lambda_function" "pharmacy_integration" {
-  filename         = data.archive_file.lambda_code.output_path
-  function_name    = "${local.prefix}-pharmacy-integration"
-  role            = aws_iam_role.lambda_execution.arn
-  handler         = "lambda_function.handler"
-  runtime         = var.runtime
-  memory_size     = var.pharmacy_memory
-  timeout         = var.timeout_s
+  filename      = data.archive_file.lambda_code.output_path
+  function_name = "${local.prefix}-pharmacy-integration"
+  role          = aws_iam_role.lambda_execution.arn
+  handler       = "lambda_function.handler"
+  runtime       = var.runtime
+  memory_size   = var.pharmacy_memory
+  timeout       = var.timeout_s
 
   environment {
     variables = merge(local.lambda_env_vars, {
@@ -2324,13 +2325,13 @@ resource "aws_lambda_function" "pharmacy_integration" {
 }
 
 resource "aws_lambda_function" "compliance_analyzer" {
-  filename         = data.archive_file.lambda_code.output_path
-  function_name    = "${local.prefix}-compliance-analyzer"
-  role            = aws_iam_role.lambda_vpc_execution.arn
-  handler         = "lambda_function.handler"
-  runtime         = var.runtime
-  memory_size     = var.compliance_memory
-  timeout         = var.timeout_s
+  filename      = data.archive_file.lambda_code.output_path
+  function_name = "${local.prefix}-compliance-analyzer"
+  role          = aws_iam_role.lambda_vpc_execution.arn
+  handler       = "lambda_function.handler"
+  runtime       = var.runtime
+  memory_size   = var.compliance_memory
+  timeout       = var.timeout_s
 
   vpc_config {
     subnet_ids         = aws_subnet.private[*].id
@@ -2339,11 +2340,11 @@ resource "aws_lambda_function" "compliance_analyzer" {
 
   environment {
     variables = merge(local.lambda_env_vars, {
-      AURORA_ENDPOINT    = aws_rds_cluster.aurora.endpoint
-      AURORA_SECRET      = aws_secretsmanager_secret.aurora_master.id
-      COMPLIANCE_TABLE   = aws_dynamodb_table.compliance.name
-      ALERTS_TOPIC_ARN   = aws_sns_topic.compliance_alerts.arn
-      AUDIT_BUCKET       = aws_s3_bucket.audit_logs.id
+      AURORA_ENDPOINT  = aws_rds_cluster.aurora.endpoint
+      AURORA_SECRET    = aws_secretsmanager_secret.aurora_master.id
+      COMPLIANCE_TABLE = aws_dynamodb_table.compliance.name
+      ALERTS_TOPIC_ARN = aws_sns_topic.compliance_alerts.arn
+      AUDIT_BUCKET     = aws_s3_bucket.audit_logs.id
     })
   }
 
@@ -2353,13 +2354,13 @@ resource "aws_lambda_function" "compliance_analyzer" {
 }
 
 resource "aws_lambda_function" "reminder_processor" {
-  filename         = data.archive_file.lambda_code.output_path
-  function_name    = "${local.prefix}-reminder-processor"
-  role            = aws_iam_role.lambda_execution.arn
-  handler         = "lambda_function.handler"
-  runtime         = var.runtime
-  memory_size     = var.reminder_memory
-  timeout         = var.timeout_s
+  filename      = data.archive_file.lambda_code.output_path
+  function_name = "${local.prefix}-reminder-processor"
+  role          = aws_iam_role.lambda_execution.arn
+  handler       = "lambda_function.handler"
+  runtime       = var.runtime
+  memory_size   = var.reminder_memory
+  timeout       = var.timeout_s
 
   environment {
     variables = merge(local.lambda_env_vars, {
@@ -2374,13 +2375,13 @@ resource "aws_lambda_function" "reminder_processor" {
 }
 
 resource "aws_lambda_function" "analytics_aggregator" {
-  filename         = data.archive_file.lambda_code.output_path
-  function_name    = "${local.prefix}-analytics-aggregator"
-  role            = aws_iam_role.lambda_vpc_execution.arn
-  handler         = "lambda_function.handler"
-  runtime         = var.runtime
-  memory_size     = var.analytics_memory
-  timeout         = var.timeout_s
+  filename      = data.archive_file.lambda_code.output_path
+  function_name = "${local.prefix}-analytics-aggregator"
+  role          = aws_iam_role.lambda_vpc_execution.arn
+  handler       = "lambda_function.handler"
+  runtime       = var.runtime
+  memory_size   = var.analytics_memory
+  timeout       = var.timeout_s
 
   vpc_config {
     subnet_ids         = aws_subnet.private[*].id
@@ -2403,18 +2404,18 @@ resource "aws_lambda_function" "analytics_aggregator" {
 }
 
 resource "aws_lambda_function" "document_processor" {
-  filename         = data.archive_file.lambda_code.output_path
-  function_name    = "${local.prefix}-document-processor"
-  role            = aws_iam_role.lambda_execution.arn
-  handler         = "lambda_function.handler"
-  runtime         = var.runtime
-  memory_size     = var.document_memory
-  timeout         = var.timeout_s
+  filename      = data.archive_file.lambda_code.output_path
+  function_name = "${local.prefix}-document-processor"
+  role          = aws_iam_role.lambda_execution.arn
+  handler       = "lambda_function.handler"
+  runtime       = var.runtime
+  memory_size   = var.document_memory
+  timeout       = var.timeout_s
 
   environment {
     variables = merge(local.lambda_env_vars, {
-      DOCUMENTS_TABLE   = aws_dynamodb_table.documents.name
-      DOCUMENTS_BUCKET  = aws_s3_bucket.documents.id
+      DOCUMENTS_TABLE  = aws_dynamodb_table.documents.name
+      DOCUMENTS_BUCKET = aws_s3_bucket.documents.id
     })
   }
 
@@ -2573,11 +2574,11 @@ resource "aws_api_gateway_rest_api" "main" {
 
 # Cognito Authorizer
 resource "aws_api_gateway_authorizer" "cognito" {
-  name                   = "${local.prefix}-cognito-authorizer"
-  type                   = "COGNITO_USER_POOLS"
-  rest_api_id            = aws_api_gateway_rest_api.main.id
-  provider_arns          = ["arn:aws:cognito-idp:${var.aws_region}:${data.aws_caller_identity.current.account_id}:userpool/${var.user_pool_id}"]
-  identity_source        = "method.request.header.Authorization"
+  name                             = "${local.prefix}-cognito-authorizer"
+  type                             = "COGNITO_USER_POOLS"
+  rest_api_id                      = aws_api_gateway_rest_api.main.id
+  provider_arns                    = ["arn:aws:cognito-idp:${var.aws_region}:${data.aws_caller_identity.current.account_id}:userpool/${var.user_pool_id}"]
+  identity_source                  = "method.request.header.Authorization"
   authorizer_result_ttl_in_seconds = 300
 }
 
@@ -2889,14 +2890,14 @@ resource "aws_sfn_state_machine" "prescription_approval" {
         Type = "Choice"
         Choices = [
           {
-            Variable     = "$[0].has_issues"
+            Variable      = "$[0].has_issues"
             BooleanEquals = true
-            Next         = "RequireReview"
+            Next          = "RequireReview"
           },
           {
-            Variable     = "$[1].has_issues"
+            Variable      = "$[1].has_issues"
             BooleanEquals = true
-            Next         = "RequireReview"
+            Next          = "RequireReview"
           }
         ]
         Default = "ApprovePrescription"
@@ -3229,7 +3230,7 @@ resource "aws_cloudwatch_metric_alarm" "s3_upload_errors" {
 
 output "api_gateway_url" {
   description = "API Gateway invoke URL"
-  value       = "${aws_api_gateway_deployment.main.invoke_url}"
+  value       = aws_api_gateway_stage.main.invoke_url
 }
 
 output "dynamodb_tables" {
