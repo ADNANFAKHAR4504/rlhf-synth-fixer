@@ -124,15 +124,26 @@ describe('TapStack Component', () => {
     });
 
     it('dashboardUrls should be a Pulumi Output', () => {
-      expect(stack.dashboardUrls).toBeInstanceOf(pulumi.Output);
+      // Pulumi Outputs have an apply method
+      expect(typeof stack.dashboardUrls.apply).toBe('function');
     });
 
     it('snsTopicArns should be a Pulumi Output', () => {
-      expect(stack.snsTopicArns).toBeInstanceOf(pulumi.Output);
+      // Pulumi Outputs have an apply method
+      expect(typeof stack.snsTopicArns.apply).toBe('function');
     });
 
     it('lambdaFunctionArns should be a Pulumi Output', () => {
-      expect(stack.lambdaFunctionArns).toBeInstanceOf(pulumi.Output);
+      // Pulumi Outputs have an apply method
+      expect(typeof stack.lambdaFunctionArns.apply).toBe('function');
+    });
+
+    it('reportsBucketName should be a Pulumi Output', () => {
+      expect(typeof stack.reportsBucketName.apply).toBe('function');
+    });
+
+    it('logGroupName should be a Pulumi Output', () => {
+      expect(typeof stack.logGroupName.apply).toBe('function');
     });
   });
 });
