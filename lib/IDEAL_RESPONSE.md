@@ -48,6 +48,7 @@ This document provides the corrected, production-ready implementation for the EC
 
 ## File: cdk.json
 
+
 ```json
 {
   "app": "npx ts-node --prefer-ts-exts bin/synth-q9n9u3x6.ts",
