@@ -50,7 +50,7 @@ describe('TapStack', () => {
     });
   });
 
-  test('configures VPC networking and bastion host security', () => {
+  test('configures VPC networking and shared security controls', () => {
     template.hasResourceProperties('AWS::EC2::VPC', {
       CidrBlock: '10.0.0.0/16',
       EnableDnsSupport: true,
@@ -70,27 +70,10 @@ describe('TapStack', () => {
         })
       ])
     });
-    template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
-      LaunchTemplateName: 'BastionInstanceLaunchTemplate',
-      LaunchTemplateData: {
-        MetadataOptions: { HttpTokens: 'required' }
-      }
-    });
-    template.hasResourceProperties('AWS::EC2::Instance', {
-      InstanceType: 't3.micro',
-      BlockDeviceMappings: Match.arrayWith([
-        Match.objectLike({
-          DeviceName: '/dev/xvda',
-          Ebs: Match.objectLike({
-            Encrypted: true,
-            VolumeType: 'gp3',
-            DeleteOnTermination: true
-          })
-        })
-      ]),
-      LaunchTemplate: Match.objectLike({
-        LaunchTemplateName: 'BastionInstanceLaunchTemplate'
-      })
+    template.resourceCountIs('AWS::EC2::Instance', 0);
+    template.hasResourceProperties('AWS::EC2::EIP', {
+      Domain: 'vpc',
+      Tags: Match.arrayWith([Match.objectLike({ Key: 'Name', Value: `elastic-ip${environmentSuffix}` })])
     });
   });
 

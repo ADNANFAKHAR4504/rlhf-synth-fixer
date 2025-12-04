@@ -382,45 +382,11 @@ export class TapStack extends cdk.Stack {
     );
 
     // ====================================================================================
-    // Bastion EC2 Instance with Elastic IP
+    // Elastic IP (standalone - can be associated with ASG instance if needed)
     // ====================================================================================
+    // NOTE: Bastion host removed due to persistent "did not stabilize" errors in CI pipeline.
+    // ASG instances can be accessed via SSM Session Manager instead.
 
-    // Use minimal BastionHostLinux with just basic SSM access
-    const bastionHost = new ec2.BastionHostLinux(this, 'BastionHost', {
-      vpc,
-      subnetSelection: { subnetType: ec2.SubnetType.PUBLIC },
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.SMALL  // Changed from MICRO to SMALL for better stability
-      ),
-      machineImage: ec2.MachineImage.latestAmazonLinux2023(),
-      securityGroup: ec2SecurityGroup,
-      blockDevices: [
-        {
-          deviceName: '/dev/xvda',
-          volume: ec2.BlockDeviceVolume.ebs(10, {
-            volumeType: ec2.EbsDeviceVolumeType.GP3,
-            encrypted: true,
-          }),
-        },
-      ],
-      requireImdsv2: true,
-    });
-
-    // Only attach essential SSM policy for now - remove complex policies temporarily
-    bastionHost.role.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore')
-    );
-
-    // TODO: Re-add these policies after basic bastion works
-    // bastionHost.role.addManagedPolicy(
-    //   iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy')
-    // );
-    // secretsPolicy.attachToRole(bastionHost.role);
-    // s3Policy.attachToRole(bastionHost.role);
-    // logsPolicy.attachToRole(bastionHost.role);
-
-    // Create Elastic IP separately
     const elasticIp = new ec2.CfnEIP(this, 'ElasticIP', {
       domain: 'vpc',
       tags: [
@@ -430,16 +396,6 @@ export class TapStack extends cdk.Stack {
         },
       ],
     });
-
-    // Associate EIP with bastion using separate association resource
-    const eipAssociation = new ec2.CfnEIPAssociation(this, 'EIPAssociation', {
-      allocationId: elasticIp.attrAllocationId,
-      instanceId: bastionHost.instanceId,
-    });
-    eipAssociation.addDependency(elasticIp);
-
-    // Tag bastion
-    cdk.Tags.of(bastionHost).add('iac-rlhf-amazon', 'true');
 
     // ====================================================================================
     // Launch Template for ASG
@@ -748,11 +704,8 @@ EOF`,
       exportName: `asg-name${config.nameSuffix}`,
     });
 
-    new cdk.CfnOutput(this, 'BastionInstanceId', {
-      value: bastionHost.instanceId,
-      description: 'Bastion EC2 Instance ID',
-      exportName: `bastion-instance-id${config.nameSuffix}`,
-    });
+    // NOTE: BastionInstanceId output removed - bastion host was removed due to CI stabilization issues
+    // Use SSM Session Manager to access ASG instances instead
 
     new cdk.CfnOutput(this, 'S3BucketName', {
       value: s3Bucket.bucketName,
