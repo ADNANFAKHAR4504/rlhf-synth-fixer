@@ -17,7 +17,7 @@ function loadOutputs() {
   const outPath = path.resolve(__dirname, '../cfn-outputs/flat-outputs.json');
   const raw = fs.readFileSync(outPath, 'utf-8');
   const json = JSON.parse(raw);
-  const parseJsonString = (s: string) => JSON.parse(s);
+  const parseJsonString = (s: string | undefined) => s ? JSON.parse(s) : {};
   return {
     apiInvokeUrl: json.api_gateway_invoke_url,
     apiKeyId: json.api_gateway_api_key_id,
@@ -27,8 +27,8 @@ function loadOutputs() {
     snsTopics: parseJsonString(json.sns_topics),
     sqsQueues: parseJsonString(json.sqs_queues),
     redisEndpoint: json.redis_endpoint as string,
-    eventBridgeRules: parseJsonString(json.eventbridge_rules || '{}'),
-    vpcConfig: parseJsonString(json.vpc_configuration || '{}'),
+    eventBridgeRules: parseJsonString(json.eventbridge_rules),
+    vpcConfig: parseJsonString(json.vpc_configuration),
   };
 }
 
