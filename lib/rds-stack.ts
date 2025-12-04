@@ -257,7 +257,10 @@ export class RDSOptimizationStack {
           Role: 'ReadReplica',
         },
       },
-      { dependsOn: [dbInstance] }
+      {
+        dependsOn: [dbInstance],
+        deleteBeforeReplace: true, // Delete old replica before creating replacement
+      }
     );
 
     // CloudWatch Alarm: CPU Utilization > 80%
