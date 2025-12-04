@@ -218,8 +218,8 @@ describe('Infrastructure Code Structure Tests', () => {
       const content = fs.readFileSync(metadataPath, 'utf-8');
       const metadata = JSON.parse(content);
       expect(metadata.po_id).toBeDefined();
-      expect(metadata.platform).toBe('pulumi');
-      expect(metadata.language).toBe('typescript');
+      expect(metadata.platform).toBe('cdk');
+      expect(metadata.language).toBe('ts');
     });
 
     it('should have valid lambda package.json', () => {
@@ -243,14 +243,15 @@ describe('Infrastructure Code Structure Tests', () => {
       const failuresPath = path.join(libPath, 'MODEL_FAILURES.md');
       const content = fs.readFileSync(failuresPath, 'utf-8');
       expect(content.length).toBeGreaterThan(100);
-      expect(content).toContain('AWS_REGION');
+      expect(content).toContain('MODEL_RESPONSE');
+      expect(content).toContain('IDEAL_RESPONSE');
     });
 
     it('should have non-empty IDEAL_RESPONSE.md', () => {
       const idealPath = path.join(libPath, 'IDEAL_RESPONSE.md');
       const content = fs.readFileSync(idealPath, 'utf-8');
       expect(content.length).toBeGreaterThan(100);
-      expect(content).toContain('Pulumi');
+      expect(content).toContain('CI/CD');
     });
   });
 });
