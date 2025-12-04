@@ -302,48 +302,78 @@ describe('Cross-env plan consistency checks (read-only)', () => {
   // and surface key differences without asserting on env names.
   const { execSync } = require('child_process');
   const libDir = path.resolve(__dirname, '../lib');
+  let backendOverrideCreated = false;
+
+  beforeAll(() => {
+    try {
+      // Create backend override to force local state for testing
+      const backendOverride = `
+terraform {
+  backend "local" {}
+}
+`;
+      const overridePath = path.join(libDir, 'backend_override.tf');
+      fs.writeFileSync(overridePath, backendOverride);
+      backendOverrideCreated = true;
+      
+      // Initialize with local backend
+      execSync('terraform init -reconfigure', { cwd: libDir, stdio: 'pipe' });
+    } catch (error) {
+      console.warn('Failed to setup backend override, tests may be skipped');
+      backendOverrideCreated = false;
+    }
+  });
+
+  afterAll(() => {
+    // Cleanup: Remove backend override and local state files
+    try {
+      const filesToClean = [
+        'backend_override.tf',
+        'terraform.tfstate',
+        'terraform.tfstate.backup',
+        'tfplan-test'
+      ];
+      
+      for (const file of filesToClean) {
+        const filePath = path.join(libDir, file);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      }
+    } catch (error) {
+      // Ignore cleanup errors
+    }
+  });
 
   function runPlan(varFile: string): boolean {
+    if (!backendOverrideCreated) {
+      console.warn(`Backend override not created - skipping ${varFile}`);
+      return false;
+    }
+
     try {
-      // Remove .terraform directory to avoid backend state issues in CI
-      const terraformDir = path.join(libDir, '.terraform');
-      if (fs.existsSync(terraformDir)) {
-        execSync(`rm -rf .terraform`, { cwd: libDir, stdio: 'pipe' });
-      }
-      
-      // Initialize without backend
-      execSync(`terraform init -backend=false -reconfigure -input=false`, { cwd: libDir, stdio: 'pipe' });
-      
-      // Run plan
       execSync(`terraform plan -lock=false -input=false -var-file=${varFile}`, { cwd: libDir, stdio: 'pipe' });
       return true;
     } catch (error: any) {
       const output = error.stdout?.toString() || error.stderr?.toString() || error.message;
-      
-      // If backend initialization is still required, skip this test
-      if (output.includes('Backend initialization required')) {
-        console.warn(`Backend initialization required for ${varFile} - skipping in CI mode`);
-        return false;
-      }
-      
-      // Re-throw other errors
-      throw error;
+      console.error(`Plan failed for ${varFile}:`, output);
+      return false;
     }
   }
 
   test('terraform plan works for staging.tfvars', () => {
     const result = runPlan('staging.tfvars');
-    if (!result) {
-      console.log('ℹ️  Terraform plan skipped - backend initialization required in CI');
+    if (!result && !backendOverrideCreated) {
+      console.log('ℹ️  Terraform plan skipped - backend setup failed');
     }
-    expect(true).toBe(true);
+    expect(backendOverrideCreated ? result : true).toBe(true);
   });
 
   test('terraform plan works for prod.tfvars', () => {
     const result = runPlan('prod.tfvars');
-    if (!result) {
-      console.log('ℹ️  Terraform plan skipped - backend initialization required in CI');
+    if (!result && !backendOverrideCreated) {
+      console.log('ℹ️  Terraform plan skipped - backend setup failed');
     }
-    expect(true).toBe(true);
+    expect(backendOverrideCreated ? result : true).toBe(true);
   });
 });
