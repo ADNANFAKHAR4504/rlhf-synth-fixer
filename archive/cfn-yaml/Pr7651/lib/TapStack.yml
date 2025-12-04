@@ -1,0 +1,441 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Multi-AZ VPC Infrastructure for Production Trading Platform - Task 101000928'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: 'Unique suffix for resource naming to allow multiple deployments'
+    Default: 'prod'
+    AllowedPattern: '[a-z0-9-]+'
+    ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
+
+Resources:
+  # VPC Configuration
+  TradingPlatformVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'vpc-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: TradingPlatform
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub 'igw-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: TradingPlatform
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref TradingPlatformVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Public Subnets
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TradingPlatformVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'public-subnet-1a-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: TradingPlatform
+        - Key: Type
+          Value: Public
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TradingPlatformVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'public-subnet-1b-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: TradingPlatform
+        - Key: Type
+          Value: Public
+
+  PublicSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TradingPlatformVPC
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: !Select [2, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'public-subnet-1c-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: TradingPlatform
+        - Key: Type
+          Value: Public
+
+  # Private Subnets
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TradingPlatformVPC
+      CidrBlock: 10.0.11.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'private-subnet-1a-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: TradingPlatform
+        - Key: Type
+          Value: Private
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TradingPlatformVPC
+      CidrBlock: 10.0.12.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'private-subnet-1b-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: TradingPlatform
+        - Key: Type
+          Value: Private
+
+  PrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TradingPlatformVPC
+      CidrBlock: 10.0.13.0/24
+      AvailabilityZone: !Select [2, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'private-subnet-1c-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: TradingPlatform
+        - Key: Type
+          Value: Private
+
+  # Elastic IPs for NAT Gateways
+  NATGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'nat-eip-1a-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: TradingPlatform
+
+  NATGateway2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'nat-eip-1b-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: TradingPlatform
+
+  NATGateway3EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'nat-eip-1c-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: TradingPlatform
+
+  # NAT Gateways
+  NATGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub 'nat-gateway-1a-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: TradingPlatform
+
+  NATGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub 'nat-gateway-1b-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: TradingPlatform
+
+  NATGateway3:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGateway3EIP.AllocationId
+      SubnetId: !Ref PublicSubnet3
+      Tags:
+        - Key: Name
+          Value: !Sub 'nat-gateway-1c-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: TradingPlatform
+
+  # Public Route Table
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref TradingPlatformVPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'public-rt-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: TradingPlatform
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet3
+      RouteTableId: !Ref PublicRouteTable
+
+  # Private Route Tables (one per AZ for high availability)
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref TradingPlatformVPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'private-rt-1a-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: TradingPlatform
+
+  PrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway1
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref TradingPlatformVPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'private-rt-1b-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: TradingPlatform
+
+  PrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway2
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable2
+
+  PrivateRouteTable3:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref TradingPlatformVPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'private-rt-1c-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: TradingPlatform
+
+  PrivateRoute3:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable3
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway3
+
+  PrivateSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet3
+      RouteTableId: !Ref PrivateRouteTable3
+
+  # Security Group for HTTPS Access
+  HTTPSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'https-sg-${EnvironmentSuffix}'
+      GroupDescription: 'Security group allowing HTTPS inbound and all outbound traffic'
+      VpcId: !Ref TradingPlatformVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: 'Allow HTTPS from anywhere'
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: 'Allow all outbound traffic'
+      Tags:
+        - Key: Name
+          Value: !Sub 'https-sg-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: TradingPlatform
+
+Outputs:
+  VPCId:
+    Description: 'VPC ID for the Trading Platform'
+    Value: !Ref TradingPlatformVPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC-ID'
+
+  PublicSubnet1Id:
+    Description: 'Public Subnet 1 ID (us-east-1a)'
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet1-ID'
+
+  PublicSubnet2Id:
+    Description: 'Public Subnet 2 ID (us-east-1b)'
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet2-ID'
+
+  PublicSubnet3Id:
+    Description: 'Public Subnet 3 ID (us-east-1c)'
+    Value: !Ref PublicSubnet3
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet3-ID'
+
+  PrivateSubnet1Id:
+    Description: 'Private Subnet 1 ID (us-east-1a)'
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet1-ID'
+
+  PrivateSubnet2Id:
+    Description: 'Private Subnet 2 ID (us-east-1b)'
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet2-ID'
+
+  PrivateSubnet3Id:
+    Description: 'Private Subnet 3 ID (us-east-1c)'
+    Value: !Ref PrivateSubnet3
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet3-ID'
+
+  HTTPSSecurityGroupId:
+    Description: 'Security Group ID for HTTPS access'
+    Value: !Ref HTTPSSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-HTTPS-SG-ID'
+
+  NATGateway1Id:
+    Description: 'NAT Gateway 1 ID (us-east-1a)'
+    Value: !Ref NATGateway1
+    Export:
+      Name: !Sub '${AWS::StackName}-NATGateway1-ID'
+
+  NATGateway2Id:
+    Description: 'NAT Gateway 2 ID (us-east-1b)'
+    Value: !Ref NATGateway2
+    Export:
+      Name: !Sub '${AWS::StackName}-NATGateway2-ID'
+
+  NATGateway3Id:
+    Description: 'NAT Gateway 3 ID (us-east-1c)'
+    Value: !Ref NATGateway3
+    Export:
+      Name: !Sub '${AWS::StackName}-NATGateway3-ID'
+
+  VPCCidr:
+    Description: 'VPC CIDR Block'
+    Value: !GetAtt TradingPlatformVPC.CidrBlock
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC-CIDR'

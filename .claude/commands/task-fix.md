@@ -379,7 +379,7 @@ Cannot apply fixes to merged PR
 
 ### Maximum Iterations Reached
 ```
-WARNING: Agent reached maximum iterations (5)
+WARNING: Agent reached maximum iterations (10)
 Some issues may remain unresolved
 Review agent report for details
 Manual intervention may be required
@@ -437,10 +437,11 @@ Agent will move files to correct directories.
 
 - Cannot fix PRs on main/master branch
 - Cannot fix merged PRs
-- Maximum 5 fix iterations per run
-- Maximum 5 deployment attempts per run
+- Maximum 10 fix iterations per run (configurable in `.claude/config/synth-trainer.yaml`)
+- Maximum 5 deployment attempts per iteration
 - Requires GitHub CLI authentication
 - Requires repository write permissions
+- Run `/synth-trainer-health` to verify prerequisites before use
 
 ## Troubleshooting
 

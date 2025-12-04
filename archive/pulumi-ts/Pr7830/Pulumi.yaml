@@ -1,0 +1,5 @@
+name: TapStack
+runtime:
+  name: nodejs
+description: Pulumi infrastructure for CI/CD Pipeline
+main: bin/tap.ts

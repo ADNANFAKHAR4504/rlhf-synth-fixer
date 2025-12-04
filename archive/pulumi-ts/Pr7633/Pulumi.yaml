@@ -1,0 +1,7 @@
+name: ec2-compliance-monitoring
+runtime: nodejs
+description: EC2 tag compliance monitoring with automated reporting and alerting
+config:
+  environmentSuffix:
+    type: string
+    description: Environment suffix for unique resource naming

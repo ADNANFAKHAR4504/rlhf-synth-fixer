@@ -1,3 +1,4 @@
 config:
-  TapStack:environmentSuffix: synthk6j3p4g8
-encryptionsalt: v1:6u68b224onE=:v1:eGpk0T+jWJJ1CdvX:+46TCzAMeU5XjEwk7LZgrzw5Dp97vw==
+  TapStack:environmentSuffix: dev
+  TapStack:dbPassword:
+    secure: AAABAMaT3Wc4K5xJ9yZ8qR7nL6pS4dF2hG9kW1mN3vB5cX7eQ8rT0yU

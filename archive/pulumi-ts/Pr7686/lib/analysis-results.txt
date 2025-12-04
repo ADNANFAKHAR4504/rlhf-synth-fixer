@@ -1,0 +1,19 @@
+AWS Inspector v2 Security Assessment Report
+======================================================================
+
+Scan ID: inspector-scan-20251203100454
+Timestamp: 2025-12-03T10:04:54.259133Z
+Environment: test
+
+Overall Security Score: 67.5%
+Total EC2 Instances: 12
+Scanned Instances: 12
+Instances with Findings: 6
+
+Findings by Severity:
+  CRITICAL: 2
+  HIGH: 3
+  MEDIUM: 2
+  LOW: 1
+
+======================================================================
