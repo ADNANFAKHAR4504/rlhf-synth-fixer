@@ -2,7 +2,7 @@
 env          = "prod"
 aws_region   = "us-east-1"
 project_name = "tap-delivery"
-pr_number    = "pr7878"
+pr_number    = "pr7881"
 
 # Full production capacity
 orders_shard_count             = 10

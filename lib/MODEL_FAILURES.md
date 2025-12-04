@@ -74,3 +74,17 @@ Error: creating Lambda Event Source Mapping: InvalidParameterValueException: Max
 **Root Cause:** The `aws_lambda_event_source_mapping` for `sqs_customer` had a `batch_size` of 25 but no
 `maximum_batching_window_in_seconds` defined. SQS requires a batch window if batch size > 10.
 **Fix:** Added `maximum_batching_window_in_seconds = 2` to the `sqs_customer` event source mapping.
+
+### **Issue 7 — Invalid Lambda Concurrency Configuration**
+
+**Error:**
+
+```text
+InvalidParameterValueException: Specified ReservedConcurrentExecutions for function decreases account's UnreservedConcurrentExecution below its minimum value of [100].
+```
+
+**Root Cause:** The sum of `reserved_concurrent_executions` for all functions in the stack (12 functions * 10 = 120),
+combined with the account's unreserved minimum (100), exceeded the account's available concurrency limit (likely 1000
+or lower in this sandbox environment).
+**Fix:** Updated `capacity_map` in `tap_stack.tf` to set `lambda_concurrent` to `-1` for the `dev` environment. This
+configures the functions to use unreserved concurrency, avoiding the limit.

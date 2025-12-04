@@ -501,7 +501,7 @@ locals {
     dev = {
       dynamodb_rcu      = 20
       dynamodb_wcu      = 20
-      lambda_concurrent = 10
+      lambda_concurrent = -1
       redis_nodes       = 1
       aurora_min        = 0.5
       aurora_max        = 1

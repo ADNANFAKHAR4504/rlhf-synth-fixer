@@ -2,7 +2,7 @@
 env          = "dev"
 aws_region   = "us-east-1"
 project_name = "tap-delivery"
-pr_number    = "pr7878"
+pr_number    = "pr7881"
 
 # Reduced capacity for development
 orders_shard_count             = 2

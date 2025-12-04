@@ -504,7 +504,7 @@ locals {
     dev = {
       dynamodb_rcu      = 20
       dynamodb_wcu      = 20
-      lambda_concurrent = 10
+      lambda_concurrent = -1
       redis_nodes       = 1
       aurora_min        = 0.5
       aurora_max        = 1
@@ -3082,7 +3082,7 @@ variable "team" {
 env          = "dev"
 aws_region   = "us-east-1"
 project_name = "tap-delivery"
-pr_number    = "pr7878"
+pr_number    = "pr7881"
 
 # Reduced capacity for development
 orders_shard_count             = 2
@@ -3119,7 +3119,7 @@ earnings_schedule_expression = "cron(0 */6 * * ? *)"
 env          = "prod"
 aws_region   = "us-east-1"
 project_name = "tap-delivery"
-pr_number    = "pr7878"
+pr_number    = "pr7881"
 
 # Full production capacity
 orders_shard_count             = 10
@@ -3163,7 +3163,7 @@ common_tags = {
 env          = "staging"
 aws_region   = "us-east-1"
 project_name = "tap-delivery"
-pr_number    = "pr7878"
+pr_number    = "pr7881"
 
 # Moderate capacity for staging
 orders_shard_count             = 5
