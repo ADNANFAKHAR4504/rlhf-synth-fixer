@@ -1,5 +1,4 @@
 module.exports = {
-  preset: 'ts-jest',
   testEnvironment: 'node',
   roots: ['<rootDir>/tests'],
   testMatch: ['**/*.test.ts', '**/*.test.mjs', '**/*.py'],
@@ -16,11 +15,16 @@ module.exports = {
     'node_modules/(?!(aws-cdk-lib|@aws-cdk|constructs|@aws-sdk|@smithy|@kubernetes/client-node|openid-client|oauth4webapi|jose)/)',
   ],
   collectCoverageFrom: [
-    'lib/**/*.ts',
-    '!lib/**/*.d.ts',
-    '!lib/lambda/**',
+    '<rootDir>/lib/**/*.ts',
+    '<rootDir>/lib/**/*.mjs',
+    '<rootDir>/lib/**/*.js',
+    '!<rootDir>/bin/**/*.ts',
+    '!<rootDir>/lib/lambda/**',
+    '!<rootDir>/**/*.d.ts',
+    '!<rootDir>/**/*.test.ts',
+    '!<rootDir>/**/*.test.js',
+    '!<rootDir>/node_modules/**',
   ],
-  coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'json-summary'],
   coverageThreshold: {
     global: {
@@ -30,18 +34,16 @@ module.exports = {
       statements: 97,
     },
   },
-  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
-  transform: {
-    '^.+\\.tsx?$': [
-      'ts-jest',
-      {
-        tsconfig: {
-          moduleResolution: 'node',
-          esModuleInterop: true,
-          skipLibCheck: true,
-        },
+  testTimeout: 60000,
+  silent: false,
+  verbose: true,
+  globals: {
+    'ts-jest': {
+      isolatedModules: true,
+      tsconfig: {
+        allowJs: true,
+        esModuleInterop: true,
       },
-    ],
+    },
   },
-  testTimeout: 30000,
 };
