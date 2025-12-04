@@ -178,17 +178,15 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
       DocumentName: 'AWS-RunShellScript',
       Parameters: {
         commands: [
-          // Read from S3
-          `aws s3 cp s3://${s3BucketName}/${s3Key} /tmp/test-data.json --region ${region}`,
-          // Get database credentials
-          `SECRET=$(aws secretsmanager get-secret-value --secret-id ${databaseSecretArn} --region ${region} --query SecretString --output text)`,
-          'DB_USER=$(echo $SECRET | jq -r .username)',
-          'DB_PASS=$(echo $SECRET | jq -r .password)',
-          // Connect to RDS and insert test data
-          `JSON_DATA=$(cat /tmp/test-data.json | jq -c . | sed "s/'/\\\\'/g")`,
-          `mysql -h ${rdsEndpoint} -P ${rdsPort} -u $DB_USER -p$DB_PASS -e "CREATE DATABASE IF NOT EXISTS testdb; USE testdb; CREATE TABLE IF NOT EXISTS test_data (id VARCHAR(255), data JSON, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP); INSERT INTO test_data (id, data) VALUES ('${testId}', '\$JSON_DATA'); SELECT id FROM test_data WHERE id='${testId}';" 2>&1`,
-          // Write result to file
-          `echo "Data processed and stored in RDS" > /tmp/result.txt`,
+          `#!/bin/bash
+set -e
+aws s3 cp s3://${s3BucketName}/${s3Key} /tmp/test-data.json --region ${region}
+SECRET=$(aws secretsmanager get-secret-value --secret-id ${databaseSecretArn} --region ${region} --query SecretString --output text)
+DB_USER=$(echo "$SECRET" | jq -r .username)
+DB_PASS=$(echo "$SECRET" | jq -r .password)
+JSON_DATA=$(cat /tmp/test-data.json | jq -c .)
+mysql -h ${rdsEndpoint} -P ${rdsPort} -u "$DB_USER" -p"$DB_PASS" -e "CREATE DATABASE IF NOT EXISTS testdb; USE testdb; CREATE TABLE IF NOT EXISTS test_data (id VARCHAR(255), data TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP); INSERT INTO test_data (id, data) VALUES ('${testId}', '$JSON_DATA'); SELECT id FROM test_data WHERE id='${testId}';"
+echo "${testId} - Data processed and stored in RDS"`,
         ],
       },
     });
@@ -210,10 +208,12 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
       DocumentName: 'AWS-RunShellScript',
       Parameters: {
         commands: [
-          `SECRET=$(aws secretsmanager get-secret-value --secret-id ${databaseSecretArn} --region ${region} --query SecretString --output text)`,
-          'DB_USER=$(echo $SECRET | jq -r .username)',
-          'DB_PASS=$(echo $SECRET | jq -r .password)',
-          `mysql -h ${rdsEndpoint} -P ${rdsPort} -u $DB_USER -p$DB_PASS -e "USE testdb; SELECT data FROM test_data WHERE id='${testId}';" 2>&1`,
+          `#!/bin/bash
+set -e
+SECRET=$(aws secretsmanager get-secret-value --secret-id ${databaseSecretArn} --region ${region} --query SecretString --output text)
+DB_USER=$(echo "$SECRET" | jq -r .username)
+DB_PASS=$(echo "$SECRET" | jq -r .password)
+mysql -h ${rdsEndpoint} -P ${rdsPort} -u "$DB_USER" -p"$DB_PASS" -e "USE testdb; SELECT data FROM test_data WHERE id='${testId}';"`,
         ],
       },
     });
@@ -294,10 +294,11 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
       DocumentName: 'AWS-RunShellScript',
       Parameters: {
         commands: [
-          `SECRET=$(aws secretsmanager get-secret-value --secret-id ${databaseSecretArn} --region ${region} --query SecretString --output text)`,
-          'DB_USER=$(echo $SECRET | jq -r .username)',
-          'DB_PASS=$(echo $SECRET | jq -r .password)',
-          `mysql -h ${rdsEndpoint} -P ${rdsPort} -u $DB_USER -p$DB_PASS -e "USE testdb; DELETE FROM test_data WHERE id='${testId}';" 2>&1`,
+          `#!/bin/bash
+SECRET=$(aws secretsmanager get-secret-value --secret-id ${databaseSecretArn} --region ${region} --query SecretString --output text)
+DB_USER=$(echo "$SECRET" | jq -r .username)
+DB_PASS=$(echo "$SECRET" | jq -r .password)
+mysql -h ${rdsEndpoint} -P ${rdsPort} -u "$DB_USER" -p"$DB_PASS" -e "USE testdb; DELETE FROM test_data WHERE id='${testId}';"`,
         ],
       },
     });
@@ -328,9 +329,11 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
       DocumentName: 'AWS-RunShellScript',
       Parameters: {
         commands: [
-          `aws s3 cp s3://${s3BucketName}/${s3Key} /tmp/artifact.txt --region ${region}`,
-          'cat /tmp/artifact.txt',
-          'echo "Processed: $(cat /tmp/artifact.txt)"',
+          `#!/bin/bash
+set -e
+aws s3 cp s3://${s3BucketName}/${s3Key} /tmp/artifact.txt --region ${region}
+cat /tmp/artifact.txt
+echo "Processed artifact: ${testId}"`,
         ],
       },
     });
@@ -347,18 +350,18 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
   });
 
   test('Data Flow: Secrets Manager -> EC2 -> RDS connection', async () => {
-    const testId = `secrets-rds-${Date.now()}`;
-
     // EC2 retrieves secret and connects to RDS
     const command = new SendCommandCommand({
       InstanceIds: [ec2InstanceId],
       DocumentName: 'AWS-RunShellScript',
       Parameters: {
         commands: [
-          `SECRET=$(aws secretsmanager get-secret-value --secret-id ${databaseSecretArn} --region ${region} --query SecretString --output text)`,
-          'DB_USER=$(echo $SECRET | jq -r .username)',
-          'DB_PASS=$(echo $SECRET | jq -r .password)',
-          `mysql -h ${rdsEndpoint} -P ${rdsPort} -u $DB_USER -p$DB_PASS -e "SELECT 'Connection successful' as status, NOW() as timestamp;" 2>&1`,
+          `#!/bin/bash
+set -e
+SECRET=$(aws secretsmanager get-secret-value --secret-id ${databaseSecretArn} --region ${region} --query SecretString --output text)
+DB_USER=$(echo "$SECRET" | jq -r .username)
+DB_PASS=$(echo "$SECRET" | jq -r .password)
+mysql -h ${rdsEndpoint} -P ${rdsPort} -u "$DB_USER" -p"$DB_PASS" -e "SELECT 'Connection successful' as status, NOW() as timestamp;"`,
         ],
       },
     });
@@ -516,11 +519,14 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
       DocumentName: 'AWS-RunShellScript',
       Parameters: {
         commands: [
-          `SECRET=$(aws secretsmanager get-secret-value --secret-id ${databaseSecretArn} --region ${region} --query SecretString --output text)`,
-          'DB_USER=$(echo $SECRET | jq -r .username)',
-          'DB_PASS=$(echo $SECRET | jq -r .password)',
-          `USER_DATA_JSON=$(echo '${JSON.stringify(userData)}' | jq -c . | sed "s/'/\\\\'/g")`,
-          `mysql -h ${rdsEndpoint} -P ${rdsPort} -u $DB_USER -p$DB_PASS -e "USE testdb; CREATE TABLE IF NOT EXISTS user_actions (id VARCHAR(255), user_data JSON, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP); INSERT INTO user_actions (id, user_data) VALUES ('${workflowId}', CAST('\$USER_DATA_JSON' AS JSON));" 2>&1`,
+          `#!/bin/bash
+set -e
+SECRET=$(aws secretsmanager get-secret-value --secret-id ${databaseSecretArn} --region ${region} --query SecretString --output text)
+DB_USER=$(echo "$SECRET" | jq -r .username)
+DB_PASS=$(echo "$SECRET" | jq -r .password)
+USER_DATA='${JSON.stringify(userData)}'
+mysql -h ${rdsEndpoint} -P ${rdsPort} -u "$DB_USER" -p"$DB_PASS" -e "USE testdb; CREATE TABLE IF NOT EXISTS user_actions (id VARCHAR(255), user_data TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP); INSERT INTO user_actions (id, user_data) VALUES ('${workflowId}', '$USER_DATA');"
+echo "Insert successful for ${workflowId}"`,
         ],
       },
     });
@@ -576,10 +582,12 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
       DocumentName: 'AWS-RunShellScript',
       Parameters: {
         commands: [
-          `SECRET=$(aws secretsmanager get-secret-value --secret-id ${databaseSecretArn} --region ${region} --query SecretString --output text)`,
-          'DB_USER=$(echo $SECRET | jq -r .username)',
-          'DB_PASS=$(echo $SECRET | jq -r .password)',
-          `mysql -h ${rdsEndpoint} -P ${rdsPort} -u $DB_USER -p$DB_PASS -e "USE testdb; SELECT * FROM user_actions WHERE id='${workflowId}';" 2>&1`,
+          `#!/bin/bash
+set -e
+SECRET=$(aws secretsmanager get-secret-value --secret-id ${databaseSecretArn} --region ${region} --query SecretString --output text)
+DB_USER=$(echo "$SECRET" | jq -r .username)
+DB_PASS=$(echo "$SECRET" | jq -r .password)
+mysql -h ${rdsEndpoint} -P ${rdsPort} -u "$DB_USER" -p"$DB_PASS" -e "USE testdb; SELECT * FROM user_actions WHERE id='${workflowId}';"`,
         ],
       },
     });
@@ -595,10 +603,11 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
       DocumentName: 'AWS-RunShellScript',
       Parameters: {
         commands: [
-          `SECRET=$(aws secretsmanager get-secret-value --secret-id ${databaseSecretArn} --region ${region} --query SecretString --output text)`,
-          'DB_USER=$(echo $SECRET | jq -r .username)',
-          'DB_PASS=$(echo $SECRET | jq -r .password)',
-          `mysql -h ${rdsEndpoint} -P ${rdsPort} -u $DB_USER -p$DB_PASS -e "USE testdb; DELETE FROM user_actions WHERE id='${workflowId}';" 2>&1`,
+          `#!/bin/bash
+SECRET=$(aws secretsmanager get-secret-value --secret-id ${databaseSecretArn} --region ${region} --query SecretString --output text)
+DB_USER=$(echo "$SECRET" | jq -r .username)
+DB_PASS=$(echo "$SECRET" | jq -r .password)
+mysql -h ${rdsEndpoint} -P ${rdsPort} -u "$DB_USER" -p"$DB_PASS" -e "USE testdb; DELETE FROM user_actions WHERE id='${workflowId}';"`,
         ],
       },
     });
