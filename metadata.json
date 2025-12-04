@@ -1,0 +1,22 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-12-04T10:28:00Z",
+  "aws_services": [
+    "CodeCommit",
+    "S3",
+    "CodeBuild",
+    "CodePipeline",
+    "IAM",
+    "EventBridge"
+  ],
+  "po_id": "c7z6c7c5",
+  "training_quality": 10
+}
