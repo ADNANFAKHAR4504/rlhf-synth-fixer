@@ -13,11 +13,12 @@ variable "project_name" {
 variable "environment_suffix" {
   description = "Unique suffix for resource names to prevent conflicts"
   type        = string
-  default     = "dev-003"
+  default     = "dev-004"
 }
 
 variable "db_password" {
   description = "Master password for RDS database"
   type        = string
   sensitive   = true
+  default     = "DefaultP@ssw0rd123!"
 }
