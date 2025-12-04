@@ -219,7 +219,7 @@ describe('Infrastructure Code Structure Tests', () => {
       const metadata = JSON.parse(content);
       expect(metadata.po_id).toBeDefined();
       expect(metadata.platform).toBe('pulumi');
-      expect(metadata.language).toBe('typescript');
+      expect(metadata.language).toBe('ts');
     });
 
     it('should have valid lambda package.json', () => {
