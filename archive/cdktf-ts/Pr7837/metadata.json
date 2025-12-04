@@ -1,0 +1,33 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-12-03T16:44:08+00:00",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "po_id": "49924683",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "ECR",
+    "ELB",
+    "CloudWatch",
+    "IAM",
+    "Secrets Manager",
+    "CloudMap",
+    "Application Auto Scaling"
+  ],
+  "training_quality": 8,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

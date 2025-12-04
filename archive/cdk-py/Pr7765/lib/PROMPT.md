@@ -1,0 +1,9 @@
+We need a CDK Python program to deploy a fully isolated and security-hardened data processing pipeline with strict zero-trust controls. Everything must run in us-east-1 and follow defense-in-depth security standards required by a financial services environment.
+
+The stack must include a customer-managed KMS key with rotation enabled (alias: data-pipeline-key), three S3 buckets (raw-data, processed-data, audit-logs) all encrypted with SSE-KMS, versioning enabled, and bucket policies that deny unencrypted uploads. The environment must run inside a VPC with three private subnets across different AZs, no internet gateway, and no NAT gateway. Create VPC endpoints for S3, DynamoDB, and Secrets Manager so all traffic stays inside AWS’s private network.
+
+A data-processing Lambda function must run inside the VPC with 512MB memory and a 5-minute timeout. Its IAM role must explicitly deny internet access and only allow minimal S3/DynamoDB permissions. The stack also needs an API Gateway REST API protected with mutual TLS authentication and integrated with the Lambda function.
+
+CloudWatch log groups for Lambda and API Gateway must use KMS encryption and enforce 90-day retention. A DynamoDB table must store processing metadata with point-in-time recovery enabled. Secrets Manager must store API certificates and automatically rotate them.
+
+The final stack should output the KMS key ARN, API Gateway endpoint URL, and all VPC endpoint IDs. This CDK program should produce a locked-down, encrypted, private data-processing pipeline with end-to-end isolation, strict least-privilege access controls, and complete audit coverage.

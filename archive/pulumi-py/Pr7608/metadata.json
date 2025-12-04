@@ -1,0 +1,28 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "z9h0j5r1",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "team": "5",
+  "startedAt": "2025-12-01T20:53:00.000Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "dockerS3Location": "",
+  "aws_services": [
+    "kinesis",
+    "elasticache",
+    "rds",
+    "secretsmanager",
+    "ec2",
+    "cloudwatch"
+  ]
+}
