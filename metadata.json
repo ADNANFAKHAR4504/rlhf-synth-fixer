@@ -10,6 +10,10 @@
   "model_generated": true,
   "task_type": "synthesis",
   "created_date": "2025-12-04",
+  "team": "synth",
+  "startedAt": "2025-12-04T09:30:00Z",
+  "turn_type": "single",
+  "subject_labels": ["Infrastructure Analysis/Monitoring", "Compliance"],
   "resource_count": 13,
   "services_used": [
     "lambda",
