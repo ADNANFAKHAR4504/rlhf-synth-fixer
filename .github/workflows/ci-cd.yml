@@ -781,21 +781,28 @@ jobs:
             echo "comment_posted=false" >> $GITHUB_OUTPUT
             
             # Post a fallback notification comment
-            gh pr comment ${{ github.event.pull_request.number }} --body "## ⚠️ Claude Review Job Completed With Issues
+            COMMENT_BODY=$(cat << 'COMMENT_EOF'
+          ## ⚠️ Claude Review Job Completed With Issues
 
-**Status**: The Claude review job ran but failed to post the review results.
+          Status: The Claude review job ran but failed to post the review results.
 
-**Possible Causes**:
-- Known issue with \`anthropics/claude-code-action@beta\` ([#548](https://github.com/anthropics/claude-code-action/issues/548), [#557](https://github.com/anthropics/claude-code-action/issues/557), [#567](https://github.com/anthropics/claude-code-action/issues/567))
-- GitHub API rate limiting
-- Network connectivity issues
+          Possible Causes:
+          - Known issue with anthropics/claude-code-action@beta (#548, #557, #567)
+          - GitHub API rate limiting
+          - Network connectivity issues
 
-**Action Required**: Please check the [GitHub Actions logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for the Claude review step to see the actual review output.
+          Action Required: Please check the GitHub Actions logs for the Claude review step.
 
-**Next Steps**: The workflow will continue with quality gate validation using metadata.json as fallback.
+          Next Steps: The workflow will continue with quality gate validation using metadata.json as fallback.
+          COMMENT_EOF
+          )
+            COMMENT_BODY="${COMMENT_BODY}
 
----
-🤖 Posted by CI/CD Pipeline | $(date -u +%Y-%m-%dT%H:%M:%SZ)" || echo "⚠️ Failed to post fallback comment (non-blocking)"
+          Logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          ---
+          Posted by CI/CD Pipeline | $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            gh pr comment ${{ github.event.pull_request.number }} --body "$COMMENT_BODY" || echo "⚠️ Failed to post fallback comment (non-blocking)"
           fi
 
       - name: Check for Critical Issues in Claude Review
