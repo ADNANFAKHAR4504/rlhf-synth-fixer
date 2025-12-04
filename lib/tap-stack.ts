@@ -385,6 +385,7 @@ export class TapStack extends cdk.Stack {
     // Bastion EC2 Instance with Elastic IP
     // ====================================================================================
 
+    // Use Amazon Linux 2023 AMI (latest, automatically looked up)
     const bastionInstance = new ec2.Instance(this, 'BastionInstance', {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
@@ -392,9 +393,8 @@ export class TapStack extends cdk.Stack {
         ec2.InstanceClass.T3,
         ec2.InstanceSize.MICRO
       ),
-      machineImage: ec2.MachineImage.genericLinux({
-        [config.region]: config.ec2AmiId,
-      }),
+      // Use SSM parameter to always get latest Amazon Linux 2023 AMI
+      machineImage: ec2.MachineImage.latestAmazonLinux2023(),
       securityGroup: ec2SecurityGroup,
       role: ec2Role,
       blockDevices: [
@@ -408,17 +408,11 @@ export class TapStack extends cdk.Stack {
         },
       ],
       requireImdsv2: true,
-      // Add simple user data to ensure instance stabilizes
-      userData: ec2.UserData.forLinux({
-        shebang: '#!/bin/bash',
-      }),
-      userDataCausesReplacement: false, // Prevent replacement on user data changes
     });
 
-    // Elastic IP for Bastion
+    // Create Elastic IP separately
     const elasticIp = new ec2.CfnEIP(this, 'ElasticIP', {
       domain: 'vpc',
-      instanceId: bastionInstance.instanceId,
       tags: [
         {
           key: 'Name',
@@ -426,6 +420,16 @@ export class TapStack extends cdk.Stack {
         },
       ],
     });
+
+    // Associate EIP with bastion using separate association resource
+    // This prevents race conditions and stabilization issues
+    const eipAssociation = new ec2.CfnEIPAssociation(this, 'EIPAssociation', {
+      allocationId: elasticIp.attrAllocationId,
+      instanceId: bastionInstance.instanceId,
+    });
+
+    // Ensure proper dependency order
+    eipAssociation.addDependency(elasticIp);
 
     // Tag bastion
     cdk.Tags.of(bastionInstance).add('iac-rlhf-amazon', 'true');
