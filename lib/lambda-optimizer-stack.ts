@@ -172,8 +172,11 @@ export class LambdaOptimizerStack extends pulumi.ComponentResource {
         // Timeout Optimization (Requirement 3): 30 seconds instead of 5 minutes
         timeout: 30,
 
-        // Reserved Concurrency (Requirement 1): Removed due to account concurrency limits
+        // Reserved Concurrency (Requirement 1): Removed due to AWS account concurrency limits
         // AWS requires minimum 100 unreserved concurrent executions per account
+        // In accounts with existing Lambda functions, setting reserved concurrency can cause:
+        // "Cannot set reserved concurrency below account unreserved concurrency limit of 100"
+        // Functions now use shared unreserved concurrency pool for cost control
         // reservedConcurrentExecutions: 10,
 
         // X-Ray Tracing (Requirement 4): Enable active tracing
