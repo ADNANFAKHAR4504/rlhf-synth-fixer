@@ -1,21 +1,38 @@
 {
-  "task_id": "a0v1c9x0",
-  "platform": "cdktf",
-  "language": "typescript",
+  "task_id": "i5x0y2m4",
+  "platform": "pulumi",
+  "language": "go",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "synth",
-  "team": "synth",
+  "po_id": "CI/CD Pipeline",
+  "team": "IaC Test Automation",
   "subtask": "CI/CD Pipeline Integration",
   "subject_labels": [
-    "CI/CD Pipeline",
-    "aws",
-    "infrastructure",
-    "education",
-    "compliance",
-    "cicd"
+    "AWS",
+    "Pulumi",
+    "Go",
+    "CodePipeline",
+    "CodeBuild",
+    "EventBridge",
+    "SNS",
+    "SSM",
+    "KMS",
+    "S3",
+    "IAM",
+    "Cross-Account",
+    "Multi-Stage-Pipeline"
   ],
-  "startedAt": "2025-12-04T16:37:55.102167Z",
-  "aws_services": [],
-  "training_quality": 0
+  "startedAt": "2025-12-05T00:00:00Z",
+  "aws_services": [
+    "CodePipeline",
+    "CodeBuild",
+    "S3",
+    "KMS",
+    "SSM Parameter Store",
+    "EventBridge",
+    "SNS",
+    "IAM",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 10
 }

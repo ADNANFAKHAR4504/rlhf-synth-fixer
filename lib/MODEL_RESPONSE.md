@@ -1,652 +1,1230 @@
-# Educational Content Delivery Platform - CDKTF Implementation
+# Pulumi Go CI/CD Pipeline Implementation
 
-Complete CDKTF TypeScript infrastructure for educational content delivery with CI/CD integration.
+This implementation creates a comprehensive CI/CD pipeline using AWS native services (CodePipeline, CodeBuild, CodeStar, EventBridge, SNS) with Pulumi state management in S3, cross-account IAM roles, and automated infrastructure deployments.
 
-## File: lib/education-stack.ts
+## File: lib/tap_stack.go
 
-```typescript
-import { TerraformStack } from 'cdktf';
-import { Construct } from 'constructs';
-import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
-import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
-import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
-import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
-import { CloudfrontDistribution } from '@cdktf/provider-aws/lib/cloudfront-distribution';
-import { CloudfrontOriginAccessIdentity } from '@cdktf/provider-aws/lib/cloudfront-origin-access-identity';
-import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
-import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';
-import { CognitoUserPool } from '@cdktf/provider-aws/lib/cognito-user-pool';
-import { CognitoUserPoolClient } from '@cdktf/provider-aws/lib/cognito-user-pool-client';
-import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
-import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
-import { ApiGatewayRestApi } from '@cdktf/provider-aws/lib/api-gateway-rest-api';
-import { ApiGatewayResource } from '@cdktf/provider-aws/lib/api-gateway-resource';
-import { ApiGatewayMethod } from '@cdktf/provider-aws/lib/api-gateway-method';
-import { ApiGatewayIntegration } from '@cdktf/provider-aws/lib/api-gateway-integration';
-import { ApiGatewayDeployment } from '@cdktf/provider-aws/lib/api-gateway-deployment';
-import { ApiGatewayStage } from '@cdktf/provider-aws/lib/api-gateway-stage';
-import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
-import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
-import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
-import { SnsTopic } from '@cdktf/provider-aws/lib/sns-topic';
+```go
+package main
 
-interface EducationStackProps {
-  environmentSuffix: string;
-  region: string;
+import (
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cloudwatch"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/codebuild"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/codepipeline"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/codestarconnections"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/events"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/iam"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/kms"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/s3"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/sns"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ssm"
+	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+)
+
+// getEnv gets an environment variable with a fallback value
+func getEnv(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
 }
 
-export class EducationStack extends TerraformStack {
-  constructor(scope: Construct, id: string, props: EducationStackProps) {
-    super(scope, id);
+func main() {
+	pulumi.Run(func(ctx *pulumi.Context) error {
+		// Get environment variables
+		environmentSuffix := getEnv("ENVIRONMENT_SUFFIX", "dev")
+		repositoryName := getEnv("REPOSITORY", "unknown")
+		commitAuthor := getEnv("COMMIT_AUTHOR", "unknown")
+		prNumber := getEnv("PR_NUMBER", "unknown")
+		team := getEnv("TEAM", "unknown")
+		createdAt := time.Now().UTC().Format(time.RFC3339)
+		awsRegion := getEnv("AWS_REGION", "us-east-1")
 
-    const { environmentSuffix, region } = props;
+		// Dev and Prod account IDs
+		devAccountID := "123456789012"
+		prodAccountID := "987654321098"
 
-    // Content Storage S3 Bucket
-    const contentBucket = new S3Bucket(this, 'content-bucket', {
-      bucket: `education-content-${environmentSuffix}`,
-      tags: {
-        Name: `education-content-${environmentSuffix}`,
-        Environment: environmentSuffix,
-      },
-    });
+		// Create default tags
+		defaultTags := pulumi.StringMap{
+			"Environment": pulumi.String(environmentSuffix),
+			"Repository":  pulumi.String(repositoryName),
+			"Author":      pulumi.String(commitAuthor),
+			"PRNumber":    pulumi.String(prNumber),
+			"Team":        pulumi.String(team),
+			"CreatedAt":   pulumi.String(createdAt),
+		}
 
-    new S3BucketPublicAccessBlock(this, 'content-bucket-public-access-block', {
-      bucket: contentBucket.id,
-      blockPublicAcls: true,
-      blockPublicPolicy: true,
-      ignorePublicAcls: true,
-      restrictPublicBuckets: true,
-    });
+		// Configure AWS provider with default tags
+		provider, err := aws.NewProvider(ctx, "aws", &aws.ProviderArgs{
+			Region: pulumi.String(awsRegion),
+			DefaultTags: &aws.ProviderDefaultTagsArgs{
+				Tags: defaultTags,
+			},
+		})
+		if err != nil {
+			return err
+		}
 
-    new S3BucketServerSideEncryptionConfigurationA(this, 'content-bucket-encryption', {
-      bucket: contentBucket.id,
-      rule: [
-        {
-          applyServerSideEncryptionByDefault: {
-            sseAlgorithm: 'AES256',
-          },
-        },
+		// 1. Create KMS key for encryption
+		kmsKey, err := kms.NewKey(ctx, fmt.Sprintf("pulumi-state-key-%s", environmentSuffix), &kms.KeyArgs{
+			Description:          pulumi.String("KMS key for Pulumi state encryption"),
+			EnableKeyRotation:    pulumi.Bool(true),
+			DeletionWindowInDays: pulumi.Int(7),
+			Tags:                 defaultTags,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		_, err = kms.NewAlias(ctx, fmt.Sprintf("pulumi-state-key-alias-%s", environmentSuffix), &kms.AliasArgs{
+			Name:        pulumi.String(fmt.Sprintf("alias/pulumi-state-%s", environmentSuffix)),
+			TargetKeyId: kmsKey.KeyId,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// 2. Create S3 bucket for Pulumi state
+		stateBucket, err := s3.NewBucketV2(ctx, fmt.Sprintf("pulumi-state-bucket-%s", environmentSuffix), &s3.BucketV2Args{
+			Bucket: pulumi.String(fmt.Sprintf("pulumi-state-bucket-%s", environmentSuffix)),
+			Tags:   defaultTags,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// Enable versioning on state bucket
+		_, err = s3.NewBucketVersioningV2(ctx, fmt.Sprintf("pulumi-state-bucket-versioning-%s", environmentSuffix), &s3.BucketVersioningV2Args{
+			Bucket: stateBucket.ID(),
+			VersioningConfiguration: &s3.BucketVersioningV2VersioningConfigurationArgs{
+				Status: pulumi.String("Enabled"),
+			},
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// Enable server-side encryption on state bucket
+		_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, fmt.Sprintf("pulumi-state-bucket-encryption-%s", environmentSuffix), &s3.BucketServerSideEncryptionConfigurationV2Args{
+			Bucket: stateBucket.ID(),
+			Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
+				&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
+					ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
+						SseAlgorithm:   pulumi.String("aws:kms"),
+						KmsMasterKeyId: kmsKey.Arn,
+					},
+				},
+			},
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// Block public access to state bucket
+		_, err = s3.NewBucketPublicAccessBlock(ctx, fmt.Sprintf("pulumi-state-bucket-public-access-block-%s", environmentSuffix), &s3.BucketPublicAccessBlockArgs{
+			Bucket:                stateBucket.ID(),
+			BlockPublicAcls:       pulumi.Bool(true),
+			BlockPublicPolicy:     pulumi.Bool(true),
+			IgnorePublicAcls:      pulumi.Bool(true),
+			RestrictPublicBuckets: pulumi.Bool(true),
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// 3. Create S3 bucket for pipeline artifacts
+		artifactBucket, err := s3.NewBucketV2(ctx, fmt.Sprintf("pipeline-artifacts-%s", environmentSuffix), &s3.BucketV2Args{
+			Bucket: pulumi.String(fmt.Sprintf("pipeline-artifacts-%s", environmentSuffix)),
+			Tags:   defaultTags,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// Enable versioning on artifact bucket
+		_, err = s3.NewBucketVersioningV2(ctx, fmt.Sprintf("pipeline-artifacts-versioning-%s", environmentSuffix), &s3.BucketVersioningV2Args{
+			Bucket: artifactBucket.ID(),
+			VersioningConfiguration: &s3.BucketVersioningV2VersioningConfigurationArgs{
+				Status: pulumi.String("Enabled"),
+			},
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// Enable encryption on artifact bucket
+		_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, fmt.Sprintf("pipeline-artifacts-encryption-%s", environmentSuffix), &s3.BucketServerSideEncryptionConfigurationV2Args{
+			Bucket: artifactBucket.ID(),
+			Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
+				&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
+					ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
+						SseAlgorithm:   pulumi.String("aws:kms"),
+						KmsMasterKeyId: kmsKey.Arn,
+					},
+				},
+			},
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// Lifecycle policy for artifact bucket (30 days)
+		_, err = s3.NewBucketLifecycleConfigurationV2(ctx, fmt.Sprintf("pipeline-artifacts-lifecycle-%s", environmentSuffix), &s3.BucketLifecycleConfigurationV2Args{
+			Bucket: artifactBucket.ID(),
+			Rules: s3.BucketLifecycleConfigurationV2RuleArray{
+				&s3.BucketLifecycleConfigurationV2RuleArgs{
+					Id:     pulumi.String("expire-after-30-days"),
+					Status: pulumi.String("Enabled"),
+					Expiration: &s3.BucketLifecycleConfigurationV2RuleExpirationArgs{
+						Days: pulumi.Int(30),
+					},
+				},
+			},
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// Block public access to artifact bucket
+		_, err = s3.NewBucketPublicAccessBlock(ctx, fmt.Sprintf("pipeline-artifacts-public-access-block-%s", environmentSuffix), &s3.BucketPublicAccessBlockArgs{
+			Bucket:                artifactBucket.ID(),
+			BlockPublicAcls:       pulumi.Bool(true),
+			BlockPublicPolicy:     pulumi.Bool(true),
+			IgnorePublicAcls:      pulumi.Bool(true),
+			RestrictPublicBuckets: pulumi.Bool(true),
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// 4. Create SNS topic for pipeline notifications
+		snsTopic, err := sns.NewTopic(ctx, fmt.Sprintf("pipeline-notifications-%s", environmentSuffix), &sns.TopicArgs{
+			Name: pulumi.String(fmt.Sprintf("pipeline-notifications-%s", environmentSuffix)),
+			Tags: defaultTags,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// Create SNS topic subscription (email)
+		_, err = sns.NewTopicSubscription(ctx, fmt.Sprintf("pipeline-notifications-subscription-%s", environmentSuffix), &sns.TopicSubscriptionArgs{
+			Topic:    snsTopic.Arn,
+			Protocol: pulumi.String("email"),
+			Endpoint: pulumi.String("devops@example.com"),
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// 5. Create SSM parameters for Pulumi access token
+		_, err = ssm.NewParameter(ctx, fmt.Sprintf("pulumi-access-token-%s", environmentSuffix), &ssm.ParameterArgs{
+			Name:  pulumi.String(fmt.Sprintf("/pulumi/access-token-%s", environmentSuffix)),
+			Type:  pulumi.String("SecureString"),
+			Value: pulumi.String("PLACEHOLDER_TOKEN"),
+			Description: pulumi.String("Pulumi access token for CI/CD pipeline"),
+			KeyId: kmsKey.KeyId,
+			Tags:  defaultTags,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// Create SSM parameter for stack configuration
+		_, err = ssm.NewParameter(ctx, fmt.Sprintf("pulumi-stack-config-%s", environmentSuffix), &ssm.ParameterArgs{
+			Name:  pulumi.String(fmt.Sprintf("/pulumi/stack-config-%s", environmentSuffix)),
+			Type:  pulumi.String("String"),
+			Value: pulumi.String("{}"),
+			Description: pulumi.String("Pulumi stack configuration"),
+			Tags:  defaultTags,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// 6. Create IAM role for CodeBuild
+		codeBuildAssumeRolePolicy, err := iam.GetPolicyDocument(ctx, &iam.GetPolicyDocumentArgs{
+			Statements: []iam.GetPolicyDocumentStatement{
+				{
+					Effect: pulumi.StringRef("Allow"),
+					Principals: []iam.GetPolicyDocumentStatementPrincipal{
+						{
+							Type:        "Service",
+							Identifiers: []string{"codebuild.amazonaws.com"},
+						},
+					},
+					Actions: []string{"sts:AssumeRole"},
+				},
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		codeBuildRole, err := iam.NewRole(ctx, fmt.Sprintf("codebuild-role-%s", environmentSuffix), &iam.RoleArgs{
+			Name:             pulumi.String(fmt.Sprintf("codebuild-role-%s", environmentSuffix)),
+			AssumeRolePolicy: pulumi.String(codeBuildAssumeRolePolicy.Json),
+			Tags:             defaultTags,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// Create IAM policy for CodeBuild
+		codeBuildPolicyDoc := pulumi.All(stateBucket.Arn, artifactBucket.Arn, kmsKey.Arn).ApplyT(func(args []interface{}) string {
+			stateBucketArn := args[0].(string)
+			artifactBucketArn := args[1].(string)
+			kmsKeyArn := args[2].(string)
+			return fmt.Sprintf(`{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
       ],
-    });
-
-    new S3BucketVersioningA(this, 'content-bucket-versioning', {
-      bucket: contentBucket.id,
-      versioningConfiguration: {
-        status: 'Enabled',
-      },
-    });
-
-    // CloudFront Origin Access Identity
-    const oai = new CloudfrontOriginAccessIdentity(this, 'cloudfront-oai', {
-      comment: `OAI for education content ${environmentSuffix}`,
-    });
-
-    // S3 Bucket Policy for CloudFront
-    new S3BucketPolicy(this, 'content-bucket-policy', {
-      bucket: contentBucket.id,
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Sid: 'AllowCloudFrontOAI',
-            Effect: 'Allow',
-            Principal: {
-              AWS: oai.iamArn,
-            },
-            Action: 's3:GetObject',
-            Resource: `${contentBucket.arn}/*`,
-          },
-        ],
-      }),
-    });
-
-    // CloudFront Distribution
-    new CloudfrontDistribution(this, 'content-distribution', {
-      enabled: true,
-      comment: `Education content distribution ${environmentSuffix}`,
-      defaultRootObject: 'index.html',
-      origin: [
-        {
-          domainName: contentBucket.bucketRegionalDomainName,
-          originId: `S3-${contentBucket.id}`,
-          s3OriginConfig: {
-            originAccessIdentity: oai.cloudfrontAccessIdentityPath,
-          },
-        },
+      "Resource": "arn:aws:logs:*:*:*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject"
       ],
-      defaultCacheBehavior: {
-        allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
-        cachedMethods: ['GET', 'HEAD'],
-        targetOriginId: `S3-${contentBucket.id}`,
-        viewerProtocolPolicy: 'redirect-to-https',
-        forwardedValues: {
-          queryString: false,
-          cookies: {
-            forward: 'none',
-          },
-        },
-        minTtl: 0,
-        defaultTtl: 3600,
-        maxTtl: 86400,
-        compress: true,
-      },
-      restrictions: {
-        geoRestriction: {
-          restrictionType: 'none',
-        },
-      },
-      viewerCertificate: {
-        cloudfrontDefaultCertificate: true,
-      },
-      tags: {
-        Name: `education-distribution-${environmentSuffix}`,
-        Environment: environmentSuffix,
-      },
-    });
-
-    // DynamoDB Table for User Profiles
-    const userProfilesTable = new DynamodbTable(this, 'user-profiles-table', {
-      name: `education-user-profiles-${environmentSuffix}`,
-      billingMode: 'PAY_PER_REQUEST',
-      hashKey: 'userId',
-      attribute: [
-        {
-          name: 'userId',
-          type: 'S',
-        },
-        {
-          name: 'email',
-          type: 'S',
-        },
+      "Resource": [
+        "%s/*",
+        "%s/*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket"
       ],
-      globalSecondaryIndex: [
-        {
-          name: 'email-index',
-          hashKey: 'email',
-          projectionType: 'ALL',
-        },
+      "Resource": [
+        "%s",
+        "%s"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "kms:Decrypt",
+        "kms:Encrypt",
+        "kms:GenerateDataKey"
       ],
-      pointInTimeRecovery: {
-        enabled: true,
-      },
-      serverSideEncryption: {
-        enabled: true,
-      },
-      tags: {
-        Name: `education-user-profiles-${environmentSuffix}`,
-        Environment: environmentSuffix,
-      },
-    });
-
-    // DynamoDB Table for Course Progress
-    const courseProgressTable = new DynamodbTable(this, 'course-progress-table', {
-      name: `education-course-progress-${environmentSuffix}`,
-      billingMode: 'PAY_PER_REQUEST',
-      hashKey: 'userId',
-      rangeKey: 'courseId',
-      attribute: [
-        {
-          name: 'userId',
-          type: 'S',
-        },
-        {
-          name: 'courseId',
-          type: 'S',
-        },
-        {
-          name: 'completionPercentage',
-          type: 'N',
-        },
+      "Resource": "%s"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ssm:GetParameter",
+        "ssm:GetParameters"
       ],
-      globalSecondaryIndex: [
-        {
-          name: 'course-completion-index',
-          hashKey: 'courseId',
-          rangeKey: 'completionPercentage',
-          projectionType: 'ALL',
-        },
+      "Resource": "arn:aws:ssm:*:*:parameter/pulumi/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "sts:AssumeRole",
+      "Resource": [
+        "arn:aws:iam::%s:role/pulumi-deploy-role",
+        "arn:aws:iam::%s:role/pulumi-deploy-role"
+      ]
+    }
+  ]
+}`, stateBucketArn, artifactBucketArn, stateBucketArn, artifactBucketArn, kmsKeyArn, devAccountID, prodAccountID)
+		}).(pulumi.StringOutput)
+
+		codeBuildPolicy, err := iam.NewPolicy(ctx, fmt.Sprintf("codebuild-policy-%s", environmentSuffix), &iam.PolicyArgs{
+			Name:   pulumi.String(fmt.Sprintf("codebuild-policy-%s", environmentSuffix)),
+			Policy: codeBuildPolicyDoc,
+			Tags:   defaultTags,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		_, err = iam.NewRolePolicyAttachment(ctx, fmt.Sprintf("codebuild-policy-attachment-%s", environmentSuffix), &iam.RolePolicyAttachmentArgs{
+			Role:      codeBuildRole.Name,
+			PolicyArn: codeBuildPolicy.Arn,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// 7. Create CloudWatch log groups for CodeBuild projects
+		previewLogGroup, err := cloudwatch.NewLogGroup(ctx, fmt.Sprintf("codebuild-preview-logs-%s", environmentSuffix), &cloudwatch.LogGroupArgs{
+			Name:            pulumi.String(fmt.Sprintf("/aws/codebuild/pulumi-preview-%s", environmentSuffix)),
+			RetentionInDays: pulumi.Int(7),
+			Tags:            defaultTags,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		deployDevLogGroup, err := cloudwatch.NewLogGroup(ctx, fmt.Sprintf("codebuild-deploy-dev-logs-%s", environmentSuffix), &cloudwatch.LogGroupArgs{
+			Name:            pulumi.String(fmt.Sprintf("/aws/codebuild/pulumi-deploy-dev-%s", environmentSuffix)),
+			RetentionInDays: pulumi.Int(7),
+			Tags:            defaultTags,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		deployProdLogGroup, err := cloudwatch.NewLogGroup(ctx, fmt.Sprintf("codebuild-deploy-prod-logs-%s", environmentSuffix), &cloudwatch.LogGroupArgs{
+			Name:            pulumi.String(fmt.Sprintf("/aws/codebuild/pulumi-deploy-prod-%s", environmentSuffix)),
+			RetentionInDays: pulumi.Int(7),
+			Tags:            defaultTags,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		buildLogGroup, err := cloudwatch.NewLogGroup(ctx, fmt.Sprintf("codebuild-build-logs-%s", environmentSuffix), &cloudwatch.LogGroupArgs{
+			Name:            pulumi.String(fmt.Sprintf("/aws/codebuild/app-build-%s", environmentSuffix)),
+			RetentionInDays: pulumi.Int(7),
+			Tags:            defaultTags,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// 8. Create CodeBuild project for Pulumi preview (Test stage)
+		_, err = codebuild.NewProject(ctx, fmt.Sprintf("pulumi-preview-%s", environmentSuffix), &codebuild.ProjectArgs{
+			Name:        pulumi.String(fmt.Sprintf("pulumi-preview-%s", environmentSuffix)),
+			Description: pulumi.String("CodeBuild project for Pulumi preview"),
+			ServiceRole: codeBuildRole.Arn,
+			Artifacts: &codebuild.ProjectArtifactsArgs{
+				Type: pulumi.String("CODEPIPELINE"),
+			},
+			Environment: &codebuild.ProjectEnvironmentArgs{
+				ComputeType:              pulumi.String("BUILD_GENERAL1_MEDIUM"),
+				Image:                    pulumi.String("aws/codebuild/standard:7.0"),
+				Type:                     pulumi.String("LINUX_CONTAINER"),
+				ImagePullCredentialsType: pulumi.String("CODEBUILD"),
+				EnvironmentVariables: codebuild.ProjectEnvironmentEnvironmentVariableArray{
+					&codebuild.ProjectEnvironmentEnvironmentVariableArgs{
+						Name:  pulumi.String("PULUMI_ACCESS_TOKEN"),
+						Type:  pulumi.String("PARAMETER_STORE"),
+						Value: pulumi.String(fmt.Sprintf("/pulumi/access-token-%s", environmentSuffix)),
+					},
+					&codebuild.ProjectEnvironmentEnvironmentVariableArgs{
+						Name:  pulumi.String("PULUMI_BACKEND_URL"),
+						Value: stateBucket.Bucket.ApplyT(func(bucket string) string { return fmt.Sprintf("s3://%s", bucket) }).(pulumi.StringOutput),
+					},
+				},
+			},
+			Source: &codebuild.ProjectSourceArgs{
+				Type: pulumi.String("CODEPIPELINE"),
+				Buildspec: pulumi.String(`version: 0.2
+phases:
+  install:
+    commands:
+      - curl -fsSL https://get.pulumi.com | sh
+      - export PATH=$PATH:$HOME/.pulumi/bin
+      - pulumi version
+  build:
+    commands:
+      - cd infrastructure
+      - pulumi login $PULUMI_BACKEND_URL
+      - pulumi stack select dev --create
+      - pulumi preview --non-interactive
+artifacts:
+  files:
+    - '**/*'
+`),
+			},
+			LogsConfig: &codebuild.ProjectLogsConfigArgs{
+				CloudwatchLogs: &codebuild.ProjectLogsConfigCloudwatchLogsArgs{
+					Status:    pulumi.String("ENABLED"),
+					GroupName: previewLogGroup.Name,
+				},
+			},
+			Tags: defaultTags,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// 9. Create CodeBuild project for application build (Build stage)
+		_, err = codebuild.NewProject(ctx, fmt.Sprintf("app-build-%s", environmentSuffix), &codebuild.ProjectArgs{
+			Name:        pulumi.String(fmt.Sprintf("app-build-%s", environmentSuffix)),
+			Description: pulumi.String("CodeBuild project for application build"),
+			ServiceRole: codeBuildRole.Arn,
+			Artifacts: &codebuild.ProjectArtifactsArgs{
+				Type: pulumi.String("CODEPIPELINE"),
+			},
+			Environment: &codebuild.ProjectEnvironmentArgs{
+				ComputeType:              pulumi.String("BUILD_GENERAL1_MEDIUM"),
+				Image:                    pulumi.String("aws/codebuild/standard:7.0"),
+				Type:                     pulumi.String("LINUX_CONTAINER"),
+				ImagePullCredentialsType: pulumi.String("CODEBUILD"),
+			},
+			Source: &codebuild.ProjectSourceArgs{
+				Type: pulumi.String("CODEPIPELINE"),
+				Buildspec: pulumi.String(`version: 0.2
+phases:
+  install:
+    commands:
+      - echo Installing dependencies...
+  build:
+    commands:
+      - echo Building application...
+      - echo Build completed
+artifacts:
+  files:
+    - '**/*'
+`),
+			},
+			LogsConfig: &codebuild.ProjectLogsConfigArgs{
+				CloudwatchLogs: &codebuild.ProjectLogsConfigCloudwatchLogsArgs{
+					Status:    pulumi.String("ENABLED"),
+					GroupName: buildLogGroup.Name,
+				},
+			},
+			Tags: defaultTags,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// 10. Create CodeBuild project for Pulumi deploy to Dev
+		_, err = codebuild.NewProject(ctx, fmt.Sprintf("pulumi-deploy-dev-%s", environmentSuffix), &codebuild.ProjectArgs{
+			Name:        pulumi.String(fmt.Sprintf("pulumi-deploy-dev-%s", environmentSuffix)),
+			Description: pulumi.String("CodeBuild project for Pulumi deployment to Dev"),
+			ServiceRole: codeBuildRole.Arn,
+			Artifacts: &codebuild.ProjectArtifactsArgs{
+				Type: pulumi.String("CODEPIPELINE"),
+			},
+			Environment: &codebuild.ProjectEnvironmentArgs{
+				ComputeType:              pulumi.String("BUILD_GENERAL1_MEDIUM"),
+				Image:                    pulumi.String("aws/codebuild/standard:7.0"),
+				Type:                     pulumi.String("LINUX_CONTAINER"),
+				ImagePullCredentialsType: pulumi.String("CODEBUILD"),
+				EnvironmentVariables: codebuild.ProjectEnvironmentEnvironmentVariableArray{
+					&codebuild.ProjectEnvironmentEnvironmentVariableArgs{
+						Name:  pulumi.String("PULUMI_ACCESS_TOKEN"),
+						Type:  pulumi.String("PARAMETER_STORE"),
+						Value: pulumi.String(fmt.Sprintf("/pulumi/access-token-%s", environmentSuffix)),
+					},
+					&codebuild.ProjectEnvironmentEnvironmentVariableArgs{
+						Name:  pulumi.String("PULUMI_BACKEND_URL"),
+						Value: stateBucket.Bucket.ApplyT(func(bucket string) string { return fmt.Sprintf("s3://%s", bucket) }).(pulumi.StringOutput),
+					},
+					&codebuild.ProjectEnvironmentEnvironmentVariableArgs{
+						Name:  pulumi.String("TARGET_ACCOUNT"),
+						Value: pulumi.String(devAccountID),
+					},
+				},
+			},
+			Source: &codebuild.ProjectSourceArgs{
+				Type: pulumi.String("CODEPIPELINE"),
+				Buildspec: pulumi.String(`version: 0.2
+phases:
+  install:
+    commands:
+      - curl -fsSL https://get.pulumi.com | sh
+      - export PATH=$PATH:$HOME/.pulumi/bin
+      - pulumi version
+  build:
+    commands:
+      - cd infrastructure
+      - pulumi login $PULUMI_BACKEND_URL
+      - pulumi stack select dev --create
+      - pulumi up --yes --non-interactive
+artifacts:
+  files:
+    - '**/*'
+`),
+			},
+			LogsConfig: &codebuild.ProjectLogsConfigArgs{
+				CloudwatchLogs: &codebuild.ProjectLogsConfigCloudwatchLogsArgs{
+					Status:    pulumi.String("ENABLED"),
+					GroupName: deployDevLogGroup.Name,
+				},
+			},
+			Tags: defaultTags,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// 11. Create CodeBuild project for Pulumi deploy to Prod
+		_, err = codebuild.NewProject(ctx, fmt.Sprintf("pulumi-deploy-prod-%s", environmentSuffix), &codebuild.ProjectArgs{
+			Name:        pulumi.String(fmt.Sprintf("pulumi-deploy-prod-%s", environmentSuffix)),
+			Description: pulumi.String("CodeBuild project for Pulumi deployment to Prod"),
+			ServiceRole: codeBuildRole.Arn,
+			Artifacts: &codebuild.ProjectArtifactsArgs{
+				Type: pulumi.String("CODEPIPELINE"),
+			},
+			Environment: &codebuild.ProjectEnvironmentArgs{
+				ComputeType:              pulumi.String("BUILD_GENERAL1_MEDIUM"),
+				Image:                    pulumi.String("aws/codebuild/standard:7.0"),
+				Type:                     pulumi.String("LINUX_CONTAINER"),
+				ImagePullCredentialsType: pulumi.String("CODEBUILD"),
+				EnvironmentVariables: codebuild.ProjectEnvironmentEnvironmentVariableArray{
+					&codebuild.ProjectEnvironmentEnvironmentVariableArgs{
+						Name:  pulumi.String("PULUMI_ACCESS_TOKEN"),
+						Type:  pulumi.String("PARAMETER_STORE"),
+						Value: pulumi.String(fmt.Sprintf("/pulumi/access-token-%s", environmentSuffix)),
+					},
+					&codebuild.ProjectEnvironmentEnvironmentVariableArgs{
+						Name:  pulumi.String("PULUMI_BACKEND_URL"),
+						Value: stateBucket.Bucket.ApplyT(func(bucket string) string { return fmt.Sprintf("s3://%s", bucket) }).(pulumi.StringOutput),
+					},
+					&codebuild.ProjectEnvironmentEnvironmentVariableArgs{
+						Name:  pulumi.String("TARGET_ACCOUNT"),
+						Value: pulumi.String(prodAccountID),
+					},
+				},
+			},
+			Source: &codebuild.ProjectSourceArgs{
+				Type: pulumi.String("CODEPIPELINE"),
+				Buildspec: pulumi.String(`version: 0.2
+phases:
+  install:
+    commands:
+      - curl -fsSL https://get.pulumi.com | sh
+      - export PATH=$PATH:$HOME/.pulumi/bin
+      - pulumi version
+  build:
+    commands:
+      - cd infrastructure
+      - pulumi login $PULUMI_BACKEND_URL
+      - pulumi stack select prod --create
+      - pulumi up --yes --non-interactive
+artifacts:
+  files:
+    - '**/*'
+`),
+			},
+			LogsConfig: &codebuild.ProjectLogsConfigArgs{
+				CloudwatchLogs: &codebuild.ProjectLogsConfigCloudwatchLogsArgs{
+					Status:    pulumi.String("ENABLED"),
+					GroupName: deployProdLogGroup.Name,
+				},
+			},
+			Tags: defaultTags,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// 12. Create CodeStar connection for GitHub
+		codestarConnection, err := codestarconnections.NewConnection(ctx, fmt.Sprintf("github-connection-%s", environmentSuffix), &codestarconnections.ConnectionArgs{
+			Name:         pulumi.String(fmt.Sprintf("github-connection-%s", environmentSuffix)),
+			ProviderType: pulumi.String("GitHub"),
+			Tags:         defaultTags,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// 13. Create IAM role for CodePipeline
+		pipelineAssumeRolePolicy, err := iam.GetPolicyDocument(ctx, &iam.GetPolicyDocumentArgs{
+			Statements: []iam.GetPolicyDocumentStatement{
+				{
+					Effect: pulumi.StringRef("Allow"),
+					Principals: []iam.GetPolicyDocumentStatementPrincipal{
+						{
+							Type:        "Service",
+							Identifiers: []string{"codepipeline.amazonaws.com"},
+						},
+					},
+					Actions: []string{"sts:AssumeRole"},
+				},
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		pipelineRole, err := iam.NewRole(ctx, fmt.Sprintf("pipeline-role-%s", environmentSuffix), &iam.RoleArgs{
+			Name:             pulumi.String(fmt.Sprintf("pipeline-role-%s", environmentSuffix)),
+			AssumeRolePolicy: pulumi.String(pipelineAssumeRolePolicy.Json),
+			Tags:             defaultTags,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// Create IAM policy for CodePipeline
+		pipelinePolicyDoc := pulumi.All(artifactBucket.Arn, kmsKey.Arn, codestarConnection.Arn).ApplyT(func(args []interface{}) string {
+			artifactBucketArn := args[0].(string)
+			kmsKeyArn := args[1].(string)
+			codestarArn := args[2].(string)
+			return fmt.Sprintf(`{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject"
       ],
-      pointInTimeRecovery: {
-        enabled: true,
-      },
-      serverSideEncryption: {
-        enabled: true,
-      },
-      tags: {
-        Name: `education-course-progress-${environmentSuffix}`,
-        Environment: environmentSuffix,
-      },
-    });
-
-    // Cognito User Pool
-    const userPool = new CognitoUserPool(this, 'user-pool', {
-      name: `education-users-${environmentSuffix}`,
-      autoVerifiedAttributes: ['email'],
-      mfaConfiguration: 'OPTIONAL',
-      passwordPolicy: {
-        minimumLength: 12,
-        requireLowercase: true,
-        requireUppercase: true,
-        requireNumbers: true,
-        requireSymbols: true,
-        temporaryPasswordValidityDays: 7,
-      },
-      accountRecoverySetting: {
-        recoveryMechanism: [
-          {
-            name: 'verified_email',
-            priority: 1,
-          },
-        ],
-      },
-      emailConfiguration: {
-        emailSendingAccount: 'COGNITO_DEFAULT',
-      },
-      schema: [
-        {
-          name: 'email',
-          attributeDataType: 'String',
-          required: true,
-          mutable: false,
-        },
-        {
-          name: 'name',
-          attributeDataType: 'String',
-          required: true,
-          mutable: true,
-        },
+      "Resource": "%s/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket"
       ],
-      tags: {
-        Name: `education-users-${environmentSuffix}`,
-        Environment: environmentSuffix,
-      },
-    });
-
-    // Cognito User Pool Client
-    new CognitoUserPoolClient(this, 'user-pool-client', {
-      name: `education-client-${environmentSuffix}`,
-      userPoolId: userPool.id,
-      generateSecret: false,
-      explicitAuthFlows: [
-        'ALLOW_USER_PASSWORD_AUTH',
-        'ALLOW_USER_SRP_AUTH',
-        'ALLOW_REFRESH_TOKEN_AUTH',
+      "Resource": "%s"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "kms:Decrypt",
+        "kms:Encrypt",
+        "kms:GenerateDataKey"
       ],
-      preventUserExistenceErrors: 'ENABLED',
-      refreshTokenValidity: 30,
-      accessTokenValidity: 60,
-      idTokenValidity: 60,
-      tokenValidityUnits: {
-        refreshToken: 'days',
-        accessToken: 'minutes',
-        idToken: 'minutes',
-      },
-    });
-
-    // SNS Topic for Alerts
-    const alertTopic = new SnsTopic(this, 'alert-topic', {
-      name: `education-alerts-${environmentSuffix}`,
-      tags: {
-        Name: `education-alerts-${environmentSuffix}`,
-        Environment: environmentSuffix,
-      },
-    });
-
-    // Lambda Execution Role
-    const lambdaRole = new IamRole(this, 'lambda-execution-role', {
-      name: `education-lambda-role-${environmentSuffix}`,
-      assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Principal: {
-              Service: 'lambda.amazonaws.com',
-            },
-            Action: 'sts:AssumeRole',
-          },
-        ],
-      }),
-      tags: {
-        Name: `education-lambda-role-${environmentSuffix}`,
-        Environment: environmentSuffix,
-      },
-    });
-
-    new IamRolePolicyAttachment(this, 'lambda-basic-execution', {
-      role: lambdaRole.name,
-      policyArn: 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
-    });
-
-    // Lambda Policy for DynamoDB and S3
-    const lambdaPolicy = new IamPolicy(this, 'lambda-policy', {
-      name: `education-lambda-policy-${environmentSuffix}`,
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Action: [
-              'dynamodb:GetItem',
-              'dynamodb:PutItem',
-              'dynamodb:UpdateItem',
-              'dynamodb:Query',
-              'dynamodb:Scan',
-            ],
-            Resource: [
-              userProfilesTable.arn,
-              courseProgressTable.arn,
-              `${userProfilesTable.arn}/index/*`,
-              `${courseProgressTable.arn}/index/*`,
-            ],
-          },
-          {
-            Effect: 'Allow',
-            Action: ['s3:GetObject', 's3:PutObject'],
-            Resource: `${contentBucket.arn}/*`,
-          },
-        ],
-      }),
-    });
-
-    new IamRolePolicyAttachment(this, 'lambda-policy-attachment', {
-      role: lambdaRole.name,
-      policyArn: lambdaPolicy.arn,
-    });
-
-    // CloudWatch Log Groups for Lambda
-    const enrollmentLogGroup = new CloudwatchLogGroup(this, 'enrollment-log-group', {
-      name: `/aws/lambda/education-enrollment-${environmentSuffix}`,
-      retentionInDays: 30,
-      tags: {
-        Name: `education-enrollment-logs-${environmentSuffix}`,
-        Environment: environmentSuffix,
-      },
-    });
-
-    const progressLogGroup = new CloudwatchLogGroup(this, 'progress-log-group', {
-      name: `/aws/lambda/education-progress-${environmentSuffix}`,
-      retentionInDays: 30,
-      tags: {
-        Name: `education-progress-logs-${environmentSuffix}`,
-        Environment: environmentSuffix,
-      },
-    });
-
-    // Lambda Function - Course Enrollment
-    const enrollmentFunction = new LambdaFunction(this, 'enrollment-function', {
-      functionName: `education-enrollment-${environmentSuffix}`,
-      role: lambdaRole.arn,
-      handler: 'index.handler',
-      runtime: 'nodejs18.x',
-      filename: 'lambda/enrollment.zip',
-      sourceCodeHash: '\${filebase64sha256("lambda/enrollment.zip")}',
-      environment: {
-        variables: {
-          USER_PROFILES_TABLE: userProfilesTable.name,
-          COURSE_PROGRESS_TABLE: courseProgressTable.name,
-          ENVIRONMENT: environmentSuffix,
-        },
-      },
-      timeout: 30,
-      memorySize: 256,
-      tags: {
-        Name: `education-enrollment-${environmentSuffix}`,
-        Environment: environmentSuffix,
-      },
-      dependsOn: [enrollmentLogGroup],
-    });
-
-    // Lambda Function - Progress Update
-    const progressFunction = new LambdaFunction(this, 'progress-function', {
-      functionName: `education-progress-${environmentSuffix}`,
-      role: lambdaRole.arn,
-      handler: 'index.handler',
-      runtime: 'nodejs18.x',
-      filename: 'lambda/progress.zip',
-      sourceCodeHash: '\${filebase64sha256("lambda/progress.zip")}',
-      environment: {
-        variables: {
-          COURSE_PROGRESS_TABLE: courseProgressTable.name,
-          ALERT_TOPIC_ARN: alertTopic.arn,
-          ENVIRONMENT: environmentSuffix,
-        },
-      },
-      timeout: 30,
-      memorySize: 256,
-      tags: {
-        Name: `education-progress-${environmentSuffix}`,
-        Environment: environmentSuffix,
-      },
-      dependsOn: [progressLogGroup],
-    });
-
-    // API Gateway REST API
-    const api = new ApiGatewayRestApi(this, 'education-api', {
-      name: `education-api-${environmentSuffix}`,
-      description: 'Education platform API',
-      endpointConfiguration: {
-        types: ['REGIONAL'],
-      },
-      tags: {
-        Name: `education-api-${environmentSuffix}`,
-        Environment: environmentSuffix,
-      },
-    });
-
-    // API Gateway Resources
-    const enrollmentResource = new ApiGatewayResource(this, 'enrollment-resource', {
-      restApiId: api.id,
-      parentId: api.rootResourceId,
-      pathPart: 'enrollment',
-    });
-
-    const progressResource = new ApiGatewayResource(this, 'progress-resource', {
-      restApiId: api.id,
-      parentId: api.rootResourceId,
-      pathPart: 'progress',
-    });
-
-    // API Gateway Methods and Integrations - Enrollment
-    const enrollmentPostMethod = new ApiGatewayMethod(this, 'enrollment-post-method', {
-      restApiId: api.id,
-      resourceId: enrollmentResource.id,
-      httpMethod: 'POST',
-      authorization: 'NONE',
-    });
-
-    const enrollmentIntegration = new ApiGatewayIntegration(this, 'enrollment-integration', {
-      restApiId: api.id,
-      resourceId: enrollmentResource.id,
-      httpMethod: enrollmentPostMethod.httpMethod,
-      integrationHttpMethod: 'POST',
-      type: 'AWS_PROXY',
-      uri: enrollmentFunction.invokeArn,
-    });
-
-    // API Gateway Methods and Integrations - Progress
-    const progressPostMethod = new ApiGatewayMethod(this, 'progress-post-method', {
-      restApiId: api.id,
-      resourceId: progressResource.id,
-      httpMethod: 'POST',
-      authorization: 'NONE',
-    });
-
-    const progressIntegration = new ApiGatewayIntegration(this, 'progress-integration', {
-      restApiId: api.id,
-      resourceId: progressResource.id,
-      httpMethod: progressPostMethod.httpMethod,
-      integrationHttpMethod: 'POST',
-      type: 'AWS_PROXY',
-      uri: progressFunction.invokeArn,
-    });
-
-    // Lambda Permissions for API Gateway
-    new LambdaPermission(this, 'enrollment-api-permission', {
-      statementId: 'AllowAPIGatewayInvoke',
-      action: 'lambda:InvokeFunction',
-      functionName: enrollmentFunction.functionName,
-      principal: 'apigateway.amazonaws.com',
-      sourceArn: `\${${api.executionArn}}/*/*`,
-    });
-
-    new LambdaPermission(this, 'progress-api-permission', {
-      statementId: 'AllowAPIGatewayInvoke',
-      action: 'lambda:InvokeFunction',
-      functionName: progressFunction.functionName,
-      principal: 'apigateway.amazonaws.com',
-      sourceArn: `\${${api.executionArn}}/*/*`,
-    });
-
-    // API Gateway Deployment
-    const deployment = new ApiGatewayDeployment(this, 'api-deployment', {
-      restApiId: api.id,
-      lifecycle: {
-        createBeforeDestroy: true,
-      },
-      dependsOn: [enrollmentIntegration, progressIntegration],
-    });
-
-    // API Gateway Stage
-    new ApiGatewayStage(this, 'api-stage', {
-      deploymentId: deployment.id,
-      restApiId: api.id,
-      stageName: environmentSuffix,
-      tags: {
-        Name: `education-api-${environmentSuffix}`,
-        Environment: environmentSuffix,
-      },
-    });
-
-    // CloudWatch Alarms
-    new CloudwatchMetricAlarm(this, 'enrollment-error-alarm', {
-      alarmName: `education-enrollment-errors-${environmentSuffix}`,
-      comparisonOperator: 'GreaterThanThreshold',
-      evaluationPeriods: 2,
-      metricName: 'Errors',
-      namespace: 'AWS/Lambda',
-      period: 300,
-      statistic: 'Sum',
-      threshold: 10,
-      alarmDescription: 'Alert on enrollment function errors',
-      alarmActions: [alertTopic.arn],
-      dimensions: {
-        FunctionName: enrollmentFunction.functionName,
-      },
-      tags: {
-        Name: `education-enrollment-errors-${environmentSuffix}`,
-        Environment: environmentSuffix,
-      },
-    });
-
-    new CloudwatchMetricAlarm(this, 'progress-error-alarm', {
-      alarmName: `education-progress-errors-${environmentSuffix}`,
-      comparisonOperator: 'GreaterThanThreshold',
-      evaluationPeriods: 2,
-      metricName: 'Errors',
-      namespace: 'AWS/Lambda',
-      period: 300,
-      statistic: 'Sum',
-      threshold: 10,
-      alarmDescription: 'Alert on progress function errors',
-      alarmActions: [alertTopic.arn],
-      dimensions: {
-        FunctionName: progressFunction.functionName,
-      },
-      tags: {
-        Name: `education-progress-errors-${environmentSuffix}`,
-        Environment: environmentSuffix,
-      },
-    });
-
-    // IAM Role for CI/CD Cross-Account Access
-    new IamRole(this, 'cicd-deployment-role', {
-      name: `education-cicd-deploy-${environmentSuffix}`,
-      assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Principal: {
-              Federated: 'arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com',
-            },
-            Action: 'sts:AssumeRoleWithWebIdentity',
-            Condition: {
-              StringEquals: {
-                'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
-              },
-              StringLike: {
-                'token.actions.githubusercontent.com:sub': 'repo:org/repo:*',
-              },
-            },
-          },
-        ],
-      }),
-      managedPolicyArns: [
-        'arn:aws:iam::aws:policy/PowerUserAccess',
+      "Resource": "%s"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "codebuild:BatchGetBuilds",
+        "codebuild:StartBuild"
       ],
-      tags: {
-        Name: `education-cicd-deploy-${environmentSuffix}`,
-        Environment: environmentSuffix,
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "codestar-connections:UseConnection"
+      ],
+      "Resource": "%s"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "sns:Publish"
+      ],
+      "Resource": "*"
+    }
+  ]
+}`, artifactBucketArn, artifactBucketArn, kmsKeyArn, codestarArn)
+		}).(pulumi.StringOutput)
+
+		pipelinePolicy, err := iam.NewPolicy(ctx, fmt.Sprintf("pipeline-policy-%s", environmentSuffix), &iam.PolicyArgs{
+			Name:   pulumi.String(fmt.Sprintf("pipeline-policy-%s", environmentSuffix)),
+			Policy: pipelinePolicyDoc,
+			Tags:   defaultTags,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		_, err = iam.NewRolePolicyAttachment(ctx, fmt.Sprintf("pipeline-policy-attachment-%s", environmentSuffix), &iam.RolePolicyAttachmentArgs{
+			Role:      pipelineRole.Name,
+			PolicyArn: pipelinePolicy.Arn,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// 14. Create CodePipeline
+		pipeline, err := codepipeline.NewPipeline(ctx, fmt.Sprintf("cicd-pipeline-%s", environmentSuffix), &codepipeline.PipelineArgs{
+			Name:    pulumi.String(fmt.Sprintf("cicd-pipeline-%s", environmentSuffix)),
+			RoleArn: pipelineRole.Arn,
+			ArtifactStores: codepipeline.PipelineArtifactStoreArray{
+				&codepipeline.PipelineArtifactStoreArgs{
+					Location: artifactBucket.Bucket,
+					Type:     pulumi.String("S3"),
+					EncryptionKey: &codepipeline.PipelineArtifactStoreEncryptionKeyArgs{
+						Id:   kmsKey.Arn,
+						Type: pulumi.String("KMS"),
+					},
+				},
+			},
+			Stages: codepipeline.PipelineStageArray{
+				// Stage 1: Source
+				&codepipeline.PipelineStageArgs{
+					Name: pulumi.String("Source"),
+					Actions: codepipeline.PipelineStageActionArray{
+						&codepipeline.PipelineStageActionArgs{
+							Name:     pulumi.String("Source"),
+							Category: pulumi.String("Source"),
+							Owner:    pulumi.String("AWS"),
+							Provider: pulumi.String("CodeStarSourceConnection"),
+							Version:  pulumi.String("1"),
+							OutputArtifacts: pulumi.StringArray{
+								pulumi.String("SourceOutput"),
+							},
+							Configuration: pulumi.StringMap{
+								"ConnectionArn":    codestarConnection.Arn,
+								"FullRepositoryId": pulumi.String("example-org/example-repo"),
+								"BranchName":       pulumi.String("main"),
+							},
+						},
+					},
+				},
+				// Stage 2: Build
+				&codepipeline.PipelineStageArgs{
+					Name: pulumi.String("Build"),
+					Actions: codepipeline.PipelineStageActionArray{
+						&codepipeline.PipelineStageActionArgs{
+							Name:     pulumi.String("Build"),
+							Category: pulumi.String("Build"),
+							Owner:    pulumi.String("AWS"),
+							Provider: pulumi.String("CodeBuild"),
+							Version:  pulumi.String("1"),
+							InputArtifacts: pulumi.StringArray{
+								pulumi.String("SourceOutput"),
+							},
+							OutputArtifacts: pulumi.StringArray{
+								pulumi.String("BuildOutput"),
+							},
+							Configuration: pulumi.StringMap{
+								"ProjectName": pulumi.String(fmt.Sprintf("app-build-%s", environmentSuffix)),
+							},
+						},
+					},
+				},
+				// Stage 3: Test (Pulumi Preview)
+				&codepipeline.PipelineStageArgs{
+					Name: pulumi.String("Test"),
+					Actions: codepipeline.PipelineStageActionArray{
+						&codepipeline.PipelineStageActionArgs{
+							Name:     pulumi.String("PulumiPreview"),
+							Category: pulumi.String("Build"),
+							Owner:    pulumi.String("AWS"),
+							Provider: pulumi.String("CodeBuild"),
+							Version:  pulumi.String("1"),
+							InputArtifacts: pulumi.StringArray{
+								pulumi.String("BuildOutput"),
+							},
+							OutputArtifacts: pulumi.StringArray{
+								pulumi.String("TestOutput"),
+							},
+							Configuration: pulumi.StringMap{
+								"ProjectName": pulumi.String(fmt.Sprintf("pulumi-preview-%s", environmentSuffix)),
+							},
+						},
+					},
+				},
+				// Stage 4: Deploy-Dev
+				&codepipeline.PipelineStageArgs{
+					Name: pulumi.String("Deploy-Dev"),
+					Actions: codepipeline.PipelineStageActionArray{
+						&codepipeline.PipelineStageActionArgs{
+							Name:     pulumi.String("DeployDev"),
+							Category: pulumi.String("Build"),
+							Owner:    pulumi.String("AWS"),
+							Provider: pulumi.String("CodeBuild"),
+							Version:  pulumi.String("1"),
+							InputArtifacts: pulumi.StringArray{
+								pulumi.String("TestOutput"),
+							},
+							OutputArtifacts: pulumi.StringArray{
+								pulumi.String("DevOutput"),
+							},
+							Configuration: pulumi.StringMap{
+								"ProjectName": pulumi.String(fmt.Sprintf("pulumi-deploy-dev-%s", environmentSuffix)),
+							},
+						},
+					},
+				},
+				// Stage 5: Deploy-Prod (with manual approval)
+				&codepipeline.PipelineStageArgs{
+					Name: pulumi.String("Deploy-Prod"),
+					Actions: codepipeline.PipelineStageActionArray{
+						&codepipeline.PipelineStageActionArgs{
+							Name:     pulumi.String("ManualApproval"),
+							Category: pulumi.String("Approval"),
+							Owner:    pulumi.String("AWS"),
+							Provider: pulumi.String("Manual"),
+							Version:  pulumi.String("1"),
+							Configuration: pulumi.StringMap{
+								"NotificationArn": snsTopic.Arn,
+								"CustomData":      pulumi.String("Please approve deployment to production"),
+							},
+							RunOrder: pulumi.Int(1),
+						},
+						&codepipeline.PipelineStageActionArgs{
+							Name:     pulumi.String("DeployProd"),
+							Category: pulumi.String("Build"),
+							Owner:    pulumi.String("AWS"),
+							Provider: pulumi.String("CodeBuild"),
+							Version:  pulumi.String("1"),
+							InputArtifacts: pulumi.StringArray{
+								pulumi.String("DevOutput"),
+							},
+							OutputArtifacts: pulumi.StringArray{
+								pulumi.String("ProdOutput"),
+							},
+							Configuration: pulumi.StringMap{
+								"ProjectName": pulumi.String(fmt.Sprintf("pulumi-deploy-prod-%s", environmentSuffix)),
+							},
+							RunOrder: pulumi.Int(2),
+						},
+					},
+				},
+			},
+			Tags: defaultTags,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// 15. Create EventBridge rule to trigger pipeline on Git tags
+		eventRole, err := iam.NewRole(ctx, fmt.Sprintf("eventbridge-role-%s", environmentSuffix), &iam.RoleArgs{
+			Name: pulumi.String(fmt.Sprintf("eventbridge-pipeline-role-%s", environmentSuffix)),
+			AssumeRolePolicy: pulumi.String(`{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "events.amazonaws.com"
       },
-    });
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}`),
+			Tags: defaultTags,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		eventPolicyDoc := pipeline.Arn.ApplyT(func(arn string) string {
+			return fmt.Sprintf(`{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "codepipeline:StartPipelineExecution",
+      "Resource": "%s"
+    }
+  ]
+}`, arn)
+		}).(pulumi.StringOutput)
+
+		eventPolicy, err := iam.NewPolicy(ctx, fmt.Sprintf("eventbridge-policy-%s", environmentSuffix), &iam.PolicyArgs{
+			Name:   pulumi.String(fmt.Sprintf("eventbridge-pipeline-policy-%s", environmentSuffix)),
+			Policy: eventPolicyDoc,
+			Tags:   defaultTags,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		_, err = iam.NewRolePolicyAttachment(ctx, fmt.Sprintf("eventbridge-policy-attachment-%s", environmentSuffix), &iam.RolePolicyAttachmentArgs{
+			Role:      eventRole.Name,
+			PolicyArn: eventPolicy.Arn,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		_, err = events.NewRule(ctx, fmt.Sprintf("pipeline-trigger-%s", environmentSuffix), &events.RuleArgs{
+			Name:        pulumi.String(fmt.Sprintf("pipeline-trigger-%s", environmentSuffix)),
+			Description: pulumi.String("Trigger pipeline on Git tag pushes matching v*.*.*"),
+			EventPattern: codestarConnection.Arn.ApplyT(func(arn string) string {
+				return fmt.Sprintf(`{
+  "source": ["aws.codestar-connections"],
+  "detail-type": ["CodeStar Source Connection State Change"],
+  "detail": {
+    "referenceType": ["tag"],
+    "referenceName": [{
+      "prefix": "v"
+    }],
+    "connectionArn": ["%s"]
   }
+}`, arn)
+			}).(pulumi.StringOutput),
+			Tags: defaultTags,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		_, err = events.NewTarget(ctx, fmt.Sprintf("pipeline-trigger-target-%s", environmentSuffix), &events.TargetArgs{
+			Rule:    pulumi.String(fmt.Sprintf("pipeline-trigger-%s", environmentSuffix)),
+			Arn:     pipeline.Arn,
+			RoleArn: eventRole.Arn,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// 16. Create EventBridge rule for pipeline failures
+		_, err = events.NewRule(ctx, fmt.Sprintf("pipeline-failure-%s", environmentSuffix), &events.RuleArgs{
+			Name:        pulumi.String(fmt.Sprintf("pipeline-failure-%s", environmentSuffix)),
+			Description: pulumi.String("Notify on pipeline failures"),
+			EventPattern: pipeline.Name.ApplyT(func(name string) string {
+				return fmt.Sprintf(`{
+  "source": ["aws.codepipeline"],
+  "detail-type": ["CodePipeline Pipeline Execution State Change"],
+  "detail": {
+    "state": ["FAILED"],
+    "pipeline": ["%s"]
+  }
+}`, name)
+			}).(pulumi.StringOutput),
+			Tags: defaultTags,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		_, err = events.NewTarget(ctx, fmt.Sprintf("pipeline-failure-target-%s", environmentSuffix), &events.TargetArgs{
+			Rule: pulumi.String(fmt.Sprintf("pipeline-failure-%s", environmentSuffix)),
+			Arn:  snsTopic.Arn,
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// Allow EventBridge to publish to SNS
+		_, err = sns.NewTopicPolicy(ctx, fmt.Sprintf("sns-eventbridge-policy-%s", environmentSuffix), &sns.TopicPolicyArgs{
+			Arn: snsTopic.Arn,
+			Policy: pulumi.All(snsTopic.Arn).ApplyT(func(args []interface{}) string {
+				topicArn := args[0].(string)
+				return fmt.Sprintf(`{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "events.amazonaws.com"
+      },
+      "Action": "SNS:Publish",
+      "Resource": "%s"
+    }
+  ]
+}`, topicArn)
+			}).(pulumi.StringOutput),
+		}, pulumi.Provider(provider))
+		if err != nil {
+			return err
+		}
+
+		// Export important values
+		ctx.Export("stateBucketName", stateBucket.Bucket)
+		ctx.Export("artifactBucketName", artifactBucket.Bucket)
+		ctx.Export("pipelineName", pipeline.Name)
+		ctx.Export("pipelineArn", pipeline.Arn)
+		ctx.Export("codestarConnectionArn", codestarConnection.Arn)
+		ctx.Export("snsTopicArn", snsTopic.Arn)
+		ctx.Export("kmsKeyId", kmsKey.KeyId)
+
+		return nil
+	})
 }
 ```
 
-## File: lib/tap-stack.ts
+## File: lib/README.md
 
-```typescript
-import {
-  AwsProvider,
-  AwsProviderDefaultTags,
-} from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack } from 'cdktf';
-import { Construct } from 'constructs';
-import { EducationStack } from './education-stack';
+```markdown
+# CI/CD Pipeline with Pulumi Infrastructure Automation
 
-interface TapStackProps {
-  environmentSuffix?: string;
-  stateBucket?: string;
-  stateBucketRegion?: string;
-  awsRegion?: string;
-  defaultTags?: AwsProviderDefaultTags[];
-}
+This Pulumi Go program deploys a complete CI/CD pipeline on AWS that automates Pulumi infrastructure deployments across multiple accounts with proper security controls and approval workflows.
 
-const AWS_REGION_OVERRIDE = 'us-east-1';
+## Architecture Overview
 
-export class TapStack extends TerraformStack {
-  constructor(scope: Construct, id: string, props?: TapStackProps) {
-    super(scope, id);
+The solution creates:
 
-    const environmentSuffix = props?.environmentSuffix || 'dev';
-    const awsRegion = AWS_REGION_OVERRIDE
-      ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-east-1';
-    const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
-    const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
-    const defaultTags = props?.defaultTags || [];
+1. **Pulumi State Management**: S3 bucket with versioning and KMS encryption for Pulumi state files
+2. **Artifact Storage**: S3 bucket with lifecycle policies for pipeline artifacts
+3. **CodeBuild Projects**: Four projects for build, test (preview), and deploy (dev/prod)
+4. **CodePipeline**: 5-stage pipeline (Source → Build → Test → Deploy-Dev → Deploy-Prod)
+5. **GitHub Integration**: CodeStar connection for source control
+6. **Notifications**: SNS topic with email subscription for failure alerts
+7. **Event-Driven Triggers**: EventBridge rules for Git tag-based deployments
+8. **Security**: KMS encryption, SSM Parameter Store for secrets, least-privilege IAM roles
+9. **Multi-Account**: Cross-account IAM roles for Dev and Prod deployments
+10. **Observability**: CloudWatch Logs with 7-day retention for all CodeBuild projects
 
-    new AwsProvider(this, 'aws', {
-      region: awsRegion,
-      defaultTags: defaultTags,
-    });
+## Prerequisites
 
-    new S3Backend(this, {
-      bucket: stateBucket,
-      key: `\${environmentSuffix}/\${id}.tfstate`,
-      region: stateBucketRegion,
-      encrypt: true,
-    });
+- AWS CLI configured with appropriate credentials
+- Pulumi CLI 3.x installed
+- Go 1.19+ installed
+- AWS accounts: Shared Services (pipeline), Dev (123456789012), Prod (987654321098)
+- GitHub repository for source code
 
-    this.addOverride('terraform.backend.s3.use_lockfile', true);
+## Environment Variables
 
-    new EducationStack(this, 'education', {
-      environmentSuffix,
-      region: awsRegion,
-    });
-  }
+The following environment variables are required:
+
+- `ENVIRONMENT_SUFFIX`: Unique suffix for resource naming (default: "dev")
+- `AWS_REGION`: AWS region for deployment (default: "us-east-1")
+- `REPOSITORY`: Repository name for tagging
+- `COMMIT_AUTHOR`: Commit author for tagging
+- `PR_NUMBER`: Pull request number for tagging
+- `TEAM`: Team name for tagging
+
+## Deployment
+
+1. Initialize Pulumi:
+   ```bash
+   pulumi login s3://your-pulumi-state-bucket
+   pulumi stack init dev
+   ```
+
+2. Set required configuration:
+   ```bash
+   export ENVIRONMENT_SUFFIX="myenv"
+   export AWS_REGION="us-east-1"
+   ```
+
+3. Deploy the infrastructure:
+   ```bash
+   pulumi up
+   ```
+
+4. After deployment, update SSM parameters:
+   ```bash
+   # Set your actual Pulumi access token
+   aws ssm put-parameter \
+     --name "/pulumi/access-token-myenv" \
+     --value "pul-your-actual-token" \
+     --type SecureString \
+     --overwrite
+   ```
+
+5. Complete the CodeStar connection:
+   ```bash
+   # Get the connection ARN from outputs
+   pulumi stack output codestarConnectionArn
+
+   # Go to AWS Console → Developer Tools → Settings → Connections
+   # Find the connection and complete the GitHub authentication
+   ```
+
+6. Update the pipeline source configuration:
+   - Edit the Source stage in CodePipeline
+   - Update `FullRepositoryId` to your GitHub repository (e.g., "myorg/myrepo")
+
+## Pipeline Stages
+
+1. **Source**: Pulls code from GitHub via CodeStar connection
+2. **Build**: Compiles application code and prepares artifacts
+3. **Test**: Runs `pulumi preview` to validate infrastructure changes
+4. **Deploy-Dev**: Deploys to Dev account with `pulumi up`
+5. **Deploy-Prod**: Manual approval followed by production deployment
+
+## Multi-Account Setup
+
+The pipeline runs in a shared services account and deploys to Dev and Prod accounts using cross-account IAM roles.
+
+### Required IAM Roles in Target Accounts
+
+Create the following IAM role in both Dev (123456789012) and Prod (987654321098) accounts:
+
+**Role Name**: `pulumi-deploy-role`
+
+**Trust Policy**:
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::SHARED_SERVICES_ACCOUNT_ID:role/codebuild-role-{environmentSuffix}"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
 }
 ```
+
+**Policy**: Attach appropriate policies for deploying your infrastructure (e.g., PowerUserAccess or custom policies)
+
+## Security Features
+
+- **Encryption at Rest**: All S3 buckets and SSM parameters use KMS encryption
+- **Encryption in Transit**: HTTPS enforced for all AWS API calls
+- **Least Privilege**: IAM roles follow principle of least privilege
+- **Secret Management**: Pulumi access tokens stored in SSM Parameter Store
+- **Audit Trail**: CloudWatch Logs capture all build activity
+- **Public Access Block**: All S3 buckets block public access
+
+## Event-Driven Deployment
+
+The pipeline can be triggered by:
+
+1. **Manual**: Start pipeline execution from AWS Console or CLI
+2. **Git Tags**: EventBridge rule triggers on version tags (v*.*.*)
+3. **Webhook**: Direct GitHub webhook integration via CodeStar connection
+
+## Notifications
+
+Pipeline failures trigger SNS notifications to `devops@example.com`. Update the email address in the code or add additional subscriptions:
+
+```bash
+aws sns subscribe \
+  --topic-arn $(pulumi stack output snsTopicArn) \
+  --protocol email \
+  --notification-endpoint your-email@example.com
+```
+
+## Lifecycle Management
+
+- **Artifact Retention**: Pipeline artifacts expire after 30 days
+- **Log Retention**: CloudWatch Logs retained for 7 days
+- **State Versioning**: Pulumi state bucket has versioning enabled
+
+## Troubleshooting
+
+### Pipeline Fails at Source Stage
+- Verify CodeStar connection is in "Available" state
+- Check repository name and branch in Source stage configuration
+
+### Pipeline Fails at Test/Deploy Stages
+- Verify Pulumi access token in SSM Parameter Store
+- Check CodeBuild role has permissions to assume cross-account roles
+- Verify target account IAM roles exist and have correct trust policies
+
+### Pulumi Login Fails
+- Verify S3 bucket for Pulumi state is accessible
+- Check KMS key permissions for CodeBuild role
+
+## Cleanup
+
+To destroy all resources:
+
+```bash
+pulumi destroy
+```
+
+Note: You may need to manually delete S3 bucket contents before destruction if versioning is enabled.
+
+## Cost Optimization
+
+The infrastructure uses cost-optimized resources:
+
+- **S3 Lifecycle**: Automatic artifact cleanup after 30 days
+- **CloudWatch Logs**: 7-day retention reduces storage costs
+- **CodeBuild**: BUILD_GENERAL1_MEDIUM compute type balances performance and cost
+- **On-Demand**: No reserved capacity or long-running resources
+
+## Extending the Pipeline
+
+### Add Additional Stages
+
+Edit the `Stages` array in the CodePipeline resource to add more stages (e.g., integration tests, security scanning).
+
+### Add More Environments
+
+Create additional CodeBuild projects and pipeline stages for staging or QA environments.
+
+### Customize Build Specifications
+
+Modify the `Buildspec` in each CodeBuild project to match your application requirements.
+
+## References
+
+- [Pulumi Documentation](https://www.pulumi.com/docs/)
+- [AWS CodePipeline User Guide](https://docs.aws.amazon.com/codepipeline/)
+- [AWS CodeBuild User Guide](https://docs.aws.amazon.com/codebuild/)
+- [CodeStar Connections](https://docs.aws.amazon.com/codestar-connections/)

@@ -1,121 +1,62 @@
-Hey team,
+# CI/CD Pipeline Integration with Pulumi
 
-We need to build infrastructure for an educational content delivery platform that integrates with a complete CI/CD pipeline. I've been looking at how we can create a secure, compliant system for delivering educational materials to students using **CDKTF with TypeScript**. The business wants infrastructure that deploys automatically through a multi-stage pipeline with proper security controls and approval gates.
+Hey, we need to modernize our CI/CD infrastructure by moving from Jenkins to AWS-native services, and we need your help building this using **Pulumi with Go**.
 
-The platform will serve educational content to students, track their progress, and ensure compliance with data protection regulations. We need this to work seamlessly with automated deployments across development, staging, and production environments.
+## Background
 
-## What we need to build
+A software development team needs to modernize their CI/CD infrastructure by moving from Jenkins to AWS-native services. They want to use Pulumi for infrastructure management and integrate it directly into their pipeline to enable automated infrastructure updates alongside application deployments.
 
-Create an educational content delivery infrastructure using **CDKTF with TypeScript** that integrates with a CI/CD pipeline.
+## Environment
 
-### Core Requirements
+AWS multi-account setup in us-east-1 region with separate Dev (123456789012) and Prod (987654321098) accounts. Requires Pulumi CLI 3.x, Go 1.19+, AWS CLI configured with cross-account assume role permissions. Pipeline runs in shared services account with CodePipeline, CodeBuild, S3 for artifacts, EventBridge for triggers. VPC endpoints required for private CodeBuild access to S3 and ECR.
 
-1. **Content Storage and Delivery**
-   - S3 buckets for storing course materials, videos, and documents
-   - CloudFront distribution for fast, global content delivery
-   - Origin Access Identity for secure S3 access
-   - Support for different content types (videos, PDFs, interactive content)
+## Requirements
 
-2. **User and Progress Tracking**
-   - DynamoDB tables for user profiles and course progress
-   - Point-in-time recovery enabled for data protection
-   - Global secondary indexes for efficient querying
-   - Encryption at rest for sensitive student data
+Create a Pulumi Go program to deploy a CI/CD pipeline that automates Pulumi infrastructure deployments. The configuration must:
 
-3. **Authentication and Authorization**
-   - Cognito User Pool for student authentication
-   - Email and SMS verification for account security
-   - Password policies meeting compliance requirements
-   - User groups for students, instructors, and administrators
+1. Set up an S3 bucket for Pulumi state with versioning and KMS encryption enabled
+2. Create CodeBuild projects for running 'pulumi preview' in Test stage and 'pulumi up' in Deploy stages
+3. Configure CodePipeline with Source stage connected to GitHub via CodeStar connection
+4. Add Build stage that compiles application code and prepares deployment artifacts
+5. Implement Test stage that runs Pulumi preview to validate infrastructure changes
+6. Add manual approval action between Dev and Prod deployment stages
+7. Configure EventBridge rule to trigger pipeline on version tags
+8. Set up SNS topic and subscription for pipeline failure notifications
+9. Create SSM parameters for Pulumi access token and stack configuration
+10. Implement cross-account IAM roles for deploying to Dev and Prod accounts
 
-4. **Serverless API Layer**
-   - Lambda functions for course enrollment and progress updates
-   - API Gateway REST API for frontend integration
-   - Lambda execution roles with least privilege
-   - Environment variables for configuration
+## Mandatory Constraints
 
-5. **Monitoring and Compliance**
-   - CloudWatch log groups for application logs
-   - Log retention policies for compliance
-   - CloudWatch alarms for critical metrics
-   - SNS topics for alerting administrators
+- Use SSM Parameter Store to manage Pulumi access tokens and configuration
+- CodeBuild must assume a specific IAM role with least-privilege permissions
+- Store Pulumi state in S3 with server-side encryption using AWS KMS
 
-### CI/CD Integration Requirements
+## Optional Constraints (Implement as many as possible)
 
-Reference the provided `lib/ci-cd.yml` for:
+- Use EventBridge to trigger pipeline on Git tag pushes matching pattern v*.*.*
+- Pipeline artifacts must be stored in S3 with lifecycle policy to expire after 30 days
+- Pipeline must send SNS notifications on failure to a dedicated topic
+- Use AWS CodePipeline with exactly 5 stages: Source, Build, Test, Deploy-Dev, Deploy-Prod
+- CodeBuild projects must use compute type BUILD_GENERAL1_MEDIUM
+- Enable CloudWatch Logs for all CodeBuild projects with 7-day retention
+- Deploy infrastructure changes must require manual approval between Dev and Prod stages
 
-1. **GitHub Actions Workflow**
-   - GitHub OIDC authentication (no long-lived credentials)
-   - Automated deployment to dev on commits
-   - Manual approval gates for staging and production
-   - Security scanning and compliance checks
+## Expected Output
 
-2. **Multi-Stage Pipeline**
-   - Build stage: Install dependencies, run cdktf synth
-   - Security stage: Run security scanning and validation
-   - Deploy stages: dev (auto) → staging (approval) → prod (approval)
-   - Notification hooks for deployment status
+A complete Pulumi Go program that creates a fully automated CI/CD pipeline capable of deploying both application code and infrastructure changes across multiple AWS accounts with proper security controls and approval workflows.
 
-3. **Environment Configuration**
-   - Support for environment-specific parameters
-   - Integration with GitHub Actions contexts
-   - Encrypted secrets management
-   - Cross-account role assumptions for production
+## Critical Implementation Notes
 
-### Technical Requirements
+1. **Resource Naming**: ALL resource names MUST include the environment suffix parameter to support parallel deployments. In Pulumi Go, use string concatenation like `resourceName + "-" + environmentSuffix`.
 
-- All infrastructure defined using **CDKTF with TypeScript**
-- Deploy to **us-east-1** region
-- Resource names must include **environmentSuffix** for uniqueness
-- Follow naming convention: `{resource-type}-{environmentSuffix}`
-- All resources must be destroyable (no Retain removal policies)
-- Use proper CDKTF imports from `@cdktf/provider-aws`
-- Support environment parameters from CI/CD pipeline
-- Include IAM roles for cross-account deployments
-- Proper error handling and logging throughout
+2. **Destroyability**: Do NOT set deletion protection or retention policies that prevent cleanup. This is a synthetic task that needs to be cleanable.
 
-### Deployment Requirements (CRITICAL)
+3. **Platform Compliance**: This MUST be implemented using Pulumi with Go as specified in the metadata. Do not use any other platform or language.
 
-- **environmentSuffix Requirement**: ALL named resources must include the environmentSuffix parameter to ensure uniqueness across environments
-- **Destroyability**: All resources must be fully destroyable. Do NOT use any Retain or Snapshot removal policies
-- **Multi-Environment Support**: Infrastructure must work across dev, staging, and prod environments with different configurations
-- **CI/CD Compatible**: Resources must support automated deployment through GitHub Actions
-- **Region Specific**: All resources deployed to us-east-1
+4. **AWS Services**: Focus on CodePipeline, CodeBuild, S3, KMS, SSM Parameter Store, EventBridge, SNS, IAM, and CloudWatch Logs.
 
-### Constraints
+5. **Security**: Implement least-privilege IAM policies for all roles, enable encryption at rest for S3 and SSM parameters, and ensure cross-account access is properly scoped.
 
-- Student data must be encrypted at rest and in transit
-- Authentication must support MFA for administrative access
-- Logs must be retained for minimum 30 days for compliance
-- API endpoints must use HTTPS only
-- Content delivery must use signed URLs for premium content
-- Infrastructure must support automated testing and validation
-- All IAM roles must follow principle of least privilege
-- CloudWatch metrics must be exported for compliance reporting
+6. **Multi-Account**: Properly configure IAM roles and trust relationships to enable CodePipeline and CodeBuild in the shared services account to deploy to Dev and Prod accounts.
 
-## Success Criteria
-
-- **Functionality**: Complete educational platform infrastructure with content delivery, user management, and progress tracking
-- **Performance**: CloudFront provides low-latency content delivery globally
-- **Reliability**: DynamoDB point-in-time recovery, Lambda retry policies
-- **Security**: Encryption at rest/transit, Cognito authentication, secure API access
-- **Resource Naming**: All resources include environmentSuffix parameter
-- **Code Quality**: TypeScript with proper types, comprehensive error handling, well-documented
-- **CI/CD Integration**: Infrastructure deploys successfully through multi-stage pipeline with approval gates
-- **Compliance**: Logging, encryption, and data retention meet educational compliance requirements
-
-## What to deliver
-
-- Complete CDKTF TypeScript implementation in lib/
-- S3 buckets with proper bucket policies and encryption
-- CloudFront distribution with Origin Access Identity
-- DynamoDB tables with encryption and backup enabled
-- Cognito User Pool with proper password policies
-- Lambda functions with execution roles
-- API Gateway with Lambda integration
-- CloudWatch log groups and alarms
-- SNS topics for notifications
-- IAM roles for CI/CD cross-account access
-- Support for environment-specific configuration
-- Unit tests for all components
-- Documentation and deployment instructions
+7. **Testing**: Ensure the infrastructure can be validated with unit tests and deployed successfully to AWS.
