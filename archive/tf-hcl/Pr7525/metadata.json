@@ -39,5 +39,11 @@
   ],
   "task_config": {
     "deploy_env": "dev.tfvars"
-  }
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
 }
