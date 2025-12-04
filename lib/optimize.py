@@ -307,7 +307,7 @@ class LambdaOptimizer:
             'payment-validator': {
                 'memory': 512,
                 'reserved_concurrency': None,  # Removed due to account limits
-                'provisioned_concurrency': True
+                'provisioned_concurrency': False
             },
             'fraud-detector': {
                 'memory': 256,
@@ -446,7 +446,7 @@ def main():
     if args.dry_run:
         print("🔍 DRY RUN MODE - Will verify the following optimizations:")
         print("\n✓ Graviton2 (ARM64) architecture for all functions")
-        print("✓ Provisioned concurrency for payment-validator")
+        print("✓ Provisioned concurrency: None (removed - incompatible with $LATEST)")
         print("✓ Lambda function URLs for direct invocation")
         print("✓ Optimized memory configurations (512MB/256MB/128MB)")
         print("✓ CloudWatch log retention (7 days)")
