@@ -90,11 +90,11 @@ class TestComplianceMonitoringAnalyzer:
     def test_analyze_lambda_functions_not_found(self, analyzer, mock_aws_clients):
         """Test Lambda function analysis when function not found"""
         # Mock ResourceNotFoundException
-        mock_aws_clients['lambda'].get_function.side_effect = \
-            analyzer.lambda_client.exceptions.ResourceNotFoundException(
-                {'Error': {'Code': 'ResourceNotFoundException'}},
-                'GetFunction'
-            )
+        from botocore.exceptions import ClientError
+        mock_aws_clients['lambda'].get_function.side_effect = ClientError(
+            {'Error': {'Code': 'ResourceNotFoundException', 'Message': 'Function not found'}},
+            'GetFunction'
+        )
 
         result = analyzer.analyze_lambda_functions('test')
 
