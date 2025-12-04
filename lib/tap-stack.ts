@@ -60,7 +60,8 @@ export class TapStack extends pulumi.ComponentResource {
   constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, args, opts);
 
-    const environmentSuffix = args.environmentSuffix || process.env.ENVIRONMENT_SUFFIX || 'dev';
+    const environmentSuffix =
+      args.environmentSuffix || process.env.ENVIRONMENT_SUFFIX || 'dev';
     const alertEmail = args.alertEmail || 'ops@example.com';
     const awsRegion = process.env.AWS_REGION || 'us-east-1';
 
