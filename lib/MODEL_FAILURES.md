@@ -161,8 +161,10 @@ SNS topic, which was Standard. FIFO queues can only subscribe to FIFO SNS topics
 InvalidParameterValue: Value ... for parameter RedrivePolicy is invalid. Reason: Dead-letter queue must be same type of queue as the source.
 ```
 
-**Root Cause:** The `patient_prescriptions` queue is FIFO, but its configured Dead Letter Queue (`patient_prescriptions_dlq`) was Standard. FIFO queues must use FIFO DLQs.
-**Fix:** Converted `patient_prescriptions_dlq` to a FIFO queue by adding `fifo_queue = true` and updating the name to end with `.fifo`.
+**Root Cause:** The `patient_prescriptions` queue is FIFO, but its configured Dead Letter Queue (`patient_prescriptions_dlq`)
+was Standard. FIFO queues must use FIFO DLQs.
+**Fix:** Converted `patient_prescriptions_dlq` to a FIFO queue by adding `fifo_queue = true` and updating the name to
+end with `.fifo`.
 
 ### **Issue 15 — Lambda SQS Permission Race Condition**
 
@@ -172,5 +174,7 @@ InvalidParameterValue: Value ... for parameter RedrivePolicy is invalid. Reason:
 InvalidParameterValueException: The function execution role does not have permissions to call ReceiveMessage on SQS
 ```
 
-**Root Cause:** The Lambda event source mapping was being created before the IAM policy granting SQS permissions was fully attached to the Lambda execution role, leading to a race condition.
-**Fix:** Added `depends_on = [aws_iam_role_policy_attachment.lambda_base]` to the `aws_lambda_event_source_mapping` resources to ensure permissions are in place before mapping creation.
+**Root Cause:** The Lambda event source mapping was being created before the IAM policy granting SQS permissions was
+fully attached to the Lambda execution role, leading to a race condition.
+**Fix:** Added `depends_on = [aws_iam_role_policy_attachment.lambda_base]` to the `aws_lambda_event_source_mapping`
+resources to ensure permissions are in place before mapping creation.
