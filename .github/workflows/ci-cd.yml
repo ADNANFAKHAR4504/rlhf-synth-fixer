@@ -105,6 +105,38 @@ jobs:
       - name: Validate commit message
         run: npx commitlint --last
 
+  validate-jest-config:
+    name: Validate Jest Config
+    runs-on: ubuntu-24.04
+    needs: detect-metadata
+    # Only run for TypeScript/JavaScript projects (Jest is not used for Python, Go, Java)
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && (needs.detect-metadata.outputs.language == 'ts' || needs.detect-metadata.outputs.language == 'js') }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate jest.config.js test folder
+        run: |
+          echo "🔍 Validating jest.config.js configuration..."
+          echo "Language: ${{ needs.detect-metadata.outputs.language }}"
+          
+          if ! grep -q "roots: \['<rootDir>/test'\]" jest.config.js; then
+            echo ""
+            echo "❌ ERROR: jest.config.js has incorrect roots configuration!"
+            echo ""
+            echo "Expected: roots: ['<rootDir>/test']"
+            echo "Found:    $(grep 'roots:' jest.config.js || echo 'roots not found')"
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "Test files must be placed in the 'test/' folder (singular)."
+            echo "Do NOT modify jest.config.js roots without team approval."
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            exit 1
+          fi
+          
+          echo "✅ jest.config.js validation passed - using 'test/' folder"
+
   build:
     name: Build
     runs-on: ubuntu-24.04
