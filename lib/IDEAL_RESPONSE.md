@@ -866,7 +866,6 @@ Resources:
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub ${EnvironmentName}-db-subnet-group
       DBSubnetGroupDescription: Subnet group for RDS database instances
       SubnetIds:
         - !Ref PrivateSubnet1

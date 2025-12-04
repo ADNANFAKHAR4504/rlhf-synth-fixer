@@ -1284,9 +1284,6 @@
         "DBSubnetGroup": {
             "Type": "AWS::RDS::DBSubnetGroup",
             "Properties": {
-                "DBSubnetGroupName": {
-                    "Fn::Sub": "${EnvironmentName}-db-subnet-group"
-                },
                 "DBSubnetGroupDescription": "Subnet group for RDS database instances",
                 "SubnetIds": [
                     {
