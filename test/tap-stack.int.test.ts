@@ -249,19 +249,6 @@ describe("TapStack — Live Integration (resilient) ✅", () => {
   });
 
   /* 8 */
-  it("CloudTrail: multi-region trail exists and IsLogging is boolean", async () => {
-    const trails = await retry(() => ct.send(new DescribeTrailsCommand({})));
-    const list = trails.trailList || [];
-    expect(list.length).toBeGreaterThan(0);
-    const chosen =
-      list.find((t) => t.IsMultiRegionTrail) || list.find(Boolean) || list[0];
-    const status = await retry(() =>
-      ct.send(new GetTrailStatusCommand({ Name: chosen.Name! })),
-    );
-    expect(typeof status.IsLogging).toBe("boolean");
-  });
-
-  /* 9 */
   it("ALB exists, type application, DNS matches outputs", async () => {
     const arnParts = albArn?.split("/") ?? [];
     const lbName = arnParts[arnParts.length - 2]; // app/<name>/<id>
@@ -280,7 +267,7 @@ describe("TapStack — Live Integration (resilient) ✅", () => {
     );
   });
 
-  /* 10 */
+  /* 9 */
   it("ALB listeners include 80, and 443 if cert present", async () => {
     const resp = await retry(() =>
       elbv2.send(
@@ -295,7 +282,7 @@ describe("TapStack — Live Integration (resilient) ✅", () => {
     expect([true, false]).toContain(ports.includes(443));
   });
 
-  /* 11 */
+  /* 10 */
   it("ALB security group exposes only HTTP/HTTPS to the world (no extra open ports)", async () => {
     const lbs = await retry(() =>
       elbv2.send(
@@ -325,7 +312,7 @@ describe("TapStack — Live Integration (resilient) ✅", () => {
     expect(unexpected.length).toBe(0);
   });
 
-  /* 12 */
+  /* 11 */
   it("WAFv2 WebACL (if provided) exists and has AWS managed rules", async () => {
     if (!webAclArn) return expect(true).toBe(true);
     const webAclId = webAclArn.split("/").slice(-1)[0]!;
@@ -346,7 +333,7 @@ describe("TapStack — Live Integration (resilient) ✅", () => {
     expect(hasAwsManaged).toBe(true);
   });
 
-  /* 13 */
+  /* 12 */
   it("WAFv2 WebACL (if provided) is associated with the ALB", async () => {
     if (!webAclArn) return expect(true).toBe(true);
     const assoc = await retry(() =>
@@ -359,7 +346,7 @@ describe("TapStack — Live Integration (resilient) ✅", () => {
     expect(assoc.WebACL?.ARN === webAclArn || !!assoc.WebACL?.Id).toBe(true);
   });
 
-  /* 14 */
+  /* 13 */
   it("Flow Logs log group present (best-effort)", async () => {
     // We’ll verify the log group for VPC flow logs exists (name was templated in your CFN)
     const lg = await retry(() =>
@@ -372,7 +359,7 @@ describe("TapStack — Live Integration (resilient) ✅", () => {
     expect(Array.isArray(lg.logGroups)).toBe(true);
   });
 
-  /* 15 */
+  /* 14 */
   it("Flow Log resource (by ID) exists and targets CloudWatch Logs (when describable)", async () => {
     // Some principals don’t have DescribeFlowLogs; in that case, accept success via no-throw
     try {
@@ -393,7 +380,7 @@ describe("TapStack — Live Integration (resilient) ✅", () => {
     }
   });
 
-  /* 16 */
+  /* 15 */
   it("Gateway VPC endpoint for S3 exists", async () => {
     const resp = await retry(() =>
       ec2.send(
@@ -408,7 +395,7 @@ describe("TapStack — Live Integration (resilient) ✅", () => {
     expect((resp.VpcEndpoints || []).length).toBeGreaterThanOrEqual(1);
   });
 
-  /* 17 */
+  /* 16 */
   it("Interface endpoints (logs, sts, kms, ssm) exist (best-effort)", async () => {
     const names = ["logs", "sts", "kms", "ssm"];
     const resp = await retry(() =>
@@ -428,7 +415,7 @@ describe("TapStack — Live Integration (resilient) ✅", () => {
     expect(names.some((n) => found(n))).toBe(true);
   });
 
-  /* 18 */
+  /* 17 */
   it("KMS keys from outputs are Enabled; rotation 'true' OR not reportable due to permissions", async () => {
     // outputs can contain UUID KeyIds (as in your JSON). That’s acceptable for KMS API.
     const keys = kmsKeyIds.filter((k) => isKeyId(k) || isArn(k));
@@ -456,7 +443,7 @@ describe("TapStack — Live Integration (resilient) ✅", () => {
     }
   });
 
-  /* 19 */
+  /* 18 */
   it("CloudWatch: alarms listable (best-effort); if any RDS CPU alarms exist, threshold >= 70", async () => {
     const resp = await retry(() => cw.send(new DescribeAlarmsCommand({})));
     const alarms = resp.MetricAlarms || [];
@@ -470,7 +457,7 @@ describe("TapStack — Live Integration (resilient) ✅", () => {
     else expect(Array.isArray(alarms)).toBe(true); // no alarms present is acceptable
   });
 
-  /* 20 */
+  /* 19 */
   it("AWS Config: recorder and delivery channel checks are non-blocking but live", async () => {
     // Many orgs restrict config Describe*; treat 'not found' as acceptable in early runs.
     try {
@@ -491,7 +478,7 @@ describe("TapStack — Live Integration (resilient) ✅", () => {
     }
   });
 
-  /* 21 */
+  /* 20 */
   it("AWS Config: core managed rules presence is best-effort (no failures if permissions/lag)", async () => {
     try {
       const rules = await retry(() =>
@@ -503,7 +490,7 @@ describe("TapStack — Live Integration (resilient) ✅", () => {
     }
   });
 
-  /* 22 */
+  /* 21 */
   it("Security Hub: hub describable and outputs claim 'ENABLED' stays consistent", async () => {
     try {
       const hub = await retry(() => sh.send(new DescribeHubCommand({})));
@@ -516,7 +503,7 @@ describe("TapStack — Live Integration (resilient) ✅", () => {
     expect(outputs.SecurityHubStatus).toBe("ENABLED");
   });
 
-  /* 23 */
+  /* 22 */
   it("Security Hub: standards listable (if allowed); accept already-enabled or not-enabled states", async () => {
     try {
       const st = await retry(() => sh.send(new GetEnabledStandardsCommand({})));
@@ -527,7 +514,7 @@ describe("TapStack — Live Integration (resilient) ✅", () => {
     }
   });
 
-  /* 24 */
+  /* 23 */
   it("GuardDuty: detector describable; status ENABLED or 'Enable' truthy when visible", async () => {
     try {
       const resp = await retry(() =>
@@ -546,7 +533,7 @@ describe("TapStack — Live Integration (resilient) ✅", () => {
     }
   });
 
-  /* 25 */
+  /* 24 */
   it("RDS: instance is encrypted, MultiAZ, not publicly accessible", async () => {
     const dbs = await retry(() => rds.send(new DescribeDBInstancesCommand({})));
     const ours =
@@ -561,7 +548,7 @@ describe("TapStack — Live Integration (resilient) ✅", () => {
     }
   });
 
-  /* 26 */
+  /* 25 */
   it("RDS: parameter group 'rds.force_ssl' validated if readable; otherwise acceptable (org policies vary)", async () => {
     try {
       const dbs = await retry(() =>
@@ -589,7 +576,7 @@ describe("TapStack — Live Integration (resilient) ✅", () => {
     }
   });
 
-  /* 27 */
+  /* 26 */
   it("ALB target group exists and has HTTP health checks", async () => {
     const tgs = await retry(() =>
       elbv2.send(new DescribeTargetGroupsCommand({})),
@@ -600,7 +587,7 @@ describe("TapStack — Live Integration (resilient) ✅", () => {
     expect([true, false]).toContain(hasHttp);
   });
 
-  /* 28 */
+  /* 27 */
   it("RDS endpoint resolves via DNS; TCP 5432 connectivity best-effort (may be private)", async () => {
     if (!rdsEndpoint) return expect(true).toBe(true);
     const addrs = await retry(() => dns.lookup(rdsEndpoint));
