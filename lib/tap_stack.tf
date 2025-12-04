@@ -19,7 +19,7 @@ terraform {
     }
   }
 
-  backend "s3" {}
+  # backend "s3" {}
 }
 
 # ============================================================================
@@ -576,7 +576,6 @@ locals {
   # Lambda environment variables (common across functions)
   lambda_env_vars = {
     ENVIRONMENT = var.env
-    AWS_REGION  = var.aws_region
     KMS_KEY_ID  = aws_kms_key.phi_encryption.id
   }
 }
@@ -594,6 +593,8 @@ data "aws_cognito_user_pools" "existing" {
 }
 
 data "aws_caller_identity" "current" {}
+
+data "aws_region" "current" {}
 
 # ============================================================================
 # NETWORKING RESOURCES
@@ -880,6 +881,40 @@ resource "aws_kms_key" "cloudwatch_logs" {
   description             = "KMS key for CloudWatch Logs encryption"
   deletion_window_in_days = 30
   enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${data.aws_region.current.name}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt*",
+          "kms:Decrypt*",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:Describe*"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" : "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*"
+          }
+        }
+      }
+    ]
+  })
 
   tags = merge(local.tags, {
     Name = "${local.prefix}-cloudwatch-logs"
@@ -1353,7 +1388,7 @@ resource "aws_rds_cluster" "aurora" {
   cluster_identifier                  = "${local.prefix}-${var.cluster_identifier}"
   engine                              = "aurora-postgresql"
   engine_mode                         = "provisioned"
-  engine_version                      = "15.4"
+  engine_version                      = "15.14"
   database_name                       = var.database_name
   master_username                     = var.master_username
   master_password                     = random_password.aurora_master.result
@@ -1448,7 +1483,8 @@ resource "aws_sns_topic" "session_events" {
 
 # Prescription Approved Topic
 resource "aws_sns_topic" "prescription_approved" {
-  name              = "${local.prefix}-${var.prescription_approved_topic}"
+  name              = "${local.prefix}-${var.prescription_approved_topic}.fifo"
+  fifo_topic        = true
   kms_master_key_id = aws_kms_key.phi_encryption.id
 
   tags = merge(local.tags, {
@@ -1641,10 +1677,12 @@ resource "aws_sqs_queue" "pharmacy_fulfillment_dlq" {
 
 # Patient Prescriptions Queue
 resource "aws_sqs_queue" "patient_prescriptions" {
-  name                       = "${local.prefix}-${var.patient_prescriptions_queue}"
-  visibility_timeout_seconds = var.visibility_timeout
-  message_retention_seconds  = local.env_config[var.env].sqs_retention_days * 86400
-  kms_master_key_id          = aws_kms_key.phi_encryption.id
+  name                        = "${local.prefix}-${var.patient_prescriptions_queue}.fifo"
+  fifo_queue                  = true
+  content_based_deduplication = true
+  visibility_timeout_seconds  = var.visibility_timeout
+  message_retention_seconds   = local.env_config[var.env].sqs_retention_days * 86400
+  kms_master_key_id           = aws_kms_key.phi_encryption.id
 
 
   redrive_policy = jsonencode({
@@ -1722,12 +1760,12 @@ resource "aws_sns_topic_subscription" "patient_prescriptions" {
 # SQS Queue Policies for SNS
 resource "aws_sqs_queue_policy" "sns_access" {
   for_each = {
-    patient_notifications  = aws_sqs_queue.patient_notifications.arn
-    provider_notifications = aws_sqs_queue.provider_notifications.arn
-    billing                = aws_sqs_queue.billing.arn
-    pharmacist_review      = aws_sqs_queue.pharmacist_review.arn
-    pharmacy_fulfillment   = aws_sqs_queue.pharmacy_fulfillment.arn
-    patient_prescriptions  = aws_sqs_queue.patient_prescriptions.arn
+    patient_notifications  = aws_sqs_queue.patient_notifications.url
+    provider_notifications = aws_sqs_queue.provider_notifications.url
+    billing                = aws_sqs_queue.billing.url
+    pharmacist_review      = aws_sqs_queue.pharmacist_review.url
+    pharmacy_fulfillment   = aws_sqs_queue.pharmacy_fulfillment.url
+    patient_prescriptions  = aws_sqs_queue.patient_prescriptions.url
   }
 
   queue_url = each.value
@@ -2703,7 +2741,6 @@ resource "aws_lambda_permission" "api_gateway_session" {
 # API Deployment
 resource "aws_api_gateway_deployment" "main" {
   rest_api_id = aws_api_gateway_rest_api.main.id
-  stage_name  = var.stage_name
 
   depends_on = [
     aws_api_gateway_integration.appointments_lambda,

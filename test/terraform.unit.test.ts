@@ -13,8 +13,6 @@ const VARIABLES_PATH = path.join(LIB_DIR, "variables.tf");
 // Helper to read file content
 const readFile = (filePath: string) => fs.readFileSync(filePath, "utf8");
 
-// --- Parsing Helpers ---
-
 // Extract a block by type and name (e.g., resource "aws_s3_bucket" "name")
 const extractBlock = (content: string, blockType: string, blockLabel1: string, blockLabel2?: string): string | null => {
   let regexStr = `${blockType}\\s+"${blockLabel1}"`;
