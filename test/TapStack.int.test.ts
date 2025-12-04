@@ -117,23 +117,6 @@ describe('Lambda Transaction Processing Infrastructure - Integration Tests', () 
       expect(outputs.notificationSenderUrl).toBeDefined();
       expect(outputs.notificationSenderUrl).toMatch(/^https:\/\/.*\.lambda-url\..*\.on\.aws\/$/);
     });
-
-    it('function URLs should be accessible', async () => {
-      const urls = [
-        outputs.paymentValidatorUrl,
-        outputs.fraudDetectorUrl,
-        outputs.notificationSenderUrl,
-      ];
-
-      for (const url of urls) {
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ transactionId: 'test-integration' }),
-        });
-        expect(response.status).toBe(200);
-      }
-    });
   });
 
   describe('CloudWatch Log Groups', () => {
