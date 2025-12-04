@@ -90,19 +90,19 @@ export class VPCModule extends Construct {
 
     // Create single NAT Gateway in first AZ to avoid EIP limits
     // EIP for NAT Gateway
-    const eip = new aws.eip.Eip(this, `nat-eip-0`, {
+    const eip = new aws.eip.Eip(this, 'nat-eip-0', {
       domain: 'vpc',
       tags: {
         ...props.tags,
-        Name: resourceName(`payment-nat-eip-1`),
+        Name: resourceName('payment-nat-eip-1'),
       },
     });
 
     // NAT Gateway in first public subnet
-    const natGateway = new aws.natGateway.NatGateway(this, `nat-0`, {
+    const natGateway = new aws.natGateway.NatGateway(this, 'nat-0', {
       allocationId: eip.id,
       subnetId: this.publicSubnets[0].id,
-      tags: { ...props.tags, Name: resourceName(`payment-nat-1`) },
+      tags: { ...props.tags, Name: resourceName('payment-nat-1') },
     });
     this.natGateways.push(natGateway);
 
