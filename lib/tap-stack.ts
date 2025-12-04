@@ -14,11 +14,9 @@ export interface TapStackArgs {
 }
 
 export class TapStack extends pulumi.ComponentResource {
-  public readonly configRecorderName: pulumi.Output<string>;
   public readonly bucketArn: pulumi.Output<string>;
   public readonly lambdaFunctionName: pulumi.Output<string>;
   public readonly snsTopicArn: pulumi.Output<string>;
-  public readonly deliveryChannelId: pulumi.Output<string>;
   public readonly s3EncryptionRuleId: pulumi.Output<string>;
   public readonly ec2TaggingRuleId: pulumi.Output<string>;
   public readonly iamPasswordPolicyRuleId: pulumi.Output<string>;
@@ -98,93 +96,10 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // IAM role for AWS Config with correct managed policy
-    const configRole = new aws.iam.Role(
-      `config-role-${envSuffix}`,
-      {
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Principal: { Service: 'config.amazonaws.com' },
-              Action: 'sts:AssumeRole',
-            },
-          ],
-        }),
-        managedPolicyArns: [
-          'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole',
-        ],
-        tags: defaultTags,
-      },
-      { parent: this }
-    );
-
-    // Additional policy for Config role to write to S3
-    new aws.iam.RolePolicy(
-      `config-s3-policy-${envSuffix}`,
-      {
-        role: configRole.id,
-        policy: configBucket.arn.apply((bucketArn) =>
-          JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Action: ['s3:PutObject', 's3:PutObjectAcl'],
-                Resource: `${bucketArn}/*`,
-                Condition: {
-                  StringLike: {
-                    's3:x-amz-acl': 'bucket-owner-full-control',
-                  },
-                },
-              },
-              {
-                Effect: 'Allow',
-                Action: ['s3:GetBucketAcl'],
-                Resource: bucketArn,
-              },
-            ],
-          })
-        ),
-      },
-      { parent: this }
-    );
-
-    // AWS Config Recorder - creates new recorder for this environment
-    const configRecorder = new aws.cfg.Recorder(
-      `config-recorder-${envSuffix}`,
-      {
-        roleArn: configRole.arn,
-        recordingGroup: {
-          allSupported: true,
-          includeGlobalResourceTypes: true,
-        },
-      },
-      { parent: this }
-    );
-
-    // AWS Config Delivery Channel - delivers config snapshots to S3
-    const deliveryChannel = new aws.cfg.DeliveryChannel(
-      `config-delivery-${envSuffix}`,
-      {
-        s3BucketName: configBucket.bucket,
-        snapshotDeliveryProperties: {
-          deliveryFrequency: 'TwentyFour_Hours',
-        },
-      },
-      { parent: this, dependsOn: [configRecorder] }
-    );
-
-    // Enable the Config Recorder
-    new aws.cfg.RecorderStatus(
-      `config-recorder-status-${envSuffix}`,
-      {
-        name: configRecorder.name,
-        isEnabled: true,
-      },
-      { parent: this, dependsOn: [deliveryChannel] }
-    );
+    // Note: AWS Config Recorder and Delivery Channel are not created here
+    // because AWS allows only 1 Config Recorder per region per account.
+    // This stack assumes an existing Config Recorder is already enabled in the account.
+    // Config Rules will work with the existing recorder.
 
     // Config rule for S3 encryption
     const s3EncryptionRule = new aws.cfg.Rule(
@@ -195,7 +110,7 @@ export class TapStack extends pulumi.ComponentResource {
           sourceIdentifier: 'S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED',
         },
       },
-      { parent: this, dependsOn: [configRecorder] }
+      { parent: this }
     );
 
     // Config rule for EC2 tagging
@@ -212,7 +127,7 @@ export class TapStack extends pulumi.ComponentResource {
           tag3Key: 'CostCenter',
         }),
       },
-      { parent: this, dependsOn: [configRecorder] }
+      { parent: this }
     );
 
     // Config rule for IAM password policy
@@ -224,7 +139,7 @@ export class TapStack extends pulumi.ComponentResource {
           sourceIdentifier: 'IAM_PASSWORD_POLICY',
         },
       },
-      { parent: this, dependsOn: [configRecorder] }
+      { parent: this }
     );
 
     // SNS topic for compliance alerts
@@ -452,22 +367,18 @@ Full report available at: s3://\${process.env.BUCKET_NAME}/\${reportKey}\`,
       { parent: this }
     );
 
-    this.configRecorderName = configRecorder.name;
     this.bucketArn = configBucket.arn;
     this.lambdaFunctionName = complianceFunction.name;
     this.snsTopicArn = alertTopic.arn;
-    this.deliveryChannelId = deliveryChannel.id;
     this.s3EncryptionRuleId = s3EncryptionRule.id;
     this.ec2TaggingRuleId = ec2TaggingRule.id;
     this.iamPasswordPolicyRuleId = iamPasswordPolicyRule.id;
     this.complianceAlarmArn = complianceAlarm.arn;
 
     this.registerOutputs({
-      configRecorderName: this.configRecorderName,
       bucketArn: this.bucketArn,
       lambdaFunctionName: this.lambdaFunctionName,
       snsTopicArn: this.snsTopicArn,
-      deliveryChannelId: this.deliveryChannelId,
       s3EncryptionRuleId: this.s3EncryptionRuleId,
       ec2TaggingRuleId: this.ec2TaggingRuleId,
       iamPasswordPolicyRuleId: this.iamPasswordPolicyRuleId,

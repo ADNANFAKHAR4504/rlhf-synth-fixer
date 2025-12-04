@@ -32,14 +32,6 @@ describe('TapStack', () => {
       expect(stack).toBeDefined();
     });
 
-    it('should have configRecorderName output', (done) => {
-      stack.configRecorderName.apply(name => {
-        expect(name).toBeDefined();
-        expect(typeof name).toBe('string');
-        done();
-      });
-    });
-
     it('should have bucketArn output', (done) => {
       stack.bucketArn.apply(arn => {
         expect(arn).toBeDefined();
@@ -83,7 +75,7 @@ describe('TapStack', () => {
     });
 
     it('should use custom environmentSuffix in resource names', (done) => {
-      stack.configRecorderName.apply(name => {
+      stack.lambdaFunctionName.apply(name => {
         expect(name).toContain('prod');
         done();
       });
@@ -91,12 +83,10 @@ describe('TapStack', () => {
 
     it('should have all required outputs', (done) => {
       pulumi.all([
-        stack.configRecorderName,
         stack.bucketArn,
         stack.lambdaFunctionName,
         stack.snsTopicArn,
-      ]).apply(([recorderName, bucketArn, functionName, topicArn]) => {
-        expect(recorderName).toBeDefined();
+      ]).apply(([bucketArn, functionName, topicArn]) => {
         expect(bucketArn).toBeDefined();
         expect(functionName).toBeDefined();
         expect(topicArn).toBeDefined();
@@ -111,7 +101,7 @@ describe('TapStack', () => {
       const stack = new TapStack('test-stack-env', {});
 
       expect(stack).toBeDefined();
-      stack.configRecorderName.apply(name => {
+      stack.lambdaFunctionName.apply(name => {
         expect(name).toBeDefined();
       });
 
@@ -121,7 +111,7 @@ describe('TapStack', () => {
     it('should default to "dev" when no environmentSuffix provided', (done) => {
       const stack = new TapStack('test-stack-default', {});
 
-      stack.configRecorderName.apply(name => {
+      stack.lambdaFunctionName.apply(name => {
         expect(name).toContain('dev');
         done();
       });
@@ -138,10 +128,13 @@ describe('TapStack', () => {
     });
 
     it('should register all outputs', () => {
-      expect(stack.configRecorderName).toBeDefined();
       expect(stack.bucketArn).toBeDefined();
       expect(stack.lambdaFunctionName).toBeDefined();
       expect(stack.snsTopicArn).toBeDefined();
+      expect(stack.s3EncryptionRuleId).toBeDefined();
+      expect(stack.ec2TaggingRuleId).toBeDefined();
+      expect(stack.iamPasswordPolicyRuleId).toBeDefined();
+      expect(stack.complianceAlarmArn).toBeDefined();
     });
   });
 });
