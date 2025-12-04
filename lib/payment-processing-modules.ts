@@ -86,24 +86,25 @@ export class VPCModule extends Construct {
         }
       );
       this.privateSubnets.push(privateSubnet);
-
-      // EIP for NAT Gateway
-      const eip = new aws.eip.Eip(this, `nat-eip-${index}`, {
-        domain: 'vpc',
-        tags: {
-          ...props.tags,
-          Name: resourceName(`payment-nat-eip-${index + 1}`),
-        },
-      });
-
-      // NAT Gateway
-      const natGateway = new aws.natGateway.NatGateway(this, `nat-${index}`, {
-        allocationId: eip.id,
-        subnetId: publicSubnet.id,
-        tags: { ...props.tags, Name: resourceName(`payment-nat-${index + 1}`) },
-      });
-      this.natGateways.push(natGateway);
     });
+
+    // Create single NAT Gateway in first AZ to avoid EIP limits
+    // EIP for NAT Gateway
+    const eip = new aws.eip.Eip(this, `nat-eip-0`, {
+      domain: 'vpc',
+      tags: {
+        ...props.tags,
+        Name: resourceName(`payment-nat-eip-1`),
+      },
+    });
+
+    // NAT Gateway in first public subnet
+    const natGateway = new aws.natGateway.NatGateway(this, `nat-0`, {
+      allocationId: eip.id,
+      subnetId: this.publicSubnets[0].id,
+      tags: { ...props.tags, Name: resourceName(`payment-nat-1`) },
+    });
+    this.natGateways.push(natGateway);
 
     // Public Route Table
     const publicRouteTable = new aws.routeTable.RouteTable(this, 'public-rt', {
@@ -128,7 +129,7 @@ export class VPCModule extends Construct {
       );
     });
 
-    // Private Route Tables (one per AZ)
+    // Private Route Tables (one per AZ) - all using single NAT Gateway
     this.privateSubnets.forEach((subnet, index) => {
       const privateRouteTable = new aws.routeTable.RouteTable(
         this,
@@ -145,7 +146,7 @@ export class VPCModule extends Construct {
       new aws.route.Route(this, `private-route-${index}`, {
         routeTableId: privateRouteTable.id,
         destinationCidrBlock: '0.0.0.0/0',
-        natGatewayId: this.natGateways[index].id,
+        natGatewayId: this.natGateways[0].id, // Use single NAT Gateway
       });
 
       new aws.routeTableAssociation.RouteTableAssociation(
@@ -887,6 +888,7 @@ export class ECSModule extends Construct {
       taskDefinition: this.taskDefinition.arn,
       desiredCount: 2,
       launchType: 'FARGATE',
+      forceNewDeployment: true,
       networkConfiguration: {
         subnets: props.privateSubnetIds,
         securityGroups: [this.securityGroup.id],
@@ -901,6 +903,10 @@ export class ECSModule extends Construct {
       ],
       tags: { ...props.tags, Name: resourceName('payment-service') },
       dependsOn: [this.logGroup],
+      lifecycle: {
+        createBeforeDestroy: true,
+        ignoreChanges: ['desired_count'],
+      },
     });
   }
 }
