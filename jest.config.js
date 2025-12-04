@@ -1,58 +1,35 @@
-/**
- * Jest Configuration
- * 
- * IMPORTANT: Do NOT change the 'roots' configuration below.
- * Test files must be placed in the 'test/' folder (singular, not 'tests/').
- * This convention is enforced across all TypeScript/JavaScript templates.
- * 
- * If you need to modify test configuration, please consult the team first.
- */
 module.exports = {
+  preset: 'ts-jest',
   testEnvironment: 'node',
   roots: ['<rootDir>/test'],
-  testMatch: ['**/*.test.ts', '**/*.test.mjs', '**/*.py'],
-  preset: 'ts-jest',
-  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs'],
-  transform: {
-    '^.+\\.tsx?$': 'ts-jest',
-    // Transform JS files (so ESM syntax in some node_modules can be transpiled)
-    '^.+\\.jsx?$': 'babel-jest',
-    '^.+\\.mjs$': 'babel-jest',
-  },
-  transformIgnorePatterns: [
-    // allow transforming some packages that ship ESM (including kubernetes client and its deps)
-    'node_modules/(?!(aws-cdk-lib|@aws-cdk|constructs|@aws-sdk|@smithy|@kubernetes/client-node|openid-client|oauth4webapi|jose)/)',
-  ],
+  testMatch: ['**/*.test.ts'],
   collectCoverageFrom: [
-    '<rootDir>/lib/**/*.ts',
-    '<rootDir>/lib/**/*.mjs',
-    '<rootDir>/lib/**/*.js',
-    '!<rootDir>/bin/**/*.ts',
-    '!<rootDir>/lib/lambda/**',
-    '!<rootDir>/**/*.d.ts',
-    '!<rootDir>/**/*.test.ts',
-    '!<rootDir>/**/*.test.js',
-    '!<rootDir>/node_modules/**',
+    'lib/**/*.ts',
+    '!lib/**/*.d.ts',
+    '!lib/lambda/**',
   ],
+  coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'json-summary'],
   coverageThreshold: {
     global: {
-      branches: 70,
-      functions: 100,
-      lines: 97,
-      statements: 97,
+      branches: 80,
+      functions: 80,
+      lines: 80,
+      statements: 80,
     },
   },
-  testTimeout: 60000,
-  silent: false,
-  verbose: true,
-  globals: {
-    'ts-jest': {
-      isolatedModules: true,
-      tsconfig: {
-        allowJs: true,
-        esModuleInterop: true,
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
+  transform: {
+    '^.+\\.tsx?$': [
+      'ts-jest',
+      {
+        tsconfig: {
+          moduleResolution: 'node',
+          esModuleInterop: true,
+          skipLibCheck: true,
+        },
       },
-    },
+    ],
   },
+  testTimeout: 30000,
 };

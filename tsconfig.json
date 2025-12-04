@@ -1,41 +1,29 @@
-
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "lib": ["es2022"],
+    "target": "ES2020",
+    "module": "commonjs",
+    "lib": ["ES2020"],
     "declaration": true,
+    "outDir": "./dist",
+    "rootDir": "./",
     "strict": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "noImplicitThis": true,
-    "alwaysStrict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "sourceMap": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": false,
-    "inlineSourceMap": true,
-    "inlineSources": true,
-    "experimentalDecorators": true,
-    "strictPropertyInitialization": false,
-    "typeRoots": ["./node_modules/@types"],
-    "types": ["node"],
-    "isolatedModules": true,
-    "resolveJsonModule": true,
-    "esModuleInterop": true,
-    "outDir": "dist"
+    "types": ["node", "jest"]
   },
+  "include": [
+    "lib/**/*",
+    "test/**/*"
+  ],
   "exclude": [
     "node_modules",
-    "cdk.out",
-    "templates",
-    "archive",
-    "subcategory-references",
-    "worktree",
-    "test",
-    "tests",
-    "cli",
-    "**/*.d.ts"
+    "dist",
+    "lib/lambda/**"
   ]
 }
