@@ -428,7 +428,7 @@ describe('Comprehensive Terraform Unit Tests', () => {
         expect(vars.env).toBe('dev');
         expect(vars.aws_region).toBe('us-east-1');
         expect(vars.project_name).toBe('tap-delivery');
-        expect(vars.pr_number).toBe('pr1234');
+        expect(vars.pr_number).toBe('pr7878');
 
         expect(vars.orders_shard_count).toBe(2);
         expect(vars.locations_shard_count).toBe(1);
@@ -460,7 +460,7 @@ describe('Comprehensive Terraform Unit Tests', () => {
         expect(vars.env).toBe('staging');
         expect(vars.aws_region).toBe('us-east-1');
         expect(vars.project_name).toBe('tap-delivery');
-        expect(vars.pr_number).toBe('pr1234');
+        expect(vars.pr_number).toBe('pr7878');
 
         expect(vars.orders_shard_count).toBe(5);
         expect(vars.locations_shard_count).toBe(3);
@@ -492,7 +492,7 @@ describe('Comprehensive Terraform Unit Tests', () => {
         expect(vars.env).toBe('prod');
         expect(vars.aws_region).toBe('us-east-1');
         expect(vars.project_name).toBe('tap-delivery');
-        expect(vars.pr_number).toBe('pr1234');
+        expect(vars.pr_number).toBe('pr7878');
 
         expect(vars.orders_shard_count).toBe(10);
         expect(vars.locations_shard_count).toBe(5);
