@@ -106,16 +106,23 @@ class ComplianceAnalyzer:
                 else:
                     payload = {'error': 'Empty response'}
 
+                # Determine success based on invocation status
+                # Lambda can return with statusCode 200 but have an error in FunctionError field
+                invocation_success = (
+                    invoke_response['StatusCode'] == 200 and
+                    'FunctionError' not in invoke_response
+                )
+
                 lambda_analysis['invocation_result'] = {
                     'status_code': invoke_response['StatusCode'],
                     'payload': payload,
-                    'success': invoke_response['StatusCode'] == 200 and 'error' not in payload
+                    'success': invocation_success
                 }
 
-                if invoke_response['StatusCode'] == 200 and 'error' not in payload:
+                if invocation_success:
                     logger.info("✓ Lambda function executed successfully")
                     if 'body' in payload:
-                        body = json.loads(payload['body'])
+                        body = json.loads(payload['body']) if isinstance(payload['body'], str) else payload['body']
                         logger.info(f"  Total violations: {body.get('totalViolations', 0)}")
                         logger.info(f"  Critical violations: {body.get('criticalViolations', 0)}")
                 else:
