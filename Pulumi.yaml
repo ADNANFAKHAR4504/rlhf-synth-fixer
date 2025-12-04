@@ -1,0 +1,5 @@
+name: TapStack
+runtime:
+  name: nodejs
+description: CI/CD Pipeline for Payment Processing Microservices
+main: index.ts

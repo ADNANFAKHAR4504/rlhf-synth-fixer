@@ -1,0 +1,8 @@
+encryptionsalt: v1:BLfklNJv1L0=:v1:4gq9njOlOPxRw/M4:5Mf42aB+usuEvRtQ81yPlmzSJzopEQ==
+config:
+  aws:region: us-east-2
+  TapStack:environmentSuffix: n7a4t5r3
+  TapStack:githubOwner: test-org
+  TapStack:githubRepo: test-repo
+  TapStack:githubBranch: main
+  TapStack:notificationEmail: test@example.com

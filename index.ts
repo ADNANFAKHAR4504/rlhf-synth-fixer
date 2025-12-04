@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Pulumi Program Entry Point - CI/CD Pipeline for Payment Processing Microservices
  *
@@ -12,14 +11,15 @@
  * - IAM roles with least privilege access
  */
 import * as pulumi from '@pulumi/pulumi';
-import { TapStack } from '../lib/tap-stack';
+import { TapStack } from './lib/tap-stack';
 
 // Get Pulumi configuration
 const config = new pulumi.Config();
 const awsConfig = new pulumi.Config('aws');
 
 // Required configuration
-const environmentSuffix = pulumi.getStack();
+const environmentSuffix =
+  config.require('environmentSuffix') || pulumi.getStack();
 const region = awsConfig.get('region') || 'us-east-2';
 
 // GitHub configuration
@@ -61,9 +61,9 @@ const stack = new TapStack('TapStack', {
   albListenerArn,
   tags: {
     Environment: environmentSuffix,
-    Project: 'PaymentProcessing',
-    CostCenter: 'Engineering',
-    ManagedBy: 'Pulumi',
+    Project: 'payment-processing-cicd',
+    CostCenter: 'fintech-operations',
+    ManagedBy: 'pulumi',
   },
 });
 
