@@ -486,19 +486,19 @@ exports.handler = async (event) => {
     this.logGroupName = logGroup.name;
 
     // Dashboard URLs - could be CloudWatch console URLs
-    this.dashboardUrls = pulumi.output({
-      cloudwatchLogs: pulumi.interpolate`https://console.aws.amazon.com/cloudwatch/home?region=${awsRegion}#logsV2:log-groups/log-group/${logGroup.name}`,
-    });
+    this.dashboardUrls = logGroup.name.apply(name => ({
+      cloudwatchLogs: `https://console.aws.amazon.com/cloudwatch/home?region=${awsRegion}#logsV2:log-groups/log-group/${name}`,
+    }));
 
     // SNS Topic ARNs
-    this.snsTopicArns = pulumi.output({
-      complianceAlerts: alertTopic.arn,
-    });
+    this.snsTopicArns = alertTopic.arn.apply(arn => ({
+      complianceAlerts: arn,
+    }));
 
     // Lambda Function ARNs
-    this.lambdaFunctionArns = pulumi.output({
-      complianceScanner: lambdaFunction.arn,
-    });
+    this.lambdaFunctionArns = lambdaFunction.arn.apply(arn => ({
+      complianceScanner: arn,
+    }));
 
     // Register the outputs of this component
     this.registerOutputs({
