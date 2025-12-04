@@ -1,7 +1,7 @@
 # Serverless Fraud Detection Pipeline
 
 ## Platform and Language
-**MANDATORY:** Use **CDKTF with Python** for this infrastructure.
+**MANDATORY:** Use **CDKTF with Python** for this infrastructure
 
 ## Task Overview
 Create a CDKTF Python program to deploy a serverless fraud detection pipeline. The configuration must:
