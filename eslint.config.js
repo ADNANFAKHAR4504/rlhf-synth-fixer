@@ -36,7 +36,6 @@ module.exports = [
 
       // Quote preferences
       quotes: ['error', 'single', { avoidEscape: true }],
-      '@typescript-eslint/quotes': ['error', 'single', { avoidEscape: true }],
 
       // Import rules (simplified for templates)
       'import/prefer-default-export': 'off',
@@ -81,7 +80,6 @@ module.exports = [
 
       // Quote preferences
       quotes: ['error', 'single', { avoidEscape: true }],
-      '@typescript-eslint/quotes': ['error', 'single', { avoidEscape: true }],
 
       // Import rules
       'import/prefer-default-export': 'off',
