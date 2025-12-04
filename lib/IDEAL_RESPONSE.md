@@ -1,5 +1,9 @@
 # Multi-Environment Infrastructure with CDKTF Python
 
+**Platform**: cdktf  
+**Language**: py (Python)  
+**Implementation**: CDKTF Python using Python 3.12
+
 This implementation creates identical infrastructure across three AWS environments (dev, staging, prod) with environment-specific configurations using CDKTF Python.
 
 ## Architecture Overview
@@ -203,13 +207,20 @@ self.vpc = DataAwsVpc(
 ### Secrets Manager (Fixed - Creates Secret Instead of Reading)
 
 ```python
-def _create_rds_database(self):
-    """Create RDS PostgreSQL database with environment-specific retention."""
-    import os
-    
-    # Get database credentials from environment variables
-    db_username = os.getenv("TF_VAR_db_username", "dbadmin")
-    db_password = os.getenv("TF_VAR_db_password", "TempPassword123!")
+    def _create_rds_database(self):
+        """Create RDS PostgreSQL database with environment-specific retention."""
+        import os
+        
+        # Get database credentials from environment variables
+        # SECURITY: Require password to be set - no hardcoded fallback
+        db_username = os.getenv("TF_VAR_db_username", "dbadmin")
+        db_password = os.getenv("TF_VAR_db_password")
+        
+        if not db_password:
+            raise ValueError(
+                "TF_VAR_db_password environment variable must be set. "
+                "Do not use hardcoded passwords in source code."
+            )
     
     # Create Secrets Manager secret for database credentials
     self.db_secret = SecretsmanagerSecret(
@@ -416,7 +427,7 @@ class TestTapStackIntegration(unittest.TestCase):
                         flat_outputs = {}
                         for key, value in outputs.items():
                             flat_outputs[key] = value
-                        print(f"✅ Loaded outputs from {path} (nested format, exact match)")
+                        print(f"Loaded outputs from {path} (nested format, exact match)")
                         return flat_outputs
 
                     # Try to find any TapStack key (fallback for slight name variations)
@@ -427,7 +438,7 @@ class TestTapStackIntegration(unittest.TestCase):
                                 flat_outputs = {}
                                 for k, v in outputs.items():
                                     flat_outputs[k] = v
-                                print(f"✅ Loaded outputs from {path} (nested format, found {key})")
+                                print(f"Loaded outputs from {path} (nested format, found {key})")
                                 return flat_outputs
 
                     # Handle flat format: {"key": "value"}
@@ -435,7 +446,7 @@ class TestTapStackIntegration(unittest.TestCase):
                         "fintech_infrastructure" in k or "api_gateway" in k.lower()
                         for k in data.keys()
                     ):
-                        print(f"✅ Loaded outputs from {path} (flat format)")
+                        print(f"Loaded outputs from {path} (flat format)")
                         return data
 
                     # Handle Terraform output format: {"key": {"value": "..."}}
@@ -446,14 +457,14 @@ class TestTapStackIntegration(unittest.TestCase):
                                 flat_outputs[key] = value["value"]
                             else:
                                 flat_outputs[key] = value
-                        print(f"✅ Loaded outputs from {path} (terraform format)")
+                        print(f"Loaded outputs from {path} (terraform format)")
                         return flat_outputs
 
                 except Exception as e:
-                    print(f"⚠️ Failed to parse {path}: {e}")
+                    print(f"Warning: Failed to parse {path}: {e}")
                     continue
 
-        print("⚠️ No outputs file found, will discover resources from AWS")
+        print("Warning: No outputs file found, will discover resources from AWS")
         return {}
 
     @classmethod
@@ -516,7 +527,7 @@ class TestTapStackIntegration(unittest.TestCase):
                 if cls.environment_suffix in api.get("name", ""):
                     return api["id"]
         except Exception as e:
-            print(f"⚠️ Failed to discover API Gateway: {e}")
+            print(f"Warning: Failed to discover API Gateway: {e}")
         return None
 
     def test_terraform_configuration_synthesis(self):
@@ -535,7 +546,7 @@ class TestTapStackIntegration(unittest.TestCase):
         # Synthesize to verify no errors
         try:
             app.synth()
-            print("✅ Stack synthesis successful")
+            print("Stack synthesis successful")
         except Exception as e:
             self.fail(f"Stack synthesis failed: {e}")
 
@@ -570,7 +581,7 @@ class TestTapStackIntegration(unittest.TestCase):
             self.assertIn("S3_BUCKET", env_vars)
             self.assertIn("DB_HOST", env_vars)
 
-            print(f"✅ Lambda function {self.lambda_function_name} verified")
+            print(f"Lambda function {self.lambda_function_name} verified")
 
         except ClientError as e:
             self.fail(f"Lambda function {self.lambda_function_name} not found: {e}")
@@ -611,7 +622,7 @@ class TestTapStackIntegration(unittest.TestCase):
                 == "ENABLED"
             )
 
-            print(f"✅ DynamoDB table {self.dynamodb_table_name} verified")
+            print(f"DynamoDB table {self.dynamodb_table_name} verified")
 
         except ClientError as e:
             self.fail(f"DynamoDB table {self.dynamodb_table_name} not found: {e}")
@@ -643,7 +654,7 @@ class TestTapStackIntegration(unittest.TestCase):
             self.assertTrue(config["IgnorePublicAcls"])
             self.assertTrue(config["RestrictPublicBuckets"])
 
-            print(f"✅ S3 bucket {self.s3_bucket_name} verified")
+            print(f"S3 bucket {self.s3_bucket_name} verified")
 
         except ClientError as e:
             self.fail(f"S3 bucket {self.s3_bucket_name} not found: {e}")
@@ -674,7 +685,7 @@ class TestTapStackIntegration(unittest.TestCase):
             # Verify backup configuration
             self.assertEqual(db_instance["BackupRetentionPeriod"], 1)
 
-            print(f"✅ RDS database {db_identifier} verified")
+            print(f"RDS database {db_identifier} verified")
 
         except ClientError as e:
             self.fail(f"RDS database not found: {e}")
@@ -702,7 +713,7 @@ class TestTapStackIntegration(unittest.TestCase):
             stage_names = {s["stageName"] for s in stages.get("item", [])}
             self.assertIn("dev", stage_names)
 
-            print(f"✅ API Gateway {self.api_gateway_id} verified")
+            print(f"API Gateway {self.api_gateway_id} verified")
 
         except ClientError as e:
             self.fail(f"API Gateway {self.api_gateway_id} not found: {e}")
@@ -723,7 +734,7 @@ class TestTapStackIntegration(unittest.TestCase):
             self.assertIn("EnvironmentSuffix", tags)
             self.assertEqual(tags["EnvironmentSuffix"], self.environment_suffix)
 
-            print(f"✅ Secrets Manager secret {secret_name} verified")
+            print(f"Secrets Manager secret {secret_name} verified")
 
         except ClientError as e:
             self.fail(f"Secrets Manager secret {secret_name} not found: {e}")
@@ -748,7 +759,7 @@ class TestTapStackIntegration(unittest.TestCase):
             self.assertEqual(log_group["logGroupName"], api_log_group)
             self.assertEqual(log_group["retentionInDays"], 7)
 
-            print(f"✅ CloudWatch log groups verified")
+            print(f"CloudWatch log groups verified")
 
         except ClientError as e:
             self.fail(f"CloudWatch log groups not found: {e}")
@@ -785,7 +796,7 @@ class TestTapStackIntegration(unittest.TestCase):
                 policy_arns,
             )
 
-            print(f"✅ Lambda IAM role {role_name} verified")
+            print(f"Lambda IAM role {role_name} verified")
 
         except ClientError as e:
             self.fail(f"Lambda IAM role {role_name} not found: {e}")
@@ -812,7 +823,7 @@ class TestTapStackIntegration(unittest.TestCase):
         except ClientError:
             pass
 
-        print("✅ Resource tagging verified")
+        print("Resource tagging verified")
 ```
 
 ## Key Fixes Applied

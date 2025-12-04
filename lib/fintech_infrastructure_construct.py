@@ -396,8 +396,15 @@ class FinTechInfrastructureConstruct(Construct):
         import os
         
         # Get database credentials from environment variables
+        # SECURITY: Require password to be set - no hardcoded fallback
         db_username = os.getenv("TF_VAR_db_username", "dbadmin")
-        db_password = os.getenv("TF_VAR_db_password", "TempPassword123!")
+        db_password = os.getenv("TF_VAR_db_password")
+        
+        if not db_password:
+            raise ValueError(
+                "TF_VAR_db_password environment variable must be set. "
+                "Do not use hardcoded passwords in source code."
+            )
         
         # Create Secrets Manager secret for database credentials
         self.db_secret = SecretsmanagerSecret(
