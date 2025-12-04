@@ -1,0 +1,37 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "1019122961",
+  "team": "5",
+  "startedAt": "2025-12-02T12:37:16.899Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "CloudFront",
+    "S3",
+    "KMS",
+    "DynamoDB",
+    "SNS",
+    "SQS",
+    "CloudWatch Logs",
+    "CloudWatch Alarms",
+    "CloudWatch Dashboards",
+    "IAM",
+    "VPC",
+    "X-Ray",
+    "WAFv2"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "siddhantr-sudo",
+  "dockerS3Location": ""
+}
