@@ -11,6 +11,25 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": ["EMR", "S3", "VPC", "KMS", "Step Functions", "Lambda", "Glue", "Athena", "IAM", "CloudWatch", "SNS", "EC2"],
-  "training_quality": 9.5
+  "aws_services": [
+    "EMR",
+    "S3",
+    "VPC",
+    "KMS",
+    "Step Functions",
+    "Lambda",
+    "Glue",
+    "Athena",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "EC2"
+  ],
+  "training_quality": 9.5,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
 }
