@@ -6,11 +6,9 @@ from constructs import Construct
 from cdktf import TerraformOutput, Fn
 from cdktf_cdktf_provider_aws.data_aws_vpc import DataAwsVpc
 from cdktf_cdktf_provider_aws.data_aws_subnets import DataAwsSubnets
-from cdktf_cdktf_provider_aws.data_aws_secretsmanager_secret import (
-    DataAwsSecretsmanagerSecret,
-)
-from cdktf_cdktf_provider_aws.data_aws_secretsmanager_secret_version import (
-    DataAwsSecretsmanagerSecretVersion,
+from cdktf_cdktf_provider_aws.secretsmanager_secret import SecretsmanagerSecret
+from cdktf_cdktf_provider_aws.secretsmanager_secret_version import (
+    SecretsmanagerSecretVersion,
 )
 from cdktf_cdktf_provider_aws.security_group import (
     SecurityGroup,
@@ -95,8 +93,9 @@ class FinTechInfrastructureConstruct(Construct):
         self.common_tags = common_tags
 
         # Get existing VPC (using default VPC for this example)
+        # Note: default=True finds the default VPC, tags filter is not needed
         self.vpc = DataAwsVpc(
-            self, "vpc", default=True, tags={"Name": f"vpc-{environment_suffix}"}
+            self, "vpc", default=True
         )
 
         # Get private subnets
@@ -394,17 +393,40 @@ class FinTechInfrastructureConstruct(Construct):
 
     def _create_rds_database(self):
         """Create RDS PostgreSQL database with environment-specific retention."""
-        # Get database password from Secrets Manager (existing secret)
-        self.db_secret = DataAwsSecretsmanagerSecret(
+        import os
+        
+        # Get database credentials from environment variables
+        db_username = os.getenv("TF_VAR_db_username", "dbadmin")
+        db_password = os.getenv("TF_VAR_db_password", "TempPassword123!")
+        
+        # Create Secrets Manager secret for database credentials
+        self.db_secret = SecretsmanagerSecret(
             self,
             "db_secret",
             name=f"rds-password-{self.environment_suffix}",
+            description=f"RDS PostgreSQL credentials for {self.environment_suffix}",
+            recovery_window_in_days=0,  # Immediate deletion for destroyability
+            tags={
+                **self.common_tags,
+                "Name": f"rds-password-{self.environment_suffix}",
+            },
         )
 
-        self.db_secret_version = DataAwsSecretsmanagerSecretVersion(
+        # Store credentials in the secret
+        db_credentials = {
+            "username": db_username,
+            "password": db_password,
+            "engine": "postgres",
+            "host": "",  # Will be updated after RDS creation
+            "port": 5432,
+            "dbname": "payments",
+        }
+        
+        self.db_secret_version = SecretsmanagerSecretVersion(
             self,
             "db_secret_version",
             secret_id=self.db_secret.id,
+            secret_string=json.dumps(db_credentials),
         )
 
         # DB Subnet Group
@@ -429,8 +451,8 @@ class FinTechInfrastructureConstruct(Construct):
             instance_class=self.config["rds_instance_class"],
             allocated_storage=20,
             storage_encrypted=True,
-            username="dbadmin",
-            password=self.db_secret_version.secret_string,
+            username=db_username,
+            password=db_password,
             multi_az=self.config["rds_multi_az"],
             vpc_security_group_ids=[self.rds_sg.id],
             db_subnet_group_name=self.db_subnet_group.name,
