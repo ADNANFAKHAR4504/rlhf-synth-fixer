@@ -1,0 +1,394 @@
+---
+
+name: Lambda ETL Optimization CI/CD Pipeline
+
+description: |
+  CI/CD pipeline for deploying optimized Lambda-based ETL infrastructure
+  with ARM64 Graviton2 architecture, X-Ray tracing, shared Lambda layers,
+  and CloudWatch monitoring. Features automated testing, approval workflows,
+  and rollback capabilities for data engineering workloads.
+
+platform: AWS
+iac_tool: Pulumi
+language: TypeScript
+
+pipeline:
+  name: lambda-etl-cicd-pipeline
+  trigger_on: push
+  branches:
+    - main
+  stages:
+    - name: Source
+      type: source
+      provider: GitHub
+      configuration:
+        connection_type: CodeStar
+        repository: github-repo
+        branch: main
+        auto_trigger: true
+
+    - name: Build
+      type: build
+      provider: CodeBuild
+      needs:
+        - Source
+      configuration:
+        compute_type: BUILD_GENERAL1_SMALL
+        environment: NodeJS
+        cache_enabled: true
+        cache_type: S3
+        buildspec: |
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                nodejs: 20
+              commands:
+                - echo Installing Pulumi CLI
+                - curl -fsSL https://get.pulumi.com | sh
+                - export PATH=$PATH:$HOME/.pulumi/bin
+            pre_build:
+              commands:
+                - echo Installing dependencies
+                - npm ci
+                - echo Building Lambda layer
+                - cd lib/lambda/layer/nodejs && npm ci && cd ../../../..
+            build:
+              commands:
+                - echo Running Pulumi preview
+                - pulumi preview --stack dev --non-interactive
+                - echo Packaging Lambda layer
+                - |
+                  cd lib/lambda/layer && \
+                  zip -r ../../../lambda-layer.zip nodejs
+          artifacts:
+            files:
+              - '**/*'
+              - lambda-layer.zip
+
+    - name: Test
+      type: build
+      provider: CodeBuild
+      needs:
+        - Build
+      configuration:
+        compute_type: BUILD_GENERAL1_SMALL
+        environment: NodeJS
+        cache_enabled: true
+        cache_type: Local
+        buildspec: |
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                nodejs: 20
+              commands:
+                - npm ci
+            pre_build:
+              commands:
+                - echo Installing test dependencies
+                - npm install --save-dev jest @types/jest ts-jest
+            build:
+              commands:
+                - echo Running unit tests
+                - npm test
+                - echo Running integration tests
+                - npm run test:integration
+                - echo Running Pulumi stack tests
+                - pulumi test --stack dev
+          reports:
+            test-results:
+              files:
+                - 'test-results/**/*.xml'
+              file-format: 'JUNITXML'
+            coverage-report:
+              files:
+                - 'coverage/**/*'
+              file-format: 'CLOVERXML'
+
+    - name: Security-Scan
+      type: build
+      provider: CodeBuild
+      needs:
+        - Build
+      configuration:
+        compute_type: BUILD_GENERAL1_SMALL
+        environment: NodeJS
+        buildspec: |
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                nodejs: 20
+              commands:
+                - npm ci
+            build:
+              commands:
+                - echo Running security audit
+                - npm audit --audit-level=high
+                - echo Running dependency check
+                - npx snyk test --severity-threshold=high
+                - echo Scanning Lambda code for vulnerabilities
+                - npx eslint lib/**/*.ts --ext .ts
+
+    - name: Manual-Approval
+      type: approval
+      provider: Manual
+      needs:
+        - Test
+        - Security-Scan
+      environment: production
+      configuration:
+        notification_arn: ${SNS_TOPIC_ARN}
+        custom_data: "Review and approve deployment of Lambda ETL infrastructure to production"
+        timeout_minutes: 1440
+
+    - name: Deploy
+      type: deploy
+      provider: Pulumi
+      needs:
+        - Manual-Approval
+      environment: production
+      configuration:
+        stack: prod
+        command: up
+        non_interactive: true
+        refresh: true
+        config:
+          environment: prod
+          team: data-engineering
+          costCenter: analytics
+
+resources:
+  lambda:
+    - name: data-ingestion
+      runtime: nodejs20.x
+      memory: 512
+      timeout: 60
+      architectures:
+        - arm64
+      xray_tracing: true
+      layers:
+        - etl-shared-dependencies
+
+    - name: data-transform
+      runtime: nodejs20.x
+      memory: 1024
+      timeout: 300
+      reserved_concurrency: 50
+      architectures:
+        - arm64
+      xray_tracing: true
+      snap_start: true
+      layers:
+        - etl-shared-dependencies
+
+    - name: data-output
+      runtime: nodejs20.x
+      memory: 512
+      timeout: 120
+      architectures:
+        - arm64
+      xray_tracing: true
+      layers:
+        - etl-shared-dependencies
+
+  lambda_layer:
+    - name: etl-shared-dependencies
+      compatible_runtimes:
+        - nodejs18.x
+        - nodejs20.x
+      compatible_architectures:
+        - arm64
+      description: Shared dependencies for ETL Lambda functions
+
+  s3:
+    - name: etl-ingestion-bucket
+      versioning: true
+      encryption: AWS_MANAGED
+      lifecycle_rules:
+        - expiration_days: 90
+          prefix: raw-data/
+
+    - name: etl-output-bucket
+      versioning: true
+      encryption: AWS_MANAGED
+      lifecycle_rules:
+        - expiration_days: 365
+          prefix: processed-data/
+
+    - name: pipeline-artifacts
+      versioning: true
+      encryption: AWS_MANAGED
+      lifecycle_rules:
+        - expiration_days: 30
+          prefix: artifacts/
+
+  cloudwatch:
+    alarms:
+      - name: data-ingestion-errors
+        metric: Errors
+        namespace: AWS/Lambda
+        threshold: 1
+        evaluation_periods: 2
+        period: 300
+        statistic: Sum
+        comparison_operator: GreaterThanThreshold
+        actions:
+          - ${SNS_TOPIC_ARN}
+
+      - name: data-transform-errors
+        metric: Errors
+        namespace: AWS/Lambda
+        threshold: 1
+        evaluation_periods: 2
+        period: 300
+        statistic: Sum
+        comparison_operator: GreaterThanThreshold
+        actions:
+          - ${SNS_TOPIC_ARN}
+
+      - name: data-output-errors
+        metric: Errors
+        namespace: AWS/Lambda
+        threshold: 1
+        evaluation_periods: 2
+        period: 300
+        statistic: Sum
+        comparison_operator: GreaterThanThreshold
+        actions:
+          - ${SNS_TOPIC_ARN}
+
+      - name: lambda-duration-alarm
+        metric: Duration
+        namespace: AWS/Lambda
+        threshold: 250000
+        evaluation_periods: 3
+        period: 300
+        statistic: Average
+        comparison_operator: GreaterThanThreshold
+        actions:
+          - ${SNS_TOPIC_ARN}
+
+      - name: lambda-throttles-alarm
+        metric: Throttles
+        namespace: AWS/Lambda
+        threshold: 10
+        evaluation_periods: 1
+        period: 60
+        statistic: Sum
+        comparison_operator: GreaterThanThreshold
+        actions:
+          - ${SNS_TOPIC_ARN}
+
+  sns:
+    - name: etl-lambda-alarms
+      display_name: ETL Lambda Error Alarms
+      subscriptions:
+        - protocol: email
+          endpoint: data-engineering@example.com
+
+  iam:
+    roles:
+      - name: etl-lambda-role
+        service: lambda.amazonaws.com
+        managed_policies:
+          - AWSLambdaBasicExecutionRole
+          - AWSXRayDaemonWriteAccess
+        inline_policies:
+          - name: S3Access
+            actions:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:ListBucket
+
+      - name: codepipeline-service-role
+        service: codepipeline.amazonaws.com
+        managed_policies:
+          - AWSCodePipelineFullAccess
+        inline_policies:
+          - name: CodePipelineAccess
+            actions:
+              - s3:GetObject
+              - s3:PutObject
+              - codebuild:StartBuild
+              - codebuild:BatchGetBuilds
+              - lambda:UpdateFunctionCode
+              - lambda:GetFunction
+              - lambda:PublishVersion
+              - iam:PassRole
+
+      - name: codebuild-service-role
+        service: codebuild.amazonaws.com
+        managed_policies:
+          - AWSCodeBuildDeveloperAccess
+        inline_policies:
+          - name: CodeBuildAccess
+            actions:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              - s3:GetObject
+              - s3:PutObject
+              - lambda:UpdateFunctionCode
+              - lambda:GetFunction
+              - lambda:PublishLayerVersion
+
+deployment:
+  region: us-east-1
+  environment_suffix: ${ENVIRONMENT_SUFFIX}
+  naming_convention: "etl-{resource-type}-{purpose}-{environmentSuffix}"
+
+monitoring:
+  cloudwatch_logs: true
+  cloudwatch_alarms: true
+  sns_notifications: true
+  xray_tracing: true
+
+security:
+  encryption_at_rest: true
+  encryption_in_transit: true
+  least_privilege_iam: true
+  lambda_reserved_concurrency: true
+
+cost_optimization:
+  graviton2_arm64: true
+  right_sized_memory: true
+  snap_start_enabled: true
+  s3_lifecycle_policies: true
+  reserved_concurrency: true
+  shared_lambda_layers: true
+
+outputs:
+  - name: ingestion_function_name
+    description: Data Ingestion Lambda Function Name
+  - name: ingestion_function_arn
+    description: Data Ingestion Lambda Function ARN
+  - name: transform_function_name
+    description: Data Transform Lambda Function Name
+  - name: transform_function_arn
+    description: Data Transform Lambda Function ARN
+  - name: output_function_name
+    description: Data Output Lambda Function Name
+  - name: output_function_arn
+    description: Data Output Lambda Function ARN
+  - name: shared_layer_arn
+    description: Shared Lambda Layer ARN
+  - name: alarm_topic_arn
+    description: SNS Topic ARN for Lambda Error Alarms
+  - name: lambda_role_arn
+    description: IAM Role ARN for Lambda Functions
+  - name: ingestion_alarm_arn
+    description: Data Ingestion Error Alarm ARN
+  - name: transform_alarm_arn
+    description: Data Transform Error Alarm ARN
+  - name: output_alarm_arn
+    description: Data Output Error Alarm ARN
+
+validation:
+  destroyable: true
+  environment_suffix_required: true
+  test_coverage_required: 100
+  integration_tests_required: true
+  documentation_required: true
+
