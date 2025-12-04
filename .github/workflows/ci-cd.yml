@@ -85,6 +85,7 @@ jobs:
   validate-commit-message:
     name: Validate Commit Message
     runs-on: ubuntu-24.04
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
