@@ -133,16 +133,26 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
     }
   });
 
-  const waitForSSMCommand = async (commandId: string, instanceId: string, maxAttempts = 20) => {
+  const waitForSSMCommand = async (commandId: string, instanceId: string, maxAttempts = 30) => {
+    // Initial delay to allow SSM to register the command
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
     for (let i = 0; i < maxAttempts; i++) {
-      const getCommand = new GetCommandInvocationCommand({
-        CommandId: commandId,
-        InstanceId: instanceId,
-      });
-      const invocation = await ssmClient.send(getCommand);
-      
-      if (invocation.Status === 'Success' || invocation.Status === 'Failed') {
-        return invocation;
+      try {
+        const getCommand = new GetCommandInvocationCommand({
+          CommandId: commandId,
+          InstanceId: instanceId,
+        });
+        const invocation = await ssmClient.send(getCommand);
+        
+        if (invocation.Status === 'Success' || invocation.Status === 'Failed') {
+          return invocation;
+        }
+      } catch (error: any) {
+        // InvocationDoesNotExist means the command hasn't been registered yet, retry
+        if (error.name !== 'InvocationDoesNotExist') {
+          throw error;
+        }
       }
       
       await new Promise(resolve => setTimeout(resolve, 3000));
