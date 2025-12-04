@@ -552,7 +552,6 @@ class TapStack(TerraformStack):
             runtime="python3.11",
             timeout=30,
             memory_size=256,
-            reserved_concurrent_executions=100,
             environment=LambdaFunctionEnvironment(
                 variables={
                     "DYNAMODB_TABLE": transactions_table.name
@@ -579,7 +578,6 @@ class TapStack(TerraformStack):
             runtime="python3.11",
             timeout=60,
             memory_size=512,
-            reserved_concurrent_executions=100,
             environment=LambdaFunctionEnvironment(
                 variables={
                     "SQS_QUEUE_URL": suspicious_transactions_queue.url
@@ -610,7 +608,6 @@ class TapStack(TerraformStack):
             runtime="python3.11",
             timeout=30,
             memory_size=256,
-            reserved_concurrent_executions=100,
             environment=LambdaFunctionEnvironment(
                 variables={
                     "SNS_TOPIC_ARN": fraud_alerts_topic.arn
