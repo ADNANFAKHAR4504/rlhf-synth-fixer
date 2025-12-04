@@ -385,30 +385,40 @@ export class TapStack extends cdk.Stack {
     // Bastion EC2 Instance with Elastic IP
     // ====================================================================================
 
-    // Use Amazon Linux 2023 AMI (latest, automatically looked up)
-    const bastionInstance = new ec2.Instance(this, 'BastionInstance', {
+    // Use BastionHostLinux - a higher-level construct that handles stabilization properly
+    const bastionHost = new ec2.BastionHostLinux(this, 'BastionHost', {
       vpc,
-      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
+      subnetSelection: { subnetType: ec2.SubnetType.PUBLIC },
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
         ec2.InstanceSize.MICRO
       ),
-      // Use SSM parameter to always get latest Amazon Linux 2023 AMI
       machineImage: ec2.MachineImage.latestAmazonLinux2023(),
       securityGroup: ec2SecurityGroup,
-      role: ec2Role,
       blockDevices: [
         {
           deviceName: '/dev/xvda',
           volume: ec2.BlockDeviceVolume.ebs(10, {
             volumeType: ec2.EbsDeviceVolumeType.GP3,
             encrypted: true,
-            deleteOnTermination: true,
           }),
         },
       ],
       requireImdsv2: true,
     });
+
+    // Attach the IAM role policies to the bastion's role
+    bastionHost.role.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore')
+    );
+    bastionHost.role.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy')
+    );
+
+    // Attach custom policies
+    secretsPolicy.attachToRole(bastionHost.role);
+    s3Policy.attachToRole(bastionHost.role);
+    logsPolicy.attachToRole(bastionHost.role);
 
     // Create Elastic IP separately
     const elasticIp = new ec2.CfnEIP(this, 'ElasticIP', {
@@ -422,17 +432,14 @@ export class TapStack extends cdk.Stack {
     });
 
     // Associate EIP with bastion using separate association resource
-    // This prevents race conditions and stabilization issues
     const eipAssociation = new ec2.CfnEIPAssociation(this, 'EIPAssociation', {
       allocationId: elasticIp.attrAllocationId,
-      instanceId: bastionInstance.instanceId,
+      instanceId: bastionHost.instanceId,
     });
-
-    // Ensure proper dependency order
     eipAssociation.addDependency(elasticIp);
 
     // Tag bastion
-    cdk.Tags.of(bastionInstance).add('iac-rlhf-amazon', 'true');
+    cdk.Tags.of(bastionHost).add('iac-rlhf-amazon', 'true');
 
     // ====================================================================================
     // Launch Template for ASG
@@ -742,7 +749,7 @@ EOF`,
     });
 
     new cdk.CfnOutput(this, 'BastionInstanceId', {
-      value: bastionInstance.instanceId,
+      value: bastionHost.instanceId,
       description: 'Bastion EC2 Instance ID',
       exportName: `bastion-instance-id${config.nameSuffix}`,
     });
