@@ -225,8 +225,12 @@ describe('Lambda Transaction Processing Infrastructure - Integration Tests', () 
         outputs.notificationSenderRoleArn,
       ];
 
+      // Get environment suffix from environment variable or default to pr pattern
+      const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+      const suffixPattern = new RegExp(`-${envSuffix}`);
+
       for (const resource of resources) {
-        expect(resource).toMatch(/-dev/);
+        expect(resource).toMatch(suffixPattern);
       }
     });
   });

@@ -6,17 +6,33 @@ import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 const ddbClient = AWSXRay.captureAWSv3Client(new DynamoDBClient({}));
 DynamoDBDocumentClient.from(ddbClient);
 
-export const handler = async (event: { transactionId?: string }) => {
+export const handler = async (event: any) => {
   console.log('Payment validation logic', JSON.stringify(event));
 
-  // Create custom X-Ray subsegment for database call
-  const segment = AWSXRay.getSegment();
-  const subsegment = segment?.addNewSubsegment('database-validation');
+  // Parse body if it's a Lambda URL request
+  let parsedEvent = event;
+  if (event.body && typeof event.body === 'string') {
+    try {
+      parsedEvent = JSON.parse(event.body);
+    } catch (e) {
+      parsedEvent = event;
+    }
+  }
+
+  // Create custom X-Ray subsegment for database call (if segment available)
+  let subsegment;
+  try {
+    const segment = AWSXRay.getSegment();
+    subsegment = segment?.addNewSubsegment('database-validation');
+  } catch (e) {
+    // X-Ray segment not available (e.g., in Lambda URL direct invocation)
+    console.log('X-Ray segment not available, continuing without tracing');
+  }
 
   try {
     // Placeholder for actual validation logic
     const validationResult = {
-      transactionId: event.transactionId || 'test-transaction',
+      transactionId: parsedEvent.transactionId || 'test-transaction',
       status: 'validated',
       timestamp: new Date().toISOString(),
     };
@@ -46,6 +62,13 @@ export const handler = async (event: { transactionId?: string }) => {
   } catch (error) {
     subsegment?.addError(error as Error);
     subsegment?.close();
-    throw error;
+    console.error('Error in payment validation:', error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        message: 'Internal server error',
+        error: (error as Error).message,
+      }),
+    };
   }
 };
