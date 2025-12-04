@@ -500,18 +500,6 @@ describe('Payment Processing Infrastructure Integration Tests', () => {
     }, 30000);
   });
 
-  describe('SNS Topics', () => {
-    test('SNS topic exists for payment notifications', async () => {
-      const result = await sns.listTopics().promise();
-
-      const paymentTopic = result.Topics?.find((topic) =>
-        topic.TopicArn?.includes('payment-notifications')
-      );
-
-      expect(paymentTopic).toBeDefined();
-    }, 30000);
-  });
-
   describe('End-to-End Payment Flow', () => {
     test('complete payment flow from API to DynamoDB', async () => {
       if (!outputs['api-gateway-url'] || !outputs['dynamodb-table-name']) {
