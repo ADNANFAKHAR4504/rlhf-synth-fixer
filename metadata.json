@@ -1,7 +1,7 @@
 {
   "po_id": "s4r2q0w6",
   "platform": "pulumi",
-  "language": "typescript",
+  "language": "ts",
   "subtask": "infrastructure-compliance-monitoring",
   "complexity": "medium",
   "difficulty": 3,
