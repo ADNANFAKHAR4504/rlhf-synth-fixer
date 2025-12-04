@@ -23,19 +23,19 @@ const lambdaFunctions = [
   {
     name: 'payment-validator',
     memory: 512,
-    reservedConcurrentExecutions: undefined, // Removed to avoid account limits
-    provisionedConcurrency: environment === 'production' ? 10 : 0,
+    reservedConcurrentExecutions: 100,
+    provisionedConcurrency: 5, // Provisioned concurrency to eliminate cold starts
   },
   {
     name: 'fraud-detector',
     memory: 256,
-    reservedConcurrentExecutions: undefined, // Removed to avoid account limits
+    reservedConcurrentExecutions: 50,
     provisionedConcurrency: 0,
   },
   {
     name: 'notification-sender',
     memory: 128,
-    reservedConcurrentExecutions: undefined, // Removed to avoid account limits
+    reservedConcurrentExecutions: 50,
     provisionedConcurrency: 0,
   },
 ];
@@ -199,7 +199,7 @@ function createProvisionedConcurrency(
       `${functionName}-provisioned-${environmentSuffix}`,
       {
         functionName: lambdaFunction.name,
-        qualifier: lambdaFunction.version,
+        qualifier: '$LATEST', // Use $LATEST version for provisioned concurrency
         provisionedConcurrentExecutions: concurrency,
       }
     );
