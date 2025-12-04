@@ -49,7 +49,7 @@ const complianceTopic = new aws.sns.Topic(
 );
 
 // SNS Email Subscription
-export const complianceSubscription = new aws.sns.TopicSubscription(
+const _complianceSubscription = new aws.sns.TopicSubscription(
   `compliance-email-${environmentSuffix}`,
   {
     topic: complianceTopic.arn,
@@ -190,7 +190,8 @@ const scheduledRule = new aws.cloudwatch.EventRule(
 );
 
 // Lambda Permission for EventBridge
-export const lambdaPermission = new aws.lambda.Permission(
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _lambdaPermission = new aws.lambda.Permission(
   `compliance-scanner-permission-${environmentSuffix}`,
   {
     action: 'lambda:InvokeFunction',
@@ -201,7 +202,8 @@ export const lambdaPermission = new aws.lambda.Permission(
 );
 
 // EventBridge Target
-export const scheduledTarget = new aws.cloudwatch.EventTarget(
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _scheduledTarget = new aws.cloudwatch.EventTarget(
   `compliance-schedule-target-${environmentSuffix}`,
   {
     rule: scheduledRule.name,
@@ -339,3 +341,13 @@ export const dashboardName = complianceDashboard.dashboardName;
 export const alarmName = complianceAlarm.name;
 export const eventRuleName = scheduledRule.name;
 export const logGroupName = lambdaLogGroup.name;
+// Export subscription details as a structured object for testing
+export const complianceSubscription = pulumi.all([
+  _complianceSubscription.arn,
+  _complianceSubscription.protocol,
+  _complianceSubscription.endpoint,
+]).apply(([arn, protocol, endpoint]) => ({
+  arn,
+  protocol,
+  endpoint,
+}));
