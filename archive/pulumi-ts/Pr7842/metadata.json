@@ -38,5 +38,11 @@
     "test_coverage": "100%",
     "deployment_time_estimate": "2-3 minutes",
     "analysis_time_estimate": "5-8 minutes for 100 buckets"
-  }
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
