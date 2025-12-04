@@ -19,5 +19,7 @@
     "cloudwatch-logs"
   ],
   "region": "us-east-1",
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "reviewer": "balasl342"
 }
