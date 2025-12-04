@@ -45,7 +45,7 @@ class InfrastructureOptimizer:
         - Reduce timeout from 300s to 60s
         - Reduce reserved concurrency to minimize costs
         """
-        print("\n🔧 Optimizing Lambda Functions...")
+        print("\n[INFO] Optimizing Lambda Functions...")
         
         try:
             # Find Lambda functions matching TapStack naming pattern
@@ -69,7 +69,7 @@ class InfrastructureOptimizer:
                         break
             
             if not matching_functions:
-                print(f"❌ No Lambda functions found for environment: {self.environment_suffix}")
+                print(f"[ERROR] No Lambda functions found for environment: {self.environment_suffix}")
                 print(f"Looking for patterns: {target_patterns}")
                 print(f"Available functions: {[f['FunctionName'] for f in functions['Functions'][:10]]}")
                 return False
@@ -89,13 +89,13 @@ class InfrastructureOptimizer:
                     Timeout=60
                 )
                 
-                print(f"  ✅ Updated: memory 128MB, timeout 60s")
+                print(f"  [OK] Updated: memory 128MB, timeout 60s")
                 optimized_count += 1
                 
                 # Wait briefly between updates to avoid rate limiting
                 time.sleep(1)
             
-            print(f"\n✅ Lambda optimization complete:")
+            print(f"\n[OK] Lambda optimization complete:")
             print(f"   - Functions optimized: {optimized_count}")
             print(f"   - Memory: 256MB → 128MB")
             print(f"   - Timeout: 300s → 60s")
@@ -103,7 +103,7 @@ class InfrastructureOptimizer:
             return True
             
         except ClientError as e:
-            print(f"❌ Error optimizing Lambda: {e}")
+            print(f"[ERROR] Error optimizing Lambda: {e}")
             return False
     
     def optimize_cloudwatch_logs(self) -> bool:
@@ -112,7 +112,7 @@ class InfrastructureOptimizer:
         - Reduce retention from 7 days to 3 days
         - Delete old log streams if any
         """
-        print("\n🔧 Optimizing CloudWatch Log Groups...")
+        print("\n[INFO] Optimizing CloudWatch Log Groups...")
         
         try:
             # Find log groups matching TapStack naming pattern
@@ -142,7 +142,7 @@ class InfrastructureOptimizer:
                         break
             
             if not all_log_groups:
-                print(f"❌ No log groups found for environment: {self.environment_suffix}")
+                print(f"[ERROR] No log groups found for environment: {self.environment_suffix}")
                 return False
             
             optimized_count = 0
@@ -159,17 +159,17 @@ class InfrastructureOptimizer:
                     retentionInDays=3
                 )
                 
-                print(f"  ✅ Updated retention: 3 days")
+                print(f"  [OK] Updated retention: 3 days")
                 optimized_count += 1
             
-            print(f"\n✅ CloudWatch Logs optimization complete:")
+            print(f"\n[OK] CloudWatch Logs optimization complete:")
             print(f"   - Log groups optimized: {optimized_count}")
             print(f"   - Retention: 7 days → 3 days")
             
             return True
             
         except ClientError as e:
-            print(f"❌ Error optimizing CloudWatch Logs: {e}")
+            print(f"[ERROR] Error optimizing CloudWatch Logs: {e}")
             return False
     
     def optimize_cloudwatch_alarms(self) -> bool:
@@ -178,7 +178,7 @@ class InfrastructureOptimizer:
         - Increase evaluation periods to reduce alarm checks
         - Adjust thresholds for dev environment
         """
-        print("\n🔧 Optimizing CloudWatch Alarms...")
+        print("\n[INFO] Optimizing CloudWatch Alarms...")
         
         try:
             # Get all alarms
@@ -200,7 +200,7 @@ class InfrastructureOptimizer:
                         break
             
             if not matching_alarms:
-                print(f"❌ No alarms found for environment: {self.environment_suffix}")
+                print(f"[ERROR] No alarms found for environment: {self.environment_suffix}")
                 print(f"Available alarms: {[a['AlarmName'] for a in alarms.get('MetricAlarms', [])[:10]]}")
                 return False
             
@@ -229,10 +229,10 @@ class InfrastructureOptimizer:
                     TreatMissingData=alarm.get('TreatMissingData', 'missing'),
                 )
                 
-                print(f"  ✅ Updated: period 300s, evaluation periods 2")
+                print(f"  [OK] Updated: period 300s, evaluation periods 2")
                 optimized_count += 1
             
-            print(f"\n✅ CloudWatch Alarms optimization complete:")
+            print(f"\n[OK] CloudWatch Alarms optimization complete:")
             print(f"   - Alarms optimized: {optimized_count}")
             print(f"   - Period: 60s → 300s")
             print(f"   - Evaluation periods: reduced to 2")
@@ -240,7 +240,7 @@ class InfrastructureOptimizer:
             return True
             
         except ClientError as e:
-            print(f"❌ Error optimizing CloudWatch Alarms: {e}")
+            print(f"[ERROR] Error optimizing CloudWatch Alarms: {e}")
             return False
     
     def optimize_sns_topics(self) -> bool:
@@ -249,7 +249,7 @@ class InfrastructureOptimizer:
         - Remove unused subscriptions
         - Disable delivery status logging for dev
         """
-        print("\n🔧 Optimizing SNS Topics...")
+        print("\n[INFO] Optimizing SNS Topics...")
         
         try:
             # Find SNS topics matching TapStack naming pattern
@@ -271,7 +271,7 @@ class InfrastructureOptimizer:
                         break
             
             if not matching_topics:
-                print(f"❌ No SNS topics found for environment: {self.environment_suffix}")
+                print(f"[ERROR] No SNS topics found for environment: {self.environment_suffix}")
                 print(f"Available topics: {[t['TopicArn'].split(':')[-1] for t in topics.get('Topics', [])[:10]]}")
                 return False
             
@@ -293,19 +293,19 @@ class InfrastructureOptimizer:
                             AttributeName='LambdaFailureFeedbackRoleArn',
                             AttributeValue=''
                         )
-                        print(f"  ✅ Disabled delivery status logging")
+                        print(f"  [OK] Disabled delivery status logging")
                     except ClientError:
-                        print(f"  ℹ️  Delivery logging not configured")
+                        print(f"  [INFO] Delivery logging not configured")
                 
                 optimized_count += 1
             
-            print(f"\n✅ SNS Topics optimization complete:")
+            print(f"\n[OK] SNS Topics optimization complete:")
             print(f"   - Topics optimized: {optimized_count}")
             
             return True
             
         except ClientError as e:
-            print(f"❌ Error optimizing SNS Topics: {e}")
+            print(f"[ERROR] Error optimizing SNS Topics: {e}")
             return False
     
     def get_cost_savings_estimate(self) -> Dict[str, Any]:
@@ -361,7 +361,7 @@ class InfrastructureOptimizer:
     
     def run_optimization(self) -> None:
         """Run all optimization tasks."""
-        print("\n🚀 Starting infrastructure optimization...")
+        print("\n[START] Starting infrastructure optimization...")
         print("=" * 50)
         
         results = {
@@ -372,21 +372,21 @@ class InfrastructureOptimizer:
         }
         
         print("\n" + "=" * 50)
-        print("📊 Optimization Summary:")
+        print("[SUMMARY] Optimization Summary:")
         print("-" * 50)
         
         success_count = sum(results.values())
         total_count = len(results)
         
         for service, success in results.items():
-            status = "✅ Success" if success else "❌ Failed"
+            status = "[OK] Success" if success else "[ERROR] Failed"
             service_name = service.replace('_', ' ').title()
             print(f"{service_name}: {status}")
         
         print(f"\nTotal: {success_count}/{total_count} optimizations successful")
         
         if success_count == total_count:
-            print("\n💰 Estimated Monthly Cost Savings:")
+            print("\n[COST] Estimated Monthly Cost Savings:")
             print("-" * 50)
             savings = self.get_cost_savings_estimate()
             print(f"Lambda Functions: ${savings['lambda_monthly_savings']}")
@@ -394,9 +394,9 @@ class InfrastructureOptimizer:
             print(f"CloudWatch Alarms: ${savings['alarms_monthly_savings']}")
             print(f"SNS Topics: ${savings['sns_monthly_savings']}")
             print(f"Total: ${savings['total_monthly_savings']}/month")
-            print("\n✨ All optimizations completed successfully!")
+            print("\n[SUCCESS] All optimizations completed successfully!")
         else:
-            print("\n⚠️  Some optimizations failed. Please check the logs above.")
+            print("\n[WARN] Some optimizations failed. Please check the logs above.")
 
 
 def main():
@@ -430,7 +430,7 @@ def main():
     aws_region = args.region or os.getenv('AWS_REGION') or 'us-east-1'
     
     if args.dry_run:
-        print("🔍 DRY RUN MODE - No changes will be made")
+        print("[DRY-RUN] DRY RUN MODE - No changes will be made")
         print("\nPlanned optimizations:")
         print("- Lambda: Reduce memory 256MB→128MB, timeout 300s→60s")
         print("- CloudWatch Logs: Reduce retention 7→3 days")
@@ -443,17 +443,17 @@ def main():
         return
     
     # Proceed with optimization
-    print(f"🚀 Starting optimization in {aws_region}")
+    print(f"[START] Starting optimization in {aws_region}")
     print(f"Environment suffix: {environment_suffix}")
     
     try:
         optimizer = InfrastructureOptimizer(environment_suffix, aws_region)
         optimizer.run_optimization()
     except KeyboardInterrupt:
-        print("\n\n⚠️  Optimization interrupted by user")
+        print("\n\n[WARN] Optimization interrupted by user")
         sys.exit(1)
     except Exception as e:
-        print(f"\n❌ Unexpected error: {e}")
+        print(f"\n[ERROR] Unexpected error: {e}")
         sys.exit(1)
 
 
