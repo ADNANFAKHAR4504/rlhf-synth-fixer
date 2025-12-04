@@ -305,8 +305,16 @@ describe('Cross-env plan consistency checks (read-only)', () => {
 
   function runPlan(varFile: string): boolean {
     try {
-      // First try: Use -reconfigure to avoid backend initialization issues
+      // Remove .terraform directory to avoid backend state issues in CI
+      const terraformDir = path.join(libDir, '.terraform');
+      if (fs.existsSync(terraformDir)) {
+        execSync(`rm -rf .terraform`, { cwd: libDir, stdio: 'pipe' });
+      }
+      
+      // Initialize without backend
       execSync(`terraform init -backend=false -reconfigure -input=false`, { cwd: libDir, stdio: 'pipe' });
+      
+      // Run plan
       execSync(`terraform plan -lock=false -input=false -var-file=${varFile}`, { cwd: libDir, stdio: 'pipe' });
       return true;
     } catch (error: any) {
