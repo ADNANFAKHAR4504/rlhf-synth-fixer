@@ -4,7 +4,7 @@ project_name = "tap"
 owner        = "dev-team"
 cost_center  = "engineering"
 user_pool_id = "us-east-1_ABC123DEV"
-pr_number    = "pr7883"
+pr_number    = "pr7897"
 
 # Reduced capacity for dev
 request_handler_memory = 256

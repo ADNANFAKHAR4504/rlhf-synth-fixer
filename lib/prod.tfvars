@@ -4,7 +4,7 @@ project_name = "tap"
 owner        = "platform-team"
 cost_center  = "production-operations"
 user_pool_id = "us-east-1_ABC123PRD"
-pr_number    = "pr7883"
+pr_number    = "pr7897"
 
 # Production capacity
 request_handler_memory = 1024
