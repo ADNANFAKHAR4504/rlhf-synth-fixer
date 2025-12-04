@@ -1,0 +1,5 @@
+name: TapStack
+runtime:
+  name: nodejs
+description: Lambda Transaction Processing System Optimization - Pulumi TypeScript Infrastructure
+main: lib/

@@ -1,0 +1,34 @@
+2025-12-04 05:12:32,680 - INFO - ============================================================
+2025-12-04 05:12:32,680 - INFO - Compliance Monitoring Infrastructure Analysis
+2025-12-04 05:12:32,680 - INFO - ============================================================
+2025-12-04 05:12:32,680 - INFO - Region: us-east-1
+2025-12-04 05:12:32,680 - INFO - Environment Suffix: pr7864
+2025-12-04 05:12:32,680 - INFO - Endpoint URL: http://127.0.0.1:5001
+2025-12-04 05:12:32,681 - INFO - ============================================================
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:30: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  self.timestamp = datetime.utcnow().isoformat()
+2025-12-04 05:12:32,691 - INFO - Found credentials in environment variables.
+2025-12-04 05:12:32,801 - INFO - Generating compliance monitoring analysis for environment: pr7864
+2025-12-04 05:12:32,801 - INFO - Analyzing Lambda functions...
+2025-12-04 05:12:33,332 - INFO - Analyzing CloudWatch resources...
+2025-12-04 05:12:33,414 - INFO - Analyzing SNS topics...
+2025-12-04 05:12:33,491 - INFO - Analyzing S3 buckets...
+2025-12-04 05:12:33,498 - INFO - Analyzing EventBridge rules...
+2025-12-04 05:12:33,518 - INFO - Analysis report saved to: compliance-monitoring-analysis.json
+2025-12-04 05:12:33,518 - INFO - ============================================================
+2025-12-04 05:12:33,518 - INFO - Analysis Summary
+2025-12-04 05:12:33,518 - INFO - ============================================================
+2025-12-04 05:12:33,518 - INFO - Lambda Functions: 0
+2025-12-04 05:12:33,518 - INFO - CloudWatch Log Groups: 0
+2025-12-04 05:12:33,518 - INFO - CloudWatch Alarms: 0
+2025-12-04 05:12:33,518 - INFO - SNS Topics: 0
+2025-12-04 05:12:33,518 - INFO - S3 Buckets: 0
+2025-12-04 05:12:33,518 - INFO - EventBridge Rules: 0
+2025-12-04 05:12:33,518 - INFO - Total Issues Found: 3
+2025-12-04 05:12:33,518 - INFO - 
+2025-12-04 05:12:33,518 - INFO - Issues Found:
+2025-12-04 05:12:33,518 - WARNING -   - Lambda compliance-analyzer-pr7864: Not found
+2025-12-04 05:12:33,519 - WARNING -   - Lambda compliance-report-generator-pr7864: Not found
+2025-12-04 05:12:33,519 - WARNING -   - Lambda compliance-deep-scanner-pr7864: Not found
+2025-12-04 05:12:33,519 - INFO - ============================================================
+2025-12-04 05:12:33,519 - INFO - Analysis complete!

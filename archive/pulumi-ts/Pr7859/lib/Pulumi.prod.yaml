@@ -1,0 +1,6 @@
+config:
+  lambda-optimization:environmentSuffix: "prod"
+  lambda-optimization:environment: "production"
+  lambda-optimization:region: "us-east-1"
+  lambda-optimization:costCenter: "production"
+  lambda-optimization:owner: "platform-team"

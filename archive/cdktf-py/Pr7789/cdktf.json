@@ -1,0 +1,14 @@
+{
+  "language": "python",
+  "app": "python tap.py",
+  "projectId": "vpc-peering-cross-account",
+  "sendCrashReports": "false",
+  "terraformProviders": [
+    "aws@~> 5.0"
+  ],
+  "terraformModules": [],
+  "context": {
+    "excludeStackIdFromLogicalIds": "true",
+    "allowSepCharsInLogicalIds": "true"
+  }
+}
