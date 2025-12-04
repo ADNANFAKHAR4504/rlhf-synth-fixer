@@ -9,5 +9,11 @@
   "subtask": "IaC Program Optimization",
   "subject_labels": [
     "Infrastructure Analysis/Monitoring"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Olatunjym",
+  "dockerS3Location": ""
 }
