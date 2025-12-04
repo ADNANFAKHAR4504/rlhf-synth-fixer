@@ -1,6 +1,15 @@
+/**
+ * Jest Configuration
+ * 
+ * IMPORTANT: Do NOT change the 'roots' configuration below.
+ * Test files must be placed in the 'test/' folder (singular, not 'tests/').
+ * This convention is enforced across all TypeScript/JavaScript templates.
+ * 
+ * If you need to modify test configuration, please consult the team first.
+ */
 module.exports = {
   testEnvironment: 'node',
-  roots: ['<rootDir>/tests'],
+  roots: ['<rootDir>/test'],
   testMatch: ['**/*.test.ts', '**/*.test.mjs', '**/*.py'],
   preset: 'ts-jest',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs'],
