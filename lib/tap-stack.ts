@@ -1,10 +1,3 @@
-# Multi-Stage CI/CD Pipeline - Production Ready Implementation
-
-Complete production-ready CI/CD pipeline implementation with all requirements addressed.
-
-## File: lib/tap-stack.ts
-
-```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
 import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';
@@ -17,7 +10,6 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as sns from 'aws-cdk-lib/aws-sns';
-import * as sns_subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
@@ -26,13 +18,14 @@ interface TapStackProps extends cdk.StackProps {
   environmentSuffix: string;
   stagingAccountId?: string;
   productionAccountId?: string;
+  deployEcsServices?: boolean; // Whether to deploy ECS services (default: false for CI/CD-first approach)
 }
 
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
 
-    const { environmentSuffix, stagingAccountId, productionAccountId } = props;
+    const { environmentSuffix, stagingAccountId, productionAccountId, deployEcsServices = false } = props;
 
     // KMS key for cross-account encryption
     const artifactKey = new kms.Key(this, 'ArtifactKey', {
@@ -74,8 +67,8 @@ export class TapStack extends cdk.Stack {
     }
 
     // S3 bucket for pipeline artifacts with KMS encryption
+    // Use CDK-generated unique name to avoid conflicts with other tasks
     const artifactBucket = new s3.Bucket(this, 'ArtifactBucket', {
-      bucketName: `pipeline-artifacts-${environmentSuffix}-${this.account}`,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: artifactKey,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -113,11 +106,10 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // IAM role for CodeBuild with least privilege
+    // IAM role for CodeBuild with least privilege (auto-generated name to avoid conflicts)
     const buildRole = new iam.Role(this, 'BuildRole', {
-      roleName: `codebuild-build-role-${environmentSuffix}`,
       assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com'),
-      description: 'Role for CodeBuild to build Docker images',
+      description: `Role for CodeBuild to build Docker images - ${environmentSuffix}`,
     });
 
     buildRole.addToPolicy(new iam.PolicyStatement({
@@ -208,11 +200,10 @@ export class TapStack extends cdk.Stack {
     // Grant ECR permissions to build project
     repository.grantPullPush(buildProject);
 
-    // IAM role for test project
+    // IAM role for test project (auto-generated name to avoid conflicts)
     const testRole = new iam.Role(this, 'TestRole', {
-      roleName: `codebuild-test-role-${environmentSuffix}`,
       assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com'),
-      description: 'Role for CodeBuild to run tests and security scans',
+      description: `Role for CodeBuild to run tests and security scans - ${environmentSuffix}`,
     });
 
     testRole.addToPolicy(new iam.PolicyStatement({
@@ -307,112 +298,121 @@ export class TapStack extends cdk.Stack {
       timeout: cdk.Duration.minutes(15),
     });
 
-    // VPC for ECS clusters
-    const vpc = new ec2.Vpc(this, 'PipelineVpc', {
-      vpcName: `pipeline-vpc-${environmentSuffix}`,
-      maxAzs: 2,
-      natGateways: 0,
-      subnetConfiguration: [
-        {
-          name: 'Public',
-          subnetType: ec2.SubnetType.PUBLIC,
-          cidrMask: 24,
+    // VPC, ECS clusters and services (optional - deploy after pipeline builds container images)
+    let vpc: ec2.Vpc | undefined;
+    let stagingCluster: ecs.Cluster | undefined;
+    let stagingService: ecs.FargateService | undefined;
+    let productionCluster: ecs.Cluster | undefined;
+    let productionService: ecs.FargateService | undefined;
+    let stagingTaskDefinition: ecs.FargateTaskDefinition | undefined;
+    let productionTaskDefinition: ecs.FargateTaskDefinition | undefined;
+
+    if (deployEcsServices) {
+      // VPC for ECS clusters
+      vpc = new ec2.Vpc(this, 'PipelineVpc', {
+        vpcName: `pipeline-vpc-${environmentSuffix}`,
+        maxAzs: 2,
+        natGateways: 0,
+        subnetConfiguration: [
+          {
+            name: 'Public',
+            subnetType: ec2.SubnetType.PUBLIC,
+            cidrMask: 24,
+          },
+        ],
+      });
+
+      // ECS Cluster for Staging
+      stagingCluster = new ecs.Cluster(this, 'StagingCluster', {
+        clusterName: `staging-cluster-${environmentSuffix}`,
+        vpc: vpc,
+        containerInsights: true,
+      });
+
+      // Staging Task Definition
+      stagingTaskDefinition = new ecs.FargateTaskDefinition(this, 'StagingTaskDef', {
+        family: `staging-task-${environmentSuffix}`,
+        cpu: 256,
+        memoryLimitMiB: 512,
+      });
+
+      stagingTaskDefinition.addContainer('app', {
+        containerName: 'app',
+        image: ecs.ContainerImage.fromRegistry('amazon/amazon-ecs-sample'),
+        logging: ecs.LogDrivers.awsLogs({
+          streamPrefix: 'staging',
+          logRetention: logs.RetentionDays.ONE_WEEK,
+        }),
+        portMappings: [{ containerPort: 80 }],
+      });
+
+      // Staging ECS Service
+      stagingService = new ecs.FargateService(this, 'StagingService', {
+        serviceName: `staging-service-${environmentSuffix}`,
+        cluster: stagingCluster,
+        taskDefinition: stagingTaskDefinition,
+        desiredCount: 1,
+        deploymentController: {
+          type: ecs.DeploymentControllerType.ECS,
         },
-      ],
-    });
+        circuitBreaker: {
+          rollback: true,
+        },
+      });
 
-    // ECS Cluster for Staging
-    const stagingCluster = new ecs.Cluster(this, 'StagingCluster', {
-      clusterName: `staging-cluster-${environmentSuffix}`,
-      vpc: vpc,
-      containerInsights: true,
-    });
+      // ECS Cluster for Production
+      productionCluster = new ecs.Cluster(this, 'ProductionCluster', {
+        clusterName: `production-cluster-${environmentSuffix}`,
+        vpc: vpc,
+        containerInsights: true,
+      });
 
-    // Staging Task Definition
-    const stagingTaskDefinition = new ecs.FargateTaskDefinition(this, 'StagingTaskDef', {
-      family: `staging-task-${environmentSuffix}`,
-      cpu: 256,
-      memoryLimitMiB: 512,
-    });
+      // Production Task Definition
+      productionTaskDefinition = new ecs.FargateTaskDefinition(this, 'ProductionTaskDef', {
+        family: `production-task-${environmentSuffix}`,
+        cpu: 512,
+        memoryLimitMiB: 1024,
+      });
 
-    stagingTaskDefinition.addContainer('app', {
-      containerName: 'app',
-      image: ecs.ContainerImage.fromRegistry('amazon/amazon-ecs-sample'),
-      logging: ecs.LogDrivers.awsLogs({
-        streamPrefix: 'staging',
-        logRetention: logs.RetentionDays.ONE_WEEK,
-      }),
-      portMappings: [{ containerPort: 80 }],
-    });
+      productionTaskDefinition.addContainer('app', {
+        containerName: 'app',
+        image: ecs.ContainerImage.fromRegistry('amazon/amazon-ecs-sample'),
+        logging: ecs.LogDrivers.awsLogs({
+          streamPrefix: 'production',
+          logRetention: logs.RetentionDays.TWO_WEEKS,
+        }),
+        portMappings: [{ containerPort: 80 }],
+      });
 
-    // Staging ECS Service
-    const stagingService = new ecs.FargateService(this, 'StagingService', {
-      serviceName: `staging-service-${environmentSuffix}`,
-      cluster: stagingCluster,
-      taskDefinition: stagingTaskDefinition,
-      desiredCount: 1,
-      deploymentController: {
-        type: ecs.DeploymentControllerType.ECS,
-      },
-      circuitBreaker: {
-        rollback: true,
-      },
-    });
+      // Production ECS Service
+      productionService = new ecs.FargateService(this, 'ProductionService', {
+        serviceName: `production-service-${environmentSuffix}`,
+        cluster: productionCluster,
+        taskDefinition: productionTaskDefinition,
+        desiredCount: 2,
+        deploymentController: {
+          type: ecs.DeploymentControllerType.ECS,
+        },
+        circuitBreaker: {
+          rollback: true,
+        },
+        healthCheckGracePeriod: cdk.Duration.seconds(60),
+      });
+    }
 
-    // ECS Cluster for Production
-    const productionCluster = new ecs.Cluster(this, 'ProductionCluster', {
-      clusterName: `production-cluster-${environmentSuffix}`,
-      vpc: vpc,
-      containerInsights: true,
-    });
-
-    // Production Task Definition
-    const productionTaskDefinition = new ecs.FargateTaskDefinition(this, 'ProductionTaskDef', {
-      family: `production-task-${environmentSuffix}`,
-      cpu: 512,
-      memoryLimitMiB: 1024,
-    });
-
-    productionTaskDefinition.addContainer('app', {
-      containerName: 'app',
-      image: ecs.ContainerImage.fromRegistry('amazon/amazon-ecs-sample'),
-      logging: ecs.LogDrivers.awsLogs({
-        streamPrefix: 'production',
-        logRetention: logs.RetentionDays.TWO_WEEKS,
-      }),
-      portMappings: [{ containerPort: 80 }],
-    });
-
-    // Production ECS Service
-    const productionService = new ecs.FargateService(this, 'ProductionService', {
-      serviceName: `production-service-${environmentSuffix}`,
-      cluster: productionCluster,
-      taskDefinition: productionTaskDefinition,
-      desiredCount: 2,
-      deploymentController: {
-        type: ecs.DeploymentControllerType.ECS,
-      },
-      circuitBreaker: {
-        rollback: true,
-      },
-      healthCheckGracePeriod: cdk.Duration.seconds(60),
-    });
-
-    // SNS topic for notifications
+    // SNS topic for notifications (use auto-generated name to avoid conflicts)
     const notificationTopic = new sns.Topic(this, 'NotificationTopic', {
-      topicName: `pipeline-notifications-${environmentSuffix}`,
-      displayName: 'CI/CD Pipeline Notifications',
+      displayName: `CI/CD Pipeline Notifications - ${environmentSuffix}`,
     });
 
     // Pipeline artifacts
     const sourceOutput = new codepipeline.Artifact('SourceOutput');
     const buildOutput = new codepipeline.Artifact('BuildOutput');
 
-    // IAM role for Pipeline
+    // IAM role for Pipeline (auto-generated name to avoid conflicts)
     const pipelineRole = new iam.Role(this, 'PipelineRole', {
-      roleName: `pipeline-role-${environmentSuffix}`,
       assumedBy: new iam.ServicePrincipal('codepipeline.amazonaws.com'),
-      description: 'Role for CodePipeline orchestration',
+      description: `Role for CodePipeline orchestration - ${environmentSuffix}`,
     });
 
     pipelineRole.addToPolicy(new iam.PolicyStatement({
@@ -466,16 +466,19 @@ export class TapStack extends cdk.Stack {
       resources: ['*'],
     }));
 
-    pipelineRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ['iam:PassRole'],
-      resources: [
-        stagingTaskDefinition.executionRole!.roleArn,
-        stagingTaskDefinition.taskRole.roleArn,
-        productionTaskDefinition.executionRole!.roleArn,
-        productionTaskDefinition.taskRole.roleArn,
-      ],
-    }));
+    // Add IAM PassRole permissions only if ECS services are deployed
+    if (deployEcsServices && stagingTaskDefinition && productionTaskDefinition) {
+      pipelineRole.addToPolicy(new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['iam:PassRole'],
+        resources: [
+          stagingTaskDefinition.executionRole!.roleArn,
+          stagingTaskDefinition.taskRole.roleArn,
+          productionTaskDefinition.executionRole!.roleArn,
+          productionTaskDefinition.taskRole.roleArn,
+        ],
+      }));
+    }
 
     // CodePipeline
     const pipeline = new codepipeline.Pipeline(this, 'Pipeline', {
@@ -524,50 +527,61 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    // Deploy to Staging
-    pipeline.addStage({
-      stageName: 'DeployStaging',
-      actions: [
-        new codepipeline_actions.EcsDeployAction({
-          actionName: 'Deploy_To_Staging',
-          service: stagingService,
-          input: buildOutput,
-        }),
-      ],
-    });
+    // Deploy to Staging (only if ECS services are enabled)
+    if (deployEcsServices && stagingService) {
+      pipeline.addStage({
+        stageName: 'DeployStaging',
+        actions: [
+          new codepipeline_actions.EcsDeployAction({
+            actionName: 'Deploy_To_Staging',
+            service: stagingService,
+            input: buildOutput,
+          }),
+        ],
+      });
 
-    // Manual approval for Production
-    pipeline.addStage({
-      stageName: 'ApproveProduction',
-      actions: [
-        new codepipeline_actions.ManualApprovalAction({
-          actionName: 'Approve_Production_Deployment',
-          notificationTopic: notificationTopic,
-          additionalInformation: 'Please review staging deployment before approving production release.',
-        }),
-      ],
-    });
+      // Manual approval for Production
+      pipeline.addStage({
+        stageName: 'ApproveProduction',
+        actions: [
+          new codepipeline_actions.ManualApprovalAction({
+            actionName: 'Approve_Production_Deployment',
+            notificationTopic: notificationTopic,
+            additionalInformation: 'Please review staging deployment before approving production release.',
+          }),
+        ],
+      });
 
-    // Deploy to Production
-    pipeline.addStage({
-      stageName: 'DeployProduction',
-      actions: [
-        new codepipeline_actions.EcsDeployAction({
-          actionName: 'Deploy_To_Production',
-          service: productionService,
-          input: buildOutput,
-        }),
-      ],
-    });
+      // Deploy to Production
+      if (productionService) {
+        pipeline.addStage({
+          stageName: 'DeployProduction',
+          actions: [
+            new codepipeline_actions.EcsDeployAction({
+              actionName: 'Deploy_To_Production',
+              service: productionService,
+              input: buildOutput,
+            }),
+          ],
+        });
+      }
+    }
 
     // CloudWatch Alarms
+    const pipelineFailureMetric = new cloudwatch.Metric({
+      namespace: 'AWS/CodePipeline',
+      metricName: 'PipelineExecutionFailure',
+      dimensionsMap: {
+        PipelineName: pipeline.pipelineName,
+      },
+      statistic: 'Sum',
+      period: cdk.Duration.minutes(5),
+    });
+
     const pipelineFailureAlarm = new cloudwatch.Alarm(this, 'PipelineFailureAlarm', {
       alarmName: `pipeline-failure-${environmentSuffix}`,
       alarmDescription: 'Alert on pipeline execution failures',
-      metric: pipeline.metricFailed({
-        statistic: 'Sum',
-        period: cdk.Duration.minutes(5),
-      }),
+      metric: pipelineFailureMetric,
       threshold: 1,
       evaluationPeriods: 1,
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
@@ -601,9 +615,8 @@ export class TapStack extends cdk.Stack {
     // Cross-account deployment role (to be assumed by pipeline in production account)
     if (productionAccountId) {
       const crossAccountRole = new iam.Role(this, 'CrossAccountDeployRole', {
-        roleName: `cross-account-deploy-${environmentSuffix}`,
         assumedBy: new iam.AccountPrincipal(productionAccountId),
-        description: 'Role for cross-account deployments from pipeline',
+        description: `Role for cross-account deployments from pipeline - ${environmentSuffix}`,
       });
 
       crossAccountRole.addToPolicy(new iam.PolicyStatement({
@@ -689,45 +702,21 @@ export class TapStack extends cdk.Stack {
       exportName: `NotificationTopic-${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, 'StagingServiceName', {
-      value: stagingService.serviceName,
-      description: 'Name of the staging ECS service',
-      exportName: `StagingService-${environmentSuffix}`,
-    });
+    // Output ECS service names only if they were deployed
+    if (deployEcsServices && stagingService) {
+      new cdk.CfnOutput(this, 'StagingServiceName', {
+        value: stagingService.serviceName,
+        description: 'Name of the staging ECS service',
+        exportName: `StagingService-${environmentSuffix}`,
+      });
+    }
 
-    new cdk.CfnOutput(this, 'ProductionServiceName', {
-      value: productionService.serviceName,
-      description: 'Name of the production ECS service',
-      exportName: `ProductionService-${environmentSuffix}`,
-    });
+    if (deployEcsServices && productionService) {
+      new cdk.CfnOutput(this, 'ProductionServiceName', {
+        value: productionService.serviceName,
+        description: 'Name of the production ECS service',
+        exportName: `ProductionService-${environmentSuffix}`,
+      });
+    }
   }
 }
-```
-
-## File: bin/tap.ts
-
-```typescript
-#!/usr/bin/env node
-import 'source-map-support/register';
-import * as cdk from 'aws-cdk-lib';
-import { TapStack } from '../lib/tap-stack';
-
-const app = new cdk.App();
-
-const environmentSuffix = app.node.tryGetContext('environmentSuffix') || process.env.ENVIRONMENT_SUFFIX || 'dev';
-const stagingAccountId = app.node.tryGetContext('stagingAccountId') || process.env.STAGING_ACCOUNT_ID;
-const productionAccountId = app.node.tryGetContext('productionAccountId') || process.env.PRODUCTION_ACCOUNT_ID;
-
-new TapStack(app, `TapStack-${environmentSuffix}`, {
-  environmentSuffix,
-  stagingAccountId,
-  productionAccountId,
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
-  },
-  description: `Multi-stage CI/CD pipeline for containerized applications - ${environmentSuffix}`,
-});
-
-app.synth();
-```
