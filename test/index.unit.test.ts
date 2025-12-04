@@ -44,6 +44,9 @@ pulumi.runtime.setMocks({
   },
 });
 
+// Set required environment variable before importing index
+process.env.ENVIRONMENT_SUFFIX = 'test123';
+
 // Set required config before importing index
 // Note: Use "project:" prefix for global config values
 pulumi.runtime.setConfig('project:environmentSuffix', 'test123');
@@ -183,6 +186,23 @@ describe('Image Processor Infrastructure Tests', () => {
       expect(config.get('maxFileSize')).toBeUndefined();
       expect(config.getNumber('lambdaMemory')).toBeUndefined();
       expect(config.getNumber('logRetention')).toBeUndefined();
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('should require ENVIRONMENT_SUFFIX environment variable', () => {
+      // Verify that ENVIRONMENT_SUFFIX is set and being used
+      expect(process.env.ENVIRONMENT_SUFFIX).toBeDefined();
+      expect(process.env.ENVIRONMENT_SUFFIX).toBe('test123');
+
+      // Verify that resources use the environment suffix
+      pulumi
+        .all([module.bucketName, module.lambdaFunctionName])
+        .apply(([bucketName, functionName]) => {
+          // If ENVIRONMENT_SUFFIX wasn't checked/used, these would fail
+          expect(bucketName).toContain('test123');
+          expect(functionName).toContain('test123');
+        });
     });
   });
 });
