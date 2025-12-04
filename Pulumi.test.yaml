@@ -1,4 +1,0 @@
-config:
-  TapStack:environmentSuffix: test
-  TapStack:alertEmail: test@example.com
-  aws:region: us-east-1
