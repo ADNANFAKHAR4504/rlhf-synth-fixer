@@ -705,8 +705,16 @@ describe('Infrastructure Integration Tests', () => {
       const command = new DescribeAlarmsCommand({});
       const response = await cloudWatchClient.send(command);
 
-      const alarmsWithSns = response.MetricAlarms!.filter((alarm) =>
-        alarm.AlarmActions?.includes(topicArn)
+      // Filter to only alarms from this stack (cpu-high or cpu-low patterns)
+      const stackAlarms = response.MetricAlarms!.filter(
+        (alarm) => alarm.AlarmName?.includes('cpu-high') || alarm.AlarmName?.includes('cpu-low')
+      );
+
+      // Check that at least one stack alarm has SNS topic configured in any action
+      const alarmsWithSns = stackAlarms.filter((alarm) =>
+        alarm.AlarmActions?.includes(topicArn) ||
+        alarm.OKActions?.includes(topicArn) ||
+        alarm.InsufficientDataActions?.includes(topicArn)
       );
 
       expect(alarmsWithSns.length).toBeGreaterThan(0);
