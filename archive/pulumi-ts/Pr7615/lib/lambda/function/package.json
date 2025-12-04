@@ -1,0 +1,11 @@
+{
+  "name": "optimized-lambda-function",
+  "version": "1.0.0",
+  "description": "Optimized Lambda function with X-Ray tracing and AWS SDK v3",
+  "type": "module",
+  "main": "index.js",
+  "dependencies": {
+    "aws-xray-sdk-core": "^3.5.3",
+    "@aws-sdk/client-xray": "^3.872.0"
+  }
+}
