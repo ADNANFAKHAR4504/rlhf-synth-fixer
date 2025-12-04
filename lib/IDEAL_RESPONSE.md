@@ -1,16 +1,17 @@
 # IDEAL_RESPONSE.md
 
-## Infrastructure as Code Implementation
+## CI/CD Pipeline Implementation
 
-### Platform: Pulumi with TypeScript
+### Platform: AWS CodePipeline with Pulumi
 
-This is the corrected and final implementation of the optimized ECS Fargate deployment.
+This is the corrected and final implementation of the ECS Fargate CI/CD pipeline infrastructure.
 
 ## File Structure
 
 ```
 lib/
 ├── tap-stack.ts         # Main infrastructure stack
+├── ci-cd.yml            # CI/CD pipeline configuration
 ├── PROMPT.md            # Task requirements
 ├── MODEL_RESPONSE.md    # Initial model output
 ├── IDEAL_RESPONSE.md    # This file - corrected implementation
@@ -24,765 +25,600 @@ test/
 └── tap-stack.int.test.ts     # Integration tests
 ```
 
-## Complete Implementation
+## Complete CI/CD Pipeline Configuration
 
-### lib/tap-stack.ts
+### lib/ci-cd.yml
 
-```typescript
-import * as pulumi from '@pulumi/pulumi';
-import * as aws from '@pulumi/aws';
+```yml
+---
 
-/**
- * Properties for the TapStack component
- */
-export interface TapStackProps {
-  tags?: Record<string, string>;
-}
+name: ECS Fargate CI/CD Pipeline
 
-/**
- * TapStack - Optimized ECS Fargate deployment with ALB, CloudWatch monitoring, and proper resource configuration
- */
-export class TapStack extends pulumi.ComponentResource {
-  public readonly albDnsName: pulumi.Output<string>;
-  public readonly dashboardUrl: pulumi.Output<string>;
+description: |
+  Comprehensive CI/CD pipeline for deploying containerized applications
+  to ECS Fargate with Application Load Balancer. Includes automated
+  testing gates, security scanning, approval workflows, and CloudWatch
+  monitoring for production deployments.
 
-  constructor(
-    name: string,
-    props: TapStackProps,
-    opts?: pulumi.ComponentResourceOptions
-  ) {
-    super('custom:infrastructure:TapStack', name, {}, opts);
+platform: AWS
+iac_tool: Pulumi
+language: TypeScript
 
-    const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-    const region = aws.config.region || 'us-east-1';
+pipeline:
+  name: ecs-fargate-cicd-pipeline
+  trigger_on: push
+  branches:
+    - main
+  stages:
+    - name: Source
+      type: source
+      provider: GitHub
+      configuration:
+        connection_type: CodeStar
+        repository: github-repo
+        branch: main
+        auto_trigger: true
 
-    // Default tags
-    const defaultTags = {
-      Environment: environmentSuffix,
-      Team: props.tags?.Team || 'platform',
-      CostCenter: props.tags?.CostCenter || 'engineering',
-      ManagedBy: 'Pulumi',
-      ...props.tags,
-    };
+    - name: Build
+      type: build
+      provider: CodeBuild
+      needs:
+        - Source
+      configuration:
+        compute_type: BUILD_GENERAL1_MEDIUM
+        environment: Docker
+        cache_enabled: true
+        cache_type: S3
+        privileged_mode: true
+        buildspec: |
+          version: 0.2
+          phases:
+            pre_build:
+              commands:
+                - echo Logging in to ECR
+                - |
+                  aws ecr get-login-password \
+                    --region $AWS_DEFAULT_REGION | \
+                  docker login --username AWS \
+                    --password-stdin $ECR_REPOSITORY_URI
+            build:
+              commands:
+                - echo Building Docker image
+                - docker build -t $IMAGE_REPO_NAME:$IMAGE_TAG .
+                - |
+                  docker tag $IMAGE_REPO_NAME:$IMAGE_TAG \
+                    $ECR_REPOSITORY_URI:$IMAGE_TAG
+            post_build:
+              commands:
+                - echo Pushing Docker image to ECR
+                - docker push $ECR_REPOSITORY_URI:$IMAGE_TAG
+                - echo Image pushed successfully
+                - echo Scanning image with Trivy for vulnerabilities
+                - trivy image --severity HIGH,CRITICAL $ECR_REPOSITORY_URI:$IMAGE_TAG
+                - echo Starting ECR image scan
+                - |
+                  aws ecr start-image-scan \
+                    --repository-name $IMAGE_REPO_NAME \
+                    --image-id imageTag=$IMAGE_TAG
+                - echo Writing image definitions for ECS deployment
+                - |
+                  printf '[{"name":"app","imageUri":"%s"}]' \
+                    $ECR_REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+          artifacts:
+            files:
+              - imagedefinitions.json
+              - '**/*'
 
-    // Create VPC with public and private subnets
-    const vpc = new aws.ec2.Vpc(
-      `ecs-vpc-${environmentSuffix}`,
-      {
-        cidrBlock: '10.0.0.0/16',
-        enableDnsHostnames: true,
-        enableDnsSupport: true,
-        tags: {
-          ...defaultTags,
-          Name: `ecs-vpc-${environmentSuffix}`,
-        },
-      },
-      { parent: this }
-    );
+    - name: Test
+      type: build
+      provider: CodeBuild
+      needs:
+        - Build
+      configuration:
+        compute_type: BUILD_GENERAL1_SMALL
+        environment: Docker
+        cache_enabled: true
+        cache_type: Local
+        buildspec: |
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                nodejs: 18
+            pre_build:
+              commands:
+                - echo Installing test dependencies
+                - npm install
+            build:
+              commands:
+                - echo Running unit tests
+                - npm run test:unit
+                - echo Running integration tests
+                - npm run test:integration
+                - echo Running linting
+                - npm run lint
+          reports:
+            test-results:
+              files:
+                - 'test-results/**/*.xml'
+              file-format: 'JUNITXML'
+            coverage-results:
+              files:
+                - 'coverage/**/*.xml'
+              file-format: 'COBERTURAXML'
 
-    // Internet Gateway
-    const igw = new aws.ec2.InternetGateway(
-      `ecs-igw-${environmentSuffix}`,
-      {
-        vpcId: vpc.id,
-        tags: {
-          ...defaultTags,
-          Name: `ecs-igw-${environmentSuffix}`,
-        },
-      },
-      { parent: this }
-    );
+    - name: Security-Scan
+      type: build
+      provider: CodeBuild
+      needs:
+        - Build
+      configuration:
+        compute_type: BUILD_GENERAL1_SMALL
+        environment: Docker
+        buildspec: |
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                nodejs: 18
+              commands:
+                - npm ci
+            build:
+              commands:
+                - echo Running security audit
+                - npm audit --audit-level=high
+                - echo Running container security scan
+                - trivy image --severity HIGH,CRITICAL $ECR_REPOSITORY_URI:$IMAGE_TAG
+                - echo Running infrastructure code scan
+                - npx eslint lib/**/*.ts --ext .ts
 
-    // Public Subnets (for ALB)
-    const publicSubnet1 = new aws.ec2.Subnet(
-      `ecs-public-subnet-1-${environmentSuffix}`,
-      {
-        vpcId: vpc.id,
-        cidrBlock: '10.0.1.0/24',
-        availabilityZone: `${region}a`,
-        mapPublicIpOnLaunch: true,
-        tags: {
-          ...defaultTags,
-          Name: `ecs-public-subnet-1-${environmentSuffix}`,
-          Type: 'public',
-        },
-      },
-      { parent: this }
-    );
+    - name: Manual-Approval
+      type: approval
+      provider: Manual
+      needs:
+        - Test
+        - Security-Scan
+      environment: production
+      configuration:
+        notification_arn: ${SNS_TOPIC_ARN}
+        custom_data: "Review and approve deployment to production ECS cluster"
+        timeout_minutes: 1440
 
-    const publicSubnet2 = new aws.ec2.Subnet(
-      `ecs-public-subnet-2-${environmentSuffix}`,
-      {
-        vpcId: vpc.id,
-        cidrBlock: '10.0.2.0/24',
-        availabilityZone: `${region}b`,
-        mapPublicIpOnLaunch: true,
-        tags: {
-          ...defaultTags,
-          Name: `ecs-public-subnet-2-${environmentSuffix}`,
-          Type: 'public',
-        },
-      },
-      { parent: this }
-    );
+    - name: Deploy
+      type: deploy
+      provider: ECS
+      needs:
+        - Manual-Approval
+      environment: production
+      configuration:
+        cluster_name: ecs-cluster-${ENVIRONMENT_SUFFIX}
+        service_name: tap-service-${ENVIRONMENT_SUFFIX}
+        deployment_type: rolling_update
+        minimum_healthy_percent: 50
+        maximum_percent: 200
+        image_uri: ${ECR_REPOSITORY_URI}:${IMAGE_TAG}
 
-    // Private Subnets (for ECS tasks)
-    const privateSubnet1 = new aws.ec2.Subnet(
-      `ecs-private-subnet-1-${environmentSuffix}`,
-      {
-        vpcId: vpc.id,
-        cidrBlock: '10.0.10.0/24',
-        availabilityZone: `${region}a`,
-        tags: {
-          ...defaultTags,
-          Name: `ecs-private-subnet-1-${environmentSuffix}`,
-          Type: 'private',
-        },
-      },
-      { parent: this }
-    );
+resources:
+  vpc:
+    - name: ecs-vpc
+      cidr_block: 10.0.0.0/16
+      enable_dns_hostnames: true
+      enable_dns_support: true
+      subnets:
+        public:
+          - cidr: 10.0.1.0/24
+            availability_zone: us-east-1a
+          - cidr: 10.0.2.0/24
+            availability_zone: us-east-1b
+        private:
+          - cidr: 10.0.10.0/24
+            availability_zone: us-east-1a
+          - cidr: 10.0.11.0/24
+            availability_zone: us-east-1b
 
-    const privateSubnet2 = new aws.ec2.Subnet(
-      `ecs-private-subnet-2-${environmentSuffix}`,
-      {
-        vpcId: vpc.id,
-        cidrBlock: '10.0.11.0/24',
-        availabilityZone: `${region}b`,
-        tags: {
-          ...defaultTags,
-          Name: `ecs-private-subnet-2-${environmentSuffix}`,
-          Type: 'private',
-        },
-      },
-      { parent: this }
-    );
+  internet_gateway:
+    - name: ecs-igw
+      attached_to: ecs-vpc
 
-    // Public Route Table
-    const publicRouteTable = new aws.ec2.RouteTable(
-      `ecs-public-rt-${environmentSuffix}`,
-      {
-        vpcId: vpc.id,
-        tags: {
-          ...defaultTags,
-          Name: `ecs-public-rt-${environmentSuffix}`,
-        },
-      },
-      { parent: this }
-    );
+  nat_gateway:
+    - name: ecs-nat
+      subnet: public-subnet-1
+      elastic_ip: true
 
-    new aws.ec2.Route(
-      `ecs-public-route-${environmentSuffix}`,
-      {
-        routeTableId: publicRouteTable.id,
-        destinationCidrBlock: '0.0.0.0/0',
-        gatewayId: igw.id,
-      },
-      { parent: this }
-    );
+  ecr:
+    - name: container-images
+      image_scanning: true
+      encryption: AWS_MANAGED
+      lifecycle_policy:
+        max_images: 10
 
-    new aws.ec2.RouteTableAssociation(
-      `ecs-public-rta-1-${environmentSuffix}`,
-      {
-        subnetId: publicSubnet1.id,
-        routeTableId: publicRouteTable.id,
-      },
-      { parent: this }
-    );
+  ecs:
+    cluster:
+      - name: ecs-cluster
+        container_insights: enabled
 
-    new aws.ec2.RouteTableAssociation(
-      `ecs-public-rta-2-${environmentSuffix}`,
-      {
-        subnetId: publicSubnet2.id,
-        routeTableId: publicRouteTable.id,
-      },
-      { parent: this }
-    );
+    task_definition:
+      - name: tap-service
+        network_mode: awsvpc
+        requires_compatibilities:
+          - FARGATE
+        cpu: 1024
+        memory: 2048
+        container:
+          name: app
+          image: nginx:latest
+          port: 80
+          log_driver: awslogs
 
-    // NAT Gateway for private subnets (single NAT for cost optimization)
-    const eip = new aws.ec2.Eip(
-      `ecs-nat-eip-${environmentSuffix}`,
-      {
-        domain: 'vpc',
-        tags: {
-          ...defaultTags,
-          Name: `ecs-nat-eip-${environmentSuffix}`,
-        },
-      },
-      { parent: this }
-    );
+    service:
+      - name: tap-service
+        cluster: ecs-cluster
+        desired_count: 2
+        launch_type: FARGATE
+        network_configuration:
+          subnets: private
+          assign_public_ip: false
 
-    const natGateway = new aws.ec2.NatGateway(
-      `ecs-nat-${environmentSuffix}`,
-      {
-        allocationId: eip.id,
-        subnetId: publicSubnet1.id,
-        tags: {
-          ...defaultTags,
-          Name: `ecs-nat-${environmentSuffix}`,
-        },
-      },
-      { parent: this }
-    );
+  alb:
+    - name: ecs-alb
+      type: application
+      scheme: internet-facing
+      subnets: public
+      idle_timeout: 30
+      target_group:
+        name: ecs-tg
+        port: 80
+        protocol: HTTP
+        target_type: ip
+        deregistration_delay: 30
+        health_check:
+          path: /
+          healthy_threshold: 2
+          unhealthy_threshold: 3
+          timeout: 5
+          interval: 30
+      listener:
+        port: 80
+        protocol: HTTP
 
-    // Private Route Table
-    const privateRouteTable = new aws.ec2.RouteTable(
-      `ecs-private-rt-${environmentSuffix}`,
-      {
-        vpcId: vpc.id,
-        tags: {
-          ...defaultTags,
-          Name: `ecs-private-rt-${environmentSuffix}`,
-        },
-      },
-      { parent: this }
-    );
+  security_groups:
+    - name: ecs-alb-sg
+      description: Security group for Application Load Balancer
+      ingress:
+        - protocol: tcp
+          from_port: 80
+          to_port: 80
+          cidr_blocks:
+            - 0.0.0.0/0
+        - protocol: tcp
+          from_port: 443
+          to_port: 443
+          cidr_blocks:
+            - 0.0.0.0/0
+      egress:
+        - protocol: -1
+          from_port: 0
+          to_port: 0
+          cidr_blocks:
+            - 0.0.0.0/0
 
-    new aws.ec2.Route(
-      `ecs-private-route-${environmentSuffix}`,
-      {
-        routeTableId: privateRouteTable.id,
-        destinationCidrBlock: '0.0.0.0/0',
-        natGatewayId: natGateway.id,
-      },
-      { parent: this }
-    );
+    - name: ecs-task-sg
+      description: Security group for ECS tasks
+      ingress:
+        - protocol: tcp
+          from_port: 80
+          to_port: 80
+          source_security_group: ecs-alb-sg
+      egress:
+        - protocol: -1
+          from_port: 0
+          to_port: 0
+          cidr_blocks:
+            - 0.0.0.0/0
 
-    new aws.ec2.RouteTableAssociation(
-      `ecs-private-rta-1-${environmentSuffix}`,
-      {
-        subnetId: privateSubnet1.id,
-        routeTableId: privateRouteTable.id,
-      },
-      { parent: this }
-    );
+  s3:
+    - name: pipeline-artifacts
+      versioning: true
+      encryption: AWS_MANAGED
+      lifecycle_rules:
+        - expiration_days: 30
+          prefix: artifacts/
+    - name: docker-build-cache
+      versioning: false
+      encryption: AWS_MANAGED
 
-    new aws.ec2.RouteTableAssociation(
-      `ecs-private-rta-2-${environmentSuffix}`,
-      {
-        subnetId: privateSubnet2.id,
-        routeTableId: privateRouteTable.id,
-      },
-      { parent: this }
-    );
+  cloudwatch:
+    log_groups:
+      - name: /ecs/tap-service
+        retention_days: 7
 
-    // Security Group for ALB - consolidated rules (no duplicates)
-    const albSecurityGroup = new aws.ec2.SecurityGroup(
-      `ecs-alb-sg-${environmentSuffix}`,
-      {
-        vpcId: vpc.id,
-        description: 'Security group for Application Load Balancer',
-        ingress: [
-          {
-            protocol: 'tcp',
-            fromPort: 80,
-            toPort: 80,
-            cidrBlocks: ['0.0.0.0/0'],
-            description: 'Allow HTTP traffic',
-          },
-          {
-            protocol: 'tcp',
-            fromPort: 443,
-            toPort: 443,
-            cidrBlocks: ['0.0.0.0/0'],
-            description: 'Allow HTTPS traffic',
-          },
-        ],
-        egress: [
-          {
-            protocol: '-1',
-            fromPort: 0,
-            toPort: 0,
-            cidrBlocks: ['0.0.0.0/0'],
-            description: 'Allow all outbound traffic',
-          },
-        ],
-        tags: {
-          ...defaultTags,
-          Name: `ecs-alb-sg-${environmentSuffix}`,
-        },
-      },
-      { parent: this }
-    );
+    alarms:
+      - name: ecs-cpu-alarm
+        metric: CPUUtilization
+        namespace: AWS/ECS
+        threshold: 80
+        evaluation_periods: 2
+        period: 60
+        statistic: Average
+        comparison_operator: GreaterThanThreshold
+        dimensions:
+          ClusterName: ${ECS_CLUSTER_NAME}
+          ServiceName: ${ECS_SERVICE_NAME}
+        actions:
+          - ${SNS_TOPIC_ARN}
 
-    // Security Group for ECS Tasks
-    const ecsSecurityGroup = new aws.ec2.SecurityGroup(
-      `ecs-task-sg-${environmentSuffix}`,
-      {
-        vpcId: vpc.id,
-        description: 'Security group for ECS tasks',
-        ingress: [
-          {
-            protocol: 'tcp',
-            fromPort: 80,
-            toPort: 80,
-            securityGroups: [albSecurityGroup.id],
-            description: 'Allow traffic from ALB',
-          },
-        ],
-        egress: [
-          {
-            protocol: '-1',
-            fromPort: 0,
-            toPort: 0,
-            cidrBlocks: ['0.0.0.0/0'],
-            description: 'Allow all outbound traffic',
-          },
-        ],
-        tags: {
-          ...defaultTags,
-          Name: `ecs-task-sg-${environmentSuffix}`,
-        },
-      },
-      { parent: this }
-    );
+      - name: ecs-memory-alarm
+        metric: MemoryUtilization
+        namespace: AWS/ECS
+        threshold: 80
+        evaluation_periods: 2
+        period: 60
+        statistic: Average
+        comparison_operator: GreaterThanThreshold
+        dimensions:
+          ClusterName: ${ECS_CLUSTER_NAME}
+          ServiceName: ${ECS_SERVICE_NAME}
+        actions:
+          - ${SNS_TOPIC_ARN}
 
-    // Application Load Balancer with 30 second idle timeout
-    const alb = new aws.lb.LoadBalancer(
-      `ecs-alb-${environmentSuffix}`,
-      {
-        loadBalancerType: 'application',
-        subnets: [publicSubnet1.id, publicSubnet2.id],
-        securityGroups: [albSecurityGroup.id],
-        idleTimeout: 30,
-        tags: {
-          ...defaultTags,
-          Name: `ecs-alb-${environmentSuffix}`,
-        },
-      },
-      { parent: this }
-    );
+      - name: pipeline-execution-failures
+        metric: ExecutionFailures
+        namespace: AWS/CodePipeline
+        threshold: 1
+        evaluation_periods: 1
+        comparison_operator: GreaterThanOrEqualToThreshold
+        actions:
+          - ${SNS_TOPIC_ARN}
 
-    // Target Group with health checks
-    const targetGroup = new aws.lb.TargetGroup(
-      `ecs-tg-${environmentSuffix}`,
-      {
-        port: 80,
-        protocol: 'HTTP',
-        vpcId: vpc.id,
-        targetType: 'ip',
-        deregistrationDelay: 30,
-        healthCheck: {
-          enabled: true,
-          path: '/',
-          protocol: 'HTTP',
-          healthyThreshold: 2,
-          unhealthyThreshold: 3,
-          timeout: 5,
-          interval: 30,
-          matcher: '200',
-        },
-        tags: {
-          ...defaultTags,
-          Name: `ecs-tg-${environmentSuffix}`,
-        },
-      },
-      { parent: this }
-    );
+      - name: alb-5xx-errors
+        metric: HTTPCode_ELB_5XX_Count
+        namespace: AWS/ApplicationELB
+        threshold: 10
+        evaluation_periods: 2
+        period: 300
+        statistic: Sum
+        comparison_operator: GreaterThanThreshold
+        actions:
+          - ${SNS_TOPIC_ARN}
 
-    // ALB Listener
-    const listener = new aws.lb.Listener(
-      `ecs-listener-${environmentSuffix}`,
-      {
-        loadBalancerArn: alb.arn,
-        port: 80,
-        protocol: 'HTTP',
-        defaultActions: [
-          {
-            type: 'forward',
-            targetGroupArn: targetGroup.arn,
-          },
-        ],
-        tags: {
-          ...defaultTags,
-        },
-      },
-      { parent: this }
-    );
+      - name: alb-target-response-time
+        metric: TargetResponseTime
+        namespace: AWS/ApplicationELB
+        threshold: 5
+        evaluation_periods: 3
+        period: 60
+        statistic: Average
+        comparison_operator: GreaterThanThreshold
+        actions:
+          - ${SNS_TOPIC_ARN}
 
-    // ECS Cluster
-    const cluster = new aws.ecs.Cluster(
-      `ecs-cluster-${environmentSuffix}`,
-      {
-        name: `ecs-cluster-${environmentSuffix}`,
-        settings: [
-          {
-            name: 'containerInsights',
-            value: 'enabled',
-          },
-        ],
-        tags: {
-          ...defaultTags,
-        },
-      },
-      { parent: this }
-    );
+    dashboards:
+      - name: ecs-dashboard
+        widgets:
+          - type: metric
+            title: ECS CPU Utilization
+            metrics:
+              - namespace: AWS/ECS
+                metric: CPUUtilization
+                stat: Average
+              - namespace: AWS/ECS
+                metric: CPUUtilization
+                stat: Maximum
+          - type: metric
+            title: ECS Memory Utilization
+            metrics:
+              - namespace: AWS/ECS
+                metric: MemoryUtilization
+                stat: Average
+              - namespace: AWS/ECS
+                metric: MemoryUtilization
+                stat: Maximum
+          - type: metric
+            title: ALB Metrics
+            metrics:
+              - namespace: AWS/ApplicationELB
+                metric: TargetResponseTime
+                stat: Average
+              - namespace: AWS/ApplicationELB
+                metric: RequestCount
+                stat: Sum
 
-    // CloudWatch Log Group with 7-day retention
-    const logGroup = new aws.cloudwatch.LogGroup(
-      `ecs-logs-${environmentSuffix}`,
-      {
-        name: `/ecs/tap-service-${environmentSuffix}`,
-        retentionInDays: 7,
-        tags: {
-          ...defaultTags,
-        },
-      },
-      { parent: this }
-    );
+  sns:
+    - name: deployment-notifications
+      display_name: Deployment Notifications
+      subscriptions:
+        - protocol: email
+          endpoint: operations@example.com
 
-    // IAM Role for ECS Task Execution
-    const executionRole = new aws.iam.Role(
-      `ecs-execution-role-${environmentSuffix}`,
-      {
-        name: `ecs-execution-role-${environmentSuffix}`,
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Principal: {
-                Service: 'ecs-tasks.amazonaws.com',
-              },
-              Action: 'sts:AssumeRole',
-            },
-          ],
-        }),
-        tags: {
-          ...defaultTags,
-        },
-      },
-      { parent: this }
-    );
+  iam:
+    roles:
+      - name: codepipeline-service-role
+        service: codepipeline.amazonaws.com
+        managed_policies:
+          - AWSCodePipelineFullAccess
+        inline_policies:
+          - name: CodePipelineAccess
+            actions:
+              - s3:GetObject
+              - s3:PutObject
+              - codebuild:StartBuild
+              - codebuild:BatchGetBuilds
+              - ecs:UpdateService
+              - ecs:DescribeServices
+              - ecs:DescribeTaskDefinition
+              - ecs:RegisterTaskDefinition
+              - iam:PassRole
 
-    new aws.iam.RolePolicyAttachment(
-      `ecs-execution-role-policy-${environmentSuffix}`,
-      {
-        role: executionRole.name,
-        policyArn:
-          'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy',
-      },
-      { parent: this }
-    );
+      - name: codebuild-service-role
+        service: codebuild.amazonaws.com
+        managed_policies:
+          - AmazonEC2ContainerRegistryPowerUser
+        inline_policies:
+          - name: CodeBuildAccess
+            actions:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              - s3:GetObject
+              - s3:PutObject
+              - ecr:GetAuthorizationToken
+              - ecr:BatchCheckLayerAvailability
+              - ecr:GetDownloadUrlForLayer
+              - ecr:PutImage
 
-    // IAM Role for ECS Task
-    const taskRole = new aws.iam.Role(
-      `ecs-task-role-${environmentSuffix}`,
-      {
-        name: `ecs-task-role-${environmentSuffix}`,
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Principal: {
-                Service: 'ecs-tasks.amazonaws.com',
-              },
-              Action: 'sts:AssumeRole',
-            },
-          ],
-        }),
-        tags: {
-          ...defaultTags,
-        },
-      },
-      { parent: this }
-    );
+      - name: ecs-execution-role
+        service: ecs-tasks.amazonaws.com
+        managed_policies:
+          - AmazonECSTaskExecutionRolePolicy
+        inline_policies:
+          - name: ECRAccess
+            actions:
+              - ecr:GetAuthorizationToken
+              - ecr:BatchCheckLayerAvailability
+              - ecr:GetDownloadUrlForLayer
+              - ecr:BatchGetImage
+              - logs:CreateLogStream
+              - logs:PutLogEvents
 
-    // Task Definition with optimized memory (2GB) and CPU (1 vCPU)
-    const taskDefinition = new aws.ecs.TaskDefinition(
-      `ecs-task-def-${environmentSuffix}`,
-      {
-        family: `tap-service-${environmentSuffix}`,
-        networkMode: 'awsvpc',
-        requiresCompatibilities: ['FARGATE'],
-        cpu: '1024', // 1 vCPU
-        memory: '2048', // 2GB (optimized from 4GB)
-        executionRoleArn: executionRole.arn,
-        taskRoleArn: taskRole.arn,
-        containerDefinitions: JSON.stringify([
-          {
-            name: 'app',
-            image: 'nginx:latest',
-            essential: true,
-            portMappings: [
-              {
-                containerPort: 80,
-                protocol: 'tcp',
-              },
-            ],
-            logConfiguration: {
-              logDriver: 'awslogs',
-              options: pulumi.all([logGroup.name]).apply(([logGroupName]) => ({
-                'awslogs-group': logGroupName,
-                'awslogs-region': region,
-                'awslogs-stream-prefix': 'ecs',
-              })),
-            },
-            environment: [
-              {
-                name: 'ENVIRONMENT',
-                value: environmentSuffix,
-              },
-            ],
-          },
-        ]),
-        tags: {
-          ...defaultTags,
-        },
-      },
-      { parent: this }
-    );
+      - name: ecs-task-role
+        service: ecs-tasks.amazonaws.com
+        inline_policies:
+          - name: TaskAccess
+            actions:
+              - cloudwatch:PutMetricData
+              - logs:CreateLogStream
+              - logs:PutLogEvents
 
-    // ECS Service
-    const service = new aws.ecs.Service(
-      `ecs-service-${environmentSuffix}`,
-      {
-        name: `tap-service-${environmentSuffix}`,
-        cluster: cluster.arn,
-        taskDefinition: taskDefinition.arn,
-        desiredCount: 2,
-        launchType: 'FARGATE',
-        networkConfiguration: {
-          subnets: [privateSubnet1.id, privateSubnet2.id],
-          securityGroups: [ecsSecurityGroup.id],
-          assignPublicIp: false,
-        },
-        loadBalancers: [
-          {
-            targetGroupArn: targetGroup.arn,
-            containerName: 'app',
-            containerPort: 80,
-          },
-        ],
-        tags: {
-          ...defaultTags,
-        },
-      },
-      { parent: this, dependsOn: [listener] }
-    );
+deployment:
+  region: us-east-1
+  environment_suffix: ${ENVIRONMENT_SUFFIX}
+  naming_convention: "{resource-type}-{purpose}-{environmentSuffix}"
 
-    // CloudWatch Alarms for CPU utilization
-    new aws.cloudwatch.MetricAlarm(
-      `ecs-cpu-alarm-${environmentSuffix}`,
-      {
-        name: `ecs-cpu-alarm-${environmentSuffix}`,
-        comparisonOperator: 'GreaterThanThreshold',
-        evaluationPeriods: 2,
-        metricName: 'CPUUtilization',
-        namespace: 'AWS/ECS',
-        period: 60,
-        statistic: 'Average',
-        threshold: 80,
-        alarmDescription: 'Alarm when ECS service CPU exceeds 80%',
-        dimensions: {
-          ClusterName: cluster.name,
-          ServiceName: service.name,
-        },
-        tags: {
-          ...defaultTags,
-        },
-      },
-      { parent: this }
-    );
+monitoring:
+  cloudwatch_logs: true
+  cloudwatch_alarms: true
+  cloudwatch_dashboard: true
+  container_insights: true
+  sns_notifications: true
 
-    // CloudWatch Alarms for Memory utilization
-    new aws.cloudwatch.MetricAlarm(
-      `ecs-memory-alarm-${environmentSuffix}`,
-      {
-        name: `ecs-memory-alarm-${environmentSuffix}`,
-        comparisonOperator: 'GreaterThanThreshold',
-        evaluationPeriods: 2,
-        metricName: 'MemoryUtilization',
-        namespace: 'AWS/ECS',
-        period: 60,
-        statistic: 'Average',
-        threshold: 80,
-        alarmDescription: 'Alarm when ECS service memory exceeds 80%',
-        dimensions: {
-          ClusterName: cluster.name,
-          ServiceName: service.name,
-        },
-        tags: {
-          ...defaultTags,
-        },
-      },
-      { parent: this }
-    );
+security:
+  encryption_at_rest: true
+  encryption_in_transit: true
+  least_privilege_iam: true
+  ecr_image_scanning: true
+  private_subnets_for_tasks: true
+  security_group_restrictions: true
 
-    // CloudWatch Dashboard
-    const dashboard = new aws.cloudwatch.Dashboard(
-      `ecs-dashboard-${environmentSuffix}`,
-      {
-        dashboardName: `ecs-dashboard-${environmentSuffix}`,
-        dashboardBody: pulumi
-          .all([cluster.name, service.name])
-          .apply(([clusterName, serviceName]) =>
-            JSON.stringify({
-              widgets: [
-                {
-                  type: 'metric',
-                  properties: {
-                    metrics: [
-                      [
-                        'AWS/ECS',
-                        'CPUUtilization',
-                        { stat: 'Average', label: 'CPU Average' },
-                      ],
-                      ['...', { stat: 'Maximum', label: 'CPU Maximum' }],
-                    ],
-                    period: 60,
-                    stat: 'Average',
-                    region: region,
-                    title: 'ECS CPU Utilization',
-                    yAxis: {
-                      left: {
-                        min: 0,
-                        max: 100,
-                      },
-                    },
-                    dimensions: {
-                      ClusterName: clusterName,
-                      ServiceName: serviceName,
-                    },
-                  },
-                },
-                {
-                  type: 'metric',
-                  properties: {
-                    metrics: [
-                      [
-                        'AWS/ECS',
-                        'MemoryUtilization',
-                        { stat: 'Average', label: 'Memory Average' },
-                      ],
-                      ['...', { stat: 'Maximum', label: 'Memory Maximum' }],
-                    ],
-                    period: 60,
-                    stat: 'Average',
-                    region: region,
-                    title: 'ECS Memory Utilization',
-                    yAxis: {
-                      left: {
-                        min: 0,
-                        max: 100,
-                      },
-                    },
-                    dimensions: {
-                      ClusterName: clusterName,
-                      ServiceName: serviceName,
-                    },
-                  },
-                },
-                {
-                  type: 'metric',
-                  properties: {
-                    metrics: [
-                      [
-                        'AWS/ApplicationELB',
-                        'TargetResponseTime',
-                        { stat: 'Average' },
-                      ],
-                      ['...', 'RequestCount', { stat: 'Sum' }],
-                    ],
-                    period: 60,
-                    stat: 'Average',
-                    region: region,
-                    title: 'ALB Metrics',
-                  },
-                },
-              ],
-            })
-          ),
-      },
-      { parent: this }
-    );
+cost_optimization:
+  build_compute_type: BUILD_GENERAL1_MEDIUM
+  test_compute_type: BUILD_GENERAL1_SMALL
+  fargate_spot: false
+  single_nat_gateway: true
+  log_retention_days: 7
+  s3_lifecycle_policies: true
+  ecr_lifecycle_policies: true
 
-    // Stack Outputs
-    this.albDnsName = alb.dnsName;
-    this.dashboardUrl = pulumi.interpolate`https://console.aws.amazon.com/cloudwatch/home?region=${region}#dashboards:name=${dashboard.dashboardName}`;
+outputs:
+  - name: pipeline_arn
+    description: CodePipeline ARN
+  - name: pipeline_url
+    description: CodePipeline Console URL
+  - name: ecr_repository_uri
+    description: ECR Repository URI for CI/CD integration
+  - name: alb_dns_name
+    description: Application Load Balancer DNS Name
+  - name: dashboard_url
+    description: CloudWatch Dashboard URL
+  - name: ecs_cluster_arn
+    description: ECS Cluster ARN
+  - name: ecs_service_arn
+    description: ECS Service ARN
+  - name: vpc_id
+    description: VPC ID
+  - name: sns_topic_arn
+    description: SNS Topic ARN for notifications
 
-    this.registerOutputs({
-      albDnsName: this.albDnsName,
-      dashboardUrl: this.dashboardUrl,
-      vpcId: vpc.id,
-      clusterId: cluster.id,
-      serviceId: service.id,
-    });
-  }
-}
-```
-
-### bin/tap.ts
-
-```typescript
-import * as pulumi from '@pulumi/pulumi';
-import { TapStack } from '../lib/tap-stack';
-
-const stack = new TapStack('pulumi-infra', {
-  tags: {
-    Team: 'platform',
-    CostCenter: 'engineering',
-  },
-});
-
-export const albDnsName = stack.albDnsName;
-export const dashboardUrl = stack.dashboardUrl;
+validation:
+  destroyable: true
+  environment_suffix_required: true
+  test_coverage_required: 100
+  integration_tests_required: true
+  documentation_required: true
 ```
 
 ## Key Features Implemented
 
-### 1. Memory Optimization
-- Reduced ECS task memory from 4GB to 2GB (2048 MB)
-- Configured CPU as 1 vCPU (1024) - valid Fargate combination
+### 1. Pipeline Stages
+- Source: GitHub integration with CodeStar connection
+- Build: Docker image build, ECR push, Trivy vulnerability scanning
+- Test: Unit tests, integration tests, linting with JUnit reports
+- Security-Scan: npm audit, container scanning, code analysis
+- Manual-Approval: Production deployment gate with SNS notification
+- Deploy: ECS rolling update deployment
 
-### 2. Health Checks
-- ALB target group health checks configured
-- Healthy threshold: 2
-- Unhealthy threshold: 3
-- Interval: 30 seconds
-- Timeout: 5 seconds
+### 2. Build Configuration
+- CodeBuild with BUILD_GENERAL1_MEDIUM compute type
+- Docker environment with privileged mode for container builds
+- S3 caching enabled for faster builds
+- ECR login and image push automation
+- Trivy vulnerability scanning on container images
+- Image definitions generation for ECS deployment
 
-### 3. Security Groups
-- Consolidated rules (HTTP on 80, HTTPS on 443 - no duplicates)
-- ALB security group allows inbound HTTP/HTTPS from internet
-- ECS task security group only allows traffic from ALB
+### 3. Test Configuration
+- CodeBuild with BUILD_GENERAL1_SMALL compute type
+- Unit and integration test execution
+- JUnit XML test reports
+- Cobertura coverage reports
+- Local caching for dependencies
 
-### 4. Resource Tagging
-- Consistent tags across all resources:
-  - Environment: `environmentSuffix`
-  - Team: 'platform'
-  - CostCenter: 'engineering'
-  - ManagedBy: 'Pulumi'
+### 4. Security Scanning
+- npm audit for dependency vulnerabilities
+- Trivy container image scanning
+- ESLint code analysis
+- High severity threshold enforcement
 
-### 5. CloudWatch Log Retention
-- Log group: `/ecs/tap-service-${environmentSuffix}`
-- Retention: 7 days
-- Properly integrated with ECS task definition using Pulumi Output types
+### 5. Approval Workflow
+- Manual approval before production deployment
+- SNS notification for approval requests
+- 24-hour timeout (1440 minutes)
+- Custom approval message
 
-### 6. ALB Idle Timeout
-- Configured to 30 seconds (reduced from default 300 seconds)
+### 6. Deployment Strategy
+- ECS rolling update deployment
+- Minimum healthy percent: 50%
+- Maximum percent: 200%
+- Automatic image URI injection
 
-### 7. CloudWatch Alarms
-- CPU utilization alarm (threshold: 80%)
-- Memory utilization alarm (threshold: 80%)
-- Both alarms monitor ECS service metrics
-- Evaluation periods: 2
+### 7. Infrastructure Resources
+- VPC with public/private subnets across 2 AZs
+- Internet Gateway and NAT Gateway
+- ECR repository with image scanning
+- ECS cluster with Container Insights
+- Application Load Balancer with health checks
+- Security groups for ALB and ECS tasks
 
-### 8. Stack Outputs
-- `albDnsName`: ALB DNS name for accessing the application
-- `dashboardUrl`: Direct link to CloudWatch dashboard
+### 8. Monitoring and Alerting
+- CloudWatch Log Group with 7-day retention
+- CPU utilization alarm (80% threshold)
+- Memory utilization alarm (80% threshold)
+- Pipeline execution failure alarm
+- ALB 5xx error alarm
+- ALB response time alarm
+- CloudWatch Dashboard for metrics visualization
 
 ### 9. Cost Optimization
-- Single NAT Gateway (not per AZ) for cost savings
-- Container Insights enabled for monitoring
-- Deregistration delay set to 30 seconds
+- Single NAT Gateway for cost savings
+- BUILD_GENERAL1_SMALL for test stages
+- 7-day log retention
+- S3 lifecycle policies (30-day expiration)
+- ECR lifecycle policies (10 image limit)
 
-### 10. Infrastructure Best Practices
-- All resources use `environmentSuffix` for naming uniqueness
-- Proper IAM roles with least privilege
-- Resources organized in VPC with public/private subnets across 2 AZs
-- Private subnets for ECS tasks (enhanced security)
-- Public subnets for ALB (internet-facing)
+### 10. Security Best Practices
+- Private subnets for ECS tasks
+- Security group restrictions (ALB to ECS only)
+- ECR image scanning enabled
+- Encryption at rest and in transit
+- Least privilege IAM roles
 
 ## AWS Resources Created
 
@@ -790,28 +626,29 @@ export const dashboardUrl = stack.dashboardUrl;
 2. Internet Gateway
 3. 2 Public Subnets (10.0.1.0/24, 10.0.2.0/24)
 4. 2 Private Subnets (10.0.10.0/24, 10.0.11.0/24)
-5. Public Route Table with route to IGW
-6. Private Route Table with route to NAT Gateway
-7. 4 Route Table Associations
-8. Elastic IP for NAT Gateway
-9. NAT Gateway
-10. ALB Security Group
-11. ECS Task Security Group
-12. Application Load Balancer
-13. Target Group
-14. ALB Listener (port 80)
-15. ECS Cluster with Container Insights
-16. CloudWatch Log Group (7-day retention)
-17. IAM Execution Role for ECS
-18. IAM Role Policy Attachment (AmazonECSTaskExecutionRolePolicy)
-19. IAM Task Role for ECS
-20. ECS Task Definition (1 vCPU, 2GB RAM, nginx container)
-21. ECS Service (2 tasks, Fargate)
-22. CloudWatch CPU Alarm
-23. CloudWatch Memory Alarm
-24. CloudWatch Dashboard
+5. NAT Gateway with Elastic IP
+6. Route Tables and Associations
+7. ECR Repository
+8. ECS Cluster
+9. ECS Task Definition
+10. ECS Service
+11. Application Load Balancer
+12. ALB Target Group
+13. ALB Listener
+14. ALB Security Group
+15. ECS Task Security Group
+16. CloudWatch Log Group
+17. CloudWatch Alarms (5 alarms)
+18. CloudWatch Dashboard
+19. SNS Topic with Email Subscription
+20. CodePipeline Service Role
+21. CodeBuild Service Role
+22. ECS Execution Role
+23. ECS Task Role
+24. S3 Bucket for Pipeline Artifacts
+25. S3 Bucket for Docker Build Cache
 
-**Total: 24 AWS resources**
+**Total: 25 AWS resources**
 
 ## Deployment
 

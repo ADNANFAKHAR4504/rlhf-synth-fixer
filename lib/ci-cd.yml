@@ -115,11 +115,37 @@ pipeline:
                 - 'coverage/**/*.xml'
               file-format: 'COBERTURAXML'
 
+    - name: Security-Scan
+      type: build
+      provider: CodeBuild
+      needs:
+        - Build
+      configuration:
+        compute_type: BUILD_GENERAL1_SMALL
+        environment: Docker
+        buildspec: |
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                nodejs: 18
+              commands:
+                - npm ci
+            build:
+              commands:
+                - echo Running security audit
+                - npm audit --audit-level=high
+                - echo Running container security scan
+                - trivy image --severity HIGH,CRITICAL $ECR_REPOSITORY_URI:$IMAGE_TAG
+                - echo Running infrastructure code scan
+                - npx eslint lib/**/*.ts --ext .ts
+
     - name: Manual-Approval
       type: approval
       provider: Manual
       needs:
         - Test
+        - Security-Scan
       environment: production
       configuration:
         notification_arn: ${SNS_TOPIC_ARN}
@@ -312,6 +338,28 @@ resources:
         actions:
           - ${SNS_TOPIC_ARN}
 
+      - name: alb-5xx-errors
+        metric: HTTPCode_ELB_5XX_Count
+        namespace: AWS/ApplicationELB
+        threshold: 10
+        evaluation_periods: 2
+        period: 300
+        statistic: Sum
+        comparison_operator: GreaterThanThreshold
+        actions:
+          - ${SNS_TOPIC_ARN}
+
+      - name: alb-target-response-time
+        metric: TargetResponseTime
+        namespace: AWS/ApplicationELB
+        threshold: 5
+        evaluation_periods: 3
+        period: 60
+        statistic: Average
+        comparison_operator: GreaterThanThreshold
+        actions:
+          - ${SNS_TOPIC_ARN}
+
     dashboards:
       - name: ecs-dashboard
         widgets:
@@ -464,4 +512,3 @@ validation:
   test_coverage_required: 100
   integration_tests_required: true
   documentation_required: true
-
