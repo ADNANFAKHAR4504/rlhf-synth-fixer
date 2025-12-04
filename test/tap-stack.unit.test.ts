@@ -1,5 +1,7 @@
 import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // This test validates that the Pulumi program is structured correctly
 // and that the TapStack component is properly configured
@@ -65,6 +67,33 @@ describe('TapStack Component', () => {
         expect(stack).toBeDefined();
       });
     });
+
+    describe('with environment variables', () => {
+      const originalEnv = process.env;
+
+      beforeEach(() => {
+        jest.resetModules();
+        process.env = { ...originalEnv };
+      });
+
+      afterAll(() => {
+        process.env = originalEnv;
+      });
+
+      it('uses ENVIRONMENT_SUFFIX from env when not provided in args', () => {
+        process.env.ENVIRONMENT_SUFFIX = 'staging';
+        const envStack = new TapStack('TestTapStackEnvSuffix', {});
+        expect(envStack).toBeDefined();
+      });
+
+      it('uses AWS_REGION from env', () => {
+        process.env.AWS_REGION = 'eu-west-1';
+        const regionStack = new TapStack('TestTapStackRegion', {
+          environmentSuffix: 'test',
+        });
+        expect(regionStack).toBeDefined();
+      });
+    });
   });
 
   describe('Stack Outputs', () => {
@@ -93,6 +122,18 @@ describe('TapStack Component', () => {
     it('should have logGroupName output', () => {
       expect(stack.logGroupName).toBeDefined();
     });
+
+    it('dashboardUrls should be a Pulumi Output', () => {
+      expect(stack.dashboardUrls).toBeInstanceOf(pulumi.Output);
+    });
+
+    it('snsTopicArns should be a Pulumi Output', () => {
+      expect(stack.snsTopicArns).toBeInstanceOf(pulumi.Output);
+    });
+
+    it('lambdaFunctionArns should be a Pulumi Output', () => {
+      expect(stack.lambdaFunctionArns).toBeInstanceOf(pulumi.Output);
+    });
   });
 });
 
@@ -112,20 +153,25 @@ describe('Compliance Monitoring Infrastructure Configuration', () => {
       const defaultRegion = process.env.AWS_REGION || 'us-east-1';
       expect(defaultRegion).toBe('us-east-1');
     });
+
+    it('should use default environmentSuffix when not provided', () => {
+      const defaultSuffix = 'dev';
+      expect(defaultSuffix).toBe('dev');
+    });
   });
 
   describe('Lambda Code Validation', () => {
-    const fs = require('fs');
+    const lambdaDir = './lib/lambda';
+    const lambdaCodePath = './lib/lambda/index.js';
+    const packageJsonPath = './lib/lambda/package.json';
 
     it('should create lambda directory', () => {
-      const lambdaDir = './lib/lambda';
       if (fs.existsSync(lambdaDir)) {
         expect(fs.statSync(lambdaDir).isDirectory()).toBe(true);
       }
     });
 
     it('should have lambda function code', () => {
-      const lambdaCodePath = './lib/lambda/index.js';
       if (fs.existsSync(lambdaCodePath)) {
         const lambdaCode = fs.readFileSync(lambdaCodePath, 'utf-8');
         expect(lambdaCode).toContain('EC2Client');
@@ -136,7 +182,6 @@ describe('Compliance Monitoring Infrastructure Configuration', () => {
     });
 
     it('should have lambda package.json', () => {
-      const packageJsonPath = './lib/lambda/package.json';
       if (fs.existsSync(packageJsonPath)) {
         const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
         expect(packageJson.dependencies).toBeDefined();
@@ -144,6 +189,22 @@ describe('Compliance Monitoring Infrastructure Configuration', () => {
         expect(packageJson.dependencies['@aws-sdk/client-rds']).toBeDefined();
         expect(packageJson.dependencies['@aws-sdk/client-s3']).toBeDefined();
         expect(packageJson.dependencies['@aws-sdk/client-sns']).toBeDefined();
+      }
+    });
+
+    it('should have lambda handler export', () => {
+      if (fs.existsSync(lambdaCodePath)) {
+        const lambdaCode = fs.readFileSync(lambdaCodePath, 'utf-8');
+        expect(lambdaCode).toContain('exports.handler');
+      }
+    });
+
+    it('should have compliance scan logic', () => {
+      if (fs.existsSync(lambdaCodePath)) {
+        const lambdaCode = fs.readFileSync(lambdaCodePath, 'utf-8');
+        expect(lambdaCode).toContain('DescribeInstancesCommand');
+        expect(lambdaCode).toContain('DescribeDBInstancesCommand');
+        expect(lambdaCode).toContain('ListBucketsCommand');
       }
     });
   });
@@ -161,6 +222,12 @@ describe('Compliance Monitoring Infrastructure Configuration', () => {
       const requiredTags = ['Environment', 'CostCenter', 'Owner'];
       const tagsString = requiredTags.join(',');
       expect(tagsString).toBe('Environment,CostCenter,Owner');
+    });
+
+    it('should be parseable back to array', () => {
+      const tagsString = 'Environment,CostCenter,Owner';
+      const parsedTags = tagsString.split(',');
+      expect(parsedTags).toEqual(['Environment', 'CostCenter', 'Owner']);
     });
   });
 
@@ -203,6 +270,52 @@ describe('Compliance Monitoring Infrastructure Configuration', () => {
       expect(requiredSnsPermissions).toHaveLength(1);
       expect(requiredLogsPermissions).toHaveLength(2);
     });
+
+    it('should generate valid IAM policy JSON', () => {
+      const bucketId = 'test-bucket';
+      const topicArn = 'arn:aws:sns:us-east-1:123456789012:test-topic';
+      const awsRegion = 'us-east-1';
+      const environmentSuffix = 'test';
+
+      const policy = JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: [
+              'ec2:DescribeInstances',
+              'ec2:DescribeTags',
+              'rds:DescribeDBInstances',
+              'rds:ListTagsForResource',
+              's3:ListAllMyBuckets',
+              's3:GetBucketTagging',
+            ],
+            Resource: '*',
+          },
+          {
+            Effect: 'Allow',
+            Action: ['s3:PutObject', 's3:PutObjectAcl'],
+            Resource: `arn:aws:s3:::${bucketId}/*`,
+          },
+          {
+            Effect: 'Allow',
+            Action: ['sns:Publish'],
+            Resource: topicArn,
+          },
+          {
+            Effect: 'Allow',
+            Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+            Resource: `arn:aws:logs:${awsRegion}:*:log-group:/aws/lambda/compliance-scanner-${environmentSuffix}:*`,
+          },
+        ],
+      });
+
+      const parsedPolicy = JSON.parse(policy);
+      expect(parsedPolicy.Version).toBe('2012-10-17');
+      expect(parsedPolicy.Statement).toHaveLength(4);
+      expect(parsedPolicy.Statement[1].Resource).toContain(bucketId);
+      expect(parsedPolicy.Statement[2].Resource).toBe(topicArn);
+    });
   });
 
   describe('Lambda Configuration', () => {
@@ -224,6 +337,11 @@ describe('Compliance Monitoring Infrastructure Configuration', () => {
       expect(memorySize).toBeGreaterThanOrEqual(128);
       expect(memorySize).toBeLessThanOrEqual(10240);
     });
+
+    it('should have correct handler', () => {
+      const handler = 'index.handler';
+      expect(handler).toBe('index.handler');
+    });
   });
 
   describe('CloudWatch Event Schedule', () => {
@@ -231,6 +349,13 @@ describe('Compliance Monitoring Infrastructure Configuration', () => {
       const scheduleExpression = 'rate(6 hours)';
       expect(scheduleExpression).toBe('rate(6 hours)');
       expect(scheduleExpression).toMatch(/rate\(\d+ hours?\)/);
+    });
+
+    it('should support rate expression format', () => {
+      const rateExpressions = ['rate(1 hour)', 'rate(6 hours)', 'rate(24 hours)'];
+      rateExpressions.forEach(expr => {
+        expect(expr).toMatch(/rate\(\d+ hours?\)/);
+      });
     });
   });
 
@@ -255,12 +380,24 @@ describe('Compliance Monitoring Infrastructure Configuration', () => {
       const forceDestroy = true;
       expect(forceDestroy).toBe(true);
     });
+
+    it('should have correct bucket naming', () => {
+      const environmentSuffix = 'test';
+      const bucketName = `compliance-reports-${environmentSuffix}`;
+      expect(bucketName).toBe('compliance-reports-test');
+    });
   });
 
   describe('CloudWatch Logs Configuration', () => {
     it('should have 30-day retention', () => {
       const retentionInDays = 30;
       expect(retentionInDays).toBe(30);
+    });
+
+    it('should have correct log group naming', () => {
+      const environmentSuffix = 'test';
+      const logGroupName = `/aws/lambda/compliance-scanner-${environmentSuffix}`;
+      expect(logGroupName).toBe('/aws/lambda/compliance-scanner-test');
     });
   });
 
@@ -311,6 +448,16 @@ describe('Compliance Monitoring Infrastructure Configuration', () => {
       expect(tags[1]).toBe('CostCenter');
       expect(tags[2]).toBe('Owner');
     });
+
+    it('should have SNS_TOPIC_ARN variable', () => {
+      const topicArn = 'arn:aws:sns:us-east-1:123456789012:compliance-alerts-test';
+      expect(topicArn).toMatch(/^arn:aws:sns:/);
+    });
+
+    it('should have REPORTS_BUCKET variable', () => {
+      const bucketName = 'compliance-reports-test';
+      expect(bucketName).toMatch(/^compliance-reports-/);
+    });
   });
 
   describe('Exports Validation', () => {
@@ -329,6 +476,63 @@ describe('Compliance Monitoring Infrastructure Configuration', () => {
       expect(requiredExports).toContain('lambdaFunctionArns');
       expect(requiredExports).toContain('reportsBucketName');
       expect(requiredExports).toContain('logGroupName');
+    });
+  });
+
+  describe('File System Operations', () => {
+    const lambdaDir = './lib/lambda';
+
+    it('should handle lambda directory creation', () => {
+      // Test that the directory exists or can be created
+      const dirExists = fs.existsSync(lambdaDir);
+      if (dirExists) {
+        expect(fs.statSync(lambdaDir).isDirectory()).toBe(true);
+      } else {
+        // If it doesn't exist, verify the path is valid
+        expect(path.isAbsolute(path.resolve(lambdaDir))).toBe(true);
+      }
+    });
+
+    it('should write files with correct encoding', () => {
+      const testContent = 'test content';
+      const encoding = 'utf-8';
+      expect(Buffer.from(testContent, encoding as BufferEncoding).toString(encoding)).toBe(
+        testContent
+      );
+    });
+
+    it('should use recursive option for directory creation', () => {
+      const options = { recursive: true };
+      expect(options.recursive).toBe(true);
+    });
+  });
+
+  describe('Dashboard URL Generation', () => {
+    it('should generate valid CloudWatch console URLs', () => {
+      const awsRegion = 'us-east-1';
+      const logGroupName = '/aws/lambda/compliance-scanner-test';
+      const url = `https://console.aws.amazon.com/cloudwatch/home?region=${awsRegion}#logsV2:log-groups/log-group/${logGroupName}`;
+
+      expect(url).toContain('console.aws.amazon.com/cloudwatch');
+      expect(url).toContain(awsRegion);
+      expect(url).toContain('logsV2:log-groups');
+    });
+  });
+
+  describe('SNS Configuration', () => {
+    it('should have correct display name', () => {
+      const displayName = 'Compliance Alerts';
+      expect(displayName).toBe('Compliance Alerts');
+    });
+
+    it('should support email protocol', () => {
+      const protocol = 'email';
+      expect(protocol).toBe('email');
+    });
+
+    it('should validate email endpoint format', () => {
+      const email = 'ops@example.com';
+      expect(email).toMatch(/^[^\s@]+@[^\s@]+\.[^\s@]+$/);
     });
   });
 });

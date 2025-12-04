@@ -45,7 +45,7 @@ class InfrastructureOptimizer:
         - Reduce memory from 512 MB to 256 MB
         - Reduce timeout from 300s to 120s
         """
-        print("\n🔧 Optimizing Lambda Function...")
+        print("\n[OPTIMIZE] Optimizing Lambda Function...")
         
         try:
             # Find the Lambda function - must match stack naming pattern
@@ -70,7 +70,7 @@ class InfrastructureOptimizer:
                         break
             
             if not function_name:
-                print(f"❌ Lambda function not found for environment: {self.environment_suffix}")
+                print(f"[ERROR] Lambda function not found for environment: {self.environment_suffix}")
                 print(f"Available functions: {[f['FunctionName'] for f in functions['Functions']]}")
                 return False
             
@@ -86,7 +86,7 @@ class InfrastructureOptimizer:
             
             # Skip if already optimized
             if current_memory <= 256 and current_timeout <= 120:
-                print("✅ Already optimized (256 MB, 120s or less)")
+                print("[OK] Already optimized (256 MB, 120s or less)")
                 return True
             
             # Update Lambda configuration
@@ -97,9 +97,9 @@ class InfrastructureOptimizer:
                 Timeout=120
             )
             
-            print("✅ Lambda optimization complete:")
-            print(f"   - Memory: {current_memory} MB → 256 MB")
-            print(f"   - Timeout: {current_timeout}s → 120s")
+            print("[OK] Lambda optimization complete:")
+            print(f"   - Memory: {current_memory} MB -> 256 MB")
+            print(f"   - Timeout: {current_timeout}s -> 120s")
             
             # Wait for update to complete
             print("Waiting for Lambda update to complete...")
@@ -112,7 +112,7 @@ class InfrastructureOptimizer:
             return True
             
         except ClientError as e:
-            print(f"❌ Error optimizing Lambda: {e}")
+            print(f"[ERROR] Error optimizing Lambda: {e}")
             return False
     
     def optimize_cloudwatch_logs(self) -> bool:
@@ -120,7 +120,7 @@ class InfrastructureOptimizer:
         Optimize CloudWatch Logs configuration.
         - Reduce retention from 30 days to 7 days
         """
-        print("\n🔧 Optimizing CloudWatch Logs...")
+        print("\n[OPTIMIZE] Optimizing CloudWatch Logs...")
         
         try:
             # Find the log group - must match stack naming pattern
@@ -139,7 +139,7 @@ class InfrastructureOptimizer:
                     break
             
             if not log_group_name:
-                print(f"❌ Log group not found for environment: {self.environment_suffix}")
+                print(f"[ERROR] Log group not found for environment: {self.environment_suffix}")
                 print(f"Available log groups: {[g['logGroupName'] for g in log_groups['logGroups']]}")
                 return False
             
@@ -147,7 +147,7 @@ class InfrastructureOptimizer:
             
             # Skip if already optimized
             if current_retention and current_retention <= 7:
-                print("✅ Already optimized (7 days or less)")
+                print("[OK] Already optimized (7 days or less)")
                 return True
             
             # Update log group retention
@@ -157,13 +157,13 @@ class InfrastructureOptimizer:
                 retentionInDays=7
             )
             
-            print("✅ CloudWatch Logs optimization complete:")
-            print(f"   - Retention: {current_retention} days → 7 days")
+            print("[OK] CloudWatch Logs optimization complete:")
+            print(f"   - Retention: {current_retention} days -> 7 days")
             
             return True
             
         except ClientError as e:
-            print(f"❌ Error optimizing CloudWatch Logs: {e}")
+            print(f"[ERROR] Error optimizing CloudWatch Logs: {e}")
             return False
     
     def optimize_s3_bucket(self) -> bool:
@@ -172,7 +172,7 @@ class InfrastructureOptimizer:
         - Add lifecycle rule to expire old compliance reports after 30 days
         - Transition to Glacier after 14 days
         """
-        print("\n🔧 Optimizing S3 Bucket...")
+        print("\n[OPTIMIZE] Optimizing S3 Bucket...")
         
         try:
             # Find the S3 bucket - must match stack naming pattern
@@ -188,7 +188,7 @@ class InfrastructureOptimizer:
                     break
             
             if not bucket_name:
-                print(f"❌ S3 bucket not found for environment: {self.environment_suffix}")
+                print(f"[ERROR] S3 bucket not found for environment: {self.environment_suffix}")
                 print(f"Available buckets: {[b['Name'] for b in buckets['Buckets']]}")
                 return False
             
@@ -245,7 +245,7 @@ class InfrastructureOptimizer:
                 LifecycleConfiguration=lifecycle_config
             )
             
-            print("✅ S3 optimization complete:")
+            print("[OK] S3 optimization complete:")
             print("   - Reports transition to Glacier after 14 days")
             print("   - Reports expire after 90 days")
             print("   - Old versions expire after 30 days")
@@ -253,7 +253,7 @@ class InfrastructureOptimizer:
             return True
             
         except ClientError as e:
-            print(f"❌ Error optimizing S3: {e}")
+            print(f"[ERROR] Error optimizing S3: {e}")
             return False
     
     def optimize_event_schedule(self) -> bool:
@@ -261,7 +261,7 @@ class InfrastructureOptimizer:
         Optimize EventBridge schedule.
         - Reduce scan frequency from every 6 hours to every 24 hours
         """
-        print("\n🔧 Optimizing EventBridge Schedule...")
+        print("\n[OPTIMIZE] Optimizing EventBridge Schedule...")
         
         try:
             # Find the event rule - must match stack naming pattern
@@ -280,7 +280,7 @@ class InfrastructureOptimizer:
                     break
             
             if not rule_name:
-                print(f"❌ Event rule not found for environment: {self.environment_suffix}")
+                print(f"[ERROR] Event rule not found for environment: {self.environment_suffix}")
                 print(f"Available rules: {[r['Name'] for r in rules['Rules']]}")
                 return False
             
@@ -288,7 +288,7 @@ class InfrastructureOptimizer:
             
             # Skip if already optimized
             if current_schedule == 'rate(24 hours)' or current_schedule == 'rate(1 day)':
-                print("✅ Already optimized (24 hours)")
+                print("[OK] Already optimized (24 hours)")
                 return True
             
             # Update event rule schedule
@@ -300,13 +300,13 @@ class InfrastructureOptimizer:
                 Description='Trigger compliance scan every 24 hours (optimized)'
             )
             
-            print("✅ EventBridge optimization complete:")
-            print(f"   - Schedule: {current_schedule} → rate(24 hours)")
+            print("[OK] EventBridge optimization complete:")
+            print(f"   - Schedule: {current_schedule} -> rate(24 hours)")
             
             return True
             
         except ClientError as e:
-            print(f"❌ Error optimizing EventBridge: {e}")
+            print(f"[ERROR] Error optimizing EventBridge: {e}")
             return False
     
     def get_cost_savings_estimate(self) -> Dict[str, Any]:
@@ -368,7 +368,7 @@ class InfrastructureOptimizer:
     
     def run_optimization(self) -> None:
         """Run all optimization tasks."""
-        print("\n🚀 Starting infrastructure optimization...")
+        print("\n[START] Starting infrastructure optimization...")
         print("=" * 50)
         
         results = {
@@ -379,20 +379,20 @@ class InfrastructureOptimizer:
         }
         
         print("\n" + "=" * 50)
-        print("📊 Optimization Summary:")
+        print("[SUMMARY] Optimization Summary:")
         print("-" * 50)
         
         success_count = sum(results.values())
         total_count = len(results)
         
         for service, success in results.items():
-            status = "✅ Success" if success else "❌ Failed"
+            status = "[OK] Success" if success else "[FAILED] Failed"
             print(f"{service.replace('_', ' ').title()}: {status}")
         
         print(f"\nTotal: {success_count}/{total_count} optimizations successful")
         
         if success_count == total_count:
-            print("\n💰 Estimated Monthly Cost Savings:")
+            print("\n[SAVINGS] Estimated Monthly Cost Savings:")
             print("-" * 50)
             savings = self.get_cost_savings_estimate()
             print(f"Lambda Function: ${savings['lambda_monthly_savings']}")
@@ -400,9 +400,9 @@ class InfrastructureOptimizer:
             print(f"S3 Storage: ${savings['s3_monthly_savings']}")
             print(f"EventBridge: ${savings['events_monthly_savings']}")
             print(f"Total: ${savings['total_monthly_savings']}/month")
-            print("\n✨ All optimizations completed successfully!")
+            print("\n[DONE] All optimizations completed successfully!")
         else:
-            print("\n⚠️  Some optimizations failed. Please check the logs above.")
+            print("\n[WARNING] Some optimizations failed. Please check the logs above.")
 
 
 def main():
@@ -436,12 +436,12 @@ def main():
     aws_region = args.region or os.getenv('AWS_REGION') or 'us-east-1'
     
     if args.dry_run:
-        print("🔍 DRY RUN MODE - No changes will be made")
+        print("[DRY RUN] DRY RUN MODE - No changes will be made")
         print("\nPlanned optimizations:")
-        print("- Lambda: Reduce memory 512→256 MB, timeout 300→120s")
-        print("- CloudWatch Logs: Reduce retention 30→7 days")
+        print("- Lambda: Reduce memory 512->256 MB, timeout 300->120s")
+        print("- CloudWatch Logs: Reduce retention 30->7 days")
         print("- S3: Add lifecycle rules (Glacier after 14 days, expire after 90 days)")
-        print("- EventBridge: Reduce schedule frequency 6h→24h")
+        print("- EventBridge: Reduce schedule frequency 6h->24h")
         
         optimizer = InfrastructureOptimizer(environment_suffix, aws_region)
         savings = optimizer.get_cost_savings_estimate()
@@ -449,20 +449,19 @@ def main():
         return
     
     # Proceed with optimization
-    print(f"🚀 Starting optimization in {aws_region}")
+    print(f"[START] Starting optimization in {aws_region}")
     print(f"Environment suffix: {environment_suffix}")
     
     try:
         optimizer = InfrastructureOptimizer(environment_suffix, aws_region)
         optimizer.run_optimization()
     except KeyboardInterrupt:
-        print("\n\n⚠️  Optimization interrupted by user")
+        print("\n\n[WARNING] Optimization interrupted by user")
         sys.exit(1)
     except Exception as e:
-        print(f"\n❌ Unexpected error: {e}")
+        print(f"\n[ERROR] Unexpected error: {e}")
         sys.exit(1)
 
 
 if __name__ == "__main__":
     main()
-
