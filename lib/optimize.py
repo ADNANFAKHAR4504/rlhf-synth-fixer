@@ -306,17 +306,17 @@ class LambdaOptimizer:
         functions_config = {
             'payment-validator': {
                 'memory': 512,
-                'reserved_concurrency': 100,
+                'reserved_concurrency': None,  # Removed due to account limits
                 'provisioned_concurrency': True
             },
             'fraud-detector': {
                 'memory': 256,
-                'reserved_concurrency': 50,
+                'reserved_concurrency': None,  # Removed due to account limits
                 'provisioned_concurrency': False
             },
             'notification-sender': {
                 'memory': 128,
-                'reserved_concurrency': 50,
+                'reserved_concurrency': None,  # Removed due to account limits
                 'provisioned_concurrency': False
             }
         }
@@ -451,7 +451,7 @@ def main():
         print("✓ Optimized memory configurations (512MB/256MB/128MB)")
         print("✓ CloudWatch log retention (7 days)")
         print("✓ X-Ray tracing enabled")
-        print("✓ Reserved concurrency limits (100/50/50)")
+        print("✓ Reserved concurrency: None (removed to avoid account limits)")
         print("\n💡 Run without --dry-run to perform actual verification")
         return
 

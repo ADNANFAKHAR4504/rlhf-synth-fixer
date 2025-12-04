@@ -23,19 +23,19 @@ const lambdaFunctions = [
   {
     name: 'payment-validator',
     memory: 512,
-    reservedConcurrentExecutions: 100,
+    reservedConcurrentExecutions: undefined, // Removed to avoid account concurrency limits
     provisionedConcurrency: 5, // Provisioned concurrency to eliminate cold starts
   },
   {
     name: 'fraud-detector',
     memory: 256,
-    reservedConcurrentExecutions: 50,
+    reservedConcurrentExecutions: undefined, // Removed to avoid account concurrency limits
     provisionedConcurrency: 0,
   },
   {
     name: 'notification-sender',
     memory: 128,
-    reservedConcurrentExecutions: 50,
+    reservedConcurrentExecutions: undefined, // Removed to avoid account concurrency limits
     provisionedConcurrency: 0,
   },
 ];
