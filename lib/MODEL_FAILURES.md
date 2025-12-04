@@ -29,7 +29,7 @@ containerDefinitions: JSON.stringify([
     logConfiguration: {
       logDriver: 'awslogs',
       options: {
-        'awslogs-group': logGroup.name,  // ❌ Output<string> not resolved
+        'awslogs-group': logGroup.name,  // WRONG - Output<string> not resolved
         'awslogs-region': region,
         'awslogs-stream-prefix': 'ecs',
       },
@@ -47,7 +47,7 @@ containerDefinitions: JSON.stringify([
     logConfiguration: {
       logDriver: 'awslogs',
       options: pulumi.all([logGroup.name]).apply(([logGroupName]) => ({
-        'awslogs-group': logGroupName,  // ❌ Can't have Output inside JSON.stringify()
+        'awslogs-group': logGroupName,  // WRONG - Can't have Output inside JSON.stringify()
         'awslogs-region': region,
         'awslogs-stream-prefix': 'ecs',
       })),
@@ -76,7 +76,7 @@ containerDefinitions: pulumi
         logConfiguration: {
           logDriver: 'awslogs',
           options: {
-            'awslogs-group': logGroupName,  // ✅ Resolved string value
+            'awslogs-group': logGroupName,  // CORRECT - Resolved string value
             'awslogs-region': region,
             'awslogs-stream-prefix': 'ecs',
           },
