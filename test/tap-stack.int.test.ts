@@ -83,7 +83,6 @@ import {
 } from '@aws-sdk/client-secrets-manager';
 import {
   GetTopicAttributesCommand,
-  ListTopicsCommand,
   SNSClient
 } from '@aws-sdk/client-sns';
 import {
@@ -699,21 +698,15 @@ describe('Infrastructure Integration Tests', () => {
 
   describe('End-to-End Workflow: Resource Connectivity Validation', () => {
     test('should have CloudWatch alarms connected to SNS topic', async () => {
-      // Find the SNS topic ARN by listing topics with the expected name pattern
-      const listTopicsCommand = new ListTopicsCommand({});
-      const topicsResponse = await snsClient.send(listTopicsCommand);
-
-      const topicArn = topicsResponse.Topics?.find(topic =>
-        topic.TopicArn?.includes('infrastructure-alarms')
-      )?.TopicArn;
-
+      // Use the SNS topic ARN from stack outputs
+      const topicArn = outputs.SNSTopicArn;
       expect(topicArn).toBeDefined();
 
       const command = new DescribeAlarmsCommand({});
       const response = await cloudWatchClient.send(command);
 
       const alarmsWithSns = response.MetricAlarms!.filter((alarm) =>
-        alarm.AlarmActions?.includes(topicArn!)
+        alarm.AlarmActions?.includes(topicArn)
       );
 
       expect(alarmsWithSns.length).toBeGreaterThan(0);
