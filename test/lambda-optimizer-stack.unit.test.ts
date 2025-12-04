@@ -8,7 +8,9 @@ import { LambdaOptimizerStack } from '../lib/lambda-optimizer-stack';
 
 // Mock Pulumi runtime
 pulumi.runtime.setMocks({
-  newResource: (args: pulumi.runtime.MockResourceArgs): { id: string; state: any } => {
+  newResource: (
+    args: pulumi.runtime.MockResourceArgs
+  ): { id: string; state: any } => {
     const outputs: Record<string, any> = {
       ...args.inputs,
       id: args.name + '_id',

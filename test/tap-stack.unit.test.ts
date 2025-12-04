@@ -8,7 +8,9 @@ import { TapStack } from '../lib/tap-stack';
 
 // Mock Pulumi runtime
 pulumi.runtime.setMocks({
-  newResource: (args: pulumi.runtime.MockResourceArgs): { id: string; state: any } => {
+  newResource: (
+    args: pulumi.runtime.MockResourceArgs
+  ): { id: string; state: any } => {
     const outputs: Record<string, any> = {
       ...args.inputs,
       id: args.name + '_id',
@@ -231,7 +233,7 @@ describe('TapStack', () => {
         stack.layerArn,
       ]);
 
-      outputs.forEach((output) => {
+      outputs.forEach(output => {
         expect(output).toBeDefined();
       });
     });
@@ -315,7 +317,7 @@ describe('TapStack', () => {
       ]);
 
       // All outputs should be defined, indicating successful configuration
-      expect(outputs.every((o) => o !== undefined)).toBe(true);
+      expect(outputs.every(o => o !== undefined)).toBe(true);
     });
   });
 });

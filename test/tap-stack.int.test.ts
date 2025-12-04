@@ -10,10 +10,7 @@ import {
   GetFunctionCommand,
   GetFunctionConfigurationCommand,
 } from '@aws-sdk/client-lambda';
-import {
-  SQSClient,
-  GetQueueAttributesCommand,
-} from '@aws-sdk/client-sqs';
+import { SQSClient, GetQueueAttributesCommand } from '@aws-sdk/client-sqs';
 import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
@@ -33,7 +30,11 @@ describe('Lambda Optimizer Stack Integration Tests', () => {
 
   beforeAll(() => {
     // Read deployment outputs
-    const outputPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
+    const outputPath = path.join(
+      process.cwd(),
+      'cfn-outputs',
+      'flat-outputs.json'
+    );
 
     if (!fs.existsSync(outputPath)) {
       throw new Error(
@@ -168,7 +169,9 @@ describe('Lambda Optimizer Stack Integration Tests', () => {
       const trustPolicy = JSON.parse(
         decodeURIComponent(response.Role!.AssumeRolePolicyDocument!)
       );
-      expect(trustPolicy.Statement[0].Principal.Service).toContain('lambda.amazonaws.com');
+      expect(trustPolicy.Statement[0].Principal.Service).toContain(
+        'lambda.amazonaws.com'
+      );
     });
 
     it('should verify IAM role has required policies attached', async () => {
@@ -182,13 +185,15 @@ describe('Lambda Optimizer Stack Integration Tests', () => {
 
       // Should have Lambda basic execution policy
       const hasBasicExecution = policies.some(
-        (p) => p.PolicyArn === 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+        p =>
+          p.PolicyArn ===
+          'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
       );
       expect(hasBasicExecution).toBe(true);
 
       // Should have X-Ray write access
       const hasXRayAccess = policies.some(
-        (p) => p.PolicyArn === 'arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess'
+        p => p.PolicyArn === 'arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess'
       );
       expect(hasXRayAccess).toBe(true);
     });
@@ -232,7 +237,9 @@ describe('Lambda Optimizer Stack Integration Tests', () => {
     });
 
     it('should verify log group has correct naming pattern', async () => {
-      expect(outputs.logGroupName).toMatch(/^\/aws\/lambda\/optimized-function-/);
+      expect(outputs.logGroupName).toMatch(
+        /^\/aws\/lambda\/optimized-function-/
+      );
     });
   });
 
@@ -270,7 +277,8 @@ describe('Lambda Optimizer Stack Integration Tests', () => {
 
       // Validate all 10 requirements
       const validations = {
-        requirement1_reservedConcurrency: funcData.Concurrency?.ReservedConcurrentExecutions === 10,
+        requirement1_reservedConcurrency:
+          funcData.Concurrency?.ReservedConcurrentExecutions === 10,
         requirement2_memory: config.MemorySize === 512,
         requirement3_timeout: config.Timeout === 30,
         requirement4_xray: config.TracingConfig?.Mode === 'Active',
