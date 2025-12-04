@@ -9,11 +9,7 @@
   "startedAt": "2025-12-03T18:00:00Z",
   "turn_type": "single",
   "subject_labels": [
-    "Infrastructure Analysis/Monitoring",
-    "S3 Bucket Analysis",
-    "CloudWatch Dashboard",
-    "Lambda Function",
-    "Security Compliance"
+    "Infrastructure Analysis/Monitoring"
   ],
   "training_quality": 10,
   "po_quality_report_url": "",
