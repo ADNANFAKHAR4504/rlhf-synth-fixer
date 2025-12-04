@@ -5,7 +5,8 @@ import * as path from 'path';
 
 // Get configuration - use environment variables as fallback for CI/CD
 const config = new pulumi.Config();
-const environmentSuffix = config.get('environmentSuffix') || process.env.ENVIRONMENT_SUFFIX || 'dev';
+const environmentSuffix =
+  config.get('environmentSuffix') || process.env.ENVIRONMENT_SUFFIX || 'dev';
 const awsConfig = new pulumi.Config('aws');
 const region = awsConfig.get('region') || process.env.AWS_REGION || 'us-east-1';
 
