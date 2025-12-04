@@ -18,6 +18,8 @@ terraform {
       version = "~> 3.5"
     }
   }
+
+  # backend "s3" {}
 }
 
 # ============================================================================
@@ -31,12 +33,6 @@ variable "env" {
     condition     = contains(["dev", "staging", "prod"], var.env)
     error_message = "Environment must be dev, staging, or prod."
   }
-}
-
-variable "aws_region" {
-  description = "AWS region for deployment"
-  type        = string
-  default     = "us-east-1"
 }
 
 variable "project_name" {
@@ -528,7 +524,7 @@ variable "log_retention_days" {
 
 locals {
   # Common naming prefix
-  prefix = "${var.project_name}-${var.env}"
+  prefix = "${var.project_name}-${var.env}-${var.pr_number}"
   
   # Environment-specific capacity mappings
   env_config = {
@@ -926,6 +922,7 @@ resource "aws_secretsmanager_secret_version" "aurora_master" {
 resource "random_password" "redis_auth" {
   length  = 32
   special = false
+  override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 
 resource "aws_secretsmanager_secret" "redis_auth" {

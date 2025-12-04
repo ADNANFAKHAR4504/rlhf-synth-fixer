@@ -4,6 +4,7 @@ project_name        = "tap"
 owner               = "qa-team"
 cost_center         = "quality-assurance"
 user_pool_id        = "us-east-1_ABC123STG"
+pr_number           = "pr7883"
 
 # Moderate capacity for staging
 request_handler_memory = 512
