@@ -181,10 +181,19 @@ STMT_COV=$(jq -r '.total.statements.pct' coverage/coverage-summary.json)
 FUNC_COV=$(jq -r '.total.functions.pct' coverage/coverage-summary.json)
 LINE_COV=$(jq -r '.total.lines.pct' coverage/coverage-summary.json)
 
-# Check threshold - MUST be 100%
-test "$STMT_COV" -eq 100
-test "$FUNC_COV" -eq 100
-test "$LINE_COV" -eq 100
+# Check threshold - MUST be 100% (use bc for float comparison)
+# Handles "100", "100.0", "100.00" correctly
+if command -v bc &> /dev/null; then
+    # Use bc for accurate float comparison
+    [ "$(echo "$STMT_COV >= 100" | bc -l)" -eq 1 ] || { echo "Statement coverage < 100%: $STMT_COV"; exit 1; }
+    [ "$(echo "$FUNC_COV >= 100" | bc -l)" -eq 1 ] || { echo "Function coverage < 100%: $FUNC_COV"; exit 1; }
+    [ "$(echo "$LINE_COV >= 100" | bc -l)" -eq 1 ] || { echo "Line coverage < 100%: $LINE_COV"; exit 1; }
+else
+    # Fallback to integer comparison (works for "100" but not "100.0")
+    test "${STMT_COV%.*}" -ge 100 || { echo "Statement coverage < 100%: $STMT_COV"; exit 1; }
+    test "${FUNC_COV%.*}" -ge 100 || { echo "Function coverage < 100%: $FUNC_COV"; exit 1; }
+    test "${LINE_COV%.*}" -ge 100 || { echo "Line coverage < 100%: $LINE_COV"; exit 1; }
+fi
 ```
 
 **Pass criteria**: 100% statement, function, and line coverage - all tests pass
