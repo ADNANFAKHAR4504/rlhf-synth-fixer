@@ -164,6 +164,9 @@ export class VPCModule extends Construct {
       bucket: resourceName('v5-vpc-flowlogs').toLowerCase(),
       forceDestroy: true,
       tags: { ...props.tags, Name: resourceName('v5-flowlogs') },
+      lifecycle: {
+        ignoreChanges: ['bucket'],
+      },
     });
 
     // S3 Bucket Versioning
