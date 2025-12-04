@@ -6,9 +6,9 @@
   "po_id": "e4z0r2q3",
   "team": "synth",
   "startedAt": "2025-12-03T18:12:20+05:30",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "IaC Program Optimization",
   "subject_labels": [
-    "Infrastructure Analysis/Monitoring"
+    "IaC Optimization"
   ],
   "aws_services": [
     "Lambda",
@@ -19,5 +19,6 @@
     "RDS",
     "API Gateway"
   ],
+  "author": "mayanksethi-turing",
   "training_quality": 10
 }
