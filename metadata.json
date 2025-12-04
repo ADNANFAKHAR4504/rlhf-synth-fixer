@@ -11,11 +11,25 @@
     "Cloud Environment Setup"
   ],
   "aws_services": [
-    "S3 Bucket",
-    "CloudFormation",
+    "EC2",
+    "VPC",
+    "IAM",
+    "KMS",
+    "Secrets Manager",
+    "S3",
+    "Auto Scaling",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "RDS",
+    "SNS",
     "Lambda",
-    "EventBridge",
-    "CloudWatch LogGroup",
-    "VPC"
-  ]
+    "SSM"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mikiaszerihun",
+  "dockerS3Location": ""
 }
