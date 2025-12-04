@@ -183,52 +183,58 @@ export class RDSOptimizationStack {
     });
 
     // Create primary RDS PostgreSQL instance
-    const dbInstance = new aws.rds.Instance(`rds-${environmentSuffix}`, {
-      identifier: `rds-${environmentSuffix}`,
-      engine: 'postgres',
-      engineVersion: '15', // Use major version, AWS will use latest minor version
-      instanceClass: 'db.t3.large',
-      allocatedStorage: 100,
-      storageType: 'gp3',
-      storageEncrypted: true,
+    const dbInstance = new aws.rds.Instance(
+      `rds-${environmentSuffix}`,
+      {
+        identifier: `rds-${environmentSuffix}`,
+        engine: 'postgres',
+        engineVersion: '15', // Use major version, AWS will use latest minor version
+        instanceClass: 'db.t3.large',
+        allocatedStorage: 100,
+        storageType: 'gp3',
+        storageEncrypted: true,
 
-      // Database configuration
-      dbName: 'optimizeddb',
-      username: 'dbadmin',
-      password: dbPassword,
-      port: 5432,
+        // Database configuration
+        dbName: 'optimizeddb',
+        username: 'dbadmin',
+        password: dbPassword,
+        port: 5432,
 
-      // Network configuration
-      dbSubnetGroupName: dbSubnetGroup.name,
-      vpcSecurityGroupIds: [dbSecurityGroup.id],
-      publiclyAccessible: false,
-      multiAz: false, // Single AZ for cost optimization
+        // Network configuration
+        dbSubnetGroupName: dbSubnetGroup.name,
+        vpcSecurityGroupIds: [dbSecurityGroup.id],
+        publiclyAccessible: false,
+        multiAz: false, // Single AZ for cost optimization
 
-      // Backup configuration (baseline - will be optimized by script)
-      backupRetentionPeriod: 7,
-      backupWindow: '03:00-04:00', // 3-4 AM UTC
-      maintenanceWindow: 'sun:04:00-sun:06:00', // Sunday 4-6 AM UTC
-      skipFinalSnapshot: true, // Allow destruction for testing
+        // Backup configuration (baseline - will be optimized by script)
+        backupRetentionPeriod: 7,
+        backupWindow: '03:00-04:00', // 3-4 AM UTC
+        maintenanceWindow: 'sun:04:00-sun:06:00', // Sunday 4-6 AM UTC
+        skipFinalSnapshot: true, // Allow destruction for testing
 
-      // Performance Insights
-      performanceInsightsEnabled: true,
-      performanceInsightsRetentionPeriod: 7,
+        // Performance Insights
+        performanceInsightsEnabled: true,
+        performanceInsightsRetentionPeriod: 7,
 
-      // Deletion protection
-      deletionProtection: true,
+        // Deletion protection
+        deletionProtection: true,
 
-      // Parameter group
-      parameterGroupName: dbParameterGroup.name,
+        // Parameter group
+        parameterGroupName: dbParameterGroup.name,
 
-      // Enhanced monitoring
-      enabledCloudwatchLogsExports: ['postgresql', 'upgrade'],
+        // Enhanced monitoring
+        enabledCloudwatchLogsExports: ['postgresql', 'upgrade'],
 
-      // Tags
-      tags: {
-        ...commonTags,
-        Name: `rds-${environmentSuffix}`,
+        // Tags
+        tags: {
+          ...commonTags,
+          Name: `rds-${environmentSuffix}`,
+        },
       },
-    });
+      {
+        ignoreChanges: ['tagsAll'], // Ignore AWS-managed tags to prevent unnecessary updates
+      }
+    );
 
     // Create read replica in the same AZ for read-heavy reporting queries
     const readReplica = new aws.rds.Instance(
@@ -260,6 +266,7 @@ export class RDSOptimizationStack {
       {
         dependsOn: [dbInstance],
         deleteBeforeReplace: true, // Delete old replica before creating replacement
+        ignoreChanges: ['tagsAll', 'storageEncrypted'], // Ignore AWS-managed tags and inherited properties
       }
     );
 
