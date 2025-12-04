@@ -1,29 +1,15 @@
 {
-  "po_id": "s4r2q0w6",
-  "platform": "pulumi",
-  "language": "typescript",
-  "subtask": "infrastructure-compliance-monitoring",
-  "complexity": "medium",
-  "difficulty": 3,
-  "training_quality": 9,
-  "synthetic_ground_truth": true,
-  "model_generated": true,
-  "task_type": "synthesis",
-  "created_date": "2025-12-04",
-  "resource_count": 13,
-  "services_used": [
-    "lambda",
-    "s3",
-    "sns",
-    "iam",
-    "cloudwatch",
-    "eventbridge"
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "s1p3f3c3",
+  "team": "synth",
+  "startedAt": "2025-12-04T10:03:04+05:30",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
   ],
-  "tags": {
-    "category": "monitoring",
-    "use_case": "compliance-scanning",
-    "lambda": true,
-    "scheduled": true,
-    "alerting": true
-  }
+  "aws_services": [],
+  "training_quality": 10
 }

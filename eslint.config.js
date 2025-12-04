@@ -34,10 +34,6 @@ module.exports = [
       '@typescript-eslint/explicit-module-boundary-types': 'off',
       '@typescript-eslint/no-explicit-any': 'warn',
 
-      // Quote preferences
-      quotes: ['error', 'single', { avoidEscape: true }],
-      '@typescript-eslint/quotes': ['error', 'single', { avoidEscape: true }],
-
       // Import rules (simplified for templates)
       'import/prefer-default-export': 'off',
       'import/no-unresolved': 'off', // Disable for templates since they might not have proper resolution
@@ -78,10 +74,6 @@ module.exports = [
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/explicit-module-boundary-types': 'off',
       '@typescript-eslint/no-explicit-any': 'warn',
-
-      // Quote preferences
-      quotes: ['error', 'single', { avoidEscape: true }],
-      '@typescript-eslint/quotes': ['error', 'single', { avoidEscape: true }],
 
       // Import rules
       'import/prefer-default-export': 'off',

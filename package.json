@@ -1,34 +1,37 @@
 {
-  "name": "iac-compliance-monitoring",
+  "name": "cicd-pipeline-integration",
   "version": "1.0.0",
-  "description": "Infrastructure compliance monitoring system for EC2 instances",
-  "main": "lib/index.ts",
+  "description": "CI/CD pipeline for containerized applications",
+  "main": "lib/tap-stack.ts",
   "scripts": {
     "test": "jest --coverage --detectOpenHandles --forceExit",
     "test:unit": "jest test/unit --coverage",
     "test:integration": "jest test/integration --coverage",
+    "test:coverage": "jest --coverage",
     "build": "tsc",
-    "lint": "eslint lib/**/*.ts test/**/*.ts",
-    "lint:fix": "eslint lib/**/*.ts test/**/*.ts --fix"
+    "synth": "cdk synth",
+    "lint": "eslint lib/**/*.ts",
+    "lint:fix": "eslint lib/**/*.ts --fix"
   },
   "keywords": [
-    "pulumi",
+    "cdk",
     "typescript",
-    "compliance",
-    "monitoring",
-    "lambda"
+    "cicd",
+    "codepipeline",
+    "codebuild"
   ],
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@pulumi/pulumi": "^3.140.0",
-    "@pulumi/aws": "^6.62.0"
+    "aws-cdk-lib": "^2.160.0",
+    "constructs": "^10.0.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",
     "@types/node": "^22.10.1",
     "@typescript-eslint/eslint-plugin": "^8.17.0",
     "@typescript-eslint/parser": "^8.17.0",
+    "aws-cdk": "^2.160.0",
     "eslint": "^9.15.0",
     "jest": "^29.7.0",
     "ts-jest": "^29.2.5",
