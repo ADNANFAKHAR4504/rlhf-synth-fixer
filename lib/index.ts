@@ -3,7 +3,8 @@ import * as aws from '@pulumi/aws';
 
 // Get configuration
 const config = new pulumi.Config();
-const environmentSuffix = config.require('environmentSuffix');
+// Prefer environment variable ENVIRONMENT_SUFFIX over Pulumi config for CI/CD compatibility
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || config.get('environmentSuffix') || 'dev';
 const alertEmail = config.get('alertEmail') || 'compliance-team@example.com';
 const awsConfig = new pulumi.Config('aws');
 const region = awsConfig.get('region') || 'us-east-1';

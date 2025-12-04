@@ -123,7 +123,7 @@ describe('Infrastructure Code Structure Tests', () => {
 
     it('should use environmentSuffix configuration', () => {
       expect(indexContent).toContain('environmentSuffix');
-      expect(indexContent).toContain("config.require('environmentSuffix')");
+      expect(indexContent).toContain("process.env.ENVIRONMENT_SUFFIX || config.get('environmentSuffix')");
     });
 
     it('should use nodejs20.x runtime', () => {
