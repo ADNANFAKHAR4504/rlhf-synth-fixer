@@ -457,6 +457,17 @@ Resources:
                   - ec2:DisassociateAddress
                   - ec2:DescribeAddresses
                 Resource: '*'
+        - PolicyName: KMSDecryptAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Allow EC2 to decrypt data encrypted with KMS key (for S3 and Secrets Manager)
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:DescribeKey
+                  - kms:GenerateDataKey
+                Resource: !GetAtt KMSKey.Arn
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-EC2-Instance-Role
