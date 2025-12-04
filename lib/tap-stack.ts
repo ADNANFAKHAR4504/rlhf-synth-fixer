@@ -45,9 +45,9 @@ export interface TapStackArgs {
  */
 export class TapStack extends pulumi.ComponentResource {
   // Public outputs
-  public readonly dashboardUrls: pulumi.Output<{ [key: string]: string }>;
-  public readonly snsTopicArns: pulumi.Output<{ [key: string]: string }>;
-  public readonly lambdaFunctionArns: pulumi.Output<{ [key: string]: string }>;
+  public readonly dashboardUrls: pulumi.Output<Record<string, string>>;
+  public readonly snsTopicArns: pulumi.Output<Record<string, string>>;
+  public readonly lambdaFunctionArns: pulumi.Output<Record<string, string>>;
   public readonly reportsBucketName: pulumi.Output<string>;
   public readonly logGroupName: pulumi.Output<string>;
 
@@ -486,19 +486,28 @@ exports.handler = async (event) => {
     this.logGroupName = logGroup.name;
 
     // Dashboard URLs - could be CloudWatch console URLs
-    this.dashboardUrls = logGroup.name.apply(name => ({
-      cloudwatchLogs: `https://console.aws.amazon.com/cloudwatch/home?region=${awsRegion}#logsV2:log-groups/log-group/${name}`,
-    }));
+    this.dashboardUrls = logGroup.name.apply(name => {
+      const urls: Record<string, string> = {
+        cloudwatchLogs: `https://console.aws.amazon.com/cloudwatch/home?region=${awsRegion}#logsV2:log-groups/log-group/${name}`,
+      };
+      return urls;
+    });
 
     // SNS Topic ARNs
-    this.snsTopicArns = alertTopic.arn.apply(arn => ({
-      complianceAlerts: arn,
-    }));
+    this.snsTopicArns = alertTopic.arn.apply(arn => {
+      const arns: Record<string, string> = {
+        complianceAlerts: arn,
+      };
+      return arns;
+    });
 
     // Lambda Function ARNs
-    this.lambdaFunctionArns = lambdaFunction.arn.apply(arn => ({
-      complianceScanner: arn,
-    }));
+    this.lambdaFunctionArns = lambdaFunction.arn.apply(arn => {
+      const arns: Record<string, string> = {
+        complianceScanner: arn,
+      };
+      return arns;
+    });
 
     // Register the outputs of this component
     this.registerOutputs({
