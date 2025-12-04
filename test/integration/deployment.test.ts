@@ -5,7 +5,10 @@ describe('Deployment Integration Tests', () => {
   let outputs: Record<string, unknown>;
 
   beforeAll(() => {
-    const outputsPath = path.join(__dirname, '../../cfn-outputs/flat-outputs.json');
+    const outputsPath = path.join(
+      __dirname,
+      '../../cfn-outputs/flat-outputs.json'
+    );
     if (fs.existsSync(outputsPath)) {
       const data = fs.readFileSync(outputsPath, 'utf-8');
       outputs = JSON.parse(data);
@@ -61,12 +64,17 @@ describe('Deployment Integration Tests', () => {
     it('should have deployed CloudWatch log group', () => {
       expect(outputs.logGroupName).toBeDefined();
       expect(typeof outputs.logGroupName).toBe('string');
-      expect(outputs.logGroupName).toMatch(/\/aws\/lambda\/compliance-scanner-/);
+      expect(outputs.logGroupName).toMatch(
+        /\/aws\/lambda\/compliance-scanner-/
+      );
     });
 
     it('should have SNS subscription details', () => {
       expect(outputs.complianceSubscription).toBeDefined();
-      const subscription = outputs.complianceSubscription as Record<string, unknown>;
+      const subscription = outputs.complianceSubscription as Record<
+        string,
+        unknown
+      >;
       expect(subscription.arn).toBeDefined();
       expect(subscription.protocol).toBe('email');
       expect(subscription.endpoint).toBe('compliance-team@example.com');
@@ -118,13 +126,13 @@ describe('Deployment Integration Tests', () => {
         'complianceSubscription',
       ];
 
-      requiredOutputs.forEach((output) => {
+      requiredOutputs.forEach(output => {
         expect(outputs[output]).toBeDefined();
       });
     });
 
     it('should have no undefined or null outputs', () => {
-      Object.entries(outputs).forEach(([key, value]) => {
+      Object.entries(outputs).forEach(([_key, value]) => {
         expect(value).not.toBeUndefined();
         expect(value).not.toBeNull();
       });

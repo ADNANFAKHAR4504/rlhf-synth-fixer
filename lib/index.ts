@@ -11,25 +11,50 @@ const region = awsConfig.get('region') || 'us-east-1';
 // Required tags to check for compliance
 const requiredTags = ['Environment', 'Owner', 'CostCenter'];
 
-// S3 Bucket for storing compliance scan results
-const complianceBucket = new aws.s3.Bucket(
+// S3 Bucket for storing compliance scan results with versioning
+const complianceBucket = new aws.s3.BucketV2(
   `compliance-results-${environmentSuffix}`,
   {
     bucket: `compliance-results-${environmentSuffix}`,
     forceDestroy: true,
-    lifecycleRules: [
-      {
-        enabled: true,
-        expiration: {
-          days: 90,
-        },
-      },
-    ],
     tags: {
       Name: `compliance-results-${environmentSuffix}`,
       Purpose: 'Compliance scan results storage',
       Environment: environmentSuffix,
     },
+  }
+);
+
+// Enable versioning on S3 bucket
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _bucketVersioning = new aws.s3.BucketVersioningV2(
+  `compliance-results-versioning-${environmentSuffix}`,
+  {
+    bucket: complianceBucket.id,
+    versioningConfiguration: {
+      status: 'Enabled',
+    },
+  }
+);
+
+// S3 Lifecycle Configuration - transition to Glacier after 90 days
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _bucketLifecycle = new aws.s3.BucketLifecycleConfigurationV2(
+  `compliance-results-lifecycle-${environmentSuffix}`,
+  {
+    bucket: complianceBucket.id,
+    rules: [
+      {
+        id: 'transition-to-glacier',
+        status: 'Enabled',
+        transitions: [
+          {
+            days: 90,
+            storageClass: 'GLACIER',
+          },
+        ],
+      },
+    ],
   }
 );
 
@@ -48,7 +73,8 @@ const complianceTopic = new aws.sns.Topic(
 );
 
 // SNS Email Subscription
-export const complianceSubscription = new aws.sns.TopicSubscription(
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _complianceSubscription = new aws.sns.TopicSubscription(
   `compliance-email-${environmentSuffix}`,
   {
     topic: complianceTopic.arn,
@@ -57,8 +83,8 @@ export const complianceSubscription = new aws.sns.TopicSubscription(
   }
 );
 
-// IAM Role for Lambda execution
-const lambdaRole = new aws.iam.Role(
+// IAM Role for Scanner Lambda
+const scannerRole = new aws.iam.Role(
   `compliance-scanner-role-${environmentSuffix}`,
   {
     name: `compliance-scanner-role-${environmentSuffix}`,
@@ -82,12 +108,12 @@ const lambdaRole = new aws.iam.Role(
   }
 );
 
-// IAM Policy for Lambda
-const lambdaPolicy = new aws.iam.RolePolicy(
+// IAM Policy for Scanner Lambda
+const scannerPolicy = new aws.iam.RolePolicy(
   `compliance-scanner-policy-${environmentSuffix}`,
   {
     name: `compliance-scanner-policy-${environmentSuffix}`,
-    role: lambdaRole.id,
+    role: scannerRole.id,
     policy: pulumi
       .all([complianceBucket.arn, complianceTopic.arn])
       .apply(([bucketArn, topicArn]) =>
@@ -96,7 +122,11 @@ const lambdaPolicy = new aws.iam.RolePolicy(
           Statement: [
             {
               Effect: 'Allow',
-              Action: ['ec2:DescribeInstances', 'ec2:DescribeTags'],
+              Action: [
+                'ec2:DescribeInstances',
+                'ec2:DescribeTags',
+                'ec2:DescribeSecurityGroups',
+              ],
               Resource: '*',
             },
             {
@@ -129,39 +159,112 @@ const lambdaPolicy = new aws.iam.RolePolicy(
   }
 );
 
-// CloudWatch Log Group for Lambda
-const lambdaLogGroup = new aws.cloudwatch.LogGroup(
-  `compliance-scanner-logs-${environmentSuffix}`,
+// IAM Role for Reporter Lambda
+const reporterRole = new aws.iam.Role(
+  `compliance-reporter-role-${environmentSuffix}`,
   {
-    name: `/aws/lambda/compliance-scanner-${environmentSuffix}`,
-    retentionInDays: 7,
+    name: `compliance-reporter-role-${environmentSuffix}`,
+    assumeRolePolicy: JSON.stringify({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Action: 'sts:AssumeRole',
+          Effect: 'Allow',
+          Principal: {
+            Service: 'lambda.amazonaws.com',
+          },
+        },
+      ],
+    }),
     tags: {
-      Name: `compliance-scanner-logs-${environmentSuffix}`,
-      Purpose: 'Lambda function logs',
+      Name: `compliance-reporter-role-${environmentSuffix}`,
+      Purpose: 'Lambda execution role for report generator',
       Environment: environmentSuffix,
     },
   }
 );
 
-// Lambda Function (using FileArchive for separate lambda directory)
+// IAM Policy for Reporter Lambda
+const reporterPolicy = new aws.iam.RolePolicy(
+  `compliance-reporter-policy-${environmentSuffix}`,
+  {
+    name: `compliance-reporter-policy-${environmentSuffix}`,
+    role: reporterRole.id,
+    policy: pulumi.all([complianceBucket.arn]).apply(([bucketArn]) =>
+      JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: ['s3:GetObject', 's3:ListBucket'],
+            Resource: [bucketArn, `${bucketArn}/*`],
+          },
+          {
+            Effect: 'Allow',
+            Action: ['s3:PutObject', 's3:PutObjectAcl'],
+            Resource: `${bucketArn}/*`,
+          },
+          {
+            Effect: 'Allow',
+            Action: [
+              'logs:CreateLogGroup',
+              'logs:CreateLogStream',
+              'logs:PutLogEvents',
+            ],
+            Resource: 'arn:aws:logs:*:*:*',
+          },
+        ],
+      })
+    ),
+  }
+);
+
+// CloudWatch Log Group for Scanner Lambda with 30-day retention
+const scannerLogGroup = new aws.cloudwatch.LogGroup(
+  `compliance-scanner-logs-${environmentSuffix}`,
+  {
+    name: `/aws/lambda/compliance-scanner-${environmentSuffix}`,
+    retentionInDays: 30,
+    tags: {
+      Name: `compliance-scanner-logs-${environmentSuffix}`,
+      Purpose: 'Scanner Lambda function logs',
+      Environment: environmentSuffix,
+    },
+  }
+);
+
+// CloudWatch Log Group for Reporter Lambda with 30-day retention
+const reporterLogGroup = new aws.cloudwatch.LogGroup(
+  `compliance-reporter-logs-${environmentSuffix}`,
+  {
+    name: `/aws/lambda/compliance-reporter-${environmentSuffix}`,
+    retentionInDays: 30,
+    tags: {
+      Name: `compliance-reporter-logs-${environmentSuffix}`,
+      Purpose: 'Reporter Lambda function logs',
+      Environment: environmentSuffix,
+    },
+  }
+);
+
+// Scanner Lambda Function
 const complianceScanner = new aws.lambda.Function(
   `compliance-scanner-${environmentSuffix}`,
   {
     name: `compliance-scanner-${environmentSuffix}`,
-    role: lambdaRole.arn,
+    role: scannerRole.arn,
     runtime: 'nodejs20.x',
     handler: 'index.handler',
     timeout: 300,
     memorySize: 256,
     code: new pulumi.asset.AssetArchive({
-      '.': new pulumi.asset.FileArchive('./lambda'),
+      '.': new pulumi.asset.FileArchive('./lambda/scanner'),
     }),
     environment: {
       variables: {
         REQUIRED_TAGS: requiredTags.join(','),
         BUCKET_NAME: complianceBucket.bucket,
         TOPIC_ARN: complianceTopic.arn,
-        // AWS_REGION is NOT set - Lambda provides this automatically
       },
     },
     tags: {
@@ -170,62 +273,213 @@ const complianceScanner = new aws.lambda.Function(
       Environment: environmentSuffix,
     },
   },
-  { dependsOn: [lambdaLogGroup, lambdaPolicy] }
+  { dependsOn: [scannerLogGroup, scannerPolicy] }
 );
 
-// EventBridge Rule for scheduled scans (every 6 hours)
-const scheduledRule = new aws.cloudwatch.EventRule(
-  `compliance-schedule-${environmentSuffix}`,
+// Reporter Lambda Function
+const complianceReporter = new aws.lambda.Function(
+  `compliance-reporter-${environmentSuffix}`,
   {
-    name: `compliance-schedule-${environmentSuffix}`,
+    name: `compliance-reporter-${environmentSuffix}`,
+    role: reporterRole.arn,
+    runtime: 'nodejs20.x',
+    handler: 'index.handler',
+    timeout: 300,
+    memorySize: 256,
+    code: new pulumi.asset.AssetArchive({
+      '.': new pulumi.asset.FileArchive('./lambda/reporter'),
+    }),
+    environment: {
+      variables: {
+        BUCKET_NAME: complianceBucket.bucket,
+      },
+    },
+    tags: {
+      Name: `compliance-reporter-${environmentSuffix}`,
+      Purpose: 'Daily compliance report generation',
+      Environment: environmentSuffix,
+    },
+  },
+  { dependsOn: [reporterLogGroup, reporterPolicy] }
+);
+
+// EventBridge Rule for scanner (every 6 hours)
+const scannerRule = new aws.cloudwatch.EventRule(
+  `compliance-scanner-schedule-${environmentSuffix}`,
+  {
+    name: `compliance-scanner-schedule-${environmentSuffix}`,
     description: 'Trigger compliance scan every 6 hours',
     scheduleExpression: 'rate(6 hours)',
     tags: {
-      Name: `compliance-schedule-${environmentSuffix}`,
+      Name: `compliance-scanner-schedule-${environmentSuffix}`,
       Purpose: 'Scheduled compliance scanning',
       Environment: environmentSuffix,
     },
   }
 );
 
-// Lambda Permission for EventBridge
-export const lambdaPermission = new aws.lambda.Permission(
+// EventBridge Rule for reporter (daily at midnight UTC)
+const reporterRule = new aws.cloudwatch.EventRule(
+  `compliance-reporter-schedule-${environmentSuffix}`,
+  {
+    name: `compliance-reporter-schedule-${environmentSuffix}`,
+    description: 'Trigger daily compliance report generation',
+    scheduleExpression: 'cron(0 0 * * ? *)',
+    tags: {
+      Name: `compliance-reporter-schedule-${environmentSuffix}`,
+      Purpose: 'Daily compliance reporting',
+      Environment: environmentSuffix,
+    },
+  }
+);
+
+// Lambda Permission for Scanner EventBridge
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _scannerPermission = new aws.lambda.Permission(
   `compliance-scanner-permission-${environmentSuffix}`,
   {
     action: 'lambda:InvokeFunction',
     function: complianceScanner.name,
     principal: 'events.amazonaws.com',
-    sourceArn: scheduledRule.arn,
+    sourceArn: scannerRule.arn,
   }
 );
 
-// EventBridge Target
-export const scheduledTarget = new aws.cloudwatch.EventTarget(
-  `compliance-schedule-target-${environmentSuffix}`,
+// Lambda Permission for Reporter EventBridge
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _reporterPermission = new aws.lambda.Permission(
+  `compliance-reporter-permission-${environmentSuffix}`,
   {
-    rule: scheduledRule.name,
+    action: 'lambda:InvokeFunction',
+    function: complianceReporter.name,
+    principal: 'events.amazonaws.com',
+    sourceArn: reporterRule.arn,
+  }
+);
+
+// EventBridge Target for Scanner
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _scannerTarget = new aws.cloudwatch.EventTarget(
+  `compliance-scanner-target-${environmentSuffix}`,
+  {
+    rule: scannerRule.name,
     arn: complianceScanner.arn,
   }
 );
 
-// CloudWatch Alarm for low compliance
-const complianceAlarm = new aws.cloudwatch.MetricAlarm(
-  `compliance-threshold-alarm-${environmentSuffix}`,
+// EventBridge Target for Reporter
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _reporterTarget = new aws.cloudwatch.EventTarget(
+  `compliance-reporter-target-${environmentSuffix}`,
   {
-    name: `compliance-threshold-alarm-${environmentSuffix}`,
-    comparisonOperator: 'LessThanThreshold',
+    rule: reporterRule.name,
+    arn: complianceReporter.arn,
+  }
+);
+
+// CloudWatch Alarm for Scanner Lambda failures
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _scannerFailureAlarm = new aws.cloudwatch.MetricAlarm(
+  `scanner-failure-alarm-${environmentSuffix}`,
+  {
+    name: `scanner-failure-alarm-${environmentSuffix}`,
+    comparisonOperator: 'GreaterThanThreshold',
     evaluationPeriods: 1,
-    metricName: 'CompliancePercentage',
-    namespace: 'EC2Compliance',
-    period: 21600, // 6 hours
-    statistic: 'Average',
-    threshold: 95,
-    alarmDescription: 'Alert when compliance rate drops below 95%',
+    metricName: 'Errors',
+    namespace: 'AWS/Lambda',
+    period: 300,
+    statistic: 'Sum',
+    threshold: 0,
+    alarmDescription: 'Alert when compliance scanner Lambda fails',
     alarmActions: [complianceTopic.arn],
+    dimensions: {
+      FunctionName: complianceScanner.name,
+    },
     treatMissingData: 'notBreaching',
     tags: {
-      Name: `compliance-threshold-alarm-${environmentSuffix}`,
-      Purpose: 'Compliance monitoring',
+      Name: `scanner-failure-alarm-${environmentSuffix}`,
+      Purpose: 'Scanner failure monitoring',
+      Environment: environmentSuffix,
+    },
+  }
+);
+
+// CloudWatch Alarm for Scanner Lambda duration >5 minutes
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _scannerDurationAlarm = new aws.cloudwatch.MetricAlarm(
+  `scanner-duration-alarm-${environmentSuffix}`,
+  {
+    name: `scanner-duration-alarm-${environmentSuffix}`,
+    comparisonOperator: 'GreaterThanThreshold',
+    evaluationPeriods: 1,
+    metricName: 'Duration',
+    namespace: 'AWS/Lambda',
+    period: 300,
+    statistic: 'Maximum',
+    threshold: 300000, // 5 minutes in milliseconds
+    alarmDescription: 'Alert when scanner Lambda duration exceeds 5 minutes',
+    alarmActions: [complianceTopic.arn],
+    dimensions: {
+      FunctionName: complianceScanner.name,
+    },
+    treatMissingData: 'notBreaching',
+    tags: {
+      Name: `scanner-duration-alarm-${environmentSuffix}`,
+      Purpose: 'Scanner duration monitoring',
+      Environment: environmentSuffix,
+    },
+  }
+);
+
+// CloudWatch Alarm for Reporter Lambda failures
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _reporterFailureAlarm = new aws.cloudwatch.MetricAlarm(
+  `reporter-failure-alarm-${environmentSuffix}`,
+  {
+    name: `reporter-failure-alarm-${environmentSuffix}`,
+    comparisonOperator: 'GreaterThanThreshold',
+    evaluationPeriods: 1,
+    metricName: 'Errors',
+    namespace: 'AWS/Lambda',
+    period: 300,
+    statistic: 'Sum',
+    threshold: 0,
+    alarmDescription: 'Alert when compliance reporter Lambda fails',
+    alarmActions: [complianceTopic.arn],
+    dimensions: {
+      FunctionName: complianceReporter.name,
+    },
+    treatMissingData: 'notBreaching',
+    tags: {
+      Name: `reporter-failure-alarm-${environmentSuffix}`,
+      Purpose: 'Reporter failure monitoring',
+      Environment: environmentSuffix,
+    },
+  }
+);
+
+// CloudWatch Alarm for Reporter Lambda duration >5 minutes
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _reporterDurationAlarm = new aws.cloudwatch.MetricAlarm(
+  `reporter-duration-alarm-${environmentSuffix}`,
+  {
+    name: `reporter-duration-alarm-${environmentSuffix}`,
+    comparisonOperator: 'GreaterThanThreshold',
+    evaluationPeriods: 1,
+    metricName: 'Duration',
+    namespace: 'AWS/Lambda',
+    period: 300,
+    statistic: 'Maximum',
+    threshold: 300000, // 5 minutes in milliseconds
+    alarmDescription: 'Alert when reporter Lambda duration exceeds 5 minutes',
+    alarmActions: [complianceTopic.arn],
+    dimensions: {
+      FunctionName: complianceReporter.name,
+    },
+    treatMissingData: 'notBreaching',
+    tags: {
+      Name: `reporter-duration-alarm-${environmentSuffix}`,
+      Purpose: 'Reporter duration monitoring',
       Environment: environmentSuffix,
     },
   }
@@ -299,13 +553,23 @@ const complianceDashboard = new aws.cloudwatch.Dashboard(
           height: 6,
           properties: {
             metrics: [
-              ['EC2Compliance', 'NonCompliantInstances', { stat: 'Average' }],
+              [
+                'AWS/Lambda',
+                'Errors',
+                { stat: 'Sum', label: 'Scanner Errors' },
+                { FunctionName: complianceScanner.name },
+              ],
+              [
+                '...',
+                { stat: 'Sum', label: 'Reporter Errors' },
+                { FunctionName: complianceReporter.name },
+              ],
             ],
             view: 'timeSeries',
             stacked: false,
             region: region,
-            title: 'Violations Trend',
-            period: 21600,
+            title: 'Lambda Function Errors',
+            period: 300,
           },
         },
         {
@@ -332,9 +596,10 @@ const complianceDashboard = new aws.cloudwatch.Dashboard(
 // Exports
 export const bucketName = complianceBucket.id;
 export const topicArn = complianceTopic.arn;
-export const lambdaFunctionName = complianceScanner.name;
-export const lambdaFunctionArn = complianceScanner.arn;
+export const scannerFunctionName = complianceScanner.name;
+export const scannerFunctionArn = complianceScanner.arn;
+export const reporterFunctionName = complianceReporter.name;
+export const reporterFunctionArn = complianceReporter.arn;
 export const dashboardName = complianceDashboard.dashboardName;
-export const alarmName = complianceAlarm.name;
-export const eventRuleName = scheduledRule.name;
-export const logGroupName = lambdaLogGroup.name;
+export const scannerLogGroupName = scannerLogGroup.name;
+export const reporterLogGroupName = reporterLogGroup.name;

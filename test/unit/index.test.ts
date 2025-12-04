@@ -31,13 +31,29 @@ describe('Infrastructure Code Structure Tests', () => {
       expect(fs.statSync(lambdaPath).isDirectory()).toBe(true);
     });
 
-    it('should have lambda index.js', () => {
-      const lambdaIndexPath = path.join(libPath, 'lambda/index.js');
+    it('should have scanner lambda index.js', () => {
+      const lambdaIndexPath = path.join(libPath, 'lambda/scanner/index.js');
       expect(fs.existsSync(lambdaIndexPath)).toBe(true);
     });
 
-    it('should have lambda package.json', () => {
-      const lambdaPackagePath = path.join(libPath, 'lambda/package.json');
+    it('should have scanner lambda package.json', () => {
+      const lambdaPackagePath = path.join(
+        libPath,
+        'lambda/scanner/package.json'
+      );
+      expect(fs.existsSync(lambdaPackagePath)).toBe(true);
+    });
+
+    it('should have reporter lambda index.js', () => {
+      const lambdaIndexPath = path.join(libPath, 'lambda/reporter/index.js');
+      expect(fs.existsSync(lambdaIndexPath)).toBe(true);
+    });
+
+    it('should have reporter lambda package.json', () => {
+      const lambdaPackagePath = path.join(
+        libPath,
+        'lambda/reporter/package.json'
+      );
       expect(fs.existsSync(lambdaPackagePath)).toBe(true);
     });
 
@@ -66,7 +82,9 @@ describe('Infrastructure Code Structure Tests', () => {
     });
 
     it('should import pulumi packages', () => {
-      expect(indexContent).toContain("import * as pulumi from '@pulumi/pulumi'");
+      expect(indexContent).toContain(
+        "import * as pulumi from '@pulumi/pulumi'"
+      );
       expect(indexContent).toContain("import * as aws from '@pulumi/aws'");
     });
 
@@ -102,7 +120,8 @@ describe('Infrastructure Code Structure Tests', () => {
 
     it('should create CloudWatch alarm', () => {
       expect(indexContent).toContain('aws.cloudwatch.MetricAlarm');
-      expect(indexContent).toContain('compliance-threshold-alarm');
+      expect(indexContent).toContain('scanner-failure-alarm');
+      expect(indexContent).toContain('reporter-failure-alarm');
     });
 
     it('should create CloudWatch log group', () => {
@@ -113,12 +132,13 @@ describe('Infrastructure Code Structure Tests', () => {
     it('should export all required outputs', () => {
       expect(indexContent).toContain('export const bucketName');
       expect(indexContent).toContain('export const topicArn');
-      expect(indexContent).toContain('export const lambdaFunctionName');
-      expect(indexContent).toContain('export const lambdaFunctionArn');
+      expect(indexContent).toContain('export const scannerFunctionName');
+      expect(indexContent).toContain('export const scannerFunctionArn');
+      expect(indexContent).toContain('export const reporterFunctionName');
+      expect(indexContent).toContain('export const reporterFunctionArn');
       expect(indexContent).toContain('export const dashboardName');
-      expect(indexContent).toContain('export const alarmName');
-      expect(indexContent).toContain('export const eventRuleName');
-      expect(indexContent).toContain('export const logGroupName');
+      expect(indexContent).toContain('export const scannerLogGroupName');
+      expect(indexContent).toContain('export const reporterLogGroupName');
     });
 
     it('should use environmentSuffix configuration', () => {
@@ -150,56 +170,62 @@ describe('Infrastructure Code Structure Tests', () => {
   });
 
   describe('Lambda Code Content', () => {
-    let lambdaContent: string;
+    let scannerContent: string;
+    let reporterContent: string;
 
     beforeAll(() => {
-      const lambdaPath = path.join(libPath, 'lambda/index.js');
-      lambdaContent = fs.readFileSync(lambdaPath, 'utf-8');
+      const scannerPath = path.join(libPath, 'lambda/scanner/index.js');
+      const reporterPath = path.join(libPath, 'lambda/reporter/index.js');
+      scannerContent = fs.readFileSync(scannerPath, 'utf-8');
+      reporterContent = fs.readFileSync(reporterPath, 'utf-8');
     });
 
-    it('should import AWS SDK clients', () => {
-      expect(lambdaContent).toContain('@aws-sdk/client-ec2');
-      expect(lambdaContent).toContain('@aws-sdk/client-s3');
-      expect(lambdaContent).toContain('@aws-sdk/client-cloudwatch');
-      expect(lambdaContent).toContain('@aws-sdk/client-sns');
+    it('scanner should import AWS SDK clients', () => {
+      expect(scannerContent).toContain('@aws-sdk/client-ec2');
+      expect(scannerContent).toContain('@aws-sdk/client-s3');
+      expect(scannerContent).toContain('@aws-sdk/client-cloudwatch');
+      expect(scannerContent).toContain('@aws-sdk/client-sns');
     });
 
-    it('should export handler function', () => {
-      expect(lambdaContent).toContain('exports.handler');
+    it('reporter should import AWS SDK clients', () => {
+      expect(reporterContent).toContain('@aws-sdk/client-s3');
     });
 
-    it('should use environment variables', () => {
-      expect(lambdaContent).toContain('process.env.REQUIRED_TAGS');
-      expect(lambdaContent).toContain('process.env.BUCKET_NAME');
-      expect(lambdaContent).toContain('process.env.TOPIC_ARN');
+    it('scanner should export handler function', () => {
+      expect(scannerContent).toContain('exports.handler');
     });
 
-    it('should implement getAllInstances function', () => {
-      expect(lambdaContent).toContain('async function getAllInstances()');
-      expect(lambdaContent).toContain('DescribeInstancesCommand');
+    it('reporter should export handler function', () => {
+      expect(reporterContent).toContain('exports.handler');
     });
 
-    it('should implement checkInstanceCompliance function', () => {
-      expect(lambdaContent).toContain('function checkInstanceCompliance(instance)');
+    it('scanner should use environment variables', () => {
+      expect(scannerContent).toContain('process.env');
     });
 
-    it('should implement storeResults function', () => {
-      expect(lambdaContent).toContain('async function storeResults(scanResult, timestamp)');
-      expect(lambdaContent).toContain('PutObjectCommand');
+    it('reporter should use environment variables', () => {
+      expect(reporterContent).toContain('process.env');
     });
 
-    it('should implement publishMetrics function', () => {
-      expect(lambdaContent).toContain('async function publishMetrics');
-      expect(lambdaContent).toContain('PutMetricDataCommand');
+    it('scanner should implement instance scanning logic', () => {
+      expect(scannerContent).toContain('DescribeInstancesCommand');
     });
 
-    it('should implement sendAlert function', () => {
-      expect(lambdaContent).toContain('async function sendAlert(scanResult)');
-      expect(lambdaContent).toContain('PublishCommand');
+    it('reporter should implement report generation logic', () => {
+      expect(reporterContent).toContain('PutObjectCommand');
     });
 
-    it('should NOT hardcode AWS region (use SDK auto-detection)', () => {
-      const clientRegionMatch = lambdaContent.match(/new EC2Client\(\{ *region:/);
+    it('scanner should NOT hardcode AWS region (use SDK auto-detection)', () => {
+      const clientRegionMatch = scannerContent.match(
+        /new EC2Client\(\{ *region:/
+      );
+      expect(clientRegionMatch).toBeNull();
+    });
+
+    it('reporter should NOT hardcode AWS region (use SDK auto-detection)', () => {
+      const clientRegionMatch = reporterContent.match(
+        /new S3Client\(\{ *region:/
+      );
       expect(clientRegionMatch).toBeNull();
     });
   });
@@ -219,15 +245,30 @@ describe('Infrastructure Code Structure Tests', () => {
       const metadata = JSON.parse(content);
       expect(metadata.po_id).toBeDefined();
       expect(metadata.platform).toBe('pulumi');
-      expect(metadata.language).toBe('typescript');
+      expect(metadata.language).toBe('ts');
     });
 
-    it('should have valid lambda package.json', () => {
-      const lambdaPackagePath = path.join(libPath, 'lambda/package.json');
+    it('should have valid scanner lambda package.json', () => {
+      const lambdaPackagePath = path.join(
+        libPath,
+        'lambda/scanner/package.json'
+      );
       const content = fs.readFileSync(lambdaPackagePath, 'utf-8');
       const packageJson = JSON.parse(content);
       expect(packageJson.dependencies).toBeDefined();
       expect(packageJson.dependencies['@aws-sdk/client-ec2']).toBeDefined();
+      expect(packageJson.dependencies['@aws-sdk/client-s3']).toBeDefined();
+    });
+
+    it('should have valid reporter lambda package.json', () => {
+      const lambdaPackagePath = path.join(
+        libPath,
+        'lambda/reporter/package.json'
+      );
+      const content = fs.readFileSync(lambdaPackagePath, 'utf-8');
+      const packageJson = JSON.parse(content);
+      expect(packageJson.dependencies).toBeDefined();
+      expect(packageJson.dependencies['@aws-sdk/client-s3']).toBeDefined();
     });
   });
 

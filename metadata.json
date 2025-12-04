@@ -1,29 +1,22 @@
 {
-  "po_id": "s4r2q0w6",
+  "po_id": "a4s0l8v4",
   "platform": "pulumi",
-  "language": "typescript",
-  "subtask": "infrastructure-compliance-monitoring",
-  "complexity": "medium",
-  "difficulty": 3,
-  "training_quality": 9,
-  "synthetic_ground_truth": true,
-  "model_generated": true,
-  "task_type": "synthesis",
-  "created_date": "2025-12-04",
-  "resource_count": 13,
-  "services_used": [
-    "lambda",
-    "s3",
-    "sns",
-    "iam",
-    "cloudwatch",
-    "eventbridge"
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-12-04T09:58:00-08:00",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring"
   ],
-  "tags": {
-    "category": "monitoring",
-    "use_case": "compliance-scanning",
-    "lambda": true,
-    "scheduled": true,
-    "alerting": true
-  }
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "CloudWatch",
+    "EventBridge",
+    "SNS",
+    "IAM"
+  ],
+  "training_quality": 10
 }
