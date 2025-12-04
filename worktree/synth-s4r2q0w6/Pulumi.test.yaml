@@ -1,0 +1,5 @@
+config:
+  TapStack:environmentSuffix: test
+  TapStack:alertEmail: test@example.com
+  aws:region: us-east-1
+encryptionsalt: v1:ukohug3pmzg=:v1:9S2bRqxy0X2kegA/:53ZT3X5yTjyRGt47UgfCl2BF7UqjYg==
