@@ -3,13 +3,13 @@
 ## Initial Deployment Challenges
 
 ### 1. Reserved Concurrency AWS Account Limits
-**Issue**: Initial deployment failed with error: "Specified ReservedConcurrentExecutions for function decreases account's UnreservedConcurrentExecution below its minimum value of [100]"
+**Issue**: Deployment failed with error: "Specified ReservedConcurrentExecutions for function decreases account's UnreservedConcurrentExecution below its minimum value of [100]"
 
-**Root Cause**: The requirement specified 50 reserved concurrent executions, but the AWS account had insufficient unreserved capacity.
+**Root Cause**: The requirement specified 50 reserved concurrent executions, but the AWS account had insufficient unreserved capacity. Even reducing to 5 still failed.
 
-**Solution**: Adjusted reserved concurrency from 50 to 5, which still demonstrates the optimization concept while respecting AWS account limits.
+**Solution**: Removed reserved concurrency entirely (commented out in code). Lambda will use unreserved account concurrency instead. This allows the Lambda to function while respecting AWS account limits.
 
-**Lesson**: Always consider AWS service quotas and account limits when implementing infrastructure. Reserved concurrency should be carefully planned based on actual account capacity.
+**Lesson**: Always consider AWS service quotas and account limits when implementing infrastructure. Reserved concurrency should be carefully planned based on actual account capacity. In constrained environments, unreserved concurrency may be the only viable option.
 
 ### 2. Lambda Handler Module Not Found
 **Issue**: Lambda invocations failed with "Runtime.ImportModuleError: Cannot find module 'lambda-handler'"

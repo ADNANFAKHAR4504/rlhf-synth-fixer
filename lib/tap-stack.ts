@@ -5,7 +5,7 @@
  *
  * This stack implements a complete Lambda-based order processing system with:
  * - Optimized Lambda configuration (512MB memory, 30s timeout)
- * - Reserved concurrency (50)
+ * - Reserved concurrency (removed due to AWS account limits)
  * - X-Ray tracing enabled
  * - CloudWatch log retention (7 days)
  * - Comprehensive tagging (Environment, Team, CostCenter)
@@ -217,7 +217,7 @@ exports.handler = async (event) => {
 
         // Requirement 2: Reserved concurrency (adjusted to 5 for AWS account limits)
         // Note: Original requirement was 50, but AWS account has insufficient unreserved capacity
-        reservedConcurrentExecutions: 5,
+        // reservedConcurrentExecutions: 5, // Removed due to AWS account quota limits
 
         // Requirement 3: Enable X-Ray tracing
         tracingConfig: {
