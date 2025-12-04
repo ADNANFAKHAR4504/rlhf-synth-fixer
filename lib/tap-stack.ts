@@ -1,8 +1,10 @@
+/* eslint-disable import/no-extraneous-dependencies */
 import {
   ConfigServiceClient,
   DescribeConfigurationRecordersCommand,
   DescribeDeliveryChannelsCommand,
 } from '@aws-sdk/client-config-service';
+/* eslint-enable import/no-extraneous-dependencies */
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
