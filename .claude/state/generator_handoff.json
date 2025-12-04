@@ -1,0 +1,30 @@
+{
+  "agent": "iac-infra-generator",
+  "phase": "COMPLETE",
+  "timestamp": "2025-12-04T10:43:00Z",
+  "task_id": "y8q4p7r3",
+  "task_type": "optimization",
+  "platform": "cdk",
+  "language": "ts",
+  "artifacts": {
+    "prompt_md": "lib/PROMPT.md",
+    "model_response_md": "lib/MODEL_RESPONSE.md",
+    "files_generated": [
+      "lib/tap-stack.ts",
+      "lib/networking-construct.ts",
+      "lib/secrets-construct.ts",
+      "lib/ecs-cluster-construct.ts",
+      "lib/reusable-task-definition-construct.ts",
+      "lib/alb-construct.ts",
+      "bin/tap.ts"
+    ]
+  },
+  "validations_passed": ["A", "B", "C", "D", "E", "F"],
+  "special_files": {
+    "ci_cd_yml": false,
+    "optimize_py": true,
+    "analyse_py": false
+  },
+  "next_agent": "iac-infra-qa-trainer",
+  "recommendations": "Ready for QA validation and testing. This is an IaC Optimization task that addresses 10 critical ECS issues. The optimize.py script should be implemented to demonstrate cost savings on live resources."
+}

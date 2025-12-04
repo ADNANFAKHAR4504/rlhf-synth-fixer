@@ -1,0 +1,25 @@
+{
+  "po_id": "y8q4p7r3",
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-12-04T00:00:00.000Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Optimization"
+  ],
+  "aws_services": [
+    "ECS",
+    "Fargate",
+    "ALB",
+    "VPC",
+    "EC2",
+    "Secrets Manager",
+    "CloudWatch Logs",
+    "IAM",
+    "ECR"
+  ],
+  "training_quality": 10
+}

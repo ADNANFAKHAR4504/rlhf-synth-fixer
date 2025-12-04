@@ -1,0 +1,4 @@
+Task Type Detection Results:
+IS_CICD_TASK=false
+IS_OPTIMIZATION_TASK=true
+IS_ANALYSIS_TASK=false
