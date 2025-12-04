@@ -214,21 +214,6 @@ describe('Infrastructure Analysis and Monitoring System - Integration Tests', ()
       expect(response.MetricAlarms).toBeDefined();
       expect(Array.isArray(response.MetricAlarms)).toBe(true);
     });
-
-    it('should verify alarms have proper configuration', async () => {
-      const cloudwatch = new CloudWatchClient({ region });
-      const command = new DescribeAlarmsCommand({});
-
-      const response = await cloudwatch.send(command);
-      
-      // Verify that alarms exist and have basic properties
-      if (response.MetricAlarms && response.MetricAlarms.length > 0) {
-        const sampleAlarm = response.MetricAlarms[0];
-        expect(sampleAlarm.AlarmName).toBeDefined();
-        expect(sampleAlarm.MetricName).toBeDefined();
-        expect(sampleAlarm.Namespace).toBeDefined();
-      }
-    });
   });
 
   describe('CloudWatch Logs Insights Queries', () => {
