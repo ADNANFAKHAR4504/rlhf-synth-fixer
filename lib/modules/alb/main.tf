@@ -11,6 +11,18 @@ resource "aws_security_group" "alb" {
     description = "HTTP from anywhere"
   }
 
+  # HTTPS ingress (only when certificate is available)
+  dynamic "ingress" {
+    for_each = var.ssl_certificate_arn != null ? [1] : []
+    content {
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "HTTPS from anywhere"
+    }
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -64,10 +76,46 @@ resource "aws_lb_target_group" "main" {
   })
 }
 
+# HTTP Listener (redirects to HTTPS only when certificate is available and in prod)
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
+
+  default_action {
+    type = var.ssl_certificate_arn != null && var.environment == "prod" ? "redirect" : "forward"
+
+    # Redirect to HTTPS for prod with certificate
+    dynamic "redirect" {
+      for_each = var.ssl_certificate_arn != null && var.environment == "prod" ? [1] : []
+      content {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
+    }
+
+    # Forward to target group for dev/staging or when no certificate
+    dynamic "forward" {
+      for_each = var.ssl_certificate_arn != null && var.environment == "prod" ? [] : [1]
+      content {
+        target_group {
+          arn = aws_lb_target_group.main.arn
+        }
+      }
+    }
+  }
+}
+
+# HTTPS Listener (only when certificate is provided)
+resource "aws_lb_listener" "https" {
+  count = var.ssl_certificate_arn != null ? 1 : 0
+
+  load_balancer_arn = aws_lb.main.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
+  certificate_arn   = var.ssl_certificate_arn
 
   default_action {
     type             = "forward"

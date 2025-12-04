@@ -32,3 +32,18 @@ output "target_group_arn_suffix" {
   description = "ARN suffix of the target group for CloudWatch"
   value       = aws_lb_target_group.main.arn_suffix
 }
+
+output "https_listener_arn" {
+  description = "ARN of the HTTPS listener (null if no certificate provided)"
+  value       = length(aws_lb_listener.https) > 0 ? aws_lb_listener.https[0].arn : null
+}
+
+output "ssl_enabled" {
+  description = "Whether SSL/HTTPS is enabled"
+  value       = var.ssl_certificate_arn != null
+}
+
+output "alb_url" {
+  description = "Primary URL for the ALB (HTTPS if available, HTTP otherwise)"
+  value       = var.ssl_certificate_arn != null ? "https://${aws_lb.main.dns_name}" : "http://${aws_lb.main.dns_name}"
+}

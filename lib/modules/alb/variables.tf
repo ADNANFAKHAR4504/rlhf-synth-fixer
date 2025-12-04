@@ -27,3 +27,9 @@ variable "common_tags" {
   description = "Common tags for all resources"
   type        = map(string)
 }
+
+variable "ssl_certificate_arn" {
+  description = "ARN of SSL certificate for HTTPS listener (required for production)"
+  type        = string
+  default     = null
+}

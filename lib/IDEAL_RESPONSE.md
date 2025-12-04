@@ -182,6 +182,12 @@ variable "az_count" {
   type        = number
   default     = 2
 }
+
+variable "ssl_certificate_arn" {
+  description = "ARN of SSL certificate for HTTPS listener (required for production HTTPS)"
+  type        = string
+  default     = null
+}
 ```
 
 ## tap_stack.tf
@@ -256,12 +262,13 @@ module "rds" {
 module "alb" {
   source = "./modules/alb"
 
-  project_name      = local.project_name
-  environment       = local.environment
-  region            = local.region
-  vpc_id            = module.vpc.vpc_id
-  public_subnet_ids = module.vpc.public_subnet_ids
-  common_tags       = local.common_tags
+  project_name        = local.project_name
+  environment         = local.environment
+  region              = local.region
+  vpc_id              = module.vpc.vpc_id
+  public_subnet_ids   = module.vpc.public_subnet_ids
+  common_tags         = local.common_tags
+  ssl_certificate_arn = var.ssl_certificate_arn
 }
 
 # ECS Module
@@ -378,8 +385,18 @@ output "alb_security_group_id" {
 }
 
 output "alb_url" {
-  description = "Full HTTP URL of the Application Load Balancer"
-  value       = "http://${module.alb.alb_dns_name}"
+  description = "URL of the Application Load Balancer (HTTPS if certificate available, HTTP otherwise)"
+  value       = module.alb.alb_url
+}
+
+output "ssl_enabled" {
+  description = "Whether SSL/HTTPS is enabled for the ALB"
+  value       = module.alb.ssl_enabled
+}
+
+output "https_listener_arn" {
+  description = "ARN of the HTTPS listener (null if no SSL certificate)"
+  value       = module.alb.https_listener_arn
 }
 
 # =============================================================================
@@ -535,12 +552,12 @@ output "common_tags" {
 # =============================================================================
 output "application_endpoint" {
   description = "Full endpoint URL for the application"
-  value       = "http://${module.alb.alb_dns_name}"
+  value       = module.alb.alb_url
 }
 
 output "health_check_url" {
   description = "Health check endpoint URL"
-  value       = "http://${module.alb.alb_dns_name}/health"
+  value       = "${module.alb.alb_url}/health"
 }
 
 output "security_group_summary" {
@@ -987,6 +1004,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
   rule {
     id     = "expire-logs"
     status = "Enabled"
+
+    filter {
+      prefix = ""
+    }
 
     expiration {
       days = 90
@@ -1586,6 +1607,18 @@ resource "aws_security_group" "alb" {
     description = "HTTP from anywhere"
   }
 
+  # HTTPS ingress (only when certificate is available)
+  dynamic "ingress" {
+    for_each = var.ssl_certificate_arn != null ? [1] : []
+    content {
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "HTTPS from anywhere"
+    }
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -1639,10 +1672,46 @@ resource "aws_lb_target_group" "main" {
   })
 }
 
+# HTTP Listener (redirects to HTTPS only when certificate is available and in prod)
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
+
+  default_action {
+    type = var.ssl_certificate_arn != null && var.environment == "prod" ? "redirect" : "forward"
+
+    # Redirect to HTTPS for prod with certificate
+    dynamic "redirect" {
+      for_each = var.ssl_certificate_arn != null && var.environment == "prod" ? [1] : []
+      content {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
+    }
+
+    # Forward to target group for dev/staging or when no certificate
+    dynamic "forward" {
+      for_each = var.ssl_certificate_arn != null && var.environment == "prod" ? [] : [1]
+      content {
+        target_group {
+          arn = aws_lb_target_group.main.arn
+        }
+      }
+    }
+  }
+}
+
+# HTTPS Listener (only when certificate is provided)
+resource "aws_lb_listener" "https" {
+  count = var.ssl_certificate_arn != null ? 1 : 0
+
+  load_balancer_arn = aws_lb.main.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
+  certificate_arn   = var.ssl_certificate_arn
 
   default_action {
     type             = "forward"
@@ -1683,6 +1752,12 @@ variable "common_tags" {
   description = "Common tags for all resources"
   type        = map(string)
 }
+
+variable "ssl_certificate_arn" {
+  description = "ARN of SSL certificate for HTTPS listener (required for production)"
+  type        = string
+  default     = null
+}
 ```
 
 ## modules/alb/outputs.tf
@@ -1721,6 +1796,21 @@ output "alb_arn_suffix" {
 output "target_group_arn_suffix" {
   description = "ARN suffix of the target group for CloudWatch"
   value       = aws_lb_target_group.main.arn_suffix
+}
+
+output "https_listener_arn" {
+  description = "ARN of the HTTPS listener (null if no certificate provided)"
+  value       = length(aws_lb_listener.https) > 0 ? aws_lb_listener.https[0].arn : null
+}
+
+output "ssl_enabled" {
+  description = "Whether SSL/HTTPS is enabled"
+  value       = var.ssl_certificate_arn != null
+}
+
+output "alb_url" {
+  description = "Primary URL for the ALB (HTTPS if available, HTTP otherwise)"
+  value       = var.ssl_certificate_arn != null ? "https://${aws_lb.main.dns_name}" : "http://${aws_lb.main.dns_name}"
 }
 ```
 

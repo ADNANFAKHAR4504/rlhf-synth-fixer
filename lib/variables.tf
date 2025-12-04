@@ -128,3 +128,9 @@ variable "az_count" {
   type        = number
   default     = 2
 }
+
+variable "ssl_certificate_arn" {
+  description = "ARN of SSL certificate for HTTPS listener (required for production HTTPS)"
+  type        = string
+  default     = null
+}

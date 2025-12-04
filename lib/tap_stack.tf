@@ -67,12 +67,13 @@ module "rds" {
 module "alb" {
   source = "./modules/alb"
 
-  project_name      = local.project_name
-  environment       = local.environment
-  region            = local.region
-  vpc_id            = module.vpc.vpc_id
-  public_subnet_ids = module.vpc.public_subnet_ids
-  common_tags       = local.common_tags
+  project_name        = local.project_name
+  environment         = local.environment
+  region              = local.region
+  vpc_id              = module.vpc.vpc_id
+  public_subnet_ids   = module.vpc.public_subnet_ids
+  common_tags         = local.common_tags
+  ssl_certificate_arn = var.ssl_certificate_arn
 }
 
 # ECS Module
@@ -189,8 +190,18 @@ output "alb_security_group_id" {
 }
 
 output "alb_url" {
-  description = "Full HTTP URL of the Application Load Balancer"
-  value       = "http://${module.alb.alb_dns_name}"
+  description = "URL of the Application Load Balancer (HTTPS if certificate available, HTTP otherwise)"
+  value       = module.alb.alb_url
+}
+
+output "ssl_enabled" {
+  description = "Whether SSL/HTTPS is enabled for the ALB"
+  value       = module.alb.ssl_enabled
+}
+
+output "https_listener_arn" {
+  description = "ARN of the HTTPS listener (null if no SSL certificate)"
+  value       = module.alb.https_listener_arn
 }
 
 # =============================================================================
@@ -346,12 +357,12 @@ output "common_tags" {
 # =============================================================================
 output "application_endpoint" {
   description = "Full endpoint URL for the application"
-  value       = "http://${module.alb.alb_dns_name}"
+  value       = module.alb.alb_url
 }
 
 output "health_check_url" {
   description = "Health check endpoint URL"
-  value       = "http://${module.alb.alb_dns_name}/health"
+  value       = "${module.alb.alb_url}/health"
 }
 
 output "security_group_summary" {

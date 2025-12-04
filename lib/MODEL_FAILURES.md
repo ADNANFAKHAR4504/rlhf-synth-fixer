@@ -48,19 +48,15 @@ variable "alb_security_group_id" {
 - Missing required module argument prevents deployment
 - **DEPLOYMENT FAILURE** - Cannot apply configuration
 
-### 2. **CRITICAL INFRASTRUCTURE ERROR** - ACM Certificate Without Domain Ownership
+### 2. **CRITICAL INFRASTRUCTURE ERROR** - Non-Conditional HTTPS Implementation
 
-**Requirement:** Avoid ACM certificate resources when domain ownership is not available for DNS validation.
+**Requirement:** Implement conditional HTTPS/SSL configuration that only applies to production environment when certificate is available.
 
-**Model Response:** Includes ACM certificate with DNS validation requiring domain control:
+**Model Response:** Forces HTTPS/ACM certificate creation in all environments:
 ```hcl
 resource "aws_acm_certificate" "main" {
   domain_name       = "${var.environment}.${var.project_name}.example.com"
   validation_method = "DNS"
-  
-  lifecycle {
-    create_before_destroy = true
-  }
 }
 
 resource "aws_acm_certificate_validation" "main" {
@@ -72,18 +68,65 @@ resource "aws_lb_listener" "https" {
   port              = "443"
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
-  certificate_arn   = aws_acm_certificate.main.arn  # Depends on validation
+  certificate_arn   = aws_acm_certificate.main.arn
 }
-```
-
-**Ideal Response:** HTTP-only configuration for environments without domain access:
-```hcl
-# No ACM certificate resources
 
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
+  
+  default_action {
+    type = "redirect"
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+}
+```
+
+**Ideal Response:** Conditional HTTPS only for production with certificate variable:
+```hcl
+# HTTP Listener with conditional redirect
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type = var.ssl_certificate_arn != null && var.environment == "prod" ? "redirect" : "forward"
+
+    dynamic "redirect" {
+      for_each = var.ssl_certificate_arn != null && var.environment == "prod" ? [1] : []
+      content {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
+    }
+
+    dynamic "forward" {
+      for_each = var.ssl_certificate_arn != null && var.environment == "prod" ? [] : [1]
+      content {
+        target_group {
+          arn = aws_lb_target_group.main.arn
+        }
+      }
+    }
+  }
+}
+
+# HTTPS Listener only when certificate is provided
+resource "aws_lb_listener" "https" {
+  count = var.ssl_certificate_arn != null ? 1 : 0
+
+  load_balancer_arn = aws_lb.main.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
+  certificate_arn   = var.ssl_certificate_arn
 
   default_action {
     type             = "forward"
@@ -91,17 +134,67 @@ resource "aws_lb_listener" "http" {
   }
 }
 
-# No HTTPS listener or redirect
+variable "ssl_certificate_arn" {
+  description = "ARN of SSL certificate for HTTPS listener"
+  type        = string
+  default     = null
+}
 ```
 
 **Impact:**
-- **DEPLOYMENT TIMEOUT** - ACM certificate validation waits indefinitely without DNS access
-- **RESOURCE CREATION FAILURE** - "Missing Resource Identity After Create"
-- **ECS SERVICE FAILURE** - Target group cannot be associated with load balancer during certificate validation
-- Cannot deploy in automated environments without domain control
-- Blocks entire infrastructure deployment
+- **DEPLOYMENT TIMEOUT** - ACM certificate validation blocks dev/staging deployments
+- **DNS VALIDATION FAILURE** - Cannot validate certificates without domain ownership
+- **DEVELOPMENT BLOCKED** - Dev and staging environments cannot deploy due to certificate requirements
+- **SERVICE UNAVAILABILITY** - HTTP redirect to non-functional HTTPS in dev/staging
+- Forces SSL certificate requirement across all environments
 
-### 3. **CRITICAL CONFIGURATION ERROR** - Invalid RDS KMS Key Reference
+### 3. **CRITICAL AWS PROVIDER WARNING** - Invalid S3 Lifecycle Configuration
+
+**Requirement:** Use proper AWS provider syntax for S3 lifecycle configuration rules.
+
+**Model Response:** Missing required filter or prefix attribute:
+```hcl
+resource "aws_s3_bucket_lifecycle_configuration" "logs" {
+  bucket = aws_s3_bucket.logs.id
+
+  rule {
+    id     = "expire-logs"
+    status = "Enabled"
+
+    expiration {
+      days = 90
+    }
+  }
+}
+```
+
+**Ideal Response:** Includes required filter attribute:
+```hcl
+resource "aws_s3_bucket_lifecycle_configuration" "logs" {
+  bucket = aws_s3_bucket.logs.id
+
+  rule {
+    id     = "expire-logs"
+    status = "Enabled"
+
+    filter {
+      prefix = ""
+    }
+
+    expiration {
+      days = 90
+    }
+  }
+}
+```
+
+**Impact:**
+- **AWS PROVIDER WARNING** - "Invalid Attribute Combination"
+- **FUTURE COMPATIBILITY ISSUE** - Will become error in future provider versions
+- **TERRAFORM VALIDATION WARNING** - Non-compliant with current AWS provider requirements
+- **DEPLOYMENT RISK** - Configuration may break with provider updates
+
+### 4. **CRITICAL CONFIGURATION ERROR** - Invalid RDS KMS Key Reference
 
 **Requirement:** Use correct KMS key ARN format for RDS encryption.
 
@@ -135,7 +228,7 @@ module "rds" {
 - **DATABASE CREATION FAILURE** - RDS instance cannot be created
 - Storage encryption cannot be enabled
 
-### 4. **CRITICAL VERSION COMPATIBILITY ERROR** - Deprecated PostgreSQL Version
+### 5. **CRITICAL VERSION COMPATIBILITY ERROR** - Deprecated PostgreSQL Version
 
 **Requirement:** Use supported PostgreSQL engine versions available in AWS RDS.
 
@@ -160,7 +253,7 @@ resource "aws_db_instance" "main" {
 - **DATABASE CREATION FAILURE** - Invalid engine version prevents deployment
 - Must use currently supported AWS RDS engine versions
 
-### 5. **CRITICAL BEST PRACTICES VIOLATION** - Deprecated Region Data Source Attribute
+### 6. **CRITICAL BEST PRACTICES VIOLATION** - Deprecated Region Data Source Attribute
 
 **Requirement:** Use current AWS provider attributes and avoid deprecated features.
 
@@ -186,7 +279,7 @@ locals {
 
 ## Major Issues
 
-### 6. **MAJOR CONFIGURATION FAILURE** - Missing Backend Configuration
+### 7. **MAJOR CONFIGURATION FAILURE** - Missing Backend Configuration
 
 **Requirement:** Include Terraform backend configuration for state management in production environments.
 
@@ -229,7 +322,7 @@ terraform {
 - Cannot be used in team environments or CI/CD pipelines
 - Poor scalability for production deployments
 
-### 7. **MAJOR TAGGING STRATEGY FAILURE** - Incomplete CI/CD Integration
+### 8. **MAJOR TAGGING STRATEGY FAILURE** - Incomplete CI/CD Integration
 
 **Requirement:** Implement comprehensive tagging strategy with CI/CD integration for proper resource governance.
 
@@ -279,7 +372,7 @@ variable "commit_author" {
 - Limited governance and compliance capabilities
 - Cannot trace deployments to specific commits or PRs
 
-### 8. **MAJOR DEPLOYMENT ARCHITECTURE FAILURE** - HTTPS Redirect Without Certificate
+### 9. **MAJOR DEPLOYMENT ARCHITECTURE FAILURE** - HTTPS Redirect Without Certificate
 
 **Requirement:** Use appropriate load balancer configuration based on available SSL certificates.
 
@@ -320,7 +413,7 @@ resource "aws_lb_listener" "http" {
 - Poor user experience with connection failures
 - Prevents application testing and validation
 
-### 9. **MAJOR ECS SERVICE CONFIGURATION FAILURE** - Incorrect Deployment Configuration
+### 10. **MAJOR ECS SERVICE CONFIGURATION FAILURE** - Incorrect Deployment Configuration
 
 **Requirement:** Use proper ECS service deployment configuration syntax.
 
@@ -349,7 +442,7 @@ resource "aws_ecs_service" "main" {
 
 ## Minor Issues
 
-### 10. **MINOR VERSION CONSTRAINT ISSUE** - Overly Restrictive Provider Versioning
+### 11. **MINOR VERSION CONSTRAINT ISSUE** - Overly Restrictive Provider Versioning
 
 **Model Response:** Uses restrictive version constraint:
 ```hcl
@@ -381,7 +474,7 @@ required_version = ">= 1.4.0"  # Lower barrier to entry
 - Reduces flexibility in CI/CD environments
 - Higher adoption barriers
 
-### 11. **MINOR MISSING OUTPUT COMPLETENESS** - Limited Infrastructure Outputs
+### 12. **MINOR MISSING OUTPUT COMPLETENESS** - Limited Infrastructure Outputs
 
 **Model Response:** Basic outputs only:
 ```hcl
@@ -442,7 +535,8 @@ output "health_check_url" {
 | Severity | Issue | Model Gap | Impact |
 |----------|-------|-----------|--------|
 | Critical | Invalid Security Group Reference | Set indexing vs direct parameter | **TERRAFORM VALIDATION ERROR** |
-| Critical | ACM Certificate Without Domain | DNS validation vs HTTP-only | **DEPLOYMENT TIMEOUT** |
+| Critical | Non-Conditional HTTPS Implementation | Forces HTTPS all environments vs conditional prod-only | **DEPLOYMENT TIMEOUT** |
+| Critical | Invalid S3 Lifecycle Configuration | Missing filter/prefix vs proper filter | **AWS PROVIDER WARNING** |
 | Critical | Invalid KMS Key Reference | Key ID vs ARN | **RDS CREATION FAILURE** |
 | Critical | Deprecated PostgreSQL Version | 15.4 vs 15.12 | **DATABASE CREATION FAILURE** |
 | Critical | Deprecated Region Attribute | `name` vs direct variable | **DEPRECATION WARNING** |
@@ -470,19 +564,25 @@ Error: Missing required argument "alb_security_group_id" on tap_stack.tf line 79
 ```
 - **Fix**: Added parameter passing from ALB module to ECS module
 
-**3. ACM Certificate Timeout:**
+**3. Non-Conditional HTTPS Deployment Failure:**
 ```
 Error: waiting for ACM Certificate to be issued: timeout while waiting for state to become 'true'
 ```
-- **Fix**: Removed ACM certificate resources and HTTPS configuration entirely
+- **Fix**: Implemented conditional HTTPS only for production with certificate variable
 
-**4. RDS KMS Key ARN Error:**
+**4. S3 Lifecycle Configuration Warning:**
+```
+Warning: Invalid Attribute Combination - No attribute specified when one (and only one) of [rule[0].filter,rule[0].prefix] is required
+```
+- **Fix**: Added required filter block with empty prefix
+
+**5. RDS KMS Key ARN Error:**
 ```
 Error: "kms_key_id" is an invalid ARN: arn: invalid prefix
 ```
 - **Fix**: Pass KMS key ARN instead of key ID to RDS module
 
-**5. PostgreSQL Version Error:**
+**6. PostgreSQL Version Error:**
 ```
 Error: Cannot find version 15.4 for postgres
 ```
@@ -492,27 +592,29 @@ Error: Cannot find version 15.4 for postgres
 
 ### **Critical Infrastructure Fixes (Deployment Blockers)**
 1. **Fix ECS security group reference** - Use direct parameter instead of set indexing
-2. **Remove ACM certificate configuration** - Switch to HTTP-only ALB listener
-3. **Correct RDS KMS key reference** - Use ARN instead of key ID
-4. **Update PostgreSQL version** - Use supported version 15.12
-5. **Remove deprecated region attribute** - Use direct variable reference
+2. **Implement conditional HTTPS configuration** - HTTPS only for production with certificate variable
+3. **Add S3 lifecycle filter attribute** - Include required filter block
+4. **Correct RDS KMS key reference** - Use ARN instead of key ID
+5. **Update PostgreSQL version** - Use supported version 15.12
+6. **Remove deprecated region attribute** - Use direct variable reference
 
 ### **Production Readiness Improvements**
-6. **Add S3 backend configuration** for remote state management
-7. **Implement comprehensive CI/CD tagging** with repository metadata
-8. **Fix ECS deployment configuration** to use current syntax
-9. **Add comprehensive outputs** for testing and integration
+7. **Add S3 backend configuration** for remote state management
+8. **Implement comprehensive CI/CD tagging** with repository metadata
+9. **Fix ECS deployment configuration** to use current syntax
+10. **Add comprehensive outputs** for testing and integration
 
 ### **Best Practice Enhancements**
-10. **Use flexible version constraints** for better compatibility
-11. **Remove HTTPS redirect without certificate** for functional HTTP access
-12. **Add security group summary outputs** for operational visibility
+11. **Use flexible version constraints** for better compatibility
+12. **Remove HTTPS redirect without certificate** for functional HTTP access
+13. **Add security group summary outputs** for operational visibility
 
 ## Operational Impact Analysis
 
 ### 1. **Complete Deployment Failures**
 - **Terraform Validation**: Set indexing prevents plan/apply operations
-- **ACM Certificate**: Infinite timeout blocks entire deployment
+- **Non-Conditional HTTPS**: Forces certificate validation in dev/staging blocks deployment
+- **S3 Lifecycle Configuration**: AWS provider warning will become error in future versions
 - **RDS Creation**: Invalid KMS ARN prevents database provisioning
 - **PostgreSQL Version**: Unsupported version blocks RDS creation
 
