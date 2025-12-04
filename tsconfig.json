@@ -1,3 +1,4 @@
+
 {
   "compilerOptions": {
     "target": "ES2020",
@@ -23,7 +24,14 @@
   ],
   "exclude": [
     "node_modules",
-    "dist",
-    "lib/lambda/**"
+    "cdk.out",
+    "templates",
+    "archive",
+    "subcategory-references",
+    "worktree",
+    "test",
+    "tests",
+    "cli",
+    "**/*.d.ts"
   ]
 }

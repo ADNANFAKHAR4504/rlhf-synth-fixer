@@ -12,7 +12,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CSV_FILE="${CSV_FILE:-$REPO_ROOT/.claude/tasks.csv}"
 BACKUP_FILE="${BACKUP_FILE:-$REPO_ROOT/.claude/tasks.csv.backup}"
 LOCK_FILE="${LOCK_FILE:-$REPO_ROOT/.claude/tasks.csv.lock}"
-LOCK_TIMEOUT="${LOCK_TIMEOUT:-120}"  # Maximum seconds to wait for lock
+LOCK_TIMEOUT="${LOCK_TIMEOUT:-300}"  # Maximum seconds to wait for lock
 
 # Colors
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
