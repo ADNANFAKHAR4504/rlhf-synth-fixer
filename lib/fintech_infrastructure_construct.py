@@ -449,6 +449,9 @@ class FinTechInfrastructureConstruct(Construct):
     def _create_lambda_functions(self):
         """Create Lambda functions with environment-specific memory allocation."""
         # Payment processor Lambda function
+        # CDKTF runs Terraform from cdktf.out/stacks/<stack-name>/ directory
+        # So we need to reference the zip file in the lib folder using relative path
+        lambda_zip_path = "../../../lib/lambda_placeholder.zip"
         self.payment_lambda = LambdaFunction(
             self,
             "payment_processor",
@@ -458,8 +461,8 @@ class FinTechInfrastructureConstruct(Construct):
             role=self.lambda_role.arn,
             memory_size=self.config["lambda_memory"],
             timeout=self.config["lambda_timeout"],
-            filename="lambda_placeholder.zip",
-            source_code_hash=Fn.filebase64sha256("lambda_placeholder.zip"),
+            filename=lambda_zip_path,
+            source_code_hash=Fn.filebase64sha256(lambda_zip_path),
             vpc_config={
                 "subnet_ids": self.private_subnets.ids,
                 "security_group_ids": [self.lambda_sg.id],
