@@ -1,6 +1,0 @@
-config:
-  aws:region: us-east-1
-  TapStack:environmentSuffix: synth-a5u1v0s6
-  TapStack:awsRegion: us-east-1
-  aws:defaultTags: '{"tags":{"Environment":"synth-a5u1v0s6","Repository":"synth-a5u1v0s6","Author":"mayanksethi-turing","PRNumber":"unknown","Team":"synth","CreatedAt":"2025-12-03T17:31:00Z","ManagedBy":"pulumi"}}'
-encryptionsalt: v1:MhFWE7yG5rc=:v1:vZHifpzC7KCD/rds:ZqJdgvAXIIdjGSzA2H4U3llqmOZOKQ==
