@@ -8,7 +8,7 @@
   "startedAt": "2025-12-03T21:41:00.000Z",
   "subtask": "CI/CD Pipeline Integration",
   "subject_labels": [
-    "CI/CD Pipeline"
+    "Developer Tools"
   ],
   "aws_services": [
     "S3",
