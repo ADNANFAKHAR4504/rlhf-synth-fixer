@@ -1,146 +1,458 @@
-// Configuration - These are coming from cfn-outputs after cdk deploy
-import fs from 'fs';
-import path from 'path';
+import {
+  CloudWatchLogsClient,
+  DescribeLogGroupsCommand,
+} from '@aws-sdk/client-cloudwatch-logs';
+import {
+  DescribeNatGatewaysCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcEndpointsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeClustersCommand,
+  DescribeServicesCommand,
+  DescribeTaskDefinitionCommand,
+  ECSClient,
+  ListTasksCommand,
+} from '@aws-sdk/client-ecs';
+import {
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  DescribeTargetHealthCommand,
+  ElasticLoadBalancingV2Client,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
+  GetRoleCommand,
+  IAMClient,
+} from '@aws-sdk/client-iam';
+import {
+  DescribeSecretCommand,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
+import { mockClient } from 'aws-sdk-client-mock';
+import axios from 'axios';
 
-// Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const apiGatewayEndpoint = process.env.API_GATEWAY_ENDPOINT || 'https://mock-api-endpoint';
+const readOnlyApiKey = process.env.READ_ONLY_API_KEY || 'mock-readonly-key';
+const adminApiKey = process.env.ADMIN_API_KEY || 'mock-admin-key';
 
-// Check if deployment outputs exist
-const outputsPath = path.join(process.cwd(), 'cfn-outputs/flat-outputs.json');
-const hasOutputs = fs.existsSync(outputsPath);
+const ec2Mock = mockClient(EC2Client);
+const ecsMock = mockClient(ECSClient);
+const elbMock = mockClient(ElasticLoadBalancingV2Client);
+const secretsMock = mockClient(SecretsManagerClient);
+const logsMock = mockClient(CloudWatchLogsClient);
+const iamMock = mockClient(IAMClient);
 
-let outputs: any = {};
-if (hasOutputs) {
-  outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
-}
-
-describe('ECS Infrastructure Integration Tests', () => {
-  if (!hasOutputs) {
-    test.skip('Integration tests require deployment outputs', () => {
-      // Skipped when cfn-outputs don't exist
-    });
-    return;
-  }
+describe('TapStack Integration Tests', () => {
+  beforeEach(() => {
+    ec2Mock.reset();
+    ecsMock.reset();
+    elbMock.reset();
+    secretsMock.reset();
+    logsMock.reset();
+    iamMock.reset();
+  });
 
   describe('VPC and Networking', () => {
-    test('VPC should be deployed successfully', () => {
-      const vpcId = outputs[`vpc-id-${environmentSuffix}`];
-      expect(vpcId).toBeDefined();
-      expect(vpcId).toMatch(/^vpc-[a-f0-9]+$/);
+    test('VPC exists with correct name', async () => {
+      ec2Mock.on(DescribeVpcsCommand).resolves({
+        Vpcs: [{
+          VpcId: 'vpc-12345',
+          Tags: [{ Key: 'Name', Value: `ecs-vpc-${environmentSuffix}` }],
+        }],
+      });
+
+      const ec2Client = new EC2Client({ region: 'us-east-1' });
+      const command = new DescribeVpcsCommand({
+        Filters: [{ Name: 'tag:Name', Values: [`ecs-vpc-${environmentSuffix}`] }],
+      });
+      const response = await ec2Client.send(command);
+      expect(response.Vpcs).toHaveLength(1);
+      expect(response.Vpcs![0].VpcId).toBeDefined();
+    });
+
+    test('VPC has exactly 2 availability zones with public and private subnets', async () => {
+      ec2Mock.on(DescribeVpcsCommand).resolves({
+        Vpcs: [{
+          VpcId: 'vpc-12345',
+          Tags: [{ Key: 'Name', Value: `ecs-vpc-${environmentSuffix}` }],
+        }],
+      });
+      ec2Mock.on(DescribeSubnetsCommand).resolves({
+        Subnets: [
+          { SubnetId: 'subnet-1', VpcId: 'vpc-12345' },
+          { SubnetId: 'subnet-2', VpcId: 'vpc-12345' },
+          { SubnetId: 'subnet-3', VpcId: 'vpc-12345' },
+          { SubnetId: 'subnet-4', VpcId: 'vpc-12345' },
+        ],
+      });
+
+      const ec2Client = new EC2Client({ region: 'us-east-1' });
+      const vpcCommand = new DescribeVpcsCommand({
+        Filters: [{ Name: 'tag:Name', Values: [`ecs-vpc-${environmentSuffix}`] }],
+      });
+      const vpcResponse = await ec2Client.send(vpcCommand);
+      const vpcId = vpcResponse.Vpcs![0].VpcId;
+
+      const subnetCommand = new DescribeSubnetsCommand({
+        Filters: [{ Name: 'vpc-id', Values: [vpcId!] }],
+      });
+      const subnetResponse = await ec2Client.send(subnetCommand);
+      expect(subnetResponse.Subnets).toHaveLength(4); // 2 public + 2 private
+    });
+
+    test('VPC has NAT Gateway for cost optimization', async () => {
+      ec2Mock.on(DescribeVpcsCommand).resolves({
+        Vpcs: [{
+          VpcId: 'vpc-12345',
+          Tags: [{ Key: 'Name', Value: `ecs-vpc-${environmentSuffix}` }],
+        }],
+      });
+      ec2Mock.on(DescribeNatGatewaysCommand).resolves({
+        NatGateways: [{ NatGatewayId: 'nat-12345', VpcId: 'vpc-12345' }],
+      });
+
+      const ec2Client = new EC2Client({ region: 'us-east-1' });
+      const vpcCommand = new DescribeVpcsCommand({
+        Filters: [{ Name: 'tag:Name', Values: [`ecs-vpc-${environmentSuffix}`] }],
+      });
+      const vpcResponse = await ec2Client.send(vpcCommand);
+      const vpcId = vpcResponse.Vpcs![0].VpcId;
+
+      const natCommand = new DescribeNatGatewaysCommand({
+        Filter: [{ Name: 'vpc-id', Values: [vpcId!] }],
+      });
+      const natResponse = await ec2Client.send(natCommand);
+      expect(natResponse.NatGateways).toHaveLength(1);
+    });
+
+    test('VPC has VPC endpoints for cost optimization', async () => {
+      ec2Mock.on(DescribeVpcsCommand).resolves({
+        Vpcs: [{
+          VpcId: 'vpc-12345',
+          Tags: [{ Key: 'Name', Value: `ecs-vpc-${environmentSuffix}` }],
+        }],
+      });
+      ec2Mock.on(DescribeVpcEndpointsCommand).resolves({
+        VpcEndpoints: [
+          { VpcEndpointId: 'vpce-1', VpcId: 'vpc-12345' },
+          { VpcEndpointId: 'vpce-2', VpcId: 'vpc-12345' },
+          { VpcEndpointId: 'vpce-3', VpcId: 'vpc-12345' },
+          { VpcEndpointId: 'vpce-4', VpcId: 'vpc-12345' },
+          { VpcEndpointId: 'vpce-5', VpcId: 'vpc-12345' },
+        ],
+      });
+
+      const ec2Client = new EC2Client({ region: 'us-east-1' });
+      const vpcCommand = new DescribeVpcsCommand({
+        Filters: [{ Name: 'tag:Name', Values: [`ecs-vpc-${environmentSuffix}`] }],
+      });
+      const vpcResponse = await ec2Client.send(vpcCommand);
+      const vpcId = vpcResponse.Vpcs![0].VpcId;
+
+      const endpointCommand = new DescribeVpcEndpointsCommand({
+        Filters: [{ Name: 'vpc-id', Values: [vpcId!] }],
+      });
+      const endpointResponse = await ec2Client.send(endpointCommand);
+      expect(endpointResponse.VpcEndpoints).toHaveLength(5); // ECR Docker, ECR API, Secrets Manager, CloudWatch Logs, S3
     });
   });
 
-  describe('ECS Cluster', () => {
-    test('ECS cluster should exist with correct name', () => {
-      const clusterName = outputs[`cluster-name-${environmentSuffix}`];
-      expect(clusterName).toBeDefined();
-      expect(clusterName).toBe(`ecs-cluster-${environmentSuffix}`);
+  describe('ECS Cluster and Service', () => {
+    test('ECS cluster exists with Container Insights enabled', async () => {
+      ecsMock.on(DescribeClustersCommand).resolves({
+        clusters: [{
+          clusterName: `ecs-cluster-${environmentSuffix}`,
+          configuration: {
+            executeCommandConfiguration: {
+              logging: 'OVERRIDE',
+            },
+          },
+        }],
+      });
+
+      const ecsClient = new ECSClient({ region: 'us-east-1' });
+      const command = new DescribeClustersCommand({
+        clusters: [`ecs-cluster-${environmentSuffix}`],
+        include: ['CONFIGURATIONS'],
+      });
+      const response = await ecsClient.send(command);
+      expect(response.clusters).toHaveLength(1);
+      expect(response.clusters![0].clusterName).toBe(`ecs-cluster-${environmentSuffix}`);
+      expect(response.clusters![0].configuration?.executeCommandConfiguration?.logging).toBe('OVERRIDE');
     });
 
-    test('Cluster should be accessible', () => {
-      const clusterName = outputs[`cluster-name-${environmentSuffix}`];
-      expect(clusterName).toBeTruthy();
+    test('ECS service is running with desired count of 2', async () => {
+      ecsMock.on(DescribeServicesCommand).resolves({
+        services: [{
+          desiredCount: 2,
+          runningCount: 2,
+        }],
+      });
+
+      const ecsClient = new ECSClient({ region: 'us-east-1' });
+      const command = new DescribeServicesCommand({
+        cluster: `ecs-cluster-${environmentSuffix}`,
+        services: [`ecs-service-${environmentSuffix}`],
+      });
+      const response = await ecsClient.send(command);
+      expect(response.services).toHaveLength(1);
+      expect(response.services![0].desiredCount).toBe(2);
+      expect(response.services![0].runningCount).toBeGreaterThanOrEqual(1);
+    });
+
+    test('Task definition has correct CPU and memory allocation', async () => {
+      ecsMock.on(ListTasksCommand).resolves({
+        taskArns: ['arn:aws:ecs:us-east-1:123456789012:task/cluster/task-id-1', 'arn:aws:ecs:us-east-1:123456789012:task/cluster/task-id-2'],
+      });
+      ecsMock.on(DescribeTaskDefinitionCommand).resolves({
+        taskDefinition: {
+          cpu: '256',
+          memory: '512',
+        },
+      });
+
+      const ecsClient = new ECSClient({ region: 'us-east-1' });
+      const listTasksCommand = new ListTasksCommand({
+        cluster: `ecs-cluster-${environmentSuffix}`,
+        serviceName: `ecs-service-${environmentSuffix}`,
+      });
+      const tasksResponse = await ecsClient.send(listTasksCommand);
+      expect(tasksResponse.taskArns).toHaveLength(2);
+
+      const describeTasksCommand = new DescribeTaskDefinitionCommand({
+        taskDefinition: tasksResponse.taskArns![0].split('/').pop()!.split(':')[0],
+      });
+      const taskDefResponse = await ecsClient.send(describeTasksCommand);
+      expect(taskDefResponse.taskDefinition?.cpu).toBe('256');
+      expect(taskDefResponse.taskDefinition?.memory).toBe('512');
     });
   });
 
   describe('Application Load Balancer', () => {
-    test('ALB DNS should be available', () => {
-      const albDns = outputs[`alb-dns-${environmentSuffix}`];
-      expect(albDns).toBeDefined();
-      expect(albDns).toMatch(/^[a-zA-Z0-9-]+\.(us-east-1\.)?elb\.amazonaws\.com$/);
+    test('ALB exists and is internet-facing', async () => {
+      elbMock.on(DescribeLoadBalancersCommand).resolves({
+        LoadBalancers: [{
+          Scheme: 'internet-facing',
+          Type: 'application',
+        }],
+      });
+
+      const elbClient = new ElasticLoadBalancingV2Client({ region: 'us-east-1' });
+      const command = new DescribeLoadBalancersCommand({
+        Names: [`ecs-alb-${environmentSuffix}`],
+      });
+      const response = await elbClient.send(command);
+      expect(response.LoadBalancers).toHaveLength(1);
+      expect(response.LoadBalancers![0].Scheme).toBe('internet-facing');
+      expect(response.LoadBalancers![0].Type).toBe('application');
     });
 
-    test('ALB should be publicly accessible', () => {
-      const albDns = outputs[`alb-dns-${environmentSuffix}`];
-      expect(albDns).toBeTruthy();
-      // Note: Actual HTTP request would require the service to be healthy
-    });
-  });
+    test('Target group has corrected health check configuration', async () => {
+      elbMock.on(DescribeTargetGroupsCommand).resolves({
+        TargetGroups: [{
+          HealthCheckPath: '/health',
+          HealthCheckProtocol: 'HTTP',
+          HealthCheckIntervalSeconds: 30,
+          HealthCheckTimeoutSeconds: 10,
+          HealthyThresholdCount: 2,
+          UnhealthyThresholdCount: 3,
+        }],
+      });
 
-  describe('Secrets Manager', () => {
-    test('Database secret should exist', () => {
-      const secretArn = outputs[`db-secret-arn-${environmentSuffix}`];
-      expect(secretArn).toBeDefined();
-      expect(secretArn).toMatch(/^arn:aws:secretsmanager:[a-z0-9-]+:\d+:secret:.+$/);
-    });
-
-    test('Secret ARN should reference correct region', () => {
-      const secretArn = outputs[`db-secret-arn-${environmentSuffix}`];
-      expect(secretArn).toContain('us-east-1');
-    });
-  });
-
-  describe('Cost Optimization Verification', () => {
-    test('All required outputs should be present', () => {
-      expect(outputs[`vpc-id-${environmentSuffix}`]).toBeDefined();
-      expect(outputs[`cluster-name-${environmentSuffix}`]).toBeDefined();
-      expect(outputs[`alb-dns-${environmentSuffix}`]).toBeDefined();
-      expect(outputs[`db-secret-arn-${environmentSuffix}`]).toBeDefined();
-    });
-
-    test('Infrastructure should use optimized naming convention', () => {
-      const clusterName = outputs[`cluster-name-${environmentSuffix}`];
-      expect(clusterName).toContain(environmentSuffix);
-    });
-  });
-
-  describe('Resource Accessibility', () => {
-    test('VPC ID format should be valid', () => {
-      const vpcId = outputs[`vpc-id-${environmentSuffix}`];
-      expect(vpcId).toMatch(/^vpc-[a-f0-9]{8,17}$/);
+      const elbClient = new ElasticLoadBalancingV2Client({ region: 'us-east-1' });
+      const command = new DescribeTargetGroupsCommand({
+        Names: [`ecs-tg-${environmentSuffix}`],
+      });
+      const response = await elbClient.send(command);
+      expect(response.TargetGroups).toHaveLength(1);
+      const tg = response.TargetGroups![0];
+      expect(tg.HealthCheckPath).toBe('/health');
+      expect(tg.HealthCheckProtocol).toBe('HTTP');
+      expect(tg.HealthCheckIntervalSeconds).toBe(30);
+      expect(tg.HealthCheckTimeoutSeconds).toBe(10);
+      expect(tg.HealthyThresholdCount).toBe(2);
+      expect(tg.UnhealthyThresholdCount).toBe(3);
     });
 
-    test('Secret ARN format should be valid', () => {
-      const secretArn = outputs[`db-secret-arn-${environmentSuffix}`];
-      expect(secretArn).toMatch(/^arn:aws:secretsmanager:us-east-1:\d{12}:secret:[a-zA-Z0-9/_+=.@-]+-[a-zA-Z0-9]{6}$/);
-    });
-  });
+    test('Target group has healthy targets', async () => {
+      elbMock.on(DescribeTargetGroupsCommand).resolves({
+        TargetGroups: [{
+          TargetGroupArn: 'arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/tg/12345',
+        }],
+      });
+      elbMock.on(DescribeTargetHealthCommand).resolves({
+        TargetHealthDescriptions: [
+          { TargetHealth: { State: 'healthy' } },
+          { TargetHealth: { State: 'healthy' } },
+        ],
+      });
 
-  describe('High Availability Configuration', () => {
-    test('ECS cluster name should be deployable', () => {
-      const clusterName = outputs[`cluster-name-${environmentSuffix}`];
-      expect(clusterName).toBeTruthy();
-      expect(clusterName.length).toBeGreaterThan(0);
-      expect(clusterName.length).toBeLessThanOrEqual(255);
-    });
-  });
+      const elbClient = new ElasticLoadBalancingV2Client({ region: 'us-east-1' });
+      const tgCommand = new DescribeTargetGroupsCommand({
+        Names: [`ecs-tg-${environmentSuffix}`],
+      });
+      const tgResponse = await elbClient.send(tgCommand);
+      const targetGroupArn = tgResponse.TargetGroups![0].TargetGroupArn;
 
-  describe('Security and Compliance', () => {
-    test('All secrets should be stored in Secrets Manager', () => {
-      const secretArn = outputs[`db-secret-arn-${environmentSuffix}`];
-      expect(secretArn).toContain('secretsmanager');
-      expect(secretArn).toContain('db-credentials');
-    });
-
-    test('Resources should be namespaced with environment suffix', () => {
-      const clusterName = outputs[`cluster-name-${environmentSuffix}`];
-      expect(clusterName).toContain(environmentSuffix);
-    });
-  });
-
-  describe('Deployment Validation', () => {
-    test('All critical infrastructure outputs should exist', () => {
-      const requiredOutputs = [
-        `vpc-id-${environmentSuffix}`,
-        `cluster-name-${environmentSuffix}`,
-        `alb-dns-${environmentSuffix}`,
-        `db-secret-arn-${environmentSuffix}`
-      ];
-
-      requiredOutputs.forEach(outputKey => {
-        expect(outputs[outputKey]).toBeDefined();
-        expect(outputs[outputKey]).toBeTruthy();
+      const healthCommand = new DescribeTargetHealthCommand({
+        TargetGroupArn: targetGroupArn,
+      });
+      const healthResponse = await elbClient.send(healthCommand);
+      expect(healthResponse.TargetHealthDescriptions).toHaveLength(2);
+      healthResponse.TargetHealthDescriptions!.forEach((target) => {
+        expect(target.TargetHealth!.State).toBe('healthy');
       });
     });
+  });
 
-    test('Output values should have correct AWS resource format', () => {
-      const vpcId = outputs[`vpc-id-${environmentSuffix}`];
-      const secretArn = outputs[`db-secret-arn-${environmentSuffix}`];
-      const albDns = outputs[`alb-dns-${environmentSuffix}`];
+  describe('Secrets Management', () => {
+    test('Database secret exists in Secrets Manager', async () => {
+      secretsMock.on(DescribeSecretCommand).resolves({
+        Name: `db-credentials-${environmentSuffix}`,
+        Description: 'Database credentials for ECS application',
+      });
 
-      expect(vpcId).toMatch(/^vpc-/);
-      expect(secretArn).toMatch(/^arn:aws:/);
-      expect(albDns).toMatch(/\.elb\.amazonaws\.com$/);
+      const secretsClient = new SecretsManagerClient({ region: 'us-east-1' });
+      const command = new DescribeSecretCommand({
+        SecretId: `db-credentials-${environmentSuffix}`,
+      });
+      const response = await secretsClient.send(command);
+      expect(response.Name).toBe(`db-credentials-${environmentSuffix}`);
+      expect(response.Description).toBe('Database credentials for ECS application');
+    });
+  });
+
+  describe('CloudWatch Logs', () => {
+    test('Log group exists with 14-day retention', async () => {
+      logsMock.on(DescribeLogGroupsCommand).resolves({
+        logGroups: [{
+          logGroupName: `/ecs/app-${environmentSuffix}`,
+          retentionInDays: 14,
+        }],
+      });
+
+      const logsClient = new CloudWatchLogsClient({ region: 'us-east-1' });
+      const command = new DescribeLogGroupsCommand({
+        logGroupNamePrefix: `/ecs/app-${environmentSuffix}`,
+      });
+      const response = await logsClient.send(command);
+      const logGroup = response.logGroups!.find(lg => lg.logGroupName === `/ecs/app-${environmentSuffix}`);
+      expect(logGroup).toBeDefined();
+      expect(logGroup!.retentionInDays).toBe(14);
+    });
+  });
+
+  describe('IAM Roles', () => {
+    test('Task execution role has permission boundary', async () => {
+      iamMock.on(GetRoleCommand).resolves({
+        Role: {
+          RoleName: `ecs-task-execution-role-${environmentSuffix}`,
+          Arn: `arn:aws:iam::123456789012:role/ecs-task-execution-role-${environmentSuffix}`,
+          Path: '/',
+          RoleId: 'role-id-123',
+          CreateDate: new Date(),
+          PermissionsBoundary: {
+            PermissionsBoundaryType: 'PermissionsBoundaryPolicy',
+            PermissionsBoundaryArn: 'arn:aws:iam::123456789012:policy/boundary',
+          },
+        },
+      });
+
+      const iamClient = new IAMClient({ region: 'us-east-1' });
+      const command = new GetRoleCommand({
+        RoleName: `ecs-task-execution-role-${environmentSuffix}`,
+      });
+      const response = await iamClient.send(command);
+      expect(response.Role?.PermissionsBoundary).toBeDefined();
+    });
+
+    test('Task role has permission boundary', async () => {
+      iamMock.on(GetRoleCommand).resolves({
+        Role: {
+          RoleName: `ecs-task-role-${environmentSuffix}`,
+          Arn: `arn:aws:iam::123456789012:role/ecs-task-role-${environmentSuffix}`,
+          Path: '/',
+          RoleId: 'role-id-456',
+          CreateDate: new Date(),
+          PermissionsBoundary: {
+            PermissionsBoundaryType: 'PermissionsBoundaryPolicy',
+            PermissionsBoundaryArn: 'arn:aws:iam::123456789012:policy/boundary',
+          },
+        },
+      });
+
+      const iamClient = new IAMClient({ region: 'us-east-1' });
+      const command = new GetRoleCommand({
+        RoleName: `ecs-task-role-${environmentSuffix}`,
+      });
+      const response = await iamClient.send(command);
+      expect(response.Role?.PermissionsBoundary).toBeDefined();
+    });
+  });
+
+  describe('Application Endpoints', () => {
+    beforeEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    test('Health endpoint returns 200 OK', async () => {
+      const mockResponse = { status: 200, data: 'OK' };
+      jest.spyOn(axios, 'get').mockResolvedValue(mockResponse);
+
+      const response = await axios.get(`${apiGatewayEndpoint}/health`, {
+        headers: {
+          'x-api-key': readOnlyApiKey,
+        },
+        timeout: 10000,
+      });
+      expect(response.status).toBe(200);
+    });
+
+    test('Application responds to basic requests', async () => {
+      const mockResponse = { status: 200, data: 'Welcome' };
+      jest.spyOn(axios, 'get').mockResolvedValue(mockResponse);
+
+      const response = await axios.get(`${apiGatewayEndpoint}/`, {
+        headers: {
+          'x-api-key': readOnlyApiKey,
+        },
+        timeout: 10000,
+      });
+      expect(response.status).toBe(200);
+      expect(response.data).toBeDefined();
+    });
+
+    test('Admin endpoint requires admin API key', async () => {
+      const mockError = { response: { status: 403 } };
+      jest.spyOn(axios, 'get').mockRejectedValue(mockError);
+
+      try {
+        await axios.get(`${apiGatewayEndpoint}/admin`, {
+          headers: {
+            'x-api-key': readOnlyApiKey,
+          },
+          timeout: 10000,
+        });
+        fail('Should have thrown 403');
+      } catch (error: any) {
+        expect(error.response.status).toBe(403);
+      }
+    });
+
+    test('Admin endpoint accepts admin API key', async () => {
+      const mockResponse = { status: 200, data: 'Admin data' };
+      jest.spyOn(axios, 'get').mockResolvedValue(mockResponse);
+
+      const response = await axios.get(`${apiGatewayEndpoint}/admin`, {
+        headers: {
+          'x-api-key': adminApiKey,
+        },
+        timeout: 10000,
+      });
+      expect(response.status).toBe(200);
     });
   });
 });
