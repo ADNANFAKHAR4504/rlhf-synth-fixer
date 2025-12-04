@@ -162,15 +162,15 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
         commands: [
           // Read from S3
           `aws s3 cp s3://${s3BucketName}/${s3Key} /tmp/test-data.json --region ${region}`,
-          'DATA=$(cat /tmp/test-data.json)',
           // Get database credentials
           `SECRET=$(aws secretsmanager get-secret-value --secret-id ${databaseSecretArn} --region ${region} --query SecretString --output text)`,
           'DB_USER=$(echo $SECRET | jq -r .username)',
           'DB_PASS=$(echo $SECRET | jq -r .password)',
           // Install MySQL client if needed
           'yum install -y mysql jq -q',
-          // Connect to RDS and insert test data
-          `mysql -h ${rdsEndpoint} -P ${rdsPort} -u $DB_USER -p$DB_PASS -e "CREATE DATABASE IF NOT EXISTS testdb; USE testdb; CREATE TABLE IF NOT EXISTS test_data (id VARCHAR(255), data JSON, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP); INSERT INTO test_data (id, data) VALUES ('${testId}', '$DATA'); SELECT * FROM test_data WHERE id='${testId}';" 2>&1`,
+          // Connect to RDS and insert test data (use mysql_native_password auth)
+          `JSON_DATA=$(cat /tmp/test-data.json | jq -c . | sed "s/'/\\\\'/g")`,
+          `mysql -h ${rdsEndpoint} -P ${rdsPort} -u $DB_USER -p$DB_PASS --default-auth=mysql_native_password -e "CREATE DATABASE IF NOT EXISTS testdb; USE testdb; CREATE TABLE IF NOT EXISTS test_data (id VARCHAR(255), data JSON, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP); INSERT INTO test_data (id, data) VALUES ('${testId}', CAST('$JSON_DATA' AS JSON)); SELECT id FROM test_data WHERE id='${testId}';" 2>&1`,
           // Write result to file
           `echo "Data processed and stored in RDS" > /tmp/result.txt`,
         ],
@@ -181,9 +181,12 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
     const commandId = sendResponse.Command?.CommandId!;
     const invocation = await waitForSSMCommand(commandId, ec2InstanceId);
 
+    if (invocation.Status !== 'Success') {
+      console.error('Command failed:', invocation.StandardErrorContent);
+      console.error('Output:', invocation.StandardOutputContent);
+    }
     expect(invocation.Status).toBe('Success');
     expect(invocation.StandardOutputContent).toContain(testId);
-    expect(invocation.StandardOutputContent).toContain('Data processed and stored in RDS');
 
     // EC2 reads from RDS and verifies data
     const verifyCommand = new SendCommandCommand({
@@ -194,7 +197,7 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
           `SECRET=$(aws secretsmanager get-secret-value --secret-id ${databaseSecretArn} --region ${region} --query SecretString --output text)`,
           'DB_USER=$(echo $SECRET | jq -r .username)',
           'DB_PASS=$(echo $SECRET | jq -r .password)',
-          `mysql -h ${rdsEndpoint} -P ${rdsPort} -u $DB_USER -p$DB_PASS -e "USE testdb; SELECT data FROM test_data WHERE id='${testId}';" 2>&1`,
+          `mysql -h ${rdsEndpoint} -P ${rdsPort} -u $DB_USER -p$DB_PASS --default-auth=mysql_native_password -e "USE testdb; SELECT data FROM test_data WHERE id='${testId}';" 2>&1`,
         ],
       },
     });
@@ -278,7 +281,7 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
           `SECRET=$(aws secretsmanager get-secret-value --secret-id ${databaseSecretArn} --region ${region} --query SecretString --output text)`,
           'DB_USER=$(echo $SECRET | jq -r .username)',
           'DB_PASS=$(echo $SECRET | jq -r .password)',
-          `mysql -h ${rdsEndpoint} -P ${rdsPort} -u $DB_USER -p$DB_PASS -e "USE testdb; DELETE FROM test_data WHERE id='${testId}';" 2>&1`,
+          `mysql -h ${rdsEndpoint} -P ${rdsPort} -u $DB_USER -p$DB_PASS --default-auth=mysql_native_password -e "USE testdb; DELETE FROM test_data WHERE id='${testId}';" 2>&1`,
         ],
       },
     });
@@ -311,8 +314,8 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
         commands: [
           `aws s3 cp s3://${s3BucketName}/${s3Key} /tmp/artifact.txt --region ${region}`,
           'CONTENT=$(cat /tmp/artifact.txt)',
-          'echo "Processed: $CONTENT" > /tmp/processed.txt',
-          'cat /tmp/processed.txt',
+          `echo "Processed: $CONTENT" | grep "${testId}" || echo "Content: $CONTENT"`,
+          'cat /tmp/artifact.txt',
         ],
       },
     });
@@ -338,7 +341,7 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
           'DB_USER=$(echo $SECRET | jq -r .username)',
           'DB_PASS=$(echo $SECRET | jq -r .password)',
           'yum install -y mysql jq -q',
-          `mysql -h ${rdsEndpoint} -P ${rdsPort} -u $DB_USER -p$DB_PASS -e "SELECT 'Connection successful' as status, NOW() as timestamp;" 2>&1`,
+          `mysql -h ${rdsEndpoint} -P ${rdsPort} -u $DB_USER -p$DB_PASS --default-auth=mysql_native_password -e "SELECT 'Connection successful' as status, NOW() as timestamp;" 2>&1`,
         ],
       },
     });
@@ -346,9 +349,13 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
     const response = await ssmClient.send(command);
     const invocation = await waitForSSMCommand(response.Command?.CommandId!, ec2InstanceId);
 
+    if (invocation.Status !== 'Success') {
+      console.error('RDS connection failed:', invocation.StandardErrorContent);
+      console.error('Output:', invocation.StandardOutputContent);
+    }
     expect(invocation.Status).toBe('Success');
     expect(invocation.StandardOutputContent).toContain('Connection successful');
-    expect(invocation.StandardErrorContent || '').not.toMatch(/Access denied|Can't connect/i);
+    expect(invocation.StandardErrorContent || '').not.toMatch(/Access denied|Can't connect|sha256_password/i);
   });
 
   test('Data Flow: Application logs written to CloudWatch and retrieved', async () => {
@@ -468,8 +475,8 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
     const logResponse = await ssmClient.send(logCommand);
     await waitForSSMCommand(logResponse.Command?.CommandId!, ec2InstanceId);
 
-    // Wait for CloudWatch Agent to send logs
-    await new Promise(resolve => setTimeout(resolve, 30000));
+    // Wait for CloudWatch Agent to send logs 
+    await new Promise(resolve => setTimeout(resolve, 15000));
 
     // Check if log appears in CloudWatch Logs
     const logStreamsCommand = new DescribeLogStreamsCommand({
@@ -512,7 +519,7 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
           'DB_PASS=$(echo $SECRET | jq -r .password)',
           'yum install -y mysql jq -q',
           // Enable general log temporarily and execute query
-          `mysql -h ${rdsEndpoint} -P ${rdsPort} -u $DB_USER -p$DB_PASS -e "USE testdb; SELECT '${testQueryId}' as test_query, NOW();" 2>&1`,
+          `mysql -h ${rdsEndpoint} -P ${rdsPort} -u $DB_USER -p$DB_PASS --default-auth=mysql_native_password -e "USE testdb; SELECT '${testQueryId}' as test_query, NOW();" 2>&1`,
         ],
       },
     });
@@ -520,8 +527,8 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
     const queryResponse = await ssmClient.send(queryCommand);
     await waitForSSMCommand(queryResponse.Command?.CommandId!, ec2InstanceId);
 
-    // Wait for RDS to export logs to CloudWatch
-    await new Promise(resolve => setTimeout(resolve, 60000));
+    // Wait for RDS to export logs to CloudWatch 
+    await new Promise(resolve => setTimeout(resolve, 30000));
 
     // Check RDS general log group (format: /aws/rds/instance/${EnvironmentName}-mysql-db/general)
     const rdsLogGroupName = `/aws/rds/instance/${environmentName}-mysql-db/general`;
@@ -567,8 +574,8 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
 
     await ssmClient.send(loadCommand);
 
-    // Wait for metrics to be published
-    await new Promise(resolve => setTimeout(resolve, 90000));
+    // Wait for metrics to be published 
+    await new Promise(resolve => setTimeout(resolve, 45000));
 
     // Get CPU metrics from CloudWatch
     const metricsCommand = new GetMetricStatisticsCommand({
@@ -640,13 +647,18 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
           `SECRET=$(aws secretsmanager get-secret-value --secret-id ${databaseSecretArn} --region ${region} --query SecretString --output text)`,
           'DB_USER=$(echo $SECRET | jq -r .username)',
           'DB_PASS=$(echo $SECRET | jq -r .password)',
-          `mysql -h ${rdsEndpoint} -P ${rdsPort} -u $DB_USER -p$DB_PASS -e "USE testdb; CREATE TABLE IF NOT EXISTS user_actions (id VARCHAR(255), user_data JSON, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP); INSERT INTO user_actions (id, user_data) VALUES ('${workflowId}', '${JSON.stringify(userData).replace(/'/g, "\\'")}');" 2>&1`,
+          `USER_DATA_JSON=$(echo '${JSON.stringify(userData)}' | jq -c . | sed "s/'/\\\\'/g")`,
+          `mysql -h ${rdsEndpoint} -P ${rdsPort} -u $DB_USER -p$DB_PASS --default-auth=mysql_native_password -e "USE testdb; CREATE TABLE IF NOT EXISTS user_actions (id VARCHAR(255), user_data JSON, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP); INSERT INTO user_actions (id, user_data) VALUES ('${workflowId}', CAST('$USER_DATA_JSON' AS JSON));" 2>&1`,
         ],
       },
     });
 
     const processResponse = await ssmClient.send(processCommand);
     const processInvocation = await waitForSSMCommand(processResponse.Command?.CommandId!, ec2InstanceId);
+    if (processInvocation.Status !== 'Success') {
+      console.error('User workflow RDS insert failed:', processInvocation.StandardErrorContent);
+      console.error('Output:', processInvocation.StandardOutputContent);
+    }
     expect(processInvocation.Status).toBe('Success');
 
     // Write log entry
@@ -695,7 +707,7 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
           `SECRET=$(aws secretsmanager get-secret-value --secret-id ${databaseSecretArn} --region ${region} --query SecretString --output text)`,
           'DB_USER=$(echo $SECRET | jq -r .username)',
           'DB_PASS=$(echo $SECRET | jq -r .password)',
-          `mysql -h ${rdsEndpoint} -P ${rdsPort} -u $DB_USER -p$DB_PASS -e "USE testdb; SELECT * FROM user_actions WHERE id='${workflowId}';" 2>&1`,
+          `mysql -h ${rdsEndpoint} -P ${rdsPort} -u $DB_USER -p$DB_PASS --default-auth=mysql_native_password -e "USE testdb; SELECT * FROM user_actions WHERE id='${workflowId}';" 2>&1`,
         ],
       },
     });
@@ -714,7 +726,7 @@ describe('TapStack End-to-End Data Flow Integration Tests', () => {
           `SECRET=$(aws secretsmanager get-secret-value --secret-id ${databaseSecretArn} --region ${region} --query SecretString --output text)`,
           'DB_USER=$(echo $SECRET | jq -r .username)',
           'DB_PASS=$(echo $SECRET | jq -r .password)',
-          `mysql -h ${rdsEndpoint} -P ${rdsPort} -u $DB_USER -p$DB_PASS -e "USE testdb; DELETE FROM user_actions WHERE id='${workflowId}';" 2>&1`,
+          `mysql -h ${rdsEndpoint} -P ${rdsPort} -u $DB_USER -p$DB_PASS --default-auth=mysql_native_password -e "USE testdb; DELETE FROM user_actions WHERE id='${workflowId}';" 2>&1`,
         ],
       },
     });
