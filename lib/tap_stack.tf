@@ -613,8 +613,9 @@ resource "aws_elasticache_replication_group" "redis" {
 }
 
 resource "random_password" "redis_auth_token" {
-  length  = 32
-  special = true
+  length           = 32
+  special          = true
+  override_special = "!&#$^<>-"
 }
 
 resource "aws_secretsmanager_secret" "redis_auth_token" {
