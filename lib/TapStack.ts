@@ -14,7 +14,7 @@ import * as aws from '@pulumi/aws';
  */
 
 // Get stack configuration
-const environmentSuffix = pulumi.getStack();
+const environmentSuffix = pulumi.getStack().toLowerCase();
 const region = aws.config.region || 'us-east-1';
 
 // Tags for all resources
@@ -23,6 +23,7 @@ const tags = {
   Environment: environmentSuffix,
   ManagedBy: 'Pulumi',
   Purpose: 'CI/CD Pipeline Integration',
+  Region: region,
 };
 
 // 1. S3 Bucket for Artifacts

@@ -306,6 +306,17 @@ describe('CI/CD Pipeline Infrastructure Tests', () => {
         });
     });
 
+    it('should use lowercase environment suffix in resource names', (done) => {
+      pulumi
+        .all([stack.artifactBucketName, stack.ecrRepositoryName])
+        .apply(([bucketName, ecrRepo]) => {
+          // Verify names are lowercase (AWS requirement)
+          expect(bucketName).toBe(bucketName.toLowerCase());
+          expect(ecrRepo).toBe(ecrRepo.toLowerCase());
+          done();
+        });
+    });
+
     it('should export all required outputs', () => {
       expect(stack.artifactBucketName).toBeDefined();
       expect(stack.artifactBucketArn).toBeDefined();
