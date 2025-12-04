@@ -22,7 +22,7 @@ terraform {
     }
   }
 
-  backend "s3" {}
+  # backend "s3" {}
 }
 
 # ============================================================================
@@ -935,8 +935,9 @@ resource "aws_kms_alias" "cloudwatch_logs" {
 
 # Aurora Database Password
 resource "random_password" "aurora_master" {
-  length  = 32
-  special = true
+  length           = 32
+  special          = true
+  override_special = "!#$%^&*()-_=+[]{}<>:?"
 }
 
 resource "aws_secretsmanager_secret" "aurora_master" {
@@ -1339,7 +1340,7 @@ resource "aws_elasticache_replication_group" "redis" {
   node_type                  = var.node_type
   num_cache_clusters         = local.env_config[var.env].redis_nodes
   port                       = 6379
-  parameter_group_name       = "default.redis${var.engine_version}"
+  parameter_group_name       = "default.redis7"
   engine_version             = var.engine_version
   subnet_group_name          = aws_elasticache_subnet_group.redis.name
   security_group_ids         = [aws_security_group.redis.id]
@@ -1536,7 +1537,6 @@ resource "aws_sqs_queue" "patient_notifications" {
   message_retention_seconds  = local.env_config[var.env].sqs_retention_days * 86400
   kms_master_key_id          = aws_kms_key.phi_encryption.id
 
-
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.patient_notifications_dlq.arn
     maxReceiveCount     = 3
@@ -1552,7 +1552,6 @@ resource "aws_sqs_queue" "patient_notifications_dlq" {
   message_retention_seconds = 1209600 # 14 days
   kms_master_key_id         = aws_kms_key.phi_encryption.id
 
-
   tags = merge(local.tags, {
     Name = "${local.prefix}-${var.patient_notifications_queue}-dlq"
   })
@@ -1564,7 +1563,6 @@ resource "aws_sqs_queue" "provider_notifications" {
   visibility_timeout_seconds = var.visibility_timeout
   message_retention_seconds  = local.env_config[var.env].sqs_retention_days * 86400
   kms_master_key_id          = aws_kms_key.phi_encryption.id
-
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.provider_notifications_dlq.arn
@@ -1581,7 +1579,6 @@ resource "aws_sqs_queue" "provider_notifications_dlq" {
   message_retention_seconds = 1209600
   kms_master_key_id         = aws_kms_key.phi_encryption.id
 
-
   tags = merge(local.tags, {
     Name = "${local.prefix}-${var.provider_notifications_queue}-dlq"
   })
@@ -1593,7 +1590,6 @@ resource "aws_sqs_queue" "billing" {
   visibility_timeout_seconds = var.visibility_timeout
   message_retention_seconds  = local.env_config[var.env].sqs_retention_days * 86400
   kms_master_key_id          = aws_kms_key.phi_encryption.id
-
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.billing_dlq.arn
@@ -1610,7 +1606,6 @@ resource "aws_sqs_queue" "billing_dlq" {
   message_retention_seconds = 1209600
   kms_master_key_id         = aws_kms_key.phi_encryption.id
 
-
   tags = merge(local.tags, {
     Name = "${local.prefix}-${var.billing_queue}-dlq"
   })
@@ -1622,7 +1617,6 @@ resource "aws_sqs_queue" "pharmacist_review" {
   visibility_timeout_seconds = var.visibility_timeout
   message_retention_seconds  = local.env_config[var.env].sqs_retention_days * 86400
   kms_master_key_id          = aws_kms_key.phi_encryption.id
-
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.pharmacist_review_dlq.arn
@@ -1639,7 +1633,6 @@ resource "aws_sqs_queue" "pharmacist_review_dlq" {
   message_retention_seconds = 1209600
   kms_master_key_id         = aws_kms_key.phi_encryption.id
 
-
   tags = merge(local.tags, {
     Name = "${local.prefix}-${var.pharmacist_queue}-dlq"
   })
@@ -1653,7 +1646,6 @@ resource "aws_sqs_queue" "pharmacy_fulfillment" {
   visibility_timeout_seconds  = var.visibility_timeout
   message_retention_seconds   = local.env_config[var.env].sqs_retention_days * 86400
   kms_master_key_id           = aws_kms_key.phi_encryption.id
-
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.pharmacy_fulfillment_dlq.arn
@@ -1672,7 +1664,6 @@ resource "aws_sqs_queue" "pharmacy_fulfillment_dlq" {
   message_retention_seconds   = 1209600
   kms_master_key_id           = aws_kms_key.phi_encryption.id
 
-
   tags = merge(local.tags, {
     Name = "${local.prefix}-${var.pharmacy_queue}-dlq"
   })
@@ -1687,7 +1678,6 @@ resource "aws_sqs_queue" "patient_prescriptions" {
   message_retention_seconds   = local.env_config[var.env].sqs_retention_days * 86400
   kms_master_key_id           = aws_kms_key.phi_encryption.id
 
-
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.patient_prescriptions_dlq.arn
     maxReceiveCount     = 3
@@ -1699,10 +1689,11 @@ resource "aws_sqs_queue" "patient_prescriptions" {
 }
 
 resource "aws_sqs_queue" "patient_prescriptions_dlq" {
-  name                      = "${local.prefix}-${var.patient_prescriptions_queue}-dlq"
-  message_retention_seconds = 1209600
-  kms_master_key_id         = aws_kms_key.phi_encryption.id
-
+  name                        = "${local.prefix}-${var.patient_prescriptions_queue}-dlq.fifo"
+  fifo_queue                  = true
+  content_based_deduplication = true
+  message_retention_seconds   = 1209600
+  kms_master_key_id           = aws_kms_key.phi_encryption.id
 
   tags = merge(local.tags, {
     Name = "${local.prefix}-${var.patient_prescriptions_queue}-dlq"
@@ -2514,6 +2505,8 @@ resource "aws_lambda_event_source_mapping" "patient_notifications_processor" {
   event_source_arn = aws_sqs_queue.patient_notifications.arn
   function_name    = aws_lambda_function.notifier.arn
   batch_size       = 10
+
+  depends_on = [aws_iam_role_policy_attachment.lambda_base]
 }
 
 resource "aws_lambda_event_source_mapping" "billing_processor" {
@@ -2526,6 +2519,8 @@ resource "aws_lambda_event_source_mapping" "pharmacy_processor" {
   event_source_arn = aws_sqs_queue.pharmacy_fulfillment.arn
   function_name    = aws_lambda_function.pharmacy_integration.arn
   batch_size       = 10
+
+  depends_on = [aws_iam_role_policy_attachment.lambda_base]
 }
 
 # S3 Bucket Notification
@@ -2594,6 +2589,129 @@ resource "aws_cloudwatch_log_group" "step_functions_logs" {
   tags = merge(local.tags, {
     Name = "${local.prefix}-step-functions-logs"
   })
+}
+
+# ============================================================================
+# WAF CONFIGURATION
+# ============================================================================
+
+# WAF Web ACL
+resource "aws_wafv2_web_acl" "api_gateway" {
+  name        = "${local.prefix}-api-gateway-waf"
+  description = "WAF for API Gateway protection"
+  scope       = "REGIONAL"
+
+  default_action {
+    allow {}
+  }
+
+  # SQL Injection Protection Rule
+  rule {
+    name     = "AWSManagedRulesSQLiRuleSet"
+    priority = 1
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesSQLiRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "SQLiRuleSet"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # Rate Limiting Rule
+  rule {
+    name     = "RateLimitRule"
+    priority = 2
+
+    action {
+      block {}
+    }
+
+    statement {
+      rate_based_statement {
+        limit              = 2000
+        aggregate_key_type = "IP"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "RateLimitRule"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # AWS Managed Common Rule Set
+  rule {
+    name     = "AWSManagedRulesCommonRuleSet"
+    priority = 3
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesCommonRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "CommonRuleSet"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # AWS Managed Known Bad Inputs Rule Set
+  rule {
+    name     = "AWSManagedRulesKnownBadInputsRuleSet"
+    priority = 4
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesKnownBadInputsRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "KnownBadInputsRuleSet"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "${local.prefix}-waf-metrics"
+    sampled_requests_enabled   = true
+  }
+
+  tags = merge(local.tags, {
+    Name = "${local.prefix}-api-gateway-waf"
+  })
+}
+
+# Associate WAF with API Gateway Stage
+resource "aws_wafv2_web_acl_association" "api_gateway" {
+  resource_arn = aws_api_gateway_stage.main.arn
+  web_acl_arn  = aws_wafv2_web_acl.api_gateway.arn
 }
 
 # ============================================================================
@@ -3403,6 +3521,87 @@ output "security_group_ids" {
     aurora     = aws_security_group.aurora.id
   }
 }
+
+output "api_gateway_rest_api_id" {
+  description = "API Gateway REST API ID"
+  value       = aws_api_gateway_rest_api.main.id
+}
+
+output "api_gateway_stage_name" {
+  description = "API Gateway stage name"
+  value       = aws_api_gateway_stage.main.stage_name
+}
+
+output "aurora_cluster_identifier" {
+  description = "Aurora cluster identifier"
+  value       = aws_rds_cluster.aurora.cluster_identifier
+}
+
+output "aurora_port" {
+  description = "Aurora PostgreSQL port"
+  value       = aws_rds_cluster.aurora.port
+}
+
+output "redis_port" {
+  description = "Redis port"
+  value       = aws_elasticache_replication_group.redis.port
+}
+
+output "redis_replication_group_id" {
+  description = "Redis replication group ID"
+  value       = aws_elasticache_replication_group.redis.id
+}
+
+output "waf_web_acl_id" {
+  description = "WAF Web ACL ID"
+  value       = aws_wafv2_web_acl.api_gateway.id
+}
+
+output "waf_web_acl_arn" {
+  description = "WAF Web ACL ARN"
+  value       = aws_wafv2_web_acl.api_gateway.arn
+}
+
+output "secrets_manager_secrets" {
+  description = "Secrets Manager secret ARNs"
+  value = {
+    aurora_credentials = aws_secretsmanager_secret.aurora_master.arn
+    redis_auth_token   = aws_secretsmanager_secret.redis_auth.arn
+  }
+}
+
+output "lambda_function_names" {
+  description = "Lambda function names"
+  value = {
+    request_handler      = aws_lambda_function.request_handler.function_name
+    scheduler            = aws_lambda_function.scheduler.function_name
+    notifier             = aws_lambda_function.notifier.function_name
+    billing              = aws_lambda_function.billing.function_name
+    session_manager      = aws_lambda_function.session_manager.function_name
+    prescription_handler = aws_lambda_function.prescription_handler.function_name
+    approval_checker     = aws_lambda_function.approval_checker.function_name
+    pharmacy_integration = aws_lambda_function.pharmacy_integration.function_name
+    compliance_analyzer  = aws_lambda_function.compliance_analyzer.function_name
+    reminder_processor   = aws_lambda_function.reminder_processor.function_name
+    analytics_aggregator = aws_lambda_function.analytics_aggregator.function_name
+    document_processor   = aws_lambda_function.document_processor.function_name
+  }
+}
+
+output "eventbridge_rule_name" {
+  description = "EventBridge compliance check rule name"
+  value       = aws_cloudwatch_event_rule.compliance_check.name
+}
+
+output "vpc_info" {
+  description = "VPC information"
+  value = {
+    vpc_id             = aws_vpc.main.id
+    cidr_block         = aws_vpc.main.cidr_block
+    private_subnet_ids = aws_subnet.private[*].id
+    public_subnet_ids  = aws_subnet.public[*].id
+  }
+}
 ```
 
 ## `variables.tf`
@@ -3562,3 +3761,4 @@ common_tags = {
   Compliance  = "HIPAA-Staging"
 }
 ```
+
