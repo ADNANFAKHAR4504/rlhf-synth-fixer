@@ -44,7 +44,7 @@ export class TapStack extends cdk.Stack {
       nameSuffix: environmentSuffix,
 
       // EC2 Configuration
-      ec2AmiId: 'ami-0c02fb55956c7d316', // Amazon Linux 2 AMI in us-east-1
+      ec2AmiId: 'ami-0156001f0548e90b1', // Amazon Linux 2 AMI in us-east-1
       instanceType: 't3.medium',
 
       // Auto Scaling Configuration
@@ -408,6 +408,11 @@ export class TapStack extends cdk.Stack {
         },
       ],
       requireImdsv2: true,
+      // Add simple user data to ensure instance stabilizes
+      userData: ec2.UserData.forLinux({
+        shebang: '#!/bin/bash',
+      }),
+      userDataCausesReplacement: false, // Prevent replacement on user data changes
     });
 
     // Elastic IP for Bastion
