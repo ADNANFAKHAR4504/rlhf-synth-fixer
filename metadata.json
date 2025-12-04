@@ -1,29 +1,25 @@
 {
-  "po_id": "s4r2q0w6",
-  "platform": "pulumi",
-  "language": "typescript",
-  "subtask": "infrastructure-compliance-monitoring",
-  "complexity": "medium",
-  "difficulty": 3,
-  "training_quality": 9,
-  "synthetic_ground_truth": true,
-  "model_generated": true,
-  "task_type": "synthesis",
-  "created_date": "2025-12-04",
-  "resource_count": 13,
-  "services_used": [
-    "lambda",
-    "s3",
-    "sns",
-    "iam",
-    "cloudwatch",
-    "eventbridge"
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-12-04T10:06:00+05:30",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Optimization"
   ],
-  "tags": {
-    "category": "monitoring",
-    "use_case": "compliance-scanning",
-    "lambda": true,
-    "scheduled": true,
-    "alerting": true
-  }
+  "po_id": "q9n9u3x6",
+  "aws_services": [
+    "ECS",
+    "EC2",
+    "VPC",
+    "ElasticLoadBalancingV2",
+    "CloudWatch",
+    "IAM",
+    "ServiceDiscovery",
+    "ApplicationAutoScaling"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10
 }
