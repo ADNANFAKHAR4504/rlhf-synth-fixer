@@ -198,10 +198,24 @@ class TestComplianceAnalyzer(unittest.TestCase):
             AssumeRolePolicyDocument=assume_role_policy
         )
 
-        # Attach a policy
+        # Create and attach a custom managed policy (moto doesn't support AWS managed policies)
+        policy_doc = json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [{
+                "Effect": "Allow",
+                "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+                "Resource": "arn:aws:logs:*:*:*"
+            }]
+        })
+        policy_response = iam_client.create_policy(
+            PolicyName='TestManagedPolicy',
+            PolicyDocument=policy_doc
+        )
+
+        # Attach the custom managed policy
         iam_client.attach_role_policy(
             RoleName='compliance-scanner-role-test-iam-exists',
-            PolicyArn='arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+            PolicyArn=policy_response['Policy']['Arn']
         )
 
         # Add inline policy

@@ -9,7 +9,7 @@ import boto3
 import logging
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Any
 
 # Configure logging
@@ -31,7 +31,7 @@ class ComplianceAnalyzer:
         self.region = region
         self.endpoint_url = endpoint_url
         self.env_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
-        self.timestamp = datetime.utcnow().isoformat()
+        self.timestamp = datetime.now(timezone.utc).isoformat()
 
         # Initialize AWS clients
         client_config = {'region_name': region}
@@ -96,14 +96,23 @@ class ComplianceAnalyzer:
                     InvocationType='RequestResponse'
                 )
 
-                payload = json.loads(invoke_response['Payload'].read())
+                # Read payload and handle empty/invalid responses
+                payload_data = invoke_response['Payload'].read()
+                if payload_data:
+                    try:
+                        payload = json.loads(payload_data)
+                    except json.JSONDecodeError:
+                        payload = {'error': 'Invalid JSON response', 'raw': payload_data.decode('utf-8', errors='ignore')}
+                else:
+                    payload = {'error': 'Empty response'}
+
                 lambda_analysis['invocation_result'] = {
                     'status_code': invoke_response['StatusCode'],
                     'payload': payload,
-                    'success': invoke_response['StatusCode'] == 200
+                    'success': invoke_response['StatusCode'] == 200 and 'error' not in payload
                 }
 
-                if invoke_response['StatusCode'] == 200:
+                if invoke_response['StatusCode'] == 200 and 'error' not in payload:
                     logger.info("✓ Lambda function executed successfully")
                     if 'body' in payload:
                         body = json.loads(payload['body'])
@@ -114,7 +123,10 @@ class ComplianceAnalyzer:
 
             except Exception as e:
                 logger.error(f"Error invoking Lambda function: {str(e)}")
-                lambda_analysis['invocation_result']['error'] = str(e)
+                lambda_analysis['invocation_result'] = {
+                    'error': str(e),
+                    'success': False
+                }
 
         except self.lambda_client.exceptions.ResourceNotFoundException:
             logger.error(f"✗ Lambda function not found: {function_name}")
@@ -154,11 +166,13 @@ class ComplianceAnalyzer:
                 encryption = self.s3_client.get_bucket_encryption(Bucket=bucket_name)
                 s3_analysis['configuration']['encryption'] = 'Enabled'
                 logger.info("  Encryption: Enabled")
-            except self.s3_client.exceptions.ServerSideEncryptionConfigurationNotFoundError:
-                s3_analysis['configuration']['encryption'] = 'Disabled'
-                logger.warning("  Encryption: Disabled")
             except Exception as e:
-                logger.warning(f"Could not check encryption: {str(e)}")
+                # Handle encryption not configured (moto doesn't have ServerSideEncryptionConfigurationNotFoundError)
+                if 'ServerSideEncryptionConfigurationNotFoundError' in str(type(e)) or 'not found' in str(e).lower():
+                    s3_analysis['configuration']['encryption'] = 'Disabled'
+                    logger.warning("  Encryption: Disabled")
+                else:
+                    logger.warning(f"Could not check encryption: {str(e)}")
 
             # Check public access block
             try:
@@ -271,7 +285,7 @@ class ComplianceAnalyzer:
         iam_analysis = {
             'exists': False,
             'configuration': {},
-            'policies': []
+            'policies': {}
         }
 
         role_name = f"compliance-scanner-role-{self.env_suffix}"
