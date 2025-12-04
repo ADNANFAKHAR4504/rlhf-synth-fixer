@@ -1,0 +1,7 @@
+name: TapStack
+runtime:
+  name: nodejs
+  options:
+    typescript: true
+main: bin/
+description: RDS PostgreSQL optimization with read replica and monitoring
