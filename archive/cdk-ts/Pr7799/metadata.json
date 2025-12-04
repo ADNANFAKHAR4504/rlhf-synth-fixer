@@ -1,0 +1,31 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912331",
+  "team": "5",
+  "startedAt": "2025-12-03T10:50:00.070Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Optimization"
+  ],
+  "aws_services": [
+    "S3",
+    "Glue",
+    "Athena",
+    "CloudWatch",
+    "EventBridge",
+    "SNS",
+    "IAM",
+    "SQS",
+    "VPC"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "siddhantr-sudo",
+  "dockerS3Location": ""
+}
