@@ -21,5 +21,10 @@
   "training_quality": 10,
   "author": "mayanksethi-turing",
   "test_coverage": 100,
-  "completedAt": "2025-12-04T09:53:00-06:00"
+  "completedAt": "2025-12-04T09:53:00-06:00",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
