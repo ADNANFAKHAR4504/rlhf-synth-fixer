@@ -1,0 +1,4 @@
+name: TapStack
+runtime: nodejs
+description: CI/CD Pipeline Integration - Complete pipeline infrastructure with S3, ECR, CodeBuild, CodePipeline, IAM, and CloudWatch
+main: dist/
