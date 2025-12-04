@@ -6,7 +6,7 @@ import * as path from 'path';
 const config = new pulumi.Config();
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX;
 if (!environmentSuffix) {
-    throw new Error("ENVIRONMENT_SUFFIX environment variable is required");
+  throw new Error('ENVIRONMENT_SUFFIX environment variable is required');
 }
 const environment = config.get('environment') || 'dev';
 const imageQuality = config.get('imageQuality') || '80';
