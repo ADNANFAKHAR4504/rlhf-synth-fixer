@@ -1,0 +1,25 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-12-04T12:00:00Z",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring"
+  ],
+  "po_id": "v0m8a5j1",
+  "aws_services": [
+    "Lambda",
+    "S3",
+    "SNS",
+    "CloudWatch Logs",
+    "CloudWatch Metrics",
+    "CloudWatch Dashboard",
+    "CloudWatch Alarms",
+    "EventBridge"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10
+}
