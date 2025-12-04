@@ -65,16 +65,15 @@ jobs:
           npx cdk synth --app "npx ts-node --prefer-ts-exts bin/*.ts"
         continue-on-error: false
 
+      - name: Create artifact tarball
+        run: tar -czf cdk-outputs.tar.gz -C cdk.out .
+
       - name: Encrypt artifacts with KMS
         run: |
-          # Create tarball of artifacts
-          tar -czf cdk-outputs.tar.gz -C cdk.out .
-          # Encrypt with AWS KMS
           aws kms encrypt \
             --key-id alias/github-actions-artifacts \
             --plaintext fileb://cdk-outputs.tar.gz \
-            --output text \
-            --query CiphertextBlob > cdk-outputs.tar.gz.encrypted
+            --output text --query CiphertextBlob > cdk-outputs.tar.gz.encrypted
       - name: Upload encrypted artifacts
         uses: actions/upload-artifact@v4
         with:
