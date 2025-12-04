@@ -1,5 +1,10 @@
-import * as pulumi from '@pulumi/pulumi';
+import {
+  ConfigServiceClient,
+  DescribeConfigurationRecordersCommand,
+  DescribeDeliveryChannelsCommand,
+} from '@aws-sdk/client-config-service';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface TapStackArgs {
   tags?: Record<string, string>;
@@ -157,48 +162,220 @@ export class TapStack extends pulumi.ComponentResource {
     // AWS Config only allows 1 recorder per region per account
     // All PRs share the same recorder to avoid quota limits
     const sharedRecorderName = 'config-recorder-shared';
-    const configRecorder = new aws.cfg.Recorder(
-      'config-recorder-shared',
-      {
-        name: sharedRecorderName,
-        roleArn: configRole.arn,
-        recordingGroup: {
-          allSupported: false,
-          includeGlobalResourceTypes: false,
-          resourceTypes: [
-            'AWS::EC2::Instance',
-            'AWS::RDS::DBInstance',
-            'AWS::S3::Bucket',
-          ],
-        },
-      },
-      { parent: this }
-    );
+    // Attempt to detect an existing recorder and reuse it; otherwise create a new one.
+    // We'll perform discovery of recorder and delivery channel using the AWS SDK and create resources accordingly.
+    const detectConfigResources = (() => {
+      const cfgClient = new ConfigServiceClient({});
+      return Promise.all([
+        cfgClient.send(new DescribeConfigurationRecordersCommand({})),
+        cfgClient.send(new DescribeDeliveryChannelsCommand({})),
+      ])
+        .then(([recResp, dcResp]) => {
+          const existingRecorder = recResp.ConfigurationRecorders?.[0];
+          const existingChannel = dcResp.DeliveryChannels?.[0];
+          const existingRecorderName = existingRecorder?.name;
+          const existingChannelName = existingChannel?.name;
+          const hasSharedRecorder = !!existingRecorderName;
+          const hasSharedChannel = !!existingChannelName;
+          let configRecorder: aws.cfg.Recorder;
+          let createdRecorder = false;
+          if (hasSharedRecorder) {
+            // If an existing recorder exists (any name), reuse it by getting its identifier
+            const recorderId = existingRecorderName || sharedRecorderName;
+            configRecorder = aws.cfg.Recorder.get(
+              'config-recorder-shared',
+              recorderId,
+              undefined,
+              { parent: this }
+            );
+          } else {
+            configRecorder = new aws.cfg.Recorder(
+              'config-recorder-shared',
+              {
+                name: sharedRecorderName,
+                roleArn: configRole.arn,
+                recordingGroup: {
+                  allSupported: false,
+                  includeGlobalResourceTypes: false,
+                  resourceTypes: [
+                    'AWS::EC2::Instance',
+                    'AWS::RDS::DBInstance',
+                    'AWS::S3::Bucket',
+                  ],
+                },
+              },
+              { parent: this }
+            );
+            createdRecorder = true;
+          }
 
-    // Delivery Channel for AWS Config - Use shared channel name
-    // AWS Config only allows 1 delivery channel per region per account
+          let deliveryChannel: aws.cfg.DeliveryChannel;
+          if (hasSharedChannel) {
+            const channelId = existingChannelName || sharedChannelName;
+            deliveryChannel = aws.cfg.DeliveryChannel.get(
+              'config-delivery-channel-shared',
+              channelId,
+              undefined,
+              { parent: this }
+            );
+          } else {
+            deliveryChannel = new aws.cfg.DeliveryChannel(
+              'config-delivery-channel-shared',
+              {
+                name: sharedChannelName,
+                s3BucketName: configBucket.bucket,
+                snapshotDeliveryProperties: {
+                  deliveryFrequency: 'TwentyFour_Hours',
+                },
+              },
+              { dependsOn: [configBucketPolicy], parent: this }
+            );
+          }
+
+          let recorderStatus: aws.cfg.RecorderStatus | undefined;
+          if (createdRecorder) {
+            recorderStatus = new aws.cfg.RecorderStatus(
+              'config-recorder-status-shared',
+              { name: sharedRecorderName, isEnabled: true },
+              { dependsOn: [deliveryChannel], parent: this }
+            );
+          }
+
+          // Create managed rules dependent on the recorder/channel
+          new aws.cfg.Rule(
+            `encrypted-volumes-rule-${environmentSuffix}`,
+            {
+              name: `encrypted-volumes-rule-${environmentSuffix}`,
+              source: { owner: 'AWS', sourceIdentifier: 'ENCRYPTED_VOLUMES' },
+              tags: { Department: 'Compliance', Purpose: 'Audit' },
+            },
+            {
+              dependsOn: recorderStatus ? [recorderStatus] : [deliveryChannel],
+              parent: this,
+            }
+          );
+
+          new aws.cfg.Rule(
+            `rds-encryption-rule-${environmentSuffix}`,
+            {
+              name: `rds-encryption-rule-${environmentSuffix}`,
+              source: {
+                owner: 'AWS',
+                sourceIdentifier: 'RDS_STORAGE_ENCRYPTED',
+              },
+              tags: { Department: 'Compliance', Purpose: 'Audit' },
+            },
+            {
+              dependsOn: recorderStatus ? [recorderStatus] : [deliveryChannel],
+              parent: this,
+            }
+          );
+
+          new aws.cfg.Rule(
+            `s3-ssl-rule-${environmentSuffix}`,
+            {
+              name: `s3-ssl-rule-${environmentSuffix}`,
+              source: {
+                owner: 'AWS',
+                sourceIdentifier: 'S3_BUCKET_SSL_REQUESTS_ONLY',
+              },
+              tags: { Department: 'Compliance', Purpose: 'Audit' },
+            },
+            {
+              dependsOn: recorderStatus ? [recorderStatus] : [deliveryChannel],
+              parent: this,
+            }
+          );
+
+          return {
+            configRecorder,
+            deliveryChannel,
+            recorderStatus,
+            existingRecorderName,
+            existingChannelName,
+          };
+        })
+        .catch(() => {
+          // Fallback - create everything if detection fails
+          const configRecorder = new aws.cfg.Recorder(
+            'config-recorder-shared',
+            {
+              name: sharedRecorderName,
+              roleArn: configRole.arn,
+              recordingGroup: {
+                allSupported: false,
+                includeGlobalResourceTypes: false,
+                resourceTypes: [
+                  'AWS::EC2::Instance',
+                  'AWS::RDS::DBInstance',
+                  'AWS::S3::Bucket',
+                ],
+              },
+            },
+            { parent: this }
+          );
+          const deliveryChannel = new aws.cfg.DeliveryChannel(
+            'config-delivery-channel-shared',
+            { name: sharedChannelName, s3BucketName: configBucket.bucket },
+            { dependsOn: [configBucketPolicy], parent: this }
+          );
+          const recorderStatus = new aws.cfg.RecorderStatus(
+            'config-recorder-status-shared',
+            { name: sharedRecorderName, isEnabled: true },
+            { dependsOn: [deliveryChannel], parent: this }
+          );
+
+          new aws.cfg.Rule(
+            `encrypted-volumes-rule-${environmentSuffix}`,
+            {
+              name: `encrypted-volumes-rule-${environmentSuffix}`,
+              source: { owner: 'AWS', sourceIdentifier: 'ENCRYPTED_VOLUMES' },
+              tags: { Department: 'Compliance', Purpose: 'Audit' },
+            },
+            { dependsOn: [recorderStatus], parent: this }
+          );
+
+          new aws.cfg.Rule(
+            `rds-encryption-rule-${environmentSuffix}`,
+            {
+              name: `rds-encryption-rule-${environmentSuffix}`,
+              source: {
+                owner: 'AWS',
+                sourceIdentifier: 'RDS_STORAGE_ENCRYPTED',
+              },
+              tags: { Department: 'Compliance', Purpose: 'Audit' },
+            },
+            { dependsOn: [recorderStatus], parent: this }
+          );
+
+          new aws.cfg.Rule(
+            `s3-ssl-rule-${environmentSuffix}`,
+            {
+              name: `s3-ssl-rule-${environmentSuffix}`,
+              source: {
+                owner: 'AWS',
+                sourceIdentifier: 'S3_BUCKET_SSL_REQUESTS_ONLY',
+              },
+              tags: { Department: 'Compliance', Purpose: 'Audit' },
+            },
+            { dependsOn: [recorderStatus], parent: this }
+          );
+
+          return {
+            configRecorder,
+            deliveryChannel,
+            recorderStatus,
+            existingRecorderName: undefined,
+            existingChannelName: undefined,
+          };
+        });
+    })();
+
+    // Delivery Channel name is defined above and is detected/created by `detectConfigResources` promise
     const sharedChannelName = 'config-delivery-channel-shared';
-    const deliveryChannel = new aws.cfg.DeliveryChannel(
-      'config-delivery-channel-shared',
-      {
-        name: sharedChannelName,
-        s3BucketName: configBucket.bucket,
-        snapshotDeliveryProperties: {
-          deliveryFrequency: 'TwentyFour_Hours',
-        },
-      },
-      { dependsOn: [configBucketPolicy], parent: this }
-    );
 
-    // Start the AWS Config Recorder
-    const recorderStatus = new aws.cfg.RecorderStatus(
-      'config-recorder-status-shared',
-      {
-        name: sharedRecorderName,
-        isEnabled: true,
-      },
-      { dependsOn: [deliveryChannel], parent: this }
-    );
+    // `recorderStatus` is created within the detectConfigResources Promise and used to create rules. If needed for further dependents,
+    // we will rely on the detectConfigResources result to provide the appropriate resources and status.
 
     // SNS Topic for compliance notifications
     const complianceTopic = new aws.sns.Topic(
@@ -213,57 +390,7 @@ export class TapStack extends pulumi.ComponentResource {
       },
       { parent: this }
     );
-
-    // Managed Config Rule: encrypted-volumes
-    new aws.cfg.Rule(
-      `encrypted-volumes-rule-${environmentSuffix}`,
-      {
-        name: `encrypted-volumes-rule-${environmentSuffix}`,
-        source: {
-          owner: 'AWS',
-          sourceIdentifier: 'ENCRYPTED_VOLUMES',
-        },
-        tags: {
-          Department: 'Compliance',
-          Purpose: 'Audit',
-        },
-      },
-      { dependsOn: [recorderStatus], parent: this }
-    );
-
-    // Managed Config Rule: rds-encryption-enabled
-    new aws.cfg.Rule(
-      `rds-encryption-rule-${environmentSuffix}`,
-      {
-        name: `rds-encryption-rule-${environmentSuffix}`,
-        source: {
-          owner: 'AWS',
-          sourceIdentifier: 'RDS_STORAGE_ENCRYPTED',
-        },
-        tags: {
-          Department: 'Compliance',
-          Purpose: 'Audit',
-        },
-      },
-      { dependsOn: [recorderStatus], parent: this }
-    );
-
-    // Managed Config Rule: s3-bucket-ssl-requests-only
-    new aws.cfg.Rule(
-      `s3-ssl-rule-${environmentSuffix}`,
-      {
-        name: `s3-ssl-rule-${environmentSuffix}`,
-        source: {
-          owner: 'AWS',
-          sourceIdentifier: 'S3_BUCKET_SSL_REQUESTS_ONLY',
-        },
-        tags: {
-          Department: 'Compliance',
-          Purpose: 'Audit',
-        },
-      },
-      { dependsOn: [recorderStatus], parent: this }
-    );
+    // We'll create config rules after we have a recorder and delivery channel (below)
 
     // IAM Role for Lambda function
     const lambdaRole = new aws.iam.Role(
@@ -437,33 +564,49 @@ exports.handler = async (event) => {
     );
 
     // Custom Config Rule using Lambda
-    new aws.cfg.Rule(
-      `custom-tag-rule-${environmentSuffix}`,
-      {
-        name: `custom-tag-rule-${environmentSuffix}`,
-        source: {
-          owner: 'CUSTOM_LAMBDA',
-          sourceIdentifier: tagCheckerLambda.arn,
-          sourceDetails: [
-            {
-              eventSource: 'aws.config',
-              messageType: 'ConfigurationItemChangeNotification',
+    detectConfigResources.then(
+      ({ recorderStatus, deliveryChannel }) =>
+        new aws.cfg.Rule(
+          `custom-tag-rule-${environmentSuffix}`,
+          {
+            name: `custom-tag-rule-${environmentSuffix}`,
+            source: {
+              owner: 'CUSTOM_LAMBDA',
+              sourceIdentifier: tagCheckerLambda.arn,
+              sourceDetails: [
+                {
+                  eventSource: 'aws.config',
+                  messageType: 'ConfigurationItemChangeNotification',
+                },
+              ],
             },
-          ],
-        },
-        scope: {
-          complianceResourceTypes: ['AWS::EC2::Instance'],
-        },
-        tags: {
-          Department: 'Compliance',
-          Purpose: 'Audit',
-        },
-      },
-      { dependsOn: [recorderStatus, lambdaPermission], parent: this }
+            scope: {
+              complianceResourceTypes: ['AWS::EC2::Instance'],
+            },
+            tags: {
+              Department: 'Compliance',
+              Purpose: 'Audit',
+            },
+          },
+          {
+            dependsOn: [
+              recorderStatus ? recorderStatus : deliveryChannel,
+              lambdaPermission,
+            ],
+            parent: this,
+          }
+        )
     );
 
     // Export outputs
-    this.configRecorderName = configRecorder.name;
+    // Map the recorder output name to the existing or shared name (resolve via detection)
+    // detectConfigResources resolves to an object with existingRecorderName if found.
+    // Use a Pulumi output wrapping the detectConfigResources promise so we can set the output immediately
+    this.configRecorderName = pulumi.output(
+      detectConfigResources.then(
+        res => res.existingRecorderName || sharedRecorderName
+      )
+    );
     this.configBucketArn = configBucket.arn;
     this.complianceTopicArn = complianceTopic.arn;
     this.tagCheckerLambdaArn = tagCheckerLambda.arn;
