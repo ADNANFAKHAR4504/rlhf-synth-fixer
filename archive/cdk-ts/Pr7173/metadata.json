@@ -1,0 +1,31 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912184",
+  "team": "5",
+  "startedAt": "2025-11-24T10:30:40.810Z",
+  "subtask": "IaC-Multi-Environment-Management",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "S3",
+    "RDS Aurora MySQL",
+    "Lambda",
+    "API Gateway",
+    "CloudWatch",
+    "KMS",
+    "IAM",
+    "SNS",
+    "VPC"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "siddhantr-sudo",
+  "dockerS3Location": ""
+}
