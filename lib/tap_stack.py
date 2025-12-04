@@ -555,8 +555,7 @@ class TapStack(TerraformStack):
             reserved_concurrent_executions=100,
             environment=LambdaFunctionEnvironment(
                 variables={
-                    "DYNAMODB_TABLE": transactions_table.name,
-                    "AWS_REGION": aws_region
+                    "DYNAMODB_TABLE": transactions_table.name
                 }
             ),
             tracing_config=LambdaFunctionTracingConfig(
@@ -583,8 +582,7 @@ class TapStack(TerraformStack):
             reserved_concurrent_executions=100,
             environment=LambdaFunctionEnvironment(
                 variables={
-                    "SQS_QUEUE_URL": suspicious_transactions_queue.url,
-                    "AWS_REGION": aws_region
+                    "SQS_QUEUE_URL": suspicious_transactions_queue.url
                 }
             ),
             vpc_config=LambdaFunctionVpcConfig(
@@ -615,8 +613,7 @@ class TapStack(TerraformStack):
             reserved_concurrent_executions=100,
             environment=LambdaFunctionEnvironment(
                 variables={
-                    "SNS_TOPIC_ARN": fraud_alerts_topic.arn,
-                    "AWS_REGION": aws_region
+                    "SNS_TOPIC_ARN": fraud_alerts_topic.arn
                 }
             ),
             tracing_config=LambdaFunctionTracingConfig(
