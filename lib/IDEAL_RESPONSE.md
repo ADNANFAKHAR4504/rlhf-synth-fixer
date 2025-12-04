@@ -22,7 +22,7 @@ terraform {
     }
   }
 
-  # backend "s3" {}
+  backend "s3" {}
 }
 
 # ============================================================================
@@ -2200,7 +2200,7 @@ resource "aws_lambda_function" "scheduler" {
     variables = merge(local.lambda_env_vars, {
       APPOINTMENTS_TABLE = aws_dynamodb_table.appointments.name
       POLICIES_TABLE     = aws_dynamodb_table.policies.name
-      REDIS_ENDPOINT     = aws_elasticache_replication_group.redis.configuration_endpoint_address
+      REDIS_ENDPOINT     = aws_elasticache_replication_group.redis.primary_endpoint_address
       REDIS_AUTH_SECRET  = aws_secretsmanager_secret.redis_auth.id
       SNS_TOPIC_ARN      = aws_sns_topic.appointment_scheduled.arn
     })
@@ -2425,7 +2425,7 @@ resource "aws_lambda_function" "analytics_aggregator" {
       APPOINTMENTS_TABLE = aws_dynamodb_table.appointments.name
       AURORA_ENDPOINT    = aws_rds_cluster.aurora.endpoint
       AURORA_SECRET      = aws_secretsmanager_secret.aurora_master.id
-      REDIS_ENDPOINT     = aws_elasticache_replication_group.redis.configuration_endpoint_address
+      REDIS_ENDPOINT     = aws_elasticache_replication_group.redis.primary_endpoint_address
       REDIS_AUTH_SECRET  = aws_secretsmanager_secret.redis_auth.id
     })
   }
@@ -3459,7 +3459,7 @@ output "aurora_endpoints" {
 
 output "redis_endpoint" {
   description = "Redis cluster endpoint"
-  value       = aws_elasticache_replication_group.redis.configuration_endpoint_address
+  value       = aws_elasticache_replication_group.redis.primary_endpoint_address
 }
 
 output "step_functions_arn" {
@@ -3761,4 +3761,3 @@ common_tags = {
   Compliance  = "HIPAA-Staging"
 }
 ```
-
