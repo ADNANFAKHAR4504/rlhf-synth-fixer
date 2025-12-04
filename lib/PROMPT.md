@@ -1,163 +1,136 @@
-# IaC Program Optimization
+# CI/CD Pipeline for ECS Fargate Deployment
 
-> **⚠️ CRITICAL REQUIREMENT: This task MUST be implemented using Pulumi with TypeScript**
->
-> Platform: **pulumi**
-> Language: **ts**
-> Region: **us-east-1**
->
-> **Do not substitute or change the platform or language.** All infrastructure code must be written using the specified platform and language combination.
+We need to build a complete CI/CD pipeline infrastructure using Pulumi with TypeScript. The pipeline should automate the build, test, and deployment of containerized applications to ECS Fargate with an Application Load Balancer.
 
----
+## Requirements
 
-## Problem Statement
+### Platform Specifications
+- Infrastructure as Code: Pulumi
+- Language: TypeScript
+- Target Region: us-east-1
+- All resources must include the environment suffix in their names (use `ENVIRONMENT_SUFFIX` environment variable)
 
-Create a Pulumi TypeScript program to refactor and optimize an existing ECS Fargate deployment that currently suffers from inefficient resource allocation and poor observability. The configuration must:
+### Pipeline Architecture
 
-1. Reduce ECS task definition memory allocation from 4GB to 2GB while maintaining application performance.
-2. Implement proper CPU and memory resource limits using Fargate's supported combinations (1 vCPU with 2GB RAM).
-3. Add missing health check configuration to the ALB target group with appropriate thresholds.
-4. Fix the duplicate security group rules that currently allow both HTTP and HTTPS on the same port.
-5. Implement consistent resource tagging strategy with Environment, Team, and CostCenter tags.
-6. Add CloudWatch log retention policy of 7 days to reduce storage costs.
-7. Enable ECS task definition deregistration of old revisions to prevent accumulation.
-8. Configure ALB idle timeout to 30 seconds instead of the current 300 seconds.
-9. Add CloudWatch alarms for ECS service CPU and memory utilization above 80%.
-10. Implement proper Pulumi stack outputs for ALB DNS name and CloudWatch dashboard URL.
+Create a CodePipeline with the following stages:
 
----
+1. **Source Stage**
+   - Connect to GitHub repository using CodeStar connection
+   - Trigger pipeline on pushes to main branch
+   - Enable automatic triggering
 
-## Implementation Guidelines
+2. **Build Stage**
+   - Use CodeBuild with BUILD_GENERAL1_MEDIUM compute type
+   - Build Docker images and push to ECR
+   - Run Trivy vulnerability scanning on the container image
+   - Enable S3 caching for faster builds
+   - Generate image definitions file for ECS deployment
 
-### Platform Requirements
-- Use Pulumi as the IaC framework
-- All code must be written in TypeScript
-- Follow Pulumi best practices for resource organization
-- Ensure all resources use the `environmentSuffix` variable for naming
+3. **Test Stage**
+   - Use CodeBuild with BUILD_GENERAL1_SMALL compute type
+   - Run unit and integration tests
+   - Generate JUnit test reports
+   - Enable local caching
 
-### Security and Compliance
-- Implement encryption at rest for all data stores using AWS KMS
-- Enable encryption in transit using TLS/SSL
-- Follow the principle of least privilege for IAM roles and policies
-- Enable logging and monitoring using CloudWatch
-- Tag all resources appropriately
+4. **Manual Approval Stage**
+   - Require manual approval before production deployment
+   - Send notification to SNS topic when approval is pending
+   - Set timeout to 24 hours (1440 minutes)
 
-### Testing
-- Write unit tests with good coverage
-- Integration tests must validate end-to-end workflows using deployed resources
-- Load test outputs from `cfn-outputs/flat-outputs.json`
+5. **Deploy Stage**
+   - Deploy to ECS Fargate service using rolling update
+   - Configure minimum healthy percent at 50%
+   - Configure maximum percent at 200%
 
-### Resource Management
-- Infrastructure should be fully destroyable for CI/CD workflows
-- **Important**: Secrets should be fetched from existing Secrets Manager entries, not created
-- Avoid DeletionPolicy: Retain unless required
+### Infrastructure Components
 
-## Deployment Requirements (CRITICAL)
+The pipeline needs these supporting resources:
 
-### Resource Naming
-- **MANDATORY**: All named resources MUST include `environmentSuffix` in their names
-- Pattern: `{resource-name}-${environmentSuffix}` or `{resource-name}-${props.environmentSuffix}`
-- Examples:
-  - S3 Bucket: `my-bucket-${environmentSuffix}`
-  - Lambda Function: `my-function-${environmentSuffix}`
-  - DynamoDB Table: `my-table-${environmentSuffix}`
-- **Validation**: Every resource with a `name`, `bucketName`, `functionName`, `tableName`, `roleName`, `queueName`, `topicName`, `streamName`, `clusterName`, or `dbInstanceIdentifier` property MUST include environmentSuffix
+**Networking**
+- VPC with CIDR 10.0.0.0/16
+- Two public subnets (10.0.1.0/24, 10.0.2.0/24) for ALB
+- Two private subnets (10.0.10.0/24, 10.0.11.0/24) for ECS tasks
+- Internet Gateway for public subnet internet access
+- Single NAT Gateway for private subnet outbound traffic (cost optimization)
+- Route tables with proper associations
 
-### Resource Lifecycle
-- **MANDATORY**: All resources MUST be destroyable after testing
-- **FORBIDDEN**:
-  - `RemovalPolicy.RETAIN` (CDK/CDKTF) → Use `RemovalPolicy.DESTROY` instead
-  - `DeletionPolicy: Retain` (CloudFormation) → Remove or use `Delete`
-  - `deletionProtection: true` (RDS, DynamoDB) → Use `deletionProtection: false`
-  - `skip_final_snapshot: false` (RDS) → Use `skip_final_snapshot: true`
-- **Rationale**: CI/CD needs to clean up resources after testing
+**Container Registry**
+- ECR repository with image scanning enabled
+- Lifecycle policy to keep maximum 10 images
 
-### AWS Service-Specific Requirements
+**ECS Cluster**
+- Fargate launch type
+- Container Insights enabled
+- Task definition with 1 vCPU and 2GB memory
+- Service running 2 tasks across private subnets
 
-#### GuardDuty
-- **CRITICAL**: Do NOT create GuardDuty detectors in code
-- GuardDuty allows only ONE detector per AWS account/region
-- If task requires GuardDuty, add comment: "GuardDuty should be enabled manually at account level"
+**Load Balancing**
+- Application Load Balancer in public subnets
+- Target group with IP target type
+- Health check on root path with 30 second interval
+- Listener on port 80
+- Idle timeout set to 30 seconds
+- Deregistration delay of 30 seconds
 
-#### AWS Config
-- **CRITICAL**: If creating AWS Config roles, use correct managed policy:
-  - ✅ CORRECT: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
-  - ❌ WRONG: `arn:aws:iam::aws:policy/service-role/ConfigRole`
-  - ❌ WRONG: `arn:aws:iam::aws:policy/AWS_ConfigRole`
-- **Alternative**: Use service-linked role `AWSServiceRoleForConfig` (auto-created)
+**Security Groups**
+- ALB security group allowing HTTP (80) and HTTPS (443) from anywhere
+- ECS task security group allowing traffic only from ALB security group
 
-#### Lambda Functions
-- **Node.js 18.x+**: Do NOT use `require('aws-sdk')` - AWS SDK v2 not available
-  - ✅ Use AWS SDK v3: `import { S3Client } from '@aws-sdk/client-s3'`
-  - ✅ Or extract data from event object directly
-- **Reserved Concurrency**: Avoid setting `reservedConcurrentExecutions` unless required
-  - If required, use low values (1-5) to avoid account limit issues
+**Monitoring and Alerting**
+- CloudWatch Log Group with 7-day retention
+- CloudWatch alarms for:
+  - ECS CPU utilization above 80%
+  - ECS Memory utilization above 80%
+  - Pipeline execution failures
+- CloudWatch Dashboard showing CPU, memory, and ALB metrics
+- SNS topic for deployment notifications
 
-#### CloudWatch Synthetics
-- **CRITICAL**: Use current runtime version
-  - ✅ CORRECT: `synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0`
-  - ❌ WRONG: `SYNTHETICS_NODEJS_PUPPETEER_5_1` (deprecated)
+**IAM Roles**
+- CodePipeline service role with permissions for S3, CodeBuild, ECS
+- CodeBuild service role with ECR and CloudWatch Logs permissions
+- ECS task execution role with ECR pull and CloudWatch Logs permissions
+- ECS task role for application-specific permissions
 
-#### RDS Databases
-- **Prefer**: Aurora Serverless v2 (faster provisioning, auto-scaling)
-- **If Multi-AZ required**: Set `backup_retention_period = 1` (minimum) and `skip_final_snapshot = true`
-- **Note**: Multi-AZ RDS takes 20-30 minutes to provision
+**Artifact Storage**
+- S3 bucket for pipeline artifacts with 30-day lifecycle policy
+- S3 bucket for Docker build cache
 
-#### NAT Gateways
-- **Cost Warning**: NAT Gateways cost ~$32/month each
-- **Prefer**: VPC Endpoints for S3, DynamoDB (free)
-- **If NAT required**: Create only 1 NAT Gateway (not per AZ) for synthetic tasks
+### Resource Tagging
 
-### Hardcoded Values (FORBIDDEN)
-- **DO NOT** hardcode:
-  - Environment names: `prod-`, `dev-`, `stage-`, `production`, `development`, `staging`
-  - Account IDs: `123456789012`, `arn:aws:.*:.*:account`
-  - Regions: Hardcoded `us-east-1` or `us-west-2` in resource names (use variables)
-- **USE**: Environment variables, context values, or parameters instead
+All resources must have these tags:
+- Environment: value from environmentSuffix
+- Team: platform
+- CostCenter: engineering
+- ManagedBy: Pulumi
 
-### Cross-Resource References
-- Ensure all resource references use proper ARNs or resource objects
-- Verify dependencies are explicit (use `DependsOn` in CloudFormation, `dependsOn` in CDK)
-- Test that referenced resources exist before use
+### Stack Outputs
 
-## Code Examples (Reference)
+Export the following values:
+- ALB DNS name for accessing the application
+- CloudWatch Dashboard URL for monitoring
+- VPC ID
+- ECS Cluster ID
+- ECS Service ID
 
-### Correct Resource Naming (Pulumi TypeScript)
-```typescript
-const bucket = new aws.s3.Bucket("dataBucket", {
-  bucket: `data-bucket-${environmentSuffix}`,  // ✅ CORRECT
-  // ...
-});
+### Important Constraints
 
-// ❌ WRONG:
-// bucket: 'data-bucket-prod'  // Hardcoded, will fail
-```
+- All resources must be destroyable for CI/CD cleanup (no deletion protection)
+- Use environment suffix variable for all resource names
+- Keep costs optimized (single NAT gateway, appropriate compute sizes, lifecycle policies)
+- Follow least privilege principle for all IAM roles
+- Enable encryption at rest and in transit where applicable
 
-### Correct Removal Policy (Pulumi TypeScript)
-```typescript
-const bucket = new aws.s3.Bucket("dataBucket", {
-  forceDestroy: true,  // ✅ CORRECT - allows deletion with objects
-  // ...
-});
+### Testing Requirements
 
-// ❌ WRONG:
-// No forceDestroy - will block cleanup if bucket has objects
-```
+- Unit tests should cover the infrastructure components
+- Integration tests should validate the pipeline executes successfully
+- Test coverage should be comprehensive
 
-## Target Region
-Deploy all resources to: **us-east-1**
+## Deliverables
 
-## Success Criteria
-- Infrastructure deploys successfully
-- All security and compliance constraints are met
-- Tests pass successfully
-- Resources are properly tagged and named with environmentSuffix
-- Infrastructure can be cleanly destroyed
-- ECS task definition optimized from 4GB to 2GB RAM
-- ALB target group has proper health checks configured
-- Security group rules are consolidated (no duplicates)
-- CloudWatch log retention set to 7 days
-- ECS task definition deregistration enabled
-- ALB idle timeout reduced to 30 seconds
-- CloudWatch alarms created for CPU and memory utilization
-- Stack outputs include ALB DNS name and CloudWatch dashboard URL
+A working Pulumi TypeScript program that deploys:
+1. Complete VPC networking infrastructure
+2. ECS Fargate cluster with ALB
+3. CodePipeline with all stages configured
+4. Supporting resources (ECR, S3, IAM, CloudWatch)
+5. Proper monitoring and alerting setup
