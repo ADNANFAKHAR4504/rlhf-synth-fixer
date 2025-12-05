@@ -35,6 +35,93 @@ export interface TapStackArgs {
 }
 
 /**
+ * Generates IAM policy JSON for the Lambda function.
+ * Exported for testability.
+ */
+export function generateLambdaPolicy(
+  bucketId: string,
+  topicArn: string,
+  awsRegion: string,
+  environmentSuffix: string
+): string {
+  return JSON.stringify({
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Effect: 'Allow',
+        Action: [
+          'ec2:DescribeInstances',
+          'ec2:DescribeTags',
+          'rds:DescribeDBInstances',
+          'rds:ListTagsForResource',
+          's3:ListAllMyBuckets',
+          's3:GetBucketTagging',
+        ],
+        Resource: '*',
+      },
+      {
+        Effect: 'Allow',
+        Action: ['s3:PutObject', 's3:PutObjectAcl'],
+        Resource: `arn:aws:s3:::${bucketId}/*`,
+      },
+      {
+        Effect: 'Allow',
+        Action: ['sns:Publish'],
+        Resource: topicArn,
+      },
+      {
+        Effect: 'Allow',
+        Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+        Resource: `arn:aws:logs:${awsRegion}:*:log-group:/aws/lambda/compliance-scanner-${environmentSuffix}:*`,
+      },
+    ],
+  });
+}
+
+/**
+ * Generates dashboard URLs for CloudWatch console.
+ * Exported for testability.
+ */
+export function generateDashboardUrls(
+  awsRegion: string,
+  logGroupName: string
+): Record<string, string> {
+  return {
+    cloudwatchLogs: `https://console.aws.amazon.com/cloudwatch/home?region=${awsRegion}#logsV2:log-groups/log-group/${logGroupName}`,
+  };
+}
+
+/**
+ * Creates SNS topic ARNs record.
+ * Exported for testability.
+ */
+export function createSnsTopicArns(arn: string): Record<string, string> {
+  return {
+    complianceAlerts: arn,
+  };
+}
+
+/**
+ * Creates Lambda function ARNs record.
+ * Exported for testability.
+ */
+export function createLambdaFunctionArns(arn: string): Record<string, string> {
+  return {
+    complianceScanner: arn,
+  };
+}
+
+/**
+ * Ensures the Lambda code directory exists.
+ * Exported for testability.
+ */
+export function ensureLambdaDirectory(lambdaCodeDir: string): void {
+  if (!fs.existsSync(lambdaCodeDir)) {
+    fs.mkdirSync(lambdaCodeDir, { recursive: true });
+  }
+}
+
+/**
  * Represents the main Pulumi component resource for the TAP project.
  *
  * This component creates compliance scanning infrastructure including:
@@ -154,45 +241,14 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // IAM policy for Lambda to read AWS resources
-    const lambdaPolicy = new aws.iam.RolePolicy(
+    new aws.iam.RolePolicy(
       `compliance-scanner-policy-${environmentSuffix}`,
       {
         role: lambdaRole.id,
         policy: pulumi
           .all([reportsBucket.id, alertTopic.arn])
           .apply(([bucketId, topicArn]) =>
-            JSON.stringify({
-              Version: '2012-10-17',
-              Statement: [
-                {
-                  Effect: 'Allow',
-                  Action: [
-                    'ec2:DescribeInstances',
-                    'ec2:DescribeTags',
-                    'rds:DescribeDBInstances',
-                    'rds:ListTagsForResource',
-                    's3:ListAllMyBuckets',
-                    's3:GetBucketTagging',
-                  ],
-                  Resource: '*',
-                },
-                {
-                  Effect: 'Allow',
-                  Action: ['s3:PutObject', 's3:PutObjectAcl'],
-                  Resource: `arn:aws:s3:::${bucketId}/*`,
-                },
-                {
-                  Effect: 'Allow',
-                  Action: ['sns:Publish'],
-                  Resource: topicArn,
-                },
-                {
-                  Effect: 'Allow',
-                  Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
-                  Resource: `arn:aws:logs:${awsRegion}:*:log-group:/aws/lambda/compliance-scanner-${environmentSuffix}:*`,
-                },
-              ],
-            })
+            generateLambdaPolicy(bucketId, topicArn, awsRegion, environmentSuffix)
           ),
       },
       { parent: this }
@@ -390,9 +446,7 @@ exports.handler = async (event) => {
 
     // Create Lambda deployment package directory
     const lambdaCodeDir = './lib/lambda';
-    if (!fs.existsSync(lambdaCodeDir)) {
-      fs.mkdirSync(lambdaCodeDir, { recursive: true });
-    }
+    ensureLambdaDirectory(lambdaCodeDir);
 
     // Write Lambda function code
     fs.writeFileSync(path.join(lambdaCodeDir, 'index.js'), lambdaCode);
@@ -443,7 +497,7 @@ exports.handler = async (event) => {
           Environment: environmentSuffix,
         },
       },
-      { parent: this, dependsOn: [lambdaPolicy, logGroup] }
+      { parent: this, dependsOn: [logGroup] }
     );
 
     // CloudWatch Event Rule to trigger Lambda every 6 hours
@@ -487,28 +541,17 @@ exports.handler = async (event) => {
     this.logGroupName = logGroup.name;
 
     // Dashboard URLs - could be CloudWatch console URLs
-    this.dashboardUrls = logGroup.name.apply(name => {
-      const urls: Record<string, string> = {
-        cloudwatchLogs: `https://console.aws.amazon.com/cloudwatch/home?region=${awsRegion}#logsV2:log-groups/log-group/${name}`,
-      };
-      return urls;
-    });
+    this.dashboardUrls = logGroup.name.apply(name =>
+      generateDashboardUrls(awsRegion, name)
+    );
 
     // SNS Topic ARNs
-    this.snsTopicArns = alertTopic.arn.apply(arn => {
-      const arns: Record<string, string> = {
-        complianceAlerts: arn,
-      };
-      return arns;
-    });
+    this.snsTopicArns = alertTopic.arn.apply(arn => createSnsTopicArns(arn));
 
     // Lambda Function ARNs
-    this.lambdaFunctionArns = lambdaFunction.arn.apply(arn => {
-      const arns: Record<string, string> = {
-        complianceScanner: arn,
-      };
-      return arns;
-    });
+    this.lambdaFunctionArns = lambdaFunction.arn.apply(arn =>
+      createLambdaFunctionArns(arn)
+    );
 
     // Register the outputs of this component
     this.registerOutputs({
@@ -520,3 +563,4 @@ exports.handler = async (event) => {
     });
   }
 }
+

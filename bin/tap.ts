@@ -57,3 +57,4 @@ const stack = new TapStack(
 export const dashboardUrls = stack.dashboardUrls;
 export const snsTopicArns = stack.snsTopicArns;
 export const lambdaFunctionArns = stack.lambdaFunctionArns;
+
