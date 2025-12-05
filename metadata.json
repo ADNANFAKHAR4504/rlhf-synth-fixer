@@ -10,7 +10,8 @@
   "subject_labels": [
     "IaC Optimization"
   ],
-  "training_quality": 9,
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
   "po_id": "t8k1e8u9",
   "aws_services": [
     "ECS",
