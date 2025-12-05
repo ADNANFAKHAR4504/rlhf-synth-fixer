@@ -6,6 +6,9 @@ import { SfnStateMachine } from '@cdktf/provider-aws/lib/sfn-state-machine';
 import { CloudwatchEventRule } from '@cdktf/provider-aws/lib/cloudwatch-event-rule';
 import { CloudwatchEventTarget } from '@cdktf/provider-aws/lib/cloudwatch-event-target';
 
+// Generate unique suffix to avoid resource naming conflicts
+const uniqueSuffix = 'c5n8';
+
 export interface FailoverOrchestrationProps {
   provider: AwsProvider;
   environmentSuffix: string;
@@ -288,7 +291,7 @@ export class FailoverOrchestration extends Construct {
       'failover-trigger-rule',
       {
         provider,
-        name: `failover-trigger-${environmentSuffix}`,
+        name: `failover-trigger-${environmentSuffix}-${uniqueSuffix}`,
         description: 'Trigger failover on primary region failure',
         eventPattern: JSON.stringify({
           source: ['aws.cloudwatch'],
@@ -314,6 +317,7 @@ export class FailoverOrchestration extends Construct {
     new CloudwatchEventTarget(this, 'failover-trigger-target', {
       provider,
       rule: failoverTriggerRule.name,
+      targetId: `failover-trigger-${uniqueSuffix}`,
       arn: this.stateMachine.arn,
       roleArn: stepFunctionsRole.arn,
     });

@@ -198,6 +198,7 @@ export class SecondaryRegionStack extends Construct {
     });
 
     // Aurora PostgreSQL Cluster (Secondary - Read Replica)
+    // Note: Do NOT specify masterUsername/masterPassword for cross-region replica
     this.auroraCluster = new RdsCluster(this, 'aurora-cluster', {
       provider,
       clusterIdentifier: `trading-cluster-secondary-${environmentSuffix}-${uniqueSuffix}`,
@@ -211,8 +212,6 @@ export class SecondaryRegionStack extends Construct {
       preferredMaintenanceWindow: 'mon:04:00-mon:05:00',
       skipFinalSnapshot: true,
       globalClusterIdentifier: sharedConstructs.globalCluster.id,
-      masterUsername: config.databaseUsername,
-      masterPassword: `TradingPlatform${environmentSuffix}SecurePass123!`,
       engineMode: 'provisioned',
       serverlessv2ScalingConfiguration: {
         minCapacity: 0.5,

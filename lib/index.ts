@@ -15,6 +15,9 @@ import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
 import { TerraformAsset, AssetType } from 'cdktf';
 import * as path from 'path';
 
+// Generate unique suffix to avoid resource naming conflicts
+const uniqueSuffix = 'c5n8';
+
 export class TradingPlatformStack extends TerraformStack {
   constructor(scope: Construct, id: string) {
     super(scope, id);
@@ -76,7 +79,7 @@ export class TradingPlatformStack extends TerraformStack {
     // Failover Validator Lambda (runs in primary region, validates both)
     const validatorRole = new IamRole(this, 'validator-role', {
       provider: primaryProvider,
-      name: `failover-validator-role-${environmentSuffix}`,
+      name: `failover-validator-role-${environmentSuffix}-${uniqueSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -136,7 +139,7 @@ export class TradingPlatformStack extends TerraformStack {
 
     const failoverValidator = new LambdaFunction(this, 'failover-validator', {
       provider: primaryProvider,
-      functionName: `failover-validator-${environmentSuffix}`,
+      functionName: `failover-validator-${environmentSuffix}-${uniqueSuffix}`,
       role: validatorRole.arn,
       handler: 'failover-validator.handler',
       runtime: 'nodejs18.x',
@@ -163,7 +166,7 @@ export class TradingPlatformStack extends TerraformStack {
       'validation-schedule',
       {
         provider: primaryProvider,
-        name: `failover-validation-schedule-${environmentSuffix}`,
+        name: `failover-validation-schedule-${environmentSuffix}-${uniqueSuffix}`,
         description: 'Validate failover readiness every hour',
         scheduleExpression: config.failoverValidationSchedule,
       }
@@ -172,6 +175,7 @@ export class TradingPlatformStack extends TerraformStack {
     new CloudwatchEventTarget(this, 'validation-target', {
       provider: primaryProvider,
       rule: validationSchedule.name,
+      targetId: `validation-target-${uniqueSuffix}`,
       arn: failoverValidator.arn,
     });
 
