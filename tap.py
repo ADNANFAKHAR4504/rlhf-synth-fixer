@@ -200,7 +200,7 @@ config_role = aws.iam.Role(
         }]
     }),
     managed_policy_arns=[
-        "arn:aws:iam::aws:policy/service-role/ConfigRole",
+        "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole",
     ],
     tags=common_tags,
 )
@@ -854,7 +854,7 @@ config_delivery_channel = aws.cfg.DeliveryChannel(
     f"config-delivery-channel-{environment_suffix}",
     name=f"config-delivery-channel-{environment_suffix}",
     s3_bucket_name=config_bucket.bucket,
-    depends_on=[config_bucket_policy],
+    opts=pulumi.ResourceOptions(depends_on=[config_bucket_policy]),
 )
 
 # Start the Config Recorder

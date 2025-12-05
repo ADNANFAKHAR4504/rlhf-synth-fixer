@@ -24,7 +24,7 @@ The solution implements a comprehensive compliance scanning infrastructure with:
 - **Scheduled Evaluations**: EventBridge rules trigger compliance checks every 6 hours
 - **Audit Trail**: Complete compliance history for regulatory audits
 
-## File: __main__.py
+## File: tap.py
 
 ```python
 """

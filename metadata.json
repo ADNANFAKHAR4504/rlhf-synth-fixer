@@ -7,15 +7,7 @@
   "startedAt": "2025-12-05T14:28:00Z",
   "subtask": "Infrastructure QA and Management",
   "subject_labels": [
-    "Use AWS Config for resource compliance tracking",
-    "Implement custom Config rules using Lambda functions",
-    "Store compliance results in DynamoDB for querying",
-    "Generate SNS notifications for non-compliant resources",
-    "Use CloudWatch Events to trigger periodic scans",
-    "Implement IAM least-privilege policies for all components",
-    "Tag all resources with compliance metadata",
-    "Export compliance reports to S3 in JSON format",
-    "Use Pulumi's automation API for programmatic validation"
+    "Infrastructure Analysis/Monitoring"
   ],
   "po_id": "c0l9i9q4",
   "aws_services": [

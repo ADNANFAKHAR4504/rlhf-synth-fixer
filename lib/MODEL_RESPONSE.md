@@ -14,7 +14,7 @@ The solution implements a comprehensive compliance scanning infrastructure with:
 6. **S3 Buckets** - Config snapshots and compliance reports with versioning
 7. **IAM Roles** - Least-privilege roles for each component
 
-## File: __main__.py
+## File: tap.py
 
 ```python
 """
@@ -991,31 +991,31 @@ pulumi destroy --yes
 
 ### Core Requirements (10/10)
 
-1. ✅ AWS Config with recording for EC2, RDS, S3, and IAM resources
-2. ✅ Three Lambda functions for custom compliance rules (EC2 tags, S3 encryption, RDS backups)
-3. ✅ DynamoDB table with partition key 'resource_id' and sort key 'evaluation_timestamp'
-4. ✅ CloudWatch Events rules triggering evaluations every 6 hours
-5. ✅ SNS topic with email subscription for compliance alerts
-6. ✅ Lambda function for report generation and aggregation
-7. ✅ S3 bucket with versioning for compliance reports
-8. ✅ IAM roles with least-privilege permissions for each Lambda
-9. ✅ Tags: 'Environment:Production', 'Compliance:Required', 'ManagedBy:Pulumi'
-10. ✅ Outputs: Config recorder name, DynamoDB table name, SNS topic ARN, S3 report bucket name
+1. [PASS] AWS Config with recording for EC2, RDS, S3, and IAM resources
+2. [PASS] Three Lambda functions for custom compliance rules (EC2 tags, S3 encryption, RDS backups)
+3. [PASS] DynamoDB table with partition key 'resource_id' and sort key 'evaluation_timestamp'
+4. [PASS] CloudWatch Events rules triggering evaluations every 6 hours
+5. [PASS] SNS topic with email subscription for compliance alerts
+6. [PASS] Lambda function for report generation and aggregation
+7. [PASS] S3 bucket with versioning for compliance reports
+8. [PASS] IAM roles with least-privilege permissions for each Lambda
+9. [PASS] Tags: 'Environment:Production', 'Compliance:Required', 'ManagedBy:Pulumi'
+10. [PASS] Outputs: Config recorder name, DynamoDB table name, SNS topic ARN, S3 report bucket name
 
 ### Mandatory Constraints (3/3)
 
-- ✅ Store compliance results in DynamoDB for querying
-- ✅ Tag all resources with compliance metadata
-- ✅ Use Pulumi's Python API for infrastructure definition
+- [PASS] Store compliance results in DynamoDB for querying
+- [PASS] Tag all resources with compliance metadata
+- [PASS] Use Pulumi's Python API for infrastructure definition
 
 ### Optional Constraints (6/6)
 
-- ✅ Implement custom Config rules using Lambda functions
-- ✅ Generate SNS notifications for non-compliant resources
-- ✅ Use CloudWatch Events to trigger periodic scans
-- ✅ Use AWS Config for resource compliance tracking
-- ✅ Implement IAM least-privilege policies for all components
-- ✅ Export compliance reports to S3 in JSON format
+- [PASS] Implement custom Config rules using Lambda functions
+- [PASS] Generate SNS notifications for non-compliant resources
+- [PASS] Use CloudWatch Events to trigger periodic scans
+- [PASS] Use AWS Config for resource compliance tracking
+- [PASS] Implement IAM least-privilege policies for all components
+- [PASS] Export compliance reports to S3 in JSON format
 
 ### Additional Features
 

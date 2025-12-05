@@ -1,6 +1,8 @@
 name: compliance-scanning
-runtime: python
+runtime:
+  name: python
 description: Automated Infrastructure Compliance Scanning System
+main: tap.py
 config:
   environmentSuffix:
     type: string
