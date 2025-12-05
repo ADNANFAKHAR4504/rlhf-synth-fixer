@@ -9,6 +9,7 @@ import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
 import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { LambdaEventSourceMapping } from '@cdktf/provider-aws/lib/lambda-event-source-mapping';
 import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
 import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
@@ -31,7 +32,7 @@ import { config } from './config/infrastructure-config';
 import { SharedConstructs } from './shared-constructs';
 
 // Generate unique suffix to avoid resource naming conflicts
-const uniqueSuffix = 'k7m2';
+const uniqueSuffix = 'p9v5';
 
 export interface SecondaryRegionStackProps {
   provider: AwsProvider;
@@ -186,6 +187,18 @@ export class SecondaryRegionStack extends Construct {
       },
     });
 
+    // KMS Key for RDS encryption in secondary region
+    const rdsKmsKey = new KmsKey(this, 'rds-kms-key', {
+      provider,
+      description: `KMS key for RDS encryption in secondary region - ${environmentSuffix}`,
+      enableKeyRotation: true,
+      deletionWindowInDays: 7,
+      tags: {
+        Name: `rds-kms-key-secondary-${environmentSuffix}`,
+        Environment: environmentSuffix,
+      },
+    });
+
     // DB Subnet Group
     const dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
       provider,
@@ -199,6 +212,7 @@ export class SecondaryRegionStack extends Construct {
 
     // Aurora PostgreSQL Cluster (Secondary - Read Replica)
     // Note: Do NOT specify masterUsername/masterPassword for cross-region replica
+    // kmsKeyId is required for encrypted cross-region replicas
     this.auroraCluster = new RdsCluster(this, 'aurora-cluster', {
       provider,
       clusterIdentifier: `trading-cluster-secondary-${environmentSuffix}-${uniqueSuffix}`,
@@ -207,6 +221,7 @@ export class SecondaryRegionStack extends Construct {
       dbSubnetGroupName: dbSubnetGroup.name,
       vpcSecurityGroupIds: [rdsSecurityGroup.id],
       storageEncrypted: true,
+      kmsKeyId: rdsKmsKey.arn,
       backupRetentionPeriod: 7,
       preferredBackupWindow: '03:00-04:00',
       preferredMaintenanceWindow: 'mon:04:00-mon:05:00',
