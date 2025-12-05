@@ -11,6 +11,6 @@
     "CI/CD Pipeline"
   ],
   "startedAt": "2025-12-04T16:37:55.102167Z",
-  "aws_services": [],
+  "aws_services": ["S3", "cloudfront","DynamoDB","API Gateway","IAM","lambda","SNS Topic"],
   "training_quality": 9
 }
