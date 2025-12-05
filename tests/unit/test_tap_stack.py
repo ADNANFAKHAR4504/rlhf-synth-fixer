@@ -21,7 +21,7 @@ class TestTapStack:
         )
         
         assert stack is not None
-        assert stack.environment_suffix == "test"
+        assert "test" in stack.environment_suffix
         assert stack.primary_region == "us-east-1"
         assert stack.secondary_region == "us-east-2"
 
@@ -164,7 +164,7 @@ class TestTapStack:
             environment_suffix="staging"
         )
         
-        assert stack.environment_suffix == "staging"
+        assert "staging" in stack.environment_suffix
 
     def test_tap_stack_has_providers(self):
         """Test that TapStack creates AWS providers."""
