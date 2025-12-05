@@ -3,22 +3,7 @@
   "platform": "cdktf",
   "language": "ts",
   "complexity": "expert",
-  "subject": "Failure Recovery and High Availability",
   "subtask": "Failure Recovery and High Availability",
-  "description": "Create a CDKTF TypeScript program to implement a multi-region disaster recovery solution for a trading platform. The configuration must: 1. Set up Route 53 hosted zone with health checks monitoring endpoints in us-east-1 and us-east-2. 2. Deploy Aurora PostgreSQL global database with writer in us-east-1 and read replica in us-east-2. 3. Create Lambda functions in both regions processing trade orders from SQS queues. 4. Configure DynamoDB global tables for user session data with point-in-time recovery enabled. 5. Implement S3 buckets with cross-region replication for application configurations and audit logs. 6. Set up CloudWatch alarms monitoring RDS lag, Lambda errors, and API Gateway latency. 7. Create Step Functions state machine orchestrating failover process including RDS promotion and Route 53 updates. 8. Deploy API Gateway REST APIs in both regions with custom domain names. 9. Configure EventBridge rules forwarding critical events between regions. 10. Implement automated testing Lambda that validates failover readiness every hour. Expected output: CDKTF application with separate stacks for primary and secondary regions, shared constructs for cross-region resources, and deployment scripts that validate both regions are synchronized before completing.",
-  "use_case": "A financial services company operates a critical trading platform that must maintain 99.99% uptime. After experiencing a regional outage that cost millions in lost trades, they need to implement a multi-region disaster recovery solution that can automatically failover within 60 seconds.",
-  "technical_spec": "Multi-region disaster recovery infrastructure spanning us-east-1 (primary) and us-east-2 (secondary). Utilizes Route 53 for DNS failover, Aurora Global Database for data persistence, Lambda for compute, DynamoDB global tables for session management, and S3 with cross-region replication. Requires CDK 2.x with TypeScript, AWS CLI configured with multi-region access. VPCs in both regions with private subnets, VPC peering for cross-region communication. CloudWatch cross-region monitoring with automated failover triggers via Step Functions.",
-  "key_tips": [
-    "Configure DynamoDB global tables for session state replication",
-    "Use S3 cross-region replication for static assets and configuration files",
-    "Implement CloudWatch cross-region alarms and SNS notifications",
-    "Ensure all IAM roles support cross-region assume role capabilities",
-    "Deploy Lambda functions in both regions using identical deployment packages",
-    "Use Systems Manager Parameter Store with region-specific configurations",
-    "Implement cross-region RDS Aurora Global Database with automated promotion",
-    "Use Route 53 health checks with failover routing policy for automatic DNS failover",
-    "Implement automated failback procedures using Step Functions"
-  ],
   "turn_type": "single",
   "po_id": "77215004",
   "team": "synth",
@@ -41,5 +26,7 @@
   "subject_labels": [
     "Failure Recovery Automation"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing"
 }

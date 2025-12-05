@@ -1,8 +1,10 @@
+
 {
   "compilerOptions": {
-    "target": "ES2020",
-    "module": "commonjs",
-    "lib": ["ES2020", "DOM"],
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["es2022"],
     "declaration": true,
     "strict": true,
     "noImplicitAny": true,
@@ -18,13 +20,22 @@
     "experimentalDecorators": true,
     "strictPropertyInitialization": false,
     "typeRoots": ["./node_modules/@types"],
-    "types": ["node", "jest"],
-    "outDir": "dist",
-    "rootDir": ".",
+    "types": ["node"],
+    "isolatedModules": true,
+    "resolveJsonModule": true,
     "esModuleInterop": true,
-    "skipLibCheck": true,
-    "resolveJsonModule": true
+    "outDir": "dist"
   },
-  "include": ["bin/**/*", "lib/**/*", "test/**/*"],
-  "exclude": ["node_modules", "cdktf.out", "dist"]
+  "exclude": [
+    "node_modules",
+    "cdk.out",
+    "templates",
+    "archive",
+    "subcategory-references",
+    "worktree",
+    "test",
+    "tests",
+    "cli",
+    "**/*.d.ts"
+  ]
 }
