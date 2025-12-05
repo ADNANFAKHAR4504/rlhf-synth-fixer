@@ -1,45 +1,59 @@
 """TAP Stack module for payment processing infrastructure migration."""
 
-from cdktf import TerraformStack, S3Backend, TerraformOutput, Fn
-from constructs import Construct
-from cdktf_cdktf_provider_aws.provider import AwsProvider
-from cdktf_cdktf_provider_aws.vpc import Vpc
-from cdktf_cdktf_provider_aws.subnet import Subnet
-from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
-from cdktf_cdktf_provider_aws.nat_gateway import NatGateway
-from cdktf_cdktf_provider_aws.eip import Eip
-from cdktf_cdktf_provider_aws.route_table import RouteTable, RouteTableRoute
-from cdktf_cdktf_provider_aws.route_table_association import RouteTableAssociation
-from cdktf_cdktf_provider_aws.security_group import SecurityGroup, SecurityGroupIngress, SecurityGroupEgress
-from cdktf_cdktf_provider_aws.kms_key import KmsKey
-from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
-from cdktf_cdktf_provider_aws.rds_cluster import RdsCluster
-from cdktf_cdktf_provider_aws.rds_cluster_instance import RdsClusterInstance
-from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
-from cdktf_cdktf_provider_aws.dynamodb_table import DynamodbTable, DynamodbTableAttribute, DynamodbTableGlobalSecondaryIndex
-from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
-from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
-from cdktf_cdktf_provider_aws.s3_bucket_lifecycle_configuration import S3BucketLifecycleConfiguration, S3BucketLifecycleConfigurationRule, S3BucketLifecycleConfigurationRuleTransition
-from cdktf_cdktf_provider_aws.iam_role import IamRole
-from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
-from cdktf_cdktf_provider_aws.iam_policy import IamPolicy
-from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
-from cdktf_cdktf_provider_aws.lb import Lb
-from cdktf_cdktf_provider_aws.lb_target_group import LbTargetGroup
-from cdktf_cdktf_provider_aws.lb_listener import LbListener, LbListenerDefaultAction, LbListenerDefaultActionForward, LbListenerDefaultActionForwardTargetGroup
+import json
+
+from cdktf import Fn, S3Backend, TerraformOutput, TerraformStack
 from cdktf_cdktf_provider_aws.apigatewayv2_api import Apigatewayv2Api
-from cdktf_cdktf_provider_aws.apigatewayv2_vpc_link import Apigatewayv2VpcLink
-from cdktf_cdktf_provider_aws.apigatewayv2_integration import Apigatewayv2Integration
+from cdktf_cdktf_provider_aws.apigatewayv2_integration import \
+    Apigatewayv2Integration
 from cdktf_cdktf_provider_aws.apigatewayv2_route import Apigatewayv2Route
 from cdktf_cdktf_provider_aws.apigatewayv2_stage import Apigatewayv2Stage
+from cdktf_cdktf_provider_aws.apigatewayv2_vpc_link import Apigatewayv2VpcLink
 from cdktf_cdktf_provider_aws.cloudwatch_dashboard import CloudwatchDashboard
-from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import CloudwatchMetricAlarm
-from cdktf_cdktf_provider_aws.sns_topic import SnsTopic
+from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import \
+    CloudwatchMetricAlarm
+from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
+from cdktf_cdktf_provider_aws.dynamodb_table import (
+    DynamodbTable, DynamodbTableAttribute, DynamodbTableGlobalSecondaryIndex)
+from cdktf_cdktf_provider_aws.eip import Eip
+from cdktf_cdktf_provider_aws.iam_policy import IamPolicy
+from cdktf_cdktf_provider_aws.iam_role import IamRole
+from cdktf_cdktf_provider_aws.iam_role_policy_attachment import \
+    IamRolePolicyAttachment
+from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
+from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
+from cdktf_cdktf_provider_aws.kms_key import KmsKey
+from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
+from cdktf_cdktf_provider_aws.lb import Lb
+from cdktf_cdktf_provider_aws.lb_listener import (
+    LbListener, LbListenerDefaultAction, LbListenerDefaultActionForward,
+    LbListenerDefaultActionForwardTargetGroup)
+from cdktf_cdktf_provider_aws.lb_target_group import LbTargetGroup
+from cdktf_cdktf_provider_aws.nat_gateway import NatGateway
+from cdktf_cdktf_provider_aws.provider import AwsProvider
+from cdktf_cdktf_provider_aws.rds_cluster import RdsCluster
+from cdktf_cdktf_provider_aws.rds_cluster_instance import RdsClusterInstance
+from cdktf_cdktf_provider_aws.route_table import RouteTable, RouteTableRoute
+from cdktf_cdktf_provider_aws.route_table_association import \
+    RouteTableAssociation
+from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
+from cdktf_cdktf_provider_aws.s3_bucket_lifecycle_configuration import (
+    S3BucketLifecycleConfiguration, S3BucketLifecycleConfigurationRule,
+    S3BucketLifecycleConfigurationRuleTransition)
+from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
 from cdktf_cdktf_provider_aws.secretsmanager_secret import SecretsmanagerSecret
-from cdktf_cdktf_provider_aws.secretsmanager_secret_version import SecretsmanagerSecretVersion
-from cdktf_cdktf_provider_aws.secretsmanager_secret_rotation import SecretsmanagerSecretRotation
+from cdktf_cdktf_provider_aws.secretsmanager_secret_rotation import \
+    SecretsmanagerSecretRotation
+from cdktf_cdktf_provider_aws.secretsmanager_secret_version import \
+    SecretsmanagerSecretVersion
+from cdktf_cdktf_provider_aws.security_group import (SecurityGroup,
+                                                     SecurityGroupEgress,
+                                                     SecurityGroupIngress)
+from cdktf_cdktf_provider_aws.sns_topic import SnsTopic
 from cdktf_cdktf_provider_aws.ssm_parameter import SsmParameter
-import json
+from cdktf_cdktf_provider_aws.subnet import Subnet
+from cdktf_cdktf_provider_aws.vpc import Vpc
+from constructs import Construct
 
 
 class TapStack(TerraformStack):
@@ -343,7 +357,6 @@ class TapStack(TerraformStack):
             cluster_identifier=f"aurora-cluster-{environment_suffix}",
             engine="aurora-postgresql",
             engine_mode="provisioned",
-            engine_version="15.4",
             database_name="payments",
             master_username="admin",
             master_password="ChangeMeToSecurePassword123!",
