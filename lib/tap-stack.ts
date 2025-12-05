@@ -122,6 +122,18 @@ export function ensureLambdaDirectory(lambdaCodeDir: string): void {
 }
 
 /**
+ * Creates a policy generator function for use with Pulumi.apply().
+ * Exported for testability.
+ */
+export function createPolicyGenerator(
+  awsRegion: string,
+  environmentSuffix: string
+): (args: [string, string]) => string {
+  return ([bucketId, topicArn]: [string, string]) =>
+    generateLambdaPolicy(bucketId, topicArn, awsRegion, environmentSuffix);
+}
+
+/**
  * Represents the main Pulumi component resource for the TAP project.
  *
  * This component creates compliance scanning infrastructure including:
@@ -241,15 +253,14 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // IAM policy for Lambda to read AWS resources
+    const policyGenerator = createPolicyGenerator(awsRegion, environmentSuffix);
     new aws.iam.RolePolicy(
       `compliance-scanner-policy-${environmentSuffix}`,
       {
         role: lambdaRole.id,
         policy: pulumi
           .all([reportsBucket.id, alertTopic.arn])
-          .apply(([bucketId, topicArn]) =>
-            generateLambdaPolicy(bucketId, topicArn, awsRegion, environmentSuffix)
-          ),
+          .apply(policyGenerator),
       },
       { parent: this }
     );

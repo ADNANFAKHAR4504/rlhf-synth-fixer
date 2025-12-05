@@ -6,6 +6,7 @@ import {
   createSnsTopicArns,
   createLambdaFunctionArns,
   ensureLambdaDirectory,
+  createPolicyGenerator,
 } from '../lib/tap-stack';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -306,10 +307,11 @@ describe('Exported Helper Functions', () => {
       const mockMkdirSync = fs.mkdirSync as jest.Mock;
 
       mockExistsSync.mockReturnValue(false);
+      mockMkdirSync.mockReturnValue(undefined);
 
-      ensureLambdaDirectory('/test/lambda');
+      ensureLambdaDirectory('./test-lambda-dir');
 
-      expect(mockMkdirSync).toHaveBeenCalledWith('/test/lambda', { recursive: true });
+      expect(mockMkdirSync).toHaveBeenCalledWith('./test-lambda-dir', { recursive: true });
     });
 
     it('should not create directory when it already exists', () => {
@@ -318,9 +320,55 @@ describe('Exported Helper Functions', () => {
 
       mockExistsSync.mockReturnValue(true);
 
-      ensureLambdaDirectory('/test/lambda');
+      ensureLambdaDirectory('./test-lambda-dir');
 
       expect(mockMkdirSync).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('createPolicyGenerator', () => {
+    it('should return a function', () => {
+      const generator = createPolicyGenerator('us-east-1', 'test');
+      expect(typeof generator).toBe('function');
+    });
+
+    it('should generate policy when called with bucket and topic ARN', () => {
+      const generator = createPolicyGenerator('us-east-1', 'dev');
+      const policy = generator(['my-bucket', 'arn:aws:sns:us-east-1:123:topic']);
+
+      const parsed = JSON.parse(policy);
+      expect(parsed.Version).toBe('2012-10-17');
+      expect(parsed.Statement).toHaveLength(4);
+    });
+
+    it('should use provided region in policy', () => {
+      const generator = createPolicyGenerator('eu-west-1', 'prod');
+      const policy = generator(['bucket', 'arn']);
+
+      expect(policy).toContain('eu-west-1');
+    });
+
+    it('should use provided environment suffix in policy', () => {
+      const generator = createPolicyGenerator('us-east-1', 'staging');
+      const policy = generator(['bucket', 'arn']);
+
+      expect(policy).toContain('compliance-scanner-staging');
+    });
+
+    it('should include bucket ID in S3 resource ARN', () => {
+      const generator = createPolicyGenerator('us-east-1', 'test');
+      const policy = generator(['test-bucket-123', 'arn']);
+
+      const parsed = JSON.parse(policy);
+      expect(parsed.Statement[1].Resource).toBe('arn:aws:s3:::test-bucket-123/*');
+    });
+
+    it('should include topic ARN in SNS resource', () => {
+      const generator = createPolicyGenerator('us-east-1', 'test');
+      const policy = generator(['bucket', 'arn:aws:sns:us-east-1:123456789012:my-topic']);
+
+      const parsed = JSON.parse(policy);
+      expect(parsed.Statement[2].Resource).toBe('arn:aws:sns:us-east-1:123456789012:my-topic');
     });
   });
 });
