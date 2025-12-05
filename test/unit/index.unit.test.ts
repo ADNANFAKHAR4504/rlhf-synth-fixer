@@ -145,7 +145,7 @@ describe('Infrastructure Code Structure Tests', () => {
 
     it('should use FileArchive for lambda code', () => {
       expect(indexContent).toContain('FileArchive');
-      expect(indexContent).toContain('lib/lambda');
+      expect(indexContent).toContain('./lambda');
     });
   });
 
