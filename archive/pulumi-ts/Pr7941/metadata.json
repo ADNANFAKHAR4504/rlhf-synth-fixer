@@ -1,10 +1,9 @@
 {
-  "task_id": "m3k1j6t7",
   "platform": "pulumi",
   "language": "ts",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "synth",
+  "po_id": "m3k1j6t7",
   "team": "synth",
   "subtask": "Infrastructure QA and Management",
   "subject_labels": [
