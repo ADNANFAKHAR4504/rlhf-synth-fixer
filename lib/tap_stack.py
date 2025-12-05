@@ -24,6 +24,7 @@ from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
 from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
 from cdktf_cdktf_provider_aws.kms_key import KmsKey
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
+from cdktf_cdktf_provider_aws.lambda_permission import LambdaPermission
 from cdktf_cdktf_provider_aws.lb import Lb
 from cdktf_cdktf_provider_aws.lb_listener import (
     LbListener, LbListenerDefaultAction, LbListenerDefaultActionForward,
@@ -358,7 +359,7 @@ class TapStack(TerraformStack):
             engine="aurora-postgresql",
             engine_mode="provisioned",
             database_name="payments",
-            master_username="admin",
+            master_username="postgres",
             master_password="ChangeMeToSecurePassword123!",
             db_subnet_group_name=db_subnet_group.name,
             vpc_security_group_ids=[rds_sg.id],
@@ -596,7 +597,6 @@ class TapStack(TerraformStack):
             source_code_hash=Fn.filebase64sha256(lambda_zip_path),
             timeout=30,
             memory_size=512,
-            reserved_concurrent_executions=10,
             vpc_config={
                 "subnet_ids": [subnet.id for subnet in private_subnets],
                 "security_group_ids": [lambda_sg.id],
@@ -621,7 +621,6 @@ class TapStack(TerraformStack):
             source_code_hash=Fn.filebase64sha256(lambda_zip_path),
             timeout=30,
             memory_size=512,
-            reserved_concurrent_executions=10,
             vpc_config={
                 "subnet_ids": [subnet.id for subnet in private_subnets],
                 "security_group_ids": [lambda_sg.id],
@@ -646,7 +645,6 @@ class TapStack(TerraformStack):
             source_code_hash=Fn.filebase64sha256(lambda_zip_path),
             timeout=60,
             memory_size=1024,
-            reserved_concurrent_executions=20,
             vpc_config={
                 "subnet_ids": [subnet.id for subnet in private_subnets],
                 "security_group_ids": [lambda_sg.id],
@@ -699,7 +697,7 @@ class TapStack(TerraformStack):
         )
 
         # ALB Listener with weighted routing (blue-green)
-        LbListener(
+        alb_listener = LbListener(
             self,
             f"alb-listener-{environment_suffix}",
             load_balancer_arn=alb.arn,
@@ -752,7 +750,7 @@ class TapStack(TerraformStack):
             api_id=api.id,
             integration_type="HTTP_PROXY",
             integration_method="ANY",
-            integration_uri=alb.arn,
+            integration_uri=alb_listener.arn,
             connection_type="VPC_LINK",
             connection_id=vpc_link.id,
         )
@@ -1020,6 +1018,16 @@ class TapStack(TerraformStack):
                 "subnet_ids": [subnet.id for subnet in private_subnets],
                 "security_group_ids": [lambda_sg.id],
             },
+        )
+
+        # Allow Secrets Manager to invoke the rotation Lambda
+        LambdaPermission(
+            self,
+            f"rotation-lambda-permission-{environment_suffix}",
+            statement_id="AllowSecretsManagerInvoke",
+            action="lambda:InvokeFunction",
+            function_name=rotation_lambda.function_name,
+            principal="secretsmanager.amazonaws.com",
         )
 
         # Secret rotation configuration
