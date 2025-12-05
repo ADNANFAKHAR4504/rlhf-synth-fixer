@@ -3,56 +3,55 @@
 // Tests validate actual AWS resources deployed by the Terraform configuration
 
 import {
-  CodeBuildClient,
-  BatchGetProjectsCommand,
+    BatchGetProjectsCommand,
+    CodeBuildClient,
 } from "@aws-sdk/client-codebuild";
 
 import {
-  CodeCommitClient,
-  GetRepositoryCommand,
+    CodeCommitClient,
+    GetRepositoryCommand,
 } from "@aws-sdk/client-codecommit";
 
 import {
-  CodePipelineClient,
-  GetPipelineCommand,
+    CodePipelineClient,
+    GetPipelineCommand,
 } from "@aws-sdk/client-codepipeline";
 
 import {
-  DynamoDBClient,
-  DescribeTableCommand,
+    DescribeTableCommand,
+    DynamoDBClient,
 } from "@aws-sdk/client-dynamodb";
 
 import {
-  KMSClient,
-  DescribeKeyCommand,
+    DescribeKeyCommand,
+    KMSClient,
 } from "@aws-sdk/client-kms";
 
 import {
-  S3Client,
-  HeadBucketCommand,
-  GetBucketVersioningCommand,
-  GetBucketEncryptionCommand,
-  GetPublicAccessBlockCommand,
+    GetBucketEncryptionCommand,
+    GetBucketVersioningCommand,
+    GetPublicAccessBlockCommand,
+    HeadBucketCommand,
+    S3Client,
 } from "@aws-sdk/client-s3";
 
 import {
-  SNSClient,
-  GetTopicAttributesCommand,
+    GetTopicAttributesCommand,
+    SNSClient,
 } from "@aws-sdk/client-sns";
 
 import {
-  STSClient,
-  GetCallerIdentityCommand,
+    GetCallerIdentityCommand,
+    STSClient,
 } from "@aws-sdk/client-sts";
 
 import {
-  CloudWatchLogsClient,
-  DescribeLogGroupsCommand,
+    CloudWatchLogsClient,
+    DescribeLogGroupsCommand,
 } from "@aws-sdk/client-cloudwatch-logs";
 
 import {
-  EventBridgeClient,
-  DescribeRuleCommand,
+    EventBridgeClient
 } from "@aws-sdk/client-eventbridge";
 
 import fs from "fs";
