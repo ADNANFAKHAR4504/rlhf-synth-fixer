@@ -9,7 +9,7 @@ describe('CloudWatch Monitoring Infrastructure - Unit Tests', () => {
       const fs = require('fs');
       const path = require('path');
 
-      const indexPath = path.join(__dirname, '..', 'index.ts');
+      const indexPath = path.join(__dirname, '..', 'lib', 'index.ts');
       expect(fs.existsSync(indexPath)).toBe(true);
 
       const content = fs.readFileSync(indexPath, 'utf-8');
@@ -21,7 +21,7 @@ describe('CloudWatch Monitoring Infrastructure - Unit Tests', () => {
       const fs = require('fs');
       const path = require('path');
 
-      const indexPath = path.join(__dirname, '..', 'index.ts');
+      const indexPath = path.join(__dirname, '..', 'lib', 'index.ts');
       const content = fs.readFileSync(indexPath, 'utf-8');
 
       expect(content).toContain("import * as pulumi from '@pulumi/pulumi'");
@@ -32,7 +32,7 @@ describe('CloudWatch Monitoring Infrastructure - Unit Tests', () => {
       const fs = require('fs');
       const path = require('path');
 
-      const indexPath = path.join(__dirname, '..', 'index.ts');
+      const indexPath = path.join(__dirname, '..', 'lib', 'index.ts');
       const content = fs.readFileSync(indexPath, 'utf-8');
 
       expect(content).toContain('environmentSuffix');
@@ -45,7 +45,7 @@ describe('CloudWatch Monitoring Infrastructure - Unit Tests', () => {
       const fs = require('fs');
       const path = require('path');
 
-      const indexPath = path.join(__dirname, '..', 'index.ts');
+      const indexPath = path.join(__dirname, '..', 'lib', 'index.ts');
       const content = fs.readFileSync(indexPath, 'utf-8');
 
       // Check that resource names use environmentSuffix
@@ -57,7 +57,7 @@ describe('CloudWatch Monitoring Infrastructure - Unit Tests', () => {
       const fs = require('fs');
       const path = require('path');
 
-      const indexPath = path.join(__dirname, '..', 'index.ts');
+      const indexPath = path.join(__dirname, '..', 'lib', 'index.ts');
       const content = fs.readFileSync(indexPath, 'utf-8');
 
       // Find S3 bucket definitions
@@ -77,7 +77,7 @@ describe('CloudWatch Monitoring Infrastructure - Unit Tests', () => {
       const fs = require('fs');
       const path = require('path');
 
-      const indexPath = path.join(__dirname, '..', 'index.ts');
+      const indexPath = path.join(__dirname, '..', 'lib', 'index.ts');
       const content = fs.readFileSync(indexPath, 'utf-8');
 
       expect(content).toContain('aws.cloudwatch.LogGroup');
@@ -88,7 +88,7 @@ describe('CloudWatch Monitoring Infrastructure - Unit Tests', () => {
       const fs = require('fs');
       const path = require('path');
 
-      const indexPath = path.join(__dirname, '..', 'index.ts');
+      const indexPath = path.join(__dirname, '..', 'lib', 'index.ts');
       const content = fs.readFileSync(indexPath, 'utf-8');
 
       expect(content).toContain('aws.cloudwatch.MetricAlarm');
@@ -100,7 +100,7 @@ describe('CloudWatch Monitoring Infrastructure - Unit Tests', () => {
       const fs = require('fs');
       const path = require('path');
 
-      const indexPath = path.join(__dirname, '..', 'index.ts');
+      const indexPath = path.join(__dirname, '..', 'lib', 'index.ts');
       const content = fs.readFileSync(indexPath, 'utf-8');
 
       expect(content).toContain('aws.cloudwatch.Dashboard');
@@ -111,7 +111,7 @@ describe('CloudWatch Monitoring Infrastructure - Unit Tests', () => {
       const fs = require('fs');
       const path = require('path');
 
-      const indexPath = path.join(__dirname, '..', 'index.ts');
+      const indexPath = path.join(__dirname, '..', 'lib', 'index.ts');
       const content = fs.readFileSync(indexPath, 'utf-8');
 
       expect(content).toContain('aws.synthetics.Canary');
@@ -122,7 +122,7 @@ describe('CloudWatch Monitoring Infrastructure - Unit Tests', () => {
       const fs = require('fs');
       const path = require('path');
 
-      const indexPath = path.join(__dirname, '..', 'index.ts');
+      const indexPath = path.join(__dirname, '..', 'lib', 'index.ts');
       const content = fs.readFileSync(indexPath, 'utf-8');
 
       expect(content).toContain('aws.cloudwatch.MetricStream');
@@ -135,7 +135,7 @@ describe('CloudWatch Monitoring Infrastructure - Unit Tests', () => {
       const fs = require('fs');
       const path = require('path');
 
-      const indexPath = path.join(__dirname, '..', 'index.ts');
+      const indexPath = path.join(__dirname, '..', 'lib', 'index.ts');
       const content = fs.readFileSync(indexPath, 'utf-8');
 
       expect(content).toContain('aws.sns.Topic');
@@ -148,7 +148,7 @@ describe('CloudWatch Monitoring Infrastructure - Unit Tests', () => {
       const fs = require('fs');
       const path = require('path');
 
-      const indexPath = path.join(__dirname, '..', 'index.ts');
+      const indexPath = path.join(__dirname, '..', 'lib', 'index.ts');
       const content = fs.readFileSync(indexPath, 'utf-8');
 
       expect(content).toContain('aws.sns.TopicSubscription');
@@ -161,7 +161,7 @@ describe('CloudWatch Monitoring Infrastructure - Unit Tests', () => {
       const fs = require('fs');
       const path = require('path');
 
-      const indexPath = path.join(__dirname, '..', 'index.ts');
+      const indexPath = path.join(__dirname, '..', 'lib', 'index.ts');
       const content = fs.readFileSync(indexPath, 'utf-8');
 
       expect(content).toContain('aws.lambda.Function');
@@ -174,7 +174,7 @@ describe('CloudWatch Monitoring Infrastructure - Unit Tests', () => {
       const fs = require('fs');
       const path = require('path');
 
-      const indexPath = path.join(__dirname, '..', 'index.ts');
+      const indexPath = path.join(__dirname, '..', 'lib', 'index.ts');
       const content = fs.readFileSync(indexPath, 'utf-8');
 
       expect(content).toContain('NodeJS18dX');
@@ -184,7 +184,7 @@ describe('CloudWatch Monitoring Infrastructure - Unit Tests', () => {
       const fs = require('fs');
       const path = require('path');
 
-      const indexPath = path.join(__dirname, '..', 'index.ts');
+      const indexPath = path.join(__dirname, '..', 'lib', 'index.ts');
       const content = fs.readFileSync(indexPath, 'utf-8');
 
       expect(content).toContain('aws.iam.Role');
@@ -197,7 +197,7 @@ describe('CloudWatch Monitoring Infrastructure - Unit Tests', () => {
       const fs = require('fs');
       const path = require('path');
 
-      const indexPath = path.join(__dirname, '..', 'index.ts');
+      const indexPath = path.join(__dirname, '..', 'lib', 'index.ts');
       const content = fs.readFileSync(indexPath, 'utf-8');
 
       expect(content).toContain('aws.kinesis.FirehoseDeliveryStream');
@@ -210,7 +210,7 @@ describe('CloudWatch Monitoring Infrastructure - Unit Tests', () => {
       const fs = require('fs');
       const path = require('path');
 
-      const indexPath = path.join(__dirname, '..', 'index.ts');
+      const indexPath = path.join(__dirname, '..', 'lib', 'index.ts');
       const content = fs.readFileSync(indexPath, 'utf-8');
 
       expect(content).toContain('export const');
