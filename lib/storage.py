@@ -3,7 +3,7 @@ from cdktf import Fn
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA, S3BucketVersioningVersioningConfiguration
 from cdktf_cdktf_provider_aws.s3_bucket_replication_configuration import (
-    S3BucketReplicationConfiguration,
+    S3BucketReplicationConfigurationA,
     S3BucketReplicationConfigurationRule,
     S3BucketReplicationConfigurationRuleDestination
 )
@@ -119,7 +119,7 @@ class StorageConstruct(Construct):
         )
 
         # S3 replication configuration
-        S3BucketReplicationConfiguration(
+        S3BucketReplicationConfigurationA(
             self,
             "replication-config",
             bucket=self.primary_bucket.id,
