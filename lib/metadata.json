@@ -5,7 +5,7 @@
   "team": "synth",
   "turn_type": "single",
   "startedAt": "2025-12-04T21:26:29+05:30",
-  "subtask": "Build Automated CI/CD Pipeline for Containerized Applications",
+  "subtask": "CI/CD Pipeline Integration",
   "subject_labels": [],
   "po_id": "p6l1f9n0",
   "aws_services": [
