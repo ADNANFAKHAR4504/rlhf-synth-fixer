@@ -50,9 +50,9 @@ func init() {
 
 	// Load stack outputs - try multiple paths for different execution contexts
 	outputsPaths := []string{
-		"../../cfn-outputs/flat-outputs.json",  // From tests/integration/
-		"../cfn-outputs/flat-outputs.json",     // From lib/ (when copied)
-		"cfn-outputs/flat-outputs.json",        // From root
+		"../../cfn-outputs/flat-outputs.json", // From tests/integration/
+		"../cfn-outputs/flat-outputs.json",    // From lib/ (when copied)
+		"cfn-outputs/flat-outputs.json",       // From root
 	}
 
 	var outputsData []byte
