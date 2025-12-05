@@ -51,7 +51,7 @@ provider = aws.Provider('aws',
 )
 
 # Get subnet IDs from config, required
-subnet_ids = config.require_list('subnet_ids')
+subnet_ids = config.require('subnet_ids').split(',')
 
 stack = TapStack(
     name="pulumi-infra",
