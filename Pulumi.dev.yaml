@@ -1,4 +1,0 @@
-config:
-  TapStack:environmentSuffix: dev
-  TapStack:dbPassword:
-    secure: AAABAMaT3Wc4K5xJ9yZ8qR7nL6pS4dF2hG9kW1mN3vB5cX7eQ8rT0yU
