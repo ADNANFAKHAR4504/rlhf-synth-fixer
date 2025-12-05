@@ -74,10 +74,12 @@ class TapStack(pulumi.ComponentResource):
                 aws.rds.ParameterGroupParameterArgs(
                     name="performance_schema",
                     value="ON",
+                    apply_method="pending-reboot",
                 ),
                 aws.rds.ParameterGroupParameterArgs(
                     name="slow_query_log",
                     value="ON",
+                    apply_method="immediate",
                 ),
             ],
             tags=resource_tags,
