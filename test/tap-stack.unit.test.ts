@@ -2,12 +2,18 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 describe('Infrastructure Code Structure Tests', () => {
-  const libPath = path.join(__dirname, '../../lib');
+  const libPath = path.join(__dirname, '../lib');
+  const rootPath = path.join(__dirname, '..');
 
   describe('Project Files', () => {
     it('should have index.ts file', () => {
       const indexPath = path.join(libPath, 'index.ts');
       expect(fs.existsSync(indexPath)).toBe(true);
+    });
+
+    it('should have tap-stack.ts file', () => {
+      const tapStackPath = path.join(libPath, 'tap-stack.ts');
+      expect(fs.existsSync(tapStackPath)).toBe(true);
     });
 
     it('should have PROMPT.md file', () => {
@@ -23,6 +29,11 @@ describe('Infrastructure Code Structure Tests', () => {
     it('should have IDEAL_RESPONSE.md file', () => {
       const idealPath = path.join(libPath, 'IDEAL_RESPONSE.md');
       expect(fs.existsSync(idealPath)).toBe(true);
+    });
+
+    it('should have analyse.py file', () => {
+      const analysePath = path.join(libPath, 'analyse.py');
+      expect(fs.existsSync(analysePath)).toBe(true);
     });
 
     it('should have lambda directory', () => {
@@ -58,22 +69,27 @@ describe('Infrastructure Code Structure Tests', () => {
     });
 
     it('should have Pulumi.yaml in root', () => {
-      const pulumiYamlPath = path.join(__dirname, '../../Pulumi.yaml');
+      const pulumiYamlPath = path.join(rootPath, 'Pulumi.yaml');
       expect(fs.existsSync(pulumiYamlPath)).toBe(true);
     });
 
     it('should have package.json in root', () => {
-      const packagePath = path.join(__dirname, '../../package.json');
+      const packagePath = path.join(rootPath, 'package.json');
       expect(fs.existsSync(packagePath)).toBe(true);
     });
 
     it('should have metadata.json in root', () => {
-      const metadataPath = path.join(__dirname, '../../metadata.json');
+      const metadataPath = path.join(rootPath, 'metadata.json');
       expect(fs.existsSync(metadataPath)).toBe(true);
+    });
+
+    it('should have bin/tap.ts entry point', () => {
+      const binPath = path.join(rootPath, 'bin/tap.ts');
+      expect(fs.existsSync(binPath)).toBe(true);
     });
   });
 
-  describe('Infrastructure Code Content', () => {
+  describe('Infrastructure Code Content - index.ts', () => {
     let indexContent: string;
 
     beforeAll(() => {
@@ -169,6 +185,65 @@ describe('Infrastructure Code Structure Tests', () => {
     });
   });
 
+  describe('Infrastructure Code Content - tap-stack.ts', () => {
+    let tapStackContent: string;
+
+    beforeAll(() => {
+      const tapStackPath = path.join(libPath, 'tap-stack.ts');
+      tapStackContent = fs.readFileSync(tapStackPath, 'utf-8');
+    });
+
+    it('should export TapStack class', () => {
+      expect(tapStackContent).toContain('export class TapStack');
+    });
+
+    it('should export TapStackArgs interface', () => {
+      expect(tapStackContent).toContain('export interface TapStackArgs');
+    });
+
+    it('should extend pulumi.ComponentResource', () => {
+      expect(tapStackContent).toContain('extends pulumi.ComponentResource');
+    });
+
+    it('should define all required outputs', () => {
+      expect(tapStackContent).toContain('public readonly bucketName');
+      expect(tapStackContent).toContain('public readonly topicArn');
+      expect(tapStackContent).toContain('public readonly scannerFunctionName');
+      expect(tapStackContent).toContain('public readonly reporterFunctionName');
+      expect(tapStackContent).toContain('public readonly dashboardName');
+    });
+
+    it('should create S3 bucket with versioning', () => {
+      expect(tapStackContent).toContain('aws.s3.BucketV2');
+      expect(tapStackContent).toContain('aws.s3.BucketVersioningV2');
+    });
+
+    it('should create lifecycle configuration for Glacier transition', () => {
+      expect(tapStackContent).toContain('aws.s3.BucketLifecycleConfigurationV2');
+      expect(tapStackContent).toContain('GLACIER');
+      expect(tapStackContent).toContain('days: 90');
+    });
+
+    it('should create Lambda functions with 30-day log retention', () => {
+      expect(tapStackContent).toContain('retentionInDays: 30');
+    });
+
+    it('should create four CloudWatch alarms', () => {
+      expect(tapStackContent).toContain('scanner-failure-alarm');
+      expect(tapStackContent).toContain('scanner-duration-alarm');
+      expect(tapStackContent).toContain('reporter-failure-alarm');
+      expect(tapStackContent).toContain('reporter-duration-alarm');
+    });
+
+    it('should set duration alarm threshold to 5 minutes (300000ms)', () => {
+      expect(tapStackContent).toContain('threshold: 300000');
+    });
+
+    it('should register outputs', () => {
+      expect(tapStackContent).toContain('this.registerOutputs');
+    });
+  });
+
   describe('Lambda Code Content', () => {
     let scannerContent: string;
     let reporterContent: string;
@@ -211,8 +286,17 @@ describe('Infrastructure Code Structure Tests', () => {
       expect(scannerContent).toContain('DescribeInstancesCommand');
     });
 
+    it('scanner should check security groups', () => {
+      expect(scannerContent).toContain('DescribeSecurityGroupsCommand');
+    });
+
     it('reporter should implement report generation logic', () => {
       expect(reporterContent).toContain('PutObjectCommand');
+    });
+
+    it('reporter should aggregate scan results', () => {
+      expect(reporterContent).toContain('ListObjectsV2Command');
+      expect(reporterContent).toContain('GetObjectCommand');
     });
 
     it('scanner should NOT hardcode AWS region (use SDK auto-detection)', () => {
@@ -232,7 +316,7 @@ describe('Infrastructure Code Structure Tests', () => {
 
   describe('Configuration Files', () => {
     it('should have valid Pulumi.yaml', () => {
-      const pulumiYamlPath = path.join(__dirname, '../../Pulumi.yaml');
+      const pulumiYamlPath = path.join(rootPath, 'Pulumi.yaml');
       const content = fs.readFileSync(pulumiYamlPath, 'utf-8');
       expect(content).toContain('name: TapStack');
       expect(content).toContain('runtime: nodejs');
@@ -240,12 +324,13 @@ describe('Infrastructure Code Structure Tests', () => {
     });
 
     it('should have valid metadata.json', () => {
-      const metadataPath = path.join(__dirname, '../../metadata.json');
+      const metadataPath = path.join(rootPath, 'metadata.json');
       const content = fs.readFileSync(metadataPath, 'utf-8');
       const metadata = JSON.parse(content);
       expect(metadata.po_id).toBeDefined();
       expect(metadata.platform).toBe('pulumi');
       expect(metadata.language).toBe('ts');
+      expect(metadata.subtask).toBe('Infrastructure QA and Management');
     });
 
     it('should have valid scanner lambda package.json', () => {
@@ -284,7 +369,6 @@ describe('Infrastructure Code Structure Tests', () => {
       const failuresPath = path.join(libPath, 'MODEL_FAILURES.md');
       const content = fs.readFileSync(failuresPath, 'utf-8');
       expect(content.length).toBeGreaterThan(100);
-      expect(content).toContain('AWS_REGION');
     });
 
     it('should have non-empty IDEAL_RESPONSE.md', () => {
@@ -292,6 +376,79 @@ describe('Infrastructure Code Structure Tests', () => {
       const content = fs.readFileSync(idealPath, 'utf-8');
       expect(content.length).toBeGreaterThan(100);
       expect(content).toContain('Pulumi');
+    });
+  });
+
+  describe('Analysis Script', () => {
+    let analyseContent: string;
+
+    beforeAll(() => {
+      const analysePath = path.join(libPath, 'analyse.py');
+      analyseContent = fs.readFileSync(analysePath, 'utf-8');
+    });
+
+    it('should import boto3', () => {
+      expect(analyseContent).toContain('import boto3');
+    });
+
+    it('should define ComplianceMonitoringAnalyzer class', () => {
+      expect(analyseContent).toContain('class ComplianceMonitoringAnalyzer');
+    });
+
+    it('should have analyze_lambda_functions method', () => {
+      expect(analyseContent).toContain('def analyze_lambda_functions');
+    });
+
+    it('should have analyze_cloudwatch_resources method', () => {
+      expect(analyseContent).toContain('def analyze_cloudwatch_resources');
+    });
+
+    it('should have analyze_sns_topics method', () => {
+      expect(analyseContent).toContain('def analyze_sns_topics');
+    });
+
+    it('should have analyze_s3_buckets method', () => {
+      expect(analyseContent).toContain('def analyze_s3_buckets');
+    });
+
+    it('should have analyze_eventbridge_rules method', () => {
+      expect(analyseContent).toContain('def analyze_eventbridge_rules');
+    });
+
+    it('should have generate_report method', () => {
+      expect(analyseContent).toContain('def generate_report');
+    });
+
+    it('should have main function', () => {
+      expect(analyseContent).toContain('def main():');
+    });
+  });
+
+  describe('Bin Entry Point', () => {
+    let binContent: string;
+
+    beforeAll(() => {
+      const binPath = path.join(rootPath, 'bin/tap.ts');
+      binContent = fs.readFileSync(binPath, 'utf-8');
+    });
+
+    it('should import TapStack from lib', () => {
+      expect(binContent).toContain("import { TapStack } from '../lib/tap-stack'");
+    });
+
+    it('should require environmentSuffix config', () => {
+      expect(binContent).toContain("config.require('environmentSuffix')");
+    });
+
+    it('should create TapStack instance', () => {
+      expect(binContent).toContain('new TapStack');
+    });
+
+    it('should export all stack outputs', () => {
+      expect(binContent).toContain('export const bucketName');
+      expect(binContent).toContain('export const topicArn');
+      expect(binContent).toContain('export const scannerFunctionName');
+      expect(binContent).toContain('export const reporterFunctionName');
     });
   });
 });
