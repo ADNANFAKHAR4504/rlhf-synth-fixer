@@ -1,7 +1,7 @@
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const uniqueSuffix = 'k7m2';
+const uniqueSuffix = 'p9v5';
 
 // Helper to check if error is credentials related
 const isCredentialsError = (error: unknown): boolean => {
