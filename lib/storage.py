@@ -54,7 +54,7 @@ class StorageConstruct(Construct):
         )
 
         # Enable versioning on secondary bucket
-        S3BucketVersioningA(
+        secondary_versioning = S3BucketVersioningA(
             self,
             "secondary-bucket-versioning",
             bucket=self.secondary_bucket.id,
@@ -118,7 +118,7 @@ class StorageConstruct(Construct):
             provider=primary_provider
         )
 
-        # S3 replication configuration
+        # S3 replication configuration - depends on secondary versioning being enabled
         S3BucketReplicationConfigurationA(
             self,
             "replication-config",
@@ -135,7 +135,8 @@ class StorageConstruct(Construct):
                     )
                 )
             ],
-            provider=primary_provider
+            provider=primary_provider,
+            depends_on=[secondary_versioning]
         )
 
     @property

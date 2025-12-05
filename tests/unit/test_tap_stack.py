@@ -126,16 +126,16 @@ class TestTapStack:
     def test_tap_stack_has_failover_orchestration(self):
         """Test that TapStack creates failover orchestration construct."""
         from lib.tap_stack import TapStack
-        
+
         app = App()
         stack = TapStack(
             app,
             "test-stack",
             environment_suffix="test"
         )
-        
-        assert hasattr(stack, 'failover_orchestration')
-        assert stack.failover_orchestration is not None
+
+        assert hasattr(stack, 'failover')
+        assert stack.failover is not None
 
     def test_tap_stack_with_custom_regions(self):
         """Test TapStack with custom region configuration."""
@@ -239,15 +239,64 @@ class TestStorageConstruct:
     def test_storage_construct_initialized(self):
         """Test that StorageConstruct is properly initialized."""
         from lib.tap_stack import TapStack
-        
+
         app = App()
         stack = TapStack(
             app,
             "test-stack",
             environment_suffix="test"
         )
-        
+
         assert stack.storage is not None
+
+    def test_storage_construct_bucket_names(self):
+        """Test that StorageConstruct has bucket name properties."""
+        from lib.tap_stack import TapStack
+
+        app = App()
+        stack = TapStack(
+            app,
+            "test-stack",
+            environment_suffix="test"
+        )
+
+        assert hasattr(stack.storage, 'primary_bucket_name')
+        assert hasattr(stack.storage, 'secondary_bucket_name')
+        assert stack.storage.primary_bucket_name is not None
+        assert stack.storage.secondary_bucket_name is not None
+
+
+class TestSessionStateConstruct:
+    """Test cases for SessionStateConstruct."""
+
+    def test_session_state_construct_initialized(self):
+        """Test that SessionStateConstruct is properly initialized."""
+        from lib.tap_stack import TapStack
+
+        app = App()
+        stack = TapStack(
+            app,
+            "test-stack",
+            environment_suffix="test"
+        )
+
+        assert stack.session_state is not None
+
+    def test_session_state_construct_properties(self):
+        """Test that SessionStateConstruct has table properties."""
+        from lib.tap_stack import TapStack
+
+        app = App()
+        stack = TapStack(
+            app,
+            "test-stack",
+            environment_suffix="test"
+        )
+
+        assert hasattr(stack.session_state, 'table_name')
+        assert hasattr(stack.session_state, 'table_arn')
+        assert stack.session_state.table_name is not None
+        assert stack.session_state.table_arn is not None
 
 
 class TestMonitoringConstruct:
