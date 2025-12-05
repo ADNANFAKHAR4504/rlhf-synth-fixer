@@ -18,11 +18,10 @@ from cdktf_cdktf_provider_aws.cloudfront_origin_access_identity import Cloudfron
 from cdktf_cdktf_provider_aws.wafv2_web_acl import (
     Wafv2WebAcl,
     Wafv2WebAclRule,
-    Wafv2WebAclRuleStatement,
-    Wafv2WebAclRuleStatementRateBasedStatement,
     Wafv2WebAclRuleAction,
     Wafv2WebAclDefaultAction,
-    Wafv2WebAclVisibilityConfig
+    Wafv2WebAclVisibilityConfig,
+    Wafv2WebAclRuleVisibilityConfig
 )
 from cdktf_cdktf_provider_aws.s3_bucket_policy import S3BucketPolicy
 import json
@@ -70,13 +69,13 @@ class CdnConstruct(Construct):
                     action=Wafv2WebAclRuleAction(
                         block={}
                     ),
-                    statement=Wafv2WebAclRuleStatement(
-                        rate_based_statement=Wafv2WebAclRuleStatementRateBasedStatement(
-                            limit=2000,
-                            aggregate_key_type="IP"
-                        )
-                    ),
-                    visibility_config=Wafv2WebAclVisibilityConfig(
+                    statement={
+                        "rate_based_statement": {
+                            "limit": 2000,
+                            "aggregate_key_type": "IP"
+                        }
+                    },
+                    visibility_config=Wafv2WebAclRuleVisibilityConfig(
                         cloudwatch_metrics_enabled=True,
                         metric_name="RateLimitRule",
                         sampled_requests_enabled=True

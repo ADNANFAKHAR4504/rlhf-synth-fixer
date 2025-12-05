@@ -1,7 +1,7 @@
 """Unit tests for MonitoringConstruct"""
 import pytest
 from unittest.mock import Mock
-from cdktf import Testing
+from cdktf import Testing, TerraformStack
 
 
 class TestMonitoringConstruct:
@@ -29,7 +29,7 @@ class TestMonitoringConstruct:
         from lib.monitoring import MonitoringConstruct
 
         app = Testing.app()
-        stack = Testing.stub_stack(app, "test")
+        stack = TerraformStack(app, "test")
         construct = MonitoringConstruct(
             stack,
             "test-monitoring",
@@ -119,7 +119,7 @@ class TestMonitoringConstruct:
         from lib.monitoring import MonitoringConstruct
 
         app = Testing.app()
-        stack = Testing.stub_stack(app, "test")
+        stack = TerraformStack(app, "test")
         construct = MonitoringConstruct(
             stack,
             "test-monitoring-prod",

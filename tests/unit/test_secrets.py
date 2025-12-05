@@ -1,7 +1,7 @@
 """Unit tests for SecretsConstruct"""
 import pytest
 from unittest.mock import Mock
-from cdktf import Testing
+from cdktf import Testing, TerraformStack
 
 
 class TestSecretsConstruct:
@@ -40,7 +40,7 @@ class TestSecretsConstruct:
         ]
 
         app = Testing.app()
-        stack = Testing.stub_stack(app, "test")
+        stack = TerraformStack(app, "test")
 
         # Patch the VPC dependency if needed
         construct = SecretsConstruct(
@@ -82,7 +82,7 @@ class TestSecretsConstruct:
         from lib.secrets import SecretsConstruct
 
         app = Testing.app()
-        stack = Testing.stub_stack(app, "test")
+        stack = TerraformStack(app, "test")
         construct = SecretsConstruct(
             stack,
             "test-secrets-prod",

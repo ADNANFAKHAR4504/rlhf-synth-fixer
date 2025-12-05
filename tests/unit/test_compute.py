@@ -1,7 +1,7 @@
 """Unit tests for ComputeConstruct"""
 import pytest
 from unittest.mock import Mock
-from cdktf import Testing
+from cdktf import Testing, TerraformStack
 
 
 class TestComputeConstruct:
@@ -60,7 +60,7 @@ class TestComputeConstruct:
         from lib.compute import ComputeConstruct
 
         app = Testing.app()
-        stack = Testing.stub_stack(app, "test")
+        stack = TerraformStack(app, "test")
         construct = ComputeConstruct(
             stack,
             "test-compute",
@@ -145,7 +145,7 @@ class TestComputeConstruct:
         from lib.compute import ComputeConstruct
 
         app = Testing.app()
-        stack = Testing.stub_stack(app, "test")
+        stack = TerraformStack(app, "test")
         construct = ComputeConstruct(
             stack,
             "test-compute-prod",

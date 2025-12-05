@@ -33,7 +33,7 @@ class AlbConstruct(Construct):
             protocol="HTTP",
             vpc_id=vpc.vpc.id,
             target_type="instance",
-            deregistration_delay=30,
+            deregistration_delay="30",
             health_check=LbTargetGroupHealthCheck(
                 enabled=True,
                 healthy_threshold=2,

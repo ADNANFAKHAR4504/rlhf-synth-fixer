@@ -2,7 +2,7 @@
 import pytest
 from unittest.mock import Mock, MagicMock, patch
 from constructs import Construct
-from cdktf import Testing
+from cdktf import Testing, TerraformStack
 
 
 class TestSecurityConstruct:
@@ -22,7 +22,7 @@ class TestSecurityConstruct:
         from lib.security import SecurityConstruct
 
         app = Testing.app()
-        stack = Testing.stub_stack(app, "test")
+        stack = TerraformStack(app, "test")
         construct = SecurityConstruct(
             stack,
             "test-security",
@@ -120,7 +120,7 @@ class TestSecurityConstruct:
         from lib.security import SecurityConstruct
 
         app = Testing.app()
-        stack = Testing.stub_stack(app, "test")
+        stack = TerraformStack(app, "test")
         construct = SecurityConstruct(
             stack,
             "test-security-prod",
@@ -149,7 +149,7 @@ class TestSecurityConstruct:
         from lib.security import SecurityConstruct
 
         app = Testing.app()
-        stack = Testing.stub_stack(app, "test")
+        stack = TerraformStack(app, "test")
 
         # Should not fail with valid VPC
         construct = SecurityConstruct(

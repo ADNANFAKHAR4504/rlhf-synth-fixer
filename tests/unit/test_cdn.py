@@ -1,7 +1,7 @@
 """Unit tests for CdnConstruct"""
 import pytest
 from unittest.mock import Mock
-from cdktf import Testing
+from cdktf import Testing, TerraformStack
 
 
 class TestCdnConstruct:
@@ -37,7 +37,7 @@ class TestCdnConstruct:
         from lib.cdn import CdnConstruct
 
         app = Testing.app()
-        stack = Testing.stub_stack(app, "test")
+        stack = TerraformStack(app, "test")
         construct = CdnConstruct(
             stack,
             "test-cdn",
@@ -140,7 +140,7 @@ class TestCdnConstruct:
         from lib.cdn import CdnConstruct
 
         app = Testing.app()
-        stack = Testing.stub_stack(app, "test")
+        stack = TerraformStack(app, "test")
         construct = CdnConstruct(
             stack,
             "test-cdn-prod",

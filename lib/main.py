@@ -48,7 +48,7 @@ class FinancialTransactionStack(TerraformStack):
 
         # Secrets Manager with rotation
         secrets = SecretsConstruct(
-            self, "secrets", environment_suffix, database, security
+            self, "secrets", environment_suffix, database, security, vpc
         )
 
         # Application Load Balancer

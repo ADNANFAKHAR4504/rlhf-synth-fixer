@@ -1,7 +1,7 @@
 """Unit tests for StorageConstruct"""
 import pytest
 from unittest.mock import Mock
-from cdktf import Testing
+from cdktf import Testing, TerraformStack
 
 
 class TestStorageConstruct:
@@ -13,7 +13,7 @@ class TestStorageConstruct:
         from lib.storage import StorageConstruct
 
         app = Testing.app()
-        stack = Testing.stub_stack(app, "test")
+        stack = TerraformStack(app, "test")
         construct = StorageConstruct(
             stack,
             "test-storage",

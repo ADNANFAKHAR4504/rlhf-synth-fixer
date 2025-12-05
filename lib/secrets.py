@@ -12,7 +12,7 @@ import base64
 
 
 class SecretsConstruct(Construct):
-    def __init__(self, scope: Construct, id: str, environment_suffix: str, database, security):
+    def __init__(self, scope: Construct, id: str, environment_suffix: str, database, security, vpc):
         super().__init__(scope, id)
 
         # Get current AWS account ID
@@ -224,7 +224,7 @@ def finish_secret(arn, token):
                 }
             },
             vpc_config={
-                "subnet_ids": [subnet.id for subnet in security.lambda_sg.vpc_id],
+                "subnet_ids": [subnet.id for subnet in vpc.private_subnets],
                 "security_group_ids": [security.lambda_sg.id]
             },
             tags={

@@ -107,9 +107,9 @@ class StorageConstruct(Construct):
                 S3BucketLifecycleConfigurationRule(
                     id="delete-old-logs",
                     status="Enabled",
-                    expiration=S3BucketLifecycleConfigurationRuleExpiration(
+                    expiration=[S3BucketLifecycleConfigurationRuleExpiration(
                         days=90
-                    )
+                    )]
                 )
             ]
         )

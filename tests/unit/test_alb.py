@@ -1,7 +1,7 @@
 """Unit tests for AlbConstruct"""
 import pytest
 from unittest.mock import Mock
-from cdktf import Testing
+from cdktf import Testing, TerraformStack
 
 
 class TestAlbConstruct:
@@ -34,7 +34,7 @@ class TestAlbConstruct:
         from lib.alb import AlbConstruct
 
         app = Testing.app()
-        stack = Testing.stub_stack(app, "test")
+        stack = TerraformStack(app, "test")
         construct = AlbConstruct(
             stack,
             "test-alb",
@@ -136,7 +136,7 @@ class TestAlbConstruct:
         from lib.alb import AlbConstruct
 
         app = Testing.app()
-        stack = Testing.stub_stack(app, "test")
+        stack = TerraformStack(app, "test")
         construct = AlbConstruct(
             stack,
             "test-alb-prod",

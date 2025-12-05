@@ -2,7 +2,7 @@
 import pytest
 from unittest.mock import Mock, MagicMock
 from constructs import Construct
-from cdktf import Testing
+from cdktf import Testing, TerraformStack
 
 
 class TestDatabaseConstruct:
@@ -37,7 +37,7 @@ class TestDatabaseConstruct:
         from lib.database import DatabaseConstruct
 
         app = Testing.app()
-        stack = Testing.stub_stack(app, "test")
+        stack = TerraformStack(app, "test")
         construct = DatabaseConstruct(
             stack,
             "test-database",
@@ -163,7 +163,7 @@ class TestDatabaseConstruct:
         from lib.database import DatabaseConstruct
 
         app = Testing.app()
-        stack = Testing.stub_stack(app, "test")
+        stack = TerraformStack(app, "test")
         construct = DatabaseConstruct(
             stack,
             "test-database-prod",
