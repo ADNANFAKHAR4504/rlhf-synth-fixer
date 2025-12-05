@@ -17,13 +17,17 @@ export class S3EncryptionAspect implements cdk.IAspect {
     const hasEncryption = bucket.bucketEncryption !== undefined;
     const encryptionConfig = bucket.bucketEncryption as any;
 
-    if (!hasEncryption || !encryptionConfig?.serverSideEncryptionConfiguration) {
+    if (
+      !hasEncryption ||
+      !encryptionConfig?.serverSideEncryptionConfiguration
+    ) {
       ValidationRegistry.addFinding({
         severity: 'critical',
         category: 'S3',
         resource: bucket.node.path,
         message: 'S3 bucket does not have encryption enabled',
-        remediation: 'Enable encryption on the S3 bucket using S3_MANAGED, KMS_MANAGED, or DSSE encryption',
+        remediation:
+          'Enable encryption on the S3 bucket using S3_MANAGED, KMS_MANAGED, or DSSE encryption',
         executionTime: Date.now() - startTime,
         metadata: {
           bucketName: bucket.bucketName || 'unknown',
@@ -52,11 +56,14 @@ export class S3EncryptionAspect implements cdk.IAspect {
           category: 'S3',
           resource: bucket.node.path,
           message: 'S3 bucket has encryption enabled',
-          remediation: 'No action required',
+          remediation:
+            'Continue to maintain encryption settings and review encryption type periodically',
           executionTime: Date.now() - startTime,
           metadata: {
             bucketName: bucket.bucketName || 'unknown',
-            encryptionType: rules[0]?.serverSideEncryptionByDefault?.sseAlgorithm || 'unknown',
+            encryptionType:
+              rules[0]?.serverSideEncryptionByDefault?.sseAlgorithm ||
+              'unknown',
           },
         });
       }

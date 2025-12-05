@@ -60,7 +60,8 @@ export class RDSConfigAspect implements cdk.IAspect {
         category: 'RDS',
         resource: instance.node.path,
         message: 'RDS instance is not configured for Multi-AZ',
-        remediation: 'Enable Multi-AZ for production databases to improve availability',
+        remediation:
+          'Enable Multi-AZ for production databases to improve availability',
         executionTime: Date.now() - startTime,
         metadata: {
           instanceId,

@@ -22,13 +22,25 @@ export class StackComparator {
     const differences: StackDifference[] = [];
 
     // Compare Resources
-    differences.push(...this.compareResources(template1.Resources || {}, template2.Resources || {}));
+    differences.push(
+      ...this.compareResources(
+        template1.Resources || {},
+        template2.Resources || {}
+      )
+    );
 
     // Compare Outputs
-    differences.push(...this.compareOutputs(template1.Outputs || {}, template2.Outputs || {}));
+    differences.push(
+      ...this.compareOutputs(template1.Outputs || {}, template2.Outputs || {})
+    );
 
     // Compare Parameters
-    differences.push(...this.compareParameters(template1.Parameters || {}, template2.Parameters || {}));
+    differences.push(
+      ...this.compareParameters(
+        template1.Parameters || {},
+        template2.Parameters || {}
+      )
+    );
 
     return differences;
   }
@@ -38,7 +50,10 @@ export class StackComparator {
     resources2: Record<string, any>
   ): StackDifference[] {
     const differences: StackDifference[] = [];
-    const allResourceIds = new Set([...Object.keys(resources1), ...Object.keys(resources2)]);
+    const allResourceIds = new Set([
+      ...Object.keys(resources1),
+      ...Object.keys(resources2),
+    ]);
 
     for (const resourceId of allResourceIds) {
       const resource1 = resources1[resourceId];
@@ -135,7 +150,7 @@ export class StackComparator {
       return 'No differences found between stacks';
     }
 
-    let report = `Stack Comparison Report\n`;
+    let report = 'Stack Comparison Report\n';
     report += `Found ${differences.length} difference(s)\n\n`;
 
     const byType = {

@@ -27,7 +27,7 @@ export class LambdaConfigAspect implements cdk.IAspect {
         category: 'Lambda',
         resource: fn.node.path,
         message: `Lambda function timeout (${timeout}s) exceeds recommended maximum (${this.MAX_TIMEOUT}s)`,
-        remediation: `Review if such a long timeout is necessary. Consider reducing to ${this.RECOMMENDED_TIMEOUT}s or using async processing`,
+        remediation: `Set timeout to ${this.RECOMMENDED_TIMEOUT}s or configure async processing for long-running tasks`,
         executionTime: Date.now() - startTime,
         metadata: {
           functionName,
@@ -45,7 +45,7 @@ export class LambdaConfigAspect implements cdk.IAspect {
         category: 'Lambda',
         resource: fn.node.path,
         message: `Lambda function memory (${memory}MB) is below recommended minimum (${this.MIN_MEMORY}MB)`,
-        remediation: `Consider increasing memory to at least ${this.MIN_MEMORY}MB for better performance`,
+        remediation: `Increase memory to at least ${this.MIN_MEMORY}MB for better performance and reduce execution time`,
         executionTime: Date.now() - startTime,
         metadata: {
           functionName,
@@ -72,7 +72,8 @@ export class LambdaConfigAspect implements cdk.IAspect {
         category: 'Lambda',
         resource: fn.node.path,
         message: `Lambda function is missing recommended environment variables: ${missingVars.join(', ')}`,
-        remediation: `Add the missing environment variables to improve operational visibility`,
+        remediation:
+          'Add the missing environment variables to improve operational visibility',
         executionTime: Date.now() - startTime,
         metadata: {
           functionName,
@@ -84,7 +85,12 @@ export class LambdaConfigAspect implements cdk.IAspect {
 
     // Check runtime
     const runtime = fn.runtime;
-    if (runtime && (runtime.includes('python2') || runtime.includes('nodejs10') || runtime.includes('nodejs12'))) {
+    if (
+      runtime &&
+      (runtime.includes('python2') ||
+        runtime.includes('nodejs10') ||
+        runtime.includes('nodejs12'))
+    ) {
       ValidationRegistry.addFinding({
         severity: 'critical',
         category: 'Lambda',

@@ -2,7 +2,10 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as fs from 'fs';
 import * as path from 'path';
-import { ValidationRegistry, ValidationFinding } from '../core/validation-registry';
+import {
+  ValidationRegistry,
+  ValidationFinding,
+} from '../core/validation-registry';
 
 export interface ValidationReporterProps {
   environmentSuffix: string;
@@ -45,8 +48,12 @@ export class ValidationReporter extends Construct {
     const findings = ValidationRegistry.getFindings();
     const summary = ValidationRegistry.getSummary();
 
-    const totalExecutionTime = findings.reduce((sum, f) => sum + f.executionTime, 0);
-    const averageExecutionTime = findings.length > 0 ? totalExecutionTime / findings.length : 0;
+    const totalExecutionTime = findings.reduce(
+      (sum, f) => sum + f.executionTime,
+      0
+    );
+    const averageExecutionTime =
+      findings.length > 0 ? totalExecutionTime / findings.length : 0;
 
     const report: ValidationReport = {
       timestamp: new Date().toISOString(),
@@ -90,7 +97,9 @@ export class ValidationReporter extends Construct {
 
     // Exit with error code if critical findings exist
     if (summary.critical > 0) {
-      console.error(`\nValidation failed with ${summary.critical} critical finding(s)\n`);
+      console.error(
+        `\nValidation failed with ${summary.critical} critical finding(s)\n`
+      );
       // Don't exit here to allow report generation, but log the issue
     }
   }

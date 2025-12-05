@@ -22,9 +22,13 @@ export class IAMPolicyAspect implements cdk.IAspect {
     // Access the underlying CFN resource to get the policy document
     const cfnRole = role.node.defaultChild as iam.CfnRole;
     if (cfnRole && cfnRole.policies) {
-      const policies = cfnRole.policies as any[] || [];
+      const policies = (cfnRole.policies as any[]) || [];
       for (const policy of policies) {
-        this.checkPolicyDocument(policy.policyDocument, role.node.path, startTime);
+        this.checkPolicyDocument(
+          policy.policyDocument,
+          role.node.path,
+          startTime
+        );
       }
     }
 
@@ -37,24 +41,44 @@ export class IAMPolicyAspect implements cdk.IAspect {
     const startTime = Date.now();
 
     // Check inline policies
-    const policies = role.policies as any[] || [];
+    const policies = (role.policies as any[]) || [];
 
     for (const policy of policies) {
-      this.checkPolicyDocument(policy.policyDocument, role.node.path, startTime);
+      this.checkPolicyDocument(
+        policy.policyDocument,
+        role.node.path,
+        startTime
+      );
     }
   }
 
   private validateIAMPolicy(policy: iam.CfnPolicy): void {
     const startTime = Date.now();
-    this.checkPolicyDocument(policy.policyDocument, policy.node.path, startTime);
+
+    // Handle both plain objects and PolicyDocument objects
+    let policyDoc = policy.policyDocument;
+
+    // If it's a PolicyDocument object, we need to access its toJSON() method or resolve it
+    // During synthesis, CDK may use tokens or objects that need resolution
+    if (policyDoc && typeof policyDoc === 'object' && 'toJSON' in policyDoc) {
+      policyDoc = (policyDoc as any).toJSON();
+    }
+
+    this.checkPolicyDocument(policyDoc, policy.node.path, startTime);
   }
 
-  private checkPolicyDocument(policyDoc: any, resourcePath: string, startTime: number): void {
+  private checkPolicyDocument(
+    policyDoc: any,
+    resourcePath: string,
+    startTime: number
+  ): void {
     if (!policyDoc || !policyDoc.Statement) {
       return;
     }
 
-    const statements = Array.isArray(policyDoc.Statement) ? policyDoc.Statement : [policyDoc.Statement];
+    const statements = Array.isArray(policyDoc.Statement)
+      ? policyDoc.Statement
+      : [policyDoc.Statement];
 
     for (const statement of statements) {
       if (statement.Effect !== 'Allow') {
@@ -70,7 +94,8 @@ export class IAMPolicyAspect implements cdk.IAspect {
           category: 'IAM',
           resource: resourcePath,
           message: 'IAM policy has wildcard (*) for both actions and resources',
-          remediation: 'Replace wildcards with specific actions and resources following the principle of least privilege',
+          remediation:
+            'Replace wildcards with specific actions and resources following the principle of least privilege',
           executionTime: Date.now() - startTime,
           metadata: {
             statement: JSON.stringify(statement),
@@ -84,7 +109,8 @@ export class IAMPolicyAspect implements cdk.IAspect {
           category: 'IAM',
           resource: resourcePath,
           message: 'IAM policy has wildcard (*) for actions',
-          remediation: 'Replace wildcard actions with specific API actions required for the use case',
+          remediation:
+            'Replace wildcard actions with specific API actions required for the use case',
           executionTime: Date.now() - startTime,
           metadata: {
             actions: statement.Action,

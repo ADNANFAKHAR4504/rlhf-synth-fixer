@@ -59,19 +59,23 @@ export class TapStack extends cdk.Stack {
     });
 
     // Example Lambda with issues (for testing)
-    const problematicFunction = new lambda.Function(this, 'ProblematicFunction', {
-      functionName: `problematic-function-${environmentSuffix}`,
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'index.handler',
-      code: lambda.Code.fromInline(`
+    const problematicFunction = new lambda.Function(
+      this,
+      'ProblematicFunction',
+      {
+        functionName: `problematic-function-${environmentSuffix}`,
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: 'index.handler',
+        code: lambda.Code.fromInline(`
         exports.handler = async (event) => {
           return { statusCode: 200, body: 'OK' };
         };
       `),
-      timeout: cdk.Duration.seconds(900), // Excessive timeout
-      memorySize: 128, // Low memory
-      // Missing environment variables
-    });
+        timeout: cdk.Duration.seconds(900), // Excessive timeout
+        memorySize: 128, // Low memory
+        // Missing environment variables
+      }
+    );
 
     // Example IAM role with overly permissive policy (for testing)
     const problematicRole = new iam.Role(this, 'ProblematicRole', {
@@ -79,11 +83,13 @@ export class TapStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
     });
 
-    problematicRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ['*'], // Wildcard action
-      resources: ['*'], // Wildcard resource
-    }));
+    problematicRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['*'], // Wildcard action
+        resources: ['*'], // Wildcard resource
+      })
+    );
 
     // Apply validation aspects to the stack
     cdk.Aspects.of(this).add(new S3EncryptionAspect());

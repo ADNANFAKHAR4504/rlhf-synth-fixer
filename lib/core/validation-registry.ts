@@ -21,7 +21,9 @@ export class ValidationRegistry {
     return [...this.findings];
   }
 
-  static getFindingsBySeverity(severity: ValidationSeverity): ValidationFinding[] {
+  static getFindingsBySeverity(
+    severity: ValidationSeverity
+  ): ValidationFinding[] {
     return this.findings.filter(f => f.severity === severity);
   }
 
@@ -45,10 +47,13 @@ export class ValidationRegistry {
       critical: this.findings.filter(f => f.severity === 'critical').length,
       warning: this.findings.filter(f => f.severity === 'warning').length,
       info: this.findings.filter(f => f.severity === 'info').length,
-      categories: this.findings.reduce((acc, f) => {
-        acc[f.category] = (acc[f.category] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>),
+      categories: this.findings.reduce(
+        (acc, f) => {
+          acc[f.category] = (acc[f.category] || 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>
+      ),
     };
   }
 }

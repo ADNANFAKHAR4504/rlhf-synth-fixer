@@ -10,7 +10,14 @@ export interface ValidationRule {
   resourceType: string;
   condition: {
     property: string;
-    operator: 'equals' | 'notEquals' | 'exists' | 'notExists' | 'contains' | 'greaterThan' | 'lessThan';
+    operator:
+      | 'equals'
+      | 'notEquals'
+      | 'exists'
+      | 'notExists'
+      | 'contains'
+      | 'greaterThan'
+      | 'lessThan';
     value?: any;
   };
   message: string;
@@ -36,14 +43,28 @@ export class RuleEngine {
     this.rules = config.rules || [];
   }
 
-  evaluateRules(node: IConstruct, resourceType: string, properties: Record<string, any>): void {
-    const applicableRules = this.rules.filter(r => r.resourceType === resourceType);
+  evaluateRules(
+    node: IConstruct,
+    resourceType: string,
+    properties: Record<string, any>
+  ): void {
+    const applicableRules = this.rules.filter(
+      r => r.resourceType === resourceType
+    );
 
     for (const rule of applicableRules) {
       const startTime = Date.now();
       const result = this.evaluateCondition(rule.condition, properties);
 
-      if (!result.pass) {
+      // For greaterThan/lessThan operators, pass=true means violation found
+      // For equals/exists operators, pass=false means violation found
+      const isViolation =
+        rule.condition.operator === 'greaterThan' ||
+        rule.condition.operator === 'lessThan'
+          ? result.pass
+          : !result.pass;
+
+      if (isViolation) {
         ValidationRegistry.addFinding({
           severity: rule.severity,
           category: rule.category,
@@ -78,13 +99,20 @@ export class RuleEngine {
         return { pass: actualValue === undefined, actualValue };
       case 'contains':
         return {
-          pass: Array.isArray(actualValue) && actualValue.includes(condition.value),
+          pass:
+            Array.isArray(actualValue) && actualValue.includes(condition.value),
           actualValue,
         };
       case 'greaterThan':
-        return { pass: Number(actualValue) > Number(condition.value), actualValue };
+        return {
+          pass: Number(actualValue) > Number(condition.value),
+          actualValue,
+        };
       case 'lessThan':
-        return { pass: Number(actualValue) < Number(condition.value), actualValue };
+        return {
+          pass: Number(actualValue) < Number(condition.value),
+          actualValue,
+        };
       default:
         return { pass: true, actualValue };
     }
