@@ -1,0 +1,23 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-12-05T18:09:55+05:30",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "po_id": "l0f6y2z6",
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "EventBridge",
+    "SNS",
+    "CloudFormation",
+    "IAM"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9
+}
