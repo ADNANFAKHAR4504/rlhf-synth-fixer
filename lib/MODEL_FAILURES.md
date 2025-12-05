@@ -485,20 +485,20 @@ tags = {
 ## Training Quality Improvement
 
 The baseline approach demonstrates **common Terraform anti-patterns** that junior engineers often produce:
-- ✅ Works functionally
-- ❌ Violates DRY principle
-- ❌ Hard to maintain
-- ❌ Hard to reuse
-- ❌ Prone to errors
-- ❌ Not scalable
+- Works functionally
+- Violates DRY principle
+- Hard to maintain
+- Hard to reuse
+- Prone to errors
+- Not scalable
 
 The optimized approach demonstrates **production-ready Terraform**:
-- ✅ Works functionally
-- ✅ Follows DRY principle
-- ✅ Easy to maintain
-- ✅ Reusable across environments
-- ✅ Error prevention built-in
-- ✅ Scalable design
+- Works functionally
+- Follows DRY principle
+- Easy to maintain
+- Reusable across environments
+- Error prevention built-in
+- Scalable design
 
 This creates **high training value** by showing:
 1. What NOT to do (baseline)

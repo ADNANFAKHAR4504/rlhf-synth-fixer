@@ -347,33 +347,33 @@ The optimize.py script demonstrates the transformation:
 ```bash
 python lib/optimize.py --dir lib
 
-🚀 Starting Terraform code optimization...
-🔧 Optimizing main.tf...
-✅ Optimization complete:
+Starting Terraform code optimization...
+Optimizing main.tf...
+Optimization complete:
    - Original: 578 lines
    - Optimized: 350 lines
    - Reduction: 40%
 
-📊 Optimization Summary:
-✅ main.tf: 578 → 350 lines (40% reduction)
-✅ variables.tf: Added 10+ variables with validation
-✅ outputs.tf: Added structured outputs with for expressions
-✅ terraform.tfvars: Extracted all hardcoded values
+Optimization Summary:
+main.tf: 578 → 350 lines (40% reduction)
+variables.tf: Added 10+ variables with validation
+outputs.tf: Added structured outputs with for expressions
+terraform.tfvars: Extracted all hardcoded values
 
-✨ All optimizations completed successfully!
+All optimizations completed successfully!
 ```
 
 ## Conclusion
 
 The optimized configuration:
-- ✅ Reduces code by 40% while maintaining all functionality
-- ✅ Eliminates all hardcoded values
-- ✅ Implements Terraform best practices (DRY, for_each, dynamic blocks)
-- ✅ Provides comprehensive variable validation
-- ✅ Uses data sources for AWS-managed policies
-- ✅ Implements consistent naming and tagging
-- ✅ Passes terraform validate and plan without errors
-- ✅ Maintains PCI compliance requirements
-- ✅ Improves maintainability and scalability
+- Reduces code by 40% while maintaining all functionality
+- Eliminates all hardcoded values
+- Implements Terraform best practices (DRY, for_each, dynamic blocks)
+- Provides comprehensive variable validation
+- Uses data sources for AWS-managed policies
+- Implements consistent naming and tagging
+- Passes terraform validate and plan without errors
+- Maintains PCI compliance requirements
+- Improves maintainability and scalability
 
 This represents production-ready, optimized Infrastructure as Code that follows industry best practices.
