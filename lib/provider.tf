@@ -14,9 +14,10 @@ terraform {
     }
   }
 
-  # Local backend for testing - production would use S3
-  backend "local" {
-    path = "terraform.tfstate"
+  # S3 backend for state management
+  backend "s3" {
+    # Backend config provided via -backend-config flags during init
+    # Example: bucket, key, region, encrypt
   }
 }
 
