@@ -1,5 +1,8 @@
-import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
+import { Construct } from 'constructs';
+
+// Generate unique suffix to avoid resource naming conflicts
+const uniqueSuffix = Date.now().toString(36).slice(-4);
 
 export interface BaseModuleProps {
   environmentSuffix: string;
@@ -161,9 +164,9 @@ export class VPCModule extends Construct {
 
     // S3 Bucket for VPC Flow Logs
     this.flowLogsBucket = new aws.s3Bucket.S3Bucket(this, 'flow-logs-bucket', {
-      bucket: resourceName('v5-vpc-flowlogs').toLowerCase(),
+      bucket: resourceName(`v5-vpc-flowlogs-${uniqueSuffix}`).toLowerCase(),
       forceDestroy: true,
-      tags: { ...props.tags, Name: resourceName('v5-flowlogs') },
+      tags: { ...props.tags, Name: resourceName(`v5-flowlogs-${uniqueSuffix}`) },
       lifecycle: {
         ignoreChanges: ['bucket'],
       },
@@ -332,7 +335,7 @@ export class KMSModule extends Construct {
 
     // KMS Alias
     this.alias = new aws.kmsAlias.KmsAlias(this, 'rds-key-alias', {
-      name: `alias/${resourceName('v5-rds-kms')}`,
+      name: `alias/${resourceName(`v5-rds-kms-${uniqueSuffix}`)}`,
       targetKeyId: this.key.id,
     });
   }
@@ -341,7 +344,7 @@ export class KMSModule extends Construct {
 /**
  * Secrets Manager Module - Manages RDS credentials
  */
-export interface SecretsModuleProps extends BaseModuleProps {}
+export interface SecretsModuleProps extends BaseModuleProps { }
 
 export class SecretsModule extends Construct {
   public readonly rdsSecret: aws.secretsmanagerSecret.SecretsmanagerSecret;
@@ -358,10 +361,10 @@ export class SecretsModule extends Construct {
       this,
       'rds-secret',
       {
-        name: resourceName('v5-db-secret'),
+        name: resourceName(`v5-db-secret-${uniqueSuffix}`),
         description: 'Master password for RDS Aurora MySQL cluster',
         recoveryWindowInDays: 7,
-        tags: { ...props.tags, Name: resourceName('v5-rds-secret') },
+        tags: { ...props.tags, Name: resourceName(`v5-rds-secret-${uniqueSuffix}`) },
       }
     );
 
@@ -410,9 +413,9 @@ export class RDSModule extends Construct {
       this,
       'rds-log-group',
       {
-        name: `/aws/rds/cluster/${resourceName('v5-db')}/slowquery`,
+        name: `/aws/rds/cluster/${resourceName(`v5-db-${uniqueSuffix}`)}/slowquery`,
         retentionInDays: 2557,
-        tags: { ...props.tags, Name: resourceName('payment-rds-logs') },
+        tags: { ...props.tags, Name: resourceName(`payment-rds-logs-${uniqueSuffix}`) },
       }
     );
 
@@ -452,16 +455,16 @@ export class RDSModule extends Construct {
       this,
       'db-subnet-group',
       {
-        name: resourceName('v5-db-subnets').toLowerCase(),
+        name: resourceName(`v5-db-subnets-${uniqueSuffix}`).toLowerCase(),
         subnetIds: props.privateSubnetIds,
         description: 'Subnet group for RDS Aurora MySQL cluster',
-        tags: { ...props.tags, Name: resourceName('v5-db-subnets') },
+        tags: { ...props.tags, Name: resourceName(`v5-db-subnets-${uniqueSuffix}`) },
       }
     );
 
     // RDS Aurora Cluster
     this.cluster = new aws.rdsCluster.RdsCluster(this, 'aurora-cluster', {
-      clusterIdentifier: resourceName('v5-aurora-db').toLowerCase(),
+      clusterIdentifier: resourceName(`v5-aurora-db-${uniqueSuffix}`).toLowerCase(),
       engine: 'aurora-mysql',
       engineVersion: '8.0.mysql_aurora.3.04.0',
       databaseName: 'paymentdb',
@@ -485,7 +488,7 @@ export class RDSModule extends Construct {
       this,
       'cluster-instance-1',
       {
-        identifier: `${resourceName('v5-aurora-db')}-instance-1`.toLowerCase(),
+        identifier: `${resourceName(`v5-aurora-db-${uniqueSuffix}`)}-instance-1`.toLowerCase(),
         clusterIdentifier: this.cluster.id,
         instanceClass: 'db.t3.medium',
         engine: this.cluster.engine,
@@ -497,7 +500,7 @@ export class RDSModule extends Construct {
 
     // Second instance for Multi-AZ
     new aws.rdsClusterInstance.RdsClusterInstance(this, 'cluster-instance-2', {
-      identifier: `${resourceName('v5-aurora-db')}-instance-2`.toLowerCase(),
+      identifier: `${resourceName(`v5-aurora-db-${uniqueSuffix}`)}-instance-2`.toLowerCase(),
       clusterIdentifier: this.cluster.id,
       instanceClass: 'db.t3.medium',
       engine: this.cluster.engine,
@@ -689,13 +692,13 @@ export class ALBModule extends Construct {
 
     // Application Load Balancer
     this.alb = new aws.lb.Lb(this, 'alb', {
-      name: resourceName('v5-loadbalancer'),
+      name: resourceName(`v5-lb-${uniqueSuffix}`),
       loadBalancerType: 'application',
       securityGroups: [this.securityGroup.id],
       subnets: props.publicSubnetIds,
       enableDeletionProtection: false,
       enableHttp2: true,
-      tags: { ...props.tags, Name: resourceName('v5-loadbalancer') },
+      tags: { ...props.tags, Name: resourceName(`v5-lb-${uniqueSuffix}`) },
     });
 
     // Target Group for ECS tasks
@@ -703,7 +706,7 @@ export class ALBModule extends Construct {
       this,
       'target-group',
       {
-        name: resourceName('v5-tg'),
+        name: resourceName(`v5-tg-${uniqueSuffix}`),
         port: 8080,
         protocol: 'HTTP',
         vpcId: props.vpcId,
@@ -720,7 +723,7 @@ export class ALBModule extends Construct {
           interval: 30,
           matcher: '200',
         },
-        tags: { ...props.tags, Name: resourceName('v5-tg') },
+        tags: { ...props.tags, Name: resourceName(`v5-tg-${uniqueSuffix}`) },
       }
     );
 
@@ -771,9 +774,9 @@ export class ECSModule extends Construct {
       this,
       'ecs-log-group',
       {
-        name: `/aws/ecs/${resourceName('v5-service')}`,
+        name: `/aws/ecs/${resourceName(`v5-service-${uniqueSuffix}`)}`,
         retentionInDays: 2557,
-        tags: { ...props.tags, Name: resourceName('payment-ecs-logs') },
+        tags: { ...props.tags, Name: resourceName(`payment-ecs-logs-${uniqueSuffix}`) },
       }
     );
 
