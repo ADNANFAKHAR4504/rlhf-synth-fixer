@@ -1,19 +1,14 @@
 {
   "task_id": "a0v1c9x0",
   "platform": "cdktf",
-  "language": "typescript",
+  "language": "ts",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "synth",
   "team": "synth",
   "subtask": "CI/CD Pipeline Integration",
   "subject_labels": [
-    "CI/CD Pipeline",
-    "aws",
-    "infrastructure",
-    "education",
-    "compliance",
-    "cicd"
+    "CI/CD Pipeline"
   ],
   "startedAt": "2025-12-04T16:37:55.102167Z",
   "aws_services": [],
