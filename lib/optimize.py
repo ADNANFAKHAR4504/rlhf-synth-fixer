@@ -14,12 +14,13 @@ Usage:
     python3 optimize.py [--dry-run]
 """
 
-import os
-import sys
 import argparse
 import json
+import os
+import sys
 import time
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
+
 import boto3
 from botocore.exceptions import ClientError
 
@@ -90,8 +91,8 @@ class ECSOptimizer:
             self.log(f"Error finding service: {e}", 'ERROR')
             return None
 
-    def find_target_group(self) -> Optional[str]:
-        """Find ALB target group ARN"""
+    def find_target_group(self) -> Optional[Dict[str, str]]:
+        """Find ALB target group ARN and associated load balancer info"""
         try:
             self.log(f"Searching for target group: {self.target_group_name}")
             response = self.elbv2_client.describe_target_groups()
@@ -99,12 +100,66 @@ class ECSOptimizer:
             for tg in response['TargetGroups']:
                 if tg['TargetGroupName'] == self.target_group_name:
                     self.log(f"Found target group: {tg['TargetGroupArn']}")
-                    return tg['TargetGroupArn']
+                    # Return both target group ARN and load balancer ARNs
+                    return {
+                        'TargetGroupArn': tg['TargetGroupArn'],
+                        'LoadBalancerArns': tg.get('LoadBalancerArns', [])
+                    }
 
             self.log(f"Target group not found: {self.target_group_name}", 'WARNING')
             return None
         except ClientError as e:
             self.log(f"Error finding target group: {e}", 'ERROR')
+            return None
+
+    def check_scaling_policy_exists(self, cluster_name: str, service_name: str, metric_type: str) -> bool:
+        """Check if a scaling policy with specific metric type already exists"""
+        try:
+            resource_id = f"service/{cluster_name}/{service_name}"
+            response = self.appautoscaling_client.describe_scaling_policies(
+                ServiceNamespace='ecs',
+                ResourceId=resource_id,
+                ScalableDimension='ecs:service:DesiredCount'
+            )
+            
+            for policy in response.get('ScalingPolicies', []):
+                policy_config = policy.get('TargetTrackingScalingPolicyConfiguration', {})
+                metric_spec = policy_config.get('PredefinedMetricSpecification', {})
+                if metric_spec.get('PredefinedMetricType') == metric_type:
+                    self.log(f"Found existing scaling policy for {metric_type}: {policy['PolicyName']}")
+                    return True
+            return False
+        except ClientError as e:
+            self.log(f"Error checking existing scaling policies: {e}", 'WARNING')
+            return False
+
+    def build_alb_resource_label(self, target_group_info: Dict[str, Any]) -> Optional[str]:
+        """Build the correct resource label for ALBRequestCountPerTarget metric"""
+        try:
+            tg_arn = target_group_info['TargetGroupArn']
+            lb_arns = target_group_info.get('LoadBalancerArns', [])
+            
+            if not lb_arns:
+                self.log("No load balancer associated with target group", 'WARNING')
+                return None
+            
+            # Extract target group suffix: targetgroup/<name>/<id>
+            # ARN format: arn:aws:elasticloadbalancing:region:account:targetgroup/name/id
+            tg_suffix = '/'.join(tg_arn.split(':')[-1].split('/'))
+            
+            # Extract load balancer suffix: app/<name>/<id>
+            # ARN format: arn:aws:elasticloadbalancing:region:account:loadbalancer/app/name/id
+            lb_arn = lb_arns[0]
+            lb_parts = lb_arn.split(':')[-1].split('/')
+            # Remove 'loadbalancer' prefix, keep app/name/id
+            lb_suffix = '/'.join(lb_parts[1:])
+            
+            # Construct resource label: app/<lb-name>/<lb-id>/targetgroup/<tg-name>/<tg-id>
+            resource_label = f"{lb_suffix}/{tg_suffix}"
+            self.log(f"Built resource label: {resource_label}")
+            return resource_label
+        except Exception as e:
+            self.log(f"Error building resource label: {e}", 'ERROR')
             return None
 
     def enable_container_insights(self, cluster_arn: str) -> bool:
@@ -200,70 +255,87 @@ class ECSOptimizer:
         """Create advanced scaling policies for CPU, memory, and ALB request count"""
         success = True
 
-        # CPU-based scaling policy (75% target)
+        # CPU-based scaling policy (75% target) - check if one already exists
         self.log("Creating CPU-based target tracking policy")
-        cpu_success = self.create_target_tracking_scaling_policy(
-            cluster_arn, service_name,
-            'cpu-scaling-policy',
-            {
-                'PredefinedMetricType': 'ECSServiceAverageCPUUtilization'
-            },
-            75.0
-        )
-        if cpu_success and not self.dry_run:
-            self.optimizations_applied.append("Added CPU-based autoscaling (target: 75%)")
-        success = success and cpu_success
+        if self.check_scaling_policy_exists(self.cluster_name, service_name, 'ECSServiceAverageCPUUtilization'):
+            self.log("CPU scaling policy already exists (created by baseline CDK), skipping")
+            self.optimizations_applied.append("CPU-based autoscaling already configured by baseline")
+        else:
+            cpu_success = self.create_target_tracking_scaling_policy(
+                cluster_arn, service_name,
+                'cpu-scaling-policy',
+                {
+                    'PredefinedMetricType': 'ECSServiceAverageCPUUtilization'
+                },
+                75.0
+            )
+            if cpu_success and not self.dry_run:
+                self.optimizations_applied.append("Added CPU-based autoscaling (target: 75%)")
+            success = success and cpu_success
 
-        # Memory-based scaling policy (80% target)
+        # Memory-based scaling policy (80% target) - check if one already exists
         self.log("Creating memory-based target tracking policy")
-        memory_success = self.create_target_tracking_scaling_policy(
-            cluster_arn, service_name,
-            'memory-scaling-policy',
-            {
-                'PredefinedMetricType': 'ECSServiceAverageMemoryUtilization'
-            },
-            80.0
-        )
-        if memory_success and not self.dry_run:
-            self.optimizations_applied.append("Added memory-based autoscaling (target: 80%)")
-        success = success and memory_success
+        if self.check_scaling_policy_exists(self.cluster_name, service_name, 'ECSServiceAverageMemoryUtilization'):
+            self.log("Memory scaling policy already exists, skipping")
+            self.optimizations_applied.append("Memory-based autoscaling already configured")
+        else:
+            memory_success = self.create_target_tracking_scaling_policy(
+                cluster_arn, service_name,
+                'memory-scaling-policy',
+                {
+                    'PredefinedMetricType': 'ECSServiceAverageMemoryUtilization'
+                },
+                80.0
+            )
+            if memory_success and not self.dry_run:
+                self.optimizations_applied.append("Added memory-based autoscaling (target: 80%)")
+            success = success and memory_success
 
         # ALB request count per target (1000 requests threshold)
-        target_group_arn = self.find_target_group()
-        if target_group_arn:
+        target_group_info = self.find_target_group()
+        if target_group_info:
             self.log("Creating ALB request count scaling policy")
-            # Extract resource label from target group ARN
-            tg_resource_label = target_group_arn.split(':')[-1]
-
-            try:
-                resource_id = f"service/{self.cluster_name}/{service_name}"
-                policy_name = f"alb-request-count-policy-{self.environment_suffix}"
-
-                if self.dry_run:
-                    self.optimizations_applied.append("Would create ALB request count scaling policy")
+            
+            # Build correct resource label with load balancer info
+            resource_label = self.build_alb_resource_label(target_group_info)
+            
+            if not resource_label:
+                self.log("Could not build ALB resource label, skipping ALB scaling policy", 'WARNING')
+            else:
+                # Check if ALB scaling policy already exists
+                if self.check_scaling_policy_exists(self.cluster_name, service_name, 'ALBRequestCountPerTarget'):
+                    self.log("ALB request count scaling policy already exists, skipping")
+                    self.optimizations_applied.append("ALB request count scaling already configured")
                 else:
-                    self.appautoscaling_client.put_scaling_policy(
-                        PolicyName=policy_name,
-                        ServiceNamespace='ecs',
-                        ResourceId=resource_id,
-                        ScalableDimension='ecs:service:DesiredCount',
-                        PolicyType='TargetTrackingScaling',
-                        TargetTrackingScalingPolicyConfiguration={
-                            'TargetValue': 1000.0,
-                            'PredefinedMetricSpecification': {
-                                'PredefinedMetricType': 'ALBRequestCountPerTarget',
-                                'ResourceLabel': tg_resource_label
-                            },
-                            'ScaleInCooldown': 60,
-                            'ScaleOutCooldown': 60
-                        }
-                    )
-                    self.log("ALB request count scaling policy created")
-                    self.optimizations_applied.append("Added ALB request count per target scaling (threshold: 1000)")
-            except ClientError as e:
-                self.log(f"Error creating ALB scaling policy: {e}", 'ERROR')
-                self.errors.append(f"ALB scaling policy: {str(e)}")
-                success = False
+                    try:
+                        resource_id = f"service/{self.cluster_name}/{service_name}"
+                        policy_name = f"alb-request-count-policy-{self.environment_suffix}"
+
+                        if self.dry_run:
+                            self.optimizations_applied.append("Would create ALB request count scaling policy")
+                        else:
+                            self.appautoscaling_client.put_scaling_policy(
+                                PolicyName=policy_name,
+                                ServiceNamespace='ecs',
+                                ResourceId=resource_id,
+                                ScalableDimension='ecs:service:DesiredCount',
+                                PolicyType='TargetTrackingScaling',
+                                TargetTrackingScalingPolicyConfiguration={
+                                    'TargetValue': 1000.0,
+                                    'PredefinedMetricSpecification': {
+                                        'PredefinedMetricType': 'ALBRequestCountPerTarget',
+                                        'ResourceLabel': resource_label
+                                    },
+                                    'ScaleInCooldown': 60,
+                                    'ScaleOutCooldown': 60
+                                }
+                            )
+                            self.log("ALB request count scaling policy created")
+                            self.optimizations_applied.append("Added ALB request count per target scaling (threshold: 1000)")
+                    except ClientError as e:
+                        self.log(f"Error creating ALB scaling policy: {e}", 'ERROR')
+                        self.errors.append(f"ALB scaling policy: {str(e)}")
+                        success = False
 
         return success
 
