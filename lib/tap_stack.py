@@ -11,7 +11,7 @@ from lib.monitoring import MonitoringConstruct
 from lib.traffic_management import TrafficManagementConstruct
 
 # Unique suffix to avoid resource naming conflicts
-UNIQUE_SUFFIX = "h9p3"
+UNIQUE_SUFFIX = "w4n6"
 
 
 class TapStack(TerraformStack):
@@ -26,7 +26,8 @@ class TapStack(TerraformStack):
         super().__init__(scope, construct_id)
 
         # Add unique suffix to environment suffix for resource naming
-        self.environment_suffix = f"{environment_suffix}-{UNIQUE_SUFFIX}"
+        env_suffix_with_unique = f"{environment_suffix}-{UNIQUE_SUFFIX}"
+        self.environment_suffix = env_suffix_with_unique
         self.primary_region = primary_region
         self.secondary_region = secondary_region
 
@@ -50,7 +51,7 @@ class TapStack(TerraformStack):
         self.networking = NetworkingConstruct(
             self,
             "networking",
-            environment_suffix,
+            env_suffix_with_unique,
             self.primary_provider,
             self.secondary_provider,
             primary_region,
@@ -61,7 +62,7 @@ class TapStack(TerraformStack):
         self.database = DatabaseConstruct(
             self,
             "database",
-            environment_suffix,
+            env_suffix_with_unique,
             self.primary_provider,
             self.secondary_provider,
             self.networking.primary_vpc.id,
@@ -76,7 +77,7 @@ class TapStack(TerraformStack):
         self.compute = ComputeConstruct(
             self,
             "compute",
-            environment_suffix,
+            env_suffix_with_unique,
             self.primary_provider,
             self.secondary_provider,
             self.networking.primary_public_subnet_ids,
@@ -97,7 +98,7 @@ class TapStack(TerraformStack):
         self.session_state = SessionStateConstruct(
             self,
             "session-state",
-            environment_suffix,
+            env_suffix_with_unique,
             self.primary_provider,
             self.secondary_provider,
             primary_region,
@@ -108,7 +109,7 @@ class TapStack(TerraformStack):
         self.storage = StorageConstruct(
             self,
             "storage",
-            environment_suffix,
+            env_suffix_with_unique,
             self.primary_provider,
             self.secondary_provider,
             primary_region,
@@ -119,7 +120,7 @@ class TapStack(TerraformStack):
         self.monitoring = MonitoringConstruct(
             self,
             "monitoring",
-            environment_suffix,
+            env_suffix_with_unique,
             self.primary_provider,
             self.secondary_provider,
             self.compute.primary_alb_arn_suffix,
@@ -134,7 +135,7 @@ class TapStack(TerraformStack):
         self.failover = FailoverOrchestrationConstruct(
             self,
             "failover",
-            environment_suffix,
+            env_suffix_with_unique,
             self.primary_provider,
             self.networking.primary_private_subnet_ids,
             self.monitoring.primary_sns_topic_arn,
@@ -147,9 +148,9 @@ class TapStack(TerraformStack):
 
         # Traffic management - Route 53 with failover
         self.traffic_management = TrafficManagementConstruct(
-            self,
+                self,
             "traffic",
-            environment_suffix,
+            env_suffix_with_unique,
             self.primary_provider,
             self.compute.primary_alb_dns,
             self.compute.secondary_alb_dns,
@@ -161,7 +162,7 @@ class TapStack(TerraformStack):
 
         # Outputs
         TerraformOutput(
-            self,
+                self,
             "primary_alb_endpoint",
             value=self.compute.primary_alb_dns,
             description="Primary ALB DNS endpoint"
