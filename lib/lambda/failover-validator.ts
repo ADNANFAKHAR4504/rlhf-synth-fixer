@@ -1,9 +1,9 @@
-import { RDSClient, DescribeDBClustersCommand } from '@aws-sdk/client-rds';
 import {
   CloudWatchClient,
   PutMetricDataCommand,
 } from '@aws-sdk/client-cloudwatch';
-import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
+import { DescribeDBClustersCommand, RDSClient } from '@aws-sdk/client-rds';
+import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 
 const rds = new RDSClient({ region: 'us-east-1' });
 const cloudwatch = new CloudWatchClient({ region: 'us-east-1' });
@@ -43,18 +43,18 @@ export async function handler(
       `/trading/${environmentSuffix}/secondary/db-endpoint`
     );
 
+    // Get cluster identifiers from SSM or environment
+    const primaryClusterId = process.env.PRIMARY_CLUSTER_ID ||
+      await getParameter(`/trading/${environmentSuffix}/primary/cluster-id`).catch(() => `trading-cluster-primary-${environmentSuffix}`);
+    const secondaryClusterId = process.env.SECONDARY_CLUSTER_ID ||
+      await getParameter(`/trading/${environmentSuffix}/secondary/cluster-id`).catch(() => `trading-cluster-secondary-${environmentSuffix}`);
+
     // Check RDS cluster status
-    const primaryStatus = await checkClusterStatus(
-      `trading-cluster-primary-${environmentSuffix}`
-    );
-    const secondaryStatus = await checkClusterStatus(
-      `trading-cluster-secondary-${environmentSuffix}`
-    );
+    const primaryStatus = await checkClusterStatus(primaryClusterId);
+    const secondaryStatus = await checkClusterStatus(secondaryClusterId);
 
     // Check replication lag
-    const replicationLag = await checkReplicationLag(
-      `trading-cluster-primary-${environmentSuffix}`
-    );
+    const replicationLag = await checkReplicationLag(primaryClusterId);
 
     // Check Route53 health checks
     await getParameter(

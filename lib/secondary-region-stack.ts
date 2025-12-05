@@ -1,34 +1,34 @@
-import { Construct } from 'constructs';
-import { TerraformAsset, AssetType } from 'cdktf';
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
-import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
-import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
-import { Route } from '@cdktf/provider-aws/lib/route';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
-import { RdsCluster } from '@cdktf/provider-aws/lib/rds-cluster';
-import { RdsClusterInstance } from '@cdktf/provider-aws/lib/rds-cluster-instance';
-import { SqsQueue } from '@cdktf/provider-aws/lib/sqs-queue';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
-import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
-import { LambdaEventSourceMapping } from '@cdktf/provider-aws/lib/lambda-event-source-mapping';
-import { ApiGatewayRestApi } from '@cdktf/provider-aws/lib/api-gateway-rest-api';
-import { ApiGatewayResource } from '@cdktf/provider-aws/lib/api-gateway-resource';
-import { ApiGatewayMethod } from '@cdktf/provider-aws/lib/api-gateway-method';
-import { ApiGatewayIntegration } from '@cdktf/provider-aws/lib/api-gateway-integration';
 import { ApiGatewayDeployment } from '@cdktf/provider-aws/lib/api-gateway-deployment';
+import { ApiGatewayIntegration } from '@cdktf/provider-aws/lib/api-gateway-integration';
+import { ApiGatewayMethod } from '@cdktf/provider-aws/lib/api-gateway-method';
+import { ApiGatewayResource } from '@cdktf/provider-aws/lib/api-gateway-resource';
+import { ApiGatewayRestApi } from '@cdktf/provider-aws/lib/api-gateway-rest-api';
 import { ApiGatewayStage } from '@cdktf/provider-aws/lib/api-gateway-stage';
 import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
-import { SnsTopic } from '@cdktf/provider-aws/lib/sns-topic';
-import { SsmParameter } from '@cdktf/provider-aws/lib/ssm-parameter';
+import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { LambdaEventSourceMapping } from '@cdktf/provider-aws/lib/lambda-event-source-mapping';
+import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
 import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { RdsCluster } from '@cdktf/provider-aws/lib/rds-cluster';
+import { RdsClusterInstance } from '@cdktf/provider-aws/lib/rds-cluster-instance';
+import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { SnsTopic } from '@cdktf/provider-aws/lib/sns-topic';
+import { SqsQueue } from '@cdktf/provider-aws/lib/sqs-queue';
+import { SsmParameter } from '@cdktf/provider-aws/lib/ssm-parameter';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { AssetType, TerraformAsset } from 'cdktf';
+import { Construct } from 'constructs';
+import * as path from 'path';
 import { config } from './config/infrastructure-config';
 import { SharedConstructs } from './shared-constructs';
-import * as path from 'path';
 
 // Generate unique suffix to avoid resource naming conflicts
 const uniqueSuffix = Date.now().toString(36).slice(-4);
@@ -194,7 +194,7 @@ export class SecondaryRegionStack extends Construct {
     // Aurora PostgreSQL Cluster (Secondary - Read Replica)
     this.auroraCluster = new RdsCluster(this, 'aurora-cluster', {
       provider,
-      clusterIdentifier: `trading-cluster-secondary-${environmentSuffix}`,
+      clusterIdentifier: `trading-cluster-secondary-${environmentSuffix}-${uniqueSuffix}`,
       engine: 'aurora-postgresql',
       engineVersion: '14.6',
       dbSubnetGroupName: dbSubnetGroup.name,
@@ -222,7 +222,7 @@ export class SecondaryRegionStack extends Construct {
     // Aurora Instance
     new RdsClusterInstance(this, 'aurora-instance-1', {
       provider,
-      identifier: `trading-instance-1-secondary-${environmentSuffix}`,
+      identifier: `trading-instance-1-secondary-${environmentSuffix}-${uniqueSuffix}`,
       clusterIdentifier: this.auroraCluster.id,
       instanceClass: 'db.serverless',
       engine: 'aurora-postgresql',
@@ -568,6 +568,17 @@ export class SecondaryRegionStack extends Construct {
       name: `/trading/${environmentSuffix}/secondary/db-endpoint`,
       type: 'String',
       value: this.auroraCluster.readerEndpoint,
+      overwrite: true,
+      tags: {
+        Environment: environmentSuffix,
+      },
+    });
+
+    new SsmParameter(this, 'cluster-id-parameter', {
+      provider,
+      name: `/trading/${environmentSuffix}/secondary/cluster-id`,
+      type: 'String',
+      value: this.auroraCluster.clusterIdentifier,
       overwrite: true,
       tags: {
         Environment: environmentSuffix,

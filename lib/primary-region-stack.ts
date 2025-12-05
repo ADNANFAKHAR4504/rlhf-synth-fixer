@@ -1,35 +1,35 @@
-import { Construct } from 'constructs';
-import { TerraformAsset, AssetType } from 'cdktf';
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
-import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
-import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
-import { Route } from '@cdktf/provider-aws/lib/route';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { ApiGatewayDeployment } from '@cdktf/provider-aws/lib/api-gateway-deployment';
+import { ApiGatewayIntegration } from '@cdktf/provider-aws/lib/api-gateway-integration';
+import { ApiGatewayMethod } from '@cdktf/provider-aws/lib/api-gateway-method';
+import { ApiGatewayResource } from '@cdktf/provider-aws/lib/api-gateway-resource';
+import { ApiGatewayRestApi } from '@cdktf/provider-aws/lib/api-gateway-rest-api';
+import { ApiGatewayStage } from '@cdktf/provider-aws/lib/api-gateway-stage';
+import { CloudwatchEventRule } from '@cdktf/provider-aws/lib/cloudwatch-event-rule';
+import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
-import { RdsCluster } from '@cdktf/provider-aws/lib/rds-cluster';
-import { RdsClusterInstance } from '@cdktf/provider-aws/lib/rds-cluster-instance';
-import { SqsQueue } from '@cdktf/provider-aws/lib/sqs-queue';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
-import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
 import { LambdaEventSourceMapping } from '@cdktf/provider-aws/lib/lambda-event-source-mapping';
-import { ApiGatewayRestApi } from '@cdktf/provider-aws/lib/api-gateway-rest-api';
-import { ApiGatewayResource } from '@cdktf/provider-aws/lib/api-gateway-resource';
-import { ApiGatewayMethod } from '@cdktf/provider-aws/lib/api-gateway-method';
-import { ApiGatewayIntegration } from '@cdktf/provider-aws/lib/api-gateway-integration';
-import { ApiGatewayDeployment } from '@cdktf/provider-aws/lib/api-gateway-deployment';
-import { ApiGatewayStage } from '@cdktf/provider-aws/lib/api-gateway-stage';
-import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
-import { SnsTopic } from '@cdktf/provider-aws/lib/sns-topic';
-import { CloudwatchEventRule } from '@cdktf/provider-aws/lib/cloudwatch-event-rule';
+import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
 import { LambdaPermission } from '@cdktf/provider-aws/lib/lambda-permission';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { RdsCluster } from '@cdktf/provider-aws/lib/rds-cluster';
+import { RdsClusterInstance } from '@cdktf/provider-aws/lib/rds-cluster-instance';
+import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { SnsTopic } from '@cdktf/provider-aws/lib/sns-topic';
+import { SqsQueue } from '@cdktf/provider-aws/lib/sqs-queue';
 import { SsmParameter } from '@cdktf/provider-aws/lib/ssm-parameter';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { AssetType, TerraformAsset } from 'cdktf';
+import { Construct } from 'constructs';
+import * as path from 'path';
 import { config } from './config/infrastructure-config';
 import { SharedConstructs } from './shared-constructs';
-import * as path from 'path';
 
 // Generate unique suffix to avoid resource naming conflicts
 const uniqueSuffix = Date.now().toString(36).slice(-4);
@@ -197,7 +197,7 @@ export class PrimaryRegionStack extends Construct {
     // Aurora PostgreSQL Cluster (Primary)
     this.auroraCluster = new RdsCluster(this, 'aurora-cluster', {
       provider,
-      clusterIdentifier: `trading-cluster-primary-${environmentSuffix}`,
+      clusterIdentifier: `trading-cluster-primary-${environmentSuffix}-${uniqueSuffix}`,
       engine: 'aurora-postgresql',
       engineVersion: '14.6',
       databaseName: config.databaseName,
@@ -226,7 +226,7 @@ export class PrimaryRegionStack extends Construct {
     // Aurora Instance
     new RdsClusterInstance(this, 'aurora-instance-1', {
       provider,
-      identifier: `trading-instance-1-primary-${environmentSuffix}`,
+      identifier: `trading-instance-1-primary-${environmentSuffix}-${uniqueSuffix}`,
       clusterIdentifier: this.auroraCluster.id,
       instanceClass: 'db.serverless',
       engine: 'aurora-postgresql',
@@ -599,6 +599,17 @@ export class PrimaryRegionStack extends Construct {
       name: `/trading/${environmentSuffix}/primary/db-endpoint`,
       type: 'String',
       value: this.auroraCluster.endpoint,
+      overwrite: true,
+      tags: {
+        Environment: environmentSuffix,
+      },
+    });
+
+    new SsmParameter(this, 'cluster-id-parameter', {
+      provider,
+      name: `/trading/${environmentSuffix}/primary/cluster-id`,
+      type: 'String',
+      value: this.auroraCluster.clusterIdentifier,
       overwrite: true,
       tags: {
         Environment: environmentSuffix,
