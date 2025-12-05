@@ -137,34 +137,34 @@ The synthesized CloudFormation template from the MODEL_RESPONSE CDK code generat
 
 ### Resources Generated (60+)
 
-| Resource Type              | Count | Validation                            |
-| -------------------------- | ----- | ------------------------------------- |
-| AWS::KMS::Key              | 1     | ✅ Key rotation enabled               |
-| AWS::KMS::Alias            | 1     | ✅ Named with environmentSuffix       |
-| AWS::S3::Bucket            | 1     | ✅ Versioning, KMS, lifecycle rules   |
-| AWS::SNS::Topic            | 2     | ✅ KMS encrypted                      |
-| AWS::SNS::Subscription     | 1     | ✅ Email subscription                 |
-| AWS::IAM::Role             | 3     | ✅ Least-privilege                    |
-| AWS::IAM::Policy           | 4+    | ✅ No wildcards except where required |
-| AWS::CodeBuild::Project    | 1     | ✅ STANDARD_7_0 image                 |
-| AWS::Lambda::Function      | 2     | ✅ Node.js 20.x, X-Ray enabled        |
-| AWS::Events::Rule          | 3     | ✅ Correct cron expressions           |
-| AWS::CloudWatch::Alarm     | 3     | ✅ Proper thresholds                  |
-| AWS::CloudWatch::Dashboard | 1     | ✅ Multi-widget                       |
-| AWS::Logs::LogGroup        | 3     | ✅ 7-day retention                    |
+| Resource Type              | Count | Validation                         |
+| -------------------------- | ----- | ---------------------------------- |
+| AWS::KMS::Key              | 1     | Key rotation enabled               |
+| AWS::KMS::Alias            | 1     | Named with environmentSuffix       |
+| AWS::S3::Bucket            | 1     | Versioning, KMS, lifecycle rules   |
+| AWS::SNS::Topic            | 2     | KMS encrypted                      |
+| AWS::SNS::Subscription     | 1     | Email subscription                 |
+| AWS::IAM::Role             | 3     | Least-privilege                    |
+| AWS::IAM::Policy           | 4+    | No wildcards except where required |
+| AWS::CodeBuild::Project    | 1     | STANDARD_7_0 image                 |
+| AWS::Lambda::Function      | 2     | Node.js 20.x, X-Ray enabled        |
+| AWS::Events::Rule          | 3     | Correct cron expressions           |
+| AWS::CloudWatch::Alarm     | 3     | Proper thresholds                  |
+| AWS::CloudWatch::Dashboard | 1     | Multi-widget                       |
+| AWS::Logs::LogGroup        | 3     | 7-day retention                    |
 
 ### Security Compliance Verified
 
-- ✅ All data encrypted at rest (KMS)
-- ✅ All SNS topics encrypted with customer KMS key
-- ✅ IAM roles follow least-privilege principle
-- ✅ CloudWatch Logs retention set to 7 days
-- ✅ Lambda timeouts configured at 300 seconds
-- ✅ X-Ray tracing enabled on Lambda functions
-- ✅ CodeBuild uses managed image (aws/codebuild/standard:7.0)
-- ✅ All resources include environmentSuffix in names
-- ✅ RemovalPolicy.DESTROY on all stateful resources
-- ✅ autoDeleteObjects: true on S3 bucket
+- All data encrypted at rest (KMS)
+- All SNS topics encrypted with customer KMS key
+- IAM roles follow least-privilege principle
+- CloudWatch Logs retention set to 7 days
+- Lambda timeouts configured at 300 seconds
+- X-Ray tracing enabled on Lambda functions
+- CodeBuild uses managed image (aws/codebuild/standard:7.0)
+- All resources include environmentSuffix in names
+- RemovalPolicy.DESTROY on all stateful resources
+- autoDeleteObjects: true on S3 bucket
 
 ---
 
