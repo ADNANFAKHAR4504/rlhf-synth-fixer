@@ -39,8 +39,8 @@ export class TapStack extends cdk.Stack {
     });
 
     // Example Lambda function for validation testing
-    // Prefix with underscore to indicate intentionally unused (for aspect validation)
-    const _exampleFunction = new lambda.Function(this, 'ExampleFunction', {
+    // Created without variable assignment - resources are registered with CDK via constructor
+    new lambda.Function(this, 'ExampleFunction', {
       functionName: `example-function-${environmentSuffix}`,
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'index.handler',
@@ -58,24 +58,20 @@ export class TapStack extends cdk.Stack {
     });
 
     // Example Lambda with issues (for testing)
-    // Prefix with underscore to indicate intentionally unused (for aspect validation)
-    const _problematicFunction = new lambda.Function(
-      this,
-      'ProblematicFunction',
-      {
-        functionName: `problematic-function-${environmentSuffix}`,
-        runtime: lambda.Runtime.NODEJS_18_X,
-        handler: 'index.handler',
-        code: lambda.Code.fromInline(`
+    // Created without variable assignment - resources are registered with CDK via constructor
+    new lambda.Function(this, 'ProblematicFunction', {
+      functionName: `problematic-function-${environmentSuffix}`,
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromInline(`
         exports.handler = async (event) => {
           return { statusCode: 200, body: 'OK' };
         };
       `),
-        timeout: cdk.Duration.seconds(900), // Excessive timeout
-        memorySize: 128, // Low memory
-        // Missing environment variables
-      }
-    );
+      timeout: cdk.Duration.seconds(900), // Excessive timeout
+      memorySize: 128, // Low memory
+      // Missing environment variables
+    });
 
     // Example IAM role with overly permissive policy (for testing)
     const problematicRole = new iam.Role(this, 'ProblematicRole', {
@@ -98,8 +94,8 @@ export class TapStack extends cdk.Stack {
     cdk.Aspects.of(this).add(new RDSConfigAspect());
 
     // Generate validation report after synthesis
-    // Prefix with underscore to indicate intentionally unused (reporter works via construct creation)
-    const _reporter = new ValidationReporter(this, 'ValidationReporter', {
+    // Created without variable assignment - reporter works via construct creation
+    new ValidationReporter(this, 'ValidationReporter', {
       environmentSuffix,
       outputPath: './validation-report.json',
     });
