@@ -1,121 +1,69 @@
-Hey team,
+# Monitoring and Observability Infrastructure
 
-We need to build infrastructure for an educational content delivery platform that integrates with a complete CI/CD pipeline. I've been looking at how we can create a secure, compliant system for delivering educational materials to students using **CDKTF with TypeScript**. The business wants infrastructure that deploys automatically through a multi-stage pipeline with proper security controls and approval gates.
+## Background
 
-The platform will serve educational content to students, track their progress, and ensure compliance with data protection regulations. We need this to work seamlessly with automated deployments across development, staging, and production environments.
+A fintech startup is experiencing intermittent performance issues with their payment processing microservices. They need a comprehensive monitoring solution to track application metrics, set up intelligent alerting, and visualize system health across their distributed architecture.
 
-## What we need to build
+## Problem Statement
 
-Create an educational content delivery infrastructure using **CDKTF with TypeScript** that integrates with a CI/CD pipeline.
+Create a Pulumi TypeScript program to deploy a monitoring and observability stack for a payment processing system. The configuration must:
 
-### Core Requirements
+1. Set up CloudWatch Log Groups for three microservices (payment-api, fraud-detector, notification-service) with 30-day retention and KMS encryption.
+2. Configure X-Ray tracing for all services with sampling rules that capture 100% of error traces and 10% of successful traces.
+3. Create custom CloudWatch metrics from log data using metric filters to track payment success rates, fraud detection rates, and notification delivery rates.
+4. Deploy Lambda functions (ARM-based) to aggregate metrics across services every 5 minutes.
+5. Set up CloudWatch dashboards with widgets for service health, payment volume trends, and cross-service latency percentiles.
+6. Configure SNS FIFO topics for critical alerts (payment failures, fraud spike, service degradation).
+7. Create composite CloudWatch alarms that trigger only when multiple conditions are met to reduce alert fatigue.
+8. Implement metric math expressions to calculate derived metrics like payment conversion rates.
+9. Set up CloudWatch Insights queries as saved queries for common troubleshooting scenarios.
+10. Configure CloudWatch Events rules to trigger Lambda functions for automated remediation of known issues.
 
-1. **Content Storage and Delivery**
-   - S3 buckets for storing course materials, videos, and documents
-   - CloudFront distribution for fast, global content delivery
-   - Origin Access Identity for secure S3 access
-   - Support for different content types (videos, PDFs, interactive content)
+Expected output: A complete Pulumi program that creates all monitoring infrastructure with proper resource dependencies, exports key resource ARNs and dashboard URLs, and implements all security and tagging requirements.
 
-2. **User and Progress Tracking**
-   - DynamoDB tables for user profiles and course progress
-   - Point-in-time recovery enabled for data protection
-   - Global secondary indexes for efficient querying
-   - Encryption at rest for sensitive student data
+## Environment
 
-3. **Authentication and Authorization**
-   - Cognito User Pool for student authentication
-   - Email and SMS verification for account security
-   - Password policies meeting compliance requirements
-   - User groups for students, instructors, and administrators
+Production monitoring infrastructure deployed in us-east-1 for a payment processing system. Uses CloudWatch for metrics and logs, X-Ray for distributed tracing, SNS for alerting, and Lambda for custom metric processing. Requires Pulumi 3.x with TypeScript, Node.js 18+, and AWS CLI configured. Infrastructure spans multiple microservices deployed on ECS Fargate in a VPC with private subnets. KMS encryption required for all log data.
 
-4. **Serverless API Layer**
-   - Lambda functions for course enrollment and progress updates
-   - API Gateway REST API for frontend integration
-   - Lambda execution roles with least privilege
-   - Environment variables for configuration
+## AWS Services Required
 
-5. **Monitoring and Compliance**
-   - CloudWatch log groups for application logs
-   - Log retention policies for compliance
-   - CloudWatch alarms for critical metrics
-   - SNS topics for alerting administrators
+- CloudWatch Logs
+- CloudWatch Metrics
+- CloudWatch Dashboards
+- CloudWatch Alarms
+- CloudWatch Metric Filters
+- X-Ray Sampling Rules
+- SNS FIFO Topics
+- KMS
+- Lambda (ARM-based Graviton2)
+- EventBridge
+- IAM
 
-### CI/CD Integration Requirements
+## Mandatory Constraints
 
-Reference the provided `lib/ci-cd.yml` for:
+1. All resources must be tagged with Environment, Service, and Owner tags
+2. SNS topics must use FIFO queues for alert ordering guarantees
+3. Lambda functions for metric aggregation must use ARM-based Graviton2 processors
 
-1. **GitHub Actions Workflow**
-   - GitHub OIDC authentication (no long-lived credentials)
-   - Automated deployment to dev on commits
-   - Manual approval gates for staging and production
-   - Security scanning and compliance checks
+## Optional Constraints
 
-2. **Multi-Stage Pipeline**
-   - Build stage: Install dependencies, run cdktf synth
-   - Security stage: Run security scanning and validation
-   - Deploy stages: dev (auto) → staging (approval) → prod (approval)
-   - Notification hooks for deployment status
+1. Alarms must implement composite alarms for reducing false positives
+2. All metrics must be exported to CloudWatch with custom namespaces per service
+3. Metric filters must extract custom business metrics from application logs
+4. CloudWatch Logs must retain logs for exactly 30 days with automatic expiration
+5. Log groups must use KMS encryption with customer-managed keys
+6. CloudWatch dashboards must be organized by service domain with cross-service views
+7. Use AWS X-Ray for distributed tracing across all microservices
 
-3. **Environment Configuration**
-   - Support for environment-specific parameters
-   - Integration with GitHub Actions contexts
-   - Encrypted secrets management
-   - Cross-account role assumptions for production
+## Expected Deliverables
 
-### Technical Requirements
-
-- All infrastructure defined using **CDKTF with TypeScript**
-- Deploy to **us-east-1** region
-- Resource names must include **environmentSuffix** for uniqueness
-- Follow naming convention: `{resource-type}-{environmentSuffix}`
-- All resources must be destroyable (no Retain removal policies)
-- Use proper CDKTF imports from `@cdktf/provider-aws`
-- Support environment parameters from CI/CD pipeline
-- Include IAM roles for cross-account deployments
-- Proper error handling and logging throughout
-
-### Deployment Requirements (CRITICAL)
-
-- **environmentSuffix Requirement**: ALL named resources must include the environmentSuffix parameter to ensure uniqueness across environments
-- **Destroyability**: All resources must be fully destroyable. Do NOT use any Retain or Snapshot removal policies
-- **Multi-Environment Support**: Infrastructure must work across dev, staging, and prod environments with different configurations
-- **CI/CD Compatible**: Resources must support automated deployment through GitHub Actions
-- **Region Specific**: All resources deployed to us-east-1
-
-### Constraints
-
-- Student data must be encrypted at rest and in transit
-- Authentication must support MFA for administrative access
-- Logs must be retained for minimum 30 days for compliance
-- API endpoints must use HTTPS only
-- Content delivery must use signed URLs for premium content
-- Infrastructure must support automated testing and validation
-- All IAM roles must follow principle of least privilege
-- CloudWatch metrics must be exported for compliance reporting
-
-## Success Criteria
-
-- **Functionality**: Complete educational platform infrastructure with content delivery, user management, and progress tracking
-- **Performance**: CloudFront provides low-latency content delivery globally
-- **Reliability**: DynamoDB point-in-time recovery, Lambda retry policies
-- **Security**: Encryption at rest/transit, Cognito authentication, secure API access
-- **Resource Naming**: All resources include environmentSuffix parameter
-- **Code Quality**: TypeScript with proper types, comprehensive error handling, well-documented
-- **CI/CD Integration**: Infrastructure deploys successfully through multi-stage pipeline with approval gates
-- **Compliance**: Logging, encryption, and data retention meet educational compliance requirements
-
-## What to deliver
-
-- Complete CDKTF TypeScript implementation in lib/
-- S3 buckets with proper bucket policies and encryption
-- CloudFront distribution with Origin Access Identity
-- DynamoDB tables with encryption and backup enabled
-- Cognito User Pool with proper password policies
-- Lambda functions with execution roles
-- API Gateway with Lambda integration
-- CloudWatch log groups and alarms
-- SNS topics for notifications
-- IAM roles for CI/CD cross-account access
-- Support for environment-specific configuration
-- Unit tests for all components
-- Documentation and deployment instructions
+1. Complete Pulumi TypeScript infrastructure code
+2. Proper resource dependencies and relationships
+3. Exported outputs for key resource ARNs and dashboard URLs
+4. Implementation of all security requirements (KMS encryption, IAM policies)
+5. All mandatory tagging requirements applied
+6. ARM-based Lambda functions for metric aggregation
+7. FIFO SNS topics for ordered alerting
+8. Composite alarms to reduce false positives
+9. Custom CloudWatch dashboards with service-specific and cross-service views
+10. X-Ray tracing configuration for distributed service monitoring
