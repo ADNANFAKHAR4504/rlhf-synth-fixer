@@ -248,7 +248,12 @@ export class TapStack extends pulumi.ComponentResource {
         policy: pulumi
           .all([reportsBucket.id, alertTopic.arn])
           .apply(([bucketId, topicArn]) =>
-            generateLambdaPolicy(bucketId, topicArn, awsRegion, environmentSuffix)
+            generateLambdaPolicy(
+              bucketId,
+              topicArn,
+              awsRegion,
+              environmentSuffix
+            )
           ),
       },
       { parent: this }
@@ -563,4 +568,3 @@ exports.handler = async (event) => {
     });
   }
 }
-
