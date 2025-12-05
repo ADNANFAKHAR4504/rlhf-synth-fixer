@@ -1,0 +1,23 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "infra-optimization",
+  "team": "stf",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Optimization"
+  ],
+  "aws_services": [
+    "EC2",
+    "RDS",
+    "IAM",
+    "S3",
+    "ALB",
+    "VPC",
+    "CloudWatch",
+    "SSM"
+  ],
+  "training_quality": 9
+}
