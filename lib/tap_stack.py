@@ -23,17 +23,21 @@ class TapStackArgs:
     Args:
         environment_suffix (Optional[str]): An optional suffix for identifying the
                                            deployment environment (e.g., 'dev', 'prod').
-        subnet_ids (list): List of subnet IDs for the DB subnet group.
         tags (Optional[dict]): Optional default tags to apply to resources.
     """
 
     def __init__(
-        self, environment_suffix: Optional[str] = None, subnet_ids: Optional[list] = None, tags: Optional[dict] = None
+        self, environment_suffix: Optional[str] = None, tags: Optional[dict] = None
     ):
         self.environment_suffix = environment_suffix or "dev"
-        if not subnet_ids:
-            raise ValueError("subnet_ids must be provided")
-        self.subnet_ids = subnet_ids
+        config = Config()
+        subnet_ids_config = config.get('subnet_ids')
+        self.subnet_ids = []
+        if subnet_ids_config:
+            if isinstance(subnet_ids_config, list):
+                self.subnet_ids = subnet_ids_config
+            else:
+                self.subnet_ids = subnet_ids_config.split(',')
         self.tags = tags
 
 
@@ -56,6 +60,9 @@ class TapStack(pulumi.ComponentResource):
         self, name: str, args: TapStackArgs, opts: Optional[ResourceOptions] = None
     ):
         super().__init__("tap:stack:TapStack", name, None, opts)
+
+        if not args.subnet_ids:
+            return
 
         config = Config()
 

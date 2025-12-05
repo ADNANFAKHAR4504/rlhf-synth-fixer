@@ -50,17 +50,9 @@ provider = aws.Provider('aws',
     )
 )
 
-# Get subnet IDs from config, required
-subnet_ids_config = config.get('subnet_ids')
-if subnet_ids_config is None:
-    raise ValueError("subnet_ids configuration is required. Please set it using `pulumi config set subnet_ids <comma-separated-subnet-ids>`")
-if isinstance(subnet_ids_config, list):
-    subnet_ids = subnet_ids_config
-else:
-    subnet_ids = subnet_ids_config.split(',')
-
+# Create the TapStack
 stack = TapStack(
     name="pulumi-infra",
-    args=TapStackArgs(environment_suffix=environment_suffix, subnet_ids=subnet_ids),
+    args=TapStackArgs(environment_suffix=environment_suffix),
     opts=ResourceOptions(provider=provider)
 )
