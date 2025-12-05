@@ -1,0 +1,38 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-12-05T03:36:15.678852",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Configure S3 cross-region replication with RTC (Replication Time Control)",
+    "Use AWS Global Accelerator for automatic traffic routing between regions",
+    "Use EventBridge Global Endpoints for event routing across regions",
+    "Configure AWS Systems Manager Parameter Store replication for configuration data",
+    "Implement AWS Backup for automated cross-region backup of RDS Aurora",
+    "Deploy Lambda functions in both regions with identical configurations",
+    "Use Route 53 health checks with failover routing policies",
+    "Deploy API Gateway with custom domain names in each region",
+    "Implement DynamoDB Global Tables for multi-region data replication"
+  ],
+  "po_id": "64457522",
+  "aws_services": [
+    "acm",
+    "apigateway",
+    "backup",
+    "cloudwatch",
+    "dynamodb",
+    "eventbridge",
+    "globalaccelerator",
+    "lambda",
+    "rds",
+    "route53",
+    "s3",
+    "sns",
+    "vpc"
+  ],
+  "region": "us-east-1",
+  "training_quality": 3
+}
