@@ -1,0 +1,14 @@
+{
+  "language": "typescript",
+  "app": "npx ts-node bin/app.ts",
+  "projectId": "trading-platform-dr",
+  "sendCrashReports": "false",
+  "terraformProviders": [
+    "aws@~> 5.0"
+  ],
+  "terraformModules": [],
+  "context": {
+    "excludeStackIdFromLogicalIds": "true",
+    "allowSepCharsInLogicalIds": "true"
+  }
+}
