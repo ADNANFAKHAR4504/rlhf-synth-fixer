@@ -48,13 +48,13 @@ class RoutingStack(Construct):
             }
         )
 
-        # Route 53 Hosted Zone
+        # Route 53 Private Hosted Zone (using .internal TLD)
         hosted_zone = Route53Zone(
             self,
             "hosted-zone",
-            name=f"dr-payments-{environment_suffix}.example.com",
+            name=f"dr-payments-{environment_suffix}.internal",
             tags={
-                "Name": f"dr-payments-{environment_suffix}.example.com"
+                "Name": f"dr-payments-{environment_suffix}.internal"
             }
         )
 
@@ -113,7 +113,7 @@ class RoutingStack(Construct):
             self,
             "primary-failover-record",
             zone_id=hosted_zone.zone_id,
-            name=f"api.dr-payments-{environment_suffix}.example.com",
+            name=f"api.dr-payments-{environment_suffix}.internal",
             type="CNAME",
             ttl=60,
             records=[primary_api_endpoint.replace("https://", "").replace("http://", "").split("/")[0]],
@@ -128,7 +128,7 @@ class RoutingStack(Construct):
             self,
             "secondary-failover-record",
             zone_id=hosted_zone.zone_id,
-            name=f"api.dr-payments-{environment_suffix}.example.com",
+            name=f"api.dr-payments-{environment_suffix}.internal",
             type="CNAME",
             ttl=60,
             records=[secondary_api_endpoint.replace("https://", "").replace("http://", "").split("/")[0]],
@@ -147,9 +147,7 @@ class RoutingStack(Construct):
             ip_address_type="IPV4",
             enabled=True,
             attributes=GlobalacceleratorAcceleratorAttributes(
-                flow_logs_enabled=True,
-                flow_logs_s3_bucket=f"dr-ga-logs-{environment_suffix}",
-                flow_logs_s3_prefix="flow-logs/"
+                flow_logs_enabled=False
             ),
             tags={
                 "Name": f"dr-payment-accelerator-{environment_suffix}"
@@ -203,4 +201,4 @@ class RoutingStack(Construct):
 
         # Outputs
         self.global_accelerator_dns = self.global_accelerator.dns_name
-        self.failover_domain = f"api.dr-payments-{environment_suffix}.example.com"
+        self.failover_domain = f"api.dr-payments-{environment_suffix}.internal"

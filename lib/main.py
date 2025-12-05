@@ -211,8 +211,8 @@ def main():
         app,
         "disaster-recovery-global",
         environment_suffix=environment_suffix,
-        primary_api_endpoint="https://api-primary.example.com",
-        secondary_api_endpoint="https://api-secondary.example.com"
+        primary_api_endpoint="https://api-primary.internal",
+        secondary_api_endpoint="https://api-secondary.internal"
     )
 
     app.synth()
