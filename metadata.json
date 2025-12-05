@@ -1,6 +1,6 @@
 {
   "platform": "analysis",
-  "language": "hcl",
+  "language": "py",
   "complexity": "hard",
   "turn_type": "single",
   "team": "synth",
