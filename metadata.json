@@ -9,7 +9,7 @@
   ],
   "background": "A fintech company's payment processing system uses RDS MySQL instances that are experiencing performance bottlenecks during peak hours. The current Pulumi infrastructure code creates database instances without proper optimization, leading to high costs and slow query response times.",
   "aws_region": "us-east-1",
-  "training_quality": 9,
+  "training_quality": 8,
   "author": "mayanksethi-turing",
   "reviewer": "balasl342",
   "turn_type": "single",
