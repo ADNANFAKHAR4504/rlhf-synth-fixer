@@ -1,0 +1,12 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "o1r1z1s4",
+  "team": "synth",
+  "startedAt": "2025-12-05T18:35:41+05:30",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": ["CI/CD Pipeline"],
+  "aws_services": []
+}
