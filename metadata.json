@@ -1,16 +1,24 @@
 {
-  "po_id": "g9s1j8o1",
   "platform": "pulumi",
   "language": "go",
   "complexity": "hard",
-  "subtask": "CI/CD Pipeline Integration",
-  "subject_labels": ["CI/CD Pipeline", "PCI-DSS", "Financial Services", "Security", "Compliance"],
-  "problem_id": "PULUMI-FIN-CICD-001",
-  "training_quality": 9,
-  "version": "1.0.0",
+  "turn_type": "multi",
+  "po_id": "d9d0n6x0",
   "team": "synth",
-  "startedAt": "2025-12-05T06:15:00Z",
-  "turn_type": "single",
-  "created_at": "2025-12-05T06:15:00Z",
-  "updated_at": "2025-12-05T06:15:00Z"
+  "startedAt": "2025-12-05T05:02:35Z",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "SNS",
+    "S3",
+    "DynamoDB",
+    "IAM",
+    "CodeBuild",
+    "CodePipeline",
+    "CloudWatch",
+    "EventBridge"
+  ],
+  "training_quality": 10
 }
