@@ -1,14 +1,14 @@
 {
-  "platform": "analysis",
-  "language": "py",
+  "platform": "tf",
+  "language": "hcl",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "b5b1b7x5",
   "team": "synth",
   "startedAt": "2025-12-05T18:30:00-05:00",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "IaC Program Optimization",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "IaC Diagnosis/Edits"
   ],
   "aws_services": [
     "S3",
