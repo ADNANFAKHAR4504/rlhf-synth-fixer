@@ -30,10 +30,13 @@ const lambdaClient = new LambdaClient({ region });
 const snsClient = new SNSClient({ region });
 const eventBridgeClient = new EventBridgeClient({ region });
 
+// Get environment suffix from env var (set in CI/CD) or default for local testing
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr7987';
+
 describe('Drift Detection System Integration Tests', () => {
   describe('CloudFormation Stack', () => {
     it('verifies the stack exists and is in CREATE_COMPLETE state', async () => {
-      const stackName = `TapStack-l0f6y2z6`;
+      const stackName = `TapStack-${environmentSuffix}`;
       const command = new DescribeStacksCommand({
         StackName: stackName,
       });
@@ -45,7 +48,7 @@ describe('Drift Detection System Integration Tests', () => {
     });
 
     it('verifies stack has required outputs', async () => {
-      const stackName = `TapStack-l0f6y2z6`;
+      const stackName = `TapStack-${environmentSuffix}`;
       const command = new DescribeStacksCommand({
         StackName: stackName,
       });
