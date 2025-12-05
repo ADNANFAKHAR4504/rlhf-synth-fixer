@@ -9,7 +9,7 @@
  */
 module.exports = {
   testEnvironment: 'node',
-  roots: ['<rootDir>/test'],
+  roots: ['<rootDir>/test', '<rootDir>/tests'],
   testMatch: ['**/*.test.ts', '**/*.test.mjs', '**/*.py'],
   preset: 'ts-jest',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs'],
@@ -39,8 +39,8 @@ module.exports = {
     global: {
       branches: 70,
       functions: 100,
-      lines: 97,
-      statements: 97,
+      lines: 100,
+      statements: 99,
     },
   },
   testTimeout: 60000,
