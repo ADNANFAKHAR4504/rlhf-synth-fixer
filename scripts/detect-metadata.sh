@@ -11,6 +11,28 @@ if [ ! -f "metadata.json" ]; then
   exit 1
 fi
 
+# Run comprehensive metadata validation early to fail fast
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "🔍 Running comprehensive metadata validation..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+VALIDATE_SCRIPT=".claude/scripts/validate-metadata.sh"
+if [ -f "$VALIDATE_SCRIPT" ]; then
+  if ! bash "$VALIDATE_SCRIPT" metadata.json; then
+    echo ""
+    echo "❌ Comprehensive metadata validation failed!"
+    echo "Please fix the issues above before proceeding."
+    echo ""
+    echo "Reference: .claude/docs/references/iac-subtasks-subject-labels.json"
+    echo "           .claude/docs/references/metadata-requirements.md"
+    exit 1
+  fi
+  echo ""
+else
+  echo "⚠️ Warning: $VALIDATE_SCRIPT not found, skipping comprehensive validation"
+  echo ""
+fi
+
 # Read and validate metadata
 eval "$(jq -r '@sh "
   PLATFORM=\(.platform // "unknown")
