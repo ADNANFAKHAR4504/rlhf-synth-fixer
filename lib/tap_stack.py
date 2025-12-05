@@ -96,16 +96,9 @@ class TapStack(Stack):
         # Grant write access to reports bucket
         reports_bucket.grant_write(lambda_role)
 
-        # CloudWatch Logs
-        log_group = logs.LogGroup(
-            self,
-            "ComplianceAnalyzerLogs",
-            log_group_name=f"/aws/lambda/compliance-analyzer-{suffix}",
-            removal_policy=RemovalPolicy.DESTROY,
-            retention=logs.RetentionDays.ONE_WEEK,
-        )
-
         # Lambda function for compliance analysis
+        # Note: Using log_retention parameter instead of explicit log group creation
+        # to avoid CloudFormation ResourceExistenceCheck conflict
         compliance_analyzer = lambda_.Function(
             self,
             "ComplianceAnalyzer",
@@ -120,7 +113,7 @@ class TapStack(Stack):
                 "REPORTS_BUCKET": reports_bucket.bucket_name,
                 "ENVIRONMENT_SUFFIX": suffix,
             },
-            log_group=log_group,
+            log_retention=logs.RetentionDays.ONE_WEEK,
         )
 
         # Store references
