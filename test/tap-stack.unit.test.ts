@@ -28,6 +28,52 @@ describe('Trading Platform Disaster Recovery Stack - Unit Tests', () => {
       // Environment suffix should be based on process.env or default
       expect(stack).toBeDefined();
     });
+
+    test('config should use default environment suffix when ENVIRONMENT_SUFFIX is not set', () => {
+      // Save original value
+      const originalEnv = process.env.ENVIRONMENT_SUFFIX;
+
+      // Unset the environment variable
+      delete process.env.ENVIRONMENT_SUFFIX;
+
+      // Force re-import of config to test the default branch
+      jest.resetModules();
+      const { config } = require('../lib/config/infrastructure-config');
+
+      expect(config.environmentSuffix).toBe('dev');
+      expect(config.hostedZoneName).toBe('trading-platform-dev.local');
+      expect(config.apiDomainName).toBe('api.trading-platform-dev.local');
+
+      // Restore original value
+      if (originalEnv !== undefined) {
+        process.env.ENVIRONMENT_SUFFIX = originalEnv;
+      }
+      jest.resetModules();
+    });
+
+    test('config should use custom environment suffix when ENVIRONMENT_SUFFIX is set', () => {
+      // Save original value
+      const originalEnv = process.env.ENVIRONMENT_SUFFIX;
+
+      // Set a custom environment variable
+      process.env.ENVIRONMENT_SUFFIX = 'prod';
+
+      // Force re-import of config to test the custom branch
+      jest.resetModules();
+      const { config } = require('../lib/config/infrastructure-config');
+
+      expect(config.environmentSuffix).toBe('prod');
+      expect(config.hostedZoneName).toBe('trading-platform-prod.local');
+      expect(config.apiDomainName).toBe('api.trading-platform-prod.local');
+
+      // Restore original value
+      if (originalEnv !== undefined) {
+        process.env.ENVIRONMENT_SUFFIX = originalEnv;
+      } else {
+        delete process.env.ENVIRONMENT_SUFFIX;
+      }
+      jest.resetModules();
+    });
   });
 
   describe('Route 53 Configuration', () => {

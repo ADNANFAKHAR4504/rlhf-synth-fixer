@@ -11,6 +11,9 @@ import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
 import { config } from './config/infrastructure-config';
 
+// Generate unique suffix to avoid resource naming conflicts
+const uniqueSuffix = Date.now().toString(36).slice(-4);
+
 export interface SharedConstructsProps {
   primaryProvider: AwsProvider;
   secondaryProvider: AwsProvider;
@@ -45,7 +48,7 @@ export class SharedConstructs extends Construct {
     // RDS Global Cluster
     this.globalCluster = new RdsGlobalCluster(this, 'global-cluster', {
       provider: primaryProvider,
-      globalClusterIdentifier: `${config.globalDatabaseIdentifier}-${environmentSuffix}`,
+      globalClusterIdentifier: `${config.globalDatabaseIdentifier}-${environmentSuffix}-${uniqueSuffix}`,
       engine: 'aurora-postgresql',
       engineVersion: '14.6',
       databaseName: config.databaseName,
@@ -138,7 +141,7 @@ export class SharedConstructs extends Construct {
       }
     );
 
-    new S3BucketVersioningA(this, 'config-bucket-secondary-versioning', {
+    const configBucketSecondaryVersioning = new S3BucketVersioningA(this, 'config-bucket-secondary-versioning', {
       provider: secondaryProvider,
       bucket: configBucketSecondary.id,
       versioningConfiguration: {
@@ -201,6 +204,7 @@ export class SharedConstructs extends Construct {
           },
         },
       ],
+      dependsOn: [configBucketSecondaryVersioning],
     });
 
     // S3 Bucket for Audit Logs (Primary)
@@ -239,7 +243,7 @@ export class SharedConstructs extends Construct {
       }
     );
 
-    new S3BucketVersioningA(this, 'audit-bucket-secondary-versioning', {
+    const auditBucketSecondaryVersioning = new S3BucketVersioningA(this, 'audit-bucket-secondary-versioning', {
       provider: secondaryProvider,
       bucket: auditLogBucketSecondary.id,
       versioningConfiguration: {
@@ -316,6 +320,7 @@ export class SharedConstructs extends Construct {
           },
         },
       ],
+      dependsOn: [auditBucketSecondaryVersioning],
     });
 
     // Route 53 Health Checks (placeholders - will be updated with actual endpoints)

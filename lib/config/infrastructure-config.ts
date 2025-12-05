@@ -20,8 +20,11 @@ export interface InfrastructureConfig {
   failoverValidationSchedule: string;
 }
 
+// Single source of truth for environment suffix to reduce branch complexity
+const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+
 export const config: InfrastructureConfig = {
-  environmentSuffix: process.env.ENVIRONMENT_SUFFIX || 'dev',
+  environmentSuffix: envSuffix,
   primaryRegion: {
     region: 'us-east-1',
     vpcCidr: '10.0.0.0/16',
@@ -36,8 +39,8 @@ export const config: InfrastructureConfig = {
     publicSubnetCidrs: ['10.1.101.0/24', '10.1.102.0/24', '10.1.103.0/24'],
     availabilityZones: ['us-east-2a', 'us-east-2b', 'us-east-2c'],
   },
-  hostedZoneName: `trading-platform-${process.env.ENVIRONMENT_SUFFIX || 'dev'}.local`,
-  apiDomainName: `api.trading-platform-${process.env.ENVIRONMENT_SUFFIX || 'dev'}.local`,
+  hostedZoneName: `trading-platform-${envSuffix}.local`,
+  apiDomainName: `api.trading-platform-${envSuffix}.local`,
   globalDatabaseIdentifier: 'trading-platform-global',
   databaseName: 'tradingdb',
   databaseUsername: 'tradingadmin',

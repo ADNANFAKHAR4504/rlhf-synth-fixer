@@ -30,6 +30,9 @@ import { config } from './config/infrastructure-config';
 import { SharedConstructs } from './shared-constructs';
 import * as path from 'path';
 
+// Generate unique suffix to avoid resource naming conflicts
+const uniqueSuffix = Date.now().toString(36).slice(-4);
+
 export interface SecondaryRegionStackProps {
   provider: AwsProvider;
   environmentSuffix: string;
@@ -180,7 +183,7 @@ export class SecondaryRegionStack extends Construct {
     // DB Subnet Group
     const dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
       provider,
-      name: `trading-db-subnet-group-secondary-${environmentSuffix}`,
+      name: `trading-db-subnet-group-secondary-${environmentSuffix}-${uniqueSuffix}`,
       subnetIds: privateSubnets.map(s => s.id),
       tags: {
         Name: `db-subnet-group-secondary-${environmentSuffix}`,
@@ -419,16 +422,6 @@ export class SecondaryRegionStack extends Construct {
       authorization: 'NONE',
     });
 
-    new ApiGatewayIntegration(this, 'post-trades-integration', {
-      provider,
-      restApiId: this.api.id,
-      resourceId: tradesResource.id,
-      httpMethod: postTradesMethod.httpMethod,
-      type: 'AWS_PROXY',
-      integrationHttpMethod: 'POST',
-      uri: this.tradeProcessorFunction.invokeArn,
-    });
-
     // GET /health
     const getHealthMethod = new ApiGatewayMethod(this, 'get-health-method', {
       provider,
@@ -438,7 +431,18 @@ export class SecondaryRegionStack extends Construct {
       authorization: 'NONE',
     });
 
-    new ApiGatewayIntegration(this, 'get-health-integration', {
+    // API Integrations
+    const postTradesIntegration = new ApiGatewayIntegration(this, 'post-trades-integration', {
+      provider,
+      restApiId: this.api.id,
+      resourceId: tradesResource.id,
+      httpMethod: postTradesMethod.httpMethod,
+      type: 'AWS_PROXY',
+      integrationHttpMethod: 'POST',
+      uri: this.tradeProcessorFunction.invokeArn,
+    });
+
+    const getHealthIntegration = new ApiGatewayIntegration(this, 'get-health-integration', {
       provider,
       restApiId: this.api.id,
       resourceId: healthResource.id,
@@ -463,7 +467,7 @@ export class SecondaryRegionStack extends Construct {
     const deployment = new ApiGatewayDeployment(this, 'api-deployment', {
       provider,
       restApiId: this.api.id,
-      dependsOn: [postTradesMethod, getHealthMethod],
+      dependsOn: [postTradesMethod, getHealthMethod, postTradesIntegration, getHealthIntegration],
       lifecycle: {
         createBeforeDestroy: true,
       },
@@ -542,6 +546,7 @@ export class SecondaryRegionStack extends Construct {
       name: `/trading/${environmentSuffix}/secondary/region`,
       type: 'String',
       value: regionConfig.region,
+      overwrite: true,
       tags: {
         Environment: environmentSuffix,
       },
@@ -552,6 +557,7 @@ export class SecondaryRegionStack extends Construct {
       name: `/trading/${environmentSuffix}/secondary/api-endpoint`,
       type: 'String',
       value: `${this.api.id}.execute-api.${regionConfig.region}.amazonaws.com`,
+      overwrite: true,
       tags: {
         Environment: environmentSuffix,
       },
@@ -562,6 +568,7 @@ export class SecondaryRegionStack extends Construct {
       name: `/trading/${environmentSuffix}/secondary/db-endpoint`,
       type: 'String',
       value: this.auroraCluster.readerEndpoint,
+      overwrite: true,
       tags: {
         Environment: environmentSuffix,
       },
