@@ -1,6 +1,6 @@
 {
-  "platform": "pulumi",
-  "language": "ts",
+  "platform": "analysis",
+  "language": "py",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "c7z9g0q1",
@@ -11,11 +11,16 @@
     "Infrastructure Analysis/Monitoring"
   ],
   "aws_services": [
+    "Config",
+    "Lambda",
+    "DynamoDB",
+    "SNS",
+    "CloudWatch Events",
+    "IAM",
     "S3",
     "EC2",
-    "RDS",
-    "IAM",
-    "VPC"
+    "RDS"
   ],
-  "training_quality": 10
+  "region": "us-east-1",
+  "training_quality": 9
 }
