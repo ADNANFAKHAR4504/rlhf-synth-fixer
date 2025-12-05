@@ -1,0 +1,15 @@
+{
+  "task_id": "f4l6k0j1",
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "f4l6k0j1",
+  "team": "synth",
+  "startedAt": "2025-12-05T20:39:07+05:30",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring"
+  ],
+  "aws_services": []
+}
