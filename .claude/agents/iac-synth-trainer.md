@@ -22,6 +22,7 @@ This agent takes a PR (by number or branch name) and systematically fixes all is
 All of the following MUST pass (adjusted based on task type):
 
 #### Standard IaC Tasks:
+
 1. ✅ **Worktree Validation** - Correct structure and location
 2. ✅ **Metadata Validation** - All required fields present and valid
 3. ✅ **Code Quality** - Lint, build, synth all passing
@@ -36,6 +37,7 @@ All of the following MUST pass (adjusted based on task type):
 12. ✅ **Commit Message Format** - Follows conventional commits with lowercase
 
 #### CI/CD Pipeline Integration Tasks (Special):
+
 1. ✅ **Worktree Validation** - Correct structure and location
 2. ✅ **Metadata Validation** - All required fields present and valid
 3. ✅ **Code Quality** - Lint, build all passing (**synth SKIPPED**)
@@ -48,9 +50,10 @@ All of the following MUST pass (adjusted based on task type):
 10. ✅ **Training Quality** - Score >= 8
 11. ✅ **File Location Compliance** - All files in allowed directories
 12. ✅ **Commit Message Format** - Follows conventional commits with lowercase
-**NOTE**: Deployment and integration tests are **SKIPPED** for CI/CD tasks (validated by pipeline job)
+    **NOTE**: Deployment and integration tests are **SKIPPED** for CI/CD tasks (validated by pipeline job)
 
 #### Infrastructure Analysis Tasks (Special):
+
 1. ✅ **Worktree Validation** - Correct structure and location
 2. ✅ **Metadata Validation** - All required fields, platform="analysis"
 3. ✅ **Code Quality** - Lint, build all passing (**synth SKIPPED**)
@@ -61,9 +64,10 @@ All of the following MUST pass (adjusted based on task type):
 8. ✅ **Training Quality** - Score >= 8
 9. ✅ **File Location Compliance** - All files in allowed directories
 10. ✅ **Commit Message Format** - Follows conventional commits with lowercase
-**NOTE**: Deployment, pre-deployment validation, and integration tests are **SKIPPED** (no infrastructure)
+    **NOTE**: Deployment, pre-deployment validation, and integration tests are **SKIPPED** (no infrastructure)
 
 #### IaC Optimization Tasks (Special):
+
 1. ✅ **Worktree Validation** - Correct structure and location
 2. ✅ **Metadata Validation** - All required fields present and valid
 3. ✅ **Code Quality** - Lint, build, synth all passing
@@ -90,9 +94,10 @@ All of the following MUST pass (adjusted based on task type):
 **When to run**: After setting up worktree, before running any validations.
 
 1. **Clean up auto-generated Pulumi stack configs**:
+
    ```bash
    echo "🧹 Cleaning up unnecessary files..."
-   
+
    # Remove Pulumi stack-specific configs (but keep Pulumi.yaml)
    # Pattern: Pulumi.TapStack*.yaml, Pulumi.*Stack*.yaml
    find . -maxdepth 1 -name "Pulumi.*.yaml" ! -name "Pulumi.yaml" -type f -delete 2>/dev/null && \
@@ -101,6 +106,7 @@ All of the following MUST pass (adjusted based on task type):
    ```
 
 2. **Clean up unnecessary lib/ files**:
+
    ```bash
    # Files in lib/ that are NOT required
    UNNECESSARY_LIB_FILES=(
@@ -109,7 +115,7 @@ All of the following MUST pass (adjusted based on task type):
      "lib/DEPLOYMENT_GUIDE.md"
      "lib/.gitkeep"
    )
-   
+
    for file in "${UNNECESSARY_LIB_FILES[@]}"; do
      if [ -f "$file" ]; then
        rm -f "$file"
@@ -119,6 +125,7 @@ All of the following MUST pass (adjusted based on task type):
    ```
 
 3. **Clean up generated artifacts**:
+
    ```bash
    # Remove generated directories and files
    GENERATED_ARTIFACTS=(
@@ -133,7 +140,7 @@ All of the following MUST pass (adjusted based on task type):
      "cfn-outputs"
      "node_modules/.cache"
    )
-   
+
    for artifact in "${GENERATED_ARTIFACTS[@]}"; do
      if [ -d "$artifact" ]; then
        rm -rf "$artifact"
@@ -143,14 +150,43 @@ All of the following MUST pass (adjusted based on task type):
        echo "✅ Removed generated files: $artifact"
      fi
    done
-   
+
    # Remove generated TypeScript declaration files (but keep in node_modules)
    find lib -name "*.d.ts" -delete 2>/dev/null
    find lib -name "*.js.map" -delete 2>/dev/null
    echo "✅ Removed generated TypeScript files from lib/"
+
+   # Remove temporary files created during synth-trainer workflow
+   # These files should NEVER be committed - they cause CI/CD failures
+   TEMP_WORKFLOW_FILES=(
+     "task_type.txt"
+     "ci_checks.json"
+     "failed_jobs.txt"
+     "priority_validations.txt"
+     "validation_output.log"
+     "validation_issues.json"
+     "cicd_status.log"
+     "cicd_summary.json"
+     "integration_test_output.log"
+     "file_check_output.log"
+     "all_fixes_summary.txt"
+   )
+
+   for file in "${TEMP_WORKFLOW_FILES[@]}"; do
+     if [ -f "$file" ]; then
+       rm -f "$file"
+       echo "✅ Removed temporary workflow file: $file"
+     fi
+   done
+
+   # Also remove any stray log files in root (not in allowed directories)
+   find . -maxdepth 1 -name "*.log" -type f -delete 2>/dev/null && \
+     echo "✅ Removed stray log files from root" || true
+   find . -maxdepth 1 -name "*_failure.log" -type f -delete 2>/dev/null || true
    ```
 
 4. **Clean up duplicate/backup files**:
+
    ```bash
    # Remove backup and duplicate files
    find . -name "*.bak" -type f -delete 2>/dev/null
@@ -161,22 +197,23 @@ All of the following MUST pass (adjusted based on task type):
    ```
 
 5. **Verify required files still exist**:
+
    ```bash
    echo "🔍 Verifying required files..."
-   
+
    # Required files check
    REQUIRED_FILES=(
      "metadata.json"
      "lib/PROMPT.md"
    )
-   
+
    for file in "${REQUIRED_FILES[@]}"; do
      if [ ! -f "$file" ]; then
        echo "❌ ERROR: Required file missing after cleanup: $file"
        exit 1
      fi
    done
-   
+
    # Check platform-specific required files
    PLATFORM=$(jq -r '.platform' metadata.json)
    case "$PLATFORM" in
@@ -190,54 +227,67 @@ All of the following MUST pass (adjusted based on task type):
        [ -f "cdktf.json" ] || echo "⚠️  Warning: cdktf.json missing"
        ;;
    esac
-   
+
    echo "✅ Required files verified"
    ```
 
 6. **Commit cleanup changes** (if any):
+
    ```bash
    # Check if there are changes to commit
    if [ -n "$(git status --porcelain)" ]; then
      echo "📝 Committing cleanup changes..."
-     
+
      # Get task ID for commit message
      TASK_ID=$(jq -r '.po_id' metadata.json)
-     
-     git add -A
+
+     # Stage only allowed directories and files (NOT git add -A to avoid temp files)
+     git add lib/ bin/ test/ tests/ metadata.json 2>/dev/null || true
+     git add package.json package-lock.json cdk.json cdktf.json Pulumi.yaml 2>/dev/null || true
+     git add tap.py tap.go setup.js Pipfile Pipfile.lock requirements.txt 2>/dev/null || true
+     git add build.gradle pom.xml go.mod go.sum 2>/dev/null || true
+
+     # Also stage deletions of files that were removed
+     git add -u 2>/dev/null || true
+
      git commit -m "chore(synth-${TASK_ID}): cleanup auto-generated and unnecessary files
+   ```
 
 - Removed Pulumi stack-specific configs (kept Pulumi.yaml)
 - Removed unnecessary lib/ files (README.md, AWS_REGION, etc.)
 - Cleaned generated artifacts (coverage, dist, cdk.out, etc.)
-- Removed backup and system files"
-     
-     git push origin ${BRANCH_NAME}
-     echo "✅ Cleanup changes committed and pushed"
-     
-     # Post cleanup comment to PR
-     CLEANUP_COMMENT="## 🧹 Automated File Cleanup
+- Removed backup and system files
+- Removed temporary workflow files (task_type.txt, logs, etc.)"
+  git push origin ${BRANCH_NAME}
+  echo "✅ Cleanup changes committed and pushed"
+  # Post cleanup comment to PR
+  CLEANUP_COMMENT="## 🧹 Automated File Cleanup
 
 **Removed unnecessary files before applying fixes:**
 
 - Auto-generated Pulumi stack configs (kept \`Pulumi.yaml\`)
 - Unnecessary documentation files in lib/ (\`README.md\`, \`AWS_REGION\`, etc.)
-- Generated artifacts (\`coverage\`, \`dist\`, \`cdk.out\`, \`__pycache__\`, etc.)
-- Backup files (\`*.bak\`, \`*.orig\`, \`*~\`, \`.DS_Store\`)
+- Generated artifacts (\`coverage\`, \`dist\`, \`cdk.out\`, \`**pycache**\`, etc.)
+- Backup files (\`_.bak\`, \`_.orig\`, \`\*~\`, \`.DS_Store\`)
 
 **Protected files (not deleted):**
+
 - \`metadata.json\`, \`Pulumi.yaml\`, \`cdk.json\`, \`cdktf.json\`
 - \`lib/PROMPT.md\`, \`lib/MODEL_RESPONSE.md\`, \`lib/IDEAL_RESPONSE.md\`, \`lib/MODEL_FAILURES.md\`
-- \`lib/tap-stack.*\`, \`lib/ci-cd.yml\`, \`lib/optimize.py\`, \`lib/analyse.*\`
+- \`lib/tap-stack._\`, \`lib/ci-cd.yml\`, \`lib/optimize.py\`, \`lib/analyse._\`
 - All files in \`bin/\`, \`test/\`, \`tests/\`
 
 ---
+
 🤖 Automated by iac-synth-trainer"
 
      gh pr comment ${PR_NUMBER} --body "${CLEANUP_COMMENT}"
-   else
-     echo "ℹ️  No cleanup changes needed"
-   fi
-   ```
+
+else
+echo "ℹ️ No cleanup changes needed"
+fi
+
+````
 
 **Files Protected (Never Deleted)**:
 - ✅ `metadata.json`
@@ -255,43 +305,45 @@ All of the following MUST pass (adjusted based on task type):
 ### Phase 1: Setup and Context
 
 1. **Accept PR context**:
-   - PR number (e.g., 1234)
-   - OR branch name (e.g., synth-abc123)
-   - Extract task_id from branch name
+- PR number (e.g., 1234)
+- OR branch name (e.g., synth-abc123)
+- Extract task_id from branch name
 
 2. **Verify required scripts exist**:
-   ```bash
-   # Verify all required scripts exist before starting
-   REQUIRED_SCRIPTS=(
-     ".claude/scripts/verify-worktree.sh"
-     ".claude/scripts/validate-metadata.sh"
-     ".claude/scripts/validate-code-platform.sh"
-     ".claude/scripts/pre-submission-check.sh"
-     ".claude/scripts/cicd-job-checker.sh"
-     ".claude/scripts/add-assignee.sh"
-     ".claude/scripts/setup-worktree.sh"
-     ".claude/scripts/validate-file-path.sh"
-     ".claude/scripts/wait-for-cicd.sh"
-     ".claude/scripts/retry-operation.sh"
-   )
+```bash
+# Verify all required scripts exist before starting
+REQUIRED_SCRIPTS=(
+  ".claude/scripts/verify-worktree.sh"
+  ".claude/scripts/validate-metadata.sh"
+  ".claude/scripts/validate-code-platform.sh"
+  ".claude/scripts/pre-submission-check.sh"
+  ".claude/scripts/cicd-job-checker.sh"
+  ".claude/scripts/add-assignee.sh"
+  ".claude/scripts/setup-worktree.sh"
+  ".claude/scripts/validate-file-path.sh"
+  ".claude/scripts/wait-for-cicd.sh"
+  ".claude/scripts/retry-operation.sh"
+)
 
-   for script in "${REQUIRED_SCRIPTS[@]}"; do
-     if [ ! -f "$script" ]; then
-       echo "❌ ERROR: Required script missing: $script"
-       exit 1
-     fi
-   done
+for script in "${REQUIRED_SCRIPTS[@]}"; do
+  if [ ! -f "$script" ]; then
+    echo "❌ ERROR: Required script missing: $script"
+    exit 1
+  fi
+done
 
-   echo "✅ All required scripts present"
-   ```
+echo "✅ All required scripts present"
+````
 
 3. **Add assignee to PR** (extracted to script):
+
    ```bash
    # Use helper script with retry logic
    bash .claude/scripts/add-assignee.sh ${PR_NUMBER}
    ```
 
 4. **Create isolated worktree and sync with main** (CRITICAL):
+
    ```bash
    # Use helper script that handles:
    # - Existing worktree detection
@@ -350,6 +402,7 @@ All of the following MUST pass (adjusted based on task type):
    - Rebase --continue fails: Aborts rebase, removes worktree, exits
 
 5. **Fetch CI/CD job status and create checklist**:
+
    ```bash
    echo "📋 Fetching CI/CD pipeline status for PR #${PR_NUMBER}..."
 
@@ -428,6 +481,7 @@ All of the following MUST pass (adjusted based on task type):
    ```
 
 6. **Analyze failed jobs in detail**:
+
    ```bash
    if [ -f failed_jobs.txt ]; then
      echo ""
@@ -471,51 +525,60 @@ All of the following MUST pass (adjusted based on task type):
    - **Store CI/CD checklist for reference throughout workflow**
 
 8. **Detect Special Task Types** (CRITICAL):
+
    ```bash
-   echo "🔍 Detecting task type from metadata..."
-   
-   # Read metadata for task type detection
-   SUBTASK=$(jq -r '.subtask // "Unknown"' metadata.json)
-   SUBJECT_LABELS=$(jq -r '.subject_labels[]? // empty' metadata.json)
-   PLATFORM=$(jq -r '.platform // "Unknown"' metadata.json)
-   
-   # Initialize task type flags
-   IS_CICD_TASK=false
-   IS_OPTIMIZATION_TASK=false
-   IS_ANALYSIS_TASK=false
-   
-   # Detect CI/CD Pipeline Integration task
-   if echo "$SUBJECT_LABELS" | grep -q "CI/CD Pipeline"; then
-     IS_CICD_TASK=true
-     echo "🔄 CI/CD Pipeline Integration task detected"
-     echo "ℹ️  Special workflow: Skip synth/deploy, focus on CI/CD validation"
+   # Use shared detection script for consistency across agents
+   echo "🔍 Detecting task type using shared script..."
+
+   TASK_INFO=$(bash .claude/scripts/detect-task-type.sh 2>/dev/null)
+   if [ $? -ne 0 ] || [ -z "$TASK_INFO" ]; then
+     echo "⚠️ Shared script failed, falling back to inline detection..."
+
+     # Fallback: inline detection
+     SUBTASK=$(jq -r '.subtask // "Unknown"' metadata.json)
+     SUBJECT_LABELS=$(jq -r '.subject_labels[]? // empty' metadata.json)
+     PLATFORM=$(jq -r '.platform // "Unknown"' metadata.json)
+
+     IS_CICD_TASK=false
+     IS_OPTIMIZATION_TASK=false
+     IS_ANALYSIS_TASK=false
+     TASK_TYPE="standard"
+
+     if echo "$SUBJECT_LABELS" | grep -q "CI/CD Pipeline"; then
+       IS_CICD_TASK=true
+       TASK_TYPE="cicd"
+     fi
+
+     if echo "$SUBJECT_LABELS" | grep -q "IaC Optimization"; then
+       IS_OPTIMIZATION_TASK=true
+       TASK_TYPE="optimization"
+     fi
+
+     if [ "$SUBTASK" = "Infrastructure QA and Management" ] || [ "$PLATFORM" = "analysis" ]; then
+       IS_ANALYSIS_TASK=true
+       TASK_TYPE="analysis"
+     fi
+   else
+     # Extract task type information from shared script JSON output
+     IS_CICD_TASK=$(echo "$TASK_INFO" | jq -r '.is_cicd_task')
+     IS_OPTIMIZATION_TASK=$(echo "$TASK_INFO" | jq -r '.is_optimization_task')
+     IS_ANALYSIS_TASK=$(echo "$TASK_INFO" | jq -r '.is_analysis_task')
+     TASK_TYPE=$(echo "$TASK_INFO" | jq -r '.task_type')
    fi
-   
-   # Detect IaC Optimization task
-   if echo "$SUBJECT_LABELS" | grep -q "IaC Optimization"; then
-     IS_OPTIMIZATION_TASK=true
-     echo "📊 IaC Optimization task detected"
-     echo "ℹ️  Special workflow: Deploy baseline + run optimize.py"
-   fi
-   
-   # Detect Infrastructure Analysis/QA task
-   if [ "$SUBTASK" = "Infrastructure QA and Management" ] || [ "$PLATFORM" = "analysis" ]; then
-     IS_ANALYSIS_TASK=true
-     echo "🔍 Infrastructure Analysis task detected"
-     echo "ℹ️  Special workflow: No deployment, focus on analysis script"
-   fi
-   
-   # Store task type for use in validation phases
-   echo "Task Type Detection Results:" > task_type.txt
-   echo "IS_CICD_TASK=${IS_CICD_TASK}" >> task_type.txt
-   echo "IS_OPTIMIZATION_TASK=${IS_OPTIMIZATION_TASK}" >> task_type.txt
-   echo "IS_ANALYSIS_TASK=${IS_ANALYSIS_TASK}" >> task_type.txt
-   
-   # Export for use in validation scripts
+
+   # Export for use in validation scripts (NO FILE CREATION - prevents CI/CD failures)
+   # IMPORTANT: Do NOT create task_type.txt - it causes "Detect Project Files" to fail
    export IS_CICD_TASK
    export IS_OPTIMIZATION_TASK
    export IS_ANALYSIS_TASK
-   
+   export TASK_TYPE
+
+   # Log detected task type
+   echo "🔍 Detected task type: $TASK_TYPE"
+   [ "$IS_CICD_TASK" = "true" ] && echo "  ℹ️  CI/CD Pipeline Integration task - Skip synth/deploy"
+   [ "$IS_OPTIMIZATION_TASK" = "true" ] && echo "  ℹ️  IaC Optimization task - Deploy baseline + run optimize.py"
+   [ "$IS_ANALYSIS_TASK" = "true" ] && echo "  ℹ️  Infrastructure Analysis task - No deployment"
+
    echo "✅ Task type detection complete"
    ```
 
@@ -524,13 +587,12 @@ All of the following MUST pass (adjusted based on task type):
 **Strategy**: Use CI/CD job failures to guide local validation priorities (adjusted based on task type)
 
 1. **Map CI/CD jobs to local validation checkpoints**:
+
    ```bash
    echo "🗺️ Mapping CI/CD failures to local validations..."
 
-   # Source task type detection
-   if [ -f task_type.txt ]; then
-     source task_type.txt
-   fi
+   # Task type variables (IS_CICD_TASK, IS_OPTIMIZATION_TASK, IS_ANALYSIS_TASK, TASK_TYPE)
+   # are already exported from Phase 1 Step 8 - no file sourcing needed
 
    # CI/CD Job → Local Validation mapping (standard tasks)
    declare -A CICD_TO_LOCAL=(
@@ -569,11 +631,10 @@ All of the following MUST pass (adjusted based on task type):
    ```
 
 2. **Run prioritized validations** (based on CI/CD failures):
+
    ```bash
-   # Source task type detection
-   if [ -f task_type.txt ]; then
-     source task_type.txt
-   fi
+   # Task type variables (IS_CICD_TASK, IS_OPTIMIZATION_TASK, IS_ANALYSIS_TASK, TASK_TYPE)
+   # are already exported from Phase 1 Step 8 - no file sourcing needed
 
    # If we have priority validations, run those first
    if [ -f priority_validations.txt ]; then
@@ -583,10 +644,95 @@ All of the following MUST pass (adjusted based on task type):
      while IFS='|' read -r local_check job_id; do
        echo "Running: ${local_check}"
 
-       case "$job_id" in
-         "detect-metadata")
-           bash .claude/scripts/validate-metadata.sh metadata.json
-           ;;
+      case "$job_id" in
+        "detect-metadata")
+          # CRITICAL: First check for file location issues (common cause of detect-metadata failures)
+          echo "🔍 Checking for file location issues..."
+
+          if ! ./scripts/check-project-files.sh 2>&1 | tee /tmp/file_check_output.log; then
+            echo "⚠️ File location issues detected, attempting to fix..."
+
+            # Parse invalid files from output
+            INVALID_FILES=$(grep "  - " /tmp/file_check_output.log | sed 's/  - //' || true)
+
+            if [ -n "$INVALID_FILES" ]; then
+              echo "Found files in invalid locations:"
+              echo "$INVALID_FILES"
+              echo ""
+
+              # Known temporary files that should be deleted (not committed)
+              KNOWN_TEMP_FILES=(
+                "task_type.txt"
+                "ci_checks.json"
+                "failed_jobs.txt"
+                "priority_validations.txt"
+                "validation_output.log"
+                "validation_issues.json"
+                "cicd_status.log"
+                "cicd_summary.json"
+                "integration_test_output.log"
+                "file_check_output.log"
+                "all_fixes_summary.txt"
+              )
+
+              FIXED_COUNT=0
+              UNFIXED_FILES=()
+
+              while IFS= read -r file; do
+                [ -z "$file" ] && continue
+
+                # Check if it's a known temporary file
+                IS_TEMP=false
+                for temp in "${KNOWN_TEMP_FILES[@]}"; do
+                  if [[ "$file" == "$temp" ]] || [[ "$file" == *"$temp" ]]; then
+                    IS_TEMP=true
+                    break
+                  fi
+                done
+
+                # Check if it's a log file or temporary file pattern
+                if [ "$IS_TEMP" = "true" ] || [[ "$file" =~ \.(log|tmp)$ ]] || [[ "$file" =~ _failure\.log$ ]]; then
+                  echo "  🗑️ Removing temporary file: $file"
+                  rm -f "$file" 2>/dev/null || true
+                  git checkout -- "$file" 2>/dev/null || true
+                  git reset HEAD "$file" 2>/dev/null || true
+                  FIXED_COUNT=$((FIXED_COUNT + 1))
+                else
+                  UNFIXED_FILES+=("$file")
+                fi
+              done <<< "$INVALID_FILES"
+
+              echo ""
+              echo "📊 File location fix summary:"
+              echo "  ✅ Fixed: $FIXED_COUNT files"
+              echo "  ⚠️ Remaining: ${#UNFIXED_FILES[@]} files"
+
+              if [ ${#UNFIXED_FILES[@]} -gt 0 ]; then
+                echo ""
+                echo "❌ Cannot auto-fix these files (may need manual intervention):"
+                printf '    - %s\n' "${UNFIXED_FILES[@]}"
+              fi
+
+              # Re-run check to verify fix
+              echo ""
+              if ./scripts/check-project-files.sh 2>/dev/null; then
+                echo "✅ File location issues fixed successfully"
+              else
+                echo "⚠️ Some file location issues may remain"
+              fi
+            fi
+          else
+            echo "✅ No file location issues detected"
+          fi
+
+          # Clean up temp file
+          rm -f /tmp/file_check_output.log 2>/dev/null || true
+
+          # Now run metadata validation
+          echo ""
+          echo "🔍 Running metadata validation..."
+          bash .claude/scripts/validate-metadata.sh metadata.json
+          ;;
          "validate-commit-message")
            # Check commit message format
            git log -1 --pretty=%B | npx commitlint --from HEAD~1
@@ -628,24 +774,24 @@ All of the following MUST pass (adjusted based on task type):
              echo "⏭️ Skipping integration tests (no deployment for this task type)"
            else
              echo "🧪 Running integration tests..."
-             
+
              # Run integration tests and capture output
              bash .claude/scripts/integration-tests.sh > integration_test_output.log 2>&1
              INTEGRATION_EXIT_CODE=$?
-             
+
              # Check exit code first
              if [ $INTEGRATION_EXIT_CODE -ne 0 ]; then
                echo "❌ Integration tests FAILED (exit code: $INTEGRATION_EXIT_CODE)"
                cat integration_test_output.log
                exit 1
              fi
-             
+
              # Parse test results for 100% pass rate
              # Look for patterns like "Tests: X passed, Y failed" or "X/Y passed"
              TOTAL_TESTS=$(grep -oP '(\d+) (total|tests)' integration_test_output.log | head -1 | grep -oP '\d+' || echo "0")
              PASSED_TESTS=$(grep -oP '(\d+) passed' integration_test_output.log | head -1 | grep -oP '\d+' || echo "0")
              FAILED_TESTS=$(grep -oP '(\d+) failed' integration_test_output.log | head -1 | grep -oP '\d+' || echo "0")
-             
+
              # Alternative pattern: "X/Y PASS" format (common in test outputs)
              if [ "$TOTAL_TESTS" = "0" ]; then
                PASS_RATIO=$(grep -oP '\d+/\d+' integration_test_output.log | tail -1 || echo "")
@@ -655,9 +801,9 @@ All of the following MUST pass (adjusted based on task type):
                  FAILED_TESTS=$((TOTAL_TESTS - PASSED_TESTS))
                fi
              fi
-             
+
              echo "Integration Test Results: ${PASSED_TESTS}/${TOTAL_TESTS} passed, ${FAILED_TESTS} failed"
-             
+
              # CRITICAL: Require 100% pass rate - NO PARTIAL PASSES ALLOWED
              if [ "$FAILED_TESTS" != "0" ]; then
                echo "❌ ERROR: Integration tests PARTIAL PASS (${PASSED_TESTS}/${TOTAL_TESTS})"
@@ -670,13 +816,13 @@ All of the following MUST pass (adjusted based on task type):
                echo "Full test output available in: integration_test_output.log"
                exit 1
              fi
-             
+
              if [ "$PASSED_TESTS" != "$TOTAL_TESTS" ]; then
                echo "❌ ERROR: Test count mismatch (${PASSED_TESTS} passed vs ${TOTAL_TESTS} total)"
                echo "❌ ALL integration tests must pass (100% pass rate required)"
                exit 1
              fi
-             
+
              if [ "$TOTAL_TESTS" = "0" ]; then
                echo "⚠️ WARNING: No integration tests detected. Verify test file exists."
                # Don't fail, but warn - some platforms may not have integration tests yet
@@ -689,25 +835,25 @@ All of the following MUST pass (adjusted based on task type):
            # CI/CD Pipeline Integration specific validation
            if [ "$IS_CICD_TASK" = "true" ]; then
              echo "🔄 Running CI/CD Pipeline validation..."
-             
+
              # Verify lib/ci-cd.yml exists
              if [ ! -f "lib/ci-cd.yml" ]; then
                echo "❌ ERROR: lib/ci-cd.yml is required for CI/CD Pipeline Integration tasks"
                exit 1
              fi
-             
+
              # Run CI/CD pipeline validation script
              if [ -f "scripts/cicd-pipeline.sh" ]; then
                bash scripts/cicd-pipeline.sh
              else
                echo "⚠️ scripts/cicd-pipeline.sh not found, skipping platform validation"
              fi
-             
+
              # Validate YAML syntax
              if command -v yamllint &> /dev/null; then
                yamllint lib/ci-cd.yml || echo "⚠️ YAML validation warnings (non-blocking)"
              fi
-             
+
              echo "✅ CI/CD Pipeline validation complete"
            fi
            ;;
@@ -715,13 +861,13 @@ All of the following MUST pass (adjusted based on task type):
            # IaC Optimization specific validation
            if [ "$IS_OPTIMIZATION_TASK" = "true" ]; then
              echo "📊 Running IaC Optimization validation..."
-             
+
              # Verify lib/optimize.py exists
              if [ ! -f "lib/optimize.py" ]; then
                echo "❌ ERROR: lib/optimize.py is required for IaC Optimization tasks"
                exit 1
              fi
-             
+
              echo "✅ IaC Optimization script found"
            fi
            ;;
@@ -729,13 +875,13 @@ All of the following MUST pass (adjusted based on task type):
            # Infrastructure Analysis specific validation
            if [ "$IS_ANALYSIS_TASK" = "true" ]; then
              echo "🔍 Running Infrastructure Analysis validation..."
-             
+
              # Verify analysis script exists
              if [ ! -f "lib/analyse.py" ] && [ ! -f "lib/analyse.sh" ]; then
                echo "❌ ERROR: lib/analyse.py or lib/analyse.sh is required for Analysis tasks"
                exit 1
              fi
-             
+
              echo "✅ Analysis script found"
            fi
            ;;
@@ -755,13 +901,12 @@ All of the following MUST pass (adjusted based on task type):
    ```
 
 3. **Run comprehensive validation** (if no CI/CD failures or after priority fixes):
+
    ```bash
    echo "🔍 Running comprehensive validation suite..."
 
-   # Source task type detection
-   if [ -f task_type.txt ]; then
-     source task_type.txt
-   fi
+   # Task type variables (IS_CICD_TASK, IS_OPTIMIZATION_TASK, IS_ANALYSIS_TASK, TASK_TYPE)
+   # are already exported from Phase 1 Step 8 - no file sourcing needed
 
    # Checkpoint A: Metadata Completeness
    echo "1. Metadata Completeness"
@@ -775,7 +920,7 @@ All of the following MUST pass (adjusted based on task type):
    echo "3. Build Quality (Lint, Build, Synth)"
    bash .claude/scripts/lint.sh
    bash .claude/scripts/build.sh
-   
+
    # Skip synth for CI/CD Pipeline Integration and Analysis tasks
    if [ "$IS_CICD_TASK" = "true" ] || [ "$IS_ANALYSIS_TASK" = "true" ]; then
      echo "⏭️ Skipping synth (not required for this task type)"
@@ -799,57 +944,57 @@ All of the following MUST pass (adjusted based on task type):
    # Task-specific validations
    if [ "$IS_CICD_TASK" = "true" ]; then
      echo "6. CI/CD Pipeline Validation (Special for CI/CD tasks)"
-     
+
      # Verify lib/ci-cd.yml exists
      if [ ! -f "lib/ci-cd.yml" ]; then
        echo "❌ ERROR: lib/ci-cd.yml is required for CI/CD Pipeline Integration tasks"
        exit 1
      fi
-     
+
      # Run CI/CD pipeline validation
      if [ -f "scripts/cicd-pipeline.sh" ]; then
        bash scripts/cicd-pipeline.sh
      fi
-     
+
      # Validate infrastructure code exists and is correct
      echo "7. Infrastructure Code Validation"
      bash .claude/scripts/unit-tests.sh
-     
+
      echo "✅ CI/CD Pipeline Integration validation complete (skipped deployment)"
-     
+
    elif [ "$IS_ANALYSIS_TASK" = "true" ]; then
      echo "6. Analysis Script Validation (Special for Analysis tasks)"
-     
+
      # Verify analysis script exists
      if [ ! -f "lib/analyse.py" ] && [ ! -f "lib/analyse.sh" ]; then
        echo "❌ ERROR: lib/analyse.py or lib/analyse.sh is required"
        exit 1
      fi
-     
+
      # Run unit tests for analysis script
      bash .claude/scripts/unit-tests.sh
-     
+
      echo "✅ Infrastructure Analysis validation complete (no deployment required)"
-     
+
    elif [ "$IS_OPTIMIZATION_TASK" = "true" ]; then
      echo "6. Master QA Pipeline with Optimization"
-     
+
      # Verify lib/optimize.py exists
      if [ ! -f "lib/optimize.py" ]; then
        echo "❌ ERROR: lib/optimize.py is required for IaC Optimization tasks"
        exit 1
      fi
-     
+
      # Deploy baseline infrastructure and run optimization
      bash .claude/scripts/qa-pipeline.sh
-     
+
      echo "✅ IaC Optimization validation complete"
-     
+
    else
      # Standard IaC task - full deployment pipeline
      echo "6. Master QA Pipeline"
      bash .claude/scripts/qa-pipeline.sh
-     
+
      echo "✅ Standard IaC validation complete"
    fi
 
@@ -857,6 +1002,7 @@ All of the following MUST pass (adjusted based on task type):
    ```
 
 4. **Collect all validation issues**:
+
    ```bash
    # Aggregate all issues found
    echo "📋 Collecting all validation issues..."
@@ -924,6 +1070,7 @@ For each issue in priority order:
    - Check no new issues introduced
 
 3. **Document fix in PR comment** (REQUIRED after each fix):
+
    ```bash
    # After successfully applying a fix
    FIX_DESCRIPTION="[Describe what was fixed]"
@@ -968,6 +1115,7 @@ For each issue in priority order:
    ```
 
 4. **Commit and push fix**:
+
    ```bash
    # Stage only allowed files
    git add lib/ bin/ test/ tests/ metadata.json
@@ -1018,11 +1166,13 @@ For each issue in priority order:
 After applying fixes:
 
 1. **Re-run all validations**:
+
    ```bash
    bash .claude/scripts/pre-submission-check.sh
    ```
 
 2. **Check results and iterate**:
+
    ```bash
    ITERATION=1
    MAX_ITERATIONS=10  # Increased for complex issues
@@ -1159,11 +1309,13 @@ After applying fixes:
    ```
 
 **Exit Codes**:
+
 - `0` = SUCCESS (production ready)
 - `1` = ERROR (unrecoverable error, can retry)
 - `2` = BLOCKED (manual intervention required)
 
 3. **Wait for CI/CD between iterations** (extracted to script):
+
    ```bash
    # After pushing fixes, wait for CI/CD to complete
    # Handles: sleep, polling, queued state, timeout
@@ -1173,11 +1325,10 @@ After applying fixes:
    ```
 
 4. **Production Readiness Criteria** (adjusted by task type):
+
    ```bash
-   # Source task type detection
-   if [ -f task_type.txt ]; then
-     source task_type.txt
-   fi
+   # Task type variables (IS_CICD_TASK, IS_OPTIMIZATION_TASK, IS_ANALYSIS_TASK, TASK_TYPE)
+   # are already exported from Phase 1 Step 8 - no file sourcing needed
 
    # Local validations
    ✅ pre-submission-check.sh exits with 0
@@ -1220,13 +1371,16 @@ After applying fixes:
 ### Phase 6: Final Verification and PR Update
 
 1. **Run final pre-submission check**:
+
    ```bash
    bash .claude/scripts/pre-submission-check.sh
    ```
+
    - This validates all critical requirements (task-type specific)
    - Must pass before proceeding
 
 2. **Verify training quality**:
+
    ```bash
    TRAINING_QUALITY=$(jq -r '.training_quality // 0' metadata.json)
 
@@ -1237,13 +1391,45 @@ After applying fixes:
    fi
    ```
 
-3. **Stage all changes**:
+3. **Stage all changes** (with cleanup to prevent CI/CD failures):
+
    ```bash
-   git add .
+   # CRITICAL: Clean up temporary workflow files BEFORE staging
+   # These files are NOT in allowed directories and will cause "Detect Project Files" to fail
+   echo "🧹 Cleaning up temporary workflow files before staging..."
+
+   TEMP_WORKFLOW_FILES=(
+     "task_type.txt"
+     "ci_checks.json"
+     "failed_jobs.txt"
+     "priority_validations.txt"
+     "validation_output.log"
+     "validation_issues.json"
+     "cicd_status.log"
+     "cicd_summary.json"
+     "integration_test_output.log"
+     "file_check_output.log"
+     "all_fixes_summary.txt"
+   )
+
+   for file in "${TEMP_WORKFLOW_FILES[@]}"; do
+     rm -f "$file" 2>/dev/null || true
+   done
+
+   # Remove any stray log files in root
+   find . -maxdepth 1 -name "*.log" -type f -delete 2>/dev/null || true
+   find . -maxdepth 1 -name "*_failure.log" -type f -delete 2>/dev/null || true
+
+   # Stage only allowed directories and files (safer than git add .)
+   git add lib/ bin/ test/ tests/ metadata.json package.json package-lock.json 2>/dev/null || true
+   git add cdk.json cdktf.json Pulumi.yaml tap.py tap.go setup.js 2>/dev/null || true
+   git add Pipfile Pipfile.lock requirements.txt build.gradle pom.xml go.mod go.sum 2>/dev/null || true
+
    git status
    ```
 
 4. **Commit with proper format** (CRITICAL: lowercase subject):
+
    ```bash
    TASK_ID=$(jq -r '.po_id' metadata.json)
    SUBTASK=$(jq -r '.subtask' metadata.json)
@@ -1252,10 +1438,8 @@ After applying fixes:
    COMPLEXITY=$(jq -r '.complexity' metadata.json)
    TRAINING_QUALITY=$(jq -r '.training_quality' metadata.json)
 
-   # Source task type detection
-   if [ -f task_type.txt ]; then
-     source task_type.txt
-   fi
+   # Task type variables (IS_CICD_TASK, IS_OPTIMIZATION_TASK, IS_ANALYSIS_TASK, TASK_TYPE)
+   # are already exported from Phase 1 Step 8 - no file sourcing needed
 
    # Convert subtask to lowercase for subject
    SUBTASK_LOWER=$(echo "${SUBTASK}" | tr '[:upper:]' '[:lower:]')
@@ -1300,17 +1484,17 @@ After applying fixes:
    ```
 
 5. **Push changes**:
+
    ```bash
    BRANCH_NAME=$(git branch --show-current)
    git push origin ${BRANCH_NAME}
    ```
 
 6. **Add comment to PR with fix summary**:
+
    ```bash
-   # Source task type detection
-   if [ -f task_type.txt ]; then
-     source task_type.txt
-   fi
+   # Task type variables (IS_CICD_TASK, IS_OPTIMIZATION_TASK, IS_ANALYSIS_TASK, TASK_TYPE)
+   # are already exported from Phase 1 Step 8 - no file sourcing needed
 
    # Build validations list based on task type
    if [ "$IS_CICD_TASK" = "true" ]; then
@@ -1321,7 +1505,7 @@ After applying fixes:
    - Training Quality: ${TRAINING_QUALITY}/10
    - File Locations: Compliant
    - Documentation: Complete
-   
+
    ℹ️  Note: Synth, Deployment, and Integration Tests skipped (CI/CD Pipeline Integration task)"
    elif [ "$IS_ANALYSIS_TASK" = "true" ]; then
      VALIDATIONS_LIST="- Build Quality (lint, build)
@@ -1330,7 +1514,7 @@ After applying fixes:
    - Training Quality: ${TRAINING_QUALITY}/10
    - File Locations: Compliant
    - Documentation: Complete
-   
+
    ℹ️  Note: Synth, Deployment, and Integration Tests skipped (Infrastructure Analysis task)"
    elif [ "$IS_OPTIMIZATION_TASK" = "true" ]; then
      VALIDATIONS_LIST="- Build Quality (lint, build, synth)
@@ -1371,14 +1555,13 @@ After applying fixes:
 ### Phase 7: Completion Report and Final PR Comment
 
 1. **Post comprehensive summary to PR**:
+
    ```bash
    # Gather all fix comments posted during workflow
    ALL_FIXES=$(cat all_fixes_summary.txt)
 
-   # Source task type detection
-   if [ -f task_type.txt ]; then
-     source task_type.txt
-   fi
+   # Task type variables (IS_CICD_TASK, IS_OPTIMIZATION_TASK, IS_ANALYSIS_TASK, TASK_TYPE)
+   # are already exported from Phase 1 Step 8 - no file sourcing needed
 
    # Build quality gates table based on task type
    if [ "$IS_CICD_TASK" = "true" ]; then
@@ -1395,7 +1578,7 @@ After applying fixes:
    | Training Quality | ✅ ${TRAINING_QUALITY}/10 |
    | File Location Compliance | ✅ PASSED |
    | Commit Message Format | ✅ PASSED |"
-     
+
      CICD_JOBS_LIST="- ✅ Detect Project Files
    - ✅ Validate Commit Message
    - ✅ Build
@@ -1406,7 +1589,7 @@ After applying fixes:
    - ⏭️  Integration Tests (Skipped - CI/CD task)
    - ✅ CICD Pipeline Optimization
    - ✅ Claude Review"
-     
+
    elif [ "$IS_ANALYSIS_TASK" = "true" ]; then
      QUALITY_GATES_TABLE="| Quality Gate | Status |
    |-------------|--------|
@@ -1420,7 +1603,7 @@ After applying fixes:
    | Training Quality | ✅ ${TRAINING_QUALITY}/10 |
    | File Location Compliance | ✅ PASSED |
    | Commit Message Format | ✅ PASSED |"
-     
+
      CICD_JOBS_LIST="- ✅ Detect Project Files
    - ✅ Validate Commit Message
    - ✅ Build
@@ -1431,7 +1614,7 @@ After applying fixes:
    - ⏭️  Integration Tests (Skipped - Analysis task)
    - ✅ Analysis
    - ✅ Claude Review"
-     
+
    elif [ "$IS_OPTIMIZATION_TASK" = "true" ]; then
      QUALITY_GATES_TABLE="| Quality Gate | Status |
    |-------------|--------|
@@ -1449,7 +1632,7 @@ After applying fixes:
    | Training Quality | ✅ ${TRAINING_QUALITY}/10 |
    | File Location Compliance | ✅ PASSED |
    | Commit Message Format | ✅ PASSED |"
-     
+
      CICD_JOBS_LIST="- ✅ Detect Project Files
    - ✅ Validate Commit Message
    - ✅ Build
@@ -1460,7 +1643,7 @@ After applying fixes:
    - ✅ Integration Tests (Live)
    - ✅ IaC Optimization
    - ✅ Claude Review"
-     
+
    else
      # Standard IaC task
      QUALITY_GATES_TABLE="| Quality Gate | Status |
@@ -1477,7 +1660,7 @@ After applying fixes:
    | Training Quality | ✅ ${TRAINING_QUALITY}/10 |
    | File Location Compliance | ✅ PASSED |
    | Commit Message Format | ✅ PASSED |"
-     
+
      CICD_JOBS_LIST="- ✅ Detect Project Files
    - ✅ Validate Commit Message
    - ✅ Build
@@ -1534,6 +1717,7 @@ After applying fixes:
    ```
 
 2. **Provide comprehensive report** (for agent logs):
+
    ```markdown
    ## PR Fix Completion Report
 
@@ -1542,6 +1726,7 @@ After applying fixes:
    **Task ID**: ${TASK_ID}
 
    ### Execution Summary
+
    - Total Iterations: ${TOTAL_ITERATIONS}
    - Issues Fixed: ${TOTAL_ISSUES_FIXED}
    - Deployment Attempts: ${DEPLOYMENT_ATTEMPTS}
@@ -1564,14 +1749,17 @@ After applying fixes:
    12. ✅ Commit Message Format
 
    ### Changes Applied
+
    [Detailed list of fixes with files modified]
 
    ### PR Comments Posted
+
    - Initial CI/CD checklist
    - ${TOTAL_FIX_COMMENTS} fix documentation comments
    - Final summary comment
 
    ### PR Status
+
    **Ready for merge** - All production requirements met
    All CI/CD jobs passing
    PR comment thread updated with complete fix documentation
@@ -1584,11 +1772,13 @@ After applying fixes:
 ### Automatic Retry Logic
 
 For transient errors:
+
 ```bash
 bash .claude/scripts/retry-operation.sh "operation_name" 3 5
 ```
 
 For deployment failures:
+
 ```bash
 bash .claude/scripts/deployment-failure-analysis.sh <log> <attempt> <max>
 bash .claude/scripts/enhanced-error-recovery.sh <type> <msg> <attempt> <max>
@@ -1597,6 +1787,7 @@ bash .claude/scripts/enhanced-error-recovery.sh <type> <msg> <attempt> <max>
 ### Escalation Criteria
 
 Escalate to user when:
+
 - Maximum iterations (10) reached without passing all checks
 - Deployment fails with quota/permission errors after retries
 - Critical issues cannot be auto-fixed (architectural problems)
@@ -1605,6 +1796,7 @@ Escalate to user when:
 ### Blocked Status
 
 Report BLOCKED with:
+
 - Specific issue preventing progress
 - Attempts made to resolve
 - Recommended user action
@@ -1613,6 +1805,7 @@ Report BLOCKED with:
 ## Key Constraints
 
 ### 🎯 Primary Mission
+
 **FIX PR UNTIL PRODUCTION READY - NO EXCEPTIONS**
 
 - **Agent MUST continue iterating until production ready OR escalate**
@@ -1631,9 +1824,11 @@ Report BLOCKED with:
 The agent MUST detect and handle three special task types differently:
 
 #### 1. CI/CD Pipeline Integration Tasks
+
 **Detection**: `subject_labels` contains "CI/CD Pipeline"
 
 **Special Requirements**:
+
 - ✅ **lib/ci-cd.yml REQUIRED** - GitHub Actions workflow file
 - ⏭️ **SKIP synth** - Not required for CI/CD tasks
 - ⏭️ **SKIP deployment** - Infrastructure not deployed to AWS
@@ -1646,6 +1841,7 @@ The agent MUST detect and handle three special task types differently:
 **Why**: The CI/CD Pipeline Integration task focuses on creating a pipeline configuration (`lib/ci-cd.yml`) that WOULD deploy infrastructure. The infrastructure code is validated through unit tests, not actual deployment. This aligns with the GitHub CI/CD workflow which skips synth/deploy jobs for these tasks.
 
 **CI/CD Jobs Expected**:
+
 - ✅ detect-metadata, validate-commit-message, build, lint, unit-tests
 - ✅ cicd-pipeline-optimization (special validation job)
 - ⏭️ synth (skipped by CI/CD pipeline)
@@ -1653,9 +1849,11 @@ The agent MUST detect and handle three special task types differently:
 - ⏭️ integration-tests-live (skipped by CI/CD pipeline)
 
 #### 2. Infrastructure QA and Management Tasks
+
 **Detection**: `subtask` = "Infrastructure QA and Management" OR `platform` = "analysis"
 
 **Special Requirements**:
+
 - ✅ **lib/analyse.py OR lib/analyse.sh REQUIRED** - Analysis script
 - ✅ **platform = "analysis"** in metadata.json
 - ⏭️ **NO infrastructure deployment** - Analysis only
@@ -1669,9 +1867,11 @@ The agent MUST detect and handle three special task types differently:
 **Why**: These tasks analyze existing infrastructure, they don't create new infrastructure.
 
 #### 3. IaC Optimization Tasks
+
 **Detection**: `subject_labels` contains "IaC Optimization"
 
 **Special Requirements**:
+
 - ✅ **lib/optimize.py REQUIRED** - Optimization script
 - ✅ **Baseline infrastructure deployed** - Higher resource allocations (intentional)
 - ✅ **Run optimize.py after deployment** - Modifies live resources via boto3
@@ -1685,6 +1885,7 @@ The agent MUST detect and handle three special task types differently:
 ### 🔄 Iteration Policy
 
 **Continue fixing until**:
+
 1. ✅ All local validations pass (pre-submission-check.sh = 0)
 2. ✅ All CI/CD jobs pass (ready_for_merge = true)
 3. ✅ 100% test coverage achieved
@@ -1693,11 +1894,13 @@ The agent MUST detect and handle three special task types differently:
 6. ✅ No pending or in-progress CI/CD jobs
 
 **Adjusted for task type**:
+
 - **CI/CD tasks**: Skip deployment/integration test requirements
 - **Analysis tasks**: Skip deployment/integration test requirements
 - **Optimization tasks**: Include optimization script validation
 
 **OR escalate if**:
+
 - Maximum iterations (10) reached without success
 - Manual intervention required (AWS quotas, permissions)
 - Architectural issues beyond automated fixes
@@ -1708,6 +1911,7 @@ The agent MUST detect and handle three special task types differently:
 ### 🚨 CRITICAL: Allowed Directories Only
 
 **YOU MUST ONLY MODIFY FILES IN THESE DIRECTORIES**:
+
 - ✅ `lib/` - All infrastructure code and documentation
 - ✅ `bin/` - Executable entry points (CDK apps)
 - ✅ `test/` or `tests/` - Test files only
@@ -1721,6 +1925,7 @@ The agent MUST detect and handle three special task types differently:
   - `build.gradle`, `pom.xml`
 
 **❌ STRICTLY FORBIDDEN - DO NOT MODIFY**:
+
 - ❌ `.github/` - CI/CD workflows
 - ❌ `.claude/` - Agent configurations
 - ❌ `scripts/` - Build and deployment scripts
@@ -1731,6 +1936,7 @@ The agent MUST detect and handle three special task types differently:
 - ❌ Any other root-level configuration files
 
 **Validation Before Any Modification** (extracted to script):
+
 ```bash
 # Before modifying ANY file, verify it's in allowed directory
 FILE_TO_MODIFY="path/to/file"
@@ -1746,6 +1952,7 @@ fi
 ```
 
 **Pre-commit Enforcement**:
+
 ```bash
 # Before git add, validate all modified files
 for file in $(git diff --name-only); do
@@ -1785,11 +1992,13 @@ This agent may invoke:
 **Symptom**: "Worktree already exists" error
 
 **Solution**: The setup-worktree.sh script handles this automatically:
+
 - Checks if worktree is on correct branch → Reuses it
 - Checks if worktree is on wrong branch → Removes and recreates
 - Checks if worktree directory missing → Prunes and recreates
 
 **Manual cleanup if needed**:
+
 ```bash
 git worktree remove worktree/synth-{task_id} --force
 git worktree prune
@@ -1802,6 +2011,7 @@ git worktree prune
 **Solution**: **Already handled automatically** by setup-worktree.sh
 
 **What happens**:
+
 1. Agent fetches latest main
 2. Checks if branch is behind
 3. Rebases branch on main (if behind)
@@ -1811,6 +2021,7 @@ git worktree prune
 **Automatic Conflict Resolution**:
 
 The script automatically resolves conflicts by:
+
 ```bash
 # For each conflicted file
 git checkout --ours <file>  # Accept main's version
@@ -1820,6 +2031,7 @@ git add <file>
 **Strategy**: Accept main's version (safe for CI/CD scripts, helpers)
 
 **Example Output**:
+
 ```
 ❌ Rebase failed - conflicts detected
 
@@ -1844,6 +2056,7 @@ Resolution summary:
 **When auto-resolution fails**:
 
 If conflicts are in PR's actual work (lib/, test/), auto-resolution may fail:
+
 ```
 ❌ Cannot auto-resolve all conflicts. Manual intervention required.
 
@@ -1856,6 +2069,7 @@ Manual resolution steps:
 ```
 
 **Manual conflict resolution**:
+
 ```bash
 cd worktree/synth-{task_id}
 
@@ -1889,6 +2103,7 @@ git push origin {branch_name} --force-with-lease
 **Symptom**: Git conflicts or "diverged branches" during agent execution
 
 **Solution**:
+
 ```bash
 cd worktree/synth-{task_id}
 git fetch origin {branch_name}
@@ -1897,6 +2112,7 @@ git reset --hard origin/{branch_name}
 ```
 
 **Prevention**: Agent should check for divergence before each push:
+
 ```bash
 git fetch origin ${BRANCH_NAME}
 LOCAL_COMMIT=$(git rev-parse HEAD)
@@ -1916,6 +2132,7 @@ fi
 **Impact**: May check CI/CD status while deployment still running
 
 **Solution**:
+
 - wait-for-cicd.sh already handles this with timeout
 - Agent will check again in next iteration
 - If deployment consistently takes >10min:
@@ -1923,6 +2140,7 @@ fi
   - Or add `MAX_DEPLOYMENT_WAIT` variable to agent
 
 **Adjustment**:
+
 ```bash
 # For tasks known to have long deployments
 bash .claude/scripts/wait-for-cicd.sh ${PR_NUMBER} 900  # 15 minutes
@@ -1935,6 +2153,7 @@ bash .claude/scripts/wait-for-cicd.sh ${PR_NUMBER} 900  # 15 minutes
 **Solution**: Already handled by retry-operation.sh with exponential backoff
 
 **Manual workaround**:
+
 ```bash
 # Check rate limit status
 gh api rate_limit
@@ -1948,11 +2167,13 @@ gh api rate_limit
 **Symptom**: Many jobs fail due to one issue (e.g., metadata.json)
 
 **Optimization**: Priority validation already handles this by:
+
 1. Detecting metadata failure first
 2. Fixing it
 3. Re-running dependent validations
 
 **Manual skip**: If you know a fix needs time:
+
 ```bash
 # Temporarily skip specific jobs by adding [skip-jobs] to commit message
 git commit -m "fix: intermediate changes [skip-jobs]"
@@ -1963,11 +2184,13 @@ git commit -m "fix: intermediate changes [skip-jobs]"
 **Symptom**: Agent reaches max iterations without progress
 
 **Possible Causes**:
+
 - External dependency not resolving (AWS quota, permission)
 - Test flakiness causing intermittent failures
 - CI/CD timing issues
 
 **Solution**:
+
 - Agent will escalate after 10 iterations
 - Review escalation comment for root cause
 - May require manual intervention for:
@@ -1982,6 +2205,7 @@ git commit -m "fix: intermediate changes [skip-jobs]"
 **Prevention**: post-fix-comment.sh includes deduplication
 
 **Cleanup** (if needed):
+
 ```bash
 # List all bot comments
 gh api "/repos/{owner}/{repo}/issues/${PR_NUMBER}/comments" \
@@ -2140,6 +2364,7 @@ gh api -X DELETE "/repos/{owner}/{repo}/issues/comments/{comment_id}"
 ### If Production Ready = False After Max Iterations:
 
 **Agent MUST escalate to user with**:
+
 - Detailed explanation of remaining issues
 - Root cause analysis
 - Recommended manual actions
