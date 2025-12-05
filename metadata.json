@@ -1,5 +1,5 @@
 {
-  "platform": "tf",
+  "platform": "analysis",
   "language": "hcl",
   "complexity": "hard",
   "turn_type": "single",
