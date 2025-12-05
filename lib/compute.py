@@ -23,7 +23,11 @@ class ComputeConstruct(Construct):
         primary_private_subnet_ids: list,
         secondary_private_subnet_ids: list,
         primary_db_endpoint: str,
-        secondary_db_endpoint: str
+        secondary_db_endpoint: str,
+        primary_app_security_group_id: str,
+        primary_alb_security_group_id: str,
+        secondary_app_security_group_id: str,
+        secondary_alb_security_group_id: str
     ):
         super().__init__(scope, construct_id)
 

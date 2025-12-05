@@ -80,7 +80,11 @@ class TapStack(TerraformStack):
             self.networking.primary_private_subnet_ids,
             self.networking.secondary_private_subnet_ids,
             self.database.primary_cluster_endpoint,
-            self.database.secondary_cluster_endpoint
+            self.database.secondary_cluster_endpoint,
+            self.networking.primary_app_security_group_id,
+            self.networking.primary_alb_security_group_id,
+            self.networking.secondary_app_security_group_id,
+            self.networking.secondary_alb_security_group_id
         )
 
         # Session state - DynamoDB global tables
