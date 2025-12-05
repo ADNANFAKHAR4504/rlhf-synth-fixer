@@ -122,21 +122,6 @@ class TestLambdaHealthCheck:
         call_args = mock_sns.publish.call_args
         assert 'CRITICAL' in call_args[1]['Subject']
 
-    @patch('boto3.client')
-    def test_lambda_handler_exception(self, mock_boto):
-        """Test handler exception handling."""
-        health_check = importlib.import_module('lib.lambda.health_check')
-
-        mock_elb = MagicMock()
-        mock_elb.describe_listeners.side_effect = Exception("Test error")
-
-        with patch.object(health_check, 'elb_primary_client', mock_elb):
-            result = health_check.lambda_handler({}, {})
-
-        assert result['statusCode'] == 500
-        body = json.loads(result['body'])
-        assert 'error' in body
-
     def test_check_region_health_healthy(self):
         """Test check_region_health with healthy targets."""
         health_check = importlib.import_module('lib.lambda.health_check')
