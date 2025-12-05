@@ -23,13 +23,17 @@ class TapStackArgs:
     Args:
         environment_suffix (Optional[str]): An optional suffix for identifying the
                                            deployment environment (e.g., 'dev', 'prod').
+        subnet_ids (list): List of subnet IDs for the DB subnet group.
         tags (Optional[dict]): Optional default tags to apply to resources.
     """
 
     def __init__(
-        self, environment_suffix: Optional[str] = None, tags: Optional[dict] = None
+        self, environment_suffix: Optional[str] = None, subnet_ids: Optional[list] = None, tags: Optional[dict] = None
     ):
         self.environment_suffix = environment_suffix or "dev"
+        if not subnet_ids:
+            raise ValueError("subnet_ids must be provided")
+        self.subnet_ids = subnet_ids
         self.tags = tags
 
 
@@ -64,6 +68,16 @@ class TapStack(pulumi.ComponentResource):
             "CostCenter": "payments",
             "OptimizedBy": "pulumi",
         }
+
+        # Create DB Subnet Group
+        subnet_group = aws.rds.SubnetGroup(
+            f"db-subnet-group-{args.environment_suffix}",
+            name=f"db-subnet-group-{args.environment_suffix}",
+            subnet_ids=args.subnet_ids,
+            description="DB subnet group for RDS instance",
+            tags=resource_tags,
+            opts=ResourceOptions(parent=self),
+        )
 
         # Create DB Parameter Group with performance optimization
         param_group = aws.rds.ParameterGroup(
@@ -108,7 +122,7 @@ class TapStack(pulumi.ComponentResource):
             db_name="paymentsdb",
             username="admin",
             password=config.get_secret("db_password") or "test-password-12345",
-            db_subnet_group_name="db-subnet-group-prod",
+            db_subnet_group_name=subnet_group.name,
             parameter_group_name=param_group.name,
             backup_retention_period=7,
             backup_window="03:00-04:00",

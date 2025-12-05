@@ -7,6 +7,7 @@ Tests configuration, resource creation, and parameter validation.
 
 import unittest
 from unittest.mock import MagicMock, patch
+
 import pulumi
 
 
@@ -54,15 +55,16 @@ class TestTapStackArgs(unittest.TestCase):
 
     def test_tap_stack_args_default_values(self):
         """Test TapStackArgs with default values."""
-        args = TapStackArgs()
-        self.assertEqual(args.environment_suffix, "dev")
-        self.assertIsNone(args.tags)
+        with self.assertRaises(ValueError):
+            args = TapStackArgs()
 
     def test_tap_stack_args_custom_values(self):
         """Test TapStackArgs with custom values."""
         custom_tags = {"Owner": "platform-team"}
-        args = TapStackArgs(environment_suffix="prod", tags=custom_tags)
+        subnet_ids = ["subnet-12345", "subnet-67890"]
+        args = TapStackArgs(environment_suffix="prod", subnet_ids=subnet_ids, tags=custom_tags)
         self.assertEqual(args.environment_suffix, "prod")
+        self.assertEqual(args.subnet_ids, subnet_ids)
         self.assertEqual(args.tags, custom_tags)
 
 
@@ -85,7 +87,7 @@ class TestTapStack(unittest.TestCase):
             mock_instance.name = "mysql-params-dev"
             mock_pg.return_value = mock_instance
 
-            args = TapStackArgs(environment_suffix="dev")
+            args = TapStackArgs(environment_suffix="dev", subnet_ids=["subnet-12345"])
             stack = TapStack("test-stack", args)
 
             self.assertIsNotNone(stack)
@@ -111,7 +113,7 @@ class TestTapStack(unittest.TestCase):
             mock_rds.identifier = pulumi.Output.from_input("mysql-optimized-dev")
             mock_instance.return_value = mock_rds
 
-            args = TapStackArgs(environment_suffix="dev")
+            args = TapStackArgs(environment_suffix="dev", subnet_ids=["subnet-12345"])
             stack = TapStack("test-stack", args)
 
             self.assertIsNotNone(stack)
@@ -124,7 +126,7 @@ class TestTapStack(unittest.TestCase):
             mock_alarm_instance = MagicMock()
             mock_alarm.return_value = mock_alarm_instance
 
-            args = TapStackArgs(environment_suffix="dev")
+            args = TapStackArgs(environment_suffix="dev", subnet_ids=["subnet-12345"])
             stack = TapStack("test-stack", args)
 
             # Should create at least 2 alarms (CPU and storage)
@@ -142,7 +144,7 @@ class TestTapStack(unittest.TestCase):
             self.assertIn("db_instance_class", outputs)
             self.assertIn("allocated_storage", outputs)
 
-        args = TapStackArgs(environment_suffix="dev")
+        args = TapStackArgs(environment_suffix="dev", subnet_ids=["subnet-12345"])
         stack = TapStack("test-stack", args)
 
         # Stack should have outputs registered

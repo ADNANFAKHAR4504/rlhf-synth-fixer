@@ -11,9 +11,11 @@ different deployment environments (development, staging, production, etc.).
 """
 import os
 from datetime import datetime, timezone
+
 import pulumi
 import pulumi_aws as aws
 from pulumi import Config, ResourceOptions
+
 from lib.tap_stack import TapStack, TapStackArgs
 
 # Initialize Pulumi configuration
@@ -48,8 +50,11 @@ provider = aws.Provider('aws',
     )
 )
 
+# Get subnet IDs from config, required
+subnet_ids = config.require_list('subnet_ids')
+
 stack = TapStack(
     name="pulumi-infra",
-    args=TapStackArgs(environment_suffix=environment_suffix),
+    args=TapStackArgs(environment_suffix=environment_suffix, subnet_ids=subnet_ids),
     opts=ResourceOptions(provider=provider)
 )
