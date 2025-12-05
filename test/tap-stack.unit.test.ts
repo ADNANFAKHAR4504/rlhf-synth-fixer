@@ -7,9 +7,22 @@ pulumi.runtime.setMocks({
     id: string;
     state: any;
   } {
+    const state = { ...args.inputs };
+
+    // Generate appropriate ARNs based on resource type
+    if (args.type === "aws:kms/key:Key") {
+      state.arn = `arn:aws:kms:us-east-1:123456789012:key/${args.name}_id`;
+    } else if (args.type === "aws:sns/topic:Topic") {
+      state.arn = `arn:aws:sns:us-east-1:123456789012:${args.name}_id`;
+    } else if (args.type === "aws:lambda/function:Function") {
+      state.arn = `arn:aws:lambda:us-east-1:123456789012:function:${args.name}_id`;
+    } else if (args.type === "aws:cloudwatch/logGroup:LogGroup") {
+      state.arn = `arn:aws:logs:us-east-1:123456789012:log-group:${args.inputs?.name || args.name}`;
+    }
+
     return {
       id: args.name + "_id",
-      state: args.inputs,
+      state: state,
     };
   },
   call: function (args: pulumi.runtime.MockCallArgs) {
