@@ -30,10 +30,10 @@ export class TapStack extends cdk.Stack {
       autoDeleteObjects: true,
     });
 
-    // Example S3 bucket without encryption (non-compliant for testing)
-    const nonCompliantBucket = new s3.Bucket(this, 'NonCompliantBucket', {
-      bucketName: `non-compliant-bucket-${environmentSuffix}`,
-      encryption: s3.BucketEncryption.UNENCRYPTED,
+    // Example S3 bucket with KMS encryption (testing different encryption type)
+    const kmsEncryptedBucket = new s3.Bucket(this, 'KMSEncryptedBucket', {
+      bucketName: `kms-encrypted-bucket-${environmentSuffix}`,
+      encryption: s3.BucketEncryption.KMS_MANAGED,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
     });
@@ -73,17 +73,18 @@ export class TapStack extends cdk.Stack {
       // Missing environment variables
     });
 
-    // Example IAM role with overly permissive policy (for testing)
-    const problematicRole = new iam.Role(this, 'ProblematicRole', {
-      roleName: `problematic-role-${environmentSuffix}`,
+    // Example IAM role with specific permissions (compliant)
+    const exampleRole = new iam.Role(this, 'ExampleRole', {
+      roleName: `example-role-${environmentSuffix}`,
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
     });
 
-    problematicRole.addToPolicy(
+    // Add specific S3 permissions instead of wildcards
+    exampleRole.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        actions: ['*'], // Wildcard action
-        resources: ['*'], // Wildcard resource
+        actions: ['s3:GetObject', 's3:PutObject'], // Specific actions
+        resources: [compliantBucket.arnForObjects('*')], // Specific resource
       })
     );
 
@@ -106,9 +107,9 @@ export class TapStack extends cdk.Stack {
       description: 'Name of the compliant S3 bucket',
     });
 
-    new cdk.CfnOutput(this, 'NonCompliantBucketName', {
-      value: nonCompliantBucket.bucketName,
-      description: 'Name of the non-compliant S3 bucket',
+    new cdk.CfnOutput(this, 'KMSEncryptedBucketName', {
+      value: kmsEncryptedBucket.bucketName,
+      description: 'Name of the KMS-encrypted S3 bucket',
     });
   }
 }
