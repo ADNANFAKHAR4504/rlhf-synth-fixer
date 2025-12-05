@@ -2,7 +2,13 @@
 
 from constructs import Construct
 from cdktf_cdktf_provider_aws.backup_vault import BackupVault
-from cdktf_cdktf_provider_aws.backup_plan import BackupPlan, BackupPlanRule, BackupPlanRuleCopyAction, BackupPlanRuleLifecycle
+from cdktf_cdktf_provider_aws.backup_plan import (
+    BackupPlan,
+    BackupPlanRule,
+    BackupPlanRuleCopyAction,
+    BackupPlanRuleLifecycle,
+    BackupPlanRuleCopyActionLifecycle
+)
 from cdktf_cdktf_provider_aws.backup_selection import BackupSelection, BackupSelectionSelectionTag
 from cdktf_cdktf_provider_aws.iam_role import IamRole
 from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
@@ -98,7 +104,7 @@ class BackupStack(Construct):
                 ),
                 copy_action=[BackupPlanRuleCopyAction(
                     destination_vault_arn=secondary_vault.arn,
-                    lifecycle=BackupPlanRuleLifecycle(
+                    lifecycle=BackupPlanRuleCopyActionLifecycle(
                         delete_after=30,
                         cold_storage_after=7
                     )

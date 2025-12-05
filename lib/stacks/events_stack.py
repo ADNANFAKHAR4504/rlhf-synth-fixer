@@ -3,7 +3,11 @@
 from constructs import Construct
 from cdktf_cdktf_provider_aws.cloudwatch_event_bus import CloudwatchEventBus
 from cdktf_cdktf_provider_aws.cloudwatch_event_rule import CloudwatchEventRule
-from cdktf_cdktf_provider_aws.cloudwatch_event_target import CloudwatchEventTarget, CloudwatchEventTargetDeadLetterConfig
+from cdktf_cdktf_provider_aws.cloudwatch_event_target import (
+    CloudwatchEventTarget,
+    CloudwatchEventTargetDeadLetterConfig,
+    CloudwatchEventTargetRetryPolicy
+)
 from cdktf_cdktf_provider_aws.sqs_queue import SqsQueue
 from cdktf_cdktf_provider_aws.lambda_event_source_mapping import LambdaEventSourceMapping
 import json
@@ -86,8 +90,8 @@ class EventsStack(Construct):
             dead_letter_config=CloudwatchEventTargetDeadLetterConfig(
                 arn=self.dlq.arn
             ),
-            retry_policy={
-                "maximum_event_age": 3600,
-                "maximum_retry_attempts": 2
-            }
+            retry_policy=CloudwatchEventTargetRetryPolicy(
+                maximum_event_age_in_seconds=3600,
+                maximum_retry_attempts=2
+            )
         )

@@ -16,7 +16,8 @@ from cdktf_cdktf_provider_aws.s3_bucket_replication_configuration import (
     S3BucketReplicationConfigurationRuleDestinationReplicationTimeTime,
     S3BucketReplicationConfigurationRuleDestinationMetrics,
     S3BucketReplicationConfigurationRuleDestinationMetricsEventThreshold,
-    S3BucketReplicationConfigurationRuleFilter
+    S3BucketReplicationConfigurationRuleFilter,
+    S3BucketReplicationConfigurationRuleDeleteMarkerReplication
 )
 from cdktf_cdktf_provider_aws.s3_bucket_public_access_block import S3BucketPublicAccessBlock
 from cdktf_cdktf_provider_aws.iam_role import IamRole
@@ -90,9 +91,11 @@ class StorageStack(Construct):
             "bucket-encryption",
             bucket=self.bucket.id,
             rule=[S3BucketServerSideEncryptionConfigurationRuleA(
-                apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
-                    sse_algorithm="aws:kms",
-                    kms_master_key_id=self.kms_key.arn
+                apply_server_side_encryption_by_default=(
+                    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
+                        sse_algorithm="aws:kms",
+                        kms_master_key_id=self.kms_key.arn
+                    )
                 ),
                 bucket_key_enabled=True
             )]
@@ -180,7 +183,9 @@ class StorageStack(Construct):
                     id="replicate-all",
                     status="Enabled",
                     priority=1,
-                    delete_marker_replication_status="Enabled",
+                    delete_marker_replication=S3BucketReplicationConfigurationRuleDeleteMarkerReplication(
+                        status="Enabled"
+                    ),
                     filter=S3BucketReplicationConfigurationRuleFilter(
                         prefix=""
                     ),
