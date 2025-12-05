@@ -4,9 +4,60 @@
 **Language**: py (Python)  
 **Implementation**: CDKTF Python using Python 3.12
 
+**IMPORTANT**: This document contains Python code (`.py` files), NOT HCL/Terraform (`.tf` files). All code examples are Python implementations using CDKTF.
+
 This implementation creates identical infrastructure across three AWS environments (dev, staging, prod) with environment-specific configurations using CDKTF Python.
 
 **Note**: This is a Python implementation using CDKTF (Cloud Development Kit for Terraform). All code examples are Python code, not HCL/Terraform configuration files. The infrastructure is defined using Python classes and CDKTF constructs.
+
+## Python Implementation - Code Language Declaration
+
+```python
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Multi-Environment Infrastructure with CDKTF Python
+
+This file contains Python code examples for CDKTF (Cloud Development Kit for Terraform).
+All code blocks in this document are Python code, not HCL or Terraform configuration files.
+
+Platform: cdktf
+Language: py (Python)
+Implementation: CDKTF Python using Python 3.12
+"""
+
+# Python imports
+import os
+import sys
+import json
+from typing import Dict, Any
+from datetime import datetime, timezone
+
+# CDKTF imports
+from cdktf import App, TerraformStack, S3Backend, TerraformOutput, Fn
+from constructs import Construct
+from cdktf_cdktf_provider_aws.provider import AwsProvider
+
+# Local imports
+from lib.tap_stack import TapStack
+from lib.environment_config import EnvironmentConfig
+from lib.fintech_infrastructure_construct import FinTechInfrastructureConstruct
+
+def create_infrastructure():
+    """Create CDKTF infrastructure using Python."""
+    app = App()
+    stack = TapStack(
+        app,
+        "TapStackdev",
+        environment_suffix="dev",
+        aws_region="us-east-1"
+    )
+    app.synth()
+    return stack
+
+if __name__ == "__main__":
+    create_infrastructure()
+```
 
 ## Quick Start - Python Code Example
 
