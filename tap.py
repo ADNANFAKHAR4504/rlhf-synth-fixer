@@ -50,8 +50,8 @@ provider = aws.Provider('aws',
     )
 )
 
-# Get subnet IDs from config, required
-subnet_ids_config = config.require('subnet_ids')
+# Get subnet IDs from config, with default if not set
+subnet_ids_config = config.get('subnet_ids', 'subnet-12345,subnet-67890')
 if isinstance(subnet_ids_config, list):
     subnet_ids = subnet_ids_config
 else:
