@@ -1,0 +1,13 @@
+{
+  "language": "python",
+  "app": "python3 lib/main.py",
+  "projectId": "64457522-disaster-recovery",
+  "terraformProviders": [
+    "aws@~> 5.0"
+  ],
+  "terraformModules": [],
+  "context": {
+    "excludeStackIdFromLogicalIds": "true",
+    "allowSepCharsInLogicalIds": "true"
+  }
+}
