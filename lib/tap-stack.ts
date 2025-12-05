@@ -127,10 +127,10 @@ export class TapStack extends pulumi.ComponentResource {
           name: `${service}-success-rate`,
           pattern:
             service === 'payment-api'
-              ? '[time, request_id, status=SUCCESS*, ...]'
+              ? '[time, request_id, status=SUCCESS, ...]'
               : service === 'fraud-detector'
-                ? '[time, request_id, detection=FRAUD_DETECTED*, ...]'
-                : '[time, request_id, delivery=DELIVERED*, ...]',
+                ? '[time, request_id, detection=FRAUD_DETECTED, ...]'
+                : '[time, request_id, delivery=DELIVERED, ...]',
           metricTransformation: {
             name: `${service}-success-count`,
             namespace: `CustomMetrics/${service}`,

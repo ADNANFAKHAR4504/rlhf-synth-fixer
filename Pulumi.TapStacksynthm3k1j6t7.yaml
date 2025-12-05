@@ -1,0 +1,4 @@
+encryptionsalt: v1:nL2a+UW+WYs=:v1:cJFHzD3AdTH1e2YI:RuJP4grDySz5VTJ3fjLs7JtrDIcZQQ==
+config:
+  aws:region: us-east-1
+  MonitoringStack:environmentSuffix: synthm3k1j6t7
