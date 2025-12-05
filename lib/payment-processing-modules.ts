@@ -166,7 +166,10 @@ export class VPCModule extends Construct {
     this.flowLogsBucket = new aws.s3Bucket.S3Bucket(this, 'flow-logs-bucket', {
       bucket: resourceName(`v5-vpc-flowlogs-${uniqueSuffix}`).toLowerCase(),
       forceDestroy: true,
-      tags: { ...props.tags, Name: resourceName(`v5-flowlogs-${uniqueSuffix}`) },
+      tags: {
+        ...props.tags,
+        Name: resourceName(`v5-flowlogs-${uniqueSuffix}`),
+      },
       lifecycle: {
         ignoreChanges: ['bucket'],
       },
@@ -364,7 +367,10 @@ export class SecretsModule extends Construct {
         name: resourceName(`v5-db-secret-${uniqueSuffix}`),
         description: 'Master password for RDS Aurora MySQL cluster',
         recoveryWindowInDays: 7,
-        tags: { ...props.tags, Name: resourceName(`v5-rds-secret-${uniqueSuffix}`) },
+        tags: {
+          ...props.tags,
+          Name: resourceName(`v5-rds-secret-${uniqueSuffix}`),
+        },
       }
     );
 
@@ -415,7 +421,10 @@ export class RDSModule extends Construct {
       {
         name: `/aws/rds/cluster/${resourceName(`v5-db-${uniqueSuffix}`)}/slowquery`,
         retentionInDays: 2557,
-        tags: { ...props.tags, Name: resourceName(`payment-rds-logs-${uniqueSuffix}`) },
+        tags: {
+          ...props.tags,
+          Name: resourceName(`payment-rds-logs-${uniqueSuffix}`),
+        },
       }
     );
 
@@ -458,13 +467,17 @@ export class RDSModule extends Construct {
         name: resourceName(`v5-db-subnets-${uniqueSuffix}`).toLowerCase(),
         subnetIds: props.privateSubnetIds,
         description: 'Subnet group for RDS Aurora MySQL cluster',
-        tags: { ...props.tags, Name: resourceName(`v5-db-subnets-${uniqueSuffix}`) },
+        tags: {
+          ...props.tags,
+          Name: resourceName(`v5-db-subnets-${uniqueSuffix}`),
+        },
       }
     );
 
     // RDS Aurora Cluster
     this.cluster = new aws.rdsCluster.RdsCluster(this, 'aurora-cluster', {
-      clusterIdentifier: resourceName(`v5-aurora-db-${uniqueSuffix}`).toLowerCase(),
+      clusterIdentifier:
+        resourceName(`v5-aurora-db-${uniqueSuffix}`).toLowerCase(),
       engine: 'aurora-mysql',
       engineVersion: '8.0.mysql_aurora.3.04.0',
       databaseName: 'paymentdb',
@@ -488,7 +501,8 @@ export class RDSModule extends Construct {
       this,
       'cluster-instance-1',
       {
-        identifier: `${resourceName(`v5-aurora-db-${uniqueSuffix}`)}-instance-1`.toLowerCase(),
+        identifier:
+          `${resourceName(`v5-aurora-db-${uniqueSuffix}`)}-instance-1`.toLowerCase(),
         clusterIdentifier: this.cluster.id,
         instanceClass: 'db.t3.medium',
         engine: this.cluster.engine,
@@ -500,7 +514,8 @@ export class RDSModule extends Construct {
 
     // Second instance for Multi-AZ
     new aws.rdsClusterInstance.RdsClusterInstance(this, 'cluster-instance-2', {
-      identifier: `${resourceName(`v5-aurora-db-${uniqueSuffix}`)}-instance-2`.toLowerCase(),
+      identifier:
+        `${resourceName(`v5-aurora-db-${uniqueSuffix}`)}-instance-2`.toLowerCase(),
       clusterIdentifier: this.cluster.id,
       instanceClass: 'db.t3.medium',
       engine: this.cluster.engine,
@@ -776,7 +791,10 @@ export class ECSModule extends Construct {
       {
         name: `/aws/ecs/${resourceName(`v5-service-${uniqueSuffix}`)}`,
         retentionInDays: 2557,
-        tags: { ...props.tags, Name: resourceName(`payment-ecs-logs-${uniqueSuffix}`) },
+        tags: {
+          ...props.tags,
+          Name: resourceName(`payment-ecs-logs-${uniqueSuffix}`),
+        },
       }
     );
 
