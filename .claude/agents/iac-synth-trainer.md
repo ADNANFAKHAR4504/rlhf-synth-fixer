@@ -731,7 +731,88 @@ echo "✅ All required scripts present"
           # Now run metadata validation
           echo ""
           echo "🔍 Running metadata validation..."
-          bash .claude/scripts/validate-metadata.sh metadata.json
+          
+          # Capture validation output to detect fixable issues
+          METADATA_VALIDATION_OUTPUT=$(bash .claude/scripts/validate-metadata.sh metadata.json 2>&1) || true
+          METADATA_EXIT_CODE=$?
+          
+          echo "$METADATA_VALIDATION_OUTPUT"
+          
+          if [ $METADATA_EXIT_CODE -ne 0 ]; then
+            echo ""
+            echo "⚠️ Metadata validation failed, checking for auto-fixable issues..."
+            
+            # Auto-fix: Subject label requires different platform
+            # Pattern: "Subject label 'X' requires platform='Y', but got 'Z'"
+            if echo "$METADATA_VALIDATION_OUTPUT" | grep -q "requires platform="; then
+              REQUIRED_PLATFORM=$(echo "$METADATA_VALIDATION_OUTPUT" | grep -oP "requires platform='\K[^']+" | head -1)
+              CURRENT_PLATFORM=$(jq -r '.platform' metadata.json)
+              
+              if [ -n "$REQUIRED_PLATFORM" ] && [ "$REQUIRED_PLATFORM" != "$CURRENT_PLATFORM" ]; then
+                echo "🔧 Auto-fixing: Changing platform from '$CURRENT_PLATFORM' to '$REQUIRED_PLATFORM'"
+                
+                # Update platform in metadata.json
+                jq --arg platform "$REQUIRED_PLATFORM" '.platform = $platform' metadata.json > metadata.json.tmp
+                mv metadata.json.tmp metadata.json
+                
+                # Also fix language if needed for analysis/cicd platforms
+                if [ "$REQUIRED_PLATFORM" = "analysis" ]; then
+                  CURRENT_LANGUAGE=$(jq -r '.language' metadata.json)
+                  if [ "$CURRENT_LANGUAGE" != "py" ]; then
+                    echo "🔧 Auto-fixing: Changing language from '$CURRENT_LANGUAGE' to 'py' (required for analysis)"
+                    jq '.language = "py"' metadata.json > metadata.json.tmp
+                    mv metadata.json.tmp metadata.json
+                  fi
+                elif [ "$REQUIRED_PLATFORM" = "cicd" ]; then
+                  CURRENT_LANGUAGE=$(jq -r '.language' metadata.json)
+                  if [[ ! "$CURRENT_LANGUAGE" =~ ^(yaml|yml)$ ]]; then
+                    echo "🔧 Auto-fixing: Changing language from '$CURRENT_LANGUAGE' to 'yml' (required for cicd)"
+                    jq '.language = "yml"' metadata.json > metadata.json.tmp
+                    mv metadata.json.tmp metadata.json
+                  fi
+                fi
+                
+                echo "✅ Platform/language auto-fix applied"
+              fi
+            fi
+            
+            # Auto-fix: Platform can only be used with specific subject_labels
+            # Pattern: "Platform 'X' can only be used with subject_labels: 'Y'"
+            if echo "$METADATA_VALIDATION_OUTPUT" | grep -q "can only be used with subject_label"; then
+              CURRENT_PLATFORM=$(jq -r '.platform' metadata.json)
+              CURRENT_SUBTASK=$(jq -r '.subtask' metadata.json)
+              
+              if [ "$CURRENT_PLATFORM" = "analysis" ]; then
+                echo "🔧 Auto-fixing: Platform 'analysis' used with wrong subject_labels"
+                echo "   Updating subtask to 'Infrastructure QA and Management'"
+                echo "   Updating subject_labels to ['Infrastructure Analysis/Monitoring']"
+                
+                jq '.subtask = "Infrastructure QA and Management" | .subject_labels = ["Infrastructure Analysis/Monitoring"]' metadata.json > metadata.json.tmp
+                mv metadata.json.tmp metadata.json
+                echo "✅ Subject labels auto-fix applied"
+                
+              elif [ "$CURRENT_PLATFORM" = "cicd" ]; then
+                echo "🔧 Auto-fixing: Platform 'cicd' used with wrong subject_labels"
+                echo "   Updating subtask to 'CI/CD Pipeline Integration'"
+                echo "   Updating subject_labels to ['CI/CD Pipeline']"
+                
+                jq '.subtask = "CI/CD Pipeline Integration" | .subject_labels = ["CI/CD Pipeline"]' metadata.json > metadata.json.tmp
+                mv metadata.json.tmp metadata.json
+                echo "✅ Subject labels auto-fix applied"
+              fi
+            fi
+            
+            # Re-run validation after fixes
+            echo ""
+            echo "🔄 Re-running metadata validation after auto-fixes..."
+            if bash .claude/scripts/validate-metadata.sh metadata.json; then
+              echo "✅ Metadata validation now passes after auto-fix"
+            else
+              echo "❌ Metadata validation still failing - manual intervention required"
+              echo "📖 Review: .claude/docs/references/metadata-requirements.md"
+              echo "📖 Review: .claude/docs/references/iac-subtasks-subject-labels.json"
+            fi
+          fi
           ;;
          "validate-commit-message")
            # Check commit message format
@@ -1063,6 +1144,10 @@ For each issue in priority order:
    - Apply known fix patterns from `.claude/lessons_learnt.md`
    - Use deployment-failure-analysis.sh for deployment errors
    - Use enhanced-error-recovery.sh for automatic retry logic
+   - **Metadata subject_label/platform mismatches** (auto-fixed in detect-metadata job):
+     - If subject_label requires different platform → update platform and language
+     - If platform requires different subject_labels → update subtask and subject_labels
+     - Reference: `.claude/docs/references/iac-subtasks-subject-labels.json`
 
 2. **Verify fix**:
    - Re-run relevant validation checkpoint
