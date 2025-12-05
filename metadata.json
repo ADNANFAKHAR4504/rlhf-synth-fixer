@@ -8,6 +8,9 @@
   "problem_id": "PULUMI-FIN-CICD-001",
   "training_quality": 9,
   "version": "1.0.0",
+  "team": "synth",
+  "startedAt": "2025-12-05T06:15:00Z",
+  "turn_type": "single",
   "created_at": "2025-12-05T06:15:00Z",
   "updated_at": "2025-12-05T06:15:00Z"
 }
