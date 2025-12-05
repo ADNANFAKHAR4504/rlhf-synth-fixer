@@ -69,12 +69,7 @@ jobs:
       - name: Retrieve Secrets from AWS Secrets Manager
         id: secrets
         run: |
-          echo "🔐 Retrieving secrets from AWS Secrets Manager..."
-          # Retrieve database credentials and API keys
-          SECRET_JSON=$(aws secretsmanager get-secret-value \
-            --secret-id pci-dss-pipeline-secret-pr7939 \
-            --query SecretString \
-            --output text)
+          SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id pci-dss-pipeline-secret-pr7939 --query SecretString --output text)
           echo "::add-mask::$SECRET_JSON"
           echo "✅ Secrets retrieved securely"
 
@@ -95,17 +90,8 @@ jobs:
 
       - name: Encrypt Build Artifacts with KMS
         run: |
-          echo "🔒 Encrypting build artifacts..."
-          # Create tarball of build artifacts
           tar -czf build-artifacts.tar.gz coverage.html coverage.out
-
-          # Encrypt with AWS KMS
-          aws kms encrypt \
-            --key-id alias/pci-dss-pipeline-key-pr7939 \
-            --plaintext fileb://build-artifacts.tar.gz \
-            --output text \
-            --query CiphertextBlob > build-artifacts.tar.gz.encrypted
-
+          aws kms encrypt --key-id alias/pci-dss-pipeline-key-pr7939 --plaintext fileb://build-artifacts.tar.gz --output text --query CiphertextBlob > build-artifacts.tar.gz.encrypted
           echo "✅ Artifacts encrypted with KMS"
 
       - name: Upload Encrypted Artifacts to S3
@@ -117,12 +103,8 @@ jobs:
 
       - name: Log Build Event to CloudWatch
         run: |
-          echo "📝 Logging build event..."
-          aws logs put-log-events \
-            --log-group-name pci-dss-pipeline-logs-pr7939 \
-            --log-stream-name build-events \
-            --log-events timestamp=$(date +%s000),message="Build completed for commit ${{ github.sha }}"
-          echo "✅ Build event logged for audit trail"
+          aws logs put-log-events --log-group-name pci-dss-pipeline-logs-pr7939 --log-stream-name build-events --log-events timestamp=$(date +%s000),message="Build ${{ github.sha }}"
+          echo "✅ Build event logged"
 
   deploy-dev:
     name: Deploy to Development
@@ -142,37 +124,24 @@ jobs:
 
       - name: Download Encrypted Artifacts from S3
         run: |
-          echo "📥 Downloading encrypted artifacts..."
-          aws s3 cp \
-            s3://pci-dss-pipeline-artifacts-pr7939/builds/${{ github.sha }}/build-artifacts.tar.gz.encrypted \
-            ./build-artifacts.tar.gz.encrypted
+          aws s3 cp s3://pci-dss-pipeline-artifacts-pr7939/builds/${{ github.sha }}/build-artifacts.tar.gz.encrypted ./build-artifacts.tar.gz.encrypted
+          echo "✅ Downloaded encrypted artifacts"
 
       - name: Decrypt Artifacts with KMS
         run: |
-          echo "🔓 Decrypting artifacts..."
-          aws kms decrypt \
-            --ciphertext-blob fileb://build-artifacts.tar.gz.encrypted \
-            --output text \
-            --query Plaintext | base64 -d > build-artifacts.tar.gz
-
+          aws kms decrypt --ciphertext-blob fileb://build-artifacts.tar.gz.encrypted --output text --query Plaintext | base64 -d > build-artifacts.tar.gz
           tar -xzf build-artifacts.tar.gz
           echo "✅ Artifacts decrypted"
 
       - name: Deploy to Development Environment
         run: |
-          echo "🚀 Deploying to development..."
-          # Trigger AWS CodePipeline deployment
-          aws codepipeline start-pipeline-execution \
-            --name pci-dss-pipeline-pr7939
+          aws codepipeline start-pipeline-execution --name pci-dss-pipeline-pr7939
           echo "✅ Deployment triggered"
 
       - name: Log Deployment Event
         run: |
-          echo "📝 Logging deployment event..."
-          aws logs put-log-events \
-            --log-group-name pci-dss-pipeline-logs-pr7939 \
-            --log-stream-name deployment-events \
-            --log-events timestamp=$(date +%s000),message="Deployment to DEV completed for commit ${{ github.sha }}"
+          aws logs put-log-events --log-group-name pci-dss-pipeline-logs-pr7939 --log-stream-name deployment-events --log-events timestamp=$(date +%s000),message="DEV ${{ github.sha }}"
+          echo "✅ Logged deployment event"
 
   deploy-staging:
     name: Deploy to Staging
@@ -192,31 +161,19 @@ jobs:
 
       - name: Run Security Compliance Check
         run: |
-          echo "🔍 Verifying PCI-DSS compliance..."
-          # Check encryption status
-          aws s3api get-bucket-encryption \
-            --bucket pci-dss-pipeline-artifacts-pr7939
-
-          # Check KMS key rotation
-          aws kms get-key-rotation-status \
-            --key-id alias/pci-dss-pipeline-key-pr7939
-
+          aws s3api get-bucket-encryption --bucket pci-dss-pipeline-artifacts-pr7939
+          aws kms get-key-rotation-status --key-id alias/pci-dss-pipeline-key-pr7939
           echo "✅ Compliance checks passed"
 
       - name: Deploy to Staging Environment
         run: |
-          echo "🚀 Deploying to staging..."
-          aws codepipeline start-pipeline-execution \
-            --name pci-dss-pipeline-pr7939-staging
+          aws codepipeline start-pipeline-execution --name pci-dss-pipeline-pr7939-staging
           echo "✅ Staging deployment triggered"
 
       - name: Log Staging Deployment Event
         run: |
-          echo "📝 Logging staging deployment..."
-          aws logs put-log-events \
-            --log-group-name pci-dss-pipeline-logs-pr7939 \
-            --log-stream-name deployment-events \
-            --log-events timestamp=$(date +%s000),message="Deployment to STAGING completed for commit ${{ github.sha }}"
+          aws logs put-log-events --log-group-name pci-dss-pipeline-logs-pr7939 --log-stream-name deployment-events --log-events timestamp=$(date +%s000),message="STAGING ${{ github.sha }}"
+          echo "✅ Logged staging deployment"
 
   deploy-production:
     name: Deploy to Production
@@ -241,27 +198,18 @@ jobs:
 
       - name: Final Security Validation
         run: |
-          echo "🔒 Running final security validation..."
-          # Verify all PCI-DSS controls
           echo "✅ Encryption: VERIFIED"
           echo "✅ Access Controls: VERIFIED"
           echo "✅ Audit Logging: VERIFIED"
-          echo "✅ Network Isolation: VERIFIED"
 
       - name: Deploy to Production
         run: |
-          echo "🚀 Deploying to production..."
-          aws codepipeline start-pipeline-execution \
-            --name pci-dss-pipeline-pr7939-prod
+          aws codepipeline start-pipeline-execution --name pci-dss-pipeline-pr7939-prod
           echo "✅ Production deployment triggered"
 
       - name: Create Audit Trail
         run: |
-          echo "📝 Creating production deployment audit trail..."
-          aws logs put-log-events \
-            --log-group-name pci-dss-pipeline-logs-pr7939 \
-            --log-stream-name production-deployments \
-            --log-events timestamp=$(date +%s000),message="PRODUCTION DEPLOYMENT: commit ${{ github.sha }}, user ${{ github.actor }}, approved $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          aws logs put-log-events --log-group-name pci-dss-pipeline-logs-pr7939 --log-stream-name production-deployments --log-events timestamp=$(date +%s000),message="PROD ${{ github.sha }} by ${{ github.actor }}"
           echo "✅ Audit trail created"
 
   post-deployment-validation:
@@ -278,80 +226,26 @@ jobs:
 
       - name: Verify S3 Bucket Encryption
         run: |
-          echo "🔍 Verifying S3 bucket encryption..."
-          ENCRYPTION=$(aws s3api get-bucket-encryption \
-            --bucket pci-dss-pipeline-artifacts-pr7939 \
-            --query 'ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm' \
-            --output text)
-
-          if [ "$ENCRYPTION" != "aws:kms" ]; then
-            echo "❌ S3 bucket not using KMS encryption"
-            exit 1
-          fi
-          echo "✅ S3 encryption verified"
+          ENCRYPTION=$(aws s3api get-bucket-encryption --bucket pci-dss-pipeline-artifacts-pr7939 --query 'ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm' --output text)
+          [ "$ENCRYPTION" = "aws:kms" ] && echo "✅ S3 encryption verified" || exit 1
 
       - name: Verify Secrets Manager Configuration
         run: |
-          echo "🔍 Verifying Secrets Manager..."
-          SECRET=$(aws secretsmanager describe-secret \
-            --secret-id pci-dss-pipeline-secret-pr7939 \
-            --query 'KmsKeyId' \
-            --output text)
-
-          if [ -z "$SECRET" ]; then
-            echo "❌ Secrets Manager not configured with KMS"
-            exit 1
-          fi
-          echo "✅ Secrets Manager encryption verified"
+          SECRET=$(aws secretsmanager describe-secret --secret-id pci-dss-pipeline-secret-pr7939 --query 'KmsKeyId' --output text)
+          [ -n "$SECRET" ] && echo "✅ Secrets Manager verified" || exit 1
 
       - name: Verify CloudWatch Log Retention
         run: |
-          echo "🔍 Verifying CloudWatch log retention..."
-          RETENTION=$(aws logs describe-log-groups \
-            --log-group-name-prefix pci-dss-pipeline-logs-pr7939 \
-            --query 'logGroups[0].retentionInDays' \
-            --output text)
-
-          if [ "$RETENTION" -lt "365" ]; then
-            echo "❌ Log retention less than 365 days (PCI-DSS requirement)"
-            exit 1
-          fi
-          echo "✅ Log retention meets PCI-DSS requirements (${RETENTION} days)"
+          RETENTION=$(aws logs describe-log-groups --log-group-name-prefix pci-dss-pipeline-logs-pr7939 --query 'logGroups[0].retentionInDays' --output text)
+          [ "$RETENTION" -ge "365" ] && echo "✅ Log retention: ${RETENTION} days" || exit 1
 
       - name: Verify KMS Key Rotation
         run: |
-          echo "🔍 Verifying KMS key rotation..."
-          ROTATION=$(aws kms get-key-rotation-status \
-            --key-id alias/pci-dss-pipeline-key-pr7939 \
-            --query 'KeyRotationEnabled' \
-            --output text)
-
-          if [ "$ROTATION" != "True" ]; then
-            echo "❌ KMS key rotation not enabled"
-            exit 1
-          fi
-          echo "✅ KMS key rotation enabled"
+          ROTATION=$(aws kms get-key-rotation-status --key-id alias/pci-dss-pipeline-key-pr7939 --query 'KeyRotationEnabled' --output text)
+          [ "$ROTATION" = "True" ] && echo "✅ KMS key rotation enabled" || exit 1
 
       - name: Generate Compliance Report
         run: |
-          echo "📊 Generating PCI-DSS compliance report..."
-          cat > compliance-report.json <<EOF
-          {
-            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "commit": "${{ github.sha }}",
-            "compliance_checks": {
-              "encryption_at_rest": "PASS",
-              "encryption_in_transit": "PASS",
-              "access_controls": "PASS",
-              "audit_logging": "PASS",
-              "secrets_management": "PASS",
-              "network_isolation": "PASS",
-              "key_rotation": "PASS",
-              "log_retention": "PASS"
-            },
-            "pci_dss_version": "4.0",
-            "status": "COMPLIANT"
-          }
-          EOF
+          echo '{"timestamp":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","status":"COMPLIANT","pci_dss":"4.0"}' > compliance-report.json
           cat compliance-report.json
           echo "✅ Compliance report generated"
