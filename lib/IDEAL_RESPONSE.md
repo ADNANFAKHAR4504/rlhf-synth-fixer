@@ -1,505 +1,250 @@
-# Ideal Infrastructure Response - Financial Transaction Processing Platform
+# Ideal Response - Financial Transaction Processing Platform
 
-## Overview
-This document describes the ideal implementation for a PCI-DSS compliant financial transaction processing web application using CDKTF (Terraform CDK) with Python on AWS.
+## Architecture Overview
 
-## Architecture Summary
+A production-grade web application infrastructure for financial transactions using CDKTF Python on AWS, designed for PCI-DSS compliance.
 
-### Core Components
-1. **VPC and Networking** - Multi-AZ VPC with public and private subnets
-2. **Security** - KMS encryption, security groups, IAM roles and policies
-3. **Database** - Aurora MySQL cluster with Multi-AZ deployment
-4. **Storage** - S3 buckets for static assets and logs
-5. **Application Load Balancer** - Internet-facing ALB for traffic distribution
-6. **Compute** - Auto Scaling Group with EC2 instances
-7. **CDN** - CloudFront distribution with WAF protection
-8. **Secrets Management** - AWS Secrets Manager with rotation
-9. **Monitoring** - CloudWatch logs, metrics, and alarms
+## Components
 
-## Implementation Details
+### Network Layer
+- VPC with CIDR 10.0.0.0/16
+- 3 public subnets for ALB and NAT Gateways
+- 3 private subnets for compute and database
+- NAT Gateways for private subnet internet access
+- Route tables for traffic management
 
-### 1. VPC Architecture (lib/vpc.py)
-
-**Design Rationale:**
-- 3 Availability Zones for high availability
-- 3 public subnets (10.0.0.0/24, 10.0.1.0/24, 10.0.2.0/24)
-- 3 private subnets (10.0.10.0/24, 10.0.11.0/24, 10.0.12.0/24)
-- Internet Gateway for public internet access
-- NAT Gateways (one per AZ) for private subnet outbound connectivity
-- Proper route tables and associations
-
-**Key Features:**
-- DNS hostnames and DNS support enabled
-- Multi-AZ deployment for fault tolerance
-- Isolated private subnets for database and application tiers
-- Public subnets for ALB and NAT Gateways
-
-**Environment Suffix:**
-All resources properly use `environment_suffix` parameter to enable multi-environment deployments.
-
-### 2. Security (lib/security.py)
-
-**Design Rationale:**
-- Defense in depth with multiple security layers
-- Principle of least privilege for IAM policies
-- Encryption at rest using KMS
-- Security groups follow least privilege network access
-
-**Components:**
-
-#### KMS Encryption
-- Key rotation enabled for compliance
-- Used for RDS, Secrets Manager, and other encrypted resources
-- Proper key alias for easy reference
-
-#### Security Groups
-1. **ALB Security Group:**
-   - Ingress: HTTP (80) and HTTPS (443) from 0.0.0.0/0
-   - Egress: All traffic
-
-2. **EC2 Security Group:**
-   - Ingress: HTTP and HTTPS from ALB security group only
-   - Egress: All traffic
-
-3. **RDS Security Group:**
-   - Ingress: MySQL (3306) from EC2 security group only
-   - Egress: All traffic
-
-4. **Lambda Security Group:**
-   - Egress: All traffic (for Secrets rotation)
-   - Additional rule allowing Lambda to access RDS
-
-#### IAM Roles and Policies
-1. **EC2 Role:**
-   - Secrets Manager read access
-   - KMS decrypt permissions
-   - CloudWatch Logs permissions
-   - S3 access for logs bucket
-   - SSM Managed Instance Core policy for management
-
-2. **Lambda Role:**
-   - Secrets Manager full rotation permissions
-   - RDS describe and modify permissions
-   - KMS encrypt/decrypt permissions
-   - VPC networking permissions
-   - Lambda basic execution role
-
-### 3. Database (lib/database.py)
-
-**Design Rationale:**
-- Aurora MySQL 8.0 for PCI-DSS compliance
-- Multi-AZ deployment with 2 instances
-- Encryption at rest and in transit
-- Automated backups and point-in-time recovery
-- Performance Insights for monitoring
-
-**Configuration:**
-
-#### Cluster Configuration
-- Engine: aurora-mysql 8.0
-- Storage encryption with KMS
-- Backup retention: 7 days
-- CloudWatch logs: audit, error, general, slowquery
-- Deletion protection disabled for test environments
-- Skip final snapshot enabled for test environments
-
-#### Parameter Groups
-**Cluster Parameters:**
-- character_set_server: utf8mb4
-- collation_server: utf8mb4_unicode_ci
-- require_secure_transport: ON (enforces SSL/TLS)
-
-**Instance Parameters:**
-- slow_query_log: 1
-- long_query_time: 2
-
-#### Instance Configuration
-- Class: db.r6g.large (production-grade)
-- Performance Insights enabled with 7-day retention
-- Not publicly accessible
-- Enhanced monitoring recommended
-
-**Security Improvements:**
-- Master password generated randomly using Python's random/string modules
-- Password excludes problematic characters for RDS
-- Actual password management delegated to Secrets Manager
-- Credentials never hardcoded in plain text
-
-### 4. Storage (lib/storage.py)
-
-**Design Rationale:**
-- Separate buckets for different data types
-- Encryption at rest for all data
-- Versioning for data protection
-- Lifecycle policies for cost optimization
-
-**Components:**
-
-#### Static Assets Bucket
-- Server-side encryption with AES256
-- Versioning enabled
-- Public access blocked (CloudFront access only)
-- Force destroy enabled for test environments
-
-#### Logs Bucket
-- Server-side encryption with AES256
-- Versioning enabled
-- Public access blocked completely
-- 90-day lifecycle policy for log retention
-- Force destroy enabled for test environments
-
-### 5. Application Load Balancer (lib/alb.py)
-
-**Design Rationale:**
-- Internet-facing ALB for public access
-- Deployed in public subnets across multiple AZs
-- Health checks for application monitoring
-
-**Configuration:**
-- Load balancer type: application
-- HTTP/2 enabled
-- Cross-zone load balancing enabled
-- Deletion protection disabled for test environments
-
-**Target Group:**
-- Protocol: HTTP
-- Port: 80
-- Target type: instance
-- Deregistration delay: 30 seconds
-- Health check path: /health
-- Health check thresholds: 2/2 (healthy/unhealthy)
-
-**Listeners:**
-- HTTP (port 80) with forward to target group
-- HTTPS would be configured in production with ACM certificate
-
-### 6. Compute (lib/compute.py)
-
-**Design Rationale:**
-- Auto Scaling for elasticity and high availability
-- Latest Amazon Linux 2023 AMI
-- IMDSv2 enforced for security
-- User data script for application bootstrap
-
-**Components:**
-
-#### Launch Template
-- Latest Amazon Linux 2023 AMI
-- Instance type: configurable (default: t3.medium)
-- IAM instance profile attached
-- Security group attached
-- IMDSv2 enforced (http_tokens: required)
-- Detailed monitoring enabled
-
-#### User Data Script
-- System updates
-- Python 3, nginx, mysql client installation
-- AWS CLI v2 installation
-- CloudWatch agent installation
-- Simple health check application
-- Systemd service configuration
-- Database connectivity check
-
-#### Auto Scaling Group
-- Deployed in private subnets
-- Min: 2, Max: 6, Desired: 2
-- Health check type: ELB
-- Health check grace period: 300 seconds
-- Attached to ALB target group
-- Proper tags for resource tracking
-
-#### Scaling Policies
-1. **Target Tracking:**
-   - Target CPU utilization: 70%
-   - Automatic scale-out and scale-in
-
-2. **Scheduled Scaling:**
-   - Scale up during business hours
-   - Scale down during off-peak hours
-
-### 7. CDN and WAF (lib/cdn.py)
-
-**Design Rationale:**
-- CloudFront for global content delivery
-- WAF for DDoS and application-layer protection
-- Origin Access Identity for S3 security
-
-**Components:**
-
-#### WAF Web ACL
-- Scope: CLOUDFRONT
-- Rate limiting rule: 2000 requests per 5 minutes per IP
-- CloudWatch metrics enabled
-- Sampled requests enabled for analysis
-- Default action: allow
-
-#### CloudFront Distribution
-**Origins:**
-1. ALB origin for dynamic content
-2. S3 origin for static assets
-
-**Cache Behaviors:**
-- Default behavior: forward to ALB
-- Ordered behavior: S3 for static assets
-- Viewer protocol policy: redirect-to-https
-- HTTP/2 enabled
-- Price class: PriceClass_100 (US, Canada, Europe)
-
-**Security:**
-- Origin Access Identity for S3
-- S3 bucket policy restricts access to CloudFront only
-- Geo restrictions configurable
-- Default CloudFront certificate (custom certificate recommended for production)
-
-### 8. Secrets Management (lib/secrets.py)
-
-**Design Rationale:**
-- Centralized secret management
-- Automatic rotation for security compliance
-- KMS encryption at rest
-- Lambda-based rotation function
-
-**Components:**
-
-#### Secrets Manager Secret
-- Name includes environment suffix
-- KMS encryption with custom key
-- Recovery window: 0 days for test environments
-- Tags for tracking and compliance
-
-#### Initial Secret Value
-```json
-{
-  "username": "admin",
-  "password": "ChangeMe123456!",
-  "engine": "mysql",
-  "host": "<cluster-endpoint>",
-  "port": 3306,
-  "dbname": "financialdb"
-}
-```
-
-#### Rotation Lambda Function
-- Runtime: Python 3.12
-- VPC-enabled for database access
-- Four-step rotation process:
-  1. createSecret - Generate new password
-  2. setSecret - Update database with new password
-  3. testSecret - Verify new credentials work
-  4. finishSecret - Mark new version as current
-
-- Dependencies: boto3, pymysql
-- Timeout: 300 seconds
-- Memory: 256 MB
-
-#### Rotation Schedule
-- Automatic rotation every 30 days
-- Ensures passwords are regularly updated
-- Compliant with PCI-DSS requirements
-
-### 9. Monitoring (lib/monitoring.py)
-
-**Design Rationale:**
-- Comprehensive logging and monitoring
-- Proactive alerting for critical issues
-- 90-day log retention for compliance
-- Custom metrics for application monitoring
-
-**Components:**
-
-#### CloudWatch Log Groups
-1. Application logs: /aws/ec2/financial-{env}
-2. ALB logs: /aws/alb/financial-{env}
-3. Database logs: /aws/rds/cluster/financial-aurora-{env}
-
-All with 90-day retention period.
-
-#### Metric Filters
-1. **Application Errors:** Tracks ERROR* patterns
-2. **4xx Errors:** Tracks client errors from ALB
-3. **5xx Errors:** Tracks server errors from ALB
-
-#### CloudWatch Alarms
-1. **High Error Rate Alarm:**
-   - Threshold: 10 errors in 10 minutes
-   - Evaluation periods: 2
-   - Statistic: Sum
-
-2. **ALB 5xx Alarm:**
-   - Threshold: 50 errors in 10 minutes
-   - Evaluation periods: 2
-   - Statistic: Sum
-
-3. **Database CPU Alarm:**
-   - Threshold: 80% CPU utilization
-   - Evaluation periods: 2
-   - Statistic: Average
-
-#### SNS Topic
-- Name: financial-critical-alerts-{env}
-- All alarms send notifications to this topic
-- Subscriptions can be added for email/SMS/Lambda
-
-## PCI-DSS Compliance Measures
-
-### Data Encryption
-- Encryption at rest (KMS for RDS, S3 encryption)
-- Encryption in transit (require_secure_transport for RDS, HTTPS for ALB/CloudFront)
-
-### Network Isolation
-- Private subnets for database and application
-- Security groups with least privilege
-- No public access to database
-
-### Access Control
-- IAM roles with least privilege
-- No hardcoded credentials
-- Secrets Manager for credential management
-- Automatic secret rotation
-
-### Logging and Monitoring
-- CloudWatch logs for all components
-- Audit logs enabled on database
-- WAF logging and monitoring
-- CloudWatch alarms for critical metrics
-
-### High Availability
-- Multi-AZ deployment
-- Auto Scaling for application tier
-- Aurora Multi-AZ for database
-- Multiple NAT Gateways
-
-## Environment Suffix Implementation
-
-**Critical Requirement:** All resources must use the `environment_suffix` parameter to enable proper environment isolation.
-
-**Correct Implementation:**
 ```python
-tags={
-    "Environment": f"{environment_suffix}",  # Correct
-    # NOT: "Environment": "production",      # Wrong - hardcoded
-}
+from cdktf_cdktf_provider_aws.vpc import Vpc
+from cdktf_cdktf_provider_aws.subnet import Subnet
+from cdktf_cdktf_provider_aws.nat_gateway import NatGateway
+
+# VPC
+self.vpc = Vpc(self, "vpc",
+    cidr_block="10.0.0.0/16",
+    enable_dns_hostnames=True,
+    enable_dns_support=True,
+    tags={
+        "Name": f"financial-vpc-{environment_suffix}",
+        "Environment": f"{environment_suffix}",
+        "Application": "financial-transaction-platform",
+        "CostCenter": "engineering"
+    }
+)
+
+# Public Subnets (3 AZs)
+azs = ["us-east-1a", "us-east-1b", "us-east-1c"]
+self.public_subnets = []
+for i, az in enumerate(azs):
+    subnet = Subnet(self, f"public_subnet_{i}",
+        vpc_id=self.vpc.id,
+        cidr_block=f"10.0.{i}.0/24",
+        availability_zone=az,
+        map_public_ip_on_launch=True,
+        tags={"Name": f"financial-public-subnet-{i+1}-{environment_suffix}"}
+    )
+    self.public_subnets.append(subnet)
+
+# Private Subnets (3 AZs)
+self.private_subnets = []
+for i, az in enumerate(azs):
+    subnet = Subnet(self, f"private_subnet_{i}",
+        vpc_id=self.vpc.id,
+        cidr_block=f"10.0.{i+10}.0/24",
+        availability_zone=az,
+        map_public_ip_on_launch=False,
+        tags={"Name": f"financial-private-subnet-{i+1}-{environment_suffix}"}
+    )
+    self.private_subnets.append(subnet)
 ```
 
-**Enforced in All Resources:**
-- Resource names include suffix
-- Tags include dynamic environment value
-- No hardcoded "production" values
-- Enables dev/test/staging/prod isolation
+### Compute Layer
+- Auto Scaling Group with t3.large instances
+- Amazon Linux 2023 AMI with IMDSv2 enforced
+- Launch template with user data for application setup
+- Target tracking scaling policy (70% CPU)
+- Scheduled scaling for business hours (8AM-6PM EST)
 
-## Deployment Process
+```python
+from cdktf_cdktf_provider_aws.launch_template import (
+    LaunchTemplate,
+    LaunchTemplateMetadataOptions,
+    LaunchTemplateTagSpecifications
+)
+from cdktf_cdktf_provider_aws.autoscaling_group import AutoscalingGroup
+from cdktf_cdktf_provider_aws.autoscaling_policy import AutoscalingPolicy
 
-### Prerequisites
-1. AWS credentials configured
-2. Python 3.12 installed
-3. Node.js and npm installed
-4. CDKTF CLI installed
+# Launch Template with IMDSv2
+self.launch_template = LaunchTemplate(self, "launch_template",
+    name_prefix=f"financial-lt-{environment_suffix}-",
+    image_id=ami.id,
+    instance_type="t3.large",
+    iam_instance_profile={"name": security.ec2_instance_profile.name},
+    vpc_security_group_ids=[security.ec2_sg.id],
+    user_data=base64.b64encode(user_data_script.encode()).decode(),
+    metadata_options=LaunchTemplateMetadataOptions(
+        http_endpoint="enabled",
+        http_tokens="required",  # IMDSv2 enforcement
+        http_put_response_hop_limit=1,
+        instance_metadata_tags="enabled"
+    )
+)
 
-### Deployment Steps
-```bash
-# Install dependencies
-pip install -r requirements.txt
-npm install
+# Auto Scaling Group
+self.asg = AutoscalingGroup(self, "asg",
+    name=f"financial-asg-{environment_suffix}",
+    launch_template={"id": self.launch_template.id, "version": "$Latest"},
+    vpc_zone_identifier=[subnet.id for subnet in vpc.private_subnets],
+    target_group_arns=[alb.target_group.arn],
+    health_check_type="ELB",
+    health_check_grace_period=300,
+    min_size=2,
+    max_size=10,
+    desired_capacity=3
+)
 
-# Synthesize Terraform configuration
-cdktf synth
-
-# Review plan
-cdktf diff
-
-# Deploy infrastructure
-cdktf deploy --auto-approve
-
-# Capture outputs
-mkdir -p cfn-outputs
-cdktf output > cfn-outputs/flat-outputs.json
+# Target Tracking Scaling Policy (70% CPU)
+AutoscalingPolicy(self, "scale_up_policy",
+    name=f"financial-scale-up-{environment_suffix}",
+    autoscaling_group_name=self.asg.name,
+    policy_type="TargetTrackingScaling",
+    target_tracking_configuration=AutoscalingPolicyTargetTrackingConfiguration(
+        predefined_metric_specification={
+            "predefined_metric_type": "ASGAverageCPUUtilization"
+        },
+        target_value=70.0
+    )
+)
 ```
 
-### Post-Deployment
-1. Configure Secrets Manager with actual database credentials
-2. Set up SNS topic subscriptions for alerts
-3. Upload static assets to S3 bucket
-4. Configure CloudFront custom domain (optional)
-5. Set up Route 53 DNS records
-6. Configure WAF rules as needed
-7. Test health check endpoint
-8. Verify Auto Scaling policies
+### Database Layer
+- Aurora MySQL 8.0 cluster with Multi-AZ
+- 2 instances for high availability
+- KMS encryption at rest
+- 7-day automated backup retention
+- Performance Insights enabled
+- SSL/TLS required for connections
 
-## Testing Strategy
+```python
+from cdktf_cdktf_provider_aws.rds_cluster import RdsCluster
+from cdktf_cdktf_provider_aws.rds_cluster_instance import RdsClusterInstance
+from cdktf_cdktf_provider_aws.rds_cluster_parameter_group import (
+    RdsClusterParameterGroup,
+    RdsClusterParameterGroupParameter
+)
 
-### Unit Tests
-- Test each construct in isolation
-- Mock dependencies
-- Verify resource properties
-- Test environment suffix application
-- Coverage target: >95%
+# Cluster Parameter Group with SSL enforcement
+cluster_parameter_group = RdsClusterParameterGroup(self, "cluster_param_group",
+    name=f"financial-aurora-cluster-pg-{environment_suffix}",
+    family="aurora-mysql8.0",
+    parameter=[
+        RdsClusterParameterGroupParameter(name="character_set_server", value="utf8mb4"),
+        RdsClusterParameterGroupParameter(name="require_secure_transport", value="ON")
+    ]
+)
 
-### Integration Tests
-- Test complete stack synthesis
-- Verify resource dependencies
-- Test cross-module interactions
-- Validate deployment outputs
+# Aurora MySQL Cluster
+self.cluster = RdsCluster(self, "aurora_cluster",
+    cluster_identifier=f"financial-aurora-{environment_suffix}",
+    engine="aurora-mysql",
+    engine_version="8.0.mysql_aurora.3.04.0",
+    engine_mode="provisioned",
+    database_name="financialdb",
+    master_username="admin",
+    master_password=generate_password(),
+    db_subnet_group_name=db_subnet_group.name,
+    db_cluster_parameter_group_name=cluster_parameter_group.name,
+    vpc_security_group_ids=[security.rds_sg.id],
+    storage_encrypted=True,
+    kms_key_id=security.kms_key.arn,
+    backup_retention_period=7,
+    enabled_cloudwatch_logs_exports=["audit", "error", "general", "slowquery"],
+    deletion_protection=False,
+    skip_final_snapshot=True
+)
 
-### Security Tests
-- Verify encryption is enabled
-- Check security group rules
-- Validate IAM policies
-- Test secret rotation
+# Aurora Instances (2 for HA)
+self.instances = []
+for i in range(2):
+    instance = RdsClusterInstance(self, f"aurora_instance_{i}",
+        identifier=f"financial-aurora-{environment_suffix}-{i+1}",
+        cluster_identifier=self.cluster.id,
+        instance_class="db.r6g.large",
+        engine=self.cluster.engine,
+        performance_insights_enabled=True,
+        performance_insights_kms_key_id=security.kms_key.arn
+    )
+    self.instances.append(instance)
+```
 
-### Compliance Tests
-- PCI-DSS requirements verification
-- Logging validation
-- Network isolation checks
+### Security
+- KMS key for encryption
+- Security groups with least privilege
+- IAM roles for EC2 and Lambda
+- IMDSv2 enforcement
 
-## Cost Optimization Recommendations
+```python
+from cdktf_cdktf_provider_aws.kms_key import KmsKey
+from cdktf_cdktf_provider_aws.security_group import SecurityGroup, SecurityGroupIngress
+from cdktf_cdktf_provider_aws.iam_role import IamRole
 
-### For Test/Dev Environments
-1. Use single NAT Gateway instead of 3
-2. Reduce Aurora instances to 1
-3. Use smaller instance types (db.t3.medium)
-4. Disable Performance Insights
-5. Reduce CloudWatch log retention to 7 days
-6. Use scheduled scaling to shut down during off-hours
+# KMS Key for encryption
+self.kms_key = KmsKey(self, "kms_key",
+    description=f"KMS key for financial transaction platform {environment_suffix}",
+    deletion_window_in_days=10,
+    enable_key_rotation=True,
+    tags={"Name": f"financial-kms-{environment_suffix}"}
+)
 
-### For Production
-1. Use Reserved Instances for predictable workloads
-2. Enable S3 Intelligent-Tiering
-3. Use CloudFront caching effectively
-4. Monitor and right-size instances
-5. Use Aurora Serverless for variable workloads (if applicable)
+# RDS Security Group (least privilege)
+self.rds_sg = SecurityGroup(self, "rds_sg",
+    name=f"financial-rds-sg-{environment_suffix}",
+    vpc_id=vpc.vpc.id,
+    ingress=[
+        SecurityGroupIngress(
+            from_port=3306,
+            to_port=3306,
+            protocol="tcp",
+            security_groups=[self.ec2_sg.id],
+            description="Allow MySQL from EC2 instances only"
+        )
+    ]
+)
 
-## Known Limitations
+# EC2 IAM Role
+self.ec2_role = IamRole(self, "ec2_role",
+    name=f"financial-ec2-role-{environment_suffix}",
+    assume_role_policy=json.dumps({
+        "Version": "2012-10-17",
+        "Statement": [{
+            "Effect": "Allow",
+            "Principal": {"Service": "ec2.amazonaws.com"},
+            "Action": "sts:AssumeRole"
+        }]
+    })
+)
+```
 
-1. **Secrets Initial Password:** The initial database password is visible in Terraform state. In production, consider using AWS Secrets Manager to generate the initial password.
+### Secrets Management
+- Secrets Manager for database credentials
+- Lambda function for 30-day rotation
+- KMS encryption for secrets
 
-2. **Certificate Management:** HTTPS is not fully configured. Production should use ACM certificates for ALB and CloudFront.
+### Monitoring
+- CloudWatch log groups with 90-day retention
+- Metric filters for error tracking
+- Alarms for high error rates and CPU
+- SNS topic for alerts
 
-3. **Monitoring:** Enhanced monitoring for EC2 requires additional IAM role configuration.
+## Compliance
 
-4. **Backup:** While RDS automated backups are enabled, consider AWS Backup for comprehensive backup management.
+- Encryption at rest (KMS) and in transit (SSL/TLS)
+- Network isolation with private subnets
+- Audit logging for all components
+- Automated credential rotation
+- IMDSv2 security enforcement
 
-5. **DR:** Disaster recovery requires additional configuration such as cross-region replication and backup retention policies.
+## Resource Naming
 
-## Future Enhancements
+All resources follow: `financial-{resource}-{environment_suffix}`
 
-1. **Multi-Region Deployment:** Add cross-region replication for DR
-2. **Container Support:** Migrate to ECS/EKS for better scalability
-3. **Serverless Components:** Add Lambda functions for background processing
-4. **Enhanced Security:** Add AWS GuardDuty, Security Hub integration
-5. **CI/CD Pipeline:** Automate deployment with GitHub Actions or similar
-6. **Database:** Consider Aurora Serverless v2 for cost optimization
-7. **Observability:** Add AWS X-Ray for distributed tracing
-8. **Compliance:** Implement AWS Config rules for continuous compliance
-
-## Conclusion
-
-This infrastructure implementation provides a solid foundation for a PCI-DSS compliant financial transaction processing platform with:
-- High availability across multiple AZs
-- Strong security with encryption, IAM, and network isolation
-- Comprehensive monitoring and alerting
-- Auto scaling for elasticity
-- Global content delivery with CloudFront
-- Automated secret rotation
-- Cost-effective architecture for test environments
-
-The modular design allows for easy customization and extension based on specific requirements.
+Example: `financial-vpc-dev`, `financial-aurora-prod`
