@@ -12,7 +12,7 @@ import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
 import { config } from './config/infrastructure-config';
 
 // Generate unique suffix to avoid resource naming conflicts
-const uniqueSuffix = 'b3x7';
+const uniqueSuffix = 'k7m2';
 
 export interface SharedConstructsProps {
   primaryProvider: AwsProvider;

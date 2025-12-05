@@ -16,7 +16,7 @@ import { TerraformAsset, AssetType } from 'cdktf';
 import * as path from 'path';
 
 // Generate unique suffix to avoid resource naming conflicts
-const uniqueSuffix = 'c5n8';
+const uniqueSuffix = 'k7m2';
 
 export class TradingPlatformStack extends TerraformStack {
   constructor(scope: Construct, id: string) {
