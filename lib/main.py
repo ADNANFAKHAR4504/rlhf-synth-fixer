@@ -183,12 +183,18 @@ class GlobalResourcesStack(TerraformStack):
         )
 
 
+# Unique suffix to avoid resource naming conflicts
+UNIQUE_SUFFIX = "x8r4"
+
+
 def main():
     """Main entry point for CDKTF application"""
     app = App()
 
     # Get environment suffix from environment variable or use default
-    environment_suffix = os.environ.get("ENVIRONMENT_SUFFIX", "dev")
+    # Add unique suffix to avoid naming conflicts
+    base_suffix = os.environ.get("ENVIRONMENT_SUFFIX", "dev")
+    environment_suffix = f"{base_suffix}-{UNIQUE_SUFFIX}"
 
     # Deploy primary region stack
     primary_stack = DisasterRecoveryStack(
