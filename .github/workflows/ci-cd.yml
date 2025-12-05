@@ -120,22 +120,31 @@ jobs:
           echo "🔍 Validating jest.config.js configuration..."
           echo "Language: ${{ needs.detect-metadata.outputs.language }}"
           
-          # Valid config requires BOTH test/ and tests/ directories
+          # Valid config requires ONLY 'test/' directory (singular)
+          # Do NOT include 'tests/' - that's for Python/Go/Java projects using their own test runners
           ROOTS_LINE=$(grep 'roots:' jest.config.js || echo '')
           
-          if echo "$ROOTS_LINE" | grep -q "roots: \['<rootDir>/test', '<rootDir>/tests'\]"; then
-            echo "✅ jest.config.js validation passed - using both 'test/' and 'tests/' folders"
+          # Check for the correct configuration: only 'test/' folder
+          if echo "$ROOTS_LINE" | grep -q "roots: \['<rootDir>/test'\]"; then
+            echo "✅ jest.config.js validation passed - using 'test/' folder (singular)"
             echo "Found: $ROOTS_LINE"
           else
             echo ""
             echo "❌ ERROR: jest.config.js has incorrect roots configuration!"
             echo ""
-            echo "Expected: roots: ['<rootDir>/test', '<rootDir>/tests']"
+            echo "Expected: roots: ['<rootDir>/test']"
             echo "Found:    $ROOTS_LINE"
             echo ""
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "Test files must be placed in both 'test/' and 'tests/' folders."
-            echo "Do NOT modify jest.config.js roots without team approval."
+            echo "Jest is ONLY used for TypeScript/JavaScript projects."
+            echo "TS/JS projects must use 'test/' folder (singular)."
+            echo ""
+            echo "Other languages use their own test runners:"
+            echo "  - Python: pytest with 'tests/' folder"
+            echo "  - Go: go test with 'tests/' folder"
+            echo "  - Java: JUnit/Gradle with 'tests/' folder"
+            echo ""
+            echo "Do NOT add 'tests/' to Jest roots - it will break validation!"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             echo ""
             exit 1
