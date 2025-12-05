@@ -6,6 +6,27 @@
 
 This implementation creates identical infrastructure across three AWS environments (dev, staging, prod) with environment-specific configurations using CDKTF Python.
 
+**Note**: This is a Python implementation using CDKTF (Cloud Development Kit for Terraform). All code examples are Python code, not HCL/Terraform configuration files. The infrastructure is defined using Python classes and CDKTF constructs.
+
+## Quick Start - Python Code Example
+
+```python
+#!/usr/bin/env python
+# This is a Python CDKTF implementation
+# All code in this file is Python, not HCL/Terraform
+import os
+from cdktf import App
+from lib.tap_stack import TapStack
+
+def main():
+    app = App()
+    TapStack(app, "TapStackdev", environment_suffix="dev", aws_region="us-east-1")
+    app.synth()
+
+if __name__ == "__main__":
+    main()
+```
+
 ## Architecture Overview
 
 The solution uses a reusable construct pattern where:
