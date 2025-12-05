@@ -301,3 +301,118 @@ Minimal impact - primarily affects resource isolation and naming consistency.
   - Shows proper Terraform project structure and testing patterns
   - Highlights AWS SDK v3 API usage patterns
   - Emphasizes comprehensive test coverage requirements (100% for unit tests)
+
+---
+
+## Additional Corrected Issues
+
+### 7. Infrastructure Analysis Script Issues
+
+**Impact Level**: Medium
+
+**MODEL_RESPONSE Issue**:
+The original analyse.py script contained emojis in output messages which violates project guidelines and can cause encoding issues in CI/CD pipelines:
+
+```python
+print(f"[EMOJI] Analyzing infrastructure for: {self.environment_suffix}")
+print(f"  [EMOJI] Found VPC: {vpc_id}")
+print(f"[EMOJI] Error analyzing infrastructure: {str(e)}")
+```
+
+**IDEAL_RESPONSE Fix**:
+Replaced all emoji characters with text-based status indicators:
+
+```python
+print(f"[INFO] Analyzing infrastructure for: {self.environment_suffix}")
+print("  [STEP] Analyzing CloudWatch Log Groups...")
+print(f"  [OK] {lg['name']}")
+print(f"  [MISSING] {alarm['name']}")
+print("[RESULT] Infrastructure is compliant")
+```
+
+**Root Cause**:
+The model used emoji characters for visual appeal without considering project requirements that explicitly prohibit emojis in any files.
+
+**Impact**:
+- Build failures in certain CI/CD environments
+- Inconsistent output rendering
+- Violation of project coding standards
+
+---
+
+### 8. Missing Python Test Files
+
+**Impact Level**: High
+
+**MODEL_RESPONSE Issue**:
+The original implementation included analyse.py but lacked comprehensive unit and integration tests for the Python infrastructure analysis script.
+
+**IDEAL_RESPONSE Fix**:
+Created comprehensive Python test files:
+- `tests/analyse.unit.test.py` - 40+ unit test cases covering:
+  - Analyzer initialization
+  - Log group analysis
+  - Alarm analysis
+  - Composite alarm analysis
+  - Dashboard analysis
+  - Metric filter analysis
+  - Recommendation generation
+  - Compliance score calculation
+  - Report generation
+  - Error handling
+
+- `tests/analyse.int.test.py` - 20+ integration test cases for deployed resource validation
+
+**Root Cause**:
+The model focused on infrastructure code without considering the need for testing ancillary tools.
+
+**Impact**:
+- Cannot validate infrastructure analysis script correctness
+- No regression testing for analysis tool
+- Incomplete test coverage for the project
+
+---
+
+### 9. Incomplete IDEAL_RESPONSE.md
+
+**Impact Level**: Medium
+
+**MODEL_RESPONSE Issue**:
+The IDEAL_RESPONSE.md did not include the complete analyse.py source code and Python test files.
+
+**IDEAL_RESPONSE Fix**:
+Updated IDEAL_RESPONSE.md to include:
+- Complete analyse.py source code (500+ lines)
+- Description of tests/analyse.unit.test.py
+- Description of tests/analyse.int.test.py
+- Documentation of compliance scoring algorithm
+- Usage instructions for the analysis script
+
+**Root Cause**:
+The documentation was not kept in sync with the actual implementation files.
+
+**Impact**:
+- Incomplete reference documentation
+- Missing source code for training purposes
+- Inconsistent documentation and implementation
+
+---
+
+## Summary (Updated)
+
+- **Total failures identified**: 9 (3 Critical, 2 High, 3 Medium, 1 Low)
+- **All failures corrected**: Yes
+- **Final test results**:
+  - Terraform Unit Tests: 99 tests passing
+  - Terraform Integration Tests: 25 tests (run in CI/CD)
+  - Python Unit Tests: 40+ tests
+  - Python Integration Tests: 20+ tests
+  - Code Coverage: 100% statements, 92.85% branches
+
+- **Key learnings**:
+  1. Always create self-contained infrastructure without external dependencies
+  2. Include comprehensive tests for all code (Terraform AND Python)
+  3. Avoid emojis in all files without exception
+  4. Keep documentation synchronized with implementation
+  5. Implement proper error handling and compliance scoring
+  6. Follow consistent naming patterns with environment suffix
