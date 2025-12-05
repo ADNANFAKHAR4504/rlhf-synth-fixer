@@ -1,10 +1,9 @@
 {
-  "task_id": "i5x0y2m4",
   "platform": "cdktf",
   "language": "ts",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "CI/CD Pipeline",
+  "po_id": "i5x0y2m4",
   "team": "synth",
   "subtask": "CI/CD Pipeline Integration",
   "subject_labels": [
