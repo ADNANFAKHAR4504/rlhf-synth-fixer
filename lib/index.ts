@@ -356,8 +356,8 @@ const apiCanary = new aws.synthetics.Canary(`api-canary-${environmentSuffix}`, {
   name: `api-monitor-${environmentSuffix}`,
   artifactS3Location: pulumi.interpolate`s3://${canaryBucket.bucket}/canary`,
   executionRoleArn: canaryRole.arn,
-  handler: 'apiCanaryBlueprint.handler',
-  zipFile: 'canary.zip',
+  handler: 'canary/apiCanaryBlueprint.handler',
+  zipFile: 'lib/canary.zip',
   runtimeVersion: 'syn-nodejs-puppeteer-6.2',
   schedule: {
     expression: 'rate(2 minutes)',
