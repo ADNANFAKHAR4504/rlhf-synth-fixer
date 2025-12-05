@@ -1,7 +1,7 @@
 {
   "task_id": "e5y2e9p2",
-  "platform": "pulumi",
-  "language": "go",
+  "platform": "cicd",
+  "language": "yaml",
   "complexity": "hard",
   "team": "synth",
   "turn_type": "single",
