@@ -1,8 +1,0 @@
-config:
-  TapStack:environmentSuffix: pr7770
-  TapStack:environment: dev
-  TapStack:imageQuality: "80"
-  TapStack:maxFileSize: "10485760"
-  TapStack:lambdaMemory: 512
-  TapStack:logRetention: 7
-  TapStack:reservedConcurrency: 5

@@ -1,0 +1,31 @@
+{
+  "task_id": "z7t4z7r9",
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-12-04T17:34:17.000308Z",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "S3",
+    "CodeCommit",
+    "CodeBuild",
+    "CodePipeline",
+    "CloudWatch",
+    "IAM",
+    "SNS",
+    "EventBridge"
+  ],
+  "author": "mayanksethi-turing",
+  "po_id": "z7t4z7r9",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

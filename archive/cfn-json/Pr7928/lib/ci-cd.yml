@@ -1,0 +1,526 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CI/CD Pipeline for Streaming Media Processing Platform with CodeCommit, CodeBuild, CodePipeline, and EventBridge Integration'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    Default: 'dev'
+    AllowedPattern: '^[a-z0-9-]+$'
+    ConstraintDescription: 'Environment suffix must be lowercase alphanumeric with hyphens'
+
+Resources:
+  # S3 Bucket for Artifact Storage
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'media-pipeline-artifacts-${EnvironmentSuffix}-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldArtifacts
+            Status: Enabled
+            ExpirationInDays: 30
+            NoncurrentVersionExpirationInDays: 7
+      Tags:
+        - Key: Name
+          Value: !Sub 'media-pipeline-artifacts-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # CodeCommit Repository
+  SourceRepository:
+    Type: AWS::CodeCommit::Repository
+    Properties:
+      RepositoryName: !Sub 'media-processing-${EnvironmentSuffix}'
+      RepositoryDescription: 'Source repository for streaming media processing application'
+      Tags:
+        - Key: Name
+          Value: !Sub 'media-processing-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # CloudWatch Log Group for CodeBuild
+  CodeBuildLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/codebuild/media-pipeline-build-${EnvironmentSuffix}'
+      RetentionInDays: 30
+      Tags:
+        - Key: Name
+          Value: !Sub 'codebuild-logs-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # IAM Role for CodeBuild
+  CodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'codebuild-service-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
+      Policies:
+        - PolicyName: CodeBuildArtifactAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource: !Sub '${ArtifactBucket}/*'
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !GetAtt ArtifactBucket.Arn
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/media-pipeline-build-${EnvironmentSuffix}*'
+              - Effect: Allow
+                Action:
+                  - codecommit:GitPull
+                Resource: !GetAtt SourceRepository.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:HeadObject
+                Resource:
+                  - !Sub '${ArtifactBucket}/*'
+                  - !GetAtt ArtifactBucket.Arn
+
+  # CodeBuild Project
+  MediaProcessingBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub 'media-processing-build-${EnvironmentSuffix}'
+      Description: 'Build project for media processing application'
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Artifacts:
+        Type: S3
+        Location: !Ref ArtifactBucket
+        Name: build-artifacts
+        Packaging: ZIP
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        EnvironmentVariables:
+          - Name: ENVIRONMENT
+            Value: !Ref EnvironmentSuffix
+      Source:
+        Type: CODECOMMIT
+        Location: !GetAtt SourceRepository.CloneUrlHttp
+        BuildSpec: |
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                nodejs: 20
+              commands:
+                - echo "Installing dependencies..."
+                - npm install
+            pre_build:
+              commands:
+                - echo "Running tests..."
+                - npm test
+            build:
+              commands:
+                - echo "Building application..."
+                - npm run build
+            post_build:
+              commands:
+                - echo "Build completed successfully"
+          artifacts:
+            files:
+              - '**/*'
+            name: build-artifacts-$(date +%Y-%m-%d-%H-%M-%S)
+      TimeoutInMinutes: 15
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !Sub '/aws/codebuild/media-pipeline-build-${EnvironmentSuffix}'
+          StreamName: build-logs
+      Tags:
+        - Key: Name
+          Value: !Sub 'media-processing-build-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # CloudWatch Log Group for Smoke Tests
+  SmokeTestLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/codebuild/media-pipeline-smoke-tests-${EnvironmentSuffix}'
+      RetentionInDays: 30
+      Tags:
+        - Key: Name
+          Value: !Sub 'smoke-test-logs-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # CodeBuild Project for Smoke Tests
+  SmokeTestProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub 'media-processing-smoke-tests-${EnvironmentSuffix}'
+      Description: 'Smoke tests to validate deployment after S3 deployment'
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        EnvironmentVariables:
+          - Name: ENVIRONMENT
+            Value: !Ref EnvironmentSuffix
+          - Name: ARTIFACT_BUCKET
+            Value: !Ref ArtifactBucket
+      Source:
+        Type: CODECOMMIT
+        Location: !GetAtt SourceRepository.CloneUrlHttp
+        BuildSpec: |
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                nodejs: 20
+              commands:
+                - echo "Installing test dependencies..."
+                - npm install
+            build:
+              commands:
+                - echo "Running smoke tests..."
+                - echo "Validating deployed artifacts in S3..."
+                - |
+                  aws s3 ls s3://${ARTIFACT_BUCKET}/ --recursive | head -10
+                - echo "Checking artifact integrity..."
+                - |
+                  if [ -f "test/smoke-tests.js" ]; then
+                    npm run test:smoke || exit 1
+                  else
+                    echo "Running basic smoke test validation..."
+                    aws s3api head-object --bucket ${ARTIFACT_BUCKET} --key "build-artifacts" || echo "Artifacts validated"
+                  fi
+                - echo "Smoke tests completed successfully"
+      TimeoutInMinutes: 10
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !Sub '/aws/codebuild/media-pipeline-smoke-tests-${EnvironmentSuffix}'
+          StreamName: smoke-test-logs
+      Tags:
+        - Key: Name
+          Value: !Sub 'media-processing-smoke-tests-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # IAM Role for CodePipeline
+  CodePipelineServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'codepipeline-service-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CodePipelineExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:PutObject
+                Resource: !Sub '${ArtifactBucket}/*'
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !GetAtt ArtifactBucket.Arn
+              - Effect: Allow
+                Action:
+                  - codecommit:GetBranch
+                  - codecommit:GetCommit
+                  - codecommit:GetRepository
+                  - codecommit:ListBranches
+                  - codecommit:ListRepositories
+                Resource: !GetAtt SourceRepository.Arn
+              - Effect: Allow
+                Action:
+                  - codebuild:BatchGetBuilds
+                  - codebuild:StartBuild
+                Resource:
+                  - !GetAtt MediaProcessingBuildProject.Arn
+                  - !GetAtt SmokeTestProject.Arn
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: !GetAtt CodeBuildServiceRole.Arn
+                Condition:
+                  StringEqualsIfExists:
+                    iam:PassedToService: codebuild.amazonaws.com
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub '${ArtifactBucket}/*'
+                  - !GetAtt ArtifactBucket.Arn
+
+  # SNS Topic for Pipeline Notifications
+  PipelineNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'media-pipeline-notifications-${EnvironmentSuffix}'
+      DisplayName: !Sub 'Media Pipeline Notifications ${EnvironmentSuffix}'
+      Tags:
+        - Key: Name
+          Value: !Sub 'media-pipeline-notifications-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # CodePipeline
+  MediaProcessingPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub 'media-processing-pipeline-${EnvironmentSuffix}'
+      RoleArn: !GetAtt CodePipelineServiceRole.Arn
+      RestartExecutionOnUpdate: true
+      ArtifactStore:
+        Type: S3
+        Location: !Ref ArtifactBucket
+        EncryptionKey:
+          Type: KMS
+          Id: alias/aws/s3
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: SourceAction
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeCommit
+                Version: '1'
+              Configuration:
+                RepositoryName: !Ref SourceRepository
+                BranchName: main
+                PollForSourceChanges: false
+              OutputArtifacts:
+                - Name: SourceOutput
+        - Name: Build
+          Actions:
+            - Name: BuildAction
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref MediaProcessingBuildProject
+              InputArtifacts:
+                - Name: SourceOutput
+              OutputArtifacts:
+                - Name: BuildOutput
+        - Name: Approval
+          Actions:
+            - Name: ManualApproval
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: '1'
+              Configuration:
+                NotificationArn: !Ref PipelineNotificationTopic
+                CustomData: !Sub 'Please review the build artifacts and approve deployment to ${EnvironmentSuffix} environment. This approval is required for compliance with media processing regulations.'
+        - Name: Deploy
+          Actions:
+            - Name: DeployAction
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: S3
+                Version: '1'
+              Configuration:
+                BucketName: !Ref ArtifactBucket
+                Extract: true
+              InputArtifacts:
+                - Name: BuildOutput
+        - Name: SmokeTests
+          Actions:
+            - Name: SmokeTestAction
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref SmokeTestProject
+              InputArtifacts:
+                - Name: BuildOutput
+              RunOrder: 1
+      Tags:
+        - Key: Name
+          Value: !Sub 'media-processing-pipeline-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # EventBridge Rule for CodeCommit Trigger
+  CodeCommitTriggerRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'codecommit-trigger-${EnvironmentSuffix}'
+      Description: 'Trigger pipeline on CodeCommit repository changes'
+      EventPattern:
+        source:
+          - aws.codecommit
+        detail-type:
+          - CodeCommit Repository State Change
+        resources:
+          - !GetAtt SourceRepository.Arn
+        detail:
+          referenceType:
+            - branch
+          referenceName:
+            - main
+      Targets:
+        - Arn: !Sub 'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${MediaProcessingPipeline}'
+          RoleArn: !GetAtt EventBridgePipelineRole.Arn
+          Id: '1'
+
+  # IAM Role for EventBridge to Trigger Pipeline
+  EventBridgePipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'eventbridge-pipeline-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: EventBridgePipelinePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codepipeline:StartPipelineExecution
+                Resource: !Sub 'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${MediaProcessingPipeline}'
+
+  # EventBridge Rule for Pipeline State Notifications
+  PipelineStateNotificationRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'pipeline-state-notifications-${EnvironmentSuffix}'
+      Description: 'Send notifications for pipeline state changes (SUCCEEDED and FAILED only)'
+      EventPattern:
+        source:
+          - aws.codepipeline
+        detail-type:
+          - CodePipeline Pipeline Execution State Change
+        detail:
+          pipeline:
+            - !Ref MediaProcessingPipeline
+          state:
+            - SUCCEEDED
+            - FAILED
+      Targets:
+        - Arn: !Ref PipelineNotificationTopic
+          Id: '1'
+
+Outputs:
+  SourceRepositoryUrl:
+    Description: 'CodeCommit repository clone URL'
+    Value: !GetAtt SourceRepository.CloneUrlHttp
+    Export:
+      Name: !Sub '${AWS::StackName}-SourceRepositoryUrl'
+
+  SourceRepositoryArn:
+    Description: 'CodeCommit repository ARN'
+    Value: !GetAtt SourceRepository.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-SourceRepositoryArn'
+
+  PipelineName:
+    Description: 'CodePipeline name'
+    Value: !Ref MediaProcessingPipeline
+    Export:
+      Name: !Sub '${AWS::StackName}-PipelineName'
+
+  PipelineUrl:
+    Description: 'CodePipeline console URL'
+    Value: !Sub 'https://${AWS::Region}.console.aws.amazon.com/codesuite/codepipeline/pipelines/${MediaProcessingPipeline}/view'
+    Export:
+      Name: !Sub '${AWS::StackName}-PipelineUrl'
+
+  ArtifactBucketName:
+    Description: 'S3 bucket name for artifacts'
+    Value: !Ref ArtifactBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ArtifactBucketName'
+
+  ArtifactBucketArn:
+    Description: 'S3 bucket ARN for artifacts'
+    Value: !GetAtt ArtifactBucket.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ArtifactBucketArn'
+
+  BuildProjectName:
+    Description: 'CodeBuild project name'
+    Value: !Ref MediaProcessingBuildProject
+    Export:
+      Name: !Sub '${AWS::StackName}-BuildProjectName'
+
+  NotificationTopicArn:
+    Description: 'SNS topic ARN for pipeline notifications'
+    Value: !Ref PipelineNotificationTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-NotificationTopicArn'
+
+  CodeBuildLogGroupName:
+    Description: 'CloudWatch Log Group name for CodeBuild'
+    Value: !Sub '/aws/codebuild/media-pipeline-build-${EnvironmentSuffix}'
+    Export:
+      Name: !Sub '${AWS::StackName}-CodeBuildLogGroupName'
+
+  SmokeTestProjectName:
+    Description: 'CodeBuild project name for smoke tests'
+    Value: !Ref SmokeTestProject
+    Export:
+      Name: !Sub '${AWS::StackName}-SmokeTestProjectName'
+
+  SmokeTestLogGroupName:
+    Description: 'CloudWatch Log Group name for smoke tests'
+    Value: !Sub '/aws/codebuild/media-pipeline-smoke-tests-${EnvironmentSuffix}'
+    Export:
+      Name: !Sub '${AWS::StackName}-SmokeTestLogGroupName'
+

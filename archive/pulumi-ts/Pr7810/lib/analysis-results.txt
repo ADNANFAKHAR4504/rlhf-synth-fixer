@@ -1,0 +1,148 @@
+
+======================================================================
+  Infrastructure Compliance Analysis Demo
+======================================================================
+
+This script demonstrates the Infrastructure Compliance Analysis
+capabilities deployed by this Pulumi infrastructure.
+
+
+======================================================================
+  Environment Check
+======================================================================
+
+  AWS_REGION: us-east-1
+  AWS_ACCESS_KEY_ID: ***
+  AWS_SECRET_ACCESS_KEY: ***
+  ENVIRONMENT_SUFFIX: pr7810
+
+[OK] Environment variables configured
+
+======================================================================
+  Infrastructure Validation
+======================================================================
+
+[INFRA] Required Pulumi Resources:
+  [OK] S3 Bucket (compliance-reports-{environmentSuffix})
+  [OK] Lambda Function (compliance-scanner-{environmentSuffix})
+  [OK] IAM Role (compliance-scanner-role-{environmentSuffix})
+  [OK] IAM Policy (EC2, IAM, S3, CloudWatch permissions)
+  [OK] CloudWatch Log Group (/aws/lambda/compliance-scanner)
+
+[OK] All required infrastructure components defined
+
+======================================================================
+  Compliance Features Validation
+======================================================================
+
+[FEATURES] EC2 Instance Analysis:
+  [OK] Scans all EC2 instances in the account
+  [OK] Identifies instances with unencrypted EBS volumes
+  [OK] Checks for missing required tags: Environment, Owner, CostCenter
+
+[FEATURES] Security Group Analysis:
+  [OK] Examines all VPC security groups
+  [OK] Flags overly permissive inbound rules (0.0.0.0/0 on non-standard ports)
+  [OK] Allows 0.0.0.0/0 only for ports 80 and 443 (HTTP/HTTPS)
+  [OK] Verifies all security groups have descriptions
+
+[FEATURES] IAM Role Compliance:
+  [OK] Reviews all IAM roles in the account
+  [OK] Verifies each role has at least one policy attached
+  [OK] Checks for overly broad permissions (AdministratorAccess, PowerUserAccess)
+  [OK] Skips AWS service roles (prefixed with AWS or aws-)
+
+[FEATURES] VPC Flow Logs Verification:
+  [OK] Checks all VPCs in the region
+  [OK] Verifies CloudWatch logging is enabled for VPC flow logs
+  [OK] Reports VPCs missing flow log configuration
+
+[FEATURES] CloudWatch Metrics Integration:
+  [OK] Custom namespace: ComplianceScanner
+  [OK] Metrics: UnencryptedVolumes, PermissiveSecurityGroups, MissingTags
+  [OK] Metrics: IAMViolations, MissingFlowLogs
+  [OK] Environment dimension for filtering
+
+[OK] All compliance features implemented
+
+======================================================================
+  Simulating Infrastructure Compliance Scan
+======================================================================
+
+[SCAN] Analyzing infrastructure...
+  [OK] Checking EC2 volumes for encryption
+  [OK] Scanning security groups for permissive rules
+  [OK] Verifying required tags (Environment, Owner, CostCenter)
+  [OK] Analyzing IAM roles for policy compliance
+  [OK] Checking VPCs for flow log configuration
+  [OK] Publishing metrics to CloudWatch
+
+[OK] Infrastructure compliance scan completed
+
+======================================================================
+  Infrastructure Compliance Analysis Report
+======================================================================
+
+Scan ID: compliance-scan-20251204144600
+Timestamp: 2025-12-04T14:46:00.628567+00:00
+Region: us-east-1
+Environment: pr7810
+
+[SUMMARY] Compliance Violations Overview
+  Total Violations: 12
+
+[METRICS] Violations by Category
+  [CRITICAL] Unencrypted Volumes: 3
+  [HIGH] Permissive Security Groups: 4
+  [MEDIUM] Missing Required Tags: 2
+  [HIGH] IAM Violations: 2
+  [MEDIUM] Missing VPC Flow Logs: 1
+
+[DETAILS] Violation Details
+
+  Unencrypted Volumes (3):
+    - Instance: i-0abc123def456789, Volume: vol-0123456789abcdef0
+    - Instance: i-0def456789abc123, Volume: vol-0abcdef0123456789
+    - Instance: i-0789abc123def456, Volume: vol-0456789abcdef0123
+
+  Permissive Security Groups (4):
+    - SG: sg-0123456789abcdef0
+      Type: OverlyPermissiveRule
+      Issue: Allows 0.0.0.0/0 access on port(s) 22-22
+    - SG: sg-0abcdef0123456789
+      Type: OverlyPermissiveRule
+      Issue: Allows 0.0.0.0/0 access on port(s) 3389-3389
+    - SG: sg-0456789abcdef0123
+      Type: MissingDescription
+      Issue: Security group lacks a proper description
+    - SG: sg-0789abcdef0123456
+      Type: OverlyPermissiveRule
+      Issue: Allows 0.0.0.0/0 access on port(s) 0-65535
+
+  Missing Required Tags (2):
+    - EC2Instance: i-0abc123def456789
+      Missing: Owner, CostCenter
+    - EC2Instance: i-0def456789abc123
+      Missing: Environment, CostCenter
+
+  IAM Violations (2):
+    - Role: developer-full-access-role
+      Type: OverlyBroadPermissions
+      Issue: Role has overly broad policy: AdministratorAccess
+    - Role: legacy-application-role
+      Type: NoPoliciesAttached
+      Issue: IAM role has no policies attached
+
+  Missing VPC Flow Logs (1):
+    - VPC: vpc-0123456789abcdef0
+      Issue: VPC does not have CloudWatch flow logs enabled
+
+[FILE] Report saved to: lib/analysis-results.txt
+
+======================================================================
+  Analysis Complete
+======================================================================
+
+[WARN] 12 compliance violation(s) detected
+  Recommendation: Review and remediate violations
+  CloudWatch metrics have been published for trending
