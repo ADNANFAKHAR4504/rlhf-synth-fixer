@@ -32,7 +32,9 @@ class RoutingStack(Construct):
         construct_id: str,
         environment_suffix: str,
         primary_api_endpoint: str,
-        secondary_api_endpoint: str
+        secondary_api_endpoint: str,
+        primary_alb_arn: str = None,
+        secondary_alb_arn: str = None
     ):
         super().__init__(scope, construct_id)
 
@@ -166,38 +168,42 @@ class RoutingStack(Construct):
             )]
         )
 
-        # Endpoint Groups (one per region)
-        GlobalacceleratorEndpointGroup(
-            self,
-            "primary-endpoint-group",
-            listener_arn=listener.id,
-            endpoint_group_region="us-east-1",
-            traffic_dial_percentage=100,
-            health_check_interval_seconds=30,
-            health_check_path="/health",
-            health_check_protocol="HTTPS",
-            threshold_count=3,
-            endpoint_configuration=[GlobalacceleratorEndpointGroupEndpointConfiguration(
-                endpoint_id=f"arn:aws:apigateway:us-east-1::/restapis/{primary_api_endpoint.split('/')[-2]}",
-                weight=100
-            )]
-        )
+        # Endpoint Groups (one per region) - Using ALBs as endpoints (API Gateway is not supported)
+        if primary_alb_arn:
+            GlobalacceleratorEndpointGroup(
+                self,
+                "primary-endpoint-group",
+                listener_arn=listener.id,
+                endpoint_group_region="us-east-1",
+                traffic_dial_percentage=100,
+                health_check_interval_seconds=30,
+                health_check_path="/health",
+                health_check_protocol="HTTP",
+                health_check_port=80,
+                threshold_count=3,
+                endpoint_configuration=[GlobalacceleratorEndpointGroupEndpointConfiguration(
+                    endpoint_id=primary_alb_arn,
+                    weight=100
+                )]
+            )
 
-        GlobalacceleratorEndpointGroup(
-            self,
-            "secondary-endpoint-group",
-            listener_arn=listener.id,
-            endpoint_group_region="us-east-2",
-            traffic_dial_percentage=100,
-            health_check_interval_seconds=30,
-            health_check_path="/health",
-            health_check_protocol="HTTPS",
-            threshold_count=3,
-            endpoint_configuration=[GlobalacceleratorEndpointGroupEndpointConfiguration(
-                endpoint_id=f"arn:aws:apigateway:us-east-2::/restapis/{secondary_api_endpoint.split('/')[-2]}",
-                weight=100
-            )]
-        )
+        if secondary_alb_arn:
+            GlobalacceleratorEndpointGroup(
+                self,
+                "secondary-endpoint-group",
+                listener_arn=listener.id,
+                endpoint_group_region="us-east-2",
+                traffic_dial_percentage=100,
+                health_check_interval_seconds=30,
+                health_check_path="/health",
+                health_check_protocol="HTTP",
+                health_check_port=80,
+                threshold_count=3,
+                endpoint_configuration=[GlobalacceleratorEndpointGroupEndpointConfiguration(
+                    endpoint_id=secondary_alb_arn,
+                    weight=100
+                )]
+            )
 
         # Outputs
         self.global_accelerator_dns = self.global_accelerator.dns_name
