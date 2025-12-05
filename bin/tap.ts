@@ -1,44 +1,62 @@
-#!/usr/bin/env node
-import { App } from 'cdktf';
+/**
+ * Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
+ *
+ * This module defines the core Pulumi stack and instantiates the TapStack with appropriate
+ * configuration based on the deployment environment. It handles environment-specific settings,
+ * tagging, and deployment configuration for AWS resources.
+ *
+ * The stack created by this module uses environment suffixes to distinguish between
+ * different deployment environments (development, staging, production, etc.).
+ */
+import * as aws from '@pulumi/aws';
 import { TapStack } from '../lib/tap-stack';
 
-const app = new App();
-
-// Get environment variables from the environment or use defaults
+// Get the environment suffix from environment variables, defaulting to 'dev'.
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const stateBucket = process.env.TERRAFORM_STATE_BUCKET || 'iac-rlhf-tf-states';
-const stateBucketRegion =
-  process.env.TERRAFORM_STATE_BUCKET_REGION || 'us-east-1';
-const awsRegion = process.env.AWS_REGION || 'us-east-1';
-const repositoryName = process.env.REPOSITORY || 'unknown';
+
+// Get metadata from environment variables for tagging purposes.
+// These are often injected by CI/CD systems.
+const repository = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 const prNumber = process.env.PR_NUMBER || 'unknown';
 const team = process.env.TEAM || 'unknown';
 const createdAt = new Date().toISOString();
 
-// Calculate the stack name
-const stackName = `TapStack${environmentSuffix}`;
-
-// defautlTags is structured in adherence to the AwsProviderDefaultTags interface
+// Define a set of default tags to apply to all resources.
+// While not explicitly used in the TapStack instantiation here,
+// this is the standard place to define them. They would typically be passed
+// into the TapStack or configured on the AWS provider.
 const defaultTags = {
-  tags: {
-    Environment: environmentSuffix,
-    Repository: repositoryName,
-    Author: commitAuthor,
-    PRNumber: prNumber,
-    Team: team,
-    CreatedAt: createdAt,
-  },
+  Environment: environmentSuffix,
+  Repository: repository,
+  Author: commitAuthor,
+  PRNumber: prNumber,
+  Team: team,
+  CreatedAt: createdAt,
 };
 
-// Create the TapStack with the calculated properties
-new TapStack(app, stackName, {
-  environmentSuffix: environmentSuffix,
-  stateBucket: stateBucket,
-  stateBucketRegion: stateBucketRegion,
-  awsRegion: awsRegion,
-  defaultTags: [defaultTags],
+// Configure AWS provider with default tags
+const provider = new aws.Provider('aws', {
+  region: process.env.AWS_REGION || 'us-east-1',
+  defaultTags: {
+    tags: defaultTags,
+  },
 });
 
-// Synthesize the app to generate the Terraform configuration
-app.synth();
+// Instantiate the main stack component for the infrastructure.
+// This encapsulates all the resources for the platform.
+const stack = new TapStack(
+  'pulumi-infra',
+  {
+    environment: environmentSuffix,
+    owner: team,
+  },
+  { provider }
+);
+
+// Export stack outputs
+export const kmsKeyArn = stack.kmsKeyArn;
+export const logGroupArns = stack.logGroupArns;
+export const dashboardUrl = stack.dashboardUrl;
+export const snsTopicArn = stack.snsTopicArn;
+export const lambdaFunctionArn = stack.lambdaFunctionArn;
