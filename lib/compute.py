@@ -27,7 +27,9 @@ class ComputeConstruct(Construct):
         primary_app_security_group_id: str,
         primary_alb_security_group_id: str,
         secondary_app_security_group_id: str,
-        secondary_alb_security_group_id: str
+        secondary_alb_security_group_id: str,
+        primary_vpc_id: str,
+        secondary_vpc_id: str
     ):
         super().__init__(scope, construct_id)
 

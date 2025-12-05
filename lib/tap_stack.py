@@ -84,7 +84,9 @@ class TapStack(TerraformStack):
             self.networking.primary_app_security_group_id,
             self.networking.primary_alb_security_group_id,
             self.networking.secondary_app_security_group_id,
-            self.networking.secondary_alb_security_group_id
+            self.networking.secondary_alb_security_group_id,
+            self.networking.primary_vpc.id,
+            self.networking.secondary_vpc.id
         )
 
         # Session state - DynamoDB global tables
