@@ -70,11 +70,7 @@ export class TapStack extends TerraformStack {
       'arn:aws:acm:us-east-1:123456789012:certificate/example';
 
     // Availability Zones for us-east-1
-    const availabilityZones = [
-      'us-east-1a',
-      'us-east-1b',
-      'us-east-1c',
-    ];
+    const availabilityZones = ['us-east-1a', 'us-east-1b', 'us-east-1c'];
 
     // VPC Module
     const vpc = new VPCModule(this, 'vpc', {
