@@ -1,0 +1,28 @@
+{
+  "po_id": "y3z9p7g2",
+  "team": "synth",
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "startedAt": "2025-12-05T13:01:36.000Z",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "CodePipeline",
+    "CodeBuild",
+    "CodeDeploy",
+    "ECS",
+    "ALB",
+    "S3",
+    "Secrets Manager",
+    "SSM Parameter Store",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "VPC"
+  ],
+  "training_quality": 10
+}
