@@ -1,0 +1,5 @@
+name: TapStack
+runtime:
+  name: nodejs
+description: CI/CD Pipeline Integration Infrastructure with ECS Fargate
+main: bin/tap.ts
