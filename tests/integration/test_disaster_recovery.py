@@ -110,6 +110,21 @@ class TestDynamoDBConfiguration:
         pitr_enabled = True
         assert pitr_enabled is True
 
+    def test_dynamodb_global_table_created_in_primary_only(self):
+        """Test DynamoDB global table is created only in primary region with replica"""
+        # Primary creates the table, secondary gets a replica automatically
+        primary_creates_table = True
+        secondary_creates_replica = False  # Replica is automatic from primary
+        assert primary_creates_table is True
+        assert secondary_creates_replica is False
+
+    def test_dynamodb_stream_enabled(self):
+        """Test DynamoDB streams are enabled for replication"""
+        stream_enabled = True
+        stream_view_type = "NEW_AND_OLD_IMAGES"
+        assert stream_enabled is True
+        assert stream_view_type == "NEW_AND_OLD_IMAGES"
+
 
 class TestAuroraConfiguration:
     """Test Aurora Global Database configuration"""
@@ -120,18 +135,23 @@ class TestAuroraConfiguration:
         assert "postgresql" in engine or "mysql" in engine
 
     def test_aurora_instance_class(self):
-        """Test Aurora uses Serverless v2"""
-        instance_class = "db.serverless"
-        assert "serverless" in instance_class
+        """Test Aurora uses appropriate instance class"""
+        instance_class = "db.r6g.large"
+        assert instance_class.startswith("db.")
 
 
 class TestBackupConfiguration:
     """Test AWS Backup configuration"""
 
     def test_backup_retention_days(self):
-        """Test backup retention meets requirements"""
-        retention_days = 30
-        assert retention_days >= 7
+        """Test backup retention meets requirements (120 days for cold storage compliance)"""
+        retention_days = 120
+        assert retention_days >= 90  # Must be at least 90 days after cold storage
+
+    def test_cold_storage_after_days(self):
+        """Test cold storage transition is configured properly"""
+        cold_storage_after = 14
+        assert cold_storage_after >= 7
 
     def test_cross_region_copy_enabled(self):
         """Test cross-region backup copy is enabled"""

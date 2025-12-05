@@ -271,8 +271,8 @@ class TestNetworkStack:
 class TestDatabaseStack:
     """Tests for DatabaseStack."""
 
-    def test_database_stack_creates_dynamodb(self):
-        """Test database stack creates DynamoDB table."""
+    def test_primary_database_stack_creates_dynamodb(self):
+        """Test primary database stack creates DynamoDB table."""
         from main import DisasterRecoveryStack
         
         app = App()
@@ -284,7 +284,24 @@ class TestDatabaseStack:
         )
         
         assert hasattr(stack.database_stack, 'dynamodb_table')
+        # Primary region creates DynamoDB table
         assert stack.database_stack.dynamodb_table is not None
+
+    def test_secondary_database_stack_no_dynamodb(self):
+        """Test secondary database stack does not create DynamoDB table (replicated from primary)."""
+        from main import DisasterRecoveryStack
+        
+        app = App()
+        stack = DisasterRecoveryStack(
+            app,
+            "test-stack",
+            region="us-east-2",
+            environment_suffix="test"
+        )
+        
+        assert hasattr(stack.database_stack, 'dynamodb_table')
+        # Secondary region uses replica from primary, so table is None
+        assert stack.database_stack.dynamodb_table is None
 
     def test_database_stack_creates_aurora(self):
         """Test database stack creates Aurora cluster."""
@@ -300,6 +317,21 @@ class TestDatabaseStack:
         
         assert hasattr(stack.database_stack, 'aurora_cluster')
         assert stack.database_stack.aurora_cluster is not None
+
+    def test_primary_database_stack_creates_global_cluster(self):
+        """Test primary database stack creates global cluster."""
+        from main import DisasterRecoveryStack
+        
+        app = App()
+        stack = DisasterRecoveryStack(
+            app,
+            "test-stack",
+            region="us-east-1",
+            environment_suffix="test"
+        )
+        
+        assert hasattr(stack.database_stack, 'global_cluster')
+        assert stack.database_stack.global_cluster is not None
 
 
 class TestStorageStack:
