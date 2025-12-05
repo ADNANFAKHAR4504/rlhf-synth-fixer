@@ -522,17 +522,8 @@ jobs:
 
       - name: Validate deployment health
         run: |
-          for i in {1..5}; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://api.fintech.example.com/health)
-            if [ "$STATUS" = "200" ]; then
-              echo "Health check passed"
-              exit 0
-            fi
-            echo "Health check attempt $i failed, waiting..."
-            sleep 30
-          done
-          echo "Health check failed after 5 attempts"
-          exit 1
+          curl -f --retry 5 --retry-delay 30 --retry-connrefused https://api.fintech.example.com/health
+          echo "Health check passed"
 
   # ===================================================
   # ROLLBACK (MANUAL TRIGGER)
