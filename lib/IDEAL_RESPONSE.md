@@ -131,7 +131,7 @@ Removed attempts to access ingress/egress rules directly since `aws_security_gro
 ```hcl
 # BEFORE (INCORRECT):
 top_10_expensive_resources = slice(
-  sort([...], ["estimated_monthly_cost"]),  # ❌ Wrong: sort() takes 1 arg
+  sort([...], ["estimated_monthly_cost"]),  # Wrong: sort() takes 1 arg
   0, 10
 )
 
