@@ -23,17 +23,17 @@ class ComputeStack(Construct):
         construct_id: str,
         region: str,
         environment_suffix: str,
-        private_subnets: list,  # ✅ Passed from NetworkStack
-        security_group,  # ✅ Passed from NetworkStack
-        dynamodb_table,  # ✅ Passed from DatabaseStack
-        aurora_cluster  # ✅ Passed from DatabaseStack
+        private_subnets: list,  #  Passed from NetworkStack
+        security_group,  #  Passed from NetworkStack
+        dynamodb_table,  #  Passed from DatabaseStack
+        aurora_cluster  #  Passed from DatabaseStack
     ):
         super().__init__(scope, construct_id)
 
         # Create Lambda execution role
         lambda_role = IamRole(/*... as before */)
 
-        # ✅ Package Lambda function code
+        #  Package Lambda function code
         payment_processor_archive = DataArchiveFile(
             self,
             "payment-processor-archive",
@@ -42,16 +42,16 @@ class ComputeStack(Construct):
             output_path="dist/payment_processor.zip"
         )
 
-        # ✅ Deploy Lambda with proper configuration
+        #  Deploy Lambda with proper configuration
         self.payment_processor_lambda = LambdaFunction(
             self,
             "payment-processor",
             function_name=f"dr-payment-processor-{region}-{environment_suffix}",
-            runtime="python3.11",  # ✅ Updated runtime
+            runtime="python3.11",  #  Updated runtime
             handler="index.handler",
             role=lambda_role.arn,
             filename=payment_processor_archive.output_path,
-            source_code_hash=payment_processor_archive.output_base64sha256,  # ✅ Correct syntax
+            source_code_hash=payment_processor_archive.output_base64sha256,  #  Correct syntax
             timeout=30,
             memory_size=512,
             environment=LambdaFunctionEnvironment(
@@ -95,15 +95,15 @@ class DatabaseStack(Construct):
         region: str,
         environment_suffix: str,
         is_primary: bool,
-        private_subnets: list,  # ✅ Accept subnets as parameter
-        aurora_security_group  # ✅ Accept security group as parameter
+        private_subnets: list,  #  Accept subnets as parameter
+        aurora_security_group  #  Accept security group as parameter
     ):
         super().__init__(scope, construct_id)
 
         # KMS key for encryption
         self.kms_key = KmsKey(/*... as before */)
 
-        # ✅ DynamoDB Global Table - only create in primary region
+        #  DynamoDB Global Table - only create in primary region
         if is_primary:
             self.dynamodb_table = DynamodbTable(
                 self,
@@ -114,7 +114,7 @@ class DatabaseStack(Construct):
                 range_key="timestamp",
                 attribute=[/*...*/],
                 replica=[
-                    DynamodbTableReplica(region_name="us-east-2")  # ✅ Single table with replica
+                    DynamodbTableReplica(region_name="us-east-2")  #  Single table with replica
                 ],
                 point_in_time_recovery=DynamodbTablePointInTimeRecovery(enabled=True),
                 stream_enabled=True,
@@ -123,7 +123,7 @@ class DatabaseStack(Construct):
                 tags={"Name": f"dr-payments-{environment_suffix}"}
             )
         else:
-            # ✅ In secondary region, reference existing table
+            #  In secondary region, reference existing table
             from cdktf_cdktf_provider_aws.data_aws_dynamodb_table import DataAwsDynamodbTable
             self.dynamodb_table = DataAwsDynamodbTable(
                 self,
@@ -131,16 +131,16 @@ class DatabaseStack(Construct):
                 name=f"dr-payments-{environment_suffix}"
             )
 
-        # ✅ DB Subnet Group using passed subnets
+        #  DB Subnet Group using passed subnets
         self.db_subnet_group = DbSubnetGroup(
             self,
             "aurora-subnet-group",
             name=f"dr-aurora-subnet-{region}-{environment_suffix}",
-            subnet_ids=[subnet.id for subnet in private_subnets],  # ✅ Use passed subnets
+            subnet_ids=[subnet.id for subnet in private_subnets],  #  Use passed subnets
             tags={"Name": f"dr-aurora-subnet-{region}-{environment_suffix}"}
         )
 
-        # ✅ Aurora Global Database
+        #  Aurora Global Database
         if is_primary:
             self.global_cluster = RdsGlobalCluster(
                 self,
@@ -150,10 +150,10 @@ class DatabaseStack(Construct):
                 engine_version="14.6",
                 database_name="payments",
                 storage_encrypted=True,
-                deletion_protection=False  # ✅ Allow destruction for testing
+                deletion_protection=False  #  Allow destruction for testing
             )
 
-        # ✅ Aurora Cluster with AWS-managed password
+        #  Aurora Cluster with AWS-managed password
         self.aurora_cluster = RdsCluster(
             self,
             "aurora-cluster",
@@ -163,9 +163,9 @@ class DatabaseStack(Construct):
             engine_mode="provisioned",
             database_name="payments" if is_primary else None,
             master_username="dbadmin",
-            manage_master_user_password=True,  # ✅ AWS-managed secure password
+            manage_master_user_password=True,  #  AWS-managed secure password
             db_subnet_group_name=self.db_subnet_group.name,
-            vpc_security_group_ids=[aurora_security_group.id],  # ✅ Use passed SG
+            vpc_security_group_ids=[aurora_security_group.id],  #  Use passed SG
             backup_retention_period=7,
             storage_encrypted=True,
             kms_key_id=self.kms_key.arn,
@@ -221,7 +221,7 @@ class DisasterRecoveryStack(TerraformStack):
             }]
         )
 
-        # ✅ Deploy stacks in proper order with dependency injection
+        #  Deploy stacks in proper order with dependency injection
         self.network_stack = NetworkStack(
             self, f"network-{region}", region, environment_suffix
         )
@@ -229,8 +229,8 @@ class DisasterRecoveryStack(TerraformStack):
         self.database_stack = DatabaseStack(
             self, f"database-{region}",
             region, environment_suffix, self.is_primary,
-            self.network_stack.private_subnets,  # ✅ Pass subnets
-            self.network_stack.aurora_security_group  # ✅ Pass SG
+            self.network_stack.private_subnets,  #  Pass subnets
+            self.network_stack.aurora_security_group  #  Pass SG
         )
 
         self.storage_stack = StorageStack(
@@ -241,7 +241,7 @@ class DisasterRecoveryStack(TerraformStack):
         self.compute_stack = ComputeStack(
             self, f"compute-{region}",
             region, environment_suffix,
-            self.network_stack.private_subnets,  # ✅ Pass resources
+            self.network_stack.private_subnets,  #  Pass resources
             self.network_stack.lambda_security_group,
             self.database_stack.dynamodb_table,
             self.database_stack.aurora_cluster
@@ -298,7 +298,7 @@ class TestDynamoDBReplication:
         # Wait for replication (Global Tables typically < 1 second)
         time.sleep(2)
 
-        # ✅ Verify replication to secondary region
+        #  Verify replication to secondary region
         dynamodb_secondary = boto3.resource('dynamodb', region_name='us-east-2')
         table_secondary = dynamodb_secondary.Table(table_name)
 
@@ -394,7 +394,7 @@ class TestS3Replication:
 **File: lib/stacks/network_stack.py** (excerpt)
 
 ```python
-# ✅ Add VPC Endpoints for cost optimization
+#  Add VPC Endpoints for cost optimization
 dynamodb_endpoint = VpcEndpoint(
     self,
     "dynamodb-endpoint",
@@ -415,7 +415,7 @@ s3_endpoint = VpcEndpoint(
     tags={"Name": f"dr-s3-endpoint-{region}-{environment_suffix}"}
 )
 
-# ✅ Only 1 NAT Gateway instead of 3 (cost optimization)
+#  Only 1 NAT Gateway instead of 3 (cost optimization)
 # Lambda can use VPC endpoints for DynamoDB/S3
 eip = Eip(
     self,

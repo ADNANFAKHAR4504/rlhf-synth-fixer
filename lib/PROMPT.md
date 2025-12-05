@@ -1,6 +1,6 @@
 # Failure Recovery and High Availability
 
-> **⚠️ CRITICAL REQUIREMENT: This task MUST be implemented using CDKTF with Python**
+> **CRITICAL REQUIREMENT: This task MUST be implemented using CDKTF with Python**
 > 
 > Platform: **cdktf**  
 > Language: **py**  
@@ -75,9 +75,9 @@ Multi-region disaster recovery infrastructure spanning us-east-1 (primary) and u
 
 #### AWS Config
 - **CRITICAL**: If creating AWS Config roles, use correct managed policy:
-  - ✅ CORRECT: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
-  - ❌ WRONG: `arn:aws:iam::aws:policy/service-role/ConfigRole`
-  - ❌ WRONG: `arn:aws:iam::aws:policy/AWS_ConfigRole`
+  - CORRECT: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
+  - WRONG: `arn:aws:iam::aws:policy/service-role/ConfigRole`
+  - WRONG: `arn:aws:iam::aws:policy/AWS_ConfigRole`
 - **Alternative**: Use service-linked role `AWSServiceRoleForConfig` (auto-created)
 
 #### Lambda Functions
