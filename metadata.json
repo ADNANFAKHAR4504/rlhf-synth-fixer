@@ -1,0 +1,27 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-12-05T06:38:00Z",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "po_id": "60891055",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS Aurora",
+    "Route 53",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "DynamoDB",
+    "S3",
+    "Lambda",
+    "CloudWatch",
+    "SNS",
+    "IAM"
+  ]
+}
