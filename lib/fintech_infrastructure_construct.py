@@ -394,15 +394,22 @@ class FinTechInfrastructureConstruct(Construct):
     def _create_rds_database(self):
         """Create RDS PostgreSQL database with environment-specific retention."""
         import os
+        import sys
         
         # Get database credentials from environment variables
-        # SECURITY: Require password to be set - no hardcoded fallback
+        # SECURITY: Require password to be set - no hardcoded fallback for production
         db_username = os.getenv("TF_VAR_db_username", "dbadmin")
         db_password = os.getenv("TF_VAR_db_password")
         
+        # SECURITY: Require password to be set via environment variable
+        # tap.py sets a test password for local synth/testing
+        # CI/CD deployments must set TF_VAR_db_password via deploy.sh
+        # No hardcoded passwords in this construct
         if not db_password:
             raise ValueError(
                 "TF_VAR_db_password environment variable must be set. "
+                "For local synth, tap.py sets a test password. "
+                "For CI/CD deployments, deploy.sh must set the real password. "
                 "Do not use hardcoded passwords in source code."
             )
         

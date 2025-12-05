@@ -28,10 +28,41 @@ def stack_config():
 @pytest.fixture
 def setup_environment():
     """Setup environment variables for testing."""
+    # Save original CI value if it exists
+    original_ci = os.environ.get("CI")
+    original_github_actions = os.environ.get("GITHUB_ACTIONS")
+    
+    # Set required environment variables for testing
     os.environ["ENVIRONMENT"] = "dev"
+    os.environ["TF_VAR_db_username"] = "testuser"
+    os.environ["TF_VAR_db_password"] = "TestPassword123!"  # Test-only password for unit tests
+    
+    # Unset CI flags for unit tests to allow test password fallback
+    if "CI" in os.environ:
+        del os.environ["CI"]
+    if "GITHUB_ACTIONS" in os.environ:
+        del os.environ["GITHUB_ACTIONS"]
+    
     yield
+    
+    # Cleanup - restore original values
     if "ENVIRONMENT" in os.environ:
         del os.environ["ENVIRONMENT"]
+    if "TF_VAR_db_username" in os.environ:
+        del os.environ["TF_VAR_db_username"]
+    if "TF_VAR_db_password" in os.environ:
+        del os.environ["TF_VAR_db_password"]
+    
+    # Restore original CI values
+    if original_ci is not None:
+        os.environ["CI"] = original_ci
+    elif "CI" in os.environ:
+        del os.environ["CI"]
+        
+    if original_github_actions is not None:
+        os.environ["GITHUB_ACTIONS"] = original_github_actions
+    elif "GITHUB_ACTIONS" in os.environ:
+        del os.environ["GITHUB_ACTIONS"]
 
 
 def parse_synthesized_stack(stack):
@@ -205,7 +236,7 @@ class TestTapStack:
 
         assert found_suffix, "Environment suffix not found in resource names"
 
-    def test_dev_environment_configuration(self, stack_config):
+    def test_dev_environment_configuration(self, stack_config, setup_environment):
         """Test dev environment specific configuration."""
         os.environ["ENVIRONMENT"] = "dev"
         app = Testing.app()
@@ -219,7 +250,7 @@ class TestTapStack:
         for func_config in lambda_functions.values():
             assert func_config.get("memory_size") == 256
 
-    def test_staging_environment_configuration(self, stack_config):
+    def test_staging_environment_configuration(self, stack_config, setup_environment):
         """Test staging environment specific configuration."""
         os.environ["ENVIRONMENT"] = "staging"
         app = Testing.app()
@@ -233,7 +264,7 @@ class TestTapStack:
         for func_config in lambda_functions.values():
             assert func_config.get("memory_size") == 512
 
-    def test_prod_environment_configuration(self, stack_config):
+    def test_prod_environment_configuration(self, stack_config, setup_environment):
         """Test prod environment specific configuration."""
         os.environ["ENVIRONMENT"] = "prod"
         app = Testing.app()
