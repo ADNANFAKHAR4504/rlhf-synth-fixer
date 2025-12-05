@@ -1,0 +1,25 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "n1j3m4c4",
+  "team": "synth",
+  "startedAt": "2025-12-05T06:15:10+05:30",
+  "subtask": "General Infrastructure Tooling QA",
+  "subject_labels": [
+    "Infrastructure QA and Management",
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "Lambda",
+    "S3",
+    "IAM",
+    "CloudWatch",
+    "CloudFormation",
+    "RDS",
+    "EC2",
+    "STS"
+  ],
+  "training_quality": 9
+}
