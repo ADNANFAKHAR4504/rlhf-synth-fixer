@@ -577,16 +577,24 @@ const dashboard = new aws.cloudwatch.Dashboard(
           widgets: [
             {
               type: 'metric',
+              x: 0,
+              y: 0,
+              width: 12,
+              height: 6,
               properties: {
                 metrics: [
                   [
                     'AWS/ECS',
                     'CPUUtilization',
+                    'ClusterName',
+                    `payment-cluster-${environmentSuffix}`,
                     { stat: 'Average', label: 'CPU Usage' },
                   ],
                   [
                     '.',
                     'MemoryUtilization',
+                    '.',
+                    '.',
                     { stat: 'Average', label: 'Memory Usage' },
                   ],
                 ],
@@ -604,16 +612,24 @@ const dashboard = new aws.cloudwatch.Dashboard(
             },
             {
               type: 'metric',
+              x: 12,
+              y: 0,
+              width: 12,
+              height: 6,
               properties: {
                 metrics: [
                   [
                     'PaymentProcessing',
                     'TransactionsPerMinute',
+                    'Environment',
+                    environmentSuffix,
                     { stat: 'Average' },
                   ],
                   [
                     '.',
                     'PaymentFailureRate',
+                    '.',
+                    '.',
                     { stat: 'Average', yAxis: 'right' },
                   ],
                 ],
@@ -632,12 +648,18 @@ const dashboard = new aws.cloudwatch.Dashboard(
             },
             {
               type: 'metric',
+              x: 0,
+              y: 6,
+              width: 12,
+              height: 6,
               properties: {
                 metrics: [
                   [
                     'CloudWatchSynthetics',
                     'Duration',
-                    { CanaryName: canaryName, stat: 'Average' },
+                    'CanaryName',
+                    canaryName,
+                    { stat: 'Average' },
                   ],
                   ['...', { stat: 'p99', label: 'P99 Latency' }],
                 ],
@@ -654,6 +676,10 @@ const dashboard = new aws.cloudwatch.Dashboard(
             },
             {
               type: 'metric',
+              x: 12,
+              y: 6,
+              width: 12,
+              height: 6,
               properties: {
                 metrics: [
                   [
@@ -666,9 +692,17 @@ const dashboard = new aws.cloudwatch.Dashboard(
                   [
                     'PaymentProcessing',
                     'PaymentFailureRate',
+                    'Environment',
+                    environmentSuffix,
                     { id: 'm1', visible: false },
                   ],
-                  ['.', 'TransactionsPerMinute', { id: 'm2', visible: false }],
+                  [
+                    '.',
+                    'TransactionsPerMinute',
+                    '.',
+                    '.',
+                    { id: 'm2', visible: false },
+                  ],
                 ],
                 period: 300,
                 stat: 'Average',
@@ -683,6 +717,10 @@ const dashboard = new aws.cloudwatch.Dashboard(
             },
             {
               type: 'alarm',
+              x: 0,
+              y: 12,
+              width: 24,
+              height: 3,
               properties: {
                 title: 'Alarm Status',
                 alarms: [cpuArn, memoryArn, latencyArn, failureArn],
