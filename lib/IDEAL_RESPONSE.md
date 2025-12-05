@@ -41,12 +41,12 @@ For the complete, working solution, refer to the following files in this directo
 - Basic CPU-based autoscaling (max 5 tasks)
 
 **Optimizations Applied**:
-1. ✅ Container Insights enabled
-2. ✅ Max capacity doubled (5 → 10 tasks)
-3. ✅ Memory-based autoscaling added
-4. ✅ CPU alarm created (>75%)
-5. ✅ Memory alarm created (>85%)
-6. ✅ CloudWatch dashboard with 4 metrics
+1. Container Insights enabled
+2. Max capacity doubled (5 -> 10 tasks)
+3. Memory-based autoscaling added
+4. CPU alarm created (>75%)
+5. Memory alarm created (>85%)
+6. CloudWatch dashboard with 4 metrics
 
 **Production Readiness**:
 - 100% test coverage (statements, functions, lines, branches)
