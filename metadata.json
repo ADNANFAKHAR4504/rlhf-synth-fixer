@@ -6,9 +6,9 @@
   "po_id": "i0n9f3v9",
   "team": "synth",
   "startedAt": "2025-12-05T16:12:00.000Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Application Deployment",
   "subject_labels": [
-    "Infrastructure Analysis/Monitoring"
+    "Web Application Deployment"
   ],
   "aws_services": [
     "CloudWatch Logs",
