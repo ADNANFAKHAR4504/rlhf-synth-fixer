@@ -7,9 +7,9 @@
  * It orchestrates the instantiation of compliance scanning infrastructure
  * and manages environment-specific configurations.
  */
+import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
-import * as aws from '@pulumi/aws';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -574,4 +574,3 @@ exports.handler = async (event) => {
     });
   }
 }
-
