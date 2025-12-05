@@ -1,7 +1,11 @@
 #!/usr/bin/env python
+import time
 from constructs import Construct
 from cdktf import App, TerraformStack, TerraformOutput
 from cdktf_cdktf_provider_aws.provider import AwsProvider
+
+# Generate unique suffix to avoid resource naming conflicts
+UNIQUE_SUFFIX = str(int(time.time()))[-6:]
 from lib.vpc import VpcConstruct
 from lib.security import SecurityConstruct
 from lib.database import DatabaseConstruct
@@ -105,5 +109,7 @@ class FinancialTransactionStack(TerraformStack):
 
 
 app = App()
-FinancialTransactionStack(app, "financial-transaction-platform", environment_suffix="dev")
+# Include unique suffix in environment_suffix to avoid resource conflicts
+env_suffix = f"dev-{UNIQUE_SUFFIX}"
+FinancialTransactionStack(app, "financial-transaction-platform", environment_suffix=env_suffix)
 app.synth()
