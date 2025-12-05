@@ -1,0 +1,14 @@
+{
+  "language": "python",
+  "app": "python3 main.py",
+  "projectId": "zero-trust-security",
+  "sendCrashReports": "false",
+  "terraformProviders": [
+    "aws@~> 5.0"
+  ],
+  "terraformModules": [],
+  "context": {
+    "excludeStackIdFromLogicalIds": "true",
+    "allowSepCharsInLogicalIds": "true"
+  }
+}
