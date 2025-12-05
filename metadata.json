@@ -1,0 +1,12 @@
+{
+  "po_id": "t8n5i3h9",
+  "platform": "terraform",
+  "language": "hcl",
+  "complexity": "hard",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Optimization"
+  ],
+  "training_quality": 0,
+  "review_comments": []
+}
