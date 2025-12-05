@@ -1,0 +1,5 @@
+encryptionsalt: v1:nTP+M3hvuRY=:v1:m9pBayzihNOEQ0Y2:HHkxCt9ungb8jNt73n5dbnCiiko1rw==
+config:
+  aws:defaultTags: '{"tags":{"Environment":"m4n0x5o8","Repository":"synth-m4n0x5o8","Author":"mayanksethi-turing","PRNumber":"unknown","Team":"synth","CreatedAt":"2025-12-05T15:32:57Z","ManagedBy":"pulumi"}}'
+  TapStack:environmentSuffix: m4n0x5o8
+  aws:region: us-east-1
