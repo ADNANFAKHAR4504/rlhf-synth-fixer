@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch, MagicMock
 from botocore.exceptions import ClientError
 
 # Add lib directory to path to import the analysis module
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'lib'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'lib'))
 
 from analyse import InfrastructureAnalysisAnalyzer
 
@@ -545,6 +545,212 @@ class TestMainFunction:
 
         finally:
             os.chdir(original_dir)
+
+    def test_main_function_with_violations(self, mock_aws_clients, tmp_path):
+        """Test main function execution with violations returns exit code 1"""
+        # Set environment variables
+        os.environ['AWS_REGION'] = 'us-east-1'
+        os.environ['AWS_ENDPOINT_URL'] = 'http://localhost:5001'
+        os.environ['ENVIRONMENT_SUFFIX'] = 'test'
+
+        # Change to temp directory
+        original_dir = os.getcwd()
+        os.chdir(tmp_path)
+
+        try:
+            # Mock EC2 with violation
+            mock_aws_clients['ec2'].describe_instances.return_value = {
+                'Reservations': [
+                    {
+                        'Instances': [
+                            {
+                                'InstanceId': 'i-12345',
+                                'InstanceType': 'm5.xlarge',  # Unapproved type
+                                'State': {'Name': 'running'},
+                                'Tags': [{'Key': 'Environment', 'Value': 'test'}]
+                            }
+                        ]
+                    }
+                ]
+            }
+            mock_aws_clients['ec2'].describe_security_groups.return_value = {'SecurityGroups': []}
+            mock_aws_clients['rds'].describe_db_instances.return_value = {'DBInstances': []}
+            mock_aws_clients['s3'].list_buckets.return_value = {'Buckets': []}
+
+            from analyse import main
+            result = main()
+
+            # Should return 1 due to violations
+            assert result == 1
+
+        finally:
+            os.chdir(original_dir)
+
+
+class TestRDSAnalysisAdditional:
+    """Additional RDS analysis tests for coverage"""
+
+    def test_analyze_rds_databases_api_error(self, analyzer, mock_aws_clients):
+        """Test RDS analysis handles API errors"""
+        mock_aws_clients['rds'].describe_db_instances.side_effect = Exception('API Error')
+
+        result = analyzer.analyze_rds_databases('dev')
+
+        assert 'RDS analysis error' in result['issues'][0]
+
+    def test_analyze_rds_databases_list_tags_error(self, analyzer, mock_aws_clients):
+        """Test RDS analysis handles tag listing errors"""
+        mock_aws_clients['rds'].describe_db_instances.return_value = {
+            'DBInstances': [
+                {
+                    'DBInstanceIdentifier': 'mydb-dev',
+                    'BackupRetentionPeriod': 7,
+                    'DBInstanceArn': 'arn:aws:rds:us-east-1:123456789:db:mydb-dev'
+                }
+            ]
+        }
+        mock_aws_clients['rds'].list_tags_for_resource.side_effect = Exception('Tag error')
+
+        result = analyzer.analyze_rds_databases('dev')
+
+        assert 'RDS analysis error' in result['issues'][0]
+
+
+class TestS3AnalysisAdditional:
+    """Additional S3 analysis tests for coverage"""
+
+    def test_analyze_s3_buckets_api_error(self, analyzer, mock_aws_clients):
+        """Test S3 analysis handles API errors"""
+        mock_aws_clients['s3'].list_buckets.side_effect = Exception('API Error')
+
+        result = analyzer.analyze_s3_buckets('dev')
+
+        assert 'S3 analysis error' in result['issues'][0]
+
+    def test_analyze_s3_buckets_versioning_error(self, analyzer, mock_aws_clients):
+        """Test S3 analysis handles versioning check errors"""
+        mock_aws_clients['s3'].list_buckets.return_value = {
+            'Buckets': [{'Name': 'mybucket-dev'}]
+        }
+        mock_aws_clients['s3'].get_bucket_versioning.side_effect = Exception('Versioning error')
+        mock_aws_clients['s3'].get_bucket_encryption.return_value = {
+            'ServerSideEncryptionConfiguration': {'Rules': [{'ApplyServerSideEncryptionByDefault': {}}]}
+        }
+
+        result = analyzer.analyze_s3_buckets('dev')
+
+        # Should still process but versioning will be False
+        assert result['total_buckets'] == 1
+        assert result['buckets'][0]['versioning_enabled'] is False
+
+    def test_analyze_s3_buckets_encryption_other_error(self, analyzer, mock_aws_clients):
+        """Test S3 analysis handles non-NotFound encryption errors"""
+        mock_aws_clients['s3'].list_buckets.return_value = {
+            'Buckets': [{'Name': 'mybucket-dev'}]
+        }
+        mock_aws_clients['s3'].get_bucket_versioning.return_value = {'Status': 'Enabled'}
+        mock_aws_clients['s3'].get_bucket_encryption.side_effect = ClientError(
+            {'Error': {'Code': 'AccessDenied', 'Message': 'Access Denied'}},
+            'GetBucketEncryption'
+        )
+
+        result = analyzer.analyze_s3_buckets('dev')
+
+        # Should still process but encryption will be False
+        assert result['total_buckets'] == 1
+
+
+class TestSecurityGroupAnalysisAdditional:
+    """Additional security group analysis tests for coverage"""
+
+    def test_analyze_security_groups_api_error(self, analyzer, mock_aws_clients):
+        """Test security group analysis handles API errors"""
+        mock_aws_clients['ec2'].describe_security_groups.side_effect = Exception('API Error')
+
+        result = analyzer.analyze_security_groups('dev')
+
+        assert 'Security group analysis error' in result['issues'][0]
+
+    def test_analyze_security_groups_http_allowed(self, analyzer, mock_aws_clients):
+        """Test security group analysis allows port 80"""
+        mock_aws_clients['ec2'].describe_security_groups.return_value = {
+            'SecurityGroups': [
+                {
+                    'GroupId': 'sg-12345',
+                    'GroupName': 'test-sg',
+                    'IpPermissions': [
+                        {
+                            'FromPort': 80,
+                            'ToPort': 80,
+                            'IpProtocol': 'tcp',
+                            'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
+                        }
+                    ]
+                }
+            ]
+        }
+
+        result = analyzer.analyze_security_groups('dev')
+
+        assert len(result['unrestricted_violations']) == 0
+
+
+class TestTaggingComplianceAdditional:
+    """Additional tagging compliance tests for coverage"""
+
+    def test_analyze_tagging_compliance_empty_resources(self, analyzer, mock_aws_clients):
+        """Test tagging compliance with no resources"""
+        result = analyzer.analyze_tagging_compliance(
+            {'instances': []},
+            {'databases': []},
+            {'buckets': []}
+        )
+
+        assert result['total_resources'] == 0
+        assert result['compliance_metrics']['compliance_percentage'] == 0
+
+    def test_analyze_tagging_compliance_s3_resources(self, analyzer, mock_aws_clients):
+        """Test tagging compliance includes S3 resources"""
+        s3_results = {
+            'buckets': [
+                {'name': 'mybucket-dev'}
+            ]
+        }
+
+        result = analyzer.analyze_tagging_compliance(
+            {'instances': []},
+            {'databases': []},
+            s3_results
+        )
+
+        assert result['total_resources'] == 1
+        # S3 bucket has no tags, so should have violation
+        assert len(result['resources_with_violations']) == 1
+
+    def test_analyze_tagging_compliance_rds_resources(self, analyzer, mock_aws_clients):
+        """Test tagging compliance includes RDS resources"""
+        rds_results = {
+            'databases': [
+                {
+                    'id': 'mydb-dev',
+                    'tags': {
+                        'Environment': 'dev',
+                        'Owner': 'test',
+                        'CostCenter': '12345',
+                        'Project': 'test-project'
+                    }
+                }
+            ]
+        }
+
+        result = analyzer.analyze_tagging_compliance(
+            {'instances': []},
+            rds_results,
+            {'buckets': []}
+        )
+
+        assert result['total_resources'] == 1
+        assert result['compliance_metrics']['compliance_percentage'] == 100.0
 
 
 if __name__ == '__main__':

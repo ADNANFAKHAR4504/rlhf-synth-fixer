@@ -7,9 +7,10 @@ Analyzes the deployed Terraform infrastructure analysis module and validates com
 import json
 import boto3
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Any
 import os
+from botocore.exceptions import ClientError
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -33,7 +34,7 @@ class InfrastructureAnalysisAnalyzer:
         """
         self.region = region
         self.endpoint_url = endpoint_url
-        self.timestamp = datetime.utcnow().isoformat()
+        self.timestamp = datetime.now(timezone.utc).isoformat()
 
         # Initialize AWS clients
         client_config = {
@@ -208,7 +209,7 @@ class InfrastructureAnalysisAnalyzer:
                         bucket_info['encryption_enabled'] = len(
                             encryption.get('ServerSideEncryptionConfiguration', {}).get('Rules', [])
                         ) > 0
-                    except self.s3_client.exceptions.ClientError as e:
+                    except ClientError as e:
                         if 'ServerSideEncryptionConfigurationNotFoundError' in str(e):
                             bucket_info['encryption_enabled'] = False
                         else:

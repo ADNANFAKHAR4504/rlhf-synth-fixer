@@ -43,7 +43,7 @@ describe("Infrastructure Analysis Module - Unit Tests", () => {
     });
 
     test("imports datetime for timestamps", () => {
-      expect(analyseContent).toMatch(/from datetime import datetime/);
+      expect(analyseContent).toMatch(/from datetime import datetime, timezone/);
     });
 
     test("imports typing for type hints", () => {
@@ -52,6 +52,10 @@ describe("Infrastructure Analysis Module - Unit Tests", () => {
 
     test("imports os for environment variables", () => {
       expect(analyseContent).toMatch(/import os/);
+    });
+
+    test("imports ClientError from botocore.exceptions", () => {
+      expect(analyseContent).toMatch(/from botocore\.exceptions import ClientError/);
     });
   });
 
@@ -69,7 +73,7 @@ describe("Infrastructure Analysis Module - Unit Tests", () => {
     });
 
     test("initializes timestamp in constructor", () => {
-      expect(analyseContent).toMatch(/self\.timestamp\s*=\s*datetime\.utcnow\(\)\.isoformat\(\)/);
+      expect(analyseContent).toMatch(/self\.timestamp\s*=\s*datetime\.now\(timezone\.utc\)\.isoformat\(\)/);
     });
   });
 
