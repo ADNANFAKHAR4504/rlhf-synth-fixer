@@ -1,16 +1,15 @@
 """
-test_optimize.py
+test_tap_stack.py
 
-Unit tests for the RDS optimization script.
-Tests cost savings calculation and optimization logic.
+Unit tests for the TapStack Pulumi component and RDS optimization script.
+Tests TapStack instantiation and optimization logic.
 """
 
 import unittest
 from unittest.mock import MagicMock, patch
 
-import pulumi
-
 from lib.optimize import InfrastructureOptimizer
+from lib.tap_stack import TapStack, TapStackArgs
 
 
 class TestInfrastructureOptimizer(unittest.TestCase):
@@ -269,141 +268,229 @@ class TestInfrastructureOptimizer(unittest.TestCase):
             main()
         self.assertEqual(context.exception.code, 1)
 
-class PulumiMocks(pulumi.runtime.Mocks):
-    """Mock Pulumi runtime for unit testing."""
-
-    def new_resource(self, args: pulumi.runtime.MockResourceArgs):
-        """Mock resource creation."""
-        outputs = args.inputs
-        if args.typ == "aws:rds/instance:Instance":
-            outputs = {
-                **args.inputs,
-                "endpoint": "mysql-optimized-dev.abc123.us-east-1.rds.amazonaws.com:3306",
-                "port": 3306,
-                "resource_id": "db-ABCD1234567890",
-                "id": "mysql-optimized-dev",
-            }
-        elif args.typ == "aws:rds/parameterGroup:ParameterGroup":
-            outputs = {
-                **args.inputs,
-                "id": "mysql-params-dev",
-                "name": "mysql-params-dev",
-            }
-        elif args.typ == "aws:cloudwatch/metricAlarm:MetricAlarm":
-            outputs = {
-                **args.inputs,
-                "id": f"alarm-{args.name}",
-            }
-        return [args.name + "_id", outputs]
-
-    def call(self, args: pulumi.runtime.MockCallArgs):
-        """Mock Pulumi function calls."""
-        return {}
-
-
-pulumi.runtime.set_mocks(PulumiMocks())
-
-
-# Import after setting mocks
-from lib.tap_stack import TapStack, TapStackArgs  # noqa: E402
-
 
 class TestTapStackArgs(unittest.TestCase):
     """Test cases for TapStackArgs configuration class."""
 
-    def test_tap_stack_args_default_values(self):
+    @patch('lib.tap_stack.Config')
+    def test_tap_stack_args_default_values(self, mock_config):
         """Test TapStackArgs with default values."""
-        with self.assertRaises(ValueError):
-            args = TapStackArgs()
+        mock_config_instance = MagicMock()
+        mock_config_instance.get.return_value = None
+        mock_config.return_value = mock_config_instance
 
-    def test_tap_stack_args_custom_values(self):
-        """Test TapStackArgs with custom values."""
-        custom_tags = {"Owner": "platform-team"}
-        subnet_ids = ["subnet-12345", "subnet-67890"]
-        args = TapStackArgs(environment_suffix="prod", subnet_ids=subnet_ids, tags=custom_tags)
-        self.assertEqual(args.environment_suffix, "prod")
-        self.assertEqual(args.subnet_ids, subnet_ids)
-        self.assertEqual(args.tags, custom_tags)
+        args = TapStackArgs()
+        
+        self.assertEqual(args.environment_suffix, 'dev')
+        self.assertEqual(args.subnet_ids, [])
+        self.assertIsNone(args.tags)
+
+    @patch('lib.tap_stack.Config')
+    def test_tap_stack_args_with_environment_suffix(self, mock_config):
+        """Test TapStackArgs with custom environment suffix."""
+        mock_config_instance = MagicMock()
+        mock_config_instance.get.return_value = None
+        mock_config.return_value = mock_config_instance
+
+        args = TapStackArgs(environment_suffix='prod')
+        
+        self.assertEqual(args.environment_suffix, 'prod')
+
+    @patch('lib.tap_stack.Config')
+    def test_tap_stack_args_with_subnet_ids_list(self, mock_config):
+        """Test TapStackArgs with subnet_ids as list."""
+        mock_config_instance = MagicMock()
+        mock_config_instance.get.return_value = ['subnet-1', 'subnet-2']
+        mock_config.return_value = mock_config_instance
+
+        args = TapStackArgs()
+        
+        self.assertEqual(args.subnet_ids, ['subnet-1', 'subnet-2'])
+
+    @patch('lib.tap_stack.Config')
+    def test_tap_stack_args_with_subnet_ids_string(self, mock_config):
+        """Test TapStackArgs with subnet_ids as comma-separated string."""
+        mock_config_instance = MagicMock()
+        mock_config_instance.get.return_value = 'subnet-1,subnet-2'
+        mock_config.return_value = mock_config_instance
+
+        args = TapStackArgs()
+        
+        self.assertEqual(args.subnet_ids, ['subnet-1', 'subnet-2'])
+
+    @patch('lib.tap_stack.Config')
+    def test_tap_stack_args_with_tags(self, mock_config):
+        """Test TapStackArgs with custom tags."""
+        mock_config_instance = MagicMock()
+        mock_config_instance.get.return_value = None
+        mock_config.return_value = mock_config_instance
+
+        tags = {'Environment': 'test'}
+        args = TapStackArgs(tags=tags)
+        
+        self.assertEqual(args.tags, tags)
 
 
 class TestTapStack(unittest.TestCase):
     """Test cases for TapStack Pulumi component."""
 
-    @pulumi.runtime.test
-    def test_tap_stack_creates_rds_parameter_group(self):
-        """Test that TapStack creates RDS parameter group with correct settings."""
+    @patch('lib.tap_stack.aws.rds.SubnetGroup')
+    @patch('lib.tap_stack.aws.rds.ParameterGroup')
+    @patch('lib.tap_stack.aws.rds.Instance')
+    @patch('lib.tap_stack.aws.cloudwatch.MetricAlarm')
+    @patch('lib.tap_stack.Config')
+    @patch('lib.tap_stack.pulumi.ComponentResource.__init__')
+    def test_tap_stack_initialization_with_subnet_ids(self, mock_component_init, mock_config, mock_metric_alarm, mock_instance, mock_param_group, mock_subnet_group):
+        """Test TapStack initialization with subnet_ids."""
+        mock_component_init.return_value = None
+        
+        mock_config_instance = MagicMock()
+        mock_config_instance.get_bool.return_value = False
+        mock_config_instance.get_secret.return_value = 'test-password'
+        mock_config.return_value = mock_config_instance
 
-        def check_parameter_group(args):
-            self.assertEqual(args[0], "mysql8.0", "Parameter group should use MySQL 8.0")
-            parameters = args[1]
-            param_names = [p["name"] for p in parameters]
-            self.assertIn("performance_schema", param_names)
-            self.assertIn("slow_query_log", param_names)
+        # Mock the AWS resources
+        mock_subnet_group_instance = MagicMock()
+        mock_subnet_group.return_value = mock_subnet_group_instance
+        mock_subnet_group_instance.name = 'subnet-group-name'
 
-        with patch("pulumi_aws.rds.ParameterGroup") as mock_pg:
-            mock_instance = MagicMock()
-            mock_instance.name = "mysql-params-dev"
-            mock_pg.return_value = mock_instance
+        mock_param_group_instance = MagicMock()
+        mock_param_group.return_value = mock_param_group_instance
+        mock_param_group_instance.name = 'param-group-name'
 
-            args = TapStackArgs(environment_suffix="dev", subnet_ids=["subnet-12345"])
-            stack = TapStack("test-stack", args)
+        mock_instance_instance = MagicMock()
+        mock_instance.return_value = mock_instance_instance
+        mock_instance_instance.endpoint = 'test-endpoint'
+        mock_instance_instance.port = 3306
+        mock_instance_instance.resource_id = 'test-resource-id'
+        mock_instance_instance.identifier = 'test-identifier'
 
-            self.assertIsNotNone(stack)
+        mock_metric_alarm.return_value = MagicMock()
 
-    @pulumi.runtime.test
-    def test_tap_stack_creates_rds_instance_with_baseline_config(self):
-        """Test that TapStack creates RDS instance with baseline (non-optimized) configuration."""
+        args = TapStackArgs()
+        args.subnet_ids = ['subnet-1']
 
-        def check_instance_config(args):
-            # Baseline configuration for optimization task
-            self.assertEqual(args[0], "db.t4g.xlarge", "Baseline should use db.t4g.xlarge")
-            self.assertEqual(args[1], 150, "Baseline should use 150GB storage")
-            self.assertEqual(args[2], "gp3", "Should use GP3 storage")
-            self.assertEqual(args[3], 3000, "Should have 3000 IOPS")
+        stack = TapStack('test-stack', args)
 
-        with patch("pulumi_aws.rds.Instance") as mock_instance:
-            mock_rds = MagicMock()
-            mock_rds.endpoint = pulumi.Output.from_input(
-                "mysql-optimized-dev.abc.us-east-1.rds.amazonaws.com:3306"
-            )
-            mock_rds.port = pulumi.Output.from_input(3306)
-            mock_rds.resource_id = pulumi.Output.from_input("db-ABC123")
-            mock_rds.identifier = pulumi.Output.from_input("mysql-optimized-dev")
-            mock_instance.return_value = mock_rds
+        # Verify ComponentResource init was called
+        mock_component_init.assert_called_once_with("tap:stack:TapStack", 'test-stack', None, None)
 
-            args = TapStackArgs(environment_suffix="dev", subnet_ids=["subnet-12345"])
-            stack = TapStack("test-stack", args)
+        # Verify resources were created
+        mock_subnet_group.assert_called_once()
+        mock_param_group.assert_called_once()
+        mock_instance.assert_called_once()
+        self.assertEqual(mock_metric_alarm.call_count, 2)  # CPU and storage alarms
 
-            self.assertIsNotNone(stack)
+        # Verify outputs
+        self.assertEqual(stack.db_endpoint, 'test-endpoint')
+        self.assertEqual(stack.db_port, 3306)
+        self.assertEqual(stack.db_resource_id, 'test-resource-id')
+        self.assertEqual(stack.db_instance_identifier, 'test-identifier')
 
-    @pulumi.runtime.test
-    def test_tap_stack_creates_cloudwatch_alarms(self):
-        """Test that TapStack creates CloudWatch alarms for monitoring."""
+    @patch('lib.tap_stack.pulumi.ComponentResource.__init__')
+    def test_tap_stack_initialization_without_subnet_ids(self, mock_component_init):
+        """Test TapStack initialization without subnet_ids returns early."""
+        mock_component_init.return_value = None
 
-        with patch("pulumi_aws.cloudwatch.MetricAlarm") as mock_alarm:
-            mock_alarm_instance = MagicMock()
-            mock_alarm.return_value = mock_alarm_instance
+        args = TapStackArgs()
+        args.subnet_ids = []
 
-            args = TapStackArgs(environment_suffix="dev", subnet_ids=["subnet-12345"])
-            stack = TapStack("test-stack", args)
+        stack = TapStack('test-stack', args)
 
-            # Should create at least 2 alarms (CPU and storage)
-            self.assertGreaterEqual(mock_alarm.call_count, 2)
+        # Should not create any resources
+        mock_component_init.assert_called_once_with("tap:stack:TapStack", 'test-stack', None, None)
 
-    @pulumi.runtime.test
-    def test_tap_stack_exports_outputs(self):
-        """Test that TapStack exports required outputs."""
+    @patch('lib.tap_stack.aws.rds.SubnetGroup')
+    @patch('lib.tap_stack.aws.rds.ParameterGroup')
+    @patch('lib.tap_stack.aws.rds.Instance')
+    @patch('lib.tap_stack.aws.cloudwatch.MetricAlarm')
+    @patch('lib.tap_stack.Config')
+    @patch('lib.tap_stack.pulumi.ComponentResource.__init__')
+    def test_tap_stack_initialization_production_mode(self, mock_component_init, mock_config, mock_metric_alarm, mock_instance, mock_param_group, mock_subnet_group):
+        """Test TapStack initialization in production mode."""
+        mock_component_init.return_value = None
+        
+        mock_config_instance = MagicMock()
+        mock_config_instance.get_bool.return_value = True  # is_production = True
+        mock_config_instance.get_secret.return_value = 'prod-password'
+        mock_config.return_value = mock_config_instance
 
-        def check_outputs(outputs):
-            self.assertIn("db_endpoint", outputs)
-            self.assertIn("db_port", outputs)
-            self.assertIn("db_resource_id", outputs)
-            self.assertIn("db_instance_identifier", outputs)
-            self.assertIn("db_instance_class", outputs)
-            self.assertIn("allocated_storage", outputs)
+        # Mock the AWS resources
+        mock_subnet_group_instance = MagicMock()
+        mock_subnet_group.return_value = mock_subnet_group_instance
+        mock_subnet_group_instance.name = 'subnet-group-name'
 
-        args = TapStackArgs(environment_suffix="dev", subnet_ids=["subnet-12345"])
-        stack = TapStack("test-stack", args)
+        mock_param_group_instance = MagicMock()
+        mock_param_group.return_value = mock_param_group_instance
+        mock_param_group_instance.name = 'param-group-name'
 
-        # Stack should have outputs registered
-        self.assertIsNotNone(stack)
+        mock_instance_instance = MagicMock()
+        mock_instance.return_value = mock_instance_instance
+        mock_instance_instance.endpoint = 'prod-endpoint'
+        mock_instance_instance.port = 3306
+        mock_instance_instance.resource_id = 'prod-resource-id'
+        mock_instance_instance.identifier = 'prod-identifier'
+
+        mock_metric_alarm.return_value = MagicMock()
+
+        args = TapStackArgs()
+        args.subnet_ids = ['subnet-1']
+
+        stack = TapStack('prod-stack', args)
+
+        # Verify ComponentResource init was called
+        mock_component_init.assert_called_once_with("tap:stack:TapStack", 'prod-stack', None, None)
+
+        # Verify RDS instance was created with production settings
+        mock_instance.assert_called_once()
+        call_args = mock_instance.call_args[1]
+        self.assertTrue(call_args['multi_az'])  # Should be True in production
+        self.assertTrue(call_args['deletion_protection'])  # Should be True in production
+
+    @patch('lib.tap_stack.aws.rds.SubnetGroup')
+    @patch('lib.tap_stack.aws.rds.ParameterGroup')
+    @patch('lib.tap_stack.aws.rds.Instance')
+    @patch('lib.tap_stack.aws.cloudwatch.MetricAlarm')
+    @patch('lib.tap_stack.Config')
+    @patch('lib.tap_stack.pulumi.ComponentResource.__init__')
+    def test_tap_stack_initialization_default_password(self, mock_component_init, mock_config, mock_metric_alarm, mock_instance, mock_param_group, mock_subnet_group):
+        """Test TapStack initialization with default password when secret not set."""
+        mock_component_init.return_value = None
+        
+        mock_config_instance = MagicMock()
+        mock_config_instance.get_bool.return_value = False
+        mock_config_instance.get_secret.return_value = None  # No secret set
+        mock_config.return_value = mock_config_instance
+
+        # Mock the AWS resources
+        mock_subnet_group_instance = MagicMock()
+        mock_subnet_group.return_value = mock_subnet_group_instance
+        mock_subnet_group_instance.name = 'subnet-group-name'
+
+        mock_param_group_instance = MagicMock()
+        mock_param_group.return_value = mock_param_group_instance
+        mock_param_group_instance.name = 'param-group-name'
+
+        mock_instance_instance = MagicMock()
+        mock_instance.return_value = mock_instance_instance
+        mock_instance_instance.endpoint = 'test-endpoint'
+        mock_instance_instance.port = 3306
+        mock_instance_instance.resource_id = 'test-resource-id'
+        mock_instance_instance.identifier = 'test-identifier'
+
+        mock_metric_alarm.return_value = MagicMock()
+
+        args = TapStackArgs()
+        args.subnet_ids = ['subnet-1']
+
+        stack = TapStack('test-stack', args)
+
+        # Verify password uses default
+        mock_instance.assert_called_once()
+        call_args = mock_instance.call_args[1]
+        self.assertEqual(call_args['password'], 'test-password-12345')
+
+
+if __name__ == "__main__":
+    unittest.main()
+
