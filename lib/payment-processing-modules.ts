@@ -782,7 +782,7 @@ export class ECSModule extends Construct {
 
     // ECS Cluster
     this.cluster = new aws.ecsCluster.EcsCluster(this, 'cluster', {
-      name: resourceName('payment-cluster'),
+      name: resourceName(`payment-cluster-${uniqueSuffix}`),
       setting: [
         {
           name: 'containerInsights',
@@ -839,7 +839,7 @@ export class ECSModule extends Construct {
       this,
       'task-def',
       {
-        family: resourceName('payment-service'),
+        family: resourceName(`payment-service-${uniqueSuffix}`),
         requiresCompatibilities: ['FARGATE'],
         networkMode: 'awsvpc',
         cpu: '256',
@@ -889,7 +889,7 @@ export class ECSModule extends Construct {
 
     // ECS Service
     this.service = new aws.ecsService.EcsService(this, 'service', {
-      name: resourceName('payment-service'),
+      name: resourceName(`payment-service-${uniqueSuffix}`),
       cluster: this.cluster.id,
       taskDefinition: this.taskDefinition.arn,
       desiredCount: 2,
