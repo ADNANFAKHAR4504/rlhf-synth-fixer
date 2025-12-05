@@ -1,0 +1,24 @@
+{
+  "po_id": "q3j5k0n5",
+  "status": "in_progress",
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": ["CI/CD Pipeline"],
+  "training_quality": 10,
+  "background": "A software development team needs to implement a multi-stage CI/CD pipeline for their microservices application. The pipeline must support automated testing, security scanning, and blue-green deployments to minimize downtime during releases.",
+  "environment": "AWS CI/CD infrastructure deployed in us-east-1 region using CodePipeline for orchestration, CodeBuild for compilation and testing, CodeDeploy for blue-green deployments to ECS Fargate. Requires Pulumi CLI 3.x with Python 3.9+, boto3 installed. Pipeline integrates with GitHub for source control, ECR for container registry with vulnerability scanning enabled. VPC endpoints configured for private communication between services. CodeArtifact repository for dependency caching.",
+  "mandatory_constraints": [
+    "Pipeline must trigger only on commits to 'main' and 'release/*' branches",
+    "All IAM roles must follow principle of least privilege with explicit resource ARNs",
+    "Use AWS CodePipeline with exactly 5 stages: Source, Build, Test, SecurityScan, and Deploy"
+  ],
+  "optional_constraints": [
+    "All artifacts must be encrypted using a customer-managed KMS key",
+    "CodeBuild projects must use compute type BUILD_GENERAL1_SMALL for cost optimization",
+    "Pipeline notifications must be sent to SNS topic only for failed executions",
+    "Deploy stage must implement blue-green deployment using CodeDeploy with 10-minute traffic shift",
+    "Security scan stage must use ECR image scanning and fail on HIGH severity findings"
+  ]
+}
