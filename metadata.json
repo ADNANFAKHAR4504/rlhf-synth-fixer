@@ -35,5 +35,6 @@
   ],
   "region": "us-east-1",
   "training_quality": 7,
-  "training_quality_notes": "All critical issues fixed: circular dependency resolved, hardcoded password removed, Lambda packages created, syntax and linting issues resolved"
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing"
 }
