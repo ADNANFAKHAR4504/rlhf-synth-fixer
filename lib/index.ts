@@ -70,6 +70,7 @@ export class TradingPlatformStack extends TerraformStack {
       provider: secondaryProvider,
       environmentSuffix,
       sharedConstructs,
+      primaryAuroraCluster: primaryStack.auroraCluster,
     });
 
     // Failover Validator Lambda (runs in primary region, validates both)

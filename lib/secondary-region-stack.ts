@@ -31,12 +31,13 @@ import { config } from './config/infrastructure-config';
 import { SharedConstructs } from './shared-constructs';
 
 // Generate unique suffix to avoid resource naming conflicts
-const uniqueSuffix = Date.now().toString(36).slice(-4);
+const uniqueSuffix = 'b3x7';
 
 export interface SecondaryRegionStackProps {
   provider: AwsProvider;
   environmentSuffix: string;
   sharedConstructs: SharedConstructs;
+  primaryAuroraCluster?: RdsCluster;
 }
 
 export class SecondaryRegionStack extends Construct {
@@ -48,7 +49,12 @@ export class SecondaryRegionStack extends Construct {
   constructor(scope: Construct, id: string, props: SecondaryRegionStackProps) {
     super(scope, id);
 
-    const { provider, environmentSuffix, sharedConstructs } = props;
+    const {
+      provider,
+      environmentSuffix,
+      sharedConstructs,
+      primaryAuroraCluster,
+    } = props;
     const regionConfig = config.secondaryRegion;
 
     // VPC
@@ -216,7 +222,9 @@ export class SecondaryRegionStack extends Construct {
         Name: `aurora-cluster-secondary-${environmentSuffix}`,
         Environment: environmentSuffix,
       },
-      dependsOn: [sharedConstructs.globalCluster],
+      dependsOn: primaryAuroraCluster
+        ? [sharedConstructs.globalCluster, primaryAuroraCluster]
+        : [sharedConstructs.globalCluster],
     });
 
     // Aurora Instance
@@ -432,26 +440,34 @@ export class SecondaryRegionStack extends Construct {
     });
 
     // API Integrations
-    const postTradesIntegration = new ApiGatewayIntegration(this, 'post-trades-integration', {
-      provider,
-      restApiId: this.api.id,
-      resourceId: tradesResource.id,
-      httpMethod: postTradesMethod.httpMethod,
-      type: 'AWS_PROXY',
-      integrationHttpMethod: 'POST',
-      uri: this.tradeProcessorFunction.invokeArn,
-    });
+    const postTradesIntegration = new ApiGatewayIntegration(
+      this,
+      'post-trades-integration',
+      {
+        provider,
+        restApiId: this.api.id,
+        resourceId: tradesResource.id,
+        httpMethod: postTradesMethod.httpMethod,
+        type: 'AWS_PROXY',
+        integrationHttpMethod: 'POST',
+        uri: this.tradeProcessorFunction.invokeArn,
+      }
+    );
 
-    const getHealthIntegration = new ApiGatewayIntegration(this, 'get-health-integration', {
-      provider,
-      restApiId: this.api.id,
-      resourceId: healthResource.id,
-      httpMethod: getHealthMethod.httpMethod,
-      type: 'MOCK',
-      requestTemplates: {
-        'application/json': '{"statusCode": 200}',
-      },
-    });
+    const getHealthIntegration = new ApiGatewayIntegration(
+      this,
+      'get-health-integration',
+      {
+        provider,
+        restApiId: this.api.id,
+        resourceId: healthResource.id,
+        httpMethod: getHealthMethod.httpMethod,
+        type: 'MOCK',
+        requestTemplates: {
+          'application/json': '{"statusCode": 200}',
+        },
+      }
+    );
 
     // Lambda Permission for API Gateway
     new LambdaPermission(this, 'api-lambda-permission', {
@@ -467,7 +483,12 @@ export class SecondaryRegionStack extends Construct {
     const deployment = new ApiGatewayDeployment(this, 'api-deployment', {
       provider,
       restApiId: this.api.id,
-      dependsOn: [postTradesMethod, getHealthMethod, postTradesIntegration, getHealthIntegration],
+      dependsOn: [
+        postTradesMethod,
+        getHealthMethod,
+        postTradesIntegration,
+        getHealthIntegration,
+      ],
       lifecycle: {
         createBeforeDestroy: true,
       },

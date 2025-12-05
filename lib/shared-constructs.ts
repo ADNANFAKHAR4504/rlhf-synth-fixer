@@ -12,7 +12,7 @@ import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
 import { config } from './config/infrastructure-config';
 
 // Generate unique suffix to avoid resource naming conflicts
-const uniqueSuffix = Date.now().toString(36).slice(-4);
+const uniqueSuffix = 'b3x7';
 
 export interface SharedConstructsProps {
   primaryProvider: AwsProvider;
@@ -141,13 +141,17 @@ export class SharedConstructs extends Construct {
       }
     );
 
-    const configBucketSecondaryVersioning = new S3BucketVersioningA(this, 'config-bucket-secondary-versioning', {
-      provider: secondaryProvider,
-      bucket: configBucketSecondary.id,
-      versioningConfiguration: {
-        status: 'Enabled',
-      },
-    });
+    const configBucketSecondaryVersioning = new S3BucketVersioningA(
+      this,
+      'config-bucket-secondary-versioning',
+      {
+        provider: secondaryProvider,
+        bucket: configBucketSecondary.id,
+        versioningConfiguration: {
+          status: 'Enabled',
+        },
+      }
+    );
 
     // Replication Policy
     new IamRolePolicy(this, 'replication-policy', {
@@ -243,13 +247,17 @@ export class SharedConstructs extends Construct {
       }
     );
 
-    const auditBucketSecondaryVersioning = new S3BucketVersioningA(this, 'audit-bucket-secondary-versioning', {
-      provider: secondaryProvider,
-      bucket: auditLogBucketSecondary.id,
-      versioningConfiguration: {
-        status: 'Enabled',
-      },
-    });
+    const auditBucketSecondaryVersioning = new S3BucketVersioningA(
+      this,
+      'audit-bucket-secondary-versioning',
+      {
+        provider: secondaryProvider,
+        bucket: auditLogBucketSecondary.id,
+        versioningConfiguration: {
+          status: 'Enabled',
+        },
+      }
+    );
 
     // Audit Log Replication
     const auditReplicationRole = new IamRole(this, 'audit-replication-role', {

@@ -32,7 +32,7 @@ import { config } from './config/infrastructure-config';
 import { SharedConstructs } from './shared-constructs';
 
 // Generate unique suffix to avoid resource naming conflicts
-const uniqueSuffix = Date.now().toString(36).slice(-4);
+const uniqueSuffix = 'b3x7';
 
 export interface PrimaryRegionStackProps {
   provider: AwsProvider;
@@ -451,32 +451,45 @@ export class PrimaryRegionStack extends Construct {
     });
 
     // API Integrations
-    const postTradesIntegration = new ApiGatewayIntegration(this, 'post-trades-integration', {
-      provider,
-      restApiId: this.api.id,
-      resourceId: tradesResource.id,
-      httpMethod: postTradesMethod.httpMethod,
-      type: 'AWS_PROXY',
-      integrationHttpMethod: 'POST',
-      uri: this.tradeProcessorFunction.invokeArn,
-    });
+    const postTradesIntegration = new ApiGatewayIntegration(
+      this,
+      'post-trades-integration',
+      {
+        provider,
+        restApiId: this.api.id,
+        resourceId: tradesResource.id,
+        httpMethod: postTradesMethod.httpMethod,
+        type: 'AWS_PROXY',
+        integrationHttpMethod: 'POST',
+        uri: this.tradeProcessorFunction.invokeArn,
+      }
+    );
 
-    const getHealthIntegration = new ApiGatewayIntegration(this, 'get-health-integration', {
-      provider,
-      restApiId: this.api.id,
-      resourceId: healthResource.id,
-      httpMethod: getHealthMethod.httpMethod,
-      type: 'MOCK',
-      requestTemplates: {
-        'application/json': '{"statusCode": 200}',
-      },
-    });
+    const getHealthIntegration = new ApiGatewayIntegration(
+      this,
+      'get-health-integration',
+      {
+        provider,
+        restApiId: this.api.id,
+        resourceId: healthResource.id,
+        httpMethod: getHealthMethod.httpMethod,
+        type: 'MOCK',
+        requestTemplates: {
+          'application/json': '{"statusCode": 200}',
+        },
+      }
+    );
 
     // API Deployment
     const deployment = new ApiGatewayDeployment(this, 'api-deployment', {
       provider,
       restApiId: this.api.id,
-      dependsOn: [postTradesMethod, getHealthMethod, postTradesIntegration, getHealthIntegration],
+      dependsOn: [
+        postTradesMethod,
+        getHealthMethod,
+        postTradesIntegration,
+        getHealthIntegration,
+      ],
       lifecycle: {
         createBeforeDestroy: true,
       },

@@ -44,10 +44,16 @@ export async function handler(
     );
 
     // Get cluster identifiers from SSM or environment
-    const primaryClusterId = process.env.PRIMARY_CLUSTER_ID ||
-      await getParameter(`/trading/${environmentSuffix}/primary/cluster-id`).catch(() => `trading-cluster-primary-${environmentSuffix}`);
-    const secondaryClusterId = process.env.SECONDARY_CLUSTER_ID ||
-      await getParameter(`/trading/${environmentSuffix}/secondary/cluster-id`).catch(() => `trading-cluster-secondary-${environmentSuffix}`);
+    const primaryClusterId =
+      process.env.PRIMARY_CLUSTER_ID ||
+      (await getParameter(
+        `/trading/${environmentSuffix}/primary/cluster-id`
+      ).catch(() => `trading-cluster-primary-${environmentSuffix}`));
+    const secondaryClusterId =
+      process.env.SECONDARY_CLUSTER_ID ||
+      (await getParameter(
+        `/trading/${environmentSuffix}/secondary/cluster-id`
+      ).catch(() => `trading-cluster-secondary-${environmentSuffix}`));
 
     // Check RDS cluster status
     const primaryStatus = await checkClusterStatus(primaryClusterId);
