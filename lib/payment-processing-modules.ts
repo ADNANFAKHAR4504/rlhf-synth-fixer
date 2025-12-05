@@ -347,7 +347,7 @@ export class KMSModule extends Construct {
 /**
  * Secrets Manager Module - Manages RDS credentials
  */
-export interface SecretsModuleProps extends BaseModuleProps { }
+export type SecretsModuleProps = BaseModuleProps;
 
 export class SecretsModule extends Construct {
   public readonly rdsSecret: aws.secretsmanagerSecret.SecretsmanagerSecret;
@@ -476,8 +476,7 @@ export class RDSModule extends Construct {
 
     // RDS Aurora Cluster
     this.cluster = new aws.rdsCluster.RdsCluster(this, 'aurora-cluster', {
-      clusterIdentifier:
-        resourceName(`v5-aurora-db-${uniqueSuffix}`).toLowerCase(),
+      clusterIdentifier: resourceName(`v5-aurora-db-${uniqueSuffix}`).toLowerCase(),
       engine: 'aurora-mysql',
       engineVersion: '8.0.mysql_aurora.3.04.0',
       databaseName: 'paymentdb',
