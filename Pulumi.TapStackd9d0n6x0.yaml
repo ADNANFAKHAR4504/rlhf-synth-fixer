@@ -1,7 +1,0 @@
-config:
-  aws:region: us-east-1
-  aws:defaultTags:
-    tags:
-      Project: TAP
-      Environment: dev
-      ManagedBy: Pulumi
