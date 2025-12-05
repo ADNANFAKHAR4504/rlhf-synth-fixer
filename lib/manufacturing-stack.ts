@@ -1,23 +1,3 @@
-# Manufacturing Data Pipeline - CDKTF Implementation
-
-This implementation provides a complete high-throughput manufacturing data pipeline using **CDKTF with TypeScript**. The solution handles 100,000 events per second from IoT sensors with sub-500ms processing latency.
-
-## Architecture Overview
-
-The infrastructure consists of:
-- **Data Ingestion**: Kinesis Data Streams for real-time sensor data
-- **Processing**: ECS Fargate clusters with auto-scaling
-- **Storage**: RDS Aurora PostgreSQL with 7-year retention
-- **Caching**: ElastiCache Redis for real-time analytics
-- **Shared Storage**: EFS for cross-task file sharing
-- **API Layer**: API Gateway for external integrations
-- **Security**: KMS, SecretsManager for encryption and credentials
-- **Monitoring**: CloudWatch and X-Ray for observability
-- **Networking**: Multi-AZ VPC with security groups
-
-## File: lib/manufacturing-stack.ts
-
-```typescript
 import { Construct } from 'constructs';
 import { Fn, TerraformOutput } from 'cdktf';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
@@ -283,7 +263,7 @@ export class ManufacturingStack extends Construct {
     // ====================
     const ecsLogGroup = new CloudwatchLogGroup(this, 'ecs-log-group', {
       name: `/aws/ecs/manufacturing-${environmentSuffix}`,
-      retentionInDays: 30,
+      retentionInDays: 365, // 1 year minimum for compliance
       kmsKeyId: kmsKey.arn,
       tags: {
         Name: `manufacturing-ecs-logs-${environmentSuffix}`,
@@ -293,7 +273,7 @@ export class ManufacturingStack extends Construct {
 
     const apiLogGroup = new CloudwatchLogGroup(this, 'api-log-group', {
       name: `/aws/apigateway/manufacturing-${environmentSuffix}`,
-      retentionInDays: 30,
+      retentionInDays: 365, // 1 year minimum for compliance
       kmsKeyId: kmsKey.arn,
       tags: {
         Name: `manufacturing-api-logs-${environmentSuffix}`,
@@ -408,7 +388,7 @@ export class ManufacturingStack extends Construct {
       vpcSecurityGroupIds: [rdsSecurityGroup.id],
       storageEncrypted: true,
       kmsKeyId: kmsKey.arn,
-      backupRetentionPeriod: 2555, // 7 years (2555 days) for compliance
+      backupRetentionPeriod: 35, // AWS RDS maximum (35 days) - use AWS Backup for longer retention
       preferredBackupWindow: '03:00-04:00',
       preferredMaintenanceWindow: 'sun:04:00-sun:05:00',
       enabledCloudwatchLogsExports: ['postgresql'],
@@ -474,8 +454,7 @@ export class ManufacturingStack extends Construct {
       'redis-cluster',
       {
         replicationGroupId: `manufacturing-redis-${environmentSuffix}`,
-        replicationGroupDescription:
-          'Redis cluster for manufacturing analytics',
+        description: 'Redis cluster for manufacturing analytics',
         engine: 'redis',
         engineVersion: '7.0',
         nodeType: 'cache.t3.micro',
@@ -484,7 +463,7 @@ export class ManufacturingStack extends Construct {
         parameterGroupName: 'default.redis7',
         subnetGroupName: redisSubnetGroup.name,
         securityGroupIds: [redisSecurityGroup.id],
-        atRestEncryptionEnabled: true,
+        atRestEncryptionEnabled: 'true',
         transitEncryptionEnabled: true,
         transitEncryptionMode: 'preferred',
         kmsKeyId: kmsKey.arn,
@@ -493,7 +472,7 @@ export class ManufacturingStack extends Construct {
         snapshotRetentionLimit: 5,
         snapshotWindow: '03:00-05:00',
         maintenanceWindow: 'sun:05:00-sun:07:00',
-        autoMinorVersionUpgrade: true,
+        autoMinorVersionUpgrade: 'true',
         applyImmediately: true,
         tags: {
           Name: `manufacturing-redis-${environmentSuffix}`,
@@ -773,14 +752,6 @@ export class ManufacturingStack extends Construct {
         securityGroups: [ecsSecurityGroup.id],
         assignPublicIp: true,
       },
-      deploymentConfiguration: {
-        maximumPercent: 200,
-        minimumHealthyPercent: 100,
-        deploymentCircuitBreaker: {
-          enable: true,
-          rollback: true,
-        },
-      },
       tags: {
         Name: `manufacturing-service-${environmentSuffix}`,
         Environment: environmentSuffix,
@@ -790,17 +761,13 @@ export class ManufacturingStack extends Construct {
     // ====================
     // 13. Auto Scaling for ECS
     // ====================
-    const scalingTarget = new AppautoscalingTarget(
-      this,
-      'ecs-scaling-target',
-      {
-        maxCapacity: 20,
-        minCapacity: 2,
-        resourceId: `service/${ecsCluster.name}/${ecsService.name}`,
-        scalableDimension: 'ecs:service:DesiredCount',
-        serviceNamespace: 'ecs',
-      }
-    );
+    const scalingTarget = new AppautoscalingTarget(this, 'ecs-scaling-target', {
+      maxCapacity: 20,
+      minCapacity: 2,
+      resourceId: `service/${ecsCluster.name}/${ecsService.name}`,
+      scalableDimension: 'ecs:service:DesiredCount',
+      serviceNamespace: 'ecs',
+    });
 
     // Scale based on Kinesis iterator age (processing lag)
     new AppautoscalingPolicy(this, 'ecs-scaling-policy', {
@@ -1017,147 +984,3 @@ export class ManufacturingStack extends Construct {
     });
   }
 }
-```
-
-## File: lib/tap-stack.ts
-
-```typescript
-import {
-  AwsProvider,
-  AwsProviderDefaultTags,
-} from '@cdktf/provider-aws/lib/provider';
-import { LocalBackend, TerraformStack } from 'cdktf';
-import { Construct } from 'constructs';
-
-import { ManufacturingStack } from './manufacturing-stack';
-
-interface TapStackProps {
-  environmentSuffix?: string;
-  stateBucket?: string;
-  stateBucketRegion?: string;
-  awsRegion?: string;
-  defaultTags?: AwsProviderDefaultTags[];
-}
-
-// AWS Region override for us-east-1
-const AWS_REGION_OVERRIDE = 'us-east-1';
-
-export class TapStack extends TerraformStack {
-  constructor(scope: Construct, id: string, props?: TapStackProps) {
-    super(scope, id);
-
-    const environmentSuffix = props?.environmentSuffix || 'dev';
-    const awsRegion = AWS_REGION_OVERRIDE
-      ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-east-1';
-    const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
-    const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
-    const defaultTags = props?.defaultTags || [];
-
-    // Configure AWS Provider
-    new AwsProvider(this, 'aws', {
-      region: awsRegion,
-      defaultTags: defaultTags,
-    });
-
-    // Configure Local Backend for development/testing
-    new LocalBackend(this, {
-      path: `terraform.${environmentSuffix}.tfstate`,
-    });
-
-    // Deploy Manufacturing Stack
-    new ManufacturingStack(this, 'manufacturing', {
-      environmentSuffix,
-      region: awsRegion,
-    });
-  }
-}
-```
-
-## Deployment Instructions
-
-### Prerequisites
-
-1. Node.js >= 16.x
-2. CDKTF CLI >= 0.15.0
-3. AWS CLI configured with appropriate credentials
-4. Terraform >= 1.0
-
-### Installation
-
-```bash
-npm install
-```
-
-### Deployment
-
-```bash
-# Set environment suffix
-export ENVIRONMENT_SUFFIX="dev"
-
-# Synthesize CDKTF to Terraform
-npm run cdktf:synth
-
-# Deploy infrastructure
-npm run cdktf:deploy
-```
-
-### Destroy
-
-```bash
-# Destroy all resources
-npm run cdktf:destroy
-```
-
-## Architecture Highlights
-
-### High Throughput Design
-- 10 Kinesis shards supporting 100,000 events/second (10k per shard)
-- Auto-scaling ECS Fargate from 2 to 20 tasks based on processing lag
-- Aurora Serverless v2 with 0.5-2 ACU capacity
-
-### Multi-AZ High Availability
-- Aurora PostgreSQL across 2 AZs
-- ElastiCache Redis with automatic failover
-- EFS with mount targets in multiple AZs
-- ECS tasks distributed across availability zones
-
-### Security
-- All data encrypted at rest using KMS
-- All data encrypted in transit using TLS
-- SecretsManager for credential storage
-- Security groups with least privilege access
-- IAM roles with minimal permissions
-
-### Compliance
-- 7-year backup retention for Aurora (2555 days)
-- CloudWatch logs with 30-day retention
-- X-Ray tracing for audit trails
-- Comprehensive tagging for resource tracking
-
-### Monitoring and Observability
-- CloudWatch Container Insights enabled
-- Kinesis detailed shard-level metrics
-- CloudWatch alarms for critical thresholds
-- X-Ray distributed tracing
-- Centralized logging
-
-### Blue-Green Deployment Support
-- Infrastructure supports multiple environments via environmentSuffix
-- Zero-downtime deployments with circuit breaker
-- Deployment configuration: 200% max, 100% min healthy
-
-## Cost Optimization
-
-- Aurora Serverless v2 scales down to 0.5 ACU when idle
-- ECS Fargate scales to 2 tasks minimum during low load
-- EFS uses lifecycle policies to move to IA after 30 days
-- Redis uses t3.micro instances for cost efficiency
-
-## Testing
-
-Unit tests are provided in the test directory to validate infrastructure configuration.
-
-```bash
-npm run test:unit
-```

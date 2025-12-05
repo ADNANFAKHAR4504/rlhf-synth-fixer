@@ -1,21 +1,13 @@
 {
-  "task_id": "a0v1c9x0",
   "platform": "cdktf",
-  "language": "typescript",
+  "language": "ts",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "synth",
+  "po_id": "a2e1h2o9",
   "team": "synth",
-  "subtask": "CI/CD Pipeline Integration",
-  "subject_labels": [
-    "CI/CD Pipeline",
-    "aws",
-    "infrastructure",
-    "education",
-    "compliance",
-    "cicd"
-  ],
-  "startedAt": "2025-12-04T16:37:55.102167Z",
+  "startedAt": "2025-12-05T04:50:32+05:30",
+  "subtask": "Design and implement a high-throughput manufacturing data pipeline using CDKTF that processes sensor data from IoT devices in manufacturing plants. The pipeline must handle real-time data ingestion, processing, and storage while maintaining compliance with manufacturing industry standards.",
+  "subject_labels": ["CI/CD Pipeline Integration", "CI/CD Pipeline"],
   "aws_services": [],
-  "training_quality": 0
+  "training_quality": 9
 }

@@ -1,121 +1,129 @@
-Hey team,
+# Manufacturing Data Pipeline - High-Throughput IoT Sensor Processing
 
-We need to build infrastructure for an educational content delivery platform that integrates with a complete CI/CD pipeline. I've been looking at how we can create a secure, compliant system for delivering educational materials to students using **CDKTF with TypeScript**. The business wants infrastructure that deploys automatically through a multi-stage pipeline with proper security controls and approval gates.
+## Platform and Language
+**CDKTF with TypeScript**
 
-The platform will serve educational content to students, track their progress, and ensure compliance with data protection regulations. We need this to work seamlessly with automated deployments across development, staging, and production environments.
+## Task Overview
+Design and implement a high-throughput manufacturing data pipeline using CDKTF that processes sensor data from IoT devices in manufacturing plants. The pipeline must handle real-time data ingestion, processing, and storage while maintaining compliance with manufacturing industry standards.
 
-## What we need to build
+## Background
+A large manufacturing company operates smart factories across us-east-1. They need to collect, process, and analyze real-time sensor data from manufacturing equipment to optimize production and predict maintenance needs. The solution must handle 100,000 events per second during peak operations and maintain data retention for compliance purposes.
 
-Create an educational content delivery infrastructure using **CDKTF with TypeScript** that integrates with a CI/CD pipeline.
+## Core Requirements
 
-### Core Requirements
+### AWS Services Required
+- **Kinesis Data Streams** for data ingestion
+- **ECS Fargate** for data processing
+- **RDS Aurora PostgreSQL** for operational data
+- **ElastiCache Redis** for real-time analytics
+- **EFS** for shared storage
+- **API Gateway** for external integrations
+- **SecretsManager** for credential management
 
-1. **Content Storage and Delivery**
-   - S3 buckets for storing course materials, videos, and documents
-   - CloudFront distribution for fast, global content delivery
-   - Origin Access Identity for secure S3 access
-   - Support for different content types (videos, PDFs, interactive content)
+### Infrastructure Requirements
+- All infrastructure must be deployed in **us-east-1** with multi-AZ configuration for high availability
+- Data retention must comply with manufacturing industry standards (minimum 7 years for critical data)
+- Solution must handle processing latency under 500ms for critical sensor data
+- Implement end-to-end encryption for data in transit and at rest
+- Infrastructure must support blue-green deployments for zero-downtime updates
 
-2. **User and Progress Tracking**
-   - DynamoDB tables for user profiles and course progress
-   - Point-in-time recovery enabled for data protection
-   - Global secondary indexes for efficient querying
-   - Encryption at rest for sensitive student data
+### Performance Requirements
+- Handle 100,000 events per second during peak operations
+- Processing latency under 500ms for critical sensor data
+- Multi-AZ configuration for high availability
+- Support for blue-green deployments
 
-3. **Authentication and Authorization**
-   - Cognito User Pool for student authentication
-   - Email and SMS verification for account security
-   - Password policies meeting compliance requirements
-   - User groups for students, instructors, and administrators
+### Compliance Requirements
+- Minimum 7 years data retention for critical data
+- End-to-end encryption for data in transit and at rest
+- Manufacturing industry standards compliance
 
-4. **Serverless API Layer**
-   - Lambda functions for course enrollment and progress updates
-   - API Gateway REST API for frontend integration
-   - Lambda execution roles with least privilege
-   - Environment variables for configuration
+## Technical Specifications
 
-5. **Monitoring and Compliance**
-   - CloudWatch log groups for application logs
-   - Log retention policies for compliance
-   - CloudWatch alarms for critical metrics
-   - SNS topics for alerting administrators
+### Setup Requirements
+- Node.js >= 16.x
+- CDKTF CLI >= 0.15.0
+- AWS Account with appropriate permissions
+- TypeScript development environment
+- Git for version control
 
-### CI/CD Integration Requirements
+### Resource Naming Convention
+All resources MUST include `environmentSuffix` in their names to support parallel deployments and avoid naming conflicts:
+- Pattern: `{resource-name}-${environmentSuffix}`
+- Example: `manufacturing-data-stream-${environmentSuffix}`
 
-Reference the provided `lib/ci-cd.yml` for:
+### Destroyability Requirements
+- No resources with RemovalPolicy.RETAIN
+- No resources with deletionProtection: true
+- All resources must be fully destroyable for synthetic task cleanup
 
-1. **GitHub Actions Workflow**
-   - GitHub OIDC authentication (no long-lived credentials)
-   - Automated deployment to dev on commits
-   - Manual approval gates for staging and production
-   - Security scanning and compliance checks
+## Architecture Components
 
-2. **Multi-Stage Pipeline**
-   - Build stage: Install dependencies, run cdktf synth
-   - Security stage: Run security scanning and validation
-   - Deploy stages: dev (auto) → staging (approval) → prod (approval)
-   - Notification hooks for deployment status
+### Data Ingestion Layer
+- Kinesis Data Streams for real-time sensor data ingestion
+- Support for 100,000 events/second throughput
+- Multi-shard configuration for horizontal scaling
 
-3. **Environment Configuration**
-   - Support for environment-specific parameters
-   - Integration with GitHub Actions contexts
-   - Encrypted secrets management
-   - Cross-account role assumptions for production
+### Processing Layer
+- ECS Fargate for containerized data processing
+- Auto-scaling based on Kinesis shard metrics
+- Integration with SecretsManager for secure credential management
 
-### Technical Requirements
+### Storage Layer
+- RDS Aurora PostgreSQL for operational data storage
+- Multi-AZ deployment for high availability
+- Automated backups with 7-year retention for compliance
+- Encryption at rest using KMS
 
-- All infrastructure defined using **CDKTF with TypeScript**
-- Deploy to **us-east-1** region
-- Resource names must include **environmentSuffix** for uniqueness
-- Follow naming convention: `{resource-type}-{environmentSuffix}`
-- All resources must be destroyable (no Retain removal policies)
-- Use proper CDKTF imports from `@cdktf/provider-aws`
-- Support environment parameters from CI/CD pipeline
-- Include IAM roles for cross-account deployments
-- Proper error handling and logging throughout
+### Caching Layer
+- ElastiCache Redis for real-time analytics
+- Multi-AZ deployment with automatic failover
+- Integration with ECS Fargate processing layer
 
-### Deployment Requirements (CRITICAL)
+### Shared Storage
+- EFS for shared file storage across ECS tasks
+- Multi-AZ deployment
+- Encryption at rest and in transit
 
-- **environmentSuffix Requirement**: ALL named resources must include the environmentSuffix parameter to ensure uniqueness across environments
-- **Destroyability**: All resources must be fully destroyable. Do NOT use any Retain or Snapshot removal policies
-- **Multi-Environment Support**: Infrastructure must work across dev, staging, and prod environments with different configurations
-- **CI/CD Compatible**: Resources must support automated deployment through GitHub Actions
-- **Region Specific**: All resources deployed to us-east-1
+### API Layer
+- API Gateway for external integrations
+- REST API endpoints for data access
+- Integration with ECS Fargate backend
 
-### Constraints
+### Security
+- SecretsManager for secure credential storage
+- End-to-end encryption for data in transit and at rest
+- KMS keys for encryption
+- Security groups and network ACLs
+- IAM roles with least privilege access
 
-- Student data must be encrypted at rest and in transit
-- Authentication must support MFA for administrative access
-- Logs must be retained for minimum 30 days for compliance
-- API endpoints must use HTTPS only
-- Content delivery must use signed URLs for premium content
-- Infrastructure must support automated testing and validation
-- All IAM roles must follow principle of least privilege
-- CloudWatch metrics must be exported for compliance reporting
+## Deployment Strategy
+
+### Blue-Green Deployment Support
+- Infrastructure must support blue-green deployments
+- Zero-downtime updates capability
+- Separate environment configurations
+
+### Monitoring and Observability
+- CloudWatch metrics for all services
+- CloudWatch alarms for critical thresholds
+- CloudWatch Logs for application and infrastructure logs
+- X-Ray tracing for distributed request tracking
 
 ## Success Criteria
+1. Infrastructure deploys successfully in us-east-1
+2. All resources properly named with environmentSuffix
+3. Data pipeline handles 100,000 events/second
+4. Processing latency under 500ms
+5. Multi-AZ high availability configuration
+6. 7-year data retention for compliance
+7. End-to-end encryption implemented
+8. Blue-green deployment capability
+9. All resources fully destroyable
+10. Comprehensive monitoring and alerting
 
-- **Functionality**: Complete educational platform infrastructure with content delivery, user management, and progress tracking
-- **Performance**: CloudFront provides low-latency content delivery globally
-- **Reliability**: DynamoDB point-in-time recovery, Lambda retry policies
-- **Security**: Encryption at rest/transit, Cognito authentication, secure API access
-- **Resource Naming**: All resources include environmentSuffix parameter
-- **Code Quality**: TypeScript with proper types, comprehensive error handling, well-documented
-- **CI/CD Integration**: Infrastructure deploys successfully through multi-stage pipeline with approval gates
-- **Compliance**: Logging, encryption, and data retention meet educational compliance requirements
+## Category
+CI/CD Pipeline Integration - CI/CD Pipeline
 
-## What to deliver
-
-- Complete CDKTF TypeScript implementation in lib/
-- S3 buckets with proper bucket policies and encryption
-- CloudFront distribution with Origin Access Identity
-- DynamoDB tables with encryption and backup enabled
-- Cognito User Pool with proper password policies
-- Lambda functions with execution roles
-- API Gateway with Lambda integration
-- CloudWatch log groups and alarms
-- SNS topics for notifications
-- IAM roles for CI/CD cross-account access
-- Support for environment-specific configuration
-- Unit tests for all components
-- Documentation and deployment instructions
+## Complexity
+Hard

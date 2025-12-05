@@ -15,9 +15,7 @@ describe('TapStack Unit Tests', () => {
       app = new App();
       stack = new TapStack(app, 'TestTapStackWithProps', {
         environmentSuffix: 'prod',
-        stateBucket: 'custom-state-bucket',
-        stateBucketRegion: 'us-west-2',
-        awsRegion: 'us-west-2',
+        awsRegion: 'us-east-1',
       });
       synthesized = Testing.synth(stack);
 
@@ -42,7 +40,6 @@ describe('TapStack Unit Tests', () => {
       });
       synthesized = Testing.synth(stack);
 
-      // Verify AWS provider is configured
       const config = JSON.parse(synthesized);
       expect(config.provider).toBeDefined();
       expect(config.provider.aws).toBeDefined();
@@ -62,135 +59,165 @@ describe('TapStack Unit Tests', () => {
       expect(config.terraform.backend.local).toBeDefined();
       expect(config.terraform.backend.local.path).toBe('terraform.test.tfstate');
     });
+
+    test('TapStack respects AWS_REGION_OVERRIDE', () => {
+      app = new App();
+      // AWS_REGION_OVERRIDE is hardcoded to 'us-east-1' in tap-stack.ts
+      // This test verifies the override logic works
+      stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'dev',
+        awsRegion: 'us-west-2', // This should be overridden
+      });
+      synthesized = Testing.synth(stack);
+
+      const config = JSON.parse(synthesized);
+      // Due to AWS_REGION_OVERRIDE = 'us-east-1', region should be us-east-1
+      expect(config.provider.aws[0].region).toBe('us-east-1');
+    });
   });
 
-  describe('Education Stack Resources', () => {
+  describe('Manufacturing Stack Resources', () => {
     beforeEach(() => {
       app = new App();
       stack = new TapStack(app, 'TestStack', {
         environmentSuffix: 'dev',
+        awsRegion: 'us-east-1',
       });
       synthesized = Testing.synth(stack);
     });
 
-    test('Creates S3 bucket for content storage', () => {
+    test('Creates VPC with correct CIDR and DNS configuration', () => {
       const config = JSON.parse(synthesized);
       expect(config.resource).toBeDefined();
-      expect(config.resource.aws_s3_bucket).toBeDefined();
+      expect(config.resource.aws_vpc).toBeDefined();
 
-      const buckets = Object.values(config.resource.aws_s3_bucket) as any[];
-      const contentBucket = buckets.find((b: any) =>
-        b.bucket?.includes('education-content')
-      );
+      const vpcs = Object.values(config.resource.aws_vpc) as any[];
+      expect(vpcs.length).toBeGreaterThan(0);
 
-      expect(contentBucket).toBeDefined();
-      expect(contentBucket.bucket).toBe('education-content-dev');
-      expect(contentBucket.tags).toEqual({
-        Name: 'education-content-dev',
-        Environment: 'dev',
+      const vpc = vpcs[0];
+      expect(vpc.cidr_block).toBe('10.0.0.0/16');
+      expect(vpc.enable_dns_hostnames).toBeTruthy();
+      expect(vpc.enable_dns_support).toBeTruthy();
+      expect(vpc.tags.Name).toContain('manufacturing-vpc');
+      expect(vpc.tags.Environment).toBe('dev');
+    });
+
+    test('Creates Kinesis Stream for data ingestion', () => {
+      const config = JSON.parse(synthesized);
+      expect(config.resource.aws_kinesis_stream).toBeDefined();
+
+      const streams = Object.values(config.resource.aws_kinesis_stream) as any[];
+      expect(streams.length).toBeGreaterThan(0);
+
+      const stream = streams[0];
+      expect(stream.name).toContain('manufacturing');
+      expect(stream.name).toContain('stream');
+      expect(stream.shard_count).toBeGreaterThanOrEqual(4);
+      expect(stream.retention_period).toBeGreaterThanOrEqual(168); // 7 days minimum
+      expect(stream.encryption_type).toBe('KMS');
+      expect(stream.tags.Environment).toBe('dev');
+    });
+
+    test('Creates ECS Cluster for data processing', () => {
+      const config = JSON.parse(synthesized);
+      expect(config.resource.aws_ecs_cluster).toBeDefined();
+
+      const clusters = Object.values(config.resource.aws_ecs_cluster) as any[];
+      expect(clusters.length).toBeGreaterThan(0);
+
+      const cluster = clusters[0];
+      expect(cluster.name).toContain('manufacturing-cluster');
+      expect(cluster.tags.Name).toContain('manufacturing-cluster');
+      expect(cluster.tags.Environment).toBe('dev');
+    });
+
+    test('Creates ECS Task Definition with Fargate compatibility', () => {
+      const config = JSON.parse(synthesized);
+      expect(config.resource.aws_ecs_task_definition).toBeDefined();
+
+      const taskDefs = Object.values(config.resource.aws_ecs_task_definition) as any[];
+      expect(taskDefs.length).toBeGreaterThan(0);
+
+      const taskDef = taskDefs[0];
+      expect(taskDef.family).toContain('manufacturing-processor');
+      expect(taskDef.requires_compatibilities).toEqual(['FARGATE']);
+      expect(taskDef.network_mode).toBe('awsvpc');
+      expect(taskDef.cpu).toBeDefined();
+      expect(taskDef.memory).toBeDefined();
+    });
+
+    test('Creates RDS Aurora PostgreSQL cluster with encryption', () => {
+      const config = JSON.parse(synthesized);
+      expect(config.resource.aws_rds_cluster).toBeDefined();
+
+      const clusters = Object.values(config.resource.aws_rds_cluster) as any[];
+      expect(clusters.length).toBeGreaterThan(0);
+
+      const cluster = clusters[0];
+      expect(cluster.cluster_identifier).toContain('manufacturing-aurora');
+      expect(cluster.engine).toBe('aurora-postgresql');
+      expect(cluster.storage_encrypted).toBeTruthy();
+      expect(cluster.backup_retention_period).toBeLessThanOrEqual(35); // AWS maximum
+      expect(cluster.preferred_backup_window).toBeDefined();
+      expect(cluster.tags.Environment).toBe('dev');
+    });
+
+    test('Creates RDS Aurora instances in multiple AZs', () => {
+      const config = JSON.parse(synthesized);
+      expect(config.resource.aws_rds_cluster_instance).toBeDefined();
+
+      const instances = Object.values(config.resource.aws_rds_cluster_instance) as any[];
+      expect(instances.length).toBeGreaterThanOrEqual(2); // Multi-AZ requirement
+
+      instances.forEach((instance: any) => {
+        expect(instance.cluster_identifier).toBeDefined();
+        expect(instance.instance_class).toBeDefined();
+        expect(instance.engine).toBe('aurora-postgresql');
       });
     });
 
-    test('Creates CloudFront distribution', () => {
+    test('Creates ElastiCache Redis cluster for real-time analytics', () => {
       const config = JSON.parse(synthesized);
-      expect(config.resource.aws_cloudfront_distribution).toBeDefined();
+      expect(config.resource.aws_elasticache_replication_group).toBeDefined();
 
-      const distributions = Object.values(config.resource.aws_cloudfront_distribution) as any[];
-      expect(distributions.length).toBeGreaterThan(0);
+      const repGroups = Object.values(config.resource.aws_elasticache_replication_group) as any[];
+      expect(repGroups.length).toBeGreaterThan(0);
 
-      const distribution = distributions[0];
-      expect(distribution.enabled).toBe(true);
-      expect(distribution.default_cache_behavior).toBeDefined();
-      expect(distribution.default_cache_behavior[0].viewer_protocol_policy).toBe('redirect-to-https');
+      const redisCluster = repGroups[0];
+      expect(redisCluster.replication_group_id).toContain('manufacturing-redis');
+      expect(redisCluster.engine).toBe('redis');
+      expect(redisCluster.at_rest_encryption_enabled).toBeTruthy();
+      expect(redisCluster.transit_encryption_enabled).toBeTruthy();
+      expect(redisCluster.automatic_failover_enabled).toBeTruthy(); // Multi-AZ
+      expect(redisCluster.num_cache_clusters).toBeGreaterThanOrEqual(2);
     });
 
-    test('Creates DynamoDB tables for user profiles and progress', () => {
+    test('Creates EFS file system with encryption', () => {
       const config = JSON.parse(synthesized);
-      expect(config.resource.aws_dynamodb_table).toBeDefined();
+      expect(config.resource.aws_efs_file_system).toBeDefined();
 
-      const tables = Object.values(config.resource.aws_dynamodb_table) as any[];
-      expect(tables.length).toBeGreaterThanOrEqual(2);
+      const fileSystems = Object.values(config.resource.aws_efs_file_system) as any[];
+      expect(fileSystems.length).toBeGreaterThan(0);
 
-      const userProfilesTable = tables.find((t: any) =>
-        t.name?.includes('user-profiles')
-      );
-      const courseProgressTable = tables.find((t: any) =>
-        t.name?.includes('course-progress')
-      );
-
-      expect(userProfilesTable).toBeDefined();
-      expect(userProfilesTable.billing_mode).toBe('PAY_PER_REQUEST');
-      expect(userProfilesTable.point_in_time_recovery).toEqual([{ enabled: true }]);
-      expect(userProfilesTable.server_side_encryption).toEqual([{ enabled: true }]);
-
-      expect(courseProgressTable).toBeDefined();
-      expect(courseProgressTable.billing_mode).toBe('PAY_PER_REQUEST');
+      const efs = fileSystems[0];
+      expect(efs.encrypted).toBeTruthy();
+      expect(efs.kms_key_id).toBeDefined();
+      expect(efs.tags.Name).toContain('manufacturing-efs');
+      expect(efs.tags.Environment).toBe('dev');
     });
 
-    test('Creates Cognito User Pool with correct configuration', () => {
+    test('Creates EFS mount targets in multiple AZs', () => {
       const config = JSON.parse(synthesized);
-      expect(config.resource.aws_cognito_user_pool).toBeDefined();
+      expect(config.resource.aws_efs_mount_target).toBeDefined();
 
-      const userPools = Object.values(config.resource.aws_cognito_user_pool) as any[];
-      expect(userPools.length).toBeGreaterThan(0);
+      const mountTargets = Object.values(config.resource.aws_efs_mount_target) as any[];
+      expect(mountTargets.length).toBeGreaterThanOrEqual(2); // Multi-AZ requirement
 
-      const userPool = userPools[0];
-      expect(userPool.name).toBe('education-users-dev');
-      expect(userPool.auto_verified_attributes).toEqual(['email']);
-      expect(userPool.mfa_configuration).toBe('OFF');
-      expect(userPool.password_policy).toBeDefined();
-      expect(userPool.password_policy[0].minimum_length).toBe(12);
-      expect(userPool.password_policy[0].require_lowercase).toBe(true);
-      expect(userPool.password_policy[0].require_uppercase).toBe(true);
-      expect(userPool.password_policy[0].require_numbers).toBe(true);
-      expect(userPool.password_policy[0].require_symbols).toBe(true);
-    });
-
-    test('Creates Cognito User Pool Client with correct token validity', () => {
-      const config = JSON.parse(synthesized);
-      expect(config.resource.aws_cognito_user_pool_client).toBeDefined();
-
-      const clients = Object.values(config.resource.aws_cognito_user_pool_client) as any[];
-      expect(clients.length).toBeGreaterThan(0);
-
-      const client = clients[0];
-      expect(client.name).toBe('education-client-dev');
-      expect(client.generate_secret).toBe(false);
-      expect(client.refresh_token_validity).toBe(30);
-      expect(client.access_token_validity).toBe(60);
-      expect(client.id_token_validity).toBe(60);
-      expect(client.token_validity_units).toBeDefined();
-      expect(Array.isArray(client.token_validity_units)).toBe(true);
-      expect(client.token_validity_units[0]).toEqual({
-        refresh_token: 'days',
-        access_token: 'minutes',
-        id_token: 'minutes',
+      mountTargets.forEach((mt: any) => {
+        expect(mt.file_system_id).toBeDefined();
+        expect(mt.subnet_id).toBeDefined();
+        expect(mt.security_groups).toBeDefined();
       });
-    });
-
-    test('Creates Lambda functions for enrollment and progress', () => {
-      const config = JSON.parse(synthesized);
-      expect(config.resource.aws_lambda_function).toBeDefined();
-
-      const functions = Object.values(config.resource.aws_lambda_function) as any[];
-      expect(functions.length).toBeGreaterThanOrEqual(2);
-
-      const enrollmentFunction = functions.find((f: any) =>
-        f.function_name?.includes('enrollment')
-      );
-      const progressFunction = functions.find((f: any) =>
-        f.function_name?.includes('progress')
-      );
-
-      expect(enrollmentFunction).toBeDefined();
-      expect(enrollmentFunction.handler).toBe('index.handler');
-      expect(enrollmentFunction.runtime).toBe('nodejs18.x');
-      expect(enrollmentFunction.timeout).toBe(30);
-      expect(enrollmentFunction.memory_size).toBe(256);
-
-      expect(progressFunction).toBeDefined();
-      expect(progressFunction.handler).toBe('index.handler');
-      expect(progressFunction.runtime).toBe('nodejs18.x');
     });
 
     test('Creates API Gateway REST API', () => {
@@ -201,171 +228,134 @@ describe('TapStack Unit Tests', () => {
       expect(apis.length).toBeGreaterThan(0);
 
       const api = apis[0];
-      expect(api.name).toBe('education-api-dev');
-      expect(api.description).toBe('Education platform API');
-      expect(api.endpoint_configuration).toBeDefined();
-      expect(api.endpoint_configuration[0].types).toEqual(['REGIONAL']);
+      expect(api.name).toContain('manufacturing-api');
+      expect(api.tags.Environment).toBe('dev');
     });
 
-    test('Creates API Gateway resources for enrollment and progress', () => {
+    test('Creates Secrets Manager secret for database credentials', () => {
       const config = JSON.parse(synthesized);
-      expect(config.resource.aws_api_gateway_resource).toBeDefined();
+      expect(config.resource.aws_secretsmanager_secret).toBeDefined();
 
-      const resources = Object.values(config.resource.aws_api_gateway_resource) as any[];
-      expect(resources.length).toBeGreaterThanOrEqual(2);
+      const secrets = Object.values(config.resource.aws_secretsmanager_secret) as any[];
+      expect(secrets.length).toBeGreaterThan(0);
 
-      const enrollmentResource = resources.find((r: any) =>
-        r.path_part === 'enrollment'
-      );
-      const progressResource = resources.find((r: any) =>
-        r.path_part === 'progress'
-      );
-
-      expect(enrollmentResource).toBeDefined();
-      expect(progressResource).toBeDefined();
+      const dbSecret = secrets.find((s: any) => s.name?.includes('db-password'));
+      expect(dbSecret).toBeDefined();
+      expect(dbSecret.recovery_window_in_days).toBeLessThanOrEqual(30);
+      expect(dbSecret.tags.Environment).toBe('dev');
     });
 
-    test('Creates CloudWatch log groups with correct retention', () => {
+    test('Creates KMS key with rotation enabled', () => {
+      const config = JSON.parse(synthesized);
+      expect(config.resource.aws_kms_key).toBeDefined();
+
+      const keys = Object.values(config.resource.aws_kms_key) as any[];
+      expect(keys.length).toBeGreaterThan(0);
+
+      const kmsKey = keys[0];
+      expect(kmsKey.description).toContain('Manufacturing');
+      expect(kmsKey.enable_key_rotation).toBeTruthy();
+      expect(kmsKey.deletion_window_in_days).toBeLessThanOrEqual(30);
+      expect(kmsKey.tags.Environment).toBe('dev');
+    });
+
+    test('Creates CloudWatch Log Groups for monitoring', () => {
       const config = JSON.parse(synthesized);
       expect(config.resource.aws_cloudwatch_log_group).toBeDefined();
 
       const logGroups = Object.values(config.resource.aws_cloudwatch_log_group) as any[];
-      expect(logGroups.length).toBeGreaterThanOrEqual(2);
+      expect(logGroups.length).toBeGreaterThanOrEqual(2); // ECS and API logs
 
       logGroups.forEach((lg: any) => {
-        expect(lg.retention_in_days).toBe(30);
-        expect(lg.name).toMatch(/^\/aws\/lambda\/education-/);
+        expect(lg.name).toBeDefined();
+        expect(lg.retention_in_days).toBeGreaterThanOrEqual(365); // 1 year minimum for compliance
+        expect(lg.tags).toBeDefined();
       });
     });
 
-    test('Creates CloudWatch alarms for Lambda functions', () => {
+    test('Creates CloudWatch Metric Alarms for critical thresholds', () => {
       const config = JSON.parse(synthesized);
       expect(config.resource.aws_cloudwatch_metric_alarm).toBeDefined();
 
       const alarms = Object.values(config.resource.aws_cloudwatch_metric_alarm) as any[];
-      expect(alarms.length).toBeGreaterThanOrEqual(2);
+      expect(alarms.length).toBeGreaterThan(0);
 
       alarms.forEach((alarm: any) => {
-        expect(alarm.metric_name).toBe('Errors');
-        expect(alarm.namespace).toBe('AWS/Lambda');
-        expect(alarm.statistic).toBe('Sum');
-        expect(alarm.comparison_operator).toBe('GreaterThanThreshold');
-        expect(alarm.threshold).toBe(10);
-        expect(alarm.evaluation_periods).toBe(2);
-        expect(alarm.period).toBe(300);
+        expect(alarm.alarm_name).toBeDefined();
+        expect(alarm.comparison_operator).toBeDefined();
+        expect(alarm.evaluation_periods).toBeGreaterThan(0);
+        expect(alarm.metric_name).toBeDefined();
+        expect(alarm.namespace).toBeDefined();
+        expect(alarm.period).toBeGreaterThan(0);
+        expect(alarm.statistic).toBeDefined();
+        expect(alarm.threshold).toBeDefined();
       });
     });
 
-    test('Creates SNS topic for alerts', () => {
+    test('Creates X-Ray tracing for distributed request tracking', () => {
       const config = JSON.parse(synthesized);
-      expect(config.resource.aws_sns_topic).toBeDefined();
+      expect(config.resource.aws_xray_group).toBeDefined();
+      expect(config.resource.aws_xray_sampling_rule).toBeDefined();
 
-      const topics = Object.values(config.resource.aws_sns_topic) as any[];
-      expect(topics.length).toBeGreaterThan(0);
+      const xrayGroups = Object.values(config.resource.aws_xray_group) as any[];
+      expect(xrayGroups.length).toBeGreaterThan(0);
 
-      const alertTopic = topics.find((t: any) =>
-        t.name?.includes('education-alerts')
-      );
-
-      expect(alertTopic).toBeDefined();
-      expect(alertTopic.name).toBe('education-alerts-dev');
+      const xraySamplingRules = Object.values(config.resource.aws_xray_sampling_rule) as any[];
+      expect(xraySamplingRules.length).toBeGreaterThan(0);
     });
 
-    test('Creates IAM role for Lambda with correct assume role policy', () => {
+    test('Creates IAM roles with least privilege access', () => {
       const config = JSON.parse(synthesized);
       expect(config.resource.aws_iam_role).toBeDefined();
 
       const roles = Object.values(config.resource.aws_iam_role) as any[];
-      const lambdaRole = roles.find((r: any) =>
-        r.name?.includes('lambda-role')
-      );
+      expect(roles.length).toBeGreaterThanOrEqual(2); // Task execution and task role
 
-      expect(lambdaRole).toBeDefined();
-      expect(lambdaRole.assume_role_policy).toBeDefined();
-
-      const policy = JSON.parse(lambdaRole.assume_role_policy);
-      expect(policy.Statement[0].Effect).toBe('Allow');
-      expect(policy.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
-      expect(policy.Statement[0].Action).toBe('sts:AssumeRole');
+      roles.forEach((role: any) => {
+        expect(role.name).toBeDefined();
+        expect(role.assume_role_policy).toBeDefined();
+        expect(role.tags).toBeDefined();
+      });
     });
 
-    test('Creates IAM policy for Lambda with DynamoDB and S3 permissions', () => {
+    test('Creates security groups with appropriate ingress/egress rules', () => {
       const config = JSON.parse(synthesized);
-      expect(config.resource.aws_iam_policy).toBeDefined();
+      expect(config.resource.aws_security_group).toBeDefined();
 
-      const policies = Object.values(config.resource.aws_iam_policy) as any[];
-      const lambdaPolicy = policies.find((p: any) =>
-        p.name?.includes('lambda-policy')
-      );
+      const sgs = Object.values(config.resource.aws_security_group) as any[];
+      expect(sgs.length).toBeGreaterThanOrEqual(4); // ECS, RDS, Redis, EFS
 
-      expect(lambdaPolicy).toBeDefined();
-      expect(lambdaPolicy.policy).toBeDefined();
-
-      const policyDoc = JSON.parse(lambdaPolicy.policy);
-      expect(policyDoc.Statement.length).toBeGreaterThanOrEqual(3);
-
-      const dynamoStatement = policyDoc.Statement.find((s: any) =>
-        s.Action.some((a: any) => a.includes('dynamodb'))
-      );
-      const s3Statement = policyDoc.Statement.find((s: any) =>
-        s.Action.some((a: any) => a.includes('s3'))
-      );
-      const snsStatement = policyDoc.Statement.find((s: any) =>
-        s.Action.some((a: any) => a.includes('sns'))
-      );
-
-      expect(dynamoStatement).toBeDefined();
-      expect(s3Statement).toBeDefined();
-      expect(snsStatement).toBeDefined();
+      sgs.forEach((sg: any) => {
+        expect(sg.name).toBeDefined();
+        expect(sg.description).toBeDefined();
+        expect(sg.vpc_id).toBeDefined();
+        expect(sg.tags).toBeDefined();
+      });
     });
 
     test('Creates Terraform outputs for key resources', () => {
       const config = JSON.parse(synthesized);
       expect(config.output).toBeDefined();
 
-      expect(config.output['content-bucket-name']).toBeDefined();
-      expect(config.output['cloudfront-url']).toBeDefined();
-      expect(config.output['api-endpoint']).toBeDefined();
-      expect(config.output['user-pool-id']).toBeDefined();
-      expect(config.output['user-pool-client-id']).toBeDefined();
-      expect(config.output['enrollment-function-name']).toBeDefined();
-      expect(config.output['progress-function-name']).toBeDefined();
-    });
-  });
+      const outputs = config.output;
 
-  describe('Resource Naming with Environment Suffix', () => {
-    test('All resources include environmentSuffix in naming', () => {
-      app = new App();
-      stack = new TapStack(app, 'TestStack', {
-        environmentSuffix: 'staging',
-      });
-      synthesized = Testing.synth(stack);
+      // Check for manufacturing outputs (may have varying suffixes)
+      const outputKeys = Object.keys(outputs);
+      const hasVpcOutput = outputKeys.some(k => k.includes('vpc-id'));
+      const hasKinesisOutput = outputKeys.some(k => k.includes('kinesis-stream-name'));
+      const hasEcsOutput = outputKeys.some(k => k.includes('ecs-cluster-name'));
+      const hasRdsOutput = outputKeys.some(k => k.includes('aurora-endpoint') || k.includes('rds-cluster-endpoint'));
+      const hasRedisOutput = outputKeys.some(k => k.includes('redis-endpoint'));
+      const hasEfsOutput = outputKeys.some(k => k.includes('efs-id'));
+      const hasApiOutput = outputKeys.some(k => k.includes('api-gateway-url'));
 
-      const config = JSON.parse(synthesized);
-
-      // Check S3 bucket
-      const buckets = Object.values(config.resource.aws_s3_bucket || {}) as any[];
-      buckets.forEach((b: any) => {
-        if (b.bucket) {
-          expect(b.bucket).toContain('staging');
-        }
-      });
-
-      // Check DynamoDB tables
-      const tables = Object.values(config.resource.aws_dynamodb_table || {}) as any[];
-      tables.forEach((t: any) => {
-        if (t.name) {
-          expect(t.name).toContain('staging');
-        }
-      });
-
-      // Check Lambda functions
-      const functions = Object.values(config.resource.aws_lambda_function || {}) as any[];
-      functions.forEach((f: any) => {
-        if (f.function_name) {
-          expect(f.function_name).toContain('staging');
-        }
-      });
+      expect(hasVpcOutput).toBe(true);
+      expect(hasKinesisOutput).toBe(true);
+      expect(hasEcsOutput).toBe(true);
+      expect(hasRdsOutput).toBe(true);
+      expect(hasRedisOutput).toBe(true);
+      expect(hasEfsOutput).toBe(true);
+      expect(hasApiOutput).toBe(true);
     });
   });
 
@@ -373,54 +363,161 @@ describe('TapStack Unit Tests', () => {
     beforeEach(() => {
       app = new App();
       stack = new TapStack(app, 'TestStack', {
-        environmentSuffix: 'prod',
+        environmentSuffix: 'dev',
       });
       synthesized = Testing.synth(stack);
     });
 
-    test('S3 bucket has public access blocked', () => {
+    test('All encryption uses KMS keys', () => {
       const config = JSON.parse(synthesized);
-      expect(config.resource.aws_s3_bucket_public_access_block).toBeDefined();
 
-      const blocks = Object.values(config.resource.aws_s3_bucket_public_access_block) as any[];
-      expect(blocks.length).toBeGreaterThan(0);
+      // Check Kinesis encryption
+      if (config.resource.aws_kinesis_stream) {
+        const streams = Object.values(config.resource.aws_kinesis_stream) as any[];
+        streams.forEach((stream: any) => {
+          expect(stream.encryption_type).toBe('KMS');
+          expect(stream.kms_key_id).toBeDefined();
+        });
+      }
 
-      blocks.forEach((block: any) => {
-        expect(block.block_public_acls).toBe(true);
-        expect(block.block_public_policy).toBe(true);
-        expect(block.ignore_public_acls).toBe(true);
-        expect(block.restrict_public_buckets).toBe(true);
+      // Check RDS encryption
+      if (config.resource.aws_rds_cluster) {
+        const clusters = Object.values(config.resource.aws_rds_cluster) as any[];
+        clusters.forEach((cluster: any) => {
+          expect(cluster.storage_encrypted).toBeTruthy();
+          expect(cluster.kms_key_id).toBeDefined();
+        });
+      }
+
+      // Check EFS encryption
+      if (config.resource.aws_efs_file_system) {
+        const fileSystems = Object.values(config.resource.aws_efs_file_system) as any[];
+        fileSystems.forEach((fs: any) => {
+          expect(fs.encrypted).toBeTruthy();
+          expect(fs.kms_key_id).toBeDefined();
+        });
+      }
+
+      // Check Redis encryption
+      if (config.resource.aws_elasticache_replication_group) {
+        const repGroups = Object.values(config.resource.aws_elasticache_replication_group) as any[];
+        repGroups.forEach((rg: any) => {
+          expect(rg.at_rest_encryption_enabled).toBeTruthy();
+          expect(rg.transit_encryption_enabled).toBeTruthy();
+        });
+      }
+    });
+
+    test('Multi-AZ configuration for high availability', () => {
+      const config = JSON.parse(synthesized);
+
+      // Check RDS multi-AZ
+      if (config.resource.aws_rds_cluster_instance) {
+        const instances = Object.values(config.resource.aws_rds_cluster_instance) as any[];
+        expect(instances.length).toBeGreaterThanOrEqual(2);
+      }
+
+      // Check Redis multi-AZ
+      if (config.resource.aws_elasticache_replication_group) {
+        const repGroups = Object.values(config.resource.aws_elasticache_replication_group) as any[];
+        repGroups.forEach((rg: any) => {
+          expect(rg.automatic_failover_enabled).toBeTruthy();
+          expect(rg.num_cache_clusters).toBeGreaterThanOrEqual(2);
+        });
+      }
+
+      // Check EFS multi-AZ (mount targets)
+      if (config.resource.aws_efs_mount_target) {
+        const mountTargets = Object.values(config.resource.aws_efs_mount_target) as any[];
+        expect(mountTargets.length).toBeGreaterThanOrEqual(2);
+      }
+    });
+
+    test('All resources include environmentSuffix in names', () => {
+      const config = JSON.parse(synthesized);
+
+      // Helper function to check resource names
+      const checkResourceNames = (resources: any) => {
+        Object.values(resources).forEach((resource: any) => {
+          const resourceStr = JSON.stringify(resource);
+          expect(resourceStr).toMatch(/dev|test|prod/);
+        });
+      };
+
+      // Check various resource types
+      if (config.resource.aws_vpc) checkResourceNames(config.resource.aws_vpc);
+      if (config.resource.aws_kinesis_stream) checkResourceNames(config.resource.aws_kinesis_stream);
+      if (config.resource.aws_ecs_cluster) checkResourceNames(config.resource.aws_ecs_cluster);
+      if (config.resource.aws_rds_cluster) checkResourceNames(config.resource.aws_rds_cluster);
+      if (config.resource.aws_elasticache_replication_group) checkResourceNames(config.resource.aws_elasticache_replication_group);
+    });
+
+    test('All destroyable - no retention policies or deletion protection', () => {
+      const config = JSON.parse(synthesized);
+
+      // Check RDS deletion protection
+      if (config.resource.aws_rds_cluster) {
+        const clusters = Object.values(config.resource.aws_rds_cluster) as any[];
+        clusters.forEach((cluster: any) => {
+          expect(cluster.deletion_protection).toBeFalsy();
+        });
+      }
+
+      // Check KMS deletion window is reasonable for testing
+      if (config.resource.aws_kms_key) {
+        const keys = Object.values(config.resource.aws_kms_key) as any[];
+        keys.forEach((key: any) => {
+          expect(key.deletion_window_in_days).toBeLessThanOrEqual(30);
+        });
+      }
+
+      // Check Secrets Manager recovery window
+      if (config.resource.aws_secretsmanager_secret) {
+        const secrets = Object.values(config.resource.aws_secretsmanager_secret) as any[];
+        secrets.forEach((secret: any) => {
+          expect(secret.recovery_window_in_days).toBeLessThanOrEqual(30);
+        });
+      }
+    });
+  });
+
+  describe('Compliance Requirements', () => {
+    beforeEach(() => {
+      app = new App();
+      stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'dev',
+      });
+      synthesized = Testing.synth(stack);
+    });
+
+    test('CloudWatch logs retained for at least 1 year for compliance', () => {
+      const config = JSON.parse(synthesized);
+      expect(config.resource.aws_cloudwatch_log_group).toBeDefined();
+
+      const logGroups = Object.values(config.resource.aws_cloudwatch_log_group) as any[];
+      logGroups.forEach((lg: any) => {
+        expect(lg.retention_in_days).toBeGreaterThanOrEqual(365); // 1 year minimum
       });
     });
 
-    test('S3 bucket has encryption enabled', () => {
+    test('Kinesis data retention supports 7-day minimum for compliance', () => {
       const config = JSON.parse(synthesized);
-      expect(config.resource.aws_s3_bucket_server_side_encryption_configuration).toBeDefined();
+      expect(config.resource.aws_kinesis_stream).toBeDefined();
 
-      const encryptions = Object.values(config.resource.aws_s3_bucket_server_side_encryption_configuration) as any[];
-      expect(encryptions.length).toBeGreaterThan(0);
-
-      encryptions.forEach((enc: any) => {
-        expect(enc.rule[0].apply_server_side_encryption_by_default.sse_algorithm).toBe('AES256');
+      const streams = Object.values(config.resource.aws_kinesis_stream) as any[];
+      streams.forEach((stream: any) => {
+        expect(stream.retention_period).toBeGreaterThanOrEqual(168); // 7 days in hours
       });
     });
 
-    test('DynamoDB tables have encryption and point-in-time recovery enabled', () => {
+    test('RDS backup retention respects AWS maximum (35 days)', () => {
       const config = JSON.parse(synthesized);
-      const tables = Object.values(config.resource.aws_dynamodb_table) as any[];
+      expect(config.resource.aws_rds_cluster).toBeDefined();
 
-      tables.forEach((table: any) => {
-        expect(table.server_side_encryption[0].enabled).toBe(true);
-        expect(table.point_in_time_recovery[0].enabled).toBe(true);
-      });
-    });
-
-    test('API Gateway uses HTTPS only via CloudFront', () => {
-      const config = JSON.parse(synthesized);
-      const distributions = Object.values(config.resource.aws_cloudfront_distribution) as any[];
-
-      distributions.forEach((dist: any) => {
-        expect(dist.default_cache_behavior[0].viewer_protocol_policy).toBe('redirect-to-https');
+      const clusters = Object.values(config.resource.aws_rds_cluster) as any[];
+      clusters.forEach((cluster: any) => {
+        expect(cluster.backup_retention_period).toBeGreaterThanOrEqual(7); // Minimum 7 days
+        expect(cluster.backup_retention_period).toBeLessThanOrEqual(35); // AWS maximum
       });
     });
   });

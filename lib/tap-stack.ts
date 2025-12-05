@@ -5,7 +5,7 @@ import {
 import { LocalBackend, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
-import { EducationStack } from './education-stack';
+import { ManufacturingStack } from './manufacturing-stack';
 
 interface TapStackProps {
   environmentSuffix?: string;
@@ -25,11 +25,8 @@ export class TapStack extends TerraformStack {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
-    const awsRegion = AWS_REGION_OVERRIDE
-      ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-east-1';
-    const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
-    const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
+    // Use AWS_REGION_OVERRIDE if set, otherwise fall back to props or default
+    const awsRegion = AWS_REGION_OVERRIDE || props?.awsRegion || 'us-east-1';
     const defaultTags = props?.defaultTags || [];
 
     // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
@@ -44,7 +41,7 @@ export class TapStack extends TerraformStack {
       path: `terraform.${environmentSuffix}.tfstate`,
     });
 
-    new EducationStack(this, 'education', {
+    new ManufacturingStack(this, 'manufacturing', {
       environmentSuffix,
       region: awsRegion,
     });
