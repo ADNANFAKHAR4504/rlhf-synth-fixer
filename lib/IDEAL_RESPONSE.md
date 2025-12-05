@@ -127,14 +127,14 @@ pytest tests/ -v --cov=lib --cov-report=html
 
 ## Key Features
 
-✅ **Automated Failover**: Health checks trigger DNS failover within 30 seconds
-✅ **Data Consistency**: Lambda validates data before completing failover
-✅ **Multi-AZ**: 3 AZs per region for high availability
-✅ **Cost Optimization**: Mixed instance types and lifecycle policies
-✅ **Security**: VPC isolation, encryption, least-privilege IAM
-✅ **Compliance**: PCI DSS compatible with audit logging
-✅ **Monitoring**: Comprehensive CloudWatch alarms and dashboards
-✅ **Disaster Recovery**: RTO < 5 minutes, RPO < 1 minute
+- **Automated Failover**: Health checks trigger DNS failover within 30 seconds
+- **Data Consistency**: Lambda validates data before completing failover
+- **Multi-AZ**: 3 AZs per region for high availability
+- **Cost Optimization**: Mixed instance types and lifecycle policies
+- **Security**: VPC isolation, encryption, least-privilege IAM
+- **Compliance**: PCI DSS compatible with audit logging
+- **Monitoring**: Comprehensive CloudWatch alarms and dashboards
+- **Disaster Recovery**: RTO < 5 minutes, RPO < 1 minute
 
 ## Troubleshooting
 
