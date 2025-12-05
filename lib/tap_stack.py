@@ -137,7 +137,8 @@ class TapStack(TerraformStack):
             self.compute.primary_alb_full_arn,
             self.compute.secondary_alb_full_arn,
             primary_region,
-            secondary_region
+            secondary_region,
+            self.networking.primary_lambda_security_group_id
         )
 
         # Traffic management - Route 53 with failover

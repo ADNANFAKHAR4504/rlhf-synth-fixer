@@ -21,7 +21,8 @@ class FailoverOrchestrationConstruct(Construct):
         primary_alb_arn: str,
         secondary_alb_arn: str,
         primary_region: str,
-        secondary_region: str
+        secondary_region: str,
+        lambda_security_group_id: str
     ):
         super().__init__(scope, construct_id)
 
