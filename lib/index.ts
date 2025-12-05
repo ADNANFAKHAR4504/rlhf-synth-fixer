@@ -156,7 +156,7 @@ const complianceScanner = new aws.lambda.Function(
     timeout: 300,
     memorySize: 256,
     code: new pulumi.asset.AssetArchive({
-      '.': new pulumi.asset.FileArchive('lib/lambda'),
+      '.': new pulumi.asset.FileArchive('./lambda'),
     }),
     environment: {
       variables: {
