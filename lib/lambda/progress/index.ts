@@ -1,4 +1,8 @@
-import { DynamoDBClient, UpdateItemCommand } from '@aws-sdk/client-dynamodb';
+import {
+  DynamoDBClient,
+  UpdateItemCommand,
+  AttributeValue,
+} from '@aws-sdk/client-dynamodb';
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 
@@ -18,7 +22,10 @@ interface ProgressUpdateRequest {
 export const handler = async (
   event: APIGatewayProxyEvent
 ): Promise<APIGatewayProxyResult> => {
-  console.log('Progress update request received:', JSON.stringify(event, null, 2));
+  console.log(
+    'Progress update request received:',
+    JSON.stringify(event, null, 2)
+  );
 
   try {
     if (!event.body) {
@@ -30,7 +37,8 @@ export const handler = async (
 
     const request: ProgressUpdateRequest = JSON.parse(event.body);
 
-    const { userId, courseId, completionPercentage, lastCompletedModule } = request;
+    const { userId, courseId, completionPercentage, lastCompletedModule } =
+      request;
 
     if (!userId || !courseId || completionPercentage === undefined) {
       return {
@@ -54,7 +62,7 @@ export const handler = async (
       ? 'SET completionPercentage = :percentage, lastUpdated = :updated, lastCompletedModule = :module'
       : 'SET completionPercentage = :percentage, lastUpdated = :updated';
 
-    const expressionAttributeValues: any = {
+    const expressionAttributeValues: Record<string, AttributeValue> = {
       ':percentage': { N: completionPercentage.toString() },
       ':updated': { S: new Date().toISOString() },
     };
@@ -85,7 +93,9 @@ export const handler = async (
       );
     }
 
-    console.log(`Progress updated for user ${userId} in course ${courseId}: ${completionPercentage}%`);
+    console.log(
+      `Progress updated for user ${userId} in course ${courseId}: ${completionPercentage}%`
+    );
 
     return {
       statusCode: 200,

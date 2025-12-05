@@ -53,16 +53,20 @@ export class EducationStack extends Construct {
       restrictPublicBuckets: true,
     });
 
-    new S3BucketServerSideEncryptionConfigurationA(this, 'content-bucket-encryption', {
-      bucket: contentBucket.id,
-      rule: [
-        {
-          applyServerSideEncryptionByDefault: {
-            sseAlgorithm: 'AES256',
+    new S3BucketServerSideEncryptionConfigurationA(
+      this,
+      'content-bucket-encryption',
+      {
+        bucket: contentBucket.id,
+        rule: [
+          {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'AES256',
+            },
           },
-        },
-      ],
-    });
+        ],
+      }
+    );
 
     new S3BucketVersioningA(this, 'content-bucket-versioning', {
       bucket: contentBucket.id,
@@ -96,48 +100,52 @@ export class EducationStack extends Construct {
     });
 
     // CloudFront Distribution
-    const distribution = new CloudfrontDistribution(this, 'content-distribution', {
-      enabled: true,
-      comment: `Education content distribution ${environmentSuffix}`,
-      defaultRootObject: 'index.html',
-      origin: [
-        {
-          domainName: contentBucket.bucketRegionalDomainName,
-          originId: `S3-${contentBucket.id}`,
-          s3OriginConfig: {
-            originAccessIdentity: oai.cloudfrontAccessIdentityPath,
+    const distribution = new CloudfrontDistribution(
+      this,
+      'content-distribution',
+      {
+        enabled: true,
+        comment: `Education content distribution ${environmentSuffix}`,
+        defaultRootObject: 'index.html',
+        origin: [
+          {
+            domainName: contentBucket.bucketRegionalDomainName,
+            originId: `S3-${contentBucket.id}`,
+            s3OriginConfig: {
+              originAccessIdentity: oai.cloudfrontAccessIdentityPath,
+            },
+          },
+        ],
+        defaultCacheBehavior: {
+          allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
+          cachedMethods: ['GET', 'HEAD'],
+          targetOriginId: `S3-${contentBucket.id}`,
+          viewerProtocolPolicy: 'redirect-to-https',
+          forwardedValues: {
+            queryString: false,
+            cookies: {
+              forward: 'none',
+            },
+          },
+          minTtl: 0,
+          defaultTtl: 3600,
+          maxTtl: 86400,
+          compress: true,
+        },
+        restrictions: {
+          geoRestriction: {
+            restrictionType: 'none',
           },
         },
-      ],
-      defaultCacheBehavior: {
-        allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
-        cachedMethods: ['GET', 'HEAD'],
-        targetOriginId: `S3-${contentBucket.id}`,
-        viewerProtocolPolicy: 'redirect-to-https',
-        forwardedValues: {
-          queryString: false,
-          cookies: {
-            forward: 'none',
-          },
+        viewerCertificate: {
+          cloudfrontDefaultCertificate: true,
         },
-        minTtl: 0,
-        defaultTtl: 3600,
-        maxTtl: 86400,
-        compress: true,
-      },
-      restrictions: {
-        geoRestriction: {
-          restrictionType: 'none',
+        tags: {
+          Name: `education-distribution-${environmentSuffix}`,
+          Environment: environmentSuffix,
         },
-      },
-      viewerCertificate: {
-        cloudfrontDefaultCertificate: true,
-      },
-      tags: {
-        Name: `education-distribution-${environmentSuffix}`,
-        Environment: environmentSuffix,
-      },
-    });
+      }
+    );
 
     // DynamoDB Table for User Profiles
     const userProfilesTable = new DynamodbTable(this, 'user-profiles-table', {
@@ -174,44 +182,48 @@ export class EducationStack extends Construct {
     });
 
     // DynamoDB Table for Course Progress
-    const courseProgressTable = new DynamodbTable(this, 'course-progress-table', {
-      name: `education-course-progress-${environmentSuffix}`,
-      billingMode: 'PAY_PER_REQUEST',
-      hashKey: 'userId',
-      rangeKey: 'courseId',
-      attribute: [
-        {
-          name: 'userId',
-          type: 'S',
+    const courseProgressTable = new DynamodbTable(
+      this,
+      'course-progress-table',
+      {
+        name: `education-course-progress-${environmentSuffix}`,
+        billingMode: 'PAY_PER_REQUEST',
+        hashKey: 'userId',
+        rangeKey: 'courseId',
+        attribute: [
+          {
+            name: 'userId',
+            type: 'S',
+          },
+          {
+            name: 'courseId',
+            type: 'S',
+          },
+          {
+            name: 'completionPercentage',
+            type: 'N',
+          },
+        ],
+        globalSecondaryIndex: [
+          {
+            name: 'course-completion-index',
+            hashKey: 'courseId',
+            rangeKey: 'completionPercentage',
+            projectionType: 'ALL',
+          },
+        ],
+        pointInTimeRecovery: {
+          enabled: true,
         },
-        {
-          name: 'courseId',
-          type: 'S',
+        serverSideEncryption: {
+          enabled: true,
         },
-        {
-          name: 'completionPercentage',
-          type: 'N',
+        tags: {
+          Name: `education-course-progress-${environmentSuffix}`,
+          Environment: environmentSuffix,
         },
-      ],
-      globalSecondaryIndex: [
-        {
-          name: 'course-completion-index',
-          hashKey: 'courseId',
-          rangeKey: 'completionPercentage',
-          projectionType: 'ALL',
-        },
-      ],
-      pointInTimeRecovery: {
-        enabled: true,
-      },
-      serverSideEncryption: {
-        enabled: true,
-      },
-      tags: {
-        Name: `education-course-progress-${environmentSuffix}`,
-        Environment: environmentSuffix,
-      },
-    });
+      }
+    );
 
     // Cognito User Pool
     const userPool = new CognitoUserPool(this, 'user-pool', {
@@ -271,11 +283,13 @@ export class EducationStack extends Construct {
       refreshTokenValidity: 30,
       accessTokenValidity: 60,
       idTokenValidity: 60,
-      tokenValidityUnits: [{
-        refreshToken: 'days',
-        accessToken: 'minutes',
-        idToken: 'minutes',
-      }],
+      tokenValidityUnits: [
+        {
+          refreshToken: 'days',
+          accessToken: 'minutes',
+          idToken: 'minutes',
+        },
+      ],
     });
 
     // SNS Topic for Alerts
@@ -310,7 +324,8 @@ export class EducationStack extends Construct {
 
     new IamRolePolicyAttachment(this, 'lambda-basic-execution', {
       role: lambdaRole.name,
-      policyArn: 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+      policyArn:
+        'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
     });
 
     // Lambda Policy for DynamoDB and S3
@@ -355,23 +370,31 @@ export class EducationStack extends Construct {
     });
 
     // CloudWatch Log Groups for Lambda
-    const enrollmentLogGroup = new CloudwatchLogGroup(this, 'enrollment-log-group', {
-      name: `/aws/lambda/education-enrollment-${environmentSuffix}`,
-      retentionInDays: 30,
-      tags: {
-        Name: `education-enrollment-logs-${environmentSuffix}`,
-        Environment: environmentSuffix,
-      },
-    });
+    const enrollmentLogGroup = new CloudwatchLogGroup(
+      this,
+      'enrollment-log-group',
+      {
+        name: `/aws/lambda/education-enrollment-${environmentSuffix}`,
+        retentionInDays: 30,
+        tags: {
+          Name: `education-enrollment-logs-${environmentSuffix}`,
+          Environment: environmentSuffix,
+        },
+      }
+    );
 
-    const progressLogGroup = new CloudwatchLogGroup(this, 'progress-log-group', {
-      name: `/aws/lambda/education-progress-${environmentSuffix}`,
-      retentionInDays: 30,
-      tags: {
-        Name: `education-progress-logs-${environmentSuffix}`,
-        Environment: environmentSuffix,
-      },
-    });
+    const progressLogGroup = new CloudwatchLogGroup(
+      this,
+      'progress-log-group',
+      {
+        name: `/aws/lambda/education-progress-${environmentSuffix}`,
+        retentionInDays: 30,
+        tags: {
+          Name: `education-progress-logs-${environmentSuffix}`,
+          Environment: environmentSuffix,
+        },
+      }
+    );
 
     // Lambda Function - Course Enrollment
     const enrollmentFunction = new LambdaFunction(this, 'enrollment-function', {
@@ -435,11 +458,15 @@ export class EducationStack extends Construct {
     });
 
     // API Gateway Resources
-    const enrollmentResource = new ApiGatewayResource(this, 'enrollment-resource', {
-      restApiId: api.id,
-      parentId: api.rootResourceId,
-      pathPart: 'enrollment',
-    });
+    const enrollmentResource = new ApiGatewayResource(
+      this,
+      'enrollment-resource',
+      {
+        restApiId: api.id,
+        parentId: api.rootResourceId,
+        pathPart: 'enrollment',
+      }
+    );
 
     const progressResource = new ApiGatewayResource(this, 'progress-resource', {
       restApiId: api.id,
@@ -448,38 +475,54 @@ export class EducationStack extends Construct {
     });
 
     // API Gateway Methods and Integrations - Enrollment
-    const enrollmentPostMethod = new ApiGatewayMethod(this, 'enrollment-post-method', {
-      restApiId: api.id,
-      resourceId: enrollmentResource.id,
-      httpMethod: 'POST',
-      authorization: 'NONE',
-    });
+    const enrollmentPostMethod = new ApiGatewayMethod(
+      this,
+      'enrollment-post-method',
+      {
+        restApiId: api.id,
+        resourceId: enrollmentResource.id,
+        httpMethod: 'POST',
+        authorization: 'NONE',
+      }
+    );
 
-    const enrollmentIntegration = new ApiGatewayIntegration(this, 'enrollment-integration', {
-      restApiId: api.id,
-      resourceId: enrollmentResource.id,
-      httpMethod: enrollmentPostMethod.httpMethod,
-      integrationHttpMethod: 'POST',
-      type: 'AWS_PROXY',
-      uri: enrollmentFunction.invokeArn,
-    });
+    const enrollmentIntegration = new ApiGatewayIntegration(
+      this,
+      'enrollment-integration',
+      {
+        restApiId: api.id,
+        resourceId: enrollmentResource.id,
+        httpMethod: enrollmentPostMethod.httpMethod,
+        integrationHttpMethod: 'POST',
+        type: 'AWS_PROXY',
+        uri: enrollmentFunction.invokeArn,
+      }
+    );
 
     // API Gateway Methods and Integrations - Progress
-    const progressPostMethod = new ApiGatewayMethod(this, 'progress-post-method', {
-      restApiId: api.id,
-      resourceId: progressResource.id,
-      httpMethod: 'POST',
-      authorization: 'NONE',
-    });
+    const progressPostMethod = new ApiGatewayMethod(
+      this,
+      'progress-post-method',
+      {
+        restApiId: api.id,
+        resourceId: progressResource.id,
+        httpMethod: 'POST',
+        authorization: 'NONE',
+      }
+    );
 
-    const progressIntegration = new ApiGatewayIntegration(this, 'progress-integration', {
-      restApiId: api.id,
-      resourceId: progressResource.id,
-      httpMethod: progressPostMethod.httpMethod,
-      integrationHttpMethod: 'POST',
-      type: 'AWS_PROXY',
-      uri: progressFunction.invokeArn,
-    });
+    const progressIntegration = new ApiGatewayIntegration(
+      this,
+      'progress-integration',
+      {
+        restApiId: api.id,
+        resourceId: progressResource.id,
+        httpMethod: progressPostMethod.httpMethod,
+        integrationHttpMethod: 'POST',
+        type: 'AWS_PROXY',
+        uri: progressFunction.invokeArn,
+      }
+    );
 
     // Lambda Permissions for API Gateway
     new LambdaPermission(this, 'enrollment-api-permission', {
@@ -568,7 +611,8 @@ export class EducationStack extends Construct {
           {
             Effect: 'Allow',
             Principal: {
-              Federated: 'arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com',
+              Federated:
+                'arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com',
             },
             Action: 'sts:AssumeRoleWithWebIdentity',
             Condition: {
@@ -582,9 +626,7 @@ export class EducationStack extends Construct {
           },
         ],
       }),
-      managedPolicyArns: [
-        'arn:aws:iam::aws:policy/PowerUserAccess',
-      ],
+      managedPolicyArns: ['arn:aws:iam::aws:policy/PowerUserAccess'],
       tags: {
         Name: `education-cicd-deploy-${environmentSuffix}`,
         Environment: environmentSuffix,
@@ -615,6 +657,11 @@ export class EducationStack extends Construct {
     new TerraformOutput(this, 'user-pool-client-id', {
       value: userPoolClient.id,
       description: 'Cognito User Pool Client ID',
+    });
+
+    new TerraformOutput(this, 'cicd-role-arn', {
+      value: cicdRole.arn,
+      description: 'CI/CD deployment role ARN for cross-account access',
     });
 
     new TerraformOutput(this, 'enrollment-function-name', {

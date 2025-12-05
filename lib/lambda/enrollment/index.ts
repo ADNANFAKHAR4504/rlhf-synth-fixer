@@ -3,7 +3,8 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 
 const dynamodb = new DynamoDBClient({});
 
-const USER_PROFILES_TABLE = process.env.USER_PROFILES_TABLE!;
+// Reserved for future profile management features
+// const USER_PROFILES_TABLE = process.env.USER_PROFILES_TABLE!;
 const COURSE_PROGRESS_TABLE = process.env.COURSE_PROGRESS_TABLE!;
 
 interface EnrollmentRequest {

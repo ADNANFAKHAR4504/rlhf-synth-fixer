@@ -60,7 +60,9 @@ describe('TapStack Unit Tests', () => {
       expect(config.terraform).toBeDefined();
       expect(config.terraform.backend).toBeDefined();
       expect(config.terraform.backend.local).toBeDefined();
-      expect(config.terraform.backend.local.path).toBe('terraform.test.tfstate');
+      expect(config.terraform.backend.local.path).toBe(
+        'terraform.test.tfstate'
+      );
     });
   });
 
@@ -95,13 +97,17 @@ describe('TapStack Unit Tests', () => {
       const config = JSON.parse(synthesized);
       expect(config.resource.aws_cloudfront_distribution).toBeDefined();
 
-      const distributions = Object.values(config.resource.aws_cloudfront_distribution) as any[];
+      const distributions = Object.values(
+        config.resource.aws_cloudfront_distribution
+      ) as any[];
       expect(distributions.length).toBeGreaterThan(0);
 
       const distribution = distributions[0];
       expect(distribution.enabled).toBe(true);
       expect(distribution.default_cache_behavior).toBeDefined();
-      expect(distribution.default_cache_behavior[0].viewer_protocol_policy).toBe('redirect-to-https');
+      expect(
+        distribution.default_cache_behavior[0].viewer_protocol_policy
+      ).toBe('redirect-to-https');
     });
 
     test('Creates DynamoDB tables for user profiles and progress', () => {
@@ -120,8 +126,12 @@ describe('TapStack Unit Tests', () => {
 
       expect(userProfilesTable).toBeDefined();
       expect(userProfilesTable.billing_mode).toBe('PAY_PER_REQUEST');
-      expect(userProfilesTable.point_in_time_recovery).toEqual([{ enabled: true }]);
-      expect(userProfilesTable.server_side_encryption).toEqual([{ enabled: true }]);
+      expect(userProfilesTable.point_in_time_recovery).toEqual([
+        { enabled: true },
+      ]);
+      expect(userProfilesTable.server_side_encryption).toEqual([
+        { enabled: true },
+      ]);
 
       expect(courseProgressTable).toBeDefined();
       expect(courseProgressTable.billing_mode).toBe('PAY_PER_REQUEST');
@@ -131,7 +141,9 @@ describe('TapStack Unit Tests', () => {
       const config = JSON.parse(synthesized);
       expect(config.resource.aws_cognito_user_pool).toBeDefined();
 
-      const userPools = Object.values(config.resource.aws_cognito_user_pool) as any[];
+      const userPools = Object.values(
+        config.resource.aws_cognito_user_pool
+      ) as any[];
       expect(userPools.length).toBeGreaterThan(0);
 
       const userPool = userPools[0];
@@ -150,7 +162,9 @@ describe('TapStack Unit Tests', () => {
       const config = JSON.parse(synthesized);
       expect(config.resource.aws_cognito_user_pool_client).toBeDefined();
 
-      const clients = Object.values(config.resource.aws_cognito_user_pool_client) as any[];
+      const clients = Object.values(
+        config.resource.aws_cognito_user_pool_client
+      ) as any[];
       expect(clients.length).toBeGreaterThan(0);
 
       const client = clients[0];
@@ -172,7 +186,9 @@ describe('TapStack Unit Tests', () => {
       const config = JSON.parse(synthesized);
       expect(config.resource.aws_lambda_function).toBeDefined();
 
-      const functions = Object.values(config.resource.aws_lambda_function) as any[];
+      const functions = Object.values(
+        config.resource.aws_lambda_function
+      ) as any[];
       expect(functions.length).toBeGreaterThanOrEqual(2);
 
       const enrollmentFunction = functions.find((f: any) =>
@@ -197,7 +213,9 @@ describe('TapStack Unit Tests', () => {
       const config = JSON.parse(synthesized);
       expect(config.resource.aws_api_gateway_rest_api).toBeDefined();
 
-      const apis = Object.values(config.resource.aws_api_gateway_rest_api) as any[];
+      const apis = Object.values(
+        config.resource.aws_api_gateway_rest_api
+      ) as any[];
       expect(apis.length).toBeGreaterThan(0);
 
       const api = apis[0];
@@ -211,14 +229,16 @@ describe('TapStack Unit Tests', () => {
       const config = JSON.parse(synthesized);
       expect(config.resource.aws_api_gateway_resource).toBeDefined();
 
-      const resources = Object.values(config.resource.aws_api_gateway_resource) as any[];
+      const resources = Object.values(
+        config.resource.aws_api_gateway_resource
+      ) as any[];
       expect(resources.length).toBeGreaterThanOrEqual(2);
 
-      const enrollmentResource = resources.find((r: any) =>
-        r.path_part === 'enrollment'
+      const enrollmentResource = resources.find(
+        (r: any) => r.path_part === 'enrollment'
       );
-      const progressResource = resources.find((r: any) =>
-        r.path_part === 'progress'
+      const progressResource = resources.find(
+        (r: any) => r.path_part === 'progress'
       );
 
       expect(enrollmentResource).toBeDefined();
@@ -229,7 +249,9 @@ describe('TapStack Unit Tests', () => {
       const config = JSON.parse(synthesized);
       expect(config.resource.aws_cloudwatch_log_group).toBeDefined();
 
-      const logGroups = Object.values(config.resource.aws_cloudwatch_log_group) as any[];
+      const logGroups = Object.values(
+        config.resource.aws_cloudwatch_log_group
+      ) as any[];
       expect(logGroups.length).toBeGreaterThanOrEqual(2);
 
       logGroups.forEach((lg: any) => {
@@ -242,7 +264,9 @@ describe('TapStack Unit Tests', () => {
       const config = JSON.parse(synthesized);
       expect(config.resource.aws_cloudwatch_metric_alarm).toBeDefined();
 
-      const alarms = Object.values(config.resource.aws_cloudwatch_metric_alarm) as any[];
+      const alarms = Object.values(
+        config.resource.aws_cloudwatch_metric_alarm
+      ) as any[];
       expect(alarms.length).toBeGreaterThanOrEqual(2);
 
       alarms.forEach((alarm: any) => {
@@ -285,7 +309,9 @@ describe('TapStack Unit Tests', () => {
 
       const policy = JSON.parse(lambdaRole.assume_role_policy);
       expect(policy.Statement[0].Effect).toBe('Allow');
-      expect(policy.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
+      expect(policy.Statement[0].Principal.Service).toBe(
+        'lambda.amazonaws.com'
+      );
       expect(policy.Statement[0].Action).toBe('sts:AssumeRole');
     });
 
@@ -344,7 +370,9 @@ describe('TapStack Unit Tests', () => {
       const config = JSON.parse(synthesized);
 
       // Check S3 bucket
-      const buckets = Object.values(config.resource.aws_s3_bucket || {}) as any[];
+      const buckets = Object.values(
+        config.resource.aws_s3_bucket || {}
+      ) as any[];
       buckets.forEach((b: any) => {
         if (b.bucket) {
           expect(b.bucket).toContain('staging');
@@ -352,7 +380,9 @@ describe('TapStack Unit Tests', () => {
       });
 
       // Check DynamoDB tables
-      const tables = Object.values(config.resource.aws_dynamodb_table || {}) as any[];
+      const tables = Object.values(
+        config.resource.aws_dynamodb_table || {}
+      ) as any[];
       tables.forEach((t: any) => {
         if (t.name) {
           expect(t.name).toContain('staging');
@@ -360,7 +390,9 @@ describe('TapStack Unit Tests', () => {
       });
 
       // Check Lambda functions
-      const functions = Object.values(config.resource.aws_lambda_function || {}) as any[];
+      const functions = Object.values(
+        config.resource.aws_lambda_function || {}
+      ) as any[];
       functions.forEach((f: any) => {
         if (f.function_name) {
           expect(f.function_name).toContain('staging');
@@ -382,7 +414,9 @@ describe('TapStack Unit Tests', () => {
       const config = JSON.parse(synthesized);
       expect(config.resource.aws_s3_bucket_public_access_block).toBeDefined();
 
-      const blocks = Object.values(config.resource.aws_s3_bucket_public_access_block) as any[];
+      const blocks = Object.values(
+        config.resource.aws_s3_bucket_public_access_block
+      ) as any[];
       expect(blocks.length).toBeGreaterThan(0);
 
       blocks.forEach((block: any) => {
@@ -395,13 +429,19 @@ describe('TapStack Unit Tests', () => {
 
     test('S3 bucket has encryption enabled', () => {
       const config = JSON.parse(synthesized);
-      expect(config.resource.aws_s3_bucket_server_side_encryption_configuration).toBeDefined();
+      expect(
+        config.resource.aws_s3_bucket_server_side_encryption_configuration
+      ).toBeDefined();
 
-      const encryptions = Object.values(config.resource.aws_s3_bucket_server_side_encryption_configuration) as any[];
+      const encryptions = Object.values(
+        config.resource.aws_s3_bucket_server_side_encryption_configuration
+      ) as any[];
       expect(encryptions.length).toBeGreaterThan(0);
 
       encryptions.forEach((enc: any) => {
-        expect(enc.rule[0].apply_server_side_encryption_by_default.sse_algorithm).toBe('AES256');
+        expect(
+          enc.rule[0].apply_server_side_encryption_by_default.sse_algorithm
+        ).toBe('AES256');
       });
     });
 
@@ -417,10 +457,14 @@ describe('TapStack Unit Tests', () => {
 
     test('API Gateway uses HTTPS only via CloudFront', () => {
       const config = JSON.parse(synthesized);
-      const distributions = Object.values(config.resource.aws_cloudfront_distribution) as any[];
+      const distributions = Object.values(
+        config.resource.aws_cloudfront_distribution
+      ) as any[];
 
       distributions.forEach((dist: any) => {
-        expect(dist.default_cache_behavior[0].viewer_protocol_policy).toBe('redirect-to-https');
+        expect(dist.default_cache_behavior[0].viewer_protocol_policy).toBe(
+          'redirect-to-https'
+        );
       });
     });
   });
