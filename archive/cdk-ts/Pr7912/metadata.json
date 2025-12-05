@@ -19,10 +19,11 @@
     "SNS",
     "IAM"
   ],
-  "training_quality": 10,
+  "training_quality": 9,
   "author": "mayanksethi-turing",
   "coverage": {
     "lines": 100,
     "branches": 100
-  }
+  },
+  "dockerS3Location": ""
 }
