@@ -4,7 +4,7 @@ variable "environment_suffix" {
   description = "Unique suffix for resource names to prevent collisions"
   type        = string
 
-  default     = "dev"
+  default = "dev"
   validation {
     condition     = can(regex("^[a-z0-9-]+$", var.environment_suffix))
     error_message = "Environment suffix must contain only lowercase letters, numbers, and hyphens."
