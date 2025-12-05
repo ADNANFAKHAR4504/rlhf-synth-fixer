@@ -55,7 +55,10 @@ const stack = new TapStack(
 );
 
 // Export stack outputs for use in deployment and monitoring
-export const configRecorderName = stack.configRecorderName;
 export const bucketArn = stack.bucketArn;
 export const lambdaFunctionName = stack.lambdaFunctionName;
 export const snsTopicArn = stack.snsTopicArn;
+export const s3EncryptionRuleId = stack.s3EncryptionRuleId;
+export const ec2TaggingRuleId = stack.ec2TaggingRuleId;
+export const iamPasswordPolicyRuleId = stack.iamPasswordPolicyRuleId;
+export const complianceAlarmArn = stack.complianceAlarmArn;
