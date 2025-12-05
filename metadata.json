@@ -1,6 +1,6 @@
 {
-  "platform": "pulumi",
-  "language": "ts",
+  "platform": "analysis",
+  "language": "python",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "y4t4w0m6",
