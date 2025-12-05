@@ -1,6 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
-import { TapStack } from '../lib/tap-stack';
+import { TapStack } from '../lib/TapStack';
 import { ValidationRegistry } from '../lib/core/validation-registry';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test';

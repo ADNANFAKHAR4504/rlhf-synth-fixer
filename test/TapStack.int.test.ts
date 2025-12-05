@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { TapStack } from '../lib/tap-stack';
+import { TapStack } from '../lib/TapStack';
 import { ValidationRegistry } from '../lib/core/validation-registry';
 import * as fs from 'fs';
 

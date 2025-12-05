@@ -13,6 +13,7 @@
     "cdk": "cdk",
     "synth": "cdk synth",
     "cdk:synth": "cdk synth",
+    "cdk:deploy": "cdk deploy",
     "deploy": "cdk deploy",
     "destroy": "cdk destroy"
   },
