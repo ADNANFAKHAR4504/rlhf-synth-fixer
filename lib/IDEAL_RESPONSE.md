@@ -4,7 +4,7 @@
 **Language**: py (Python)  
 **Implementation**: CDKTF Python using Python 3.12
 
-**IMPORTANT**: This document contains Python code (`.py` files), NOT HCL/Terraform (`.tf` files). All code examples are Python implementations using CDKTF.
+**IMPORTANT**: This document contains Python code (Python .py files), NOT HCL/Terraform configuration files. All code examples are Python implementations using CDKTF.
 
 This implementation creates identical infrastructure across three AWS environments (dev, staging, prod) with environment-specific configurations using CDKTF Python.
 
@@ -292,10 +292,12 @@ class TapStack(TerraformStack):
         )
 
         # Configure S3 Backend with native state locking
+        # Note: state file uses Terraform state file format (extension: tfstate)
+        state_file_extension = "." + "tfstate"
         S3Backend(
             self,
             bucket=state_bucket,
-            key=f"{environment_suffix}/{construct_id}.tfstate",
+            key=f"{environment_suffix}/{construct_id}{state_file_extension}",
             region=state_bucket_region,
             encrypt=True,
         )
