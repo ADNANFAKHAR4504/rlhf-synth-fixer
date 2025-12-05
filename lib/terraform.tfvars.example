@@ -1,0 +1,39 @@
+# Example terraform.tfvars file
+
+environment_suffix = "prod"
+aws_region         = "us-east-1"
+
+microservices = [
+  "auth-service",
+  "payment-service",
+  "order-service",
+  "inventory-service",
+  "notification-service"
+]
+
+ecs_cluster_name = "fintech-ecs-cluster"
+
+alb_endpoints = {
+  "auth-service"         = "https://auth.example.com/health"
+  "payment-service"      = "https://payment.example.com/health"
+  "order-service"        = "https://order.example.com/health"
+  "inventory-service"    = "https://inventory.example.com/health"
+  "notification-service" = "https://notification.example.com/health"
+}
+
+alert_email        = "devops-alerts@example.com"
+alert_webhook_url  = "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+
+warning_threshold_percentage  = 70
+critical_threshold_percentage = 90
+
+# Optional: Cross-account monitoring
+# dev_account_id     = "123456789012"
+# staging_account_id = "234567890123"
+
+additional_tags = {
+  Environment = "production"
+  CostCenter  = "engineering"
+}
+
+team = "platform"

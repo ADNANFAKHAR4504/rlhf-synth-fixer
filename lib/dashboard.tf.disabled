@@ -1,0 +1,163 @@
+# dashboard.tf - CloudWatch Dashboard with Metric Math Expressions
+
+resource "aws_cloudwatch_dashboard" "main" {
+  dashboard_name = "monitoring-dashboard-${var.environment_suffix}"
+
+  dashboard_body = jsonencode({
+    widgets = concat(
+      # Infrastructure Metrics Section
+      [
+        {
+          type   = "metric"
+          x      = 0
+          y      = 0
+          width  = 12
+          height = 6
+          properties = {
+            metrics = [
+              ["ECS/ContainerInsights", "RunningTaskCount", { "ClusterName" = var.ecs_cluster_name, stat = "Average", label = "Running Tasks" }],
+              [".", "PendingTaskCount", { "ClusterName" = var.ecs_cluster_name, stat = "Average", label = "Pending Tasks" }],
+              [".", "DesiredTaskCount", { "ClusterName" = var.ecs_cluster_name, stat = "Average", label = "Desired Tasks" }]
+            ]
+            period = 300
+            stat   = "Average"
+            region = data.aws_region.current.name
+            title  = "ECS Cluster Overview"
+            yAxis = {
+              left = {
+                min = 0
+              }
+            }
+          }
+        },
+        {
+          type   = "metric"
+          x      = 12
+          y      = 0
+          width  = 12
+          height = 6
+          properties = {
+            metrics = flatten([
+              for service in var.microservices : [
+                ["AWS/ECS", "CPUUtilization", { "ServiceName" = service, "ClusterName" = var.ecs_cluster_name, stat = "Average", label = "${service} CPU" }],
+                [".", "MemoryUtilization", { "ServiceName" = service, "ClusterName" = var.ecs_cluster_name, stat = "Average", label = "${service} Memory" }]
+              ]
+            ])
+            period = 300
+            stat   = "Average"
+            region = data.aws_region.current.name
+            title  = "CPU and Memory Utilization by Service"
+            yAxis = {
+              left = {
+                min = 0
+                max = 100
+              }
+            }
+          }
+        }
+      ],
+
+      # Application Metrics Section with Metric Math
+      [
+        {
+          type   = "metric"
+          x      = 0
+          y      = 6
+          width  = 12
+          height = 6
+          properties = {
+            metrics = flatten([
+              for idx, service in var.microservices : [
+                [{
+                  expression = "m${idx * 2}/m${idx * 2 + 1}*100",
+                  label      = "${service} Error Rate %",
+                  id         = "e${idx}"
+                }],
+                ["CustomMetrics/${service}", "ErrorCount", { id = "m${idx * 2}", visible = false, stat = "Sum" }],
+                [".", "RequestCount", { id = "m${idx * 2 + 1}", visible = false, stat = "Sum" }]
+              ]
+            ])
+            period = 300
+            region = data.aws_region.current.name
+            title  = "Error Rate Percentage (Calculated)"
+            yAxis = {
+              left = {
+                min = 0
+              }
+            }
+          }
+        },
+        {
+          type   = "metric"
+          x      = 12
+          y      = 6
+          width  = 12
+          height = 6
+          properties = {
+            metrics = [
+              for service in var.microservices :
+              ["CustomMetrics/${service}", "ResponseTime", { "ServiceName" = service, stat = "p99", label = "${service} p99" }]
+            ]
+            period = 300
+            region = data.aws_region.current.name
+            title  = "p99 Response Time by Service"
+            yAxis = {
+              left = {
+                min = 0
+              }
+            }
+          }
+        }
+      ],
+
+      # Synthetic Monitoring Section
+      [
+        {
+          type   = "metric"
+          x      = 0
+          y      = 12
+          width  = 12
+          height = 6
+          properties = {
+            metrics = [
+              for service in keys(var.alb_endpoints) :
+              ["CloudWatchSynthetics", "SuccessPercent", { "CanaryName" = "endpoint-${service}-${var.environment_suffix}", stat = "Average", label = service }]
+            ]
+            period = 300
+            stat   = "Average"
+            region = data.aws_region.current.name
+            title  = "Canary Success Rate"
+            yAxis = {
+              left = {
+                min = 0
+                max = 100
+              }
+            }
+          }
+        },
+        {
+          type   = "metric"
+          x      = 12
+          y      = 12
+          width  = 12
+          height = 6
+          properties = {
+            metrics = [
+              for service in keys(var.alb_endpoints) :
+              ["CloudWatchSynthetics", "Duration", { "CanaryName" = "endpoint-${service}-${var.environment_suffix}", stat = "Average", label = service }]
+            ]
+            period = 300
+            stat   = "Average"
+            region = data.aws_region.current.name
+            title  = "Canary Duration (ms)"
+            yAxis = {
+              left = {
+                min = 0
+              }
+            }
+          }
+        }
+      ]
+    )
+  })
+}
