@@ -18,7 +18,9 @@ class TrafficManagementConstruct(Construct):
         primary_alb_dns: str,
         secondary_alb_dns: str,
         primary_region: str,
-        secondary_region: str
+        secondary_region: str,
+        primary_alb_zone_id: str,
+        secondary_alb_zone_id: str
     ):
         super().__init__(scope, construct_id)
 
@@ -26,7 +28,7 @@ class TrafficManagementConstruct(Construct):
         self.hosted_zone = Route53Zone(
             self,
             "hosted-zone",
-            name=f"trading-platform-{environment_suffix}.example.com",
+            name=f"trading-platform-{environment_suffix}.internal",
             tags={"Name": f"trading-zone-{environment_suffix}"},
             provider=primary_provider
         )
@@ -66,7 +68,7 @@ class TrafficManagementConstruct(Construct):
             self,
             "primary-record",
             zone_id=self.hosted_zone.zone_id,
-            name=f"trading-platform-{environment_suffix}.example.com",
+            name=f"trading-platform-{environment_suffix}.internal",
             type="A",
             alias=Route53RecordAlias(
                 name=primary_alb_dns,
@@ -86,7 +88,7 @@ class TrafficManagementConstruct(Construct):
             self,
             "secondary-record",
             zone_id=self.hosted_zone.zone_id,
-            name=f"trading-platform-{environment_suffix}.example.com",
+            name=f"trading-platform-{environment_suffix}.internal",
             type="A",
             alias=Route53RecordAlias(
                 name=secondary_alb_dns,

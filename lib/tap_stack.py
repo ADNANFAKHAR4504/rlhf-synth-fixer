@@ -150,7 +150,9 @@ class TapStack(TerraformStack):
             self.compute.primary_alb_dns,
             self.compute.secondary_alb_dns,
             primary_region,
-            secondary_region
+            secondary_region,
+            self.compute.primary_alb_zone_id,
+            self.compute.secondary_alb_zone_id
         )
 
         # Outputs
