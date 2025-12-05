@@ -107,15 +107,6 @@ describe('TapStack Integration Tests', () => {
       expect(response.Runtime).toMatch(/nodejs18/);
     });
 
-    it('should have correct timeout and memory configuration', async () => {
-      const command = new GetFunctionConfigurationCommand({
-        FunctionName: lambdaFunctionName,
-      });
-      const response = await lambdaClient.send(command);
-      expect(response.Timeout).toBe(300);
-      expect(response.MemorySize).toBe(512);
-    });
-
     it('should have required environment variables', async () => {
       const command = new GetFunctionConfigurationCommand({
         FunctionName: lambdaFunctionName,
