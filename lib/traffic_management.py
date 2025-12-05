@@ -11,6 +11,7 @@ class TrafficManagementConstruct(Construct):
         environment_suffix: str,
         primary_provider,
         primary_alb_dns: str,
+        construct_id: str,
         secondary_alb_dns: str,
         primary_region: str,
         secondary_region: str

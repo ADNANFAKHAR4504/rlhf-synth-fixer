@@ -10,6 +10,9 @@
     "Failure Recovery Automation"
   ],
   "po_id": "60891055",
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
   "aws_services": [
     "VPC",
     "EC2",

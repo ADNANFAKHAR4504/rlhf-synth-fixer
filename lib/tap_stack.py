@@ -15,6 +15,7 @@ class TapStack(TerraformStack):
     def __init__(
         self,
         scope: Construct,
+        construct_id: str,
         environment_suffix: str,
         primary_region: str = "us-east-1",
         secondary_region: str = "us-east-2",
@@ -45,69 +46,63 @@ class TapStack(TerraformStack):
         self.networking = NetworkingConstruct(
             self,
             "networking",
-            environment_suffix=environment_suffix,
-            primary_provider=self.primary_provider,
-            secondary_provider=self.secondary_provider,
-            primary_region=primary_region,
-            secondary_region=secondary_region
+            environment_suffix,
+            self.primary_provider,
+            self.secondary_provider,
+            primary_region,
+            secondary_region
         )
 
         # Database layer - Aurora clusters in both regions
         self.database = DatabaseConstruct(
             self,
             "database",
-            environment_suffix=environment_suffix,
-            primary_provider=self.primary_provider,
-            secondary_provider=self.secondary_provider,
-            primary_vpc_id=self.networking.primary_vpc.id,
-            secondary_vpc_id=self.networking.secondary_vpc.id,
-            primary_subnet_ids=self.networking.primary_private_subnet_ids,
-            secondary_subnet_ids=self.networking.secondary_private_subnet_ids,
-            primary_security_group_id=self.networking.primary_db_security_group_id,
-            secondary_security_group_id=self.networking.secondary_db_security_group_id
+            environment_suffix,
+            self.primary_provider,
+            self.secondary_provider,
+            self.networking.primary_vpc.id,
+            self.networking.secondary_vpc.id,
+            self.networking.primary_private_subnet_ids,
+            self.networking.secondary_private_subnet_ids,
+            self.networking.primary_db_security_group_id,
+            self.networking.secondary_db_security_group_id
         )
 
         # Compute layer - ASG and ALB in both regions
         self.compute = ComputeConstruct(
             self,
             "compute",
-            environment_suffix=environment_suffix,
-            primary_provider=self.primary_provider,
-            secondary_provider=self.secondary_provider,
-            primary_vpc_id=self.networking.primary_vpc.id,
-            secondary_vpc_id=self.networking.secondary_vpc.id,
-            primary_public_subnet_ids=self.networking.primary_public_subnet_ids,
-            secondary_public_subnet_ids=self.networking.secondary_public_subnet_ids,
-            primary_private_subnet_ids=self.networking.primary_private_subnet_ids,
-            secondary_private_subnet_ids=self.networking.secondary_private_subnet_ids,
-            primary_alb_security_group_id=self.networking.primary_alb_security_group_id,
-            secondary_alb_security_group_id=self.networking.secondary_alb_security_group_id,
-            primary_app_security_group_id=self.networking.primary_app_security_group_id,
-            secondary_app_security_group_id=self.networking.secondary_app_security_group_id,
-            primary_db_endpoint=self.database.primary_cluster_endpoint,
-            secondary_db_endpoint=self.database.secondary_cluster_endpoint
+            environment_suffix,
+            self.primary_provider,
+            self.secondary_provider,
+            self.networking.primary_public_subnet_ids,
+            self.networking.secondary_public_subnet_ids,
+            self.networking.primary_private_subnet_ids,
+            self.networking.secondary_private_subnet_ids,
+            self.database.primary_cluster_endpoint,
+            self.database.secondary_cluster_endpoint
         )
 
         # Session state - DynamoDB global tables
         self.session_state = SessionStateConstruct(
             self,
             "session-state",
-            environment_suffix=environment_suffix,
-            primary_provider=self.primary_provider,
-            secondary_provider=self.secondary_provider,
-            primary_region=primary_region,
-            secondary_region=secondary_region
+            environment_suffix,
+            self.primary_provider,
+            self.secondary_provider,
+            primary_region,
+            secondary_region
         )
 
         # Storage - S3 with cross-region replication
         self.storage = StorageConstruct(
             self,
             "storage",
-            environment_suffix=environment_suffix,
-            primary_provider=self.primary_provider,
-            secondary_provider=self.secondary_provider,
-            primary_region=primary_region,
-            secondary_region=secondary_region
+            environment_suffix,
+            self.primary_provider,
+            self.secondary_provider,
+            primary_region,
+            secondary_region
         )
 
         # Monitoring - CloudWatch and SNS

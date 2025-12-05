@@ -14,6 +14,7 @@ class FailoverOrchestrationConstruct(Construct):
         self,
         scope: Construct,
         environment_suffix: str,
+        construct_id: str,
         primary_provider,
         primary_subnet_ids: list,
         sns_topic_arn: str,

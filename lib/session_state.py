@@ -6,6 +6,7 @@ class SessionStateConstruct(Construct):
     def __init__(
         self,
         scope: Construct,
+        construct_id: str,
         environment_suffix: str,
         primary_provider,
         secondary_provider,

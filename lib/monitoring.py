@@ -12,6 +12,7 @@ class MonitoringConstruct(Construct):
         environment_suffix: str,
         primary_provider,
         secondary_provider,
+        construct_id: str,
         primary_alb_arn: str,
         secondary_alb_arn: str,
         primary_asg_name: str,
