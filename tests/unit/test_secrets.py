@@ -48,7 +48,8 @@ class TestSecretsConstruct:
             "test-secrets",
             environment_suffix="test",
             database=mock_database,
-            security=mock_security
+            security=mock_security,
+            vpc=mock_vpc
         )
         return construct
 
@@ -81,6 +82,9 @@ class TestSecretsConstruct:
         """Test SecretsConstruct works with different environment suffixes"""
         from lib.secrets import SecretsConstruct
 
+        mock_vpc = Mock()
+        mock_vpc.private_subnets = [Mock(id="subnet-1")]
+
         app = Testing.app()
         stack = TerraformStack(app, "test")
         construct = SecretsConstruct(
@@ -88,7 +92,8 @@ class TestSecretsConstruct:
             "test-secrets-prod",
             environment_suffix="production",
             database=mock_database,
-            security=mock_security
+            security=mock_security,
+            vpc=mock_vpc
         )
         assert construct is not None
 
