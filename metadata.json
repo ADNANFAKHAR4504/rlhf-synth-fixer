@@ -6,10 +6,8 @@
   "po_id": "CI/CD Pipeline Integration",
   "team": "synth",
   "startedAt": "2025-12-05T05:02:35Z",
-  "subtask": "CI/CD Pipeline Integration",
-  "subject_labels": [
-    "CI/CD Pipeline"
-  ],
+  "subtask": "CI/CD Pipeline Infrastructure",
+  "subject_labels": [],
   "aws_services": [
     "SNS",
     "S3",
