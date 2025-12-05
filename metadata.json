@@ -1,0 +1,41 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "7013",
+  "team": "2",
+  "startedAt": "2025-12-05T04:55:16.412Z",
+  "subtask": "IaC-Multi-Environment-Management",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2 (NAT)",
+    "Kinesis Data Streams",
+    "Kinesis Data Firehose",
+    "Lambda",
+    "DynamoDB",
+    "DynamoDB Streams",
+    "ElastiCache Redis",
+    "Aurora PostgreSQL",
+    "Secrets Manager",
+    "SageMaker Runtime",
+    "SNS",
+    "SQS",
+    "S3",
+    "EventBridge",
+    "Step Functions",
+    "CloudWatch",
+    "IAM",
+    "KMS",
+    "Glue",
+    "Athena",
+    "API Gateway",
+    "VPC Endpoints"
+  ],
+  "task_config": {
+    "deploy_env": "dev.tfvars"
+  }
+}
