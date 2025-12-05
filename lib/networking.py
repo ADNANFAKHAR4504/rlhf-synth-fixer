@@ -6,7 +6,7 @@ from cdktf_cdktf_provider_aws.route_table import RouteTable, RouteTableRoute
 from cdktf_cdktf_provider_aws.route_table_association import RouteTableAssociation
 from cdktf_cdktf_provider_aws.security_group import SecurityGroup, SecurityGroupIngress, SecurityGroupEgress
 from cdktf_cdktf_provider_aws.vpc_peering_connection import VpcPeeringConnection
-from cdktf_cdktf_provider_aws.vpc_peering_connection_accepter import VpcPeeringConnectionAccepter
+from cdktf_cdktf_provider_aws.vpc_peering_connection_accepter import VpcPeeringConnectionAccepterA
 from cdktf_cdktf_provider_aws.vpc_peering_connection_options import VpcPeeringConnectionOptions
 
 
@@ -175,7 +175,7 @@ class NetworkingConstruct(Construct):
         )
 
         # Accept peering connection in secondary region
-        VpcPeeringConnectionAccepter(
+        VpcPeeringConnectionAccepterA(
             self,
             "vpc-peering-accepter",
             vpc_peering_connection_id=self.peering_connection.id,
