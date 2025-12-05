@@ -1,6 +1,8 @@
 """Compute infrastructure - Lambda functions"""
 
+import os
 from constructs import Construct
+from cdktf import TerraformAsset, AssetType
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction, LambdaFunctionEnvironment, LambdaFunctionVpcConfig
 from cdktf_cdktf_provider_aws.iam_role import IamRole
 from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
@@ -101,6 +103,23 @@ class ComputeStack(Construct):
             })
         )
 
+        # Lambda code assets using TerraformAsset
+        lambda_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "lambda")
+
+        payment_processor_asset = TerraformAsset(
+            self,
+            "payment-processor-asset",
+            path=os.path.join(lambda_dir, "payment_processor"),
+            type=AssetType.ARCHIVE
+        )
+
+        health_check_asset = TerraformAsset(
+            self,
+            "health-check-asset",
+            path=os.path.join(lambda_dir, "health_check"),
+            type=AssetType.ARCHIVE
+        )
+
         # Payment Processor Lambda
         self.payment_processor_lambda = LambdaFunction(
             self,
@@ -109,8 +128,8 @@ class ComputeStack(Construct):
             runtime="python3.9",
             handler="index.handler",
             role=lambda_role.arn,
-            filename="lambda/payment_processor.zip",
-            source_code_hash="${filebase64sha256(\"lambda/payment_processor.zip\")}",
+            filename=payment_processor_asset.path,
+            source_code_hash=payment_processor_asset.asset_hash,
             timeout=30,
             memory_size=512,
             environment=LambdaFunctionEnvironment(
@@ -139,8 +158,8 @@ class ComputeStack(Construct):
             runtime="python3.9",
             handler="index.handler",
             role=lambda_role.arn,
-            filename="lambda/health_check.zip",
-            source_code_hash="${filebase64sha256(\"lambda/health_check.zip\")}",
+            filename=health_check_asset.path,
+            source_code_hash=health_check_asset.asset_hash,
             timeout=10,
             memory_size=256,
             environment=LambdaFunctionEnvironment(
