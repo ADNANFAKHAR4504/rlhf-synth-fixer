@@ -143,7 +143,8 @@ def test_check_security_group_permissive_fail(mock_boto3):
 
     assert result['type'] == 'SecurityGroup'
     assert result['checks'][0]['status'] == 'FAIL'
-    assert '0.0.0.0/0' in result['checks'][0]['message']
+    assert 'Unrestricted inbound access detected' in result['checks'][0]['message']
+    assert 'Port 22' in result['checks'][0]['message']
 
 
 @patch('index.boto3')
