@@ -153,4 +153,4 @@ lib/.terraform/
 
 # Synth Files
 tasks.csv
-ci_checks.json
+ci_checks.jsonpulumi-program
