@@ -1,6 +1,6 @@
 {
   "platform": "analysis",
-  "language": "ts",
+  "language": "py",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "r0x1n7p4",
