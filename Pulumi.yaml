@@ -1,0 +1,9 @@
+name: gitops-pipeline
+runtime: go
+description: GitOps CI/CD Pipeline for microservices with Pulumi Go
+
+config:
+  environmentSuffix:
+    type: string
+    description: Environment suffix for resource naming
+    default: dev

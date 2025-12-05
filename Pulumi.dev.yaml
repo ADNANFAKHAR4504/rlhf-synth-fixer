@@ -1,0 +1,3 @@
+config:
+  gitops-pipeline:environmentSuffix: dev
+  aws:region: us-east-1
