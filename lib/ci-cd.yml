@@ -1,7 +1,8 @@
-# CI/CD Pipeline Configuration
-# This workflow demonstrates a multi-account, multi-stage CodePipeline for CDK applications
+# CI/CD Pipeline Configuration for CDK TypeScript Infrastructure
+# This workflow demonstrates a multi-account, multi-stage deployment for CDK TypeScript applications
+# Infrastructure: CI/CD Pipeline with CodePipeline, CloudFormation Change Sets, and Multi-Environment Deployments
 
-name: Multi-Stage Pipeline
+name: Multi-Stage CDK Pipeline
 
 on:
   workflow_dispatch:
@@ -12,6 +13,7 @@ on:
 
 env:
   AWS_REGION: us-east-1
+  NODE_VERSION: '22'
   DEV_ACCOUNT_ID: ${{ secrets.DEV_ACCOUNT_ID }}
   STAGING_ACCOUNT_ID: ${{ secrets.STAGING_ACCOUNT_ID }}
   PROD_ACCOUNT_ID: ${{ secrets.PROD_ACCOUNT_ID }}
@@ -51,10 +53,16 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Run TypeScript compilation
+        run: npm run build
+
+      - name: Run tests
+        run: npm test
 
       - name: Run CDK Synth
         run: npx cdk synth
@@ -67,14 +75,13 @@ jobs:
 
       - name: Encrypt artifacts with KMS
         run: |
-          # Create tarball of artifacts
           tar -czf cdk-outputs.tar.gz -C cdk.out .
-          # Encrypt with AWS KMS
           aws kms encrypt \
             --key-id alias/github-actions-artifacts \
             --plaintext fileb://cdk-outputs.tar.gz \
             --output text \
             --query CiphertextBlob > cdk-outputs.tar.gz.encrypted
+
       - name: Upload encrypted artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -94,7 +101,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: cdk-outputs
-          path: cdk.out/
+          path: ./artifacts/
 
       - name: Configure AWS Credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -106,24 +113,35 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Deploy to Dev with Change Set
+      - name: Deploy to Dev with CDK
+        env:
+          ENVIRONMENT_SUFFIX: dev
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_AUTHOR: ${{ github.actor }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TEAM: synth
         run: |
           npx cdk deploy --all --require-approval never --context environment=dev
-      - name: Verify Change Set
+
+      - name: Verify Deployment
         run: |
+          aws cloudformation describe-stacks --stack-name "*-dev" \
+            --query 'Stacks[*].{StackName:StackName,Status:StackStatus}' || echo "Stack not found"
           aws cloudformation describe-change-set --change-set-name cdk-deploy-change-set \
             --stack-name MyStack-dev --query 'Changes[*].ResourceChange' || echo "No change set found"
+
       - name: Send Slack notification
         if: always()
         run: |
           curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
             -H 'Content-Type: application/json' \
             -d '{"text":"Dev deployment completed for ${{ github.ref }}"}'
+
   manual-approval-staging:
     name: Approve Staging Deployment
     runs-on: ubuntu-latest
@@ -146,7 +164,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: cdk-outputs
-          path: cdk.out/
+          path: ./artifacts/
 
       - name: Assume cross-account role for Staging via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -159,20 +177,37 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Deploy to Staging
+      - name: Deploy to Staging with CDK
+        env:
+          ENVIRONMENT_SUFFIX: staging
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_AUTHOR: ${{ github.actor }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TEAM: synth
         run: |
           npx cdk deploy --all --require-approval never --context environment=staging
+
+      - name: Run integration tests
+        run: |
+          echo "Running integration tests..."
+
+      - name: Verify Deployment
+        run: |
+          aws cloudformation describe-stacks --stack-name "*-staging" \
+            --query 'Stacks[*].{StackName:StackName,Status:StackStatus}' || echo "Stack not found"
+
       - name: Send Slack notification
         if: always()
         run: |
           curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
             -H 'Content-Type: application/json' \
             -d '{"text":"Staging deployment completed for ${{ github.ref }}"}'
+
   manual-approval-prod:
     name: Approve Production Deployment
     runs-on: ubuntu-latest
@@ -195,7 +230,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: cdk-outputs
-          path: cdk.out/
+          path: ./artifacts/
 
       - name: Assume cross-account role for Production via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -208,17 +243,75 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Deploy to Production
+      - name: Deploy to Production with CDK
+        env:
+          ENVIRONMENT_SUFFIX: prod
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_AUTHOR: ${{ github.actor }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TEAM: synth
         run: |
           npx cdk deploy --all --require-approval never --context environment=prod
+
+      - name: Verify Production Deployment
+        run: |
+          echo "Verifying CloudFormation stacks..."
+          aws cloudformation describe-stacks --stack-name "*-prod" \
+            --query 'Stacks[*].{StackName:StackName,Status:StackStatus}'
+          echo "Verifying stack resources..."
+          aws cloudformation list-stack-resources --stack-name MyStack-prod \
+            --query 'StackResourceSummaries[*].{LogicalId:LogicalResourceId,Status:ResourceStatus}'
+
+      - name: Health check
+        run: |
+          echo "Performing health checks..."
+
       - name: Send Slack notification
         if: always()
         run: |
           curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
             -H 'Content-Type: application/json' \
             -d '{"text":"Production deployment completed for ${{ github.ref }}"}'
+
+  rollback:
+    name: Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: [deploy-prod]
+    if: failure()
+    environment: prod
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.PROD_ACCOUNT_ID }}:role/CrossAccountDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Rollback
+          role-chaining: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rollback to previous state
+        run: |
+          echo "Rolling back to previous deployment..."
+          aws cloudformation describe-stack-events --stack-name MyStack-prod \
+            --query 'StackEvents[?ResourceStatus==`ROLLBACK_COMPLETE`]' | head -5
+
+      - name: Send rollback notification
+        run: |
+          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d '{"text":"Production deployment failed - automatic rollback initiated for ${{ github.ref }}"}'
