@@ -240,7 +240,7 @@ export class PrimaryRegionStack extends Construct {
     // SQS Queue for Trade Orders
     const tradeQueue = new SqsQueue(this, 'trade-queue', {
       provider,
-      name: `${config.tradeQueueName}-primary-${environmentSuffix}`,
+      name: `${config.tradeQueueName}-primary-${environmentSuffix}-${uniqueSuffix}`,
       visibilityTimeoutSeconds: 300,
       messageRetentionSeconds: 1209600, // 14 days
       receiveWaitTimeSeconds: 20,
@@ -253,7 +253,7 @@ export class PrimaryRegionStack extends Construct {
     // Dead Letter Queue
     const dlq = new SqsQueue(this, 'trade-dlq', {
       provider,
-      name: `${config.tradeQueueName}-dlq-primary-${environmentSuffix}`,
+      name: `${config.tradeQueueName}-dlq-primary-${environmentSuffix}-${uniqueSuffix}`,
       messageRetentionSeconds: 1209600,
       tags: {
         Name: `trade-dlq-primary-${environmentSuffix}`,
@@ -355,7 +355,7 @@ export class PrimaryRegionStack extends Construct {
 
     this.tradeProcessorFunction = new LambdaFunction(this, 'trade-processor', {
       provider,
-      functionName: `trade-processor-primary-${environmentSuffix}`,
+      functionName: `trade-processor-primary-${environmentSuffix}-${uniqueSuffix}`,
       role: lambdaRole.arn,
       handler: 'trade-processor.handler',
       runtime: 'nodejs18.x',
