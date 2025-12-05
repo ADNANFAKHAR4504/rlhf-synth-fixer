@@ -798,6 +798,32 @@ jobs:
           trigger_phrase: ''
           custom_instructions: "${{ env.SYSTEM_PROMPT_CONTENT }}"
 
+      - name: Verify metadata.json Updated
+        id: verify_metadata
+        run: |
+          echo "🔍 Verifying Claude updated metadata.json with training_quality..."
+          
+          if [ ! -f "metadata.json" ]; then
+            echo "::error::metadata.json not found after Claude review"
+            exit 1
+          fi
+          
+          # Check if training_quality field exists and is a valid number
+          TRAINING_QUALITY=$(jq -r '.training_quality // empty' metadata.json 2>/dev/null || echo "")
+          
+          if [ -z "$TRAINING_QUALITY" ]; then
+            echo "⚠️ WARNING: Claude did not update metadata.json with training_quality"
+            echo "⚠️ Will attempt to extract score from PR comment instead"
+            echo "metadata_updated=false" >> $GITHUB_OUTPUT
+          elif [[ ! "$TRAINING_QUALITY" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+            echo "⚠️ WARNING: training_quality value '$TRAINING_QUALITY' is not a valid number"
+            echo "metadata_updated=false" >> $GITHUB_OUTPUT
+          else
+            echo "✅ metadata.json updated with training_quality: $TRAINING_QUALITY"
+            echo "metadata_updated=true" >> $GITHUB_OUTPUT
+            echo "training_quality=$TRAINING_QUALITY" >> $GITHUB_OUTPUT
+          fi
+
       - name: Verify Claude Posted Review Comment
         id: verify_comment
         if: always()
@@ -903,6 +929,7 @@ jobs:
           # Check for critical failure indicators in the LATEST Claude comment only
           CRITICAL_FOUND=false
           
+          # Original exact markers
           if grep -q "❌ CRITICAL:" latest_claude_comment.txt; then
             echo "❌ Found CRITICAL error markers in review"
             CRITICAL_FOUND=true
@@ -926,6 +953,34 @@ jobs:
           # Check if validation script reported errors
           if grep -q "Metadata validation FAILED" latest_claude_comment.txt; then
             echo "❌ Metadata validation script reported failures"
+            CRITICAL_FOUND=true
+          fi
+          
+          # Expanded case-insensitive patterns to catch variations
+          if grep -qi "critical.*error\|critical.*issue\|critical.*fail" latest_claude_comment.txt; then
+            echo "❌ Found critical error/issue/failure mention in review"
+            CRITICAL_FOUND=true
+          fi
+          
+          if grep -qi "validation.*did not pass\|validation.*unsuccessful\|failed.*validation" latest_claude_comment.txt; then
+            echo "❌ Found validation failure mention in review"
+            CRITICAL_FOUND=true
+          fi
+          
+          if grep -qi "must.*fix.*before\|cannot.*merge\|blocking.*error" latest_claude_comment.txt; then
+            echo "❌ Found blocking requirement in review"
+            CRITICAL_FOUND=true
+          fi
+          
+          # Check for hardcoded secrets detection
+          if grep -qi "hardcoded.*secret\|secret.*detected\|credential.*found" latest_claude_comment.txt; then
+            echo "❌ Found hardcoded secrets detection in review"
+            CRITICAL_FOUND=true
+          fi
+          
+          # Check for AI-generated content detection
+          if grep -qi "ai-generated.*prompt\|prompt.*ai-generated\|emojis.*found.*prompt" latest_claude_comment.txt; then
+            echo "❌ Found AI-generated content detection in review"
             CRITICAL_FOUND=true
           fi
           
@@ -991,52 +1046,43 @@ jobs:
             echo "$CLAUDE_COMMENT" > claude_review.txt
           fi
 
-          echo "🍀 Searching for Claude quality score patterns in most recent review..."
+          echo "🍀 Searching for Claude quality score in review comment..."
 
-          # 1️⃣ Try to find most flexible Claude score pattern
-          # Matches things like:
-          # SCORE:9, Score: 9, Training Quality: **9.2/10**, Final Score ⭐️: 8.5/10, etc.
-          SCORE=$(grep -Poi \
-            '(?i)(score|training\s*quality|training\s*score|final\s*score|estimated\s*score)[^0-9]{0,15}([0-9]+(\.[0-9]+)?)' \
-            claude_review.txt | grep -Po '[0-9]+(\.[0-9]+)?' | tail -1)
-
-          # 2️⃣ If not found, try clean "SCORE:" line (in case of strict format)
-          if [ -z "$SCORE" ]; then
-            SCORE=$(grep -Poi '^\s*\*?\**\s*SCORE\s*[:=-]?\s*\**\*?\s*([0-9]+(\.[0-9]+)?)' claude_review.txt | grep -Po '[0-9]+(\.[0-9]+)?' | tail -1)
+          # 1️⃣ STRICT: Look for exact SCORE:X format (required format)
+          # Must be SCORE: followed immediately by a number (no spaces)
+          SCORE=$(grep -Po 'SCORE:[0-9]+(\.[0-9]+)?' claude_review.txt | grep -Po '[0-9]+(\.[0-9]+)?' | tail -1)
+          
+          if [ -n "$SCORE" ]; then
+            echo "✅ Found SCORE:$SCORE in strict format"
           fi
 
-          # 3️⃣ If still not found, check for any "X/10" patterns (sometimes Claude just ends with 9/10)
+          # 2️⃣ FALLBACK: Check metadata.json training_quality (primary source)
           if [ -z "$SCORE" ]; then
-            SCORE=$(grep -Poi '\b([0-9]+(\.[0-9]+)?)/10\b' claude_review.txt | grep -Po '^[0-9]+(\.[0-9]+)?' | tail -1)
-          fi
-
-          # 4️⃣ If comment parsing failed, fallback to metadata.json
-          if [ -z "$SCORE" ]; then
-            echo "⚠️ Could not find score in Claude comment. Falling back to metadata.json..."
+            echo "⚠️ SCORE:X format not found in comment. Checking metadata.json..."
             if [ -f "metadata.json" ]; then
               SCORE=$(jq -r '.training_quality // empty' metadata.json 2>/dev/null || echo "")
               if [ -n "$SCORE" ] && [[ "$SCORE" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
-                echo "✅ Found fallback metadata training_quality: $SCORE"
+                echo "✅ Found training_quality in metadata.json: $SCORE"
               else
-                echo "⚠️ metadata.json missing valid numeric score"
+                echo "❌ metadata.json missing valid numeric training_quality"
                 SCORE=""
               fi
             else
-              echo "⚠️ metadata.json not found"
+              echo "❌ metadata.json not found"
             fi
           fi
 
-          # 5️⃣ Validate range and clean
+          # 3️⃣ FAIL if no score found from either source
           if [ -z "$SCORE" ]; then
-            echo "❌ ERROR: Could not find any quality score in Claude review or metadata.json"
+            echo "::error::No valid SCORE:X found in review comment and metadata.json missing training_quality"
             echo ""
-            echo "This indicates one of the following:"
-            echo "  1. Claude failed to complete the review properly"
-            echo "  2. Claude did not include SCORE:X line in the PR comment"
-            echo "  3. metadata.json was not updated with training_quality field"
+            echo "❌ ERROR: Could not find any quality score"
             echo ""
-            echo "Please check the PR comments to verify Claude completed the review."
-            echo "If the review is incomplete, the job must fail."
+            echo "Claude MUST either:"
+            echo "  1. End the PR comment with SCORE:X (e.g., SCORE:8)"
+            echo "  2. Update metadata.json with training_quality field"
+            echo ""
+            echo "Please check the PR comments to verify Claude completed the review properly."
             exit 1
           fi
 
