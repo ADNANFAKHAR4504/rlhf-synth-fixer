@@ -23,7 +23,7 @@ const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
-const region = 'us-east-2';
+const region = 'us-east-1';
 const cloudformationClient = new CloudFormationClient({ region });
 const dynamoDBClient = new DynamoDBClient({ region });
 const lambdaClient = new LambdaClient({ region });
