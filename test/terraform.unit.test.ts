@@ -1,299 +1,433 @@
-// Terraform Infrastructure Analysis Module - Unit Tests
-// Validates Terraform configuration structure, syntax, and validation logic
+// Infrastructure Analysis Module - Unit Tests
+// Validates Python analysis script structure and logic
 
 import fs from "fs";
 import path from "path";
 
-describe("Terraform Infrastructure Analysis Module - Unit Tests", () => {
+describe("Infrastructure Analysis Module - Unit Tests", () => {
   const libDir = path.resolve(__dirname, "../lib");
-  let mainTfContent: string;
-  let variablesTfContent: string;
-  let outputsTfContent: string;
-  let providerTfContent: string;
+  let analyseContent: string;
 
   beforeAll(() => {
-    mainTfContent = fs.readFileSync(path.join(libDir, "main.tf"), "utf8");
-    variablesTfContent = fs.readFileSync(path.join(libDir, "variables.tf"), "utf8");
-    outputsTfContent = fs.readFileSync(path.join(libDir, "outputs.tf"), "utf8");
-    providerTfContent = fs.readFileSync(path.join(libDir, "provider.tf"), "utf8");
+    analyseContent = fs.readFileSync(path.join(libDir, "analyse.py"), "utf8");
   });
 
   describe("File Structure", () => {
-    test("main.tf exists and is readable", () => {
-      expect(fs.existsSync(path.join(libDir, "main.tf"))).toBe(true);
-      expect(mainTfContent.length).toBeGreaterThan(0);
+    test("analyse.py exists and is readable", () => {
+      expect(fs.existsSync(path.join(libDir, "analyse.py"))).toBe(true);
+      expect(analyseContent.length).toBeGreaterThan(0);
     });
 
-    test("variables.tf exists and is readable", () => {
-      expect(fs.existsSync(path.join(libDir, "variables.tf"))).toBe(true);
-      expect(variablesTfContent.length).toBeGreaterThan(0);
+    test("analyse.py is executable", () => {
+      const stats = fs.statSync(path.join(libDir, "analyse.py"));
+      const isExecutable = (stats.mode & parseInt("111", 8)) !== 0;
+      expect(isExecutable).toBe(true);
     });
 
-    test("outputs.tf exists and is readable", () => {
-      expect(fs.existsSync(path.join(libDir, "outputs.tf"))).toBe(true);
-      expect(outputsTfContent.length).toBeGreaterThan(0);
-    });
-
-    test("provider.tf exists and is readable", () => {
-      expect(fs.existsSync(path.join(libDir, "provider.tf"))).toBe(true);
-      expect(providerTfContent.length).toBeGreaterThan(0);
+    test("has shebang for Python 3", () => {
+      expect(analyseContent).toMatch(/^#!.*python3/);
     });
   });
 
-  describe("Provider Configuration", () => {
-    test("declares terraform required_version", () => {
-      expect(providerTfContent).toMatch(/required_version\s*=\s*">=\s*1\.\d+\.\d+"/);
+  describe("Module Imports", () => {
+    test("imports json module", () => {
+      expect(analyseContent).toMatch(/import json/);
     });
 
-    test("declares aws provider with version constraint", () => {
-      expect(providerTfContent).toMatch(/aws\s*=\s*{[\s\S]*?version\s*=\s*"[>=~]+\s*5\.0"/);
+    test("imports boto3 for AWS SDK", () => {
+      expect(analyseContent).toMatch(/import boto3/);
     });
 
-    test("declares external provider for S3 checks", () => {
-      expect(providerTfContent).toMatch(/external\s*=\s*{[\s\S]*?version\s*=\s*"~>\s*2\.0"/);
+    test("imports logging module", () => {
+      expect(analyseContent).toMatch(/import logging/);
     });
 
-    test("configures aws provider with region variable", () => {
-      expect(providerTfContent).toMatch(/provider\s+"aws"\s*{[\s\S]*?region\s*=\s*var\.aws_region/);
-    });
-  });
-
-  describe("Input Variables", () => {
-    test("declares aws_region variable", () => {
-      expect(variablesTfContent).toMatch(/variable\s+"aws_region"\s*{/);
+    test("imports datetime for timestamps", () => {
+      expect(analyseContent).toMatch(/from datetime import datetime/);
     });
 
-    test("declares environment_suffix variable", () => {
-      expect(variablesTfContent).toMatch(/variable\s+"environment_suffix"\s*{/);
+    test("imports typing for type hints", () => {
+      expect(analyseContent).toMatch(/from typing import Dict, List, Any/);
     });
 
-    test("declares ec2_instance_ids variable as list", () => {
-      expect(variablesTfContent).toMatch(/variable\s+"ec2_instance_ids"\s*{[\s\S]*?type\s*=\s*list\(string\)/);
-    });
-
-    test("declares rds_db_instance_ids variable as list", () => {
-      expect(variablesTfContent).toMatch(/variable\s+"rds_db_instance_ids"\s*{[\s\S]*?type\s*=\s*list\(string\)/);
-    });
-
-    test("declares s3_bucket_names variable as list", () => {
-      expect(variablesTfContent).toMatch(/variable\s+"s3_bucket_names"\s*{[\s\S]*?type\s*=\s*list\(string\)/);
-    });
-
-    test("declares security_group_ids variable as list", () => {
-      expect(variablesTfContent).toMatch(/variable\s+"security_group_ids"\s*{[\s\S]*?type\s*=\s*list\(string\)/);
+    test("imports os for environment variables", () => {
+      expect(analyseContent).toMatch(/import os/);
     });
   });
 
-  describe("Data Sources", () => {
-    test("declares aws_instance data source with for_each", () => {
-      expect(mainTfContent).toMatch(/data\s+"aws_instance"\s+"ec2_instances"\s*{[\s\S]*?for_each\s*=\s*toset\(var\.ec2_instance_ids\)/);
+  describe("Class Definition", () => {
+    test("defines InfrastructureAnalysisAnalyzer class", () => {
+      expect(analyseContent).toMatch(/class InfrastructureAnalysisAnalyzer:/);
     });
 
-    test("declares aws_db_instance data source with for_each", () => {
-      expect(mainTfContent).toMatch(/data\s+"aws_db_instance"\s+"rds_instances"\s*{[\s\S]*?for_each\s*=\s*toset\(var\.rds_db_instance_ids\)/);
+    test("class has __init__ method with region parameter", () => {
+      expect(analyseContent).toMatch(/def __init__\(self,\s*region='us-east-1'/);
     });
 
-    test("declares aws_s3_bucket data source with for_each", () => {
-      expect(mainTfContent).toMatch(/data\s+"aws_s3_bucket"\s+"s3_buckets"\s*{[\s\S]*?for_each\s*=\s*toset\(var\.s3_bucket_names\)/);
+    test("class has endpoint_url parameter for testing", () => {
+      expect(analyseContent).toMatch(/endpoint_url=None/);
     });
 
-    test("declares aws_security_group data source with for_each", () => {
-      expect(mainTfContent).toMatch(/data\s+"aws_security_group"\s+"security_groups"\s*{[\s\S]*?for_each\s*=\s*toset\(var\.security_group_ids\)/);
-    });
-
-    test("declares external data source for S3 versioning", () => {
-      expect(mainTfContent).toMatch(/data\s+"external"\s+"s3_versioning"\s*{/);
-    });
-
-    test("declares external data source for S3 encryption", () => {
-      expect(mainTfContent).toMatch(/data\s+"external"\s+"s3_encryption"\s*{/);
+    test("initializes timestamp in constructor", () => {
+      expect(analyseContent).toMatch(/self\.timestamp\s*=\s*datetime\.utcnow\(\)\.isoformat\(\)/);
     });
   });
 
-  describe("Local Values - EC2 Validation", () => {
-    test("defines approved_instance_types list", () => {
-      expect(mainTfContent).toMatch(/approved_instance_types\s*=\s*\["t3\.micro",\s*"t3\.small",\s*"t3\.medium"\]/);
+  describe("AWS Client Initialization", () => {
+    test("initializes EC2 client", () => {
+      expect(analyseContent).toMatch(/self\.ec2_client\s*=\s*boto3\.client\('ec2'/);
     });
 
-    test("defines instance_costs map with pricing", () => {
-      expect(mainTfContent).toMatch(/instance_costs\s*=\s*{/);
-      expect(mainTfContent).toMatch(/"t3\.micro"\s*=\s*7\.30/);
-      expect(mainTfContent).toMatch(/"t3\.small"\s*=\s*14\.60/);
-      expect(mainTfContent).toMatch(/"t3\.medium"\s*=\s*29\.20/);
+    test("initializes RDS client", () => {
+      expect(analyseContent).toMatch(/self\.rds_client\s*=\s*boto3\.client\('rds'/);
     });
 
-    test("processes ec2_instances with instance_type and state", () => {
-      expect(mainTfContent).toMatch(/ec2_instances\s*=\s*{[\s\S]*?instance_type\s*=[\s\S]*?state\s*=/);
+    test("initializes S3 client", () => {
+      expect(analyseContent).toMatch(/self\.s3_client\s*=\s*boto3\.client\('s3'/);
     });
 
-    test("calculates ec2_type_violations for unapproved types", () => {
-      expect(mainTfContent).toMatch(/ec2_type_violations\s*=\s*{[\s\S]*?!contains\(local\.approved_instance_types/);
-    });
-
-    test("calculates ec2_costs for running instances", () => {
-      expect(mainTfContent).toMatch(/ec2_costs\s*=\s*{[\s\S]*?lookup\(local\.instance_costs/);
-    });
-
-    test("calculates ec2_cost_warnings for expensive instances", () => {
-      expect(mainTfContent).toMatch(/ec2_cost_warnings\s*=\s*{[\s\S]*?if\s+cost\s*>\s*100\.0/);
-    });
-
-    test("calculates total_ec2_cost using sum function", () => {
-      expect(mainTfContent).toMatch(/total_ec2_cost\s*=\s*sum\(\[for\s+cost\s+in\s+values\(local\.ec2_costs\)/);
+    test("supports custom endpoint URL for local testing", () => {
+      expect(analyseContent).toMatch(/if endpoint_url:/);
+      expect(analyseContent).toMatch(/client_config\['endpoint_url'\]/);
     });
   });
 
-  describe("Local Values - RDS Validation", () => {
-    test("processes rds_databases with backup settings", () => {
-      expect(mainTfContent).toMatch(/rds_databases\s*=\s*{[\s\S]*?backup_enabled\s*=[\s\S]*?backup_retention_period\s*=/);
+  describe("EC2 Analysis Method", () => {
+    test("defines analyze_ec2_instances method", () => {
+      expect(analyseContent).toMatch(/def analyze_ec2_instances\(self,\s*environment_suffix:\s*str\)/);
     });
 
-    test("calculates rds_backup_violations for insufficient backups", () => {
-      expect(mainTfContent).toMatch(/rds_backup_violations\s*=\s*{[\s\S]*?backup_retention_period\s*<\s*7/);
+    test("defines approved_types list with t3.micro, t3.small, t3.medium", () => {
+      expect(analyseContent).toMatch(/approved_types\s*=\s*\['t3\.micro',\s*'t3\.small',\s*'t3\.medium'\]/);
+    });
+
+    test("includes instance cost estimates", () => {
+      expect(analyseContent).toMatch(/instance_costs\s*=\s*{/);
+      expect(analyseContent).toMatch(/'t3\.micro':\s*7\.30/);
+      expect(analyseContent).toMatch(/'t3\.small':\s*14\.60/);
+      expect(analyseContent).toMatch(/'t3\.medium':\s*29\.20/);
+    });
+
+    test("filters EC2 instances by environment tag", () => {
+      expect(analyseContent).toMatch(/Filters=\[[\s\S]*?'Name':\s*'tag:Environment'/);
+    });
+
+    test("returns type_violations for unapproved instance types", () => {
+      expect(analyseContent).toMatch(/type_violations.*append/);
+      expect(analyseContent).toMatch(/instance_type not in approved_types/);
+    });
+
+    test("only checks running instances for type violations", () => {
+      expect(analyseContent).toMatch(/if state == 'running' and instance_type not in approved_types/);
+    });
+
+    test("returns cost_warnings for expensive instances", () => {
+      expect(analyseContent).toMatch(/cost_warnings.*append/);
+      expect(analyseContent).toMatch(/estimated_cost > 100\.0/);
+    });
+
+    test("handles API errors gracefully", () => {
+      expect(analyseContent).toMatch(/except Exception as e:/);
+      expect(analyseContent).toMatch(/EC2 analysis error/);
     });
   });
 
-  describe("Local Values - S3 Validation", () => {
-    test("processes s3_buckets with versioning and encryption", () => {
-      expect(mainTfContent).toMatch(/s3_buckets\s*=\s*{[\s\S]*?versioning_enabled\s*=[\s\S]*?encryption_enabled\s*=/);
+  describe("RDS Analysis Method", () => {
+    test("defines analyze_rds_databases method", () => {
+      expect(analyseContent).toMatch(/def analyze_rds_databases\(self,\s*environment_suffix:\s*str\)/);
     });
 
-    test("calculates s3_compliance_violations for non-compliant buckets", () => {
-      expect(mainTfContent).toMatch(/s3_compliance_violations\s*=\s*{[\s\S]*?!bucket\.versioning_enabled\s*\|\|\s*!bucket\.encryption_enabled/);
+    test("uses describe_db_instances API call", () => {
+      expect(analyseContent).toMatch(/self\.rds_client\.describe_db_instances\(\)/);
+    });
+
+    test("checks backup retention period >= 7 days", () => {
+      expect(analyseContent).toMatch(/backup_retention < 7/);
+    });
+
+    test("returns backup_violations for non-compliant databases", () => {
+      expect(analyseContent).toMatch(/backup_violations.*append/);
+    });
+
+    test("filters databases by environment suffix in identifier", () => {
+      expect(analyseContent).toMatch(/if environment_suffix in db_identifier/);
+    });
+
+    test("handles API errors gracefully", () => {
+      expect(analyseContent).toMatch(/RDS analysis error/);
     });
   });
 
-  describe("Local Values - Security Group Validation", () => {
-    test("defines allowed_public_ports list (80, 443)", () => {
-      expect(mainTfContent).toMatch(/allowed_public_ports\s*=\s*\[80,\s*443\]/);
+  describe("S3 Analysis Method", () => {
+    test("defines analyze_s3_buckets method", () => {
+      expect(analyseContent).toMatch(/def analyze_s3_buckets\(self,\s*environment_suffix:\s*str\)/);
     });
 
-    test("processes security_groups with ingress rules", () => {
-      expect(mainTfContent).toMatch(/security_groups\s*=\s*{[\s\S]*?ingress\s*=/);
+    test("uses list_buckets API call", () => {
+      expect(analyseContent).toMatch(/self\.s3_client\.list_buckets\(\)/);
     });
 
-    test("calculates sg_violations for unrestricted access", () => {
-      expect(mainTfContent).toMatch(/sg_violations\s*=\s*merge\(\[[\s\S]*?0\.0\.0\.0\/0[\s\S]*?!contains\(local\.allowed_public_ports/);
+    test("checks versioning status", () => {
+      expect(analyseContent).toMatch(/get_bucket_versioning/);
+      expect(analyseContent).toMatch(/versioning\.get\('Status'\)\s*==\s*'Enabled'/);
+    });
+
+    test("checks encryption configuration", () => {
+      expect(analyseContent).toMatch(/get_bucket_encryption/);
+    });
+
+    test("returns compliance_violations for non-compliant buckets", () => {
+      expect(analyseContent).toMatch(/compliance_violations.*append/);
+    });
+
+    test("handles ServerSideEncryptionConfigurationNotFoundError", () => {
+      expect(analyseContent).toMatch(/ServerSideEncryptionConfigurationNotFoundError/);
+    });
+
+    test("filters buckets by environment suffix in name", () => {
+      expect(analyseContent).toMatch(/if environment_suffix in bucket_name/);
+    });
+
+    test("handles API errors gracefully", () => {
+      expect(analyseContent).toMatch(/S3 analysis error/);
     });
   });
 
-  describe("Local Values - Tagging Validation", () => {
-    test("defines required_tags list", () => {
-      expect(mainTfContent).toMatch(/required_tags\s*=\s*\["Environment",\s*"Owner",\s*"CostCenter",\s*"Project"\]/);
+  describe("Security Group Analysis Method", () => {
+    test("defines analyze_security_groups method", () => {
+      expect(analyseContent).toMatch(/def analyze_security_groups\(self,\s*environment_suffix:\s*str\)/);
     });
 
-    test("merges all_resources from EC2, RDS, S3", () => {
-      expect(mainTfContent).toMatch(/all_resources\s*=\s*merge\(/);
-      expect(mainTfContent).toMatch(/ec2-\$\{id\}/);
-      expect(mainTfContent).toMatch(/rds-\$\{id\}/);
-      expect(mainTfContent).toMatch(/s3-\$\{name\}/);
+    test("defines allowed_public_ports as [80, 443]", () => {
+      expect(analyseContent).toMatch(/allowed_public_ports\s*=\s*\[80,\s*443\]/);
     });
 
-    test("calculates resources_with_tag_violations", () => {
-      expect(mainTfContent).toMatch(/resources_with_tag_violations\s*=\s*{[\s\S]*?!contains\(keys\(tags\),\s*required_tag\)/);
+    test("uses describe_security_groups API call", () => {
+      expect(analyseContent).toMatch(/self\.ec2_client\.describe_security_groups/);
+    });
+
+    test("filters by environment tag", () => {
+      expect(analyseContent).toMatch(/Filters=\[[\s\S]*?'Name':\s*'tag:Environment'/);
+    });
+
+    test("checks for 0.0.0.0/0 CIDR in ingress rules", () => {
+      expect(analyseContent).toMatch(/CidrIp.*==.*0\.0\.0\.0\/0/);
+    });
+
+    test("returns unrestricted_violations for non-allowed ports", () => {
+      expect(analyseContent).toMatch(/unrestricted_violations.*append/);
+    });
+
+    test("allows public access only on ports 80 and 443", () => {
+      expect(analyseContent).toMatch(/from_port not in allowed_public_ports/);
+    });
+
+    test("handles API errors gracefully", () => {
+      expect(analyseContent).toMatch(/Security group analysis error/);
+    });
+  });
+
+  describe("Tagging Compliance Method", () => {
+    test("defines analyze_tagging_compliance method", () => {
+      expect(analyseContent).toMatch(/def analyze_tagging_compliance\(self,\s*ec2_results:\s*Dict,\s*rds_results:\s*Dict,\s*s3_results:\s*Dict\)/);
+    });
+
+    test("defines required_tags as Environment, Owner, CostCenter, Project", () => {
+      expect(analyseContent).toMatch(/'required_tags':\s*\['Environment',\s*'Owner',\s*'CostCenter',\s*'Project'\]/);
+    });
+
+    test("aggregates resources from EC2, RDS, and S3", () => {
+      expect(analyseContent).toMatch(/ec2-\{instance\['id'\]\}/);
+      expect(analyseContent).toMatch(/rds-\{db\['id'\]\}/);
+      expect(analyseContent).toMatch(/s3-\{bucket\['name'\]\}/);
+    });
+
+    test("returns resources_with_violations for missing tags", () => {
+      expect(analyseContent).toMatch(/resources_with_violations.*append/);
     });
 
     test("calculates compliance_percentage", () => {
-      expect(mainTfContent).toMatch(/compliance_percentage\s*=[\s\S]*?floor\(\(local\.compliant_resources\s*\/\s*local\.total_resources\)\s*\*\s*100\)/);
+      expect(analyseContent).toMatch(/compliance_percentage.*round/);
+      expect(analyseContent).toMatch(/compliant_count \/ results\['total_resources'\] \* 100/);
+    });
+
+    test("handles division by zero for empty resources", () => {
+      expect(analyseContent).toMatch(/if results\['total_resources'\] > 0 else 0/);
     });
   });
 
-  describe("Local Values - Overall Metrics", () => {
-    test("calculates total_resources", () => {
-      expect(mainTfContent).toMatch(/total_resources\s*=\s*length\(local\.all_resources\)/);
+  describe("Report Generation Method", () => {
+    test("defines generate_report method", () => {
+      expect(analyseContent).toMatch(/def generate_report\(self,\s*environment_suffix:\s*str\)/);
     });
 
-    test("calculates compliant_resources", () => {
-      expect(mainTfContent).toMatch(/compliant_resources\s*=\s*local\.total_resources\s*-\s*length\(local\.resources_with_tag_violations\)/);
+    test("calls all analysis methods", () => {
+      expect(analyseContent).toMatch(/ec2_results = self\.analyze_ec2_instances\(environment_suffix\)/);
+      expect(analyseContent).toMatch(/rds_results = self\.analyze_rds_databases\(environment_suffix\)/);
+      expect(analyseContent).toMatch(/s3_results = self\.analyze_s3_buckets\(environment_suffix\)/);
+      expect(analyseContent).toMatch(/sg_results = self\.analyze_security_groups\(environment_suffix\)/);
+      expect(analyseContent).toMatch(/tagging_results = self\.analyze_tagging_compliance\(ec2_results, rds_results, s3_results\)/);
     });
 
     test("calculates total_violations", () => {
-      expect(mainTfContent).toMatch(/total_violations\s*=\s*\(/);
-      expect(mainTfContent).toMatch(/length\(local\.ec2_type_violations\)/);
-      expect(mainTfContent).toMatch(/length\(local\.rds_backup_violations\)/);
-      expect(mainTfContent).toMatch(/length\(local\.s3_compliance_violations\)/);
-      expect(mainTfContent).toMatch(/length\(local\.sg_violations\)/);
-      expect(mainTfContent).toMatch(/length\(local\.resources_with_tag_violations\)/);
+      expect(analyseContent).toMatch(/total_violations\s*=\s*\(/);
+      expect(analyseContent).toMatch(/len\(ec2_results\.get\('type_violations', \[\]\)\)/);
+      expect(analyseContent).toMatch(/len\(rds_results\.get\('backup_violations', \[\]\)\)/);
+      expect(analyseContent).toMatch(/len\(s3_results\.get\('compliance_violations', \[\]\)\)/);
+      expect(analyseContent).toMatch(/len\(sg_results\.get\('unrestricted_violations', \[\]\)\)/);
+    });
+
+    test("includes timestamp in report", () => {
+      expect(analyseContent).toMatch(/'timestamp':\s*self\.timestamp/);
+    });
+
+    test("includes environment_suffix in report", () => {
+      expect(analyseContent).toMatch(/'environment_suffix':\s*environment_suffix/);
+    });
+
+    test("includes region in report", () => {
+      expect(analyseContent).toMatch(/'region':\s*self\.region/);
+    });
+
+    test("includes compliance_status for each category", () => {
+      expect(analyseContent).toMatch(/'compliance_status':\s*'PASS' if/);
+    });
+
+    test("includes overall_status in summary", () => {
+      expect(analyseContent).toMatch(/'overall_status':\s*'PASS' if total_violations == 0 else 'FAIL'/);
+    });
+
+    test("includes compliance_by_category in summary", () => {
+      expect(analyseContent).toMatch(/'compliance_by_category':\s*{/);
+      expect(analyseContent).toMatch(/'ec2_instances':/);
+      expect(analyseContent).toMatch(/'rds_databases':/);
+      expect(analyseContent).toMatch(/'s3_buckets':/);
+      expect(analyseContent).toMatch(/'security_groups':/);
+      expect(analyseContent).toMatch(/'tagging':/);
     });
   });
 
-  describe("Output Structure", () => {
-    test("declares ec2_instance_analysis output", () => {
-      expect(outputsTfContent).toMatch(/output\s+"ec2_instance_analysis"\s*{/);
-      expect(outputsTfContent).toMatch(/total_instances\s*=\s*length\(local\.ec2_instances\)/);
-      expect(outputsTfContent).toMatch(/compliance_status\s*=[\s\S]*?PASS[\s\S]*?FAIL/);
+  describe("Main Function", () => {
+    test("defines main function", () => {
+      expect(analyseContent).toMatch(/def main\(\):/);
     });
 
-    test("declares rds_database_analysis output", () => {
-      expect(outputsTfContent).toMatch(/output\s+"rds_database_analysis"\s*{/);
-      expect(outputsTfContent).toMatch(/total_databases\s*=\s*length\(local\.rds_databases\)/);
+    test("reads AWS_REGION from environment", () => {
+      expect(analyseContent).toMatch(/region = os\.getenv\('AWS_REGION', 'us-east-1'\)/);
     });
 
-    test("declares s3_bucket_analysis output", () => {
-      expect(outputsTfContent).toMatch(/output\s+"s3_bucket_analysis"\s*{/);
-      expect(outputsTfContent).toMatch(/total_buckets\s*=\s*length\(local\.s3_buckets\)/);
+    test("reads AWS_ENDPOINT_URL from environment for testing", () => {
+      expect(analyseContent).toMatch(/endpoint_url = os\.getenv\('AWS_ENDPOINT_URL'\)/);
     });
 
-    test("declares security_group_analysis output", () => {
-      expect(outputsTfContent).toMatch(/output\s+"security_group_analysis"\s*{/);
-      expect(outputsTfContent).toMatch(/total_security_groups\s*=\s*length\(local\.security_groups\)/);
+    test("reads ENVIRONMENT_SUFFIX from environment", () => {
+      expect(analyseContent).toMatch(/environment_suffix = os\.getenv\('ENVIRONMENT_SUFFIX', 'dev'\)/);
     });
 
-    test("declares tagging_compliance_analysis output", () => {
-      expect(outputsTfContent).toMatch(/output\s+"tagging_compliance_analysis"\s*{/);
-      expect(outputsTfContent).toMatch(/compliance_percentage\s*=\s*local\.compliance_percentage/);
+    test("saves report to analysis-results.txt", () => {
+      expect(analyseContent).toMatch(/output_file = 'analysis-results\.txt'/);
     });
 
-    test("declares compliance_summary output", () => {
-      expect(outputsTfContent).toMatch(/output\s+"compliance_summary"\s*{/);
-      expect(outputsTfContent).toMatch(/total_resources_analyzed\s*=\s*local\.total_resources/);
-      expect(outputsTfContent).toMatch(/total_violations\s*=\s*local\.total_violations/);
+    test("uses json.dump for report output", () => {
+      expect(analyseContent).toMatch(/json\.dump\(report,\s*f,\s*indent=2/);
     });
 
-    test("declares cost_summary output", () => {
-      expect(outputsTfContent).toMatch(/output\s+"cost_summary"\s*{/);
-      expect(outputsTfContent).toMatch(/ec2_total_monthly_cost\s*=\s*local\.total_ec2_cost/);
+    test("returns exit code based on violations", () => {
+      expect(analyseContent).toMatch(/return 0 if report\['summary'\]\['total_violations'\] == 0 else 1/);
     });
 
-    test("declares cicd_report output with jsonencode", () => {
-      expect(outputsTfContent).toMatch(/output\s+"cicd_report"\s*{/);
-      expect(outputsTfContent).toMatch(/jsonencode\(/);
-      expect(outputsTfContent).toMatch(/report_timestamp\s*=\s*timestamp\(\)/);
+    test("has if __name__ == '__main__' block", () => {
+      expect(analyseContent).toMatch(/if __name__ == '__main__':/);
     });
   });
 
-  describe("Analysis Module - Non-Destructive", () => {
-    test("does not declare any resource blocks", () => {
-      expect(mainTfContent).not.toMatch(/resource\s+"[^"]+"\s+"[^"]+"\s*{/);
+  describe("Logging Configuration", () => {
+    test("configures logging with INFO level", () => {
+      expect(analyseContent).toMatch(/logging\.basicConfig\(level=logging\.INFO/);
     });
 
-    test("uses only data sources for reading infrastructure", () => {
-      const dataSourceCount = (mainTfContent.match(/data\s+"[^"]+"\s+"[^"]+"\s*{/g) || []).length;
-      expect(dataSourceCount).toBeGreaterThan(0);
+    test("creates named logger", () => {
+      expect(analyseContent).toMatch(/logger = logging\.getLogger\(__name__\)/);
     });
 
-    test("uses try() function for graceful error handling", () => {
-      const tryCount = (mainTfContent.match(/try\(/g) || []).length;
-      expect(tryCount).toBeGreaterThan(5);
+    test("uses logger.info for status messages", () => {
+      expect(analyseContent).toMatch(/logger\.info\(/);
+    });
+
+    test("uses logger.error for error messages", () => {
+      expect(analyseContent).toMatch(/logger\.error\(/);
+    });
+
+    test("uses logger.warning for warnings", () => {
+      expect(analyseContent).toMatch(/logger\.warning\(/);
     });
   });
 
-  describe("Best Practices", () => {
-    test("uses for_each instead of count for data sources", () => {
-      expect(mainTfContent).toMatch(/for_each\s*=\s*toset\(/);
-      expect(mainTfContent).not.toMatch(/count\s*=/);
+  describe("Type Hints", () => {
+    test("uses Dict type hint for return values", () => {
+      expect(analyseContent).toMatch(/-> Dict\[str, Any\]:/);
     });
 
-    test("uses descriptive variable descriptions", () => {
-      expect(variablesTfContent).toMatch(/description\s*=\s*"[^"]+"/);
+    test("uses str type hint for parameters", () => {
+      expect(analyseContent).toMatch(/environment_suffix: str/);
+    });
+  });
+
+  describe("Error Handling", () => {
+    test("has try-except blocks in analysis methods", () => {
+      const tryCount = (analyseContent.match(/try:/g) || []).length;
+      expect(tryCount).toBeGreaterThanOrEqual(5);
     });
 
-    test("provides default values for optional variables", () => {
-      expect(variablesTfContent).toMatch(/default\s*=\s*\[\]/);
+    test("catches generic Exception for robustness", () => {
+      const exceptCount = (analyseContent.match(/except Exception as e:/g) || []).length;
+      expect(exceptCount).toBeGreaterThanOrEqual(4);
     });
 
-    test("uses structured outputs with nested objects", () => {
-      expect(outputsTfContent).toMatch(/value\s*=\s*{/);
+    test("appends errors to issues list", () => {
+      expect(analyseContent).toMatch(/results\['issues'\]\.append/);
+    });
+  });
+
+  describe("Code Quality", () => {
+    test("has docstrings for class", () => {
+      expect(analyseContent).toMatch(/class InfrastructureAnalysisAnalyzer:[\s\S]*?"""/);
+    });
+
+    test("has docstrings for methods", () => {
+      // Check that methods have docstrings (triple-quoted strings after method definition)
+      const docstringCount = (analyseContent.match(/"""[\s\S]*?"""/g) || []).length;
+      expect(docstringCount).toBeGreaterThanOrEqual(6);
+    });
+
+    test("uses meaningful variable names", () => {
+      expect(analyseContent).toMatch(/environment_suffix/);
+      expect(analyseContent).toMatch(/backup_retention/);
+      expect(analyseContent).toMatch(/compliance_percentage/);
+    });
+
+    test("does not contain emojis", () => {
+      // Check for common emoji patterns
+      const emojiPattern = /[\u{1F300}-\u{1F9FF}]/u;
+      expect(analyseContent).not.toMatch(emojiPattern);
+    });
+  });
+
+  describe("Compliance Thresholds", () => {
+    test("uses 7 days minimum for RDS backup retention", () => {
+      expect(analyseContent).toMatch(/backup_retention < 7/);
+    });
+
+    test("uses $100 threshold for cost warnings", () => {
+      expect(analyseContent).toMatch(/estimated_cost > 100\.0/);
+    });
+
+    test("requires 4 tags: Environment, Owner, CostCenter, Project", () => {
+      expect(analyseContent).toMatch(/'Environment',\s*'Owner',\s*'CostCenter',\s*'Project'/);
+    });
+
+    test("allows only ports 80 and 443 for public access", () => {
+      expect(analyseContent).toMatch(/allowed_public_ports\s*=\s*\[80,\s*443\]/);
     });
   });
 });

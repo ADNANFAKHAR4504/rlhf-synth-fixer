@@ -1,6 +1,6 @@
 {
-  "platform": "tf",
-  "language": "hcl",
+  "platform": "analysis",
+  "language": "py",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "x8u0z8t8",

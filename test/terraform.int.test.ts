@@ -1,306 +1,401 @@
-// Terraform Infrastructure Analysis Module - Integration Tests
-// Tests the analysis module's ability to validate infrastructure scenarios
-// Note: This is an ANALYSIS task - no deployment required, only configuration validation
+// Infrastructure Analysis Module - Integration Tests
+// Tests Python analysis script functionality and output structure
+// Note: This is an ANALYSIS task - validates Python script behavior
 
 import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
 
-describe("Terraform Infrastructure Analysis Module - Integration Tests", () => {
+describe("Infrastructure Analysis Module - Integration Tests", () => {
   const libDir = path.resolve(__dirname, "../lib");
-  const testDataDir = path.resolve(__dirname, "test-data");
+  const testOutputDir = path.resolve(__dirname, "test-output");
+  let analyseContent: string;
 
   beforeAll(() => {
-    // Ensure test data directory exists
-    if (!fs.existsSync(testDataDir)) {
-      fs.mkdirSync(testDataDir, { recursive: true });
+    // Ensure test output directory exists
+    if (!fs.existsSync(testOutputDir)) {
+      fs.mkdirSync(testOutputDir, { recursive: true });
     }
+    analyseContent = fs.readFileSync(path.join(libDir, "analyse.py"), "utf8");
   });
 
-  describe("Terraform Configuration Validation", () => {
-    test("terraform init succeeds", () => {
-      const output = execSync("terraform init -backend=false", {
-        cwd: libDir,
+  describe("Python Script Validation", () => {
+    test("analyse.py has valid Python syntax", () => {
+      const result = execSync(`python3 -m py_compile ${path.join(libDir, "analyse.py")}`, {
+        encoding: "utf8",
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      // If compilation fails, it throws an error
+      expect(true).toBe(true);
+    });
+
+    test("analyse.py can be imported as a module", () => {
+      const checkScript = `
+import sys
+sys.path.insert(0, "${libDir}")
+try:
+    from analyse import InfrastructureAnalysisAnalyzer
+    print("SUCCESS")
+except Exception as e:
+    print(f"FAILED: {e}")
+`;
+      const result = execSync(`python3 -c '${checkScript}'`, {
         encoding: "utf8",
       });
-      expect(output).toContain("Terraform has been successfully initialized");
+      expect(result.trim()).toBe("SUCCESS");
     });
 
-    test("terraform validate succeeds", () => {
-      const output = execSync("terraform validate", {
-        cwd: libDir,
+    test("InfrastructureAnalysisAnalyzer class is properly defined", () => {
+      const checkScript = `
+import sys
+sys.path.insert(0, "${libDir}")
+from analyse import InfrastructureAnalysisAnalyzer
+import inspect
+methods = [m for m in dir(InfrastructureAnalysisAnalyzer) if not m.startswith('_')]
+print(','.join(methods))
+`;
+      const result = execSync(`python3 -c '${checkScript}'`, {
         encoding: "utf8",
       });
-      expect(output).toContain("Success!");
-      expect(output).toContain("The configuration is valid");
-    });
-
-    test("terraform fmt check passes", () => {
-      const output = execSync("terraform fmt -check -recursive", {
-        cwd: libDir,
-        encoding: "utf8",
-      }).trim();
-      // If output is empty, formatting is correct
-      expect(output).toBe("");
+      const methods = result.trim().split(",");
+      expect(methods).toContain("analyze_ec2_instances");
+      expect(methods).toContain("analyze_rds_databases");
+      expect(methods).toContain("analyze_s3_buckets");
+      expect(methods).toContain("analyze_security_groups");
+      expect(methods).toContain("analyze_tagging_compliance");
+      expect(methods).toContain("generate_report");
     });
   });
 
-  describe("Module Configuration - Empty Resource Lists", () => {
-    test("accepts empty resource lists without errors", () => {
-      const tfvarsPath = path.join(testDataDir, "empty.tfvars");
-      fs.writeFileSync(
-        tfvarsPath,
-        `
-aws_region            = "us-east-1"
-environment_suffix    = "test"
-ec2_instance_ids      = []
-rds_db_instance_ids   = []
-s3_bucket_names       = []
-security_group_ids    = []
-`
-      );
+  describe("EC2 Analysis Logic", () => {
+    test("approved_types list contains correct instance types", () => {
+      expect(analyseContent).toContain("'t3.micro'");
+      expect(analyseContent).toContain("'t3.small'");
+      expect(analyseContent).toContain("'t3.medium'");
+    });
 
-      const output = execSync(`terraform validate`, {
-        cwd: libDir,
-        encoding: "utf8",
-      });
+    test("instance_costs dictionary has pricing for common types", () => {
+      expect(analyseContent).toMatch(/'t3\.micro':\s*7\.30/);
+      expect(analyseContent).toMatch(/'t3\.small':\s*14\.60/);
+      expect(analyseContent).toMatch(/'t3\.medium':\s*29\.20/);
+      expect(analyseContent).toMatch(/'m5\.large':\s*69\.35/);
+      expect(analyseContent).toMatch(/'m5\.xlarge':\s*138\.70/);
+    });
 
-      expect(output).toContain("Success!");
+    test("type_violations detection checks for running state", () => {
+      expect(analyseContent).toMatch(/if state == 'running' and instance_type not in approved_types/);
+    });
+
+    test("cost_warnings threshold is $100", () => {
+      expect(analyseContent).toMatch(/estimated_cost > 100\.0/);
     });
   });
 
-  describe("Module Configuration - With Test Resource IDs", () => {
-    test("accepts valid resource ID formats", () => {
-      const tfvarsPath = path.join(testDataDir, "valid-resources.tfvars");
-      fs.writeFileSync(
-        tfvarsPath,
-        `
-aws_region            = "us-east-1"
-environment_suffix    = "test"
-ec2_instance_ids      = ["i-0123456789abcdef0", "i-0abcdef123456789"]
-rds_db_instance_ids   = ["mydb-test", "analytics-test"]
-s3_bucket_names       = ["mybucket-test", "logs-test"]
-security_group_ids    = ["sg-0123456789abcdef0", "sg-0abcdef123456789"]
-`
-      );
+  describe("RDS Analysis Logic", () => {
+    test("backup retention minimum is 7 days", () => {
+      expect(analyseContent).toMatch(/backup_retention < 7/);
+    });
 
-      const output = execSync(`terraform validate`, {
-        cwd: libDir,
-        encoding: "utf8",
-      });
+    test("checks backup_enabled flag", () => {
+      expect(analyseContent).toMatch(/backup_enabled = backup_retention > 0/);
+    });
 
-      expect(output).toContain("Success!");
+    test("filters by environment suffix in identifier", () => {
+      expect(analyseContent).toMatch(/if environment_suffix in db_identifier/);
     });
   });
 
-  describe("Analysis Logic - EC2 Validation", () => {
-    test("approved_instance_types list contains t3.micro, t3.small, t3.medium", () => {
-      const mainTf = fs.readFileSync(path.join(libDir, "main.tf"), "utf8");
-      expect(mainTf).toContain('approved_instance_types = ["t3.micro", "t3.small", "t3.medium"]');
+  describe("S3 Analysis Logic", () => {
+    test("checks versioning status is Enabled", () => {
+      expect(analyseContent).toMatch(/versioning\.get\('Status'\)\s*==\s*'Enabled'/);
     });
 
-    test("instance_costs map includes pricing for common instance types", () => {
-      const mainTf = fs.readFileSync(path.join(libDir, "main.tf"), "utf8");
-      expect(mainTf).toMatch(/"t3\.micro"\s*=\s*7\.30/);
-      expect(mainTf).toMatch(/"t3\.small"\s*=\s*14\.60/);
-      expect(mainTf).toMatch(/"t3\.medium"\s*=\s*29\.20/);
+    test("checks encryption configuration exists", () => {
+      expect(analyseContent).toMatch(/get_bucket_encryption/);
     });
 
-    test("EC2 validation logic checks for unapproved instance types", () => {
-      const mainTf = fs.readFileSync(path.join(libDir, "main.tf"), "utf8");
-      expect(mainTf).toMatch(/ec2_type_violations.*!contains\(local\.approved_instance_types/s);
+    test("filters by environment suffix in bucket name", () => {
+      expect(analyseContent).toMatch(/if environment_suffix in bucket_name/);
     });
 
-    test("EC2 cost warnings trigger for instances over $100/month", () => {
-      const mainTf = fs.readFileSync(path.join(libDir, "main.tf"), "utf8");
-      expect(mainTf).toMatch(/ec2_cost_warnings.*cost\s*>\s*100\.0/s);
+    test("handles ServerSideEncryptionConfigurationNotFoundError", () => {
+      expect(analyseContent).toMatch(/ServerSideEncryptionConfigurationNotFoundError/);
     });
   });
 
-  describe("Analysis Logic - RDS Validation", () => {
-    test("RDS backup validation checks retention period >= 7 days", () => {
-      const mainTf = fs.readFileSync(path.join(libDir, "main.tf"), "utf8");
-      expect(mainTf).toMatch(/rds_backup_violations.*backup_retention_period\s*<\s*7/s);
+  describe("Security Group Analysis Logic", () => {
+    test("allowed_public_ports contains only 80 and 443", () => {
+      expect(analyseContent).toMatch(/allowed_public_ports\s*=\s*\[80,\s*443\]/);
     });
 
-    test("RDS backup validation checks backup_enabled flag", () => {
-      const mainTf = fs.readFileSync(path.join(libDir, "main.tf"), "utf8");
-      expect(mainTf).toMatch(/!db\.backup_enabled/);
-    });
-  });
-
-  describe("Analysis Logic - S3 Validation", () => {
-    test("S3 validation checks versioning_enabled", () => {
-      const mainTf = fs.readFileSync(path.join(libDir, "main.tf"), "utf8");
-      expect(mainTf).toMatch(/!bucket\.versioning_enabled/);
+    test("detects 0.0.0.0/0 CIDR for unrestricted access", () => {
+      expect(analyseContent).toMatch(/CidrIp.*==.*0\.0\.0\.0\/0/);
     });
 
-    test("S3 validation checks encryption_enabled", () => {
-      const mainTf = fs.readFileSync(path.join(libDir, "main.tf"), "utf8");
-      expect(mainTf).toMatch(/!bucket\.encryption_enabled/);
-    });
-
-    test("S3 uses external data source for versioning check", () => {
-      const mainTf = fs.readFileSync(path.join(libDir, "main.tf"), "utf8");
-      expect(mainTf).toMatch(/data\s+"external"\s+"s3_versioning"/);
-      expect(mainTf).toMatch(/aws s3api get-bucket-versioning/);
-    });
-
-    test("S3 uses external data source for encryption check", () => {
-      const mainTf = fs.readFileSync(path.join(libDir, "main.tf"), "utf8");
-      expect(mainTf).toMatch(/data\s+"external"\s+"s3_encryption"/);
-      expect(mainTf).toMatch(/aws s3api get-bucket-encryption/);
+    test("flags non-allowed ports with public access", () => {
+      expect(analyseContent).toMatch(/from_port not in allowed_public_ports/);
     });
   });
 
-  describe("Analysis Logic - Security Group Validation", () => {
-    test("allows ports 80 and 443 for public access", () => {
-      const mainTf = fs.readFileSync(path.join(libDir, "main.tf"), "utf8");
-      expect(mainTf).toMatch(/allowed_public_ports\s*=\s*\[80,\s*443\]/);
+  describe("Tagging Compliance Logic", () => {
+    test("required_tags contains Environment, Owner, CostCenter, Project", () => {
+      expect(analyseContent).toMatch(/required_tags.*=.*\['Environment',\s*'Owner',\s*'CostCenter',\s*'Project'\]/);
     });
 
-    test("flags unrestricted access (0.0.0.0/0) to other ports", () => {
-      const mainTf = fs.readFileSync(path.join(libDir, "main.tf"), "utf8");
-      expect(mainTf).toMatch(/0\.0\.0\.0\/0/);
-      expect(mainTf).toMatch(/!contains\(local\.allowed_public_ports/);
-    });
-  });
-
-  describe("Analysis Logic - Tagging Validation", () => {
-    test("requires Environment, Owner, CostCenter, Project tags", () => {
-      const mainTf = fs.readFileSync(path.join(libDir, "main.tf"), "utf8");
-      expect(mainTf).toMatch(/required_tags\s*=\s*\["Environment",\s*"Owner",\s*"CostCenter",\s*"Project"\]/);
+    test("aggregates resources from multiple sources", () => {
+      expect(analyseContent).toMatch(/ec2-\{instance\['id'\]\}/);
+      expect(analyseContent).toMatch(/rds-\{db\['id'\]\}/);
+      expect(analyseContent).toMatch(/s3-\{bucket\['name'\]\}/);
     });
 
-    test("merges resources from EC2, RDS, and S3", () => {
-      const mainTf = fs.readFileSync(path.join(libDir, "main.tf"), "utf8");
-      expect(mainTf).toMatch(/all_resources\s*=\s*merge\(/);
-      expect(mainTf).toMatch(/ec2-\$\{id\}/);
-      expect(mainTf).toMatch(/rds-\$\{id\}/);
-      expect(mainTf).toMatch(/s3-\$\{name\}/);
-    });
-
-    test("calculates compliance percentage", () => {
-      const mainTf = fs.readFileSync(path.join(libDir, "main.tf"), "utf8");
-      expect(mainTf).toMatch(/compliance_percentage.*floor.*compliant_resources.*total_resources/s);
+    test("handles division by zero in percentage calculation", () => {
+      expect(analyseContent).toMatch(/if results\['total_resources'\] > 0 else 0/);
     });
   });
 
-  describe("Output Validation", () => {
-    test("outputs include PASS/FAIL compliance status", () => {
-      const outputsTf = fs.readFileSync(path.join(libDir, "outputs.tf"), "utf8");
-      expect(outputsTf).toMatch(/compliance_status\s*=.*"PASS".*"FAIL"/s);
+  describe("Report Structure Validation", () => {
+    test("report includes timestamp field", () => {
+      expect(analyseContent).toMatch(/'timestamp':\s*self\.timestamp/);
     });
 
-    test("outputs include total_violations count", () => {
-      const outputsTf = fs.readFileSync(path.join(libDir, "outputs.tf"), "utf8");
-      expect(outputsTf).toMatch(/total_violations\s*=\s*local\.total_violations/);
+    test("report includes environment_suffix field", () => {
+      expect(analyseContent).toMatch(/'environment_suffix':\s*environment_suffix/);
     });
 
-    test("outputs include cicd_report with jsonencode", () => {
-      const outputsTf = fs.readFileSync(path.join(libDir, "outputs.tf"), "utf8");
-      expect(outputsTf).toMatch(/output\s+"cicd_report"/);
-      expect(outputsTf).toMatch(/jsonencode\(/);
+    test("report includes region field", () => {
+      expect(analyseContent).toMatch(/'region':\s*self\.region/);
     });
 
-    test("outputs include timestamp for report generation", () => {
-      const outputsTf = fs.readFileSync(path.join(libDir, "outputs.tf"), "utf8");
-      expect(outputsTf).toMatch(/timestamp\(\)/);
-    });
-  });
-
-  describe("Non-Destructive Analysis", () => {
-    test("module uses only data sources, no resource creation", () => {
-      const mainTf = fs.readFileSync(path.join(libDir, "main.tf"), "utf8");
-      const resourceBlocks = mainTf.match(/resource\s+"[^"]+"\s+"[^"]+"\s*{/g);
-      expect(resourceBlocks).toBeNull();
+    test("report includes ec2_analysis section", () => {
+      expect(analyseContent).toMatch(/'ec2_analysis':\s*{/);
     });
 
-    test("all data sources use for_each for scalability", () => {
-      const mainTf = fs.readFileSync(path.join(libDir, "main.tf"), "utf8");
-      const dataSourcesWithForEach = mainTf.match(/data\s+"aws_\w+"\s+"[\w_]+"\s*{[\s\S]*?for_each\s*=/g);
-      expect(dataSourcesWithForEach).not.toBeNull();
-      expect(dataSourcesWithForEach!.length).toBeGreaterThanOrEqual(4); // EC2, RDS, S3, SG
+    test("report includes rds_analysis section", () => {
+      expect(analyseContent).toMatch(/'rds_analysis':\s*{/);
     });
 
-    test("uses try() for graceful error handling", () => {
-      const mainTf = fs.readFileSync(path.join(libDir, "main.tf"), "utf8");
-      const tryFunctions = mainTf.match(/try\(/g);
-      expect(tryFunctions).not.toBeNull();
-      expect(tryFunctions!.length).toBeGreaterThan(10); // Multiple try() usages
+    test("report includes s3_analysis section", () => {
+      expect(analyseContent).toMatch(/'s3_analysis':\s*{/);
+    });
+
+    test("report includes security_group_analysis section", () => {
+      expect(analyseContent).toMatch(/'security_group_analysis':\s*{/);
+    });
+
+    test("report includes tagging_analysis section", () => {
+      expect(analyseContent).toMatch(/'tagging_analysis':\s*{/);
+    });
+
+    test("report includes summary section", () => {
+      expect(analyseContent).toMatch(/'summary':\s*{/);
     });
   });
 
-  describe("Provider Configuration", () => {
-    test("requires AWS provider version 5.x", () => {
-      const providerTf = fs.readFileSync(path.join(libDir, "provider.tf"), "utf8");
-      expect(providerTf).toMatch(/version\s*=\s*"[>=~]+\s*5\.0"/);
+  describe("Summary Structure Validation", () => {
+    test("summary includes total_resources_analyzed", () => {
+      expect(analyseContent).toMatch(/'total_resources_analyzed':/);
     });
 
-    test("requires external provider for S3 checks", () => {
-      const providerTf = fs.readFileSync(path.join(libDir, "provider.tf"), "utf8");
-      expect(providerTf).toMatch(/external\s*=\s*{[\s\S]*?version\s*=\s*"~>\s*2\.0"/);
+    test("summary includes total_violations", () => {
+      expect(analyseContent).toMatch(/'total_violations':\s*total_violations/);
     });
 
-    test("configures default tags for resource tracking", () => {
-      const providerTf = fs.readFileSync(path.join(libDir, "provider.tf"), "utf8");
-      expect(providerTf).toMatch(/default_tags\s*{/);
-      expect(providerTf).toMatch(/Environment\s*=\s*var\.environment_suffix/);
-    });
-  });
-
-  describe("Module Reusability", () => {
-    test("accepts environment_suffix for multi-environment support", () => {
-      const variablesTf = fs.readFileSync(path.join(libDir, "variables.tf"), "utf8");
-      expect(variablesTf).toMatch(/variable\s+"environment_suffix"/);
+    test("summary includes compliance_by_category", () => {
+      expect(analyseContent).toMatch(/'compliance_by_category':\s*{/);
     });
 
-    test("provides default values for all optional variables", () => {
-      const variablesTf = fs.readFileSync(path.join(libDir, "variables.tf"), "utf8");
-      const defaultCount = (variablesTf.match(/default\s*=\s*\[\]/g) || []).length;
-      expect(defaultCount).toBeGreaterThanOrEqual(4); // All list variables have defaults
+    test("summary includes overall_compliance_percentage", () => {
+      expect(analyseContent).toMatch(/'overall_compliance_percentage':/);
     });
 
-    test("uses aws_region variable for multi-region support", () => {
-      const variablesTf = fs.readFileSync(path.join(libDir, "variables.tf"), "utf8");
-      expect(variablesTf).toMatch(/variable\s+"aws_region"/);
-      expect(variablesTf).toMatch(/default\s*=\s*"us-east-1"/);
+    test("summary includes overall_status as PASS/FAIL", () => {
+      expect(analyseContent).toMatch(/'overall_status':\s*'PASS' if total_violations == 0 else 'FAIL'/);
     });
   });
 
-  describe("Error Handling and Edge Cases", () => {
-    test("handles division by zero in compliance percentage calculation", () => {
-      const mainTf = fs.readFileSync(path.join(libDir, "main.tf"), "utf8");
-      expect(mainTf).toMatch(/compliance_percentage.*total_resources\s*>\s*0.*:\s*0/s);
+  describe("Compliance Status Logic", () => {
+    test("ec2_analysis compliance_status based on type_violations", () => {
+      expect(analyseContent).toMatch(/ec2_analysis.*compliance_status.*PASS.*type_violations/s);
     });
 
-    test("uses try() to handle missing resource attributes", () => {
-      const mainTf = fs.readFileSync(path.join(libDir, "main.tf"), "utf8");
-      expect(mainTf).toMatch(/try\(.*,\s*"unknown"\)/);
-      expect(mainTf).toMatch(/try\(.*,\s*false\)/);
-      expect(mainTf).toMatch(/try\(.*,\s*{}\)/);
+    test("rds_analysis compliance_status based on backup_violations", () => {
+      expect(analyseContent).toMatch(/rds_analysis.*compliance_status.*PASS.*backup_violations/s);
     });
 
-    test("filters running instances for cost calculations", () => {
-      const mainTf = fs.readFileSync(path.join(libDir, "main.tf"), "utf8");
-      expect(mainTf).toMatch(/ec2_costs.*instance\.state\s*==\s*"running"/s);
+    test("s3_analysis compliance_status based on compliance_violations", () => {
+      expect(analyseContent).toMatch(/s3_analysis.*compliance_status.*PASS.*compliance_violations/s);
+    });
+
+    test("security_group_analysis compliance_status based on unrestricted_violations", () => {
+      expect(analyseContent).toMatch(/security_group_analysis.*compliance_status.*PASS.*unrestricted_violations/s);
     });
   });
 
-  describe("Cost Analysis Functionality", () => {
-    test("calculates total EC2 monthly costs using sum()", () => {
-      const mainTf = fs.readFileSync(path.join(libDir, "main.tf"), "utf8");
-      expect(mainTf).toMatch(/total_ec2_cost\s*=\s*sum\(/);
+  describe("Environment Variable Configuration", () => {
+    test("AWS_REGION default is us-east-1", () => {
+      expect(analyseContent).toMatch(/os\.getenv\('AWS_REGION', 'us-east-1'\)/);
     });
 
-    test("provides individual instance cost breakdown", () => {
-      const outputsTf = fs.readFileSync(path.join(libDir, "outputs.tf"), "utf8");
-      expect(outputsTf).toMatch(/individual_costs\s*=\s*local\.ec2_costs/);
+    test("AWS_ENDPOINT_URL supports local testing", () => {
+      expect(analyseContent).toMatch(/os\.getenv\('AWS_ENDPOINT_URL'\)/);
     });
 
-    test("includes cost warnings in output", () => {
-      const outputsTf = fs.readFileSync(path.join(libDir, "outputs.tf"), "utf8");
-      expect(outputsTf).toMatch(/cost_warnings\s*=\s*local\.ec2_cost_warnings/);
+    test("ENVIRONMENT_SUFFIX default is dev", () => {
+      expect(analyseContent).toMatch(/os\.getenv\('ENVIRONMENT_SUFFIX', 'dev'\)/);
+    });
+  });
+
+  describe("Output File Generation", () => {
+    test("saves report to analysis-results.txt", () => {
+      expect(analyseContent).toMatch(/output_file = 'analysis-results\.txt'/);
+    });
+
+    test("uses json.dump with indent=2 for formatting", () => {
+      expect(analyseContent).toMatch(/json\.dump\(report,\s*f,\s*indent=2/);
+    });
+  });
+
+  describe("Exit Code Logic", () => {
+    test("returns 0 when no violations", () => {
+      expect(analyseContent).toMatch(/return 0 if.*total_violations.*== 0/);
+    });
+
+    test("returns 1 when violations exist", () => {
+      expect(analyseContent).toMatch(/return 0 if.*else 1/);
+    });
+  });
+
+  describe("Error Handling", () => {
+    test("EC2 analysis catches exceptions", () => {
+      expect(analyseContent).toMatch(/EC2 analysis error/);
+    });
+
+    test("RDS analysis catches exceptions", () => {
+      expect(analyseContent).toMatch(/RDS analysis error/);
+    });
+
+    test("S3 analysis catches exceptions", () => {
+      expect(analyseContent).toMatch(/S3 analysis error/);
+    });
+
+    test("Security group analysis catches exceptions", () => {
+      expect(analyseContent).toMatch(/Security group analysis error/);
+    });
+
+    test("issues are collected in report", () => {
+      expect(analyseContent).toMatch(/report\['issues'\] = all_issues/);
+    });
+  });
+
+  describe("Logging Configuration", () => {
+    test("configures logging at INFO level", () => {
+      expect(analyseContent).toMatch(/logging\.basicConfig\(level=logging\.INFO/);
+    });
+
+    test("logs analysis start for each resource type", () => {
+      expect(analyseContent).toMatch(/Analyzing EC2 instances/);
+      expect(analyseContent).toMatch(/Analyzing RDS databases/);
+      expect(analyseContent).toMatch(/Analyzing S3 buckets/);
+      expect(analyseContent).toMatch(/Analyzing security groups/);
+      expect(analyseContent).toMatch(/Analyzing tagging compliance/);
+    });
+
+    test("logs summary information", () => {
+      expect(analyseContent).toMatch(/Analysis Summary/);
+      expect(analyseContent).toMatch(/Analysis complete/);
+    });
+  });
+
+  describe("AWS API Calls", () => {
+    test("uses describe_instances for EC2", () => {
+      expect(analyseContent).toMatch(/describe_instances/);
+    });
+
+    test("uses describe_db_instances for RDS", () => {
+      expect(analyseContent).toMatch(/describe_db_instances/);
+    });
+
+    test("uses list_buckets for S3", () => {
+      expect(analyseContent).toMatch(/list_buckets/);
+    });
+
+    test("uses get_bucket_versioning for S3 versioning", () => {
+      expect(analyseContent).toMatch(/get_bucket_versioning/);
+    });
+
+    test("uses get_bucket_encryption for S3 encryption", () => {
+      expect(analyseContent).toMatch(/get_bucket_encryption/);
+    });
+
+    test("uses describe_security_groups for security groups", () => {
+      expect(analyseContent).toMatch(/describe_security_groups/);
+    });
+
+    test("uses list_tags_for_resource for RDS tags", () => {
+      expect(analyseContent).toMatch(/list_tags_for_resource/);
+    });
+  });
+
+  describe("Code Quality", () => {
+    test("does not contain TODO comments", () => {
+      expect(analyseContent).not.toMatch(/TODO/i);
+    });
+
+    test("does not contain FIXME comments", () => {
+      expect(analyseContent).not.toMatch(/FIXME/i);
+    });
+
+    test("does not contain hardcoded AWS credentials", () => {
+      expect(analyseContent).not.toMatch(/AKIA[0-9A-Z]{16}/);
+    });
+
+    test("does not contain emojis", () => {
+      const emojiPattern = /[\u{1F300}-\u{1F9FF}]/u;
+      expect(analyseContent).not.toMatch(emojiPattern);
+    });
+  });
+
+  describe("Compliance Categories", () => {
+    test("compliance_by_category includes ec2_instances", () => {
+      expect(analyseContent).toMatch(/'ec2_instances':/);
+    });
+
+    test("compliance_by_category includes rds_databases", () => {
+      expect(analyseContent).toMatch(/'rds_databases':/);
+    });
+
+    test("compliance_by_category includes s3_buckets", () => {
+      expect(analyseContent).toMatch(/'s3_buckets':/);
+    });
+
+    test("compliance_by_category includes security_groups", () => {
+      expect(analyseContent).toMatch(/'security_groups':/);
+    });
+
+    test("compliance_by_category includes tagging", () => {
+      expect(analyseContent).toMatch(/'tagging':/);
+    });
+  });
+
+  describe("Total Violations Calculation", () => {
+    test("sums ec2 type_violations", () => {
+      expect(analyseContent).toMatch(/len\(ec2_results\.get\('type_violations', \[\]\)\)/);
+    });
+
+    test("sums rds backup_violations", () => {
+      expect(analyseContent).toMatch(/len\(rds_results\.get\('backup_violations', \[\]\)\)/);
+    });
+
+    test("sums s3 compliance_violations", () => {
+      expect(analyseContent).toMatch(/len\(s3_results\.get\('compliance_violations', \[\]\)\)/);
+    });
+
+    test("sums security group unrestricted_violations", () => {
+      expect(analyseContent).toMatch(/len\(sg_results\.get\('unrestricted_violations', \[\]\)\)/);
+    });
+
+    test("sums tagging resources_with_violations", () => {
+      expect(analyseContent).toMatch(/len\(tagging_results\.get\('resources_with_violations', \[\]\)\)/);
     });
   });
 });
