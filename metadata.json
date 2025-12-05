@@ -10,12 +10,13 @@
   "subject_labels": [
     "Security Configuration as Code"
   ],
+  "training_quality": 9,
   "aws_services": [
-    "S3 Bucket",
-    "CloudFormation",
-    "Lambda",
-    "EventBridge",
-    "CloudWatch LogGroup",
-    "VPC"
+    "EC2",
+    "VPC",
+    "IAM",
+    "S3",
+    "KMS",
+    "CloudWatch Logs"
   ]
 }
