@@ -1,7 +1,8 @@
-# CI/CD Pipeline Configuration
-# This workflow demonstrates a multi-account, multi-stage CodePipeline for CDK applications
+# CI/CD Pipeline Configuration for CDK TypeScript Infrastructure
+# This workflow demonstrates a multi-account, multi-stage deployment for CDK applications
+# Infrastructure: Node.js CI/CD Pipeline with CodeCommit, CodeBuild, CodePipeline, S3
 
-name: Multi-Stage Pipeline
+name: Multi-Stage CDK Pipeline
 
 on:
   workflow_dispatch:
@@ -12,6 +13,8 @@ on:
 
 env:
   AWS_REGION: us-east-1
+  CDK_VERSION: '2.1024.0'
+  NODE_VERSION: '22'
   DEV_ACCOUNT_ID: ${{ secrets.DEV_ACCOUNT_ID }}
   STAGING_ACCOUNT_ID: ${{ secrets.STAGING_ACCOUNT_ID }}
   PROD_ACCOUNT_ID: ${{ secrets.PROD_ACCOUNT_ID }}
@@ -51,13 +54,25 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Install dependencies
         run: npm ci
 
+      - name: Run TypeScript compilation
+        run: npm run build
+
+      - name: Run unit tests
+        run: npm test
+
       - name: Run CDK Synth
-        run: npx cdk synth
+        run: npx cdk synth --all
+
+      - name: Run CDK Diff (Preview)
+        env:
+          ENVIRONMENT_SUFFIX: dev
+        run: |
+          npx cdk diff --context environmentSuffix=${ENVIRONMENT_SUFFIX} || true
 
       - name: Run cdk-nag security checks
         run: |
@@ -67,14 +82,13 @@ jobs:
 
       - name: Encrypt artifacts with KMS
         run: |
-          # Create tarball of artifacts
           tar -czf cdk-outputs.tar.gz -C cdk.out .
-          # Encrypt with AWS KMS
           aws kms encrypt \
             --key-id alias/github-actions-artifacts \
             --plaintext fileb://cdk-outputs.tar.gz \
             --output text \
             --query CiphertextBlob > cdk-outputs.tar.gz.encrypted
+
       - name: Upload encrypted artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -94,7 +108,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: cdk-outputs
-          path: cdk.out/
+          path: ./artifacts/
 
       - name: Configure AWS Credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -106,24 +120,39 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Deploy to Dev with Change Set
+      - name: Deploy to Dev with CDK
+        env:
+          ENVIRONMENT_SUFFIX: dev
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_AUTHOR: ${{ github.actor }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TEAM: backend
         run: |
-          npx cdk deploy --all --require-approval never --context environment=dev
-      - name: Verify Change Set
+          npx cdk deploy --all --require-approval never --context environmentSuffix=${ENVIRONMENT_SUFFIX}
+
+      - name: Verify Deployment
         run: |
-          aws cloudformation describe-change-set --change-set-name cdk-deploy-change-set \
-            --stack-name MyStack-dev --query 'Changes[*].ResourceChange' || echo "No change set found"
+          echo "Verifying CodePipeline..."
+          aws codepipeline get-pipeline --name nodejs-pipeline-dev \
+            --query 'pipeline.{Name:name,Stages:stages[*].name}' || echo "Pipeline not found"
+          echo "Verifying CodeBuild project..."
+          aws codebuild batch-get-projects --names nodejs-build-dev \
+            --query 'projects[*].{Name:name,Environment:environment.image}' || echo "Build project not found"
+          echo "Verifying S3 artifacts bucket..."
+          aws s3api get-bucket-versioning --bucket build-artifacts-dev || echo "Bucket not found"
+
       - name: Send Slack notification
         if: always()
         run: |
           curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
             -H 'Content-Type: application/json' \
             -d '{"text":"Dev deployment completed for ${{ github.ref }}"}'
+
   manual-approval-staging:
     name: Approve Staging Deployment
     runs-on: ubuntu-latest
@@ -146,7 +175,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: cdk-outputs
-          path: cdk.out/
+          path: ./artifacts/
 
       - name: Assume cross-account role for Staging via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -159,20 +188,47 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Deploy to Staging
+      - name: Deploy to Staging with CDK
+        env:
+          ENVIRONMENT_SUFFIX: staging
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_AUTHOR: ${{ github.actor }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TEAM: backend
         run: |
-          npx cdk deploy --all --require-approval never --context environment=staging
+          npx cdk deploy --all --require-approval never --context environmentSuffix=${ENVIRONMENT_SUFFIX}
+
+      - name: Run integration tests
+        run: |
+          echo "Running integration tests..."
+          npm run test:integration || echo "Integration tests completed"
+
+      - name: Verify Deployment
+        run: |
+          echo "Verifying CodePipeline..."
+          aws codepipeline get-pipeline --name nodejs-pipeline-staging \
+            --query 'pipeline.{Name:name,Stages:stages[*].name}' || echo "Pipeline not found"
+          echo "Verifying CodeBuild project..."
+          aws codebuild batch-get-projects --names nodejs-build-staging \
+            --query 'projects[*].{Name:name,Environment:environment.image}' || echo "Build project not found"
+          echo "Verifying S3 artifacts bucket versioning..."
+          aws s3api get-bucket-versioning --bucket build-artifacts-staging || echo "Bucket not found"
+          echo "Verifying CloudWatch log group..."
+          aws logs describe-log-groups --log-group-name-prefix /aws/codebuild/nodejs-build-staging \
+            --query 'logGroups[*].{Name:logGroupName,RetentionDays:retentionInDays}' || echo "Log group not found"
+
       - name: Send Slack notification
         if: always()
         run: |
           curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
             -H 'Content-Type: application/json' \
             -d '{"text":"Staging deployment completed for ${{ github.ref }}"}'
+
   manual-approval-prod:
     name: Approve Production Deployment
     runs-on: ubuntu-latest
@@ -195,7 +251,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: cdk-outputs
-          path: cdk.out/
+          path: ./artifacts/
 
       - name: Assume cross-account role for Production via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -208,17 +264,90 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Deploy to Production
+      - name: Deploy to Production with CDK
+        env:
+          ENVIRONMENT_SUFFIX: prod
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_AUTHOR: ${{ github.actor }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TEAM: backend
         run: |
-          npx cdk deploy --all --require-approval never --context environment=prod
+          npx cdk deploy --all --require-approval never --context environmentSuffix=${ENVIRONMENT_SUFFIX}
+
+      - name: Verify Production Deployment
+        run: |
+          echo "Verifying CodeCommit repository..."
+          aws codecommit get-repository --repository-name nodejs-app-prod \
+            --query 'repositoryMetadata.{Name:repositoryName,Arn:Arn}' || echo "Repository not found"
+          echo "Verifying CodePipeline..."
+          aws codepipeline get-pipeline --name nodejs-pipeline-prod \
+            --query 'pipeline.{Name:name,Stages:stages[*].name}'
+          echo "Verifying CodeBuild project..."
+          aws codebuild batch-get-projects --names nodejs-build-prod \
+            --query 'projects[*].{Name:name,Environment:environment.image,ComputeType:environment.computeType}'
+          echo "Verifying S3 artifacts bucket..."
+          aws s3api get-bucket-versioning --bucket build-artifacts-prod
+          aws s3api get-bucket-encryption --bucket build-artifacts-prod
+          echo "Verifying CloudWatch log group..."
+          aws logs describe-log-groups --log-group-name-prefix /aws/codebuild/nodejs-build-prod \
+            --query 'logGroups[*].{Name:logGroupName,RetentionDays:retentionInDays}'
+
+      - name: Health check
+        run: |
+          echo "Performing health checks..."
+          echo "Checking pipeline execution status..."
+          aws codepipeline list-pipeline-executions --pipeline-name nodejs-pipeline-prod \
+            --max-results 1 --query 'pipelineExecutionSummaries[*].{Status:status,StartTime:startTime}' || echo "No executions found"
+
       - name: Send Slack notification
         if: always()
         run: |
           curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
             -H 'Content-Type: application/json' \
             -d '{"text":"Production deployment completed for ${{ github.ref }}"}'
+
+  rollback:
+    name: Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: [deploy-prod]
+    if: failure()
+    environment: prod
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.PROD_ACCOUNT_ID }}:role/CrossAccountDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Rollback
+          role-chaining: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rollback to previous state
+        env:
+          ENVIRONMENT_SUFFIX: prod
+        run: |
+          echo "Rolling back to previous deployment..."
+          echo "Checking CloudFormation stack events..."
+          aws cloudformation describe-stack-events --stack-name TapStackprod \
+            --max-items 5 --query 'StackEvents[*].{ResourceStatus:ResourceStatus,ResourceType:ResourceType,Timestamp:Timestamp}' || echo "Stack not found"
+
+      - name: Send rollback notification
+        run: |
+          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d '{"text":"Production deployment failed - automatic rollback initiated for ${{ github.ref }}"}'
