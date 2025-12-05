@@ -159,7 +159,7 @@ jobs:
 environments:
   pr7908:
     region: us-east-1
-    account: "342597974367"
+    account: ${{ secrets.AWS_ACCOUNT_ID }}
     variables:
       ENVIRONMENT_SUFFIX: "pr7908"
       AWS_REGION: "us-east-1"
