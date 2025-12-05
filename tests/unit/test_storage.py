@@ -1,25 +1,26 @@
 """Unit tests for StorageConstruct"""
 import pytest
-from unittest.mock import Mock
 from cdktf import Testing, TerraformStack
+from lib.storage import StorageConstruct
 
 
 class TestStorageConstruct:
     """Test cases for StorageConstruct"""
 
     @pytest.fixture
-    def storage_construct(self):
-        """Create StorageConstruct for testing"""
-        from lib.storage import StorageConstruct
+    def app(self):
+        """Create CDKTF app for testing"""
+        return Testing.app()
 
-        app = Testing.app()
-        stack = TerraformStack(app, "test")
-        construct = StorageConstruct(
-            stack,
-            "test-storage",
-            environment_suffix="test"
-        )
-        return construct
+    @pytest.fixture
+    def stack(self, app):
+        """Create test stack"""
+        return TerraformStack(app, "test-stack")
+
+    @pytest.fixture
+    def storage_construct(self, stack):
+        """Create StorageConstruct for testing"""
+        return StorageConstruct(stack, "test-storage", "test")
 
     def test_storage_construct_initialization(self, storage_construct):
         """Test StorageConstruct initializes correctly"""
@@ -75,17 +76,10 @@ class TestStorageConstruct:
         """Test tags are properly applied to logs bucket"""
         assert storage_construct.logs_bucket is not None
 
-    def test_storage_construct_with_different_environment(self):
+    def test_storage_construct_with_different_environment(self, app):
         """Test StorageConstruct works with different environment suffixes"""
-        from lib.storage import StorageConstruct
-
-        app = Testing.app()
-        stack = Testing.stub_stack(app, "test")
-        construct = StorageConstruct(
-            stack,
-            "test-storage-prod",
-            environment_suffix="production"
-        )
+        stack = TerraformStack(app, "test-stack-prod")
+        construct = StorageConstruct(stack, "test-storage-prod", "production")
         assert construct is not None
 
     def test_encryption_algorithm_aes256(self, storage_construct):
@@ -115,3 +109,9 @@ class TestStorageConstruct:
         """Test all public access block settings are enabled"""
         assert storage_construct.static_assets_bucket is not None
         assert storage_construct.logs_bucket is not None
+
+    def test_storage_construct_synthesizes(self, stack):
+        """Test StorageConstruct synthesizes correctly"""
+        StorageConstruct(stack, "test-storage-synth", "test")
+        synth = Testing.synth(stack)
+        assert synth is not None

@@ -1,43 +1,50 @@
 """Unit tests for MonitoringConstruct"""
 import pytest
-from unittest.mock import Mock
 from cdktf import Testing, TerraformStack
+from lib.vpc import VpcConstruct
+from lib.security import SecurityConstruct
+from lib.alb import AlbConstruct
+from lib.database import DatabaseConstruct
+from lib.monitoring import MonitoringConstruct
 
 
 class TestMonitoringConstruct:
     """Test cases for MonitoringConstruct"""
 
     @pytest.fixture
-    def mock_alb(self):
-        """Mock ALB construct"""
-        alb = Mock()
-        alb.alb = Mock()
-        alb.alb.arn_suffix = "app/test-alb/1234567890123456"
-        return alb
+    def app(self):
+        """Create CDKTF app for testing"""
+        return Testing.app()
 
     @pytest.fixture
-    def mock_database(self):
-        """Mock Database construct"""
-        database = Mock()
-        database.cluster = Mock()
-        database.cluster.cluster_resource_id = "cluster-ABCDEFGHIJKLMNOP"
-        return database
+    def stack(self, app):
+        """Create test stack"""
+        return TerraformStack(app, "test-stack")
 
     @pytest.fixture
-    def monitoring_construct(self, mock_alb, mock_database):
+    def vpc(self, stack):
+        """Create real VPC construct"""
+        return VpcConstruct(stack, "test-vpc", "test")
+
+    @pytest.fixture
+    def security(self, stack, vpc):
+        """Create real Security construct"""
+        return SecurityConstruct(stack, "test-security", "test", vpc)
+
+    @pytest.fixture
+    def alb(self, stack, vpc, security):
+        """Create real ALB construct"""
+        return AlbConstruct(stack, "test-alb", "test", vpc, security)
+
+    @pytest.fixture
+    def database(self, stack, vpc, security):
+        """Create real Database construct"""
+        return DatabaseConstruct(stack, "test-database", "test", vpc, security)
+
+    @pytest.fixture
+    def monitoring_construct(self, stack, alb, database):
         """Create MonitoringConstruct for testing"""
-        from lib.monitoring import MonitoringConstruct
-
-        app = Testing.app()
-        stack = TerraformStack(app, "test")
-        construct = MonitoringConstruct(
-            stack,
-            "test-monitoring",
-            environment_suffix="test",
-            alb=mock_alb,
-            database=mock_database
-        )
-        return construct
+        return MonitoringConstruct(stack, "test-monitoring", "test", alb, database)
 
     def test_monitoring_construct_initialization(self, monitoring_construct):
         """Test MonitoringConstruct initializes correctly"""
@@ -114,19 +121,14 @@ class TestMonitoringConstruct:
         """Test tags are properly applied to CloudWatch alarms"""
         assert monitoring_construct.alert_topic is not None
 
-    def test_monitoring_construct_with_different_environment(self, mock_alb, mock_database):
+    def test_monitoring_construct_with_different_environment(self, app):
         """Test MonitoringConstruct works with different environment suffixes"""
-        from lib.monitoring import MonitoringConstruct
-
-        app = Testing.app()
-        stack = TerraformStack(app, "test")
-        construct = MonitoringConstruct(
-            stack,
-            "test-monitoring-prod",
-            environment_suffix="production",
-            alb=mock_alb,
-            database=mock_database
-        )
+        stack = TerraformStack(app, "test-stack-prod")
+        vpc = VpcConstruct(stack, "test-vpc-prod", "production")
+        security = SecurityConstruct(stack, "test-security-prod", "production", vpc)
+        alb = AlbConstruct(stack, "test-alb-prod", "production", vpc, security)
+        database = DatabaseConstruct(stack, "test-database-prod", "production", vpc, security)
+        construct = MonitoringConstruct(stack, "test-monitoring-prod", "production", alb, database)
         assert construct is not None
 
     def test_metric_filter_for_errors(self, monitoring_construct):
@@ -162,3 +164,9 @@ class TestMonitoringConstruct:
     def test_metric_namespace_custom(self, monitoring_construct):
         """Test custom metric namespace is used"""
         assert monitoring_construct.app_log_group is not None
+
+    def test_monitoring_construct_synthesizes(self, stack, alb, database):
+        """Test MonitoringConstruct synthesizes correctly"""
+        MonitoringConstruct(stack, "test-monitoring-synth", "test", alb, database)
+        synth = Testing.synth(stack)
+        assert synth is not None
