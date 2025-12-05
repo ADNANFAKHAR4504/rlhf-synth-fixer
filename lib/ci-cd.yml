@@ -163,7 +163,7 @@ jobs:
         run: |
           npx cdktf deploy --auto-approve
         env:
-          ENVIRONMENT:staging
+          ENVIRONMENT: staging
       - name: Send Slack notification
         if: always()
         run: |
@@ -214,7 +214,7 @@ jobs:
         run: |
           npx cdktf deploy --auto-approve
         env:
-          ENVIRONMENT:prod
+          ENVIRONMENT: prod
       - name: Send Slack notification
         if: always()
         run: |

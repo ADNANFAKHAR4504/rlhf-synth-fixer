@@ -689,7 +689,7 @@ export class TapStack extends TerraformStack {
 
 ## File: lib/ci-cd.yml
 
-```yaml
+```yml
 name: Educational Platform Multi-Stage CDKTF Pipeline
 
 on:
