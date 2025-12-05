@@ -4,7 +4,8 @@ import * as aws from '@pulumi/aws';
 // Get configuration
 const config = new pulumi.Config();
 // Prefer environment variable ENVIRONMENT_SUFFIX over Pulumi config for CI/CD compatibility
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || config.get('environmentSuffix') || 'dev';
+const environmentSuffix =
+  process.env.ENVIRONMENT_SUFFIX || config.get('environmentSuffix') || 'dev';
 const alertEmail = config.get('alertEmail') || 'compliance-team@example.com';
 const awsConfig = new pulumi.Config('aws');
 const region = awsConfig.get('region') || 'us-east-1';
@@ -342,12 +343,14 @@ export const alarmName = complianceAlarm.name;
 export const eventRuleName = scheduledRule.name;
 export const logGroupName = lambdaLogGroup.name;
 // Export subscription details as a structured object for testing
-export const complianceSubscription = pulumi.all([
-  _complianceSubscription.arn,
-  _complianceSubscription.protocol,
-  _complianceSubscription.endpoint,
-]).apply(([arn, protocol, endpoint]) => ({
-  arn,
-  protocol,
-  endpoint,
-}));
+export const complianceSubscription = pulumi
+  .all([
+    _complianceSubscription.arn,
+    _complianceSubscription.protocol,
+    _complianceSubscription.endpoint,
+  ])
+  .apply(([arn, protocol, endpoint]) => ({
+    arn,
+    protocol,
+    endpoint,
+  }));
