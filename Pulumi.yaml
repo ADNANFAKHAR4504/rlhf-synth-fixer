@@ -1,5 +1,15 @@
-name: TapStack
-runtime:
-  name: nodejs
-description: CI/CD Pipeline for Payment Processing Microservices
-main: index.ts
+name: compliance-scanning
+runtime: python
+description: Automated Infrastructure Compliance Scanning System
+config:
+  environmentSuffix:
+    type: string
+    description: Environment suffix for resource naming
+  notificationEmail:
+    type: string
+    default: compliance@example.com
+    description: Email address for compliance notifications
+  aws:region:
+    type: string
+    default: us-east-1
+    description: AWS region for deployment
