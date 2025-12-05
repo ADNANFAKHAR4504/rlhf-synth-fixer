@@ -22,5 +22,10 @@
   ],
   "author": "mayanksethi-turing",
   "po_id": "z7t4z7r9",
-  "training_quality": 10
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
