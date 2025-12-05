@@ -69,6 +69,10 @@ class ComputeStack(Construct):
         )
 
         # Custom policy for DynamoDB and RDS access
+        # DynamoDB table ARN - use table if available, otherwise construct from name
+        dynamodb_table_name = f"dr-payments-{environment_suffix}"
+        dynamodb_arn = dynamodb_table.arn if dynamodb_table else f"arn:aws:dynamodb:{region}:*:table/{dynamodb_table_name}"
+
         IamRolePolicy(
             self,
             "lambda-custom-policy",
@@ -87,8 +91,8 @@ class ComputeStack(Construct):
                             "dynamodb:Scan"
                         ],
                         "Resource": [
-                            dynamodb_table.arn,
-                            f"{dynamodb_table.arn}/index/*"
+                            dynamodb_arn,
+                            f"{dynamodb_arn}/index/*"
                         ]
                     },
                     {
@@ -102,6 +106,8 @@ class ComputeStack(Construct):
                 ]
             })
         )
+
+        self.dynamodb_table_name = dynamodb_table_name
 
         # Lambda code assets using TerraformAsset
         lambda_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "lambda")
@@ -136,7 +142,7 @@ class ComputeStack(Construct):
                 variables={
                     "REGION": region,
                     "ENVIRONMENT_SUFFIX": environment_suffix,
-                    "DYNAMODB_TABLE": dynamodb_table.name,
+                    "DYNAMODB_TABLE": self.dynamodb_table_name,
                     "AURORA_ENDPOINT": aurora_cluster.endpoint,
                     "DB_NAME": "payments"
                 }

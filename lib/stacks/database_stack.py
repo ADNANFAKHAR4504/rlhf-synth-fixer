@@ -54,56 +54,57 @@ class DatabaseStack(Construct):
             target_key_id=self.kms_key.id
         )
 
-        # DynamoDB Global Table
-        replica_config = []
-        other_region = "us-east-2" if region == "us-east-1" else "us-east-1"
-        replica_config.append(DynamodbTableReplica(
-            region_name=other_region
-        ))
+        # DynamoDB Global Table - only create in primary region with replica
+        if self.is_primary:
+            other_region = "us-east-2" if region == "us-east-1" else "us-east-1"
+            replica_config = [DynamodbTableReplica(region_name=other_region)]
 
-        self.dynamodb_table = DynamodbTable(
-            self,
-            "payments-table",
-            name=f"dr-payments-{environment_suffix}",
-            billing_mode="PAY_PER_REQUEST",
-            hash_key="transactionId",
-            range_key="timestamp",
-            attribute=[
-                DynamodbTableAttribute(
-                    name="transactionId",
-                    type="S"
+            self.dynamodb_table = DynamodbTable(
+                self,
+                "payments-table",
+                name=f"dr-payments-{environment_suffix}",
+                billing_mode="PAY_PER_REQUEST",
+                hash_key="transactionId",
+                range_key="timestamp",
+                attribute=[
+                    DynamodbTableAttribute(
+                        name="transactionId",
+                        type="S"
+                    ),
+                    DynamodbTableAttribute(
+                        name="timestamp",
+                        type="N"
+                    ),
+                    DynamodbTableAttribute(
+                        name="customerId",
+                        type="S"
+                    )
+                ],
+                global_secondary_index=[
+                    DynamodbTableGlobalSecondaryIndex(
+                        name="CustomerIndex",
+                        hash_key="customerId",
+                        range_key="timestamp",
+                        projection_type="ALL"
+                    )
+                ],
+                replica=replica_config,
+                point_in_time_recovery=DynamodbTablePointInTimeRecovery(
+                    enabled=True
                 ),
-                DynamodbTableAttribute(
-                    name="timestamp",
-                    type="N"
-                ),
-                DynamodbTableAttribute(
-                    name="customerId",
-                    type="S"
-                )
-            ],
-            global_secondary_index=[
-                DynamodbTableGlobalSecondaryIndex(
-                    name="CustomerIndex",
-                    hash_key="customerId",
-                    range_key="timestamp",
-                    projection_type="ALL"
-                )
-            ],
-            replica=replica_config,
-            point_in_time_recovery=DynamodbTablePointInTimeRecovery(
-                enabled=True
-            ),
-            stream_enabled=True,
-            stream_view_type="NEW_AND_OLD_IMAGES",
-            server_side_encryption={
-                "enabled": True,
-                "kms_key_arn": self.kms_key.arn
-            },
-            tags={
-                "Name": f"dr-payments-{environment_suffix}"
-            }
-        )
+                stream_enabled=True,
+                stream_view_type="NEW_AND_OLD_IMAGES",
+                server_side_encryption={
+                    "enabled": True,
+                    "kms_key_arn": self.kms_key.arn
+                },
+                tags={
+                    "Name": f"dr-payments-{environment_suffix}"
+                }
+            )
+        else:
+            # Secondary region doesn't create table - it's replicated from primary
+            self.dynamodb_table = None
 
         # Aurora Global Database
         if self.is_primary:
@@ -162,7 +163,7 @@ class DatabaseStack(Construct):
                 }
             )
         else:
-            # Secondary cluster (read-only replica)
+            # Secondary cluster (read-only replica) - no master credentials needed
             self.aurora_cluster = RdsCluster(
                 self,
                 "aurora-cluster",
@@ -178,6 +179,7 @@ class DatabaseStack(Construct):
                 deletion_protection=False,
                 skip_final_snapshot=True,
                 global_cluster_identifier=f"dr-aurora-global-{environment_suffix}",
+                source_region="us-east-1",
                 tags={
                     "Name": f"dr-aurora-{region}-{environment_suffix}"
                 }

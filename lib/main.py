@@ -111,11 +111,12 @@ class DisasterRecoveryStack(TerraformStack):
             description=f"Health check URL in {region}"
         )
 
-        TerraformOutput(
-            self, f"dynamodb_table_{region.replace('-', '_')}",
-            value=self.database_stack.dynamodb_table.name,
-            description=f"DynamoDB table name in {region}"
-        )
+        if self.database_stack.dynamodb_table:
+            TerraformOutput(
+                self, f"dynamodb_table_{region.replace('-', '_')}",
+                value=self.database_stack.dynamodb_table.name,
+                description=f"DynamoDB table name in {region}"
+            )
 
         TerraformOutput(
             self, f"aurora_endpoint_{region.replace('-', '_')}",

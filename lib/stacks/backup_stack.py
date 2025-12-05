@@ -88,6 +88,7 @@ class BackupStack(Construct):
         )
 
         # Backup Plan
+        # Note: delete_after must be at least 90 days after cold_storage_after
         backup_plan = BackupPlan(
             self,
             "aurora-backup-plan",
@@ -99,14 +100,14 @@ class BackupStack(Construct):
                 start_window=60,
                 completion_window=120,
                 lifecycle=BackupPlanRuleLifecycle(
-                    delete_after=30,
-                    cold_storage_after=7
+                    delete_after=120,
+                    cold_storage_after=14
                 ),
                 copy_action=[BackupPlanRuleCopyAction(
                     destination_vault_arn=secondary_vault.arn,
                     lifecycle=BackupPlanRuleCopyActionLifecycle(
-                        delete_after=30,
-                        cold_storage_after=7
+                        delete_after=120,
+                        cold_storage_after=14
                     )
                 )],
                 recovery_point_tags={

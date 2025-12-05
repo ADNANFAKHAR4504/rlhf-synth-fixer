@@ -70,6 +70,9 @@ class MonitoringStack(Construct):
         )
 
         # DynamoDB replication latency
+        # Use table name from object if available, otherwise construct from env suffix
+        dynamodb_table_name = dynamodb_table.name if dynamodb_table else f"dr-payments-{environment_suffix}"
+
         CloudwatchMetricAlarm(
             self,
             "dynamodb-replication-alarm",
@@ -84,7 +87,7 @@ class MonitoringStack(Construct):
             alarm_description="DynamoDB replication latency high",
             alarm_actions=[self.replication_topic.arn],
             dimensions={
-                "TableName": dynamodb_table.name
+                "TableName": dynamodb_table_name
             }
         )
 
