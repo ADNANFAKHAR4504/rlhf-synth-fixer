@@ -1,9 +1,13 @@
 # Backend configuration for Terraform state
-# Using local backend for testing and validation
-# In production, this would be configured to use S3 with DynamoDB locking
+# Using S3 backend for CI/CD pipeline state management
+# Backend configuration values are passed via -backend-config during terraform init
 
 terraform {
-  backend "local" {
-    path = "terraform.tfstate"
+  backend "s3" {
+    # Configuration provided via -backend-config flags:
+    # bucket  = "iac-rlhf-tf-states-xxx"
+    # key     = "prs/prXXXX/terraform.tfstate"
+    # region  = "us-east-1"
+    # encrypt = true
   }
 }
