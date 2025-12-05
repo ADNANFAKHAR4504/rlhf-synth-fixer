@@ -142,7 +142,7 @@ class DatabaseStack(Construct):
                 engine_mode="provisioned",
                 database_name="payments",
                 master_username="dbadmin",
-                master_password=os.environ.get("TF_VAR_db_password", "ChangeMe123!")  # noqa: S105
+                master_password=os.environ.get("TF_VAR_db_password", "ChangeMe123!"),  # noqa: S105
                 db_subnet_group_name=self.db_subnet_group.name,
                 vpc_security_group_ids=[network_stack.aurora_security_group.id],
                 backup_retention_period=7,
