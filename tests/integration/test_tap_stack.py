@@ -483,20 +483,46 @@ class TestTapStackIntegration(unittest.TestCase):
 
     def test_terraform_configuration_synthesis(self):
         """Test that stack instantiates and synthesizes properly."""
-        app = App()
-        stack = TapStack(
-            app,
-            "IntegrationTestStack",
-            environment_suffix="test",
-            aws_region="us-east-1",
-        )
-
-        # Verify basic structure
-        self.assertIsNotNone(stack, "Stack should be instantiated")
-
-        # Synthesize to verify no errors
+        # Set required environment variables for stack synthesis
+        # Use test values for synthesis validation (not actual deployment)
+        original_db_username = os.environ.get("TF_VAR_db_username")
+        original_db_password = os.environ.get("TF_VAR_db_password")
+        
         try:
-            app.synth()
-            print("✅ Stack synthesis successful")
-        except Exception as e:
-            self.fail(f"Stack synthesis failed: {e}")
+            # Set test credentials for synthesis if not already set
+            # Synthesis doesn't deploy to AWS, so test values are acceptable
+            # If already set (e.g., in CI/CD), use those values
+            if "TF_VAR_db_username" not in os.environ:
+                os.environ["TF_VAR_db_username"] = "testadmin"
+            if "TF_VAR_db_password" not in os.environ:
+                os.environ["TF_VAR_db_password"] = "TestPasswordForSynth123!"
+            
+            # Use discovered stack name and environment suffix dynamically
+            app = App()
+            stack = TapStack(
+                app,
+                self.stack_name,  # Use discovered stack name
+                environment_suffix=self.environment_suffix,  # Use discovered environment suffix
+                aws_region=self.region,  # Use discovered region
+            )
+
+            # Verify basic structure
+            self.assertIsNotNone(stack, "Stack should be instantiated")
+
+            # Synthesize to verify no errors
+            try:
+                app.synth()
+                print(f"✅ Stack synthesis successful for {self.stack_name}")
+            except Exception as e:
+                self.fail(f"Stack synthesis failed: {e}")
+        finally:
+            # Restore original environment variables
+            if original_db_username is not None:
+                os.environ["TF_VAR_db_username"] = original_db_username
+            elif "TF_VAR_db_username" in os.environ:
+                del os.environ["TF_VAR_db_username"]
+                
+            if original_db_password is not None:
+                os.environ["TF_VAR_db_password"] = original_db_password
+            elif "TF_VAR_db_password" in os.environ:
+                del os.environ["TF_VAR_db_password"]
