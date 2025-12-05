@@ -3,7 +3,7 @@
   "language": "hcl",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "infra-optimization",
+  "po_id": "i3u9a5g2",
   "team": "stf",
   "subtask": "IaC Program Optimization",
   "subject_labels": [
@@ -19,5 +19,6 @@
     "CloudWatch",
     "SSM"
   ],
-  "training_quality": 9
+  "training_quality": 9,
+  "startedAt": "2025-12-05T18:00:00Z"
 }
