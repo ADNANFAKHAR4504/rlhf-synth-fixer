@@ -70,8 +70,9 @@ class TapStack(pulumi.ComponentResource):
         is_production = config.get_bool("is_production") or False
 
         # Resource tags
+        environment_name = "production" if is_production else "development"
         resource_tags = {
-            "Environment": "production",
+            "Environment": environment_name,
             "CostCenter": "payments",
             "OptimizedBy": "pulumi",
         }
