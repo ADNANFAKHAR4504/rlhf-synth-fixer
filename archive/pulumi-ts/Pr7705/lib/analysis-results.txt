@@ -139,8 +139,8 @@ Analyzing S3 buckets...
   S3 Compliance Analysis Report
 ======================================================================
 
-Scan ID: s3-compliance-scan-20251204083545
-Timestamp: 2025-12-04T08:35:45.338271Z
+Scan ID: s3-compliance-scan-20251205114052
+Timestamp: 2025-12-05T11:40:52.966552Z
 Environment: pr7705
 Region: us-east-1
 Compliance Checks: Versioning enabled, Server-side encryption (AES256 or KMS), Lifecycle policy for objects older than 90 days...
