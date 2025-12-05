@@ -129,7 +129,7 @@ Post-Deployment (< 10 min):
 
 ## Lessons Learned
 
-### ✅ Best Practices Applied
+### Best Practices Applied
 
 1. **Async-First Design**: Never block infrastructure deployment with long-running operations
 2. **Lambda for Analysis**: Use Lambda for operations that take significant time
@@ -139,14 +139,14 @@ Post-Deployment (< 10 min):
 6. **Monitoring**: CloudWatch tracks execution time, failures, and findings
 7. **Security**: Results bucket has encryption, versioning, and blocked public access
 
-### ⚠️ Common Pitfalls Avoided
+### Common Pitfalls Avoided
 
-1. ❌ Synchronous API calls in stack constructor
-2. ❌ Mixing deployment logic with business logic
-3. ❌ No timeout buffer for Lambda execution
-4. ❌ Storing sensitive findings without encryption
-5. ❌ No monitoring of analysis execution
-6. ❌ Single-threaded bucket scanning (Lambda code uses efficient iteration)
+1. [AVOID] Synchronous API calls in stack constructor
+2. [AVOID] Mixing deployment logic with business logic
+3. [AVOID] No timeout buffer for Lambda execution
+4. [AVOID] Storing sensitive findings without encryption
+5. [AVOID] No monitoring of analysis execution
+6. [AVOID] Single-threaded bucket scanning (Lambda code uses efficient iteration)
 
 ## Testing Strategy
 
