@@ -1,6 +1,6 @@
 {
   "platform": "cicd",
-  "language": "ts",
+  "language": "yaml",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "a2e1h2o9",
