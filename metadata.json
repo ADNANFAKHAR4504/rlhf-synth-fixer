@@ -1,21 +1,14 @@
 {
   "task_id": "m3k1j6t7",
   "platform": "pulumi",
-  "language": "typescript",
+  "language": "ts",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "synth",
   "team": "synth",
-  "subtask": "Monitoring and Observability",
+  "subtask": "Infrastructure QA and Management",
   "subject_labels": [
-    "Monitoring",
-    "Observability",
-    "aws",
-    "infrastructure",
-    "cloudwatch",
-    "xray",
-    "sns",
-    "lambda"
+    "Infrastructure Analysis/Monitoring"
   ],
   "startedAt": "2025-12-05T00:00:00.000Z",
   "aws_services": [
