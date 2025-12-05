@@ -9,7 +9,7 @@ from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration imp
     S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA
 )
 from cdktf_cdktf_provider_aws.s3_bucket_replication_configuration import (
-    S3BucketReplicationConfiguration,
+    S3BucketReplicationConfigurationA,
     S3BucketReplicationConfigurationRule,
     S3BucketReplicationConfigurationRuleDestination,
     S3BucketReplicationConfigurationRuleDestinationReplicationTime,
@@ -171,7 +171,7 @@ class StorageStack(Construct):
             )
 
             # Replication configuration with RTC
-            S3BucketReplicationConfiguration(
+            S3BucketReplicationConfigurationA(
                 self,
                 "replication-config",
                 bucket=self.bucket.id,

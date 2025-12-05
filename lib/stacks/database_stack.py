@@ -7,6 +7,7 @@ from cdktf_cdktf_provider_aws.dynamodb_table import (
     DynamodbTableAttribute,
     DynamodbTableReplica,
     DynamodbTablePointInTimeRecovery,
+    DynamodbTableGlobalSecondaryIndex,
 )
 from cdktf_cdktf_provider_aws.rds_cluster import RdsCluster
 from cdktf_cdktf_provider_aws.rds_cluster_instance import RdsClusterInstance
@@ -81,12 +82,14 @@ class DatabaseStack(Construct):
                     type="S"
                 )
             ],
-            global_secondary_index=[{
-                "name": "CustomerIndex",
-                "hash_key": "customerId",
-                "range_key": "timestamp",
-                "projection_type": "ALL"
-            }],
+            global_secondary_index=[
+                DynamodbTableGlobalSecondaryIndex(
+                    name="CustomerIndex",
+                    hash_key="customerId",
+                    range_key="timestamp",
+                    projection_type="ALL"
+                )
+            ],
             replica=replica_config,
             point_in_time_recovery=DynamodbTablePointInTimeRecovery(
                 enabled=True
