@@ -1,5 +1,5 @@
 {
-  "platform": "cdktf",
+  "platform": "cicd",
   "language": "ts",
   "complexity": "hard",
   "turn_type": "single",
