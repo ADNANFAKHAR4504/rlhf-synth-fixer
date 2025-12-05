@@ -4,7 +4,7 @@
 # Resources are organized across multiple files for maintainability:
 #
 # - provider.tf: AWS provider and backend configuration
-# - variables.tf: Input variables for configuration  
+# - variables.tf: Input variables for configuration (including aws_region)
 # - data.tf: Data sources for existing resources
 # - alarms.tf: CloudWatch alarms for monitoring
 # - canaries.tf: CloudWatch Synthetics canaries
@@ -12,26 +12,24 @@
 # - events.tf: CloudWatch Events rules
 # - notifications.tf: SNS topics for alerting
 # - kms.tf: KMS keys for encryption
-# - dashboard.tf.disabled: CloudWatch dashboard (disabled)
+# - dashboard.tf.disabled: CloudWatch dashboard (currently disabled)
 # - cross_account.tf: Cross-account observability setup
 # - ecs.tf: ECS task definitions and services
 # - outputs.tf: Output values
 
-# This file exists primarily as a marker for testing tools that expect
-# a single entry point file. The actual infrastructure is defined in the
-# modular files listed above.
+# This file serves as a documentation and marker file for testing tools
+# that expect a single entry point. The actual infrastructure definitions
+# are in the modular files listed above.
 
-# Variable declarations are in variables.tf
-variable "aws_region" {
-  description = "AWS region for CloudWatch resources"
-  type        = string
-  default     = "us-east-1"
-}
+# Key Resources:
+# - CloudWatch Log Groups with 30-day retention (logs.tf)
+# - Metric Filters for error pattern extraction (logs.tf)
+# - CloudWatch Alarms with two-tier thresholds (alarms.tf)
+# - Synthetics Canaries for endpoint monitoring (canaries.tf)
+# - SNS Topics with KMS encryption (notifications.tf + kms.tf)
+# - EventBridge Rules for ECS state changes (events.tf)
+# - Cross-account monitoring links (cross_account.tf)
 
-# Main resources are defined in:
-# - alarms.tf (CloudWatch alarms)
-# - canaries.tf (Synthetics canaries)
-# - logs.tf (Log groups and metric filters)
-# - events.tf (EventBridge rules)
-# - notifications.tf (SNS topics)
-# - kms.tf (KMS encryption keys)
+# Variables are declared in variables.tf
+# Providers are configured in provider.tf
+# See those files for configuration details
