@@ -88,7 +88,9 @@ describe('TapStack Unit Tests', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
         Environment: {
           Variables: {
-            DRIFT_TABLE_NAME: `drift-detection-${testEnvironmentSuffix}`,
+            DRIFT_TABLE_NAME: Match.objectLike({
+              Ref: Match.stringLikeRegexp('DriftTable.*'),
+            }),
             ENVIRONMENT_SUFFIX: testEnvironmentSuffix,
             ALERT_TOPIC_ARN: Match.objectLike({
               Ref: Match.stringLikeRegexp('AlertTopic.*'),
@@ -234,7 +236,8 @@ describe('TapStack Unit Tests', () => {
 
   describe('Email Subscription', () => {
     it('creates SNS email subscription when email provided', () => {
-      const stackWithEmail = new TapStack(app, 'TestStackWithEmail', {
+      const appWithEmail = new cdk.App();
+      const stackWithEmail = new TapStack(appWithEmail, 'TestStackWithEmail', {
         environmentSuffix: 'test',
         alertEmail: 'test@example.com',
       });
