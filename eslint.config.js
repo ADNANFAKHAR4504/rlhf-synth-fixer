@@ -1,5 +1,7 @@
 const typescriptEslint = require('@typescript-eslint/eslint-plugin');
 const tsParser = require('@typescript-eslint/parser');
+const prettierPlugin = require('eslint-plugin-prettier');
+const importPlugin = require('eslint-plugin-import');
 
 module.exports = [
   // Separate configuration for templates folder (must come first)
@@ -15,8 +17,13 @@ module.exports = [
     },
     plugins: {
       '@typescript-eslint': typescriptEslint,
+      prettier: prettierPlugin,
+      import: importPlugin,
     },
     rules: {
+      // Prettier
+      'prettier/prettier': 'error',
+
       // Basic TypeScript rules without project-specific parsing
       ...typescriptEslint.configs.recommended.rules,
       '@typescript-eslint/no-unused-vars': [
@@ -29,6 +36,11 @@ module.exports = [
 
       // Quote preferences
       quotes: ['error', 'single', { avoidEscape: true }],
+      '@typescript-eslint/quotes': ['error', 'single', { avoidEscape: true }],
+
+      // Import rules (simplified for templates)
+      'import/prefer-default-export': 'off',
+      'import/no-unresolved': 'off', // Disable for templates since they might not have proper resolution
 
       // General rules
       'no-console': 'off',
@@ -50,8 +62,13 @@ module.exports = [
     },
     plugins: {
       '@typescript-eslint': typescriptEslint,
+      prettier: prettierPlugin,
+      import: importPlugin,
     },
     rules: {
+      // Prettier
+      'prettier/prettier': 'error',
+
       // TypeScript specific
       ...typescriptEslint.configs.recommended.rules,
       '@typescript-eslint/no-unused-vars': [
@@ -64,11 +81,33 @@ module.exports = [
 
       // Quote preferences
       quotes: ['error', 'single', { avoidEscape: true }],
+      '@typescript-eslint/quotes': ['error', 'single', { avoidEscape: true }],
+
+      // Import rules
+      'import/prefer-default-export': 'off',
+      'import/no-extraneous-dependencies': [
+        'error',
+        {
+          devDependencies: [
+            '**/*.test.ts',
+            'test/**/*.ts',
+            'lib/lambda/**/*.ts',
+          ],
+        },
+      ],
 
       // General rules
       'no-console': 'off', // Allow console in CDK code
       'class-methods-use-this': 'off',
       'no-new': 'off', // CDK constructs often need 'new' without assignment
+    },
+    settings: {
+      'import/resolver': {
+        typescript: {
+          alwaysTryTypes: true,
+          project: './tsconfig.json',
+        },
+      },
     },
   },
   {
