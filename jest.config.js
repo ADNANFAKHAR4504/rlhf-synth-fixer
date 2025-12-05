@@ -9,7 +9,7 @@
  */
 module.exports = {
   testEnvironment: 'node',
-  roots: ['<rootDir>/test', '<rootDir>/tests'],
+  roots: ['<rootDir>/test'],
   testMatch: ['**/*.test.ts', '**/*.test.mjs', '**/*.py'],
   preset: 'ts-jest',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs'],

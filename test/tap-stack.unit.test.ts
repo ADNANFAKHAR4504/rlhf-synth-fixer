@@ -101,7 +101,7 @@ describe('TapStack Unit Tests', () => {
       const distribution = distributions[0];
       expect(distribution.enabled).toBe(true);
       expect(distribution.default_cache_behavior).toBeDefined();
-      expect(distribution.default_cache_behavior[0].viewer_protocol_policy).toBe('redirect-to-https');
+      expect(distribution.default_cache_behavior.viewer_protocol_policy).toBe('redirect-to-https');
     });
 
     test('Creates DynamoDB tables for user profiles and progress', () => {
@@ -120,8 +120,8 @@ describe('TapStack Unit Tests', () => {
 
       expect(userProfilesTable).toBeDefined();
       expect(userProfilesTable.billing_mode).toBe('PAY_PER_REQUEST');
-      expect(userProfilesTable.point_in_time_recovery).toEqual([{ enabled: true }]);
-      expect(userProfilesTable.server_side_encryption).toEqual([{ enabled: true }]);
+      expect(userProfilesTable.point_in_time_recovery).toEqual({ enabled: true });
+      expect(userProfilesTable.server_side_encryption).toEqual({ enabled: true });
 
       expect(courseProgressTable).toBeDefined();
       expect(courseProgressTable.billing_mode).toBe('PAY_PER_REQUEST');
@@ -139,11 +139,11 @@ describe('TapStack Unit Tests', () => {
       expect(userPool.auto_verified_attributes).toEqual(['email']);
       expect(userPool.mfa_configuration).toBe('OFF');
       expect(userPool.password_policy).toBeDefined();
-      expect(userPool.password_policy[0].minimum_length).toBe(12);
-      expect(userPool.password_policy[0].require_lowercase).toBe(true);
-      expect(userPool.password_policy[0].require_uppercase).toBe(true);
-      expect(userPool.password_policy[0].require_numbers).toBe(true);
-      expect(userPool.password_policy[0].require_symbols).toBe(true);
+      expect(userPool.password_policy.minimum_length).toBe(12);
+      expect(userPool.password_policy.require_lowercase).toBe(true);
+      expect(userPool.password_policy.require_uppercase).toBe(true);
+      expect(userPool.password_policy.require_numbers).toBe(true);
+      expect(userPool.password_policy.require_symbols).toBe(true);
     });
 
     test('Creates Cognito User Pool Client with correct token validity', () => {
@@ -204,7 +204,7 @@ describe('TapStack Unit Tests', () => {
       expect(api.name).toBe('education-api-dev');
       expect(api.description).toBe('Education platform API');
       expect(api.endpoint_configuration).toBeDefined();
-      expect(api.endpoint_configuration[0].types).toEqual(['REGIONAL']);
+      expect(api.endpoint_configuration.types).toEqual(['REGIONAL']);
     });
 
     test('Creates API Gateway resources for enrollment and progress', () => {
@@ -410,8 +410,8 @@ describe('TapStack Unit Tests', () => {
       const tables = Object.values(config.resource.aws_dynamodb_table) as any[];
 
       tables.forEach((table: any) => {
-        expect(table.server_side_encryption[0].enabled).toBe(true);
-        expect(table.point_in_time_recovery[0].enabled).toBe(true);
+        expect(table.server_side_encryption.enabled).toBe(true);
+        expect(table.point_in_time_recovery.enabled).toBe(true);
       });
     });
 
@@ -420,7 +420,7 @@ describe('TapStack Unit Tests', () => {
       const distributions = Object.values(config.resource.aws_cloudfront_distribution) as any[];
 
       distributions.forEach((dist: any) => {
-        expect(dist.default_cache_behavior[0].viewer_protocol_policy).toBe('redirect-to-https');
+        expect(dist.default_cache_behavior.viewer_protocol_policy).toBe('redirect-to-https');
       });
     });
   });
