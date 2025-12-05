@@ -20,5 +20,10 @@
     "EC2",
     "VPC"
   ],
-  "training_quality": 10
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
