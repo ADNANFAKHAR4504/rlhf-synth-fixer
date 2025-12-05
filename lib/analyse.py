@@ -484,35 +484,55 @@ def run_full_compliance_check(
     return results
 
 
-if __name__ == '__main__':
-    # Example usage for local testing
+def main(args=None):
+    """
+    CLI entry point for compliance analysis.
+
+    Args:
+        args: Command line arguments. If None, uses sys.argv.
+
+    Returns:
+        Dictionary containing compliance check results.
+    """
     import argparse
 
     parser = argparse.ArgumentParser(description='Run compliance analysis')
     parser.add_argument('--region', default='us-east-1', help='AWS region')
-    parser.add_argument('--ec2', action='store_true', help='Check EC2 tag compliance')
-    parser.add_argument('--s3', action='store_true', help='Check S3 encryption compliance')
-    parser.add_argument('--rds', action='store_true', help='Check RDS backup compliance')
-    parser.add_argument('--all', action='store_true', help='Run all compliance checks')
+    parser.add_argument('--ec2', action='store_true',
+                        help='Check EC2 tag compliance')
+    parser.add_argument('--s3', action='store_true',
+                        help='Check S3 encryption compliance')
+    parser.add_argument('--rds', action='store_true',
+                        help='Check RDS backup compliance')
+    parser.add_argument('--all', action='store_true',
+                        help='Run all compliance checks')
 
-    args = parser.parse_args()
+    parsed_args = parser.parse_args(args)
+    results = {}
 
-    if args.all or (not args.ec2 and not args.s3 and not args.rds):
+    if parsed_args.all or (not parsed_args.ec2 and not parsed_args.s3
+                           and not parsed_args.rds):
         print("Running full compliance check...")
-        results = run_full_compliance_check(region=args.region)
+        results = run_full_compliance_check(region=parsed_args.region)
         print(json.dumps(results, indent=2, cls=DecimalEncoder))
     else:
-        if args.ec2:
+        if parsed_args.ec2:
             print("Checking EC2 tag compliance...")
-            results = analyse_ec2_tags(region=args.region)
-            print(json.dumps(results, indent=2))
+            results['ec2'] = analyse_ec2_tags(region=parsed_args.region)
+            print(json.dumps(results['ec2'], indent=2))
 
-        if args.s3:
+        if parsed_args.s3:
             print("Checking S3 encryption compliance...")
-            results = analyse_s3_encryption(region=args.region)
-            print(json.dumps(results, indent=2))
+            results['s3'] = analyse_s3_encryption(region=parsed_args.region)
+            print(json.dumps(results['s3'], indent=2))
 
-        if args.rds:
+        if parsed_args.rds:
             print("Checking RDS backup compliance...")
-            results = analyse_rds_backups(region=args.region)
-            print(json.dumps(results, indent=2))
+            results['rds'] = analyse_rds_backups(region=parsed_args.region)
+            print(json.dumps(results['rds'], indent=2))
+
+    return results
+
+
+if __name__ == '__main__':  # pragma: no cover
+    main()
