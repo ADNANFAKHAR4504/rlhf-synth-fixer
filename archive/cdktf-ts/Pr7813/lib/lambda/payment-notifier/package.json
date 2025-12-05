@@ -1,0 +1,12 @@
+{
+  "name": "payment-notifier",
+  "version": "1.0.0",
+  "description": "Payment notification Lambda function",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.940.0",
+    "@aws-sdk/lib-dynamodb": "^3.940.0",
+    "@aws-sdk/client-sns": "^3.927.0",
+    "@aws-sdk/util-dynamodb": "^3.902.0"
+  }
+}

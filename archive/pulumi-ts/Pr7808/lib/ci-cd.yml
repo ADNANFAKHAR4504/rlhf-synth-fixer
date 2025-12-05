@@ -1,0 +1,306 @@
+---
+name: Multi-Service CI/CD Pipeline
+
+description: |
+  Comprehensive CI/CD pipeline for e-commerce platform deploying
+  containerized microservices and Lambda-based APIs across multiple
+  environments with automated testing gates, approval workflows, and
+  rollback capabilities.
+
+platform: AWS
+iac_tool: Pulumi
+language: TypeScript
+
+pipeline:
+  name: multi-service-cicd-pipeline
+  trigger_on: push
+  branches:
+    - main
+  stages:
+    - name: Source
+      type: source
+      provider: GitHub
+      configuration:
+        connection_type: CodeStar
+        repository: github-repo
+        branch: main
+        auto_trigger: true
+
+    - name: Build
+      type: build
+      provider: CodeBuild
+      needs:
+        - Source
+      configuration:
+        compute_type: BUILD_GENERAL1_MEDIUM
+        environment: Docker
+        cache_enabled: true
+        cache_type: S3
+        privileged_mode: true
+        buildspec: |
+          version: 0.2
+          phases:
+            pre_build:
+              commands:
+                - echo Logging in to ECR
+                - |
+                  aws ecr get-login-password \
+                    --region $AWS_DEFAULT_REGION | \
+                  docker login --username AWS \
+                    --password-stdin $ECR_REPOSITORY_URI
+            build:
+              commands:
+                - echo Building Docker image
+                - docker build -t $IMAGE_REPO_NAME:$IMAGE_TAG .
+                - |
+                  docker tag $IMAGE_REPO_NAME:$IMAGE_TAG \
+                    $ECR_REPOSITORY_URI:$IMAGE_TAG
+            post_build:
+              commands:
+                - echo Pushing Docker image to ECR
+                - docker push $ECR_REPOSITORY_URI:$IMAGE_TAG
+                - echo Image pushed successfully
+                - echo Scanning image with Trivy for vulnerabilities
+                - trivy image --severity HIGH,CRITICAL $ECR_REPOSITORY_URI:$IMAGE_TAG
+                - echo Starting ECR image scan
+                - |
+                  aws ecr start-image-scan \
+                    --repository-name $IMAGE_REPO_NAME \
+                    --image-id imageTag=$IMAGE_TAG
+          artifacts:
+            files:
+              - '**/*'
+
+    - name: Test
+      type: build
+      provider: CodeBuild
+      needs:
+        - Build
+      configuration:
+        compute_type: BUILD_GENERAL1_SMALL
+        environment: Docker
+        cache_enabled: true
+        cache_type: Local
+        buildspec: |
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                nodejs: 18
+            pre_build:
+              commands:
+                - echo Installing test dependencies
+                - npm install
+            build:
+              commands:
+                - echo Running integration tests
+                - npm test
+          reports:
+            test-results:
+              files:
+                - 'test-results/**/*.xml'
+              file-format: 'JUNITXML'
+
+    - name: Manual-Approval
+      type: approval
+      provider: Manual
+      needs:
+        - Test
+      environment: production
+      configuration:
+        notification_arn: ${SNS_TOPIC_ARN}
+        custom_data: "Review and approve deployment to production"
+        timeout_minutes: 1440
+
+    - name: Deploy
+      type: deploy
+      provider: Lambda
+      needs:
+        - Manual-Approval
+      environment: production
+      configuration:
+        function_name: api-processor-lambda
+        deployment_type: container_image
+        runtime: nodejs18.x
+        memory: 1024
+        timeout: 30
+        reserved_concurrency: 50
+        image_uri: ${ECR_REPOSITORY_URI}:${IMAGE_TAG}
+
+resources:
+  ecr:
+    - name: container-images
+      image_scanning: true
+      encryption: AWS_MANAGED
+      lifecycle_policy:
+        max_images: 10
+
+  lambda:
+    - name: api-processor
+      runtime: nodejs18.x
+      memory: 1024
+      timeout: 30
+      reserved_concurrency: 50
+      deployment_type: container_image
+      xray_tracing: false
+
+  dynamodb:
+    - name: deployment-history
+      partition_key: deploymentId
+      sort_key: timestamp
+      billing_mode: PAY_PER_REQUEST
+      point_in_time_recovery: true
+
+  s3:
+    - name: pipeline-artifacts
+      versioning: true
+      encryption: AWS_MANAGED
+      lifecycle_rules:
+        - expiration_days: 30
+          prefix: artifacts/
+    - name: docker-build-cache
+      versioning: false
+      encryption: AWS_MANAGED
+
+  cloudwatch:
+    alarms:
+      - name: pipeline-execution-failures
+        metric: ExecutionFailures
+        namespace: AWS/CodePipeline
+        threshold: 1
+        evaluation_periods: 1
+        comparison_operator: GreaterThanOrEqualToThreshold
+        actions:
+          - ${SNS_TOPIC_ARN}
+      - name: lambda-function-errors
+        metric: Errors
+        namespace: AWS/Lambda
+        threshold: 5
+        evaluation_periods: 1
+        period: 300
+        statistic: Sum
+        comparison_operator: GreaterThanOrEqualToThreshold
+        actions:
+          - ${SNS_TOPIC_ARN}
+
+  sns:
+    - name: deployment-notifications
+      display_name: Deployment Notifications
+      subscriptions:
+        - protocol: email
+          endpoint: operations@example.com
+
+  eventbridge:
+    - name: pipeline-trigger
+      event_pattern:
+        source:
+          - aws.codecommit
+        detail-type:
+          - CodeCommit Repository State Change
+        detail:
+          event:
+            - referenceCreated
+            - referenceUpdated
+          referenceType:
+            - branch
+          referenceName:
+            - main
+      targets:
+        - arn: ${PIPELINE_ARN}
+          role_arn: ${EVENTBRIDGE_ROLE_ARN}
+
+  iam:
+    roles:
+      - name: codepipeline-service-role
+        service: codepipeline.amazonaws.com
+        managed_policies:
+          - AWSCodePipelineFullAccess
+        inline_policies:
+          - name: CodePipelineAccess
+            actions:
+              - s3:GetObject
+              - s3:PutObject
+              - codebuild:StartBuild
+              - codebuild:BatchGetBuilds
+              - lambda:UpdateFunctionCode
+              - lambda:GetFunction
+              - iam:PassRole
+
+      - name: codebuild-service-role
+        service: codebuild.amazonaws.com
+        managed_policies:
+          - AmazonEC2ContainerRegistryPowerUser
+        inline_policies:
+          - name: CodeBuildAccess
+            actions:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              - s3:GetObject
+              - s3:PutObject
+              - ecr:GetAuthorizationToken
+              - ecr:BatchCheckLayerAvailability
+              - ecr:GetDownloadUrlForLayer
+              - ecr:PutImage
+
+      - name: cross-account-deployment-role
+        service: codepipeline.amazonaws.com
+        assume_role_policy:
+          principals:
+            - type: Service
+              identifiers:
+                - codepipeline.amazonaws.com
+        inline_policies:
+          - name: CrossAccountDeployment
+            actions:
+              - lambda:UpdateFunctionCode
+              - lambda:GetFunction
+              - lambda:PublishVersion
+              - ecr:GetDownloadUrlForLayer
+              - ecr:BatchGetImage
+              - ecr:BatchCheckLayerAvailability
+
+deployment:
+  region: us-east-1
+  environment_suffix: ${ENVIRONMENT_SUFFIX}
+  naming_convention: "{resource-type}-{purpose}-{environmentSuffix}"
+
+monitoring:
+  cloudwatch_logs: true
+  cloudwatch_alarms: true
+  sns_notifications: true
+
+security:
+  encryption_at_rest: true
+  encryption_in_transit: true
+  least_privilege_iam: true
+  ecr_image_scanning: true
+
+cost_optimization:
+  build_compute_type: BUILD_GENERAL1_MEDIUM
+  test_compute_type: BUILD_GENERAL1_SMALL
+  s3_lifecycle_policies: true
+  ecr_lifecycle_policies: true
+  dynamodb_on_demand: true
+
+outputs:
+  - name: pipeline_arn
+    description: CodePipeline ARN
+  - name: pipeline_url
+    description: CodePipeline Console URL
+  - name: ecr_repository_uri
+    description: ECR Repository URI for CI/CD integration
+  - name: lambda_function_arn
+    description: Lambda Function ARN
+  - name: deployment_table_name
+    description: DynamoDB Deployment History Table Name
+  - name: sns_topic_arn
+    description: SNS Topic ARN for notifications
+
+validation:
+  destroyable: true
+  environment_suffix_required: true
+  test_coverage_required: 100
+  integration_tests_required: true
+  documentation_required: true
+

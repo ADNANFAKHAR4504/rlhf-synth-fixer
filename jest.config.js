@@ -1,3 +1,16 @@
+/**
+ * Jest Configuration
+ * 
+ * IMPORTANT: Do NOT change the 'roots' configuration below.
+ * 
+ * This config is ONLY used for TypeScript/JavaScript tests.
+ * - TS/JS projects: Place tests in 'test/' folder (singular)
+ * - Python projects: Use 'tests/' folder with pytest (not Jest)
+ * - Go projects: Use 'tests/' folder with 'go test' (not Jest)
+ * - Java projects: Use 'tests/' folder with JUnit/Gradle (not Jest)
+ * 
+ * Do NOT add 'tests/' to the roots array - it will break TS/JS project validation.
+ */
 module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/test'],
