@@ -70,8 +70,9 @@ class TapStack(pulumi.ComponentResource):
         is_production = config.get_bool("is_production") or False
 
         # Resource tags
+        environment_name = "production" if is_production else "development"
         resource_tags = {
-            "Environment": "production",
+            "Environment": environment_name,
             "CostCenter": "payments",
             "OptimizedBy": "pulumi",
         }
@@ -128,7 +129,7 @@ class TapStack(pulumi.ComponentResource):
             storage_throughput=125,
             db_name="paymentsdb",
             username="admin",
-            password=config.get_secret("db_password") or "test-password-12345",
+            password=config.require_secret("db_password"),
             db_subnet_group_name=subnet_group.name,
             parameter_group_name=param_group.name,
             backup_retention_period=7,
@@ -153,7 +154,7 @@ class TapStack(pulumi.ComponentResource):
             threshold=80.0,
             alarm_description="Alert when CPU exceeds 80%",
             alarm_actions=[
-                "arn:aws:sns:us-east-1:123456789012:db-alerts"
+                config.get("sns_topic_arn") or f"arn:aws:sns:{aws.get_region().name}:{aws.get_caller_identity().account_id}:db-alerts-{args.environment_suffix}"
             ],
             dimensions={
                 "DBInstanceIdentifier": db_instance.identifier,
@@ -174,7 +175,7 @@ class TapStack(pulumi.ComponentResource):
             threshold=10 * 1024 * 1024 * 1024,  # 10GB in bytes
             alarm_description="Alert when free storage is less than 10GB",
             alarm_actions=[
-                "arn:aws:sns:us-east-1:123456789012:db-alerts"
+                config.get("sns_topic_arn") or f"arn:aws:sns:{aws.get_region().name}:{aws.get_caller_identity().account_id}:db-alerts-{args.environment_suffix}"
             ],
             dimensions={
                 "DBInstanceIdentifier": db_instance.identifier,
