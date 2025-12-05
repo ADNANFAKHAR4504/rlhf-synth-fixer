@@ -5,9 +5,9 @@
   "turn_type": "single",
   "team": "synth",
   "startedAt": "2025-12-05T07:41:00-08:00",
-  "subtask": "CI/CD Pipeline Integration",
+  "subtask": "Application Deployment",
   "subject_labels": [
-    "CI/CD Pipeline"
+    "Web Application Deployment"
   ],
   "po_id": "y6r9r3t6",
   "aws_services": [
