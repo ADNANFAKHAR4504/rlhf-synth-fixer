@@ -128,8 +128,7 @@ class DatabaseConstruct(Construct):
                 performance_insights_enabled=True,
                 performance_insights_kms_key_id=security.kms_key.arn,
                 performance_insights_retention_period=7,
-                monitoring_interval=60,
-                monitoring_role_arn=None,  # Would need to create monitoring role
+                monitoring_interval=0,  # Disabled - would need IAM role for enhanced monitoring
                 tags={
                     "Name": f"financial-aurora-instance-{i+1}-{environment_suffix}",
                     "Environment": f"{environment_suffix}",

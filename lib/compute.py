@@ -1,5 +1,9 @@
 from constructs import Construct
-from cdktf_cdktf_provider_aws.launch_template import LaunchTemplate, LaunchTemplateMetadataOptions
+from cdktf_cdktf_provider_aws.launch_template import (
+    LaunchTemplate,
+    LaunchTemplateMetadataOptions,
+    LaunchTemplateTagSpecifications
+)
 from cdktf_cdktf_provider_aws.autoscaling_group import AutoscalingGroup, AutoscalingGroupTag
 from cdktf_cdktf_provider_aws.autoscaling_policy import AutoscalingPolicy, AutoscalingPolicyTargetTrackingConfiguration
 from cdktf_cdktf_provider_aws.autoscaling_schedule import AutoscalingSchedule
@@ -161,15 +165,17 @@ echo "Application setup complete"
                 http_put_response_hop_limit=1,
                 instance_metadata_tags="enabled"
             ),
-            tag_specifications=[{
-                "resource_type": "instance",
-                "tags": {
-                    "Name": f"financial-instance-{environment_suffix}",
-                    "Environment": f"{environment_suffix}",
-                    "Application": "financial-transaction-platform",
-                    "CostCenter": "engineering"
-                }
-            }]
+            tag_specifications=[
+                LaunchTemplateTagSpecifications(
+                    resource_type="instance",
+                    tags={
+                        "Name": f"financial-instance-{environment_suffix}",
+                        "Environment": f"{environment_suffix}",
+                        "Application": "financial-transaction-platform",
+                        "CostCenter": "engineering"
+                    }
+                )
+            ]
         )
 
         # Auto Scaling Group

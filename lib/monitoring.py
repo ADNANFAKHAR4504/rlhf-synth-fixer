@@ -63,9 +63,9 @@ class MonitoringConstruct(Construct):
         CloudwatchLogMetricFilter(self, "4xx_metric_filter",
             name=f"financial-4xx-filter-{environment_suffix}",
             log_group_name=self.alb_log_group.name,
-            pattern='[..., status_code=4*, ...]',
+            pattern='{ $.status_code = 4* }',
             metric_transformation=CloudwatchLogMetricFilterMetricTransformation(
-                name="4xxErrors",
+                name="Errors4xx",
                 namespace=f"Financial/{environment_suffix}",
                 value="1",
                 default_value="0"
@@ -76,9 +76,9 @@ class MonitoringConstruct(Construct):
         CloudwatchLogMetricFilter(self, "5xx_metric_filter",
             name=f"financial-5xx-filter-{environment_suffix}",
             log_group_name=self.alb_log_group.name,
-            pattern='[..., status_code=5*, ...]',
+            pattern='{ $.status_code = 5* }',
             metric_transformation=CloudwatchLogMetricFilterMetricTransformation(
-                name="5xxErrors",
+                name="Errors5xx",
                 namespace=f"Financial/{environment_suffix}",
                 value="1",
                 default_value="0"
