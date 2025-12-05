@@ -256,7 +256,9 @@ if [ -n "$REFERENCE_PATH" ] && jq -e '.subject_labels' "$METADATA_FILE" > /dev/n
         fi
     fi
 elif [ -z "$REFERENCE_PATH" ]; then
-    log_warn "Reference file not found: $REFERENCE_FILE (subject_labels values not validated)"
+    log_error "Reference file not found: $REFERENCE_FILE - subject_labels cannot be validated"
+    log_warn "Ensure the reference file exists at: .claude/docs/references/iac-subtasks-subject-labels.json"
+    ((ERRORS++))
 fi
 
 # 9. Validate region format (if present)
