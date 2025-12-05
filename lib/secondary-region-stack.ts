@@ -202,6 +202,8 @@ export class SecondaryRegionStack extends Construct {
       preferredMaintenanceWindow: 'mon:04:00-mon:05:00',
       skipFinalSnapshot: true,
       globalClusterIdentifier: sharedConstructs.globalCluster.id,
+      masterUsername: config.databaseUsername,
+      masterPassword: `TradingPlatform${environmentSuffix}SecurePass123!`,
       engineMode: 'provisioned',
       serverlessv2ScalingConfiguration: {
         minCapacity: 0.5,
