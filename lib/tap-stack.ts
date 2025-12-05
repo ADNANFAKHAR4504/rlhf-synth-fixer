@@ -24,7 +24,7 @@ interface TapStackProps {
   defaultTags?: AwsProviderDefaultTags[];
 }
 
-const AWS_REGION_OVERRIDE = 'eu-central-1';
+const AWS_REGION_OVERRIDE = 'us-east-1';
 
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
@@ -67,13 +67,13 @@ export class TapStack extends TerraformStack {
     // Certificate ARN for HTTPS (should be passed as environment variable in real deployment)
     const certificateArn =
       process.env.ACM_CERTIFICATE_ARN ||
-      'arn:aws:acm:eu-central-1:123456789012:certificate/example';
+      'arn:aws:acm:us-east-1:123456789012:certificate/example';
 
-    // Availability Zones for eu-central-1
+    // Availability Zones for us-east-1
     const availabilityZones = [
-      'eu-central-1a',
-      'eu-central-1b',
-      'eu-central-1c',
+      'us-east-1a',
+      'us-east-1b',
+      'us-east-1c',
     ];
 
     // VPC Module
