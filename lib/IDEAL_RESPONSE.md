@@ -538,10 +538,10 @@ The corrected implementation meets all success criteria:
 | Import Correctness | WRONG: Wrong module for DataAwsCallerIdentity | CORRECT: Correct import path |
 | Integration Tests | WRONG: Placeholder only | CORRECT: 493-line comprehensive suite |
 | AWS SDK Dependencies | WRONG: Missing 8 packages | CORRECT: All packages included |
-| S3 Backend | ⚠️ Not documented | CORRECT: Documented with fallback |
+| S3 Backend | WARNING: Not documented | CORRECT: Documented with fallback |
 | Build Success | WRONG: Fails | CORRECT: Passes |
 | Lint Success | WRONG: Fails | CORRECT: Passes |
-| Synth Success | ⚠️ After cdktf get | CORRECT: Passes |
+| Synth Success | WARNING: After cdktf get | CORRECT: Passes |
 | Deployment Ready | WRONG: No | CORRECT: Yes |
 
 ## Conclusion
