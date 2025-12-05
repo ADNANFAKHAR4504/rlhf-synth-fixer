@@ -134,6 +134,8 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // 7. CodeDeploy Stack - ECS blue-green deployments
+    // Note: ECS cluster, service, ALB, and target groups are prerequisites
+    // and must be created separately before deploying this CI/CD pipeline
     const codeDeployStack = new CodeDeployStack(
       'codedeploy-stack',
       {
@@ -151,7 +153,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // 8. CodePipeline Stack - Orchestrate the entire pipeline
+    // 9. CodePipeline Stack - Orchestrate the entire pipeline
     const codePipelineStack = new CodePipelineStack(
       'codepipeline-stack',
       {

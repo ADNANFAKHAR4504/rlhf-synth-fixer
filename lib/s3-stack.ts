@@ -115,6 +115,20 @@ export class S3Stack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // Bucket Ownership Controls - enforce bucket owner for all objects
+    // This is required for ACL-free bucket configuration (modern S3 best practice)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const bucketOwnershipControls = new aws.s3.BucketOwnershipControls(
+      `pipeline-artifacts-ownership-${args.environmentSuffix}`,
+      {
+        bucket: artifactBucket.id,
+        rule: {
+          objectOwnership: 'BucketOwnerEnforced',
+        },
+      },
+      { parent: this }
+    );
+
     this.artifactBucketName = artifactBucket.bucket;
     this.artifactBucketArn = artifactBucket.arn;
 

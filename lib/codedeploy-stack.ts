@@ -14,11 +14,11 @@ export interface CodeDeployStackArgs {
   environmentSuffix: string;
   region: string;
   serviceRole: pulumi.Output<string>;
-  ecsClusterName: string;
-  ecsServiceName: string;
-  ecsBlueTargetGroupName: string;
-  ecsGreenTargetGroupName: string;
-  albListenerArn: string;
+  ecsClusterName: pulumi.Input<string>;
+  ecsServiceName: pulumi.Input<string>;
+  ecsBlueTargetGroupName: pulumi.Input<string>;
+  ecsGreenTargetGroupName: pulumi.Input<string>;
+  albListenerArn: pulumi.Input<string>;
   snsTopicArn: pulumi.Output<string>;
   tags: pulumi.Input<{ [key: string]: string }>;
 }
