@@ -1,6 +1,6 @@
 {
-  "platform": "analysis",
-  "language": "py",
+  "platform": "pulumi",
+  "language": "ts",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "r0x1n7p4",
@@ -19,5 +19,5 @@
     "Kinesis",
     "IAM"
   ],
-  "training_quality": 10
+  "training_quality": 9
 }
