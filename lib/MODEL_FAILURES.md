@@ -14,10 +14,10 @@ This document analyzes the failures and issues in the MODEL_RESPONSE generated c
 // MODEL_RESPONSE tsconfig.json (INCORRECT)
 {
   "exclude": [
-    "bin",  // ❌ Excludes bin directory
+    "bin",  //  Excludes bin directory
     ...
   ],
-  "include": ["index.ts", "lib/**/*.ts"]  // ❌ Doesn't include bin/**/*.ts
+  "include": ["index.ts", "lib/**/*.ts"]  //  Doesn't include bin/**/*.ts
 }
 ```
 
@@ -29,7 +29,7 @@ This document analyzes the failures and issues in the MODEL_RESPONSE generated c
     // "bin" removed from exclude list
     ...
   ],
-  "include": ["index.ts", "lib/**/*.ts", "bin/**/*.ts"]  // ✅ Includes bin/**/*.ts
+  "include": ["index.ts", "lib/**/*.ts", "bin/**/*.ts"]  //  Includes bin/**/*.ts
 }
 ```
 
@@ -88,13 +88,13 @@ this.internetGateway = new aws.internetGateway.InternetGateway(
 
 ```typescript
 // MODEL_RESPONSE (INCORRECT)
-deregistrationDelay: 30,  // ❌ Type 'number' is not assignable to type 'string'
+deregistrationDelay: 30,  //  Type 'number' is not assignable to type 'string'
 ```
 
 **IDEAL_RESPONSE Fix**:
 ```typescript
 // Corrected type
-deregistrationDelay: '30',  // ✅ Correct string type
+deregistrationDelay: '30',  //  Correct string type
 ```
 
 **Root Cause**: The CDKTF AWS provider (@cdktf/provider-aws) uses string types for many numeric configuration values to maintain consistency with Terraform's type system. The model incorrectly assumed JavaScript's type coercion would handle this, but TypeScript's strict type checking caught the error.
@@ -117,7 +117,7 @@ import {
   S3Backend,
   TerraformStack,
   TerraformOutput,
-  DataAwsCallerIdentity,  // ❌ 'cdktf' has no exported member 'DataAwsCallerIdentity'
+  DataAwsCallerIdentity,  //  'cdktf' has no exported member 'DataAwsCallerIdentity'
 } from 'cdktf';
 ```
 
@@ -149,7 +149,7 @@ import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-i
 describe('Turn Around Prompt API Integration Tests', () => {
   describe('Write Integration TESTS', () => {
     test('Dont forget!', async () => {
-      expect(false).toBe(true);  // ❌ Placeholder that always fails
+      expect(false).toBe(true);  //  Placeholder that always fails
     });
   });
 });
