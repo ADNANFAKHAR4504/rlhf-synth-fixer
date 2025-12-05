@@ -149,7 +149,8 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: >-
-            arn:aws:iam::${{ env.STAGING_ACCOUNT_ID }}:role/CrossAccountDeployRole
+            arn:aws:iam::${{ env.STAGING_ACCOUNT_ID }}:role/
+            CrossAccountDeployRole
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubActions-Staging
           role-chaining: true
@@ -200,7 +201,8 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: >-
-            arn:aws:iam::${{ env.PROD_ACCOUNT_ID }}:role/CrossAccountDeployRole
+            arn:aws:iam::${{ env.PROD_ACCOUNT_ID }}:role/
+            CrossAccountDeployRole
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubActions-Prod
           role-chaining: true
