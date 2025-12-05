@@ -1,0 +1,239 @@
+"""
+test_optimize.py
+
+Unit tests for the RDS optimization script.
+Tests cost savings calculation and optimization logic.
+"""
+
+import unittest
+from unittest.mock import MagicMock, patch
+
+from lib.optimize import InfrastructureOptimizer
+
+
+class TestInfrastructureOptimizer(unittest.TestCase):
+    """Test cases for Infrastructure Optimizer."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.environment_suffix = "dev"
+        self.region_name = "us-east-1"
+
+    @patch("lib.optimize.boto3.client")
+    def test_optimizer_initialization(self, mock_boto_client):
+        """Test that optimizer initializes correctly with AWS clients."""
+        optimizer = InfrastructureOptimizer(
+            environment_suffix=self.environment_suffix, region_name=self.region_name
+        )
+
+        self.assertEqual(optimizer.environment_suffix, self.environment_suffix)
+        self.assertEqual(optimizer.region_name, self.region_name)
+        mock_boto_client.assert_called_with("rds", region_name=self.region_name)
+
+    @patch("lib.optimize.boto3.client")
+    def test_cost_savings_estimate(self, mock_boto_client):
+        """Test that cost savings calculations are reasonable."""
+        optimizer = InfrastructureOptimizer()
+        savings = optimizer.get_cost_savings_estimate()
+
+        # Check that all required fields are present
+        self.assertIn("rds_instance_monthly_savings", savings)
+        self.assertIn("rds_storage_monthly_savings", savings)
+        self.assertIn("total_monthly_savings", savings)
+
+        # Check that savings are positive and reasonable (ballpark: $50-100/month)
+        self.assertGreater(savings["rds_instance_monthly_savings"], 0)
+        self.assertGreater(savings["rds_storage_monthly_savings"], 0)
+        self.assertGreater(savings["total_monthly_savings"], 40)
+        self.assertLess(savings["total_monthly_savings"], 150)
+
+    @patch("lib.optimize.boto3.client")
+    def test_optimize_rds_instance_not_found(self, mock_boto_client):
+        """Test optimization when RDS instance is not found."""
+        mock_rds = MagicMock()
+        mock_rds.describe_db_instances.return_value = {"DBInstances": []}
+        mock_boto_client.return_value = mock_rds
+
+        optimizer = InfrastructureOptimizer()
+        result = optimizer.optimize_rds_instance()
+
+        self.assertFalse(result)
+
+    @patch("lib.optimize.boto3.client")
+    def test_optimize_rds_instance_already_optimized(self, mock_boto_client):
+        """Test optimization when instance is already at target configuration."""
+        mock_rds = MagicMock()
+        mock_rds.describe_db_instances.return_value = {
+            "DBInstances": [
+                {
+                    "DBInstanceIdentifier": "mysql-optimized-dev",
+                    "DBInstanceClass": "db.t4g.large",  # Already optimized
+                    "AllocatedStorage": 100,
+                }
+            ]
+        }
+        mock_boto_client.return_value = mock_rds
+
+        optimizer = InfrastructureOptimizer()
+        result = optimizer.optimize_rds_instance()
+
+        # Should return True (no error) but not make modifications
+        self.assertTrue(result)
+        mock_rds.modify_db_instance.assert_not_called()
+
+    @patch("lib.optimize.boto3.client")
+    def test_optimize_rds_instance_successful(self, mock_boto_client):
+        """Test successful RDS instance optimization."""
+        mock_rds = MagicMock()
+
+        # Mock instance with baseline (non-optimized) configuration
+        mock_rds.describe_db_instances.return_value = {
+            "DBInstances": [
+                {
+                    "DBInstanceIdentifier": "mysql-optimized-dev",
+                    "DBInstanceClass": "db.t4g.xlarge",  # Baseline
+                    "AllocatedStorage": 150,  # Baseline
+                }
+            ]
+        }
+
+        # Mock the waiter
+        mock_waiter = MagicMock()
+        mock_rds.get_waiter.return_value = mock_waiter
+
+        mock_boto_client.return_value = mock_rds
+
+        optimizer = InfrastructureOptimizer()
+        result = optimizer.optimize_rds_instance()
+
+        # Optimization should succeed
+        self.assertTrue(result)
+
+        # Should call modify_db_instance
+        mock_rds.modify_db_instance.assert_called_once()
+
+        # Check that it downgraded to db.t4g.large
+        call_args = mock_rds.modify_db_instance.call_args
+        self.assertEqual(
+            call_args.kwargs["DBInstanceClass"], "db.t4g.large"
+        )
+        self.assertEqual(call_args.kwargs["AllocatedStorage"], 100)
+        self.assertTrue(call_args.kwargs["ApplyImmediately"])
+
+        # Should wait for instance to be available
+        mock_rds.get_waiter.assert_called_with("db_instance_available")
+        mock_waiter.wait.assert_called_once()
+
+    @patch("lib.optimize.boto3.client")
+    def test_optimize_rds_instance_client_error(self, mock_boto_client):
+        """Test optimization handles boto3 ClientError gracefully."""
+        from botocore.exceptions import ClientError
+
+        mock_rds = MagicMock()
+        mock_rds.describe_db_instances.side_effect = ClientError(
+            {"Error": {"Code": "AccessDenied", "Message": "Access Denied"}},
+            "DescribeDBInstances",
+        )
+        mock_boto_client.return_value = mock_rds
+
+        optimizer = InfrastructureOptimizer()
+        result = optimizer.optimize_rds_instance()
+
+        self.assertFalse(result)
+
+    @patch("lib.optimize.boto3.client")
+    def test_run_optimization(self, mock_boto_client):
+        """Test that run_optimization executes all optimization tasks."""
+        mock_rds = MagicMock()
+        mock_rds.describe_db_instances.return_value = {
+            "DBInstances": [
+                {
+                    "DBInstanceIdentifier": "mysql-optimized-dev",
+                    "DBInstanceClass": "db.t4g.xlarge",
+                    "AllocatedStorage": 150,
+                }
+            ]
+        }
+
+        mock_waiter = MagicMock()
+        mock_rds.get_waiter.return_value = mock_waiter
+        mock_boto_client.return_value = mock_rds
+
+        optimizer = InfrastructureOptimizer()
+        optimizer.run_optimization()
+
+        # Should attempt RDS optimization
+        mock_rds.describe_db_instances.assert_called()
+
+    @patch("lib.optimize.boto3.client")
+    def test_run_optimization_with_failure(self, mock_boto_client):
+        """Test run_optimization handles failures gracefully."""
+        from botocore.exceptions import ClientError
+
+        mock_rds = MagicMock()
+        mock_rds.describe_db_instances.side_effect = ClientError(
+            {"Error": {"Code": "ServiceUnavailable", "Message": "Service unavailable"}},
+            "DescribeDBInstances",
+        )
+        mock_boto_client.return_value = mock_rds
+
+        optimizer = InfrastructureOptimizer()
+        # Should not raise exception even if optimization fails
+        optimizer.run_optimization()
+
+    @patch("lib.optimize.InfrastructureOptimizer")
+    @patch("sys.argv", ["optimize.py", "--dry-run"])
+    def test_main_dry_run(self, mock_optimizer_class):
+        """Test main function in dry-run mode."""
+        from lib.optimize import main
+
+        mock_optimizer = MagicMock()
+        mock_optimizer.get_cost_savings_estimate.return_value = {
+            "total_monthly_savings": 59.90
+        }
+        mock_optimizer_class.return_value = mock_optimizer
+
+        # Should not raise exception
+        main()
+
+        # Should create optimizer but not run optimization
+        mock_optimizer_class.assert_called_once()
+        mock_optimizer.run_optimization.assert_not_called()
+        mock_optimizer.get_cost_savings_estimate.assert_called_once()
+
+    @patch("lib.optimize.InfrastructureOptimizer")
+    @patch("sys.argv", ["optimize.py"])
+    def test_main_normal_execution(self, mock_optimizer_class):
+        """Test main function in normal execution mode."""
+        from lib.optimize import main
+
+        mock_optimizer = MagicMock()
+        mock_optimizer_class.return_value = mock_optimizer
+
+        # Should not raise exception
+        main()
+
+        # Should create optimizer and run optimization
+        mock_optimizer_class.assert_called_once()
+        mock_optimizer.run_optimization.assert_called_once()
+
+    @patch("lib.optimize.InfrastructureOptimizer")
+    @patch("sys.argv", ["optimize.py", "--environment", "prod", "--region", "us-west-2"])
+    def test_main_with_custom_args(self, mock_optimizer_class):
+        """Test main function with custom environment and region arguments."""
+        from lib.optimize import main
+
+        mock_optimizer = MagicMock()
+        mock_optimizer_class.return_value = mock_optimizer
+
+        # Should not raise exception
+        main()
+
+        # Should create optimizer with custom args
+        mock_optimizer_class.assert_called_with("prod", "us-west-2")
+        mock_optimizer.run_optimization.assert_called_once()
+
+
+if __name__ == "__main__":
+    unittest.main()
+

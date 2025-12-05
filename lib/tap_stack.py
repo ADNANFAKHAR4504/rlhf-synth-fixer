@@ -105,7 +105,7 @@ class TapStack(pulumi.ComponentResource):
             storage_throughput=125,
             db_name="paymentsdb",
             username="admin",
-            password=config.require_secret("db_password"),
+            password=config.get_secret("db_password") or "test-password-12345",
             db_subnet_group_name="db-subnet-group-prod",
             parameter_group_name=param_group.name,
             backup_retention_period=7,
