@@ -728,21 +728,21 @@ rm -rf cdktf.out/ terraform.tfstate*
 ## Security Compliance
 
 ### PCI DSS Alignment
-- ✅ Data encryption at rest (RDS, DynamoDB, S3)
-- ✅ Data encryption in transit (TLS 1.2+)
-- ✅ Access control (security groups, IAM)
-- ✅ Audit logging (S3, CloudWatch Logs)
-- ✅ Credential rotation (Secrets Manager)
-- ✅ Network isolation (private subnets)
+- Data encryption at rest (RDS, DynamoDB, S3)
+- Data encryption in transit (TLS 1.2+)
+- Access control (security groups, IAM)
+- Audit logging (S3, CloudWatch Logs)
+- Credential rotation (Secrets Manager)
+- Network isolation (private subnets)
 
 ### Best Practices Implemented
-- ✅ Least privilege IAM policies
-- ✅ Encryption everywhere
-- ✅ Secrets rotation automation
-- ✅ Multi-AZ for high availability
-- ✅ Blue-green deployments
-- ✅ Comprehensive monitoring
-- ✅ Infrastructure as code versioning
+- Least privilege IAM policies
+- Encryption everywhere
+- Secrets rotation automation
+- Multi-AZ for high availability
+- Blue-green deployments
+- Comprehensive monitoring
+- Infrastructure as code versioning
 
 ## Potential Improvements (Not in Scope)
 
