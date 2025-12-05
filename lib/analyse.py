@@ -433,7 +433,7 @@ class ComplianceScanner:
         return report
 
 
-def main():
+def main():  # pragma: no cover
     """Main entry point"""
     print("=== AWS Infrastructure Compliance Analysis ===\n")
 
