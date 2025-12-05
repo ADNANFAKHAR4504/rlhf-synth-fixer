@@ -1,6 +1,7 @@
 name: TapStack
 runtime: nodejs
 description: Infrastructure compliance monitoring system for EC2 instances
+main: lib/
 config:
   environmentSuffix:
     type: string
