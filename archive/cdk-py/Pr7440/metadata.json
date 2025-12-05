@@ -1,0 +1,31 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "7050",
+  "team": "2",
+  "startedAt": "2025-11-26T17:52:21.197Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Optimization"
+  ],
+  "aws_services": [
+    "Aurora Global Database (RDS)",
+    "EC2 Auto Scaling",
+    "Application Load Balancer",
+    "DynamoDB",
+    "ElastiCache Redis",
+    "VPC",
+    "CloudWatch Logs",
+    "IAM",
+    "KMS",
+    "Cost Explorer API"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
+}

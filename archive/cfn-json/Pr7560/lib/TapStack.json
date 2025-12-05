@@ -1,0 +1,1077 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Observability Stack for Payment Processing - Comprehensive monitoring with CloudWatch, X-Ray, and SNS",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Environment Configuration"
+          },
+          "Parameters": [
+            "EnvironmentSuffix",
+            "Environment",
+            "Owner",
+            "CostCenter"
+          ]
+        },
+        {
+          "Label": {
+            "default": "KMS Encryption Keys"
+          },
+          "Parameters": [
+            "PrimaryKMSKeyArn"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Monitoring Targets"
+          },
+          "Parameters": [
+            "LambdaFunctionName",
+            "ApiGatewayName"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Alerting Configuration"
+          },
+          "Parameters": [
+            "AlertEmailAddress"
+          ]
+        }
+      ]
+    }
+  },
+  "Conditions": {
+    "HasPrimaryKMSKey": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "PrimaryKMSKeyArn"
+            },
+            ""
+          ]
+        }
+      ]
+    },
+    "HasAlertEmail": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "AlertEmailAddress"
+            },
+            ""
+          ]
+        }
+      ]
+    }
+  },
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    },
+    "Environment": {
+      "Type": "String",
+      "Default": "production",
+      "Description": "Environment tag value",
+      "AllowedValues": ["development", "staging", "production"]
+    },
+    "Owner": {
+      "Type": "String",
+      "Default": "FinOps",
+      "Description": "Owner tag value for resource ownership tracking"
+    },
+    "CostCenter": {
+      "Type": "String",
+      "Default": "PaymentProcessing",
+      "Description": "Cost center tag value for cost allocation"
+    },
+    "PrimaryKMSKeyArn": {
+      "Type": "String",
+      "Default": "",
+      "Description": "ARN of the KMS key for CloudWatch Logs encryption (optional - leave empty to disable encryption)",
+      "AllowedPattern": "^(arn:aws:kms:[a-z0-9-]+:[0-9]{12}:key/[a-f0-9-]+)?$",
+      "ConstraintDescription": "Must be a valid KMS key ARN or empty"
+    },
+    "LambdaFunctionName": {
+      "Type": "String",
+      "Default": "PaymentProcessorFunction",
+      "Description": "Name of the Lambda function to monitor"
+    },
+    "ApiGatewayName": {
+      "Type": "String",
+      "Default": "PaymentAPI",
+      "Description": "Name of the API Gateway to monitor"
+    },
+    "AlertEmailAddress": {
+      "Type": "String",
+      "Default": "",
+      "Description": "Email address for critical alerts (optional - leave empty to disable email notifications)",
+      "AllowedPattern": "^([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})?$",
+      "ConstraintDescription": "Must be a valid email address or empty"
+    }
+  },
+  "Resources": {
+    "PaymentLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/payment-processing/${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30,
+        "KmsKeyId": {
+          "Fn::If": [
+            "HasPrimaryKMSKey",
+            {
+              "Ref": "PrimaryKMSKeyArn"
+            },
+            {
+              "Ref": "AWS::NoValue"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "ApiGatewayLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/apigateway/${ApiGatewayName}-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30,
+        "KmsKeyId": {
+          "Fn::If": [
+            "HasPrimaryKMSKey",
+            {
+              "Ref": "PrimaryKMSKeyArn"
+            },
+            {
+              "Ref": "AWS::NoValue"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/${LambdaFunctionName}-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30,
+        "KmsKeyId": {
+          "Fn::If": [
+            "HasPrimaryKMSKey",
+            {
+              "Ref": "PrimaryKMSKeyArn"
+            },
+            {
+              "Ref": "AWS::NoValue"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "CloudWatchLogsResourcePolicy": {
+      "Type": "AWS::Logs::ResourcePolicy",
+      "Properties": {
+        "PolicyName": {
+          "Fn::Sub": "CloudWatchLogsPolicy-${EnvironmentSuffix}"
+        },
+        "PolicyDocument": {
+          "Fn::Sub": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"AllowCloudWatchAgentAccess\",\"Effect\":\"Allow\",\"Principal\":{\"AWS\":\"${AWS::AccountId}\"},\"Action\":[\"logs:CreateLogStream\",\"logs:PutLogEvents\"],\"Resource\":[\"${PaymentLogGroup.Arn}\",\"${ApiGatewayLogGroup.Arn}\",\"${LambdaLogGroup.Arn}\"]}]}"
+        }
+      }
+    },
+    "ObservabilityDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": {
+          "Fn::Sub": "PaymentProcessing-${EnvironmentSuffix}"
+        },
+        "DashboardBody": {
+          "Fn::Sub": "{\"widgets\":[{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/ApiGateway\",\"Latency\",{\"stat\":\"Average\"}],[\".\",\".\",{\"stat\":\"p99\"}]],\"period\":300,\"stat\":\"Average\",\"region\":\"${AWS::Region}\",\"title\":\"API Gateway Latency\",\"yAxis\":{\"left\":{\"min\":0}}}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/Lambda\",\"Errors\",{\"stat\":\"Sum\"}],[\".\",\"Throttles\",{\"stat\":\"Sum\"}]],\"period\":300,\"stat\":\"Sum\",\"region\":\"${AWS::Region}\",\"title\":\"Lambda Errors and Throttles\"}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"PaymentMetrics\",\"TransactionVolume\",{\"stat\":\"Sum\"}],[\".\",\"FailedTransactions\",{\"stat\":\"Sum\"}]],\"period\":300,\"stat\":\"Sum\",\"region\":\"${AWS::Region}\",\"title\":\"Payment Transaction Metrics\"}},{\"type\":\"log\",\"properties\":{\"query\":\"SOURCE '${PaymentLogGroup}'\\n| fields @timestamp, @message\\n| filter @message like /ERROR/\\n| sort @timestamp desc\\n| limit 20\",\"region\":\"${AWS::Region}\",\"title\":\"Recent Errors\"}}]}"
+        }
+      }
+    },
+    "XRaySamplingRule": {
+      "Type": "AWS::XRay::SamplingRule",
+      "Properties": {
+        "SamplingRule": {
+          "RuleName": {
+            "Fn::Sub": "PaymentProcessing-${EnvironmentSuffix}"
+          },
+          "Priority": 1000,
+          "Version": 1,
+          "ReservoirSize": 1,
+          "FixedRate": 0.1,
+          "URLPath": "*",
+          "Host": "*",
+          "HTTPMethod": "*",
+          "ServiceType": "*",
+          "ServiceName": "*",
+          "ResourceARN": "*",
+          "Attributes": {
+            "Environment": {
+              "Ref": "Environment"
+            }
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "Api5XXErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "API-5XX-Errors-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alarm when API Gateway 5XX errors exceed threshold",
+        "MetricName": "5XXError",
+        "Namespace": "AWS/ApiGateway",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 10,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaTimeoutAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "Lambda-Timeouts-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alarm when Lambda function timeouts occur",
+        "MetricName": "Duration",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Maximum",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 25000,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "CompositeAlarm": {
+      "Type": "AWS::CloudWatch::CompositeAlarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "PaymentProcessing-Critical-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Composite alarm combining API 5XX errors and Lambda timeouts",
+        "AlarmRule": {
+          "Fn::Sub": "ALARM(${Api5XXErrorAlarm}) OR ALARM(${LambdaTimeoutAlarm})"
+        },
+        "ActionsEnabled": true,
+        "AlarmActions": [
+          {
+            "Ref": "CriticalAlertTopic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "CriticalAlertTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "PaymentProcessing-Critical-Alerts-${EnvironmentSuffix}"
+        },
+        "DisplayName": "Payment Processing Critical Alerts",
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "CriticalAlertEmailSubscription": {
+      "Type": "AWS::SNS::Subscription",
+      "Condition": "HasAlertEmail",
+      "Properties": {
+        "Protocol": "email",
+        "TopicArn": {
+          "Ref": "CriticalAlertTopic"
+        },
+        "Endpoint": {
+          "Ref": "AlertEmailAddress"
+        }
+      }
+    },
+    "DashboardConfigParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/observability/dashboard-config/${EnvironmentSuffix}"
+        },
+        "Description": "Dashboard configuration for version control and cross-region replication",
+        "Type": "String",
+        "Value": {
+          "Fn::Sub": "{\"dashboardName\":\"PaymentProcessing-${EnvironmentSuffix}\",\"version\":\"1.0.0\",\"widgets\":[{\"type\":\"metric\",\"metrics\":[[\"AWS/ApiGateway\",\"Latency\"]]},{\"type\":\"metric\",\"metrics\":[[\"AWS/Lambda\",\"Errors\"]]}]}"
+        },
+        "Tags": {
+          "Environment": {
+            "Ref": "Environment"
+          },
+          "Owner": {
+            "Ref": "Owner"
+          },
+          "CostCenter": {
+            "Ref": "CostCenter"
+          }
+        }
+      }
+    },
+    "TransactionVolumeMetricFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "FilterName": {
+          "Fn::Sub": "TransactionVolume-${EnvironmentSuffix}"
+        },
+        "LogGroupName": {
+          "Ref": "PaymentLogGroup"
+        },
+        "FilterPattern": "[timestamp, request_id, event_type=TRANSACTION, ...]",
+        "MetricTransformations": [
+          {
+            "MetricName": "TransactionVolume",
+            "MetricNamespace": "PaymentMetrics",
+            "MetricValue": "1",
+            "DefaultValue": 0,
+            "Unit": "Count"
+          }
+        ]
+      }
+    },
+    "FailedTransactionMetricFilter": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "FilterName": {
+          "Fn::Sub": "FailedTransactions-${EnvironmentSuffix}"
+        },
+        "LogGroupName": {
+          "Ref": "PaymentLogGroup"
+        },
+        "FilterPattern": "[timestamp, request_id, event_type=TRANSACTION_FAILED, ...]",
+        "MetricTransformations": [
+          {
+            "MetricName": "FailedTransactions",
+            "MetricNamespace": "PaymentMetrics",
+            "MetricValue": "1",
+            "DefaultValue": 0,
+            "Unit": "Count"
+          }
+        ]
+      }
+    },
+    "MetricStreamRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "MetricStream-Role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "streams.metrics.cloudwatch.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "MetricStreamPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "firehose:PutRecord",
+                    "firehose:PutRecordBatch"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": ["MetricStreamFirehose", "Arn"]
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "MetricStreamBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "metric-stream-${AWS::AccountId}-${EnvironmentSuffix}"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldMetrics",
+              "Status": "Enabled",
+              "ExpirationInDays": 90
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "FirehoseRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "Firehose-Role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "firehose.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "FirehoseS3Policy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:GetObject",
+                    "s3:ListBucket"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": ["MetricStreamBucket", "Arn"]
+                    },
+                    {
+                      "Fn::Sub": "${MetricStreamBucket.Arn}/*"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "MetricStreamFirehose": {
+      "Type": "AWS::KinesisFirehose::DeliveryStream",
+      "Properties": {
+        "DeliveryStreamName": {
+          "Fn::Sub": "MetricStream-${EnvironmentSuffix}"
+        },
+        "DeliveryStreamType": "DirectPut",
+        "S3DestinationConfiguration": {
+          "BucketARN": {
+            "Fn::GetAtt": ["MetricStreamBucket", "Arn"]
+          },
+          "RoleARN": {
+            "Fn::GetAtt": ["FirehoseRole", "Arn"]
+          },
+          "Prefix": "metrics/",
+          "BufferingHints": {
+            "IntervalInSeconds": 60,
+            "SizeInMBs": 5
+          },
+          "CompressionFormat": "GZIP"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "MetricStream": {
+      "Type": "AWS::CloudWatch::MetricStream",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "PaymentMetrics-${EnvironmentSuffix}"
+        },
+        "RoleArn": {
+          "Fn::GetAtt": ["MetricStreamRole", "Arn"]
+        },
+        "FirehoseArn": {
+          "Fn::GetAtt": ["MetricStreamFirehose", "Arn"]
+        },
+        "OutputFormat": "json",
+        "IncludeFilters": [
+          {
+            "Namespace": "AWS/ApiGateway"
+          },
+          {
+            "Namespace": "AWS/Lambda"
+          },
+          {
+            "Namespace": "PaymentMetrics"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "CloudWatchAgentRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "CloudWatchAgent-Role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "CloudWatchAgentPolicy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": {
+          "Fn::Sub": "CloudWatchAgent-LeastPrivilege-${EnvironmentSuffix}"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents",
+                "logs:DescribeLogStreams"
+              ],
+              "Resource": [
+                {
+                  "Fn::GetAtt": ["PaymentLogGroup", "Arn"]
+                },
+                {
+                  "Fn::GetAtt": ["ApiGatewayLogGroup", "Arn"]
+                },
+                {
+                  "Fn::GetAtt": ["LambdaLogGroup", "Arn"]
+                }
+              ]
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "cloudwatch:PutMetricData"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "StringEquals": {
+                  "cloudwatch:namespace": "PaymentMetrics"
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "ec2:DescribeVolumes",
+                "ec2:DescribeTags"
+              ],
+              "Resource": "*"
+            }
+          ]
+        },
+        "Roles": [
+          {
+            "Ref": "CloudWatchAgentRole"
+          }
+        ]
+      }
+    },
+    "CloudWatchAgentInstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "InstanceProfileName": {
+          "Fn::Sub": "CloudWatchAgent-Profile-${EnvironmentSuffix}"
+        },
+        "Roles": [
+          {
+            "Ref": "CloudWatchAgentRole"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "PaymentLogGroupName": {
+      "Description": "Name of the Payment Processing CloudWatch Log Group",
+      "Value": {
+        "Ref": "PaymentLogGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PaymentLogGroupName"
+        }
+      }
+    },
+    "PaymentLogGroupArn": {
+      "Description": "ARN of the Payment Processing CloudWatch Log Group",
+      "Value": {
+        "Fn::GetAtt": ["PaymentLogGroup", "Arn"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PaymentLogGroupArn"
+        }
+      }
+    },
+    "ApiGatewayLogGroupName": {
+      "Description": "Name of the API Gateway CloudWatch Log Group",
+      "Value": {
+        "Ref": "ApiGatewayLogGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ApiGatewayLogGroupName"
+        }
+      }
+    },
+    "LambdaLogGroupName": {
+      "Description": "Name of the Lambda CloudWatch Log Group",
+      "Value": {
+        "Ref": "LambdaLogGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LambdaLogGroupName"
+        }
+      }
+    },
+    "DashboardName": {
+      "Description": "Name of the CloudWatch Dashboard",
+      "Value": {
+        "Ref": "ObservabilityDashboard"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DashboardName"
+        }
+      }
+    },
+    "XRaySamplingRuleArn": {
+      "Description": "ARN of the X-Ray Sampling Rule",
+      "Value": {
+        "Ref": "XRaySamplingRule"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-XRaySamplingRuleArn"
+        }
+      }
+    },
+    "CompositeAlarmName": {
+      "Description": "Name of the Composite Alarm",
+      "Value": {
+        "Ref": "CompositeAlarm"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CompositeAlarmName"
+        }
+      }
+    },
+    "CriticalAlertTopicArn": {
+      "Description": "ARN of the SNS topic for critical alerts",
+      "Value": {
+        "Ref": "CriticalAlertTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CriticalAlertTopicArn"
+        }
+      }
+    },
+    "DashboardConfigParameterName": {
+      "Description": "Name of the SSM Parameter storing dashboard configuration",
+      "Value": {
+        "Ref": "DashboardConfigParameter"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DashboardConfigParameterName"
+        }
+      }
+    },
+    "MetricStreamName": {
+      "Description": "Name of the CloudWatch Metric Stream",
+      "Value": {
+        "Ref": "MetricStream"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-MetricStreamName"
+        }
+      }
+    },
+    "CloudWatchAgentRoleArn": {
+      "Description": "ARN of the IAM role for CloudWatch agent",
+      "Value": {
+        "Fn::GetAtt": ["CloudWatchAgentRole", "Arn"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CloudWatchAgentRoleArn"
+        }
+      }
+    },
+    "CloudWatchAgentInstanceProfileArn": {
+      "Description": "ARN of the Instance Profile for CloudWatch agent",
+      "Value": {
+        "Fn::GetAtt": ["CloudWatchAgentInstanceProfile", "Arn"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CloudWatchAgentInstanceProfileArn"
+        }
+      }
+    },
+    "MetricStreamBucketName": {
+      "Description": "Name of the S3 bucket for metric stream data",
+      "Value": {
+        "Ref": "MetricStreamBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-MetricStreamBucketName"
+        }
+      }
+    },
+    "StackName": {
+      "Description": "Name of this CloudFormation stack",
+      "Value": {
+        "Ref": "AWS::StackName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StackName"
+        }
+      }
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for this deployment",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    }
+  }
+}

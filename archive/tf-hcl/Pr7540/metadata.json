@@ -1,0 +1,40 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "7539",
+  "team": "5",
+  "startedAt": "2025-11-29T06:50:55.612Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "Build high-availability payment processing infrastructure for fintech startup with PCI-DSS compliance, multi-AZ deployment, auto-scaling within 60 seconds, network segmentation, encryption at rest/transit, and comprehensive monitoring across compute, database, and CDN layers",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "ECS",
+    "Fargate",
+    "Aurora",
+    "RDS",
+    "ALB",
+    "WAF",
+    "CloudFront",
+    "S3",
+    "KMS",
+    "Secrets Manager",
+    "CloudWatch",
+    "Auto Scaling",
+    "SNS",
+    "IAM",
+    "NAT Gateway",
+    "Internet Gateway"
+  ],
+  "training_quality": 9.5,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}

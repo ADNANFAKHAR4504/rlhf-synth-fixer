@@ -1,0 +1,893 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Multi-Region Disaster Recovery Solution for Payment Processing - Secondary Region (us-west-2)",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource naming to enable multiple deployments",
+      "Default": "dev",
+      "AllowedPattern": "[a-z0-9-]+",
+      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+    },
+    "PrimaryVPCCidr": {
+      "Type": "String",
+      "Description": "CIDR block of primary VPC for peering",
+      "Default": "10.0.0.0/16"
+    },
+    "GlobalClusterIdentifier": {
+      "Type": "String",
+      "Description": "Global cluster identifier from primary region"
+    },
+    "HostedZoneId": {
+      "Type": "String",
+      "Description": "Route 53 Hosted Zone ID from primary region"
+    },
+    "HostedZoneName": {
+      "Type": "String",
+      "Description": "Route 53 hosted zone name",
+      "Default": "payment-dr.local"
+    },
+    "AlertEmail": {
+      "Type": "String",
+      "Description": "Email address for CloudWatch alarm notifications",
+      "Default": "alerts@example.com"
+    },
+    "SSLCertificateArn": {
+      "Type": "String",
+      "Description": "ARN of ACM SSL certificate for HTTPS listener",
+      "Default": "arn:aws:acm:us-west-2:123456789012:certificate/12345678-1234-1234-1234-123456789012"
+    },
+    "DBMasterPasswordSecretArn": {
+      "Type": "String",
+      "Description": "ARN of the Secrets Manager secret containing database credentials from primary region"
+    }
+  },
+  "Resources": {
+    "SecondaryVPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "20.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "vpc-secondary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "SecondaryPublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "CidrBlock": "20.0.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "subnet-secondary-public-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "SecondaryPublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "CidrBlock": "20.0.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "subnet-secondary-public-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "SecondaryPrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "CidrBlock": "20.0.11.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "subnet-secondary-private-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "SecondaryPrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "CidrBlock": "20.0.12.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "subnet-secondary-private-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "SecondaryInternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "igw-secondary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "SecondaryVPCGatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "SecondaryInternetGateway"
+        }
+      }
+    },
+    "SecondaryPublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "rt-secondary-public-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "SecondaryPublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "SecondaryVPCGatewayAttachment",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "SecondaryPublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "SecondaryInternetGateway"
+        }
+      }
+    },
+    "SecondaryPublicSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "SecondaryPublicSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "SecondaryPublicRouteTable"
+        }
+      }
+    },
+    "SecondaryPublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "SecondaryPublicSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "SecondaryPublicRouteTable"
+        }
+      }
+    },
+    "SecondaryDBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupName": {
+          "Fn::Sub": "aurora-subnet-group-secondary-${EnvironmentSuffix}"
+        },
+        "DBSubnetGroupDescription": "Subnet group for Aurora secondary cluster",
+        "SubnetIds": [
+          {
+            "Ref": "SecondaryPrivateSubnet1"
+          },
+          {
+            "Ref": "SecondaryPrivateSubnet2"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-subnet-group-secondary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "SecondaryAuroraSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "sg-aurora-secondary-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for Aurora secondary database",
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "SourceSecurityGroupId": {
+              "Ref": "SecondaryLambdaSecurityGroup"
+            },
+            "Description": "Allow MySQL from Lambda functions"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "CidrIp": {
+              "Ref": "PrimaryVPCCidr"
+            },
+            "Description": "Allow MySQL from primary region VPC"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "sg-aurora-secondary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "SecondaryDBCluster": {
+      "Type": "AWS::RDS::DBCluster",
+      "Properties": {
+        "DBClusterIdentifier": {
+          "Fn::Sub": "secondary-payment-cluster-${EnvironmentSuffix}"
+        },
+        "Engine": "aurora-mysql",
+        "EngineVersion": "8.0.mysql_aurora.3.04.0",
+        "DBSubnetGroupName": {
+          "Ref": "SecondaryDBSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "SecondaryAuroraSecurityGroup"
+          }
+        ],
+        "GlobalClusterIdentifier": {
+          "Ref": "GlobalClusterIdentifier"
+        },
+        "StorageEncrypted": true,
+        "EnableCloudwatchLogsExports": [
+          "error",
+          "slowquery"
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secondary-payment-cluster-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "SecondaryDBInstance": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "secondary-payment-instance-${EnvironmentSuffix}"
+        },
+        "DBClusterIdentifier": {
+          "Ref": "SecondaryDBCluster"
+        },
+        "Engine": "aurora-mysql",
+        "DBInstanceClass": "db.r5.large",
+        "PubliclyAccessible": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "secondary-payment-instance-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "TransactionLogsSecondaryBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "transaction-logs-secondary-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldVersions",
+              "Status": "Enabled",
+              "NoncurrentVersionExpirationInDays": 30
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "transaction-logs-secondary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "SecondaryLambdaSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "sg-lambda-secondary-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for Lambda functions in secondary region",
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "sg-lambda-secondary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "SecondaryLambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "lambda-execution-role-secondary-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "LambdaPaymentProcessingPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:GetObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${TransactionLogsSecondaryBucket.Arn}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": "arn:aws:logs:*:*:*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue"
+                  ],
+                  "Resource": {
+                    "Ref": "DBMasterPasswordSecretArn"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "lambda-execution-role-secondary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "SecondaryPaymentProcessorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "payment-processor-secondary-${EnvironmentSuffix}"
+        },
+        "Runtime": "nodejs20.x",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "SecondaryLambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 30,
+        "MemorySize": 512,
+        "Environment": {
+          "Variables": {
+            "DB_ENDPOINT": {
+              "Fn::GetAtt": [
+                "SecondaryDBCluster",
+                "ReadEndpoint.Address"
+              ]
+            },
+            "DB_NAME": "payments",
+            "BUCKET_NAME": {
+              "Ref": "TransactionLogsSecondaryBucket"
+            },
+            "REGION": {
+              "Ref": "AWS::Region"
+            }
+          }
+        },
+        "VpcConfig": {
+          "SecurityGroupIds": [
+            {
+              "Ref": "SecondaryLambdaSecurityGroup"
+            }
+          ],
+          "SubnetIds": [
+            {
+              "Ref": "SecondaryPrivateSubnet1"
+            },
+            {
+              "Ref": "SecondaryPrivateSubnet2"
+            }
+          ]
+        },
+        "Code": {
+          "ZipFile": "const AWS = require('aws-sdk');\nconst s3 = new AWS.S3();\n\nexports.handler = async (event) => {\n  console.log('Processing payment (DR):', JSON.stringify(event));\n  \n  try {\n    const transactionId = event.transactionId || Date.now().toString();\n    const amount = event.amount || 0;\n    const timestamp = new Date().toISOString();\n    \n    // Log transaction to S3\n    const logData = {\n      transactionId,\n      amount,\n      timestamp,\n      status: 'processed',\n      region: process.env.REGION,\n      failover: true\n    };\n    \n    await s3.putObject({\n      Bucket: process.env.BUCKET_NAME,\n      Key: `transactions/${timestamp}/${transactionId}.json`,\n      Body: JSON.stringify(logData),\n      ContentType: 'application/json'\n    }).promise();\n    \n    return {\n      statusCode: 200,\n      body: JSON.stringify({\n        message: 'Payment processed successfully (DR)',\n        transactionId,\n        region: process.env.REGION,\n        failover: true\n      })\n    };\n  } catch (error) {\n    console.error('Payment processing error:', error);\n    throw error;\n  }\n};\n"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-processor-secondary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "SecondaryALBSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": {
+          "Fn::Sub": "sg-alb-secondary-${EnvironmentSuffix}"
+        },
+        "GroupDescription": "Security group for Application Load Balancer in secondary region",
+        "VpcId": {
+          "Ref": "SecondaryVPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow HTTP from internet"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow HTTPS from internet"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "sg-alb-secondary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "SecondaryALB": {
+      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "alb-secondary-${EnvironmentSuffix}"
+        },
+        "Type": "application",
+        "Scheme": "internet-facing",
+        "IpAddressType": "ipv4",
+        "Subnets": [
+          {
+            "Ref": "SecondaryPublicSubnet1"
+          },
+          {
+            "Ref": "SecondaryPublicSubnet2"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "Ref": "SecondaryALBSecurityGroup"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "alb-secondary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "SecondaryTargetGroup": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "tg-secondary-${EnvironmentSuffix}"
+        },
+        "TargetType": "lambda",
+        "Targets": [
+          {
+            "Id": {
+              "Fn::GetAtt": [
+                "SecondaryPaymentProcessorFunction",
+                "Arn"
+              ]
+            }
+          }
+        ],
+        "HealthCheckEnabled": true,
+        "HealthCheckPath": "/health",
+        "HealthCheckIntervalSeconds": 35,
+        "HealthCheckTimeoutSeconds": 30,
+        "HealthyThresholdCount": 5,
+        "UnhealthyThresholdCount": 2,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "tg-secondary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "SecondaryLambdaInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "SecondaryPaymentProcessorFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "elasticloadbalancing.amazonaws.com",
+        "SourceArn": {
+          "Ref": "SecondaryTargetGroup"
+        }
+      }
+    },
+    "SecondaryALBListener": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties": {
+        "LoadBalancerArn": {
+          "Ref": "SecondaryALB"
+        },
+        "Protocol": "HTTPS",
+        "Port": 443,
+        "Certificates": [
+          {
+            "CertificateArn": {
+              "Ref": "SSLCertificateArn"
+            }
+          }
+        ],
+        "DefaultActions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": {
+              "Ref": "SecondaryTargetGroup"
+            }
+          }
+        ]
+      }
+    },
+    "SecondaryALBHealthCheck": {
+      "Type": "AWS::Route53::HealthCheck",
+      "Properties": {
+        "HealthCheckConfig": {
+          "Type": "HTTPS",
+          "ResourcePath": "/health",
+          "FullyQualifiedDomainName": {
+            "Fn::GetAtt": [
+              "SecondaryALB",
+              "DNSName"
+            ]
+          },
+          "Port": 443,
+          "RequestInterval": 30,
+          "FailureThreshold": 3
+        },
+        "HealthCheckTags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "health-check-secondary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "SecondaryRecordSet": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneId": {
+          "Ref": "HostedZoneId"
+        },
+        "Name": {
+          "Fn::Sub": "payments.${HostedZoneName}"
+        },
+        "Type": "A",
+        "SetIdentifier": "Secondary",
+        "Failover": "SECONDARY",
+        "HealthCheckId": {
+          "Ref": "SecondaryALBHealthCheck"
+        },
+        "AliasTarget": {
+          "HostedZoneId": {
+            "Fn::GetAtt": [
+              "SecondaryALB",
+              "CanonicalHostedZoneID"
+            ]
+          },
+          "DNSName": {
+            "Fn::GetAtt": [
+              "SecondaryALB",
+              "DNSName"
+            ]
+          },
+          "EvaluateTargetHealth": true
+        }
+      }
+    },
+    "SecondarySNSTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "payment-alerts-secondary-${EnvironmentSuffix}"
+        },
+        "DisplayName": "Payment Processing Alerts - Secondary Region",
+        "Subscription": [
+          {
+            "Endpoint": {
+              "Ref": "AlertEmail"
+            },
+            "Protocol": "email"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-alerts-secondary-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Delete"
+    },
+    "SecondaryLambdaErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "lambda-errors-secondary-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when Lambda function has errors in secondary region",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "SecondaryPaymentProcessorFunction"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "SecondarySNSTopic"
+          }
+        ]
+      }
+    },
+    "SecondaryHealthCheckAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "route53-health-check-secondary-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when Route 53 health check fails in secondary region",
+        "MetricName": "HealthCheckStatus",
+        "Namespace": "AWS/Route53",
+        "Statistic": "Minimum",
+        "Period": 60,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "HealthCheckId",
+            "Value": {
+              "Ref": "SecondaryALBHealthCheck"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "SecondarySNSTopic"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "SecondaryVPCId": {
+      "Description": "VPC ID for secondary region",
+      "Value": {
+        "Ref": "SecondaryVPC"
+      }
+    },
+    "SecondaryALBDNSName": {
+      "Description": "DNS name of the secondary Application Load Balancer",
+      "Value": {
+        "Fn::GetAtt": [
+          "SecondaryALB",
+          "DNSName"
+        ]
+      }
+    },
+    "SecondaryDBClusterEndpoint": {
+      "Description": "Reader endpoint for the secondary Aurora cluster",
+      "Value": {
+        "Fn::GetAtt": [
+          "SecondaryDBCluster",
+          "ReadEndpoint.Address"
+        ]
+      }
+    },
+    "TransactionLogsSecondaryBucketName": {
+      "Description": "S3 bucket for transaction logs in secondary region",
+      "Value": {
+        "Ref": "TransactionLogsSecondaryBucket"
+      }
+    }
+  }
+}

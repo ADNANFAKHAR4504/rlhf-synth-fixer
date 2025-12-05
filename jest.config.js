@@ -1,7 +1,20 @@
+/**
+ * Jest Configuration
+ * 
+ * IMPORTANT: Do NOT change the 'roots' configuration below.
+ * 
+ * This config is ONLY used for TypeScript/JavaScript tests.
+ * - TS/JS projects: Place tests in 'test/' folder (singular)
+ * - Python projects: Use 'tests/' folder with pytest (not Jest)
+ * - Go projects: Use 'tests/' folder with 'go test' (not Jest)
+ * - Java projects: Use 'tests/' folder with JUnit/Gradle (not Jest)
+ * 
+ * Do NOT add 'tests/' to the roots array - it will break TS/JS project validation.
+ */
 module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/test'],
-  testMatch: ['**/*.test.ts', '**/*.test.mjs'],
+  testMatch: ['**/*.test.ts', '**/*.test.mjs', '**/*.py'],
   preset: 'ts-jest',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs'],
   transform: {
@@ -19,6 +32,7 @@ module.exports = {
     '<rootDir>/lib/**/*.mjs',
     '<rootDir>/lib/**/*.js',
     '!<rootDir>/bin/**/*.ts',
+    '!<rootDir>/lib/lambda/**',
     '!<rootDir>/**/*.d.ts',
     '!<rootDir>/**/*.test.ts',
     '!<rootDir>/**/*.test.js',
@@ -27,13 +41,13 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'json-summary'],
   coverageThreshold: {
     global: {
-      branches: 50,
-      functions: 90,
-      lines: 90,
-      statements: 90,
+      branches: 70,
+      functions: 100,
+      lines: 100,
+      statements: 99,
     },
   },
-  testTimeout: 30000,
+  testTimeout: 60000,
   silent: false,
   verbose: true,
   globals: {

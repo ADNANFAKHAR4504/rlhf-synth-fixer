@@ -1,0 +1,16 @@
+==========================================
+Monitoring Infrastructure Analysis
+==========================================
+
+1. Retrieving stack outputs...
+   Detected stack: TapStackpr7941
+⚠️  WARNING: Pulumi stack TapStackpr7941 not found
+   This may be expected if:
+     - Running in CI before deployment
+     - Stack was cleaned up
+     - Running in unit test mode
+
+   Available stacks:
+     (none)
+
+   Skipping infrastructure validation (no live deployment to analyze)

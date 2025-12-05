@@ -48,8 +48,8 @@ done
 # 2. Validate platform
 PLATFORM=$(jq -r '.platform // empty' "$METADATA_FILE")
 if [ -n "$PLATFORM" ]; then
-    if [[ ! "$PLATFORM" =~ ^(cdk|cdktf|cfn|tf|pulumi)$ ]]; then
-        log_error "Invalid platform: '$PLATFORM' (must be: cdk, cdktf, cfn, tf, or pulumi)"
+    if [[ ! "$PLATFORM" =~ ^(cdk|cdktf|cfn|tf|pulumi|cicd)$ ]]; then
+        log_error "Invalid platform: '$PLATFORM' (must be: cdk, cdktf, cfn, tf, pulumi, or cicd)"
         ((ERRORS++))
     else
         log_info "Platform: $PLATFORM"
@@ -59,8 +59,8 @@ fi
 # 3. Validate language
 LANGUAGE=$(jq -r '.language // empty' "$METADATA_FILE")
 if [ -n "$LANGUAGE" ]; then
-    if [[ ! "$LANGUAGE" =~ ^(ts|py|js|go|java|hcl|yaml|json)$ ]]; then
-        log_error "Invalid language: '$LANGUAGE' (must be: ts, py, js, go, java, hcl, yaml, or json)"
+    if [[ ! "$LANGUAGE" =~ ^(ts|py|js|go|java|hcl|yaml|json|yml)$ ]]; then
+        log_error "Invalid language: '$LANGUAGE' (must be: ts, py, js, go, java, hcl, yaml, json, or yml)"
         ((ERRORS++))
     else
         log_info "Language: $LANGUAGE"
@@ -95,8 +95,14 @@ if [ -n "$PLATFORM" ] && [ -n "$LANGUAGE" ]; then
             fi
             ;;
         cfn)
-            if [[ ! "$LANGUAGE" =~ ^(yaml|json)$ ]]; then
-                log_error "Invalid platform-language combination: cfn-$LANGUAGE (cfn supports: yaml, json)"
+            if [[ ! "$LANGUAGE" =~ ^(yaml|json|yml)$ ]]; then
+                log_error "Invalid platform-language combination: cfn-$LANGUAGE (cfn supports: yaml, json, yml)"
+                ((ERRORS++))
+            fi
+            ;;
+        cicd)
+            if [[ ! "$LANGUAGE" =~ ^(yaml|yml)$ ]]; then
+                log_error "Invalid platform-language combination: cicd-$LANGUAGE (cicd supports: yaml, yml)"
                 ((ERRORS++))
             fi
             ;;
@@ -250,7 +256,9 @@ if [ -n "$REFERENCE_PATH" ] && jq -e '.subject_labels' "$METADATA_FILE" > /dev/n
         fi
     fi
 elif [ -z "$REFERENCE_PATH" ]; then
-    log_warn "Reference file not found: $REFERENCE_FILE (subject_labels values not validated)"
+    log_error "Reference file not found: $REFERENCE_FILE - subject_labels cannot be validated"
+    log_warn "Ensure the reference file exists at: .claude/docs/references/iac-subtasks-subject-labels.json"
+    ((ERRORS++))
 fi
 
 # 9. Validate region format (if present)

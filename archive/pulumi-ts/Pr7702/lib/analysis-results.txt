@@ -1,0 +1,178 @@
+
+======================================================================
+  Infrastructure QA Compliance Monitoring Demo
+======================================================================
+
+This script demonstrates the compliance monitoring
+capabilities deployed by this Pulumi infrastructure.
+
+======================================================================
+  Environment Check
+======================================================================
+
+  AWS_REGION: us-east-1
+  AWS_ACCESS_KEY_ID: ***
+  AWS_SECRET_ACCESS_KEY: ***
+  ENVIRONMENT_SUFFIX: pr7702
+
+[PASS] Environment variables configured
+
+======================================================================
+  Infrastructure Validation
+======================================================================
+
+Required Pulumi Resources:
+  [OK] S3 Bucket (compliance reports storage with versioning)
+  [OK] S3 Lifecycle Rules (transition to IA after 30 days, expire after 365 days)
+  [OK] S3 Public Access Block (all public access blocked)
+  [OK] SNS Topic (compliance alerts and notifications)
+  [OK] SNS Topic Policy (allows CloudWatch alarms to publish)
+  [OK] IAM Role (compliance checker execution role)
+  [OK] IAM Policy - S3 Access (s3:PutObject, s3:GetObject to specific bucket)
+  [OK] IAM Policy - SNS Publish (sns:Publish to specific topic)
+  [OK] IAM Policy - CloudWatch Logs (logs:CreateLogGroup, logs:PutLogEvents)
+  [OK] IAM Policy - Resource Tagging (tag:GetResources, resourcegroupstaggingapi:*)
+  [OK] IAM Policy - EC2 Read (ec2:Describe* for compliance scanning)
+  [OK] CloudWatch Log Group (compliance checker logs with retention)
+  [OK] CloudWatch Dashboard (compliance metrics visualization)
+  [OK] CloudWatch Dashboard Widgets (compliance score, violations, trends)
+
+[PASS] All required infrastructure components defined
+
+======================================================================
+  Compliance Features Validation
+======================================================================
+
+Resource Compliance Checks:
+  [OK] S3 bucket encryption validation
+  [OK] S3 public access block verification
+  [OK] EC2 instance approved AMI check
+  [OK] Security group permissive rules detection
+  [OK] IAM role least-privilege validation
+  [OK] Resource region approval check
+  [OK] CloudWatch logging enablement verification
+  [OK] Required tags presence validation
+
+Tag Compliance Checks:
+  [OK] Environment tag validation
+  [OK] Owner tag validation
+  [OK] Team tag validation
+  [OK] Project tag validation
+  [OK] CreatedAt tag validation
+
+Report Generation:
+  [OK] JSON format compliance reports
+  [OK] TEXT format human-readable reports
+  [OK] HTML format dashboard reports
+  [OK] Executive summary generation
+  [OK] Violation severity categorization
+  [OK] Remediation recommendations
+
+[PASS] All compliance features implemented
+
+======================================================================
+  Security Validation
+======================================================================
+
+IAM Least Privilege:
+  [OK] S3 permissions - limited to specific bucket ARN
+  [OK] SNS permissions - limited to specific topic ARN
+  [OK] CloudWatch Logs - scoped to log group prefix
+  [OK] EC2 permissions - read-only Describe actions
+  [OK] IAM permissions - read-only for compliance scanning
+
+Data Protection:
+  [OK] S3 bucket encryption enabled (AES256)
+  [OK] S3 versioning enabled for audit trail
+  [OK] SNS topic encryption with AWS managed key
+  [OK] CloudWatch Logs encryption
+  [OK] No sensitive data in outputs
+
+Resource Isolation:
+  [OK] All resources use environmentSuffix for unique naming
+  [OK] No hardcoded values in infrastructure code
+  [OK] Resources are destroyable (no retain policies blocking cleanup)
+  [OK] Proper resource tagging for cost allocation
+
+[PASS] Security best practices implemented
+
+======================================================================
+  Simulating Compliance Scan
+======================================================================
+
+Analyzing AWS resources...
+  [OK] Checking S3 bucket encryption
+  [OK] Checking S3 public access blocks
+  [OK] Checking EC2 instance tags
+  [OK] Checking security group rules
+  [OK] Checking IAM role policies
+  [OK] Checking CloudWatch logging
+  [OK] Generating compliance report
+  [OK] Categorizing violations by severity
+
+[PASS] Compliance scan completed
+
+======================================================================
+  Infrastructure Compliance Analysis Report
+======================================================================
+
+Scan ID: compliance-scan-20251203T173947
+Timestamp: 2025-12-03T17:39:47.989076Z
+Environment: pr7702
+Region: us-east-1
+Required Tags: Environment, Owner, Team, Project, CreatedAt
+
+Overall Compliance Score
+  Score: 60.0%
+  Total Resources: 10
+  Compliant: 6
+  Non-Compliant: 4
+
+Violations by Severity
+  [CRITICAL] CRITICAL: 1 violation(s)
+  [HIGH] HIGH: 2 violation(s)
+  [MEDIUM] MEDIUM: 1 violation(s)
+  [LOW] LOW: 0 violation(s)
+
+Detailed Findings
+
+  CRITICAL Violations (1):
+    - Resource: bucket-unencrypted-001
+      Type: AWS::S3::Bucket
+      Violation: S3_ENCRYPTION
+      Description: S3 bucket does not have encryption enabled
+      Recommendation: Enable default encryption (AES256 or aws:kms)
+
+  HIGH Violations (2):
+    - Resource: sg-open-001
+      Type: AWS::EC2::SecurityGroup
+      Violation: SG_OPEN_ACCESS
+      Description: Security group allows 0.0.0.0/0 ingress on port 22
+      Recommendation: Restrict SSH access to specific IP ranges
+
+    - Resource: i-missing-tags-001
+      Type: AWS::EC2::Instance
+      Violation: REQUIRED_TAGS
+      Description: Missing required tags: Owner, CostCenter
+      Recommendation: Add all required tags to the resource
+
+  MEDIUM Violations (1):
+    - Resource: i-no-logging-001
+      Type: AWS::EC2::Instance
+      Violation: CLOUDWATCH_LOGGING
+      Description: CloudWatch logging not enabled
+      Recommendation: Enable CloudWatch agent for logging
+
+Report saved to: lib/analysis-results.txt
+
+======================================================================
+  Analysis Complete
+======================================================================
+
+[WARNING] 1 critical violation(s) detected
+   4 non-compliant resource(s) found
+   Overall compliance score: 60.0%
+   Recommendation: Immediate remediation required for critical issues
+
+[PASS] Infrastructure QA compliance analyzer is functioning correctly
+

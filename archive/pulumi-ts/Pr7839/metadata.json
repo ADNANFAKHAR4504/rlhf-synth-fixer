@@ -1,0 +1,29 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-12-03T22:47:00Z",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "Tag-Based Compliance Monitoring"
+  ],
+  "po_id": "a5u1v0s6",
+  "aws_services": [
+    "S3",
+    "SNS",
+    "Lambda",
+    "CloudWatch",
+    "EventBridge",
+    "IAM"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

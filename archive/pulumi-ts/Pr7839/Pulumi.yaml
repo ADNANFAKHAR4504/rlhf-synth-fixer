@@ -1,0 +1,4 @@
+name: TapStack
+runtime: nodejs
+description: Tag-based compliance monitoring system for EC2 instances using CloudWatch Events and Lambda
+main: lib/

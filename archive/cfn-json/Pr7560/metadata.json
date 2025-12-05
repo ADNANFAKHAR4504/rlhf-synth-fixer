@@ -1,0 +1,37 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-12-01T04:09:58+00:00",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "subtask": "A financial services company needs to implement comprehensive observability for their payment processing system to meet compliance requirements. The system must capture detailed metrics, logs, and traces while maintaining data residency in specific regions for regulatory purposes.",
+  "subject_labels": [
+    "All CloudWatch Logs must use KMS encryption with customer-managed keys",
+    "Metrics data retention must be exactly 90 days for compliance",
+    "Log groups must have resource policies limiting access to specific IAM roles",
+    "CloudWatch Dashboards must be deployed in at least 2 regions",
+    "Alarms must use composite alarms for reducing false positives",
+    "All resources must use consistent tagging with Environment, Owner, and CostCenter tags",
+    "Parameter Store must be used for storing dashboard configurations"
+  ],
+  "aws_services": [
+    "CloudWatch",
+    "IAM",
+    "KinesisFirehose",
+    "Logs",
+    "S3",
+    "SNS",
+    "SSM",
+    "XRay"
+  ],
+  "po_id": "101912919",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

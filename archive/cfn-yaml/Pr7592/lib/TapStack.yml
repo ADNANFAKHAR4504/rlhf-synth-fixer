@@ -1,0 +1,1209 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  TapStack — New Build with Managed Stack Operations (us-west-2).
+  All-new, production-ready environment: VPC (public/private across 2 AZs) + IGW + single-NAT,
+  ALB + Target Group + Listener + ASG (AL2023 via SSM), RDS (PostgreSQL default, Multi-AZ, KMS),
+  S3 (artifacts + CloudTrail logs; versioned, KMS, public access blocked, lifecycle to Glacier),
+  KMS CMKs with rotation (logs/data), CloudTrail (multi-region, global service events, KMS),
+  VPC Flow Logs -> CloudWatch Logs (KMS), CloudWatch alarms (ALB 5xx, TG Unhealthy, RDS CPU),
+  Example Lambda (Python 3.12) with name-matched log group, SNS notifications, and an in-template
+  Manager Lambda (Custom Resource) that verifies ALB/ASG/RDS health and notifies SNS on create/update.
+  All resource names/tags include ENVIRONMENT_SUFFIX.
+
+Metadata:
+  TemplateAuthor: SAARZ Int. / TapStack
+  Version: 2.1.3
+  Notes:
+    - Region target: us-west-2 (infra is region-agnostic but tuned for us-west-2).
+    - Two CMKs: LogsKmsKey (CloudWatch Logs & Flow Logs) and DataKmsKey (S3, RDS, CloudTrail, SNS).
+    - RDS password managed by Secrets Manager (no plaintext in template).
+    - Lambda log group name exactly matches the function name.
+    - Defaults enable non-interactive pipeline deploys.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: tapstack
+    AllowedPattern: '^[a-z0-9-]{3,32}$'
+    Description: Logical project name used as a prefix in resource tags and friendly names.
+
+  EnvironmentSuffix:
+    Type: String
+    Default: dev-usw2
+    AllowedPattern: '^[a-z0-9-]{2,20}$'
+    Description: Safe suffix included in names/tags to avoid cross-environment collisions.
+
+  VpcCidr:
+    Type: String
+    Default: 10.20.0.0/16
+    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]+$'
+    Description: VPC CIDR
+
+  PublicSubnetACidr:
+    Type: String
+    Default: 10.20.0.0/24
+    Description: Public subnet A CIDR
+
+  PublicSubnetBCidr:
+    Type: String
+    Default: 10.20.1.0/24
+    Description: Public subnet B CIDR
+
+  PrivateSubnetACidr:
+    Type: String
+    Default: 10.20.10.0/24
+    Description: Private subnet A CIDR
+
+  PrivateSubnetBCidr:
+    Type: String
+    Default: 10.20.11.0/24
+    Description: Private subnet B CIDR
+
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    Description: EC2 instance type for the ASG
+
+  DesiredCapacity:
+    Type: Number
+    Default: 2
+    MinValue: 1
+    Description: ASG desired capacity
+
+  MinSize:
+    Type: Number
+    Default: 2
+    MinValue: 1
+    Description: ASG minimum size
+
+  MaxSize:
+    Type: Number
+    Default: 4
+    MinValue: 1
+    Description: ASG maximum size
+
+  LatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: SSM parameter for the latest Amazon Linux 2023 AMI (x86_64)
+
+  AlbHealthCheckPath:
+    Type: String
+    Default: /health
+    Description: ALB target group health check path
+
+  AlbHealthCheckPort:
+    Type: String
+    Default: traffic-port
+    Description: ALB target group health check port ("traffic-port" recommended)
+
+  RdsEngine:
+    Type: String
+    Default: postgres
+    AllowedValues:
+      - postgres
+      - mysql
+    Description: RDS engine
+
+  RdsEngineVersion:
+    Type: String
+    Default: ''
+    Description: >
+      Optional RDS engine version. Leave blank to use the regional default (recommended).
+      Example: for Postgres you might supply 15.7; for MySQL 8.0.35.
+
+
+  RdsInstanceClass:
+    Type: String
+    Default: db.t4g.micro
+    Description: RDS instance class
+
+  RdsAllocatedStorage:
+    Type: Number
+    Default: 20
+    MinValue: 20
+    Description: Initial storage (GiB)
+
+  RdsMaxAllocatedStorage:
+    Type: Number
+    Default: 100
+    MinValue: 20
+    Description: Max storage (GiB)
+
+  RdsMultiAz:
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Whether to deploy RDS Multi-AZ (recommended true)
+
+  RdsMasterUsername:
+    Type: String
+    Default: dbadmin
+    AllowedPattern: '^[A-Za-z0-9_]{1,16}$'
+    Description: RDS master username. Password is managed by Secrets Manager.
+
+  NotificationEmail:
+    Type: String
+    Default: alerts@example.com
+    AllowedPattern: '^[^@]+@[^@]+\.[^@]+$'
+    Description: Email address subscribed to the SNS topic for stack notifications.
+
+  S3TransitionDaysToGlacier:
+    Type: Number
+    Default: 30
+    MinValue: 1
+    Description: Days before transitioning old objects to Glacier (logs/artifacts)
+
+Conditions:
+  IsPostgres:
+    Fn::Equals:
+      - Ref: RdsEngine
+      - postgres
+  IsMultiAzTrue:
+    Fn::Equals:
+      - Ref: RdsMultiAz
+      - 'true'
+
+  HasRdsEngineVersion:
+    Fn::Not:
+      - Fn::Equals:
+          - Ref: RdsEngineVersion
+          - ''
+
+
+Resources:
+
+  LogsKmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub '${ProjectName}-${EnvironmentSuffix} logs CMK'
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowRootAccount
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: AllowCloudWatchLogsUse
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+          - Sid: AllowVPCFlowLogsDelivery
+            Effect: Allow
+            Principal:
+              Service: delivery.logs.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-logs-kms'
+
+  DataKmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub '${ProjectName}-${EnvironmentSuffix} data CMK'
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowRootAccount
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: AllowCloudTrailS3Encryption
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+          - Sid: AllowSNSUse
+            Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-data-kms'
+
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref DataKmsKey
+            BucketKeyEnabled: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToGlacier
+            Status: Enabled
+            Transitions:
+              - StorageClass: GLACIER
+                TransitionInDays: !Ref S3TransitionDaysToGlacier
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-artifacts'
+
+  CloudTrailBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref DataKmsKey
+            BucketKeyEnabled: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToGlacier
+            Status: Enabled
+            Transitions:
+              - StorageClass: GLACIER
+                TransitionInDays: !Ref S3TransitionDaysToGlacier
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-trail'
+
+  CloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Allow CloudTrail to verify bucket ACL ownership
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt CloudTrailBucket.Arn
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+
+          # Allow CloudTrail to deliver log files into this bucket
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${CloudTrailBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+                s3:x-amz-acl: bucket-owner-full-control
+
+
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-vpc'
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-igw'
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnetACidr
+      MapPublicIpOnLaunch: true
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ''
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-a'
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnetBCidr
+      MapPublicIpOnLaunch: true
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: ''
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-b'
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnetACidr
+      MapPublicIpOnLaunch: false
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ''
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-a'
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PrivateSubnetBCidr
+      MapPublicIpOnLaunch: false
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: ''
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-b'
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-rt'
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+    DependsOn: InternetGatewayAttachment
+
+  PublicSubnetAAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetA
+
+  PublicSubnetBAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetB
+
+  EipForNatA:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-eip-nat-a'
+
+  NatGatewayA:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt EipForNatA.AllocationId
+      SubnetId: !Ref PublicSubnetA
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-nat-a'
+    DependsOn: PublicRoute
+
+  PrivateRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-rt-a'
+
+  PrivateRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-rt-b'
+
+  PrivateRouteA:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableA
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayA
+
+  PrivateRouteB:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayA
+
+  PrivateSubnetAAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableA
+      SubnetId: !Ref PrivateSubnetA
+
+  PrivateSubnetBAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
+      SubnetId: !Ref PrivateSubnetB
+
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub '${ProjectName}-${EnvironmentSuffix} ALB SG'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-alb-sg'
+
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub '${ProjectName}-${EnvironmentSuffix} App SG'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-app-sg'
+
+  RdsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub '${ProjectName}-${EnvironmentSuffix} RDS SG'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort:
+            Fn::If:
+              - IsPostgres
+              - 5432
+              - 3306
+          ToPort:
+            Fn::If:
+              - IsPostgres
+              - 5432
+              - 3306
+          SourceSecurityGroupId: !Ref AppSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-sg'
+
+  FlowLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: flowlogs-to-cwl
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-flowlogs-role'
+
+  VpcFlowLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      KmsKeyId: !GetAtt LogsKmsKey.Arn
+      RetentionInDays: 90
+
+
+  VpcFlowLogs:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      DeliverLogsPermissionArn: !GetAtt FlowLogsRole.Arn
+      LogDestinationType: cloud-watch-logs
+      LogGroupName: !Ref VpcFlowLogsGroup
+      MaxAggregationInterval: 60
+      ResourceId: !Ref VPC
+      ResourceType: VPC
+      TrafficType: ALL
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-flowlogs'
+
+  AppLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internet-facing
+      Subnets:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
+      SecurityGroups:
+        - !Ref AlbSecurityGroup
+      Type: application
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-alb'
+
+  AppTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      HealthCheckPath: !Ref AlbHealthCheckPath
+      HealthCheckPort: !Ref AlbHealthCheckPort
+      TargetType: instance
+      Matcher:
+        HttpCode: '200-399'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-tg'
+
+  AppListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref AppLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref AppTargetGroup
+
+  AppLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: !Ref InstanceType
+        SecurityGroupIds:
+          - !Ref AppSecurityGroup
+        MetadataOptions:
+          HttpEndpoint: enabled
+          HttpTokens: required
+        UserData:
+          Fn::Base64:
+            Fn::Sub: |
+              #!/bin/bash
+              set -euo pipefail
+              dnf -y update
+              dnf -y install nginx
+              cat > /usr/share/nginx/html/index.html <<'EOF'
+              <!doctype html><html><head><title>TapStack</title></head>
+              <body><h1>TapStack ${EnvironmentSuffix}</h1><p>Status: OK</p></body></html>
+              EOF
+              systemctl enable nginx
+              systemctl start nginx
+
+  AppAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+      DesiredCapacity: !Ref DesiredCapacity
+      MinSize: !Ref MinSize
+      MaxSize: !Ref MaxSize
+      HealthCheckType: ELB
+      TargetGroupARNs:
+        - !Ref AppTargetGroup
+      LaunchTemplate:
+        LaunchTemplateId: !Ref AppLaunchTemplate
+        Version: !GetAtt AppLaunchTemplate.LatestVersionNumber
+      MetricsCollection:
+        - Granularity: '1Minute'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-asg'
+          PropagateAtLaunch: true
+        - Key: Project
+          Value: !Ref ProjectName
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+          PropagateAtLaunch: true
+        - Key: ManagedBy
+          Value: TapStack
+          PropagateAtLaunch: true
+        - Key: Stack
+          Value: !Ref AWS::StackName
+          PropagateAtLaunch: true
+        - Key: Purpose
+          Value: app
+          PropagateAtLaunch: true
+        - Key: Owner
+          Value: platform
+          PropagateAtLaunch: true
+
+  RdsSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: !Sub '${ProjectName}-${EnvironmentSuffix} RDS subnet group'
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-subnetgrp'
+
+  RdsInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: !Ref RdsEngine
+      # Include EngineVersion only when provided, otherwise let RDS pick the correct regional default
+      EngineVersion:
+        Fn::If:
+          - HasRdsEngineVersion
+          - !Ref RdsEngineVersion
+          - !Ref AWS::NoValue
+      AutoMinorVersionUpgrade: true
+
+      DBInstanceClass: !Ref RdsInstanceClass
+      AllocatedStorage: !Ref RdsAllocatedStorage
+      MaxAllocatedStorage: !Ref RdsMaxAllocatedStorage
+
+      DBSubnetGroupName: !Ref RdsSubnetGroup
+      VPCSecurityGroups:
+        - !Ref RdsSecurityGroup
+
+      MultiAZ:
+        Fn::If:
+          - IsMultiAzTrue
+          - true
+          - false
+
+      StorageEncrypted: true
+      KmsKeyId: !Ref DataKmsKey
+      PubliclyAccessible: false
+      DeletionProtection: false
+
+      MasterUsername: !Ref RdsMasterUsername
+      ManageMasterUserPassword: true   # uses Secrets Manager automatically
+
+      EnablePerformanceInsights: true
+      PerformanceInsightsKMSKeyId: !Ref DataKmsKey
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: 06:00-07:00
+      PreferredMaintenanceWindow: Sun:07:00-Sun:08:00
+      StorageType: gp3
+      CopyTagsToSnapshot: true
+      EnableIAMDatabaseAuthentication: false
+      MonitoringInterval: 0
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rds'
+
+
+
+  TrailLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      KmsKeyId: !GetAtt LogsKmsKey.Arn
+      RetentionInDays: 90
+
+
+  TrailRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: cloudtrail-to-cwl
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogStreams
+                  - logs:DescribeLogGroups
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-trail-role'
+
+  CloudTrailTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: CloudTrailBucketPolicy
+    Properties:
+      S3BucketName: !Ref CloudTrailBucket
+      IncludeGlobalServiceEvents: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      KMSKeyId: !Ref DataKmsKey
+      CloudWatchLogsLogGroupArn: !GetAtt TrailLogsGroup.Arn
+      CloudWatchLogsRoleArn: !GetAtt TrailRole.Arn
+      IsLogging: true
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-trail'
+
+
+
+  ExampleLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-lambda-role'
+
+
+
+  ExampleLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt ExampleLambdaRole.Arn
+      Timeout: 6
+      MemorySize: 128
+      TracingConfig:
+        Mode: PassThrough
+      Environment:
+        Variables:
+          STAGE: !Ref EnvironmentSuffix
+      Code:
+        ZipFile: |
+          import json, os
+          def handler(event, context):
+              return {
+                  "statusCode": 200,
+                  "headers": {"Content-Type": "application/json"},
+                  "body": json.dumps({"ok": True, "env": os.getenv("STAGE","")})
+              }
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-lambda'
+
+  NotificationsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      KmsMasterKeyId: !Ref DataKmsKey
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-alerts'
+
+  NotificationsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref NotificationsTopic
+      Protocol: email
+      Endpoint: !Ref NotificationEmail
+
+  Alb5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: ALB 5xx spike
+      Namespace: AWS/ApplicationELB
+      MetricName: HTTPCode_ELB_5XX_Count
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt AppLoadBalancer.LoadBalancerFullName
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 3
+      DatapointsToAlarm: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref NotificationsTopic
+      OKActions:
+        - !Ref NotificationsTopic
+
+  TgUnhealthyHostsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Target group unhealthy host count > 0
+      Namespace: AWS/ApplicationELB
+      MetricName: UnHealthyHostCount
+      Dimensions:
+        - Name: TargetGroup
+          Value: !GetAtt AppTargetGroup.TargetGroupFullName
+        - Name: LoadBalancer
+          Value: !GetAtt AppLoadBalancer.LoadBalancerFullName
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 5
+      DatapointsToAlarm: 3
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref NotificationsTopic
+      OKActions:
+        - !Ref NotificationsTopic
+
+  RdsCpuAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: RDS CPU > 80%
+      Namespace: AWS/RDS
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref RdsInstance
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 3
+      DatapointsToAlarm: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref NotificationsTopic
+      OKActions:
+        - !Ref NotificationsTopic
+
+  ManagerLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: manager-describe-and-notify
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:DescribeStacks
+                  - elasticloadbalancing:DescribeTargetHealth
+                  - autoscaling:DescribeAutoScalingGroups
+                  - rds:DescribeDBInstances
+                  - sns:Publish
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-manager-role'
+
+  ManagerLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt ManagerLambdaRole.Arn
+      Timeout: 120
+      MemorySize: 256
+      Environment:
+        Variables:
+          STACK_NAME: !Ref AWS::StackName
+          REGION: !Ref AWS::Region
+      Code:
+        ZipFile: |
+          import json, os, urllib.request, logging, boto3
+          log = logging.getLogger()
+          log.setLevel(logging.INFO)
+
+          def send_cfn_response(event, context, status, data=None, reason=None, physical_id=None):
+              response_url = event['ResponseURL']
+              body = {
+                  'Status': status,
+                  'Reason': reason or f"See CloudWatch Logs: {getattr(context,'log_stream_name','NA')}",
+                  'PhysicalResourceId': physical_id or getattr(context,'log_stream_name','manager'),
+                  'StackId': event['StackId'],
+                  'RequestId': event['RequestId'],
+                  'LogicalResourceId': event['LogicalResourceId'],
+                  'Data': data or {}
+              }
+              body_b = json.dumps(body).encode('utf-8')
+              req = urllib.request.Request(response_url, data=body_b, method='PUT')
+              req.add_header('Content-Type','')
+              req.add_header('Content-Length', str(len(body_b)))
+              try:
+                  with urllib.request.urlopen(req) as resp:
+                      log.info(f"CFN response sent: {resp.status}")
+              except Exception as e:
+                  log.error(f"Failed sending CFN response: {e}")
+
+          def outputs_map(stack):
+              out = {}
+              for o in stack.get('Outputs',[]) or []:
+                  out[o['OutputKey']] = o['OutputValue']
+              return out
+
+          def verify(outs, region):
+              elbv2 = boto3.client('elbv2', region_name=region)
+              asg   = boto3.client('autoscaling', region_name=region)
+              rds   = boto3.client('rds', region_name=region)
+
+              tg_arn = outs.get('TargetGroupArn')
+              asg_name = outs.get('AsgName')
+              rds_id = outs.get('RdsInstanceIdentifier')
+
+              res = {'alb':{'ok':False,'msg':'n/a'},
+                     'asg':{'ok':False,'msg':'n/a'},
+                     'rds':{'ok':False,'msg':'n/a'}}
+
+              try:
+                  if not tg_arn:
+                      res['alb']={'ok':False,'msg':'Missing TargetGroupArn'}
+                  else:
+                      th = elbv2.describe_target_health(TargetGroupArn=tg_arn)
+                      descs = th.get('TargetHealthDescriptions',[])
+                      if not descs:
+                          res['alb']={'ok':False,'msg':'No targets'}
+                      else:
+                          unhealthy=[d for d in descs if d.get('TargetHealth',{}).get('State')!='healthy']
+                          res['alb']={'ok':len(unhealthy)==0,'msg':f'unhealthy={len(unhealthy)}'}
+              except Exception as e:
+                  res['alb']={'ok':False,'msg':f'error:{e}'}
+
+              try:
+                  if not asg_name:
+                      res['asg']={'ok':False,'msg':'Missing AsgName'}
+                  else:
+                      d=asg.describe_auto_scaling_groups(AutoScalingGroupNames=[asg_name])
+                      gs=d.get('AutoScalingGroups',[])
+                      if not gs:
+                          res['asg']={'ok':False,'msg':'ASG not found'}
+                      else:
+                          g=gs[0]
+                          desired=g.get('DesiredCapacity',0)
+                          healthy=[i for i in g.get('Instances',[]) if i.get('HealthStatus')=='Healthy' and i.get('LifecycleState') in ('InService','Standby')]
+                          res['asg']={'ok':len(healthy)>=desired,'msg':f'healthy={len(healthy)}/{desired}'}
+              except Exception as e:
+                  res['asg']={'ok':False,'msg':f'error:{e}'}
+
+              try:
+                  if not rds_id:
+                      res['rds']={'ok':False,'msg':'Missing RdsInstanceIdentifier'}
+                  else:
+                      d=rds.describe_db_instances(DBInstanceIdentifier=rds_id)
+                      st=d['DBInstances'][0]['DBInstanceStatus']
+                      res['rds']={'ok':st=='available','msg':f'status={st}'}
+              except Exception as e:
+                  res['rds']={'ok':False,'msg':f'error:{e}'}
+
+              all_ok = res['alb']['ok'] and res['asg']['ok'] and res['rds']['ok']
+              return all_ok, res
+
+          def publish(topic_arn, region, payload):
+              if not topic_arn:
+                  log.warning("No SNS Topic ARN; skipping notify")
+                  return
+              sns=boto3.client('sns', region_name=region)
+              sns.publish(TopicArn=topic_arn, Subject=f"TapStack Verification ({region})", Message=json.dumps(payload, indent=2))
+
+          def handler(event, context):
+              log.info("Manager event: %s", json.dumps(event))
+              region=os.getenv('REGION','us-west-2')
+              cfn=boto3.client('cloudformation', region_name=region)
+              try:
+                  st=cfn.describe_stacks(StackName=event['StackId'])['Stacks'][0]
+                  outs=outputs_map(st)
+                  topic_arn=outs.get('NotificationsTopicArn')
+                  all_ok,details=verify(outs,region)
+                  payload={'stack':st['StackName'],'region':region,'requestType':event.get('RequestType'),'verification':details}
+                  if event.get('RequestType') in ('Create','Update'):
+                      publish(topic_arn,region,payload)
+                  send_cfn_response(event,context,'SUCCESS',data={'ok':all_ok,'details':details})
+              except Exception as e:
+                  log.exception("Manager error")
+                  send_cfn_response(event,context,'FAILED',reason=str(e))
+
+  PostDeployVerifier:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt ManagerLambda.Arn
+      StackName: !Ref AWS::StackName
+    DependsOn:
+      - AppAutoScalingGroup
+      - CloudTrailTrail
+      - ExampleLambda
+      - NotificationsTopic
+      - RdsInstance
+      - AppListener
+
+Outputs:
+  VpcId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-VpcId'
+
+  PublicSubnetIds:
+    Description: Public subnet IDs
+    Value:
+      Fn::Join:
+        - ','
+        - - !Ref PublicSubnetA
+          - !Ref PublicSubnetB
+
+  PrivateSubnetIds:
+    Description: Private subnet IDs
+    Value:
+      Fn::Join:
+        - ','
+        - - !Ref PrivateSubnetA
+          - !Ref PrivateSubnetB
+
+  AlbArn:
+    Description: ALB ARN
+    Value: !Ref AppLoadBalancer
+
+  AlbDNSName:
+    Description: ALB DNS name
+    Value: !GetAtt AppLoadBalancer.DNSName
+
+  TargetGroupArn:
+    Description: Target Group ARN
+    Value: !Ref AppTargetGroup
+
+  AsgName:
+    Description: Auto Scaling Group name
+    Value: !Ref AppAutoScalingGroup
+
+  RdsEndpoint:
+    Description: RDS endpoint address
+    Value: !GetAtt RdsInstance.Endpoint.Address
+
+  RdsInstanceIdentifier:
+    Description: RDS instance identifier
+    Value: !Ref RdsInstance
+
+  ArtifactBucketName:
+    Description: Artifact bucket
+    Value: !Ref ArtifactBucket
+
+  CloudTrailBucketName:
+    Description: CloudTrail logs bucket
+    Value: !Ref CloudTrailBucket
+
+  LogsKmsKeyArn:
+    Description: Logs KMS Key ARN
+    Value: !GetAtt LogsKmsKey.Arn
+
+  DataKmsKeyArn:
+    Description: Data KMS Key ARN
+    Value: !GetAtt DataKmsKey.Arn
+
+  CloudTrailName:
+    Description: CloudTrail name
+    Value: !Ref CloudTrailTrail
+
+  NotificationsTopicArn:
+    Description: SNS topic ARN
+    Value: !Ref NotificationsTopic
+
+  LambdaFunctionName:
+    Description: Example Lambda function name
+    Value: !Ref ExampleLambda
+
+  LambdaFunctionArn:
+    Description: Example Lambda function ARN
+    Value: !GetAtt ExampleLambda.Arn

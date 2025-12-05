@@ -1,0 +1,54 @@
+# terraform.tfvars.example - Example variable values for deployment
+# Copy this file to terraform.tfvars and update the values
+
+# AWS Configuration
+aws_region = "eu-central-1"
+
+# Environment Configuration
+environment_suffix = "dev"  # IMPORTANT: Must be unique for each deployment
+
+# Repository Information
+repository    = "iac-test-automations"
+commit_author = "developer@example.com"
+pr_number     = "1234"
+team          = "infrastructure"
+
+# Network Configuration
+vpc_cidr = "10.0.0.0/16"
+availability_zones = [
+  "eu-central-1a",
+  "eu-central-1b",
+  "eu-central-1c"
+]
+
+# EKS Configuration
+eks_version = "1.28"
+
+# Node Group Instance Types
+frontend_instance_type       = "t3.large"
+backend_instance_type        = "m5.xlarge"
+data_processing_instance_type = "c5.2xlarge"
+
+# Node Group Scaling
+min_nodes     = 2
+max_nodes     = 10
+desired_nodes = 2
+
+# EKS Add-on Versions (null for latest)
+vpc_cni_version        = null
+kube_proxy_version     = null
+coredns_version        = null
+ebs_csi_driver_version = null
+
+# Helm Chart Versions
+alb_controller_chart_version      = "1.7.0"
+cluster_autoscaler_chart_version  = "9.35.0"
+istio_version                     = "1.20.2"
+
+# Common Tags
+tags = {
+  ManagedBy   = "Terraform"
+  Project     = "ECommercePlatform"
+  Environment = "Development"
+  CostCenter  = "Engineering"
+}

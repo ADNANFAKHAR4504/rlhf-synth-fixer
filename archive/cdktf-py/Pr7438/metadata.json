@@ -1,0 +1,41 @@
+{
+  "task_id": "h1u2r4i8",
+  "po_id": "h1u2r4i8",
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-27T18:20:00Z",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "VPC",
+    "Aurora",
+    "EC2",
+    "ALB",
+    "Route53",
+    "CloudWatch",
+    "StepFunctions",
+    "VPCPeering",
+    "KMS",
+    "IAM",
+    "RDS",
+    "ELB",
+    "ASG",
+    "ACM",
+    "S3",
+    "EIP",
+    "NAT"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

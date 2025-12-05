@@ -1,0 +1,13 @@
+aws_region                  = "us-east-1"
+environment                 = "prod"
+vpc_cidr                    = "10.2.0.0/16"
+ecs_cpu                     = 1024
+ecs_memory                  = 2048
+ecs_desired_count           = 3
+ecs_min_capacity            = 3
+ecs_max_capacity            = 10
+rds_instance_class          = "db.m5.large"
+rds_allocated_storage       = 100
+rds_backup_retention_period = 30
+sns_email_endpoint          = "prod-alerts@company.com"
+enable_vpc_peering          = true

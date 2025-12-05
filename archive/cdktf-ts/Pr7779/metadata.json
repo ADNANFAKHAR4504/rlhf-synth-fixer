@@ -1,0 +1,44 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-12-03T06:23:51.972Z",
+  "po_id": "22222783",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Use Route 53 health checks with failover routing policies for automatic DNS failover",
+    "Configure RDS Aurora Global Database with one primary cluster and one secondary cluster",
+    "Use EventBridge global endpoints to route events to the active region automatically",
+    "Set up CloudWatch cross-region dashboards to monitor both regions from a single pane",
+    "Use Systems Manager Parameter Store with cross-region replication for configuration data",
+    "Configure S3 bucket replication with RTC (Replication Time Control) for objects under 128 MB",
+    "Implement DynamoDB global tables for multi-region data replication with point-in-time recovery enabled",
+    "Implement Step Functions with cross-region state machine replication for workflow consistency",
+    "Implement AWS Backup for cross-region backups of EBS volumes attached to EC2 instances",
+    "Deploy Lambda functions in both regions with identical configurations and environment variables"
+  ],
+  "aws_services": [
+    "VPC",
+    "DynamoDB",
+    "RDS",
+    "Lambda",
+    "S3",
+    "Step Functions",
+    "EventBridge",
+    "Route 53",
+    "AWS Backup",
+    "CloudWatch",
+    "Systems Manager",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

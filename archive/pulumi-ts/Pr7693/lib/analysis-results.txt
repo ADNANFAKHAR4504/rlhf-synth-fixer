@@ -1,0 +1,132 @@
+
+======================================================================
+  Infrastructure Compliance Scanner Demo
+======================================================================
+
+This script demonstrates the tag compliance scanning capabilities
+deployed by this Pulumi infrastructure.
+
+Required Tags: Environment, Owner, CostCenter, Project
+
+======================================================================
+  Environment Check
+======================================================================
+
+  AWS_REGION: us-east-1
+  AWS_ACCESS_KEY_ID: ***
+  AWS_SECRET_ACCESS_KEY: ***
+  ENVIRONMENT_SUFFIX: pr7693
+
+[OK] Environment variables configured
+
+======================================================================
+  Infrastructure Validation
+======================================================================
+
+[INFRA] Required Pulumi Resources:
+  [OK] S3 Bucket (compliance reports storage)
+  [OK] S3 Bucket Public Access Block (security)
+  [OK] Lambda Function (compliance scanner)
+  [OK] IAM Role (Lambda execution role)
+  [OK] IAM Policy Attachment (AWSLambdaBasicExecutionRole)
+  [OK] IAM Role Policy (EC2, RDS, S3 read permissions)
+  [OK] CloudWatch Log Group (Lambda logging with 30-day retention)
+  [OK] EventBridge Rule (daily scheduled scan)
+  [OK] EventBridge Target (Lambda invocation)
+  [OK] Lambda Permission (EventBridge invoke)
+
+[OK] All required infrastructure components defined
+
+======================================================================
+  Compliance Features Validation
+======================================================================
+
+[FEATURES] Tag Compliance Checks:
+  [OK] EC2 instance tag scanning
+  [OK] RDS database and cluster tag scanning
+  [OK] S3 bucket tag scanning
+  [OK] Mandatory tags validation (Environment, Owner, CostCenter, Project)
+  [OK] Resource age calculation
+  [OK] 90-day flagging for non-compliant resources
+  [OK] Compliance percentage calculation per service
+  [OK] Overall compliance score calculation
+  [OK] Non-compliant resources grouped by service
+  [OK] Actionable recommendations generation
+  [OK] JSON report export to S3 with timestamp
+  [OK] Error handling for API failures
+
+[OK] All compliance features implemented
+
+======================================================================
+  Simulating Infrastructure Compliance Scan
+======================================================================
+
+[SCAN] Analyzing AWS resources for tag compliance...
+  [OK] Scanning EC2 instances for mandatory tags
+  [OK] Scanning RDS databases and clusters for mandatory tags
+  [OK] Scanning S3 buckets for mandatory tags
+  [OK] Checking for required tags: Environment, Owner, CostCenter, Project
+  [OK] Flagging resources older than 90 days without proper tags
+  [OK] Calculating compliance percentages by service
+
+[OK] Infrastructure compliance scan completed
+
+======================================================================
+  Infrastructure Compliance Report
+======================================================================
+
+Scan ID: compliance-scan-20251203113604
+Timestamp: 2025-12-03T11:36:04.413571Z
+Environment: pr7693
+Region: us-east-1
+
+[SUMMARY] Overall Tag Compliance Score
+  Score: 50.00%
+  Total Resources: 8
+  Compliant: 4
+  Non-Compliant: 4
+
+[BREAKDOWN] Compliance by Service
+  [FAIL] EC2: 33.33% (1/3 compliant)
+  [WARN] RDS: 50.00% (1/2 compliant)
+  [WARN] S3: 66.67% (2/3 compliant)
+
+[DETAILS] Non-Compliant Resources
+
+  EC2 (2 non-compliant):
+    - i-0def789abc123 [FLAGGED >90 DAYS]
+      Missing: Environment, Owner, CostCenter, Project
+      Age: 120 days
+    - i-0ghi456jkl789
+      Missing: Owner, CostCenter, Project
+      Age: 30 days
+
+  RDS (1 non-compliant):
+    - dev-test-db [FLAGGED >90 DAYS]
+      Missing: Owner, CostCenter, Project
+      Age: 95 days
+
+  S3 (1 non-compliant):
+    - temp-files-bucket [FLAGGED >90 DAYS]
+      Missing: Environment, Owner, CostCenter, Project
+      Age: 150 days
+
+[RECOMMENDATIONS] Action Items
+  1. [EC2 Instance] Add required tags (Environment, Owner, CostCenter, Project) to 2 EC2 Instance resource(s)
+     Resources: i-0def789abc123, i-0ghi456jkl789
+  2. [RDS Instance] Add required tags (Environment, Owner, CostCenter, Project) to 1 RDS Instance resource(s)
+     Resources: dev-test-db
+  3. [S3 Bucket] Add required tags (Environment, Owner, CostCenter, Project) to 1 S3 Bucket resource(s)
+     Resources: temp-files-bucket
+  4. [HIGH] 3 resource(s) have been running for >90 days without proper tags - prioritize remediation
+     Resources: i-0def789abc123, dev-test-db, temp-files-bucket
+
+[FILE] Report saved to: lib/analysis-results.txt
+
+======================================================================
+  Analysis Complete
+======================================================================
+
+[WARN] WARNING: Resources flagged for >90 days without proper tags
+       Overall compliance score: 50.0%
+       Recommendation: Prioritize remediation of flagged resources
