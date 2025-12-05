@@ -1,0 +1,12 @@
+name: ecs-optimization
+runtime: go
+description: Optimized ECS infrastructure with cost reduction features
+
+config:
+  environmentSuffix:
+    type: string
+    description: Environment suffix for resource naming
+  vpcId:
+    type: string
+    description: Optional VPC ID (will create new VPC if not provided)
+    default: ""
