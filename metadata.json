@@ -3,22 +3,23 @@
   "language": "go",
   "complexity": "hard",
   "turn_type": "multi",
-  "po_id": "d9d0n6x0",
+  "po_id": "g9s1j8o1",
   "team": "synth",
-  "startedAt": "2025-12-05T05:02:35Z",
+  "startedAt": "2025-12-05T06:15:00Z",
   "subtask": "CI/CD Pipeline Integration",
   "subject_labels": [
     "CI/CD Pipeline"
   ],
   "aws_services": [
-    "SNS",
-    "S3",
-    "DynamoDB",
-    "IAM",
+    "CodeCommit",
     "CodeBuild",
     "CodePipeline",
+    "S3",
+    "Secrets Manager",
     "CloudWatch",
-    "EventBridge"
+    "KMS",
+    "IAM",
+    "VPC"
   ],
   "training_quality": 10
 }
