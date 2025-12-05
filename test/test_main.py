@@ -208,7 +208,9 @@ class TestLambdaFunctions:
 
     def test_payment_processor_lambda(self):
         """Test payment processor Lambda handler"""
-        from lib.lambda.payment_processor.index import handler
+        import importlib
+        mod = importlib.import_module("lib.lambda.payment_processor.index")
+        handler = mod.handler
 
         event = {
             'body': json.dumps({
@@ -229,7 +231,9 @@ class TestLambdaFunctions:
 
     def test_health_check_lambda(self):
         """Test health check Lambda handler"""
-        from lib.lambda.health_check.index import handler
+        import importlib
+        mod = importlib.import_module("lib.lambda.health_check.index")
+        handler = mod.handler
 
         event = {}
 
