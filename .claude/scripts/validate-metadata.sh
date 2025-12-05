@@ -48,8 +48,8 @@ done
 # 2. Validate platform
 PLATFORM=$(jq -r '.platform // empty' "$METADATA_FILE")
 if [ -n "$PLATFORM" ]; then
-    if [[ ! "$PLATFORM" =~ ^(cdk|cdktf|cfn|tf|pulumi|cicd)$ ]]; then
-        log_error "Invalid platform: '$PLATFORM' (must be: cdk, cdktf, cfn, tf, pulumi, or cicd)"
+    if [[ ! "$PLATFORM" =~ ^(cdk|cdktf|cfn|tf|pulumi|cicd|analysis)$ ]]; then
+        log_error "Invalid platform: '$PLATFORM' (must be: cdk, cdktf, cfn, tf, pulumi, cicd, or analysis)"
         ((ERRORS++))
     else
         log_info "Platform: $PLATFORM"
@@ -103,6 +103,12 @@ if [ -n "$PLATFORM" ] && [ -n "$LANGUAGE" ]; then
         cicd)
             if [[ ! "$LANGUAGE" =~ ^(yaml|yml)$ ]]; then
                 log_error "Invalid platform-language combination: cicd-$LANGUAGE (cicd supports: yaml, yml)"
+                ((ERRORS++))
+            fi
+            ;;
+        analysis)
+            if [ "$LANGUAGE" != "py" ]; then
+                log_error "Invalid platform-language combination: analysis-$LANGUAGE (analysis supports: py)"
                 ((ERRORS++))
             fi
             ;;
