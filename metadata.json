@@ -11,5 +11,9 @@
   "subject_labels": [
     "Infrastructure Analysis/Monitoring"
   ],
-  "aws_services": []
+  "aws_services": [],
+  "training_quality": 9,
+  "test_coverage": 100,
+  "deployment_status": "blocked_infra_issue",
+  "deployment_blocker": "CDK IAM role missing - environment bootstrap issue"
 }
