@@ -3,6 +3,6 @@
   "platform": "cdk",
   "language": "ts",
   "difficulty": "hard",
-  "subtask": "Infrastructure QA and Management",
-  "subject_labels": ["General Infrastructure Tooling QA"]
+  "subtask": "IaC Program Optimization",
+  "subject_labels": ["IaC Diagnosis/Edits"]
 }
