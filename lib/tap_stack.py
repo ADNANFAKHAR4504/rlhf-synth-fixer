@@ -109,45 +109,41 @@ class TapStack(TerraformStack):
         self.monitoring = MonitoringConstruct(
             self,
             "monitoring",
-            environment_suffix=environment_suffix,
-            primary_provider=self.primary_provider,
-            secondary_provider=self.secondary_provider,
-            primary_alb_arn=self.compute.primary_alb_arn_suffix,
-            secondary_alb_arn=self.compute.secondary_alb_arn_suffix,
-            primary_asg_name=self.compute.primary_asg_name,
-            secondary_asg_name=self.compute.secondary_asg_name,
-            primary_db_cluster_id=self.database.primary_cluster_id,
-            secondary_db_cluster_id=self.database.secondary_cluster_id
+            environment_suffix,
+            self.primary_provider,
+            self.secondary_provider,
+            self.compute.primary_alb_arn_suffix,
+            self.compute.secondary_alb_arn_suffix,
+            self.compute.primary_asg_name,
+            self.compute.secondary_asg_name,
+            self.database.primary_cluster_id,
+            self.database.secondary_cluster_id
         )
 
         # Failover orchestration - Lambda functions
         self.failover = FailoverOrchestrationConstruct(
             self,
             "failover",
-            environment_suffix=environment_suffix,
-            primary_provider=self.primary_provider,
-            primary_vpc_id=self.networking.primary_vpc.id,
-            primary_subnet_ids=self.networking.primary_private_subnet_ids,
-            lambda_security_group_id=self.networking.primary_lambda_security_group_id,
-            sns_topic_arn=self.monitoring.primary_sns_topic_arn,
-            primary_alb_arn=self.compute.primary_alb_full_arn,
-            secondary_alb_arn=self.compute.secondary_alb_full_arn,
-            primary_region=primary_region,
-            secondary_region=secondary_region
+            environment_suffix,
+            self.primary_provider,
+            self.networking.primary_private_subnet_ids,
+            self.monitoring.primary_sns_topic_arn,
+            self.compute.primary_alb_full_arn,
+            self.compute.secondary_alb_full_arn,
+            primary_region,
+            secondary_region
         )
 
         # Traffic management - Route 53 with failover
         self.traffic_management = TrafficManagementConstruct(
             self,
             "traffic",
-            environment_suffix=environment_suffix,
-            primary_provider=self.primary_provider,
-            primary_alb_dns=self.compute.primary_alb_dns,
-            secondary_alb_dns=self.compute.secondary_alb_dns,
-            primary_alb_zone_id=self.compute.primary_alb_zone_id,
-            secondary_alb_zone_id=self.compute.secondary_alb_zone_id,
-            primary_region=primary_region,
-            secondary_region=secondary_region
+            environment_suffix,
+            self.primary_provider,
+            self.compute.primary_alb_dns,
+            self.compute.secondary_alb_dns,
+            primary_region,
+            secondary_region
         )
 
         # Outputs

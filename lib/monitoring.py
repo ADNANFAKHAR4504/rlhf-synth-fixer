@@ -9,14 +9,15 @@ class MonitoringConstruct(Construct):
     def __init__(
         self,
         scope: Construct,
+        construct_id: str,
         environment_suffix: str,
         primary_provider,
         secondary_provider,
-        construct_id: str,
         primary_alb_arn: str,
         secondary_alb_arn: str,
         primary_asg_name: str,
         secondary_asg_name: str,
+        primary_db_cluster_id: str,
         secondary_db_cluster_id: str
     ):
         super().__init__(scope, construct_id)

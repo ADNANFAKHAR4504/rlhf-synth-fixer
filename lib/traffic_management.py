@@ -1,6 +1,10 @@
 from constructs import Construct
 from cdktf_cdktf_provider_aws.route53_zone import Route53Zone
-from cdktf_cdktf_provider_aws.route53_record import Route53Record, Route53RecordAlias, Route53RecordFailoverRoutingPolicy
+from cdktf_cdktf_provider_aws.route53_record import (
+    Route53Record,
+    Route53RecordAlias,
+    Route53RecordFailoverRoutingPolicy
+)
 from cdktf_cdktf_provider_aws.route53_health_check import Route53HealthCheck
 
 
@@ -8,10 +12,10 @@ class TrafficManagementConstruct(Construct):
     def __init__(
         self,
         scope: Construct,
+        construct_id: str,
         environment_suffix: str,
         primary_provider,
         primary_alb_dns: str,
-        construct_id: str,
         secondary_alb_dns: str,
         primary_region: str,
         secondary_region: str

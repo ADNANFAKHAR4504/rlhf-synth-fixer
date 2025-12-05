@@ -13,8 +13,8 @@ class FailoverOrchestrationConstruct(Construct):
     def __init__(
         self,
         scope: Construct,
-        environment_suffix: str,
         construct_id: str,
+        environment_suffix: str,
         primary_provider,
         primary_subnet_ids: list,
         sns_topic_arn: str,
