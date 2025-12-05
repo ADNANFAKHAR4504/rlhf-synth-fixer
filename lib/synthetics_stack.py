@@ -46,7 +46,7 @@ class SyntheticsStack(Construct):
             name=f"health-check-{env_suffix}",
             artifact_s3_location=f"s3://{artifacts_bucket.bucket_name}/health",
             execution_role_arn=health_canary_role.role_arn,
-            runtime_version="syn-python-selenium-2.0",
+            runtime_version="syn-python-selenium-7.0",
             schedule=synthetics.CfnCanary.ScheduleProperty(
                 expression="rate(5 minutes)"
             ),
@@ -101,7 +101,7 @@ def handler(event, context):
             name=f"payment-api-{env_suffix}",
             artifact_s3_location=f"s3://{artifacts_bucket.bucket_name}/payment",
             execution_role_arn=payment_canary_role.role_arn,
-            runtime_version="syn-python-selenium-2.0",
+            runtime_version="syn-python-selenium-7.0",
             schedule=synthetics.CfnCanary.ScheduleProperty(
                 expression="rate(5 minutes)"
             ),
