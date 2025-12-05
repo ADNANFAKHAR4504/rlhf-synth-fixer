@@ -58,7 +58,7 @@ describe('Order Processing Lambda Integration Tests', () => {
         .promise();
 
       // Requirement 1: Verify memory and timeout
-      expect(response.MemorySize).toBe(512);
+      expect(response.MemorySize).toBe(1024);
       expect(response.Timeout).toBe(30);
 
       // Requirement 2: Verify reserved concurrency (adjusted for AWS account limits)

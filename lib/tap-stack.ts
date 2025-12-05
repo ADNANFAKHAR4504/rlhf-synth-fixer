@@ -4,7 +4,7 @@
  * Lambda Order Processing System Optimization Stack
  *
  * This stack implements a complete Lambda-based order processing system with:
- * - Optimized Lambda configuration (512MB memory, 30s timeout)
+ * - Optimized Lambda configuration (1024MB memory (baseline - will be optimized), 30s timeout)
  * - Reserved concurrency (removed due to AWS account limits)
  * - X-Ray tracing enabled
  * - CloudWatch log retention (7 days)
@@ -38,7 +38,7 @@ export interface TapStackArgs {
  * Represents the main Pulumi component resource for the Lambda Order Processing System.
  *
  * This component implements all 10 optimization requirements:
- * 1. Lambda configuration optimization (512MB, 30s timeout)
+ * 1. Lambda configuration baseline (1024MB, 30s timeout) - to be optimized
  * 2. Reserved concurrency (50)
  * 3. X-Ray tracing
  * 4. CloudWatch log retention (7 days)
@@ -211,8 +211,8 @@ exports.handler = async (event) => {
           `),
         }),
 
-        // Requirement 1: Optimized memory (512MB) and timeout (30s)
-        memorySize: 512,
+        // Requirement 1: Baseline memory (1024MB - over-provisioned for demonstration) and timeout (30s)
+        memorySize: 1024,
         timeout: 30,
 
         // Requirement 2: Reserved concurrency (adjusted to 5 for AWS account limits)
