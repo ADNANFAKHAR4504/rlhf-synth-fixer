@@ -1,12 +1,156 @@
-*.js
-!jest.config.js
+# Compiled JavaScript files (but keep config files)
+/bin/*.js
+./lib/*.js
+/lib/*.js
+/test/*.js
+/cli/*.js
 *.d.ts
-node_modules
+!/test/setup.js
+/lib/.terraform.lock.hcl
 
-# CDK asset staging directory
+# Dependencies
+node_modules/
+
+# CDK
 .cdk.staging
-cdk.out
+cdk.out/
+cdk.out.test/
 
-# Reports
-validation-report.json
-comparison-report.json
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE/Editor files
+.vscode/settings.local.json
+.claude/settings.local.json
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+.nyc_output
+
+# Temporary folders
+tmp/
+temp/
+test/provider-local.tf
+# Python virtual environments and packages
+python/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+.coverage
+coverage.xml
+cov.json
+coverage
+
+cfn-outputs/*
+
+# CDK Terraform stuff
+dist/
+imports/*
+!imports/__init__.py
+.terraform
+cdktf.out
+cdktf.log
+*terraform.*.tfstate*
+.gen
+bin/.terraform.lock.hcl
+.genpackage-lock.json
+.gen/providers/*
+src/main/java/imports/
+src/main/resources/imports/
+src/main/resources/
+.pulumi/
+
+tasks-status.md
+worktree/
+bin/tfplan
+
+build
+.claude/tasks.csv
+.claude/tasks.csv.backup
+.claude/tasks.csv.backup.*
+.claude/*.csv.backup
+.claude/*.csv.backup.*
+.claude/tasks.csv.lock/
+.claude/open_pr_status.json
+.claude/synth_pr_status.json
+.claude/synth_pr_status.json.backup
+.claude/synth_pr_status.json.lock/
+.sherlock/data
+.sherlock/reports
+
+# Java/Gradle
+.gradle/
+build/
+gradle-app.setting
+.gradletasknamecache
+
+# Keep Gradle wrapper files (these should be committed)
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+!gradlew
+!gradlew.bat
+
+# Java compiled files
+*.class
+*.war
+*.ear
+*.nar
+hs_err_pid*
+replay_pid*
+
+# Java JAR files (but keep Gradle wrapper)
+*.jar
+
+# Java test reports
+build/reports/
+build/test-results/
+
+# Turing IaC Review App
+turing-iac-review-app/turing-iac-tasks-processor*
+turing-iac-review-app/tasks.json
+turing-iac-review-app/aws-nuke-config-runtime.yaml
+turing-iac-review-app/task_reports.csv
+turing-iac-review-app/aws-nuke-report-batch*tasks.csv.lock/
+lib/.terraform/
+**/.terraform/
+
+# Synth Files
+tasks.csv
+ci_checks.json
