@@ -51,10 +51,11 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubActions-Build
 
-      - name: Setup Go
+      - name: Setup Go with caching
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache: true
 
       - name: Setup Pulumi CLI
         uses: pulumi/actions@v5
@@ -80,14 +81,11 @@ jobs:
           gosec ./...
         continue-on-error: false
 
+      - name: Create artifacts tarball
+        run: tar -czf pulumi-outputs.tar.gz -C . go.mod go.sum *.go
+
       - name: Encrypt artifacts with KMS
-        run: |
-          tar -czf pulumi-outputs.tar.gz -C . go.mod go.sum *.go
-          aws kms encrypt \
-            --key-id alias/github-actions-artifacts \
-            --plaintext fileb://pulumi-outputs.tar.gz \
-            --output text \
-            --query CiphertextBlob > pulumi-outputs.tar.gz.encrypted
+        run: aws kms encrypt --key-id alias/github-actions-artifacts --plaintext fileb://pulumi-outputs.tar.gz --output text --query CiphertextBlob > pulumi-outputs.tar.gz.encrypted
 
       - name: Upload encrypted artifacts
         uses: actions/upload-artifact@v4
@@ -279,19 +277,17 @@ jobs:
         run: |
           pulumi up --stack prod --yes --non-interactive --refresh
 
-      - name: Verify Production Deployment
-        run: |
-          echo "Verifying ECS services..."
-          aws ecs describe-services --cluster app-cluster-prod --services app-service-prod \
-            --query 'services[*].{ServiceName:serviceName,DesiredCount:desiredCount,RunningCount:runningCount}'
-          echo "Verifying RDS cluster..."
-          aws rds describe-db-clusters --db-cluster-identifier student-db-cluster-prod \
-            --query 'DBClusters[*].{Status:Status,Endpoint:Endpoint}'
-          echo "Verifying Redis cluster..."
-          aws elasticache describe-replication-groups --replication-group-id session-redis-prod \
-            --query 'ReplicationGroups[*].{Status:Status}'
-          echo "Verifying API Gateway..."
-          aws apigateway get-rest-apis --query 'items[?name==`api-prod`].{id:id,name:name}'
+      - name: Verify ECS services
+        run: aws ecs describe-services --cluster app-cluster-prod --services app-service-prod --query 'services[*].{ServiceName:serviceName,DesiredCount:desiredCount,RunningCount:runningCount}'
+
+      - name: Verify RDS cluster
+        run: aws rds describe-db-clusters --db-cluster-identifier student-db-cluster-prod --query 'DBClusters[*].{Status:Status,Endpoint:Endpoint}'
+
+      - name: Verify Redis cluster
+        run: aws elasticache describe-replication-groups --replication-group-id session-redis-prod --query 'ReplicationGroups[*].{Status:Status}'
+
+      - name: Verify API Gateway
+        run: aws apigateway get-rest-apis --query 'items[?name==`api-prod`].{id:id,name:name}'
 
       - name: Health check
         run: |
