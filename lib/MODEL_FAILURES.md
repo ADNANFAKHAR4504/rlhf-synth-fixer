@@ -23,8 +23,8 @@ self.payment_processor_lambda = LambdaFunction(
     runtime="python3.9",
     handler="index.handler",
     role=lambda_role.arn,
-    filename="lambda/payment_processor.zip",  # ❌ WRONG: File doesn't exist
-    source_code_hash="${filebase64sha256(\"lambda/payment_processor.zip\")}",  # ❌ Terraform syntax
+    filename="lambda/payment_processor.zip",  #  WRONG: File doesn't exist
+    source_code_hash="${filebase64sha256(\"lambda/payment_processor.zip\")}",  #  Terraform syntax
     # ... rest of config
 )
 ```
@@ -105,8 +105,8 @@ class DatabaseStack(Construct):
         region: str,
         environment_suffix: str,
         is_primary: bool,
-        private_subnets: list,  # ✅ Pass as parameter
-        aurora_security_group  # ✅ Pass as parameter
+        private_subnets: list,  #  Pass as parameter
+        aurora_security_group  #  Pass as parameter
     ):
         super().__init__(scope, construct_id)
 
@@ -115,7 +115,7 @@ class DatabaseStack(Construct):
             self,
             "aurora-subnet-group",
             name=f"dr-aurora-subnet-{region}-{environment_suffix}",
-            subnet_ids=[subnet.id for subnet in private_subnets],  # ✅ Use passed subnets
+            subnet_ids=[subnet.id for subnet in private_subnets],  #  Use passed subnets
             tags={"Name": f"dr-aurora-subnet-{region}-{environment_suffix}"}
         )
 ```
@@ -136,7 +136,7 @@ class DatabaseStack(Construct):
 self.aurora_cluster = RdsCluster(
     # ...
     master_username="dbadmin",
-    master_password="ChangeMe123!",  # ❌ CRITICAL: Hardcoded password in source code
+    master_password="ChangeMe123!",  #  CRITICAL: Hardcoded password in source code
     # ...
 )
 ```
@@ -169,7 +169,7 @@ db_secret_version = DataAwsSecretsmanagerSecretVersion(
 self.aurora_cluster = RdsCluster(
     # ...
     master_username="dbadmin",
-    manage_master_user_password=True,  # ✅ AWS-managed password
+    manage_master_user_password=True,  #  AWS-managed password
     # OR use secret:
     # master_password=db_secret_version.secret_string,
     # ...
@@ -195,7 +195,7 @@ class TestDynamoDBReplication:
         """Test data replication between regions"""
         # Note: moto doesn't fully support Global Tables
         # In real tests, this would verify cross-region replication
-        assert True  # ❌ Placeholder - not testing anything!
+        assert True  #  Placeholder - not testing anything!
 ```
 
 All 15 integration test methods follow this pattern - they use mocking libraries but just `assert True`.
@@ -267,7 +267,7 @@ class TestDynamoDBReplication:
 Lambda functions import boto3 but no dependency management:
 ```python
 # lib/lambda/payment_processor/index.py
-import boto3  # ❌ Not bundled with Lambda
+import boto3  #  Not bundled with Lambda
 from datetime import datetime
 from decimal import Decimal
 ```
@@ -303,7 +303,7 @@ zip -r ../../../lambda/payment_processor.zip .
 # lib/stacks/routing_stack.py, lines 1385-1388
 endpoint_configuration=[GlobalacceleratorEndpointGroupEndpointConfiguration(
     endpoint_id=f"arn:aws:apigateway:us-east-1::/restapis/{primary_api_endpoint.split('/')[-2]}",
-    # ❌ Invalid: Trying to parse API endpoint URL to get REST API ID
+    #  Invalid: Trying to parse API endpoint URL to get REST API ID
     weight=100
 )]
 ```
@@ -335,7 +335,7 @@ GlobalacceleratorEndpointGroup(
     listener_arn=listener.id,
     endpoint_group_region="us-east-1",
     endpoint_configuration=[GlobalacceleratorEndpointGroupEndpointConfiguration(
-        endpoint_id=nlb_primary.arn,  # ✅ Use NLB ARN
+        endpoint_id=nlb_primary.arn,  #  Use NLB ARN
         weight=100
     )]
 )
@@ -484,7 +484,7 @@ Health check Lambda referenced but never packaged or deployed properly (same iss
 hosted_zone = Route53Zone(
     self,
     "hosted-zone",
-    name=f"dr-payments-{environment_suffix}.example.com",  # ❌ example.com not owned
+    name=f"dr-payments-{environment_suffix}.example.com",  #  example.com not owned
 )
 ```
 
