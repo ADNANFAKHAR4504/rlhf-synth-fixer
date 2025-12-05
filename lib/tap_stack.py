@@ -10,6 +10,9 @@ from lib.failover_orchestration import FailoverOrchestrationConstruct
 from lib.monitoring import MonitoringConstruct
 from lib.traffic_management import TrafficManagementConstruct
 
+# Unique suffix to avoid resource naming conflicts
+UNIQUE_SUFFIX = "d4m9"
+
 
 class TapStack(TerraformStack):
     def __init__(
@@ -22,7 +25,8 @@ class TapStack(TerraformStack):
     ):
         super().__init__(scope, construct_id)
 
-        self.environment_suffix = environment_suffix
+        # Add unique suffix to environment suffix for resource naming
+        self.environment_suffix = f"{environment_suffix}-{UNIQUE_SUFFIX}"
         self.primary_region = primary_region
         self.secondary_region = secondary_region
 
