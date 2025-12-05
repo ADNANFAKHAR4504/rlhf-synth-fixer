@@ -1,6 +1,6 @@
 # Ideal Response: Complete CI/CD Pipeline for Node.js Application
 
-This document describes the ideal implementation of a complete CI/CD pipeline using AWS CDK TypeScript.
+This document describes the ideal implementation of a complete CI/CD pipeline using AWS CDK with TypeScript (aws-cdk-lib).
 
 ## Overview
 
@@ -135,6 +135,17 @@ This ensures:
 - Proper cleanup
 
 ## Deployment
+
+```typescript
+// Example CDK app entry point using aws-cdk-lib
+import * as cdk from 'aws-cdk-lib';
+import { TapStack } from '../lib/tap-stack';
+
+const app = new cdk.App();
+new TapStack(app, 'TapStack', {
+  environmentSuffix: process.env.ENVIRONMENT_SUFFIX || 'dev'
+});
+```
 
 ```bash
 # Set environment suffix

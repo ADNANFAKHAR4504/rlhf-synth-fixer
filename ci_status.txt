@@ -1,0 +1,6 @@
+Detect Project Files|null||https://github.com/TuringGpt/iac-test-automations/actions/runs/19953484730/job/57218031417
+submit-gradle|null||https://github.com/TuringGpt/iac-test-automations/actions/runs/19953484985/job/57218033157
+Validate Commit Message|null||https://github.com/TuringGpt/iac-test-automations/actions/runs/19953484730/job/57218031426
+Upload Task to S3|null|SKIPPED|https://github.com/TuringGpt/iac-test-automations/actions/runs/19953484730/job/57218031641
+Cleanup (PR Closed)|null|SKIPPED|https://github.com/TuringGpt/iac-test-automations/actions/runs/19953484730/job/57218031627
+Semantic Release|null|SKIPPED|https://github.com/TuringGpt/iac-test-automations/actions/runs/19953484730/job/57218031633
