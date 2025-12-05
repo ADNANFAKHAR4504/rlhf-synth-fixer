@@ -4,6 +4,7 @@ variable "environment_suffix" {
   description = "Unique suffix for resource names to prevent collisions"
   type        = string
 
+  default     = "dev"
   validation {
     condition     = can(regex("^[a-z0-9-]+$", var.environment_suffix))
     error_message = "Environment suffix must contain only lowercase letters, numbers, and hyphens."
@@ -91,6 +92,7 @@ variable "db_password" {
   description = "Master password for RDS PostgreSQL"
   type        = string
   sensitive   = true
+  default     = "TempPassword123!"
 
   validation {
     condition     = length(var.db_password) >= 8
