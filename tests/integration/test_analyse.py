@@ -12,12 +12,12 @@ import sys
 from pathlib import Path
 
 # Add lib directory to path for importing
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'lib'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'lib'))
 
 from analyse import InfrastructureAnalyzer
 
 # Load deployment outputs
-OUTPUTS_FILE = Path(__file__).parent.parent / 'cfn-outputs' / 'flat-outputs.json'
+OUTPUTS_FILE = Path(__file__).parent.parent.parent / 'cfn-outputs' / 'flat-outputs.json'
 
 
 class TestInfrastructureAnalyzerIntegration(unittest.TestCase):

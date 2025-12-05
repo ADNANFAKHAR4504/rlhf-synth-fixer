@@ -9,7 +9,7 @@ import sys
 import json
 import boto3
 from typing import Dict, List, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 class InfrastructureAnalyzer:
@@ -223,7 +223,7 @@ class InfrastructureAnalyzer:
         analysis_results = {
             'environment_suffix': self.environment_suffix,
             'region': self.region,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'log_groups': [],
             'alarms': [],
             'composite_alarms': [],

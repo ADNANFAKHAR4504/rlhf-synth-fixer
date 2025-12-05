@@ -12,7 +12,7 @@ import os
 from datetime import datetime
 
 # Add lib directory to path for importing
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'lib'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'lib'))
 
 from analyse import InfrastructureAnalyzer, main
 
