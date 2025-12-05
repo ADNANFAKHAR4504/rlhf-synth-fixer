@@ -6,8 +6,8 @@
   "turn_type": "single",
   "team": "synth",
   "startedAt": "2025-12-04T09:30:00Z",
-  "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": ["Infrastructure Analysis/Monitoring"],
+  "subtask": "Application Deployment",
+  "subject_labels": ["Serverless Infrastructure (Functions as Code)"],
   "aws_services": [
     "Lambda",
     "S3 Bucket",
