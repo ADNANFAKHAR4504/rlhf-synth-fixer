@@ -43,6 +43,7 @@ variable "team" {
 variable "env" {
   description = "Environment name (dev, staging, prod)"
   type        = string
+  default     = "dev"
 }
 
 variable "project_name" {
