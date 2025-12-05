@@ -493,6 +493,177 @@ output "cicd_report" {
 }
 ```
 
+## File: lib/analyse.py
+
+```python
+#!/usr/bin/env python3
+"""
+Infrastructure Analysis Script
+Analyzes the deployed Terraform infrastructure analysis module and validates compliance checks
+"""
+
+import json
+import boto3
+import logging
+from datetime import datetime
+from typing import Dict, List, Any
+import os
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+
+class InfrastructureAnalysisAnalyzer:
+    """
+    Analyzer for the Terraform Infrastructure Analysis Module.
+    This validates that the analysis module is correctly querying and validating
+    AWS resources against compliance standards.
+    """
+
+    def __init__(self, region='us-east-1', endpoint_url=None):
+        """
+        Initialize the analyzer with AWS clients
+
+        Args:
+            region: AWS region to analyze
+            endpoint_url: Optional endpoint URL for moto testing
+        """
+        self.region = region
+        self.endpoint_url = endpoint_url
+        self.timestamp = datetime.utcnow().isoformat()
+
+        # Initialize AWS clients
+        client_config = {
+            'region_name': region
+        }
+        if endpoint_url:
+            client_config['endpoint_url'] = endpoint_url
+
+        self.ec2_client = boto3.client('ec2', **client_config)
+        self.rds_client = boto3.client('rds', **client_config)
+        self.s3_client = boto3.client('s3', **client_config)
+
+    def analyze_ec2_instances(self, environment_suffix: str) -> Dict[str, Any]:
+        """Analyze EC2 instances for compliance"""
+        logger.info("Analyzing EC2 instances...")
+        results = {
+            'total_instances': 0,
+            'instances': [],
+            'type_violations': [],
+            'cost_warnings': [],
+            'issues': []
+        }
+
+        # Approved instance types from the Terraform module
+        approved_types = ['t3.micro', 't3.small', 't3.medium']
+
+        # Cost estimates per month
+        instance_costs = {
+            't3.micro': 7.30,
+            't3.small': 14.60,
+            't3.medium': 29.20,
+            't3.large': 58.40,
+            't3.xlarge': 116.80,
+            't3.2xlarge': 233.60,
+            't2.micro': 8.47,
+            't2.small': 16.79,
+            't2.medium': 33.58,
+            'm5.large': 69.35,
+            'm5.xlarge': 138.70
+        }
+
+        try:
+            # Describe EC2 instances with environment suffix tag
+            response = self.ec2_client.describe_instances(
+                Filters=[
+                    {'Name': 'tag:Environment', 'Values': [environment_suffix]}
+                ]
+            )
+
+            for reservation in response.get('Reservations', []):
+                for instance in reservation.get('Instances', []):
+                    instance_id = instance['InstanceId']
+                    instance_type = instance.get('InstanceType', 'unknown')
+                    state = instance.get('State', {}).get('Name', 'unknown')
+                    tags = {tag['Key']: tag['Value'] for tag in instance.get('Tags', [])}
+
+                    results['total_instances'] += 1
+                    results['instances'].append({
+                        'id': instance_id,
+                        'instance_type': instance_type,
+                        'state': state,
+                        'tags': tags
+                    })
+
+                    # Check for type violations (only for running instances)
+                    if state == 'running' and instance_type not in approved_types:
+                        results['type_violations'].append({
+                            'id': instance_id,
+                            'instance_type': instance_type,
+                            'message': f"Instance {instance_id} uses unapproved type {instance_type}"
+                        })
+
+                    # Check for cost warnings
+                    estimated_cost = instance_costs.get(instance_type, 100.0)
+                    if state == 'running' and estimated_cost > 100.0:
+                        results['cost_warnings'].append({
+                            'id': instance_id,
+                            'instance_type': instance_type,
+                            'estimated_monthly_cost': estimated_cost,
+                            'message': f"Instance {instance_id} estimated cost ${estimated_cost}/month exceeds threshold"
+                        })
+
+        except Exception as e:
+            logger.error(f"Error analyzing EC2 instances: {str(e)}")
+            results['issues'].append(f"EC2 analysis error: {str(e)}")
+
+        return results
+
+    def generate_report(self, environment_suffix: str) -> Dict[str, Any]:
+        """Generate comprehensive analysis report"""
+        logger.info(f"Generating infrastructure analysis report for environment: {environment_suffix}")
+
+        ec2_results = self.analyze_ec2_instances(environment_suffix)
+        # Additional analysis methods would be called here
+
+        report = {
+            'timestamp': self.timestamp,
+            'environment_suffix': environment_suffix,
+            'region': self.region,
+            'ec2_analysis': ec2_results,
+            'summary': {
+                'total_violations': len(ec2_results.get('type_violations', [])),
+                'overall_status': 'PASS' if len(ec2_results.get('type_violations', [])) == 0 else 'FAIL'
+            }
+        }
+
+        return report
+
+
+def main():
+    """Main execution function"""
+    region = os.getenv('AWS_REGION', 'us-east-1')
+    endpoint_url = os.getenv('AWS_ENDPOINT_URL')
+    environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
+
+    analyzer = InfrastructureAnalysisAnalyzer(region=region, endpoint_url=endpoint_url)
+    report = analyzer.generate_report(environment_suffix)
+
+    # Save report
+    output_file = 'analysis-results.txt'
+    with open(output_file, 'w') as f:
+        json.dump(report, f, indent=2, default=str)
+
+    logger.info(f"Analysis report saved to: {output_file}")
+
+    return 0 if report['summary']['total_violations'] == 0 else 1
+
+
+if __name__ == '__main__':
+    exit(main())
+```
+
 ## Key Improvements Over MODEL_RESPONSE
 
 1. **Correct S3 Analysis**: Uses external data sources with AWS CLI instead of non-existent Terraform data sources
