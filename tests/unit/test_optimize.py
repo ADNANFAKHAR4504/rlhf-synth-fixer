@@ -233,6 +233,38 @@ class TestInfrastructureOptimizer(unittest.TestCase):
         mock_optimizer_class.assert_called_with("prod", "us-west-2")
         mock_optimizer.run_optimization.assert_called_once()
 
+    @patch("lib.optimize.InfrastructureOptimizer")
+    @patch("sys.argv", ["optimize.py"])
+    def test_main_keyboard_interrupt(self, mock_optimizer_class):
+        """Test main function handles KeyboardInterrupt gracefully."""
+        from lib.optimize import main
+        import sys
+
+        mock_optimizer = MagicMock()
+        mock_optimizer.run_optimization.side_effect = KeyboardInterrupt()
+        mock_optimizer_class.return_value = mock_optimizer
+
+        # Should exit with code 1 on KeyboardInterrupt
+        with self.assertRaises(SystemExit) as context:
+            main()
+        self.assertEqual(context.exception.code, 1)
+
+    @patch("lib.optimize.InfrastructureOptimizer")
+    @patch("sys.argv", ["optimize.py"])
+    def test_main_unexpected_exception(self, mock_optimizer_class):
+        """Test main function handles unexpected exceptions gracefully."""
+        from lib.optimize import main
+        import sys
+
+        mock_optimizer = MagicMock()
+        mock_optimizer.run_optimization.side_effect = Exception("Unexpected error")
+        mock_optimizer_class.return_value = mock_optimizer
+
+        # Should exit with code 1 on unexpected exception
+        with self.assertRaises(SystemExit) as context:
+            main()
+        self.assertEqual(context.exception.code, 1)
+
 
 if __name__ == "__main__":
     unittest.main()
