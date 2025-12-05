@@ -2,8 +2,6 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { S3EncryptionAspect } from './aspects/s3-encryption-aspect';
 import { IAMPolicyAspect } from './aspects/iam-policy-aspect';
@@ -41,7 +39,8 @@ export class TapStack extends cdk.Stack {
     });
 
     // Example Lambda function for validation testing
-    const exampleFunction = new lambda.Function(this, 'ExampleFunction', {
+    // Prefix with underscore to indicate intentionally unused (for aspect validation)
+    const _exampleFunction = new lambda.Function(this, 'ExampleFunction', {
       functionName: `example-function-${environmentSuffix}`,
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'index.handler',
@@ -59,7 +58,8 @@ export class TapStack extends cdk.Stack {
     });
 
     // Example Lambda with issues (for testing)
-    const problematicFunction = new lambda.Function(
+    // Prefix with underscore to indicate intentionally unused (for aspect validation)
+    const _problematicFunction = new lambda.Function(
       this,
       'ProblematicFunction',
       {
@@ -98,7 +98,8 @@ export class TapStack extends cdk.Stack {
     cdk.Aspects.of(this).add(new RDSConfigAspect());
 
     // Generate validation report after synthesis
-    const reporter = new ValidationReporter(this, 'ValidationReporter', {
+    // Prefix with underscore to indicate intentionally unused (reporter works via construct creation)
+    const _reporter = new ValidationReporter(this, 'ValidationReporter', {
       environmentSuffix,
       outputPath: './validation-report.json',
     });

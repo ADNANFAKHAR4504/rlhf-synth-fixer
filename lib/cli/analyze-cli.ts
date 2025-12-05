@@ -3,15 +3,6 @@ import * as fs from 'fs';
 import { StackComparator } from '../comparator/stack-comparator';
 import { ValidationRegistry } from '../core/validation-registry';
 
-interface AnalyzeOptions {
-  command: 'compare' | 'validate' | 'report';
-  template1?: string;
-  template2?: string;
-  reportPath?: string;
-  severity?: 'critical' | 'warning' | 'info';
-  category?: string;
-}
-
 export class AnalyzeCLI {
   static run(): void {
     const argv = yargs
