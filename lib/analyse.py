@@ -694,7 +694,7 @@ class EFSAnalyzer:
     def _generate_console_output(self):
         """Generate console summary table."""
         if not self.findings:
-            print("\n✅ No issues found in EFS analysis!")
+            print("\nNo issues found in EFS analysis!")
             return
 
         # Prepare summary data
@@ -738,7 +738,7 @@ class EFSAnalyzer:
 
         # Print summary table
         headers = ['File System ID', 'Name', 'State', 'Size', 'Critical', 'High', 'Medium', 'Categories', 'Monthly Savings']
-        print("\n📊 EFS Analysis Summary")
+        print("\nEFS Analysis Summary")
         print("=" * 120)
         print(tabulate(summary_data, headers=headers, tablefmt='grid'))
 
@@ -749,14 +749,14 @@ class EFSAnalyzer:
         total_savings = sum(float(f.get('potential_monthly_savings', '$0').replace('$', '').replace(',', ''))
                            for f in self.findings)
 
-        print(f"\n📈 Total Findings: {len(self.findings)}")
-        print(f"   🔴 Critical: {total_critical}")
-        print(f"   🟠 High: {total_high}")
-        print(f"   🟡 Medium: {total_medium}")
-        print(f"   💰 Total Potential Monthly Savings: ${total_savings:,.2f}")
+        print(f"\nTotal Findings: {len(self.findings)}")
+        print(f"   Critical: {total_critical}")
+        print(f"   High: {total_high}")
+        print(f"   Medium: {total_medium}")
+        print(f"   Total Potential Monthly Savings: ${total_savings:,.2f}")
 
         # Print top recommendations
-        print("\n🎯 Top Recommendations:")
+        print("\nTop Recommendations:")
         critical_findings = [f for f in self.findings if f['severity'] == 'critical'][:5]
         for i, finding in enumerate(critical_findings, 1):
             print(f"{i}. [{finding['file_system_id']}] {finding['title']}: {finding['recommendation']}")
@@ -822,7 +822,7 @@ class EFSAnalyzer:
         with open('efs_analysis.json', 'w') as f:
             json.dump(report, f, indent=2, default=str)
 
-        print(f"\n📄 Detailed report written to: efs_analysis.json")
+        print(f"\nDetailed report written to: efs_analysis.json")
 
 
 def main():
