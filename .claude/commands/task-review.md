@@ -86,15 +86,15 @@ else
   echo "REVIEWING PRs"
   echo "═══════════════════════════════════════════════════"
   echo ""
-  
+
   # Review each PR sequentially for reliability
   for PR_JSON in $(echo "$ARCHIVING_PRS" | jq -c '.[]'); do
     PR_NUM=$(echo "$PR_JSON" | jq -r '.pr_number')
     BRANCH=$(echo "$PR_JSON" | jq -r '.branch')
-    
+
     bash .claude/scripts/review-pr.sh "$PR_NUM" "$BRANCH" "$REPORT_FILE" "$ASSIGNEE"
   done
-  
+
   echo ""
   echo "All reviews complete"
 fi
@@ -164,18 +164,18 @@ echo "════════════════════════�
 
 ## Validations (11 checks)
 
-| # | Validation | Blocks Merge |
-|---|------------|--------------|
-| 1 | Metadata (fields, platform, language, TQ>=8) | ✅ |
-| 2 | Subtask ↔ Subject Label mapping | ✅ |
-| 3 | File locations (strict patterns) | ✅ |
-| 4 | Required files (platform-specific) | ✅ |
-| 5 | No emojis in lib/*.md | ✅ |
-| 6 | PROMPT.md style | ⚠️ |
-| 7 | MODEL_FAILURES quality | ⚠️ |
-| 8 | No Retain/DeletionProtection | ✅ |
-| 9 | environmentSuffix usage | ⚠️ |
-| 10 | Integration tests (no mocks) | ⚠️ |
-| 11 | Claude review score >= 8 | ✅ |
+| #   | Validation                                   | Blocks Merge |
+| --- | -------------------------------------------- | ------------ |
+| 1   | Metadata (fields, platform, language, TQ>=8) | ✅           |
+| 2   | Subtask ↔ Subject Label mapping              | ✅           |
+| 3   | File locations (strict patterns)             | ✅           |
+| 4   | Required files (platform-specific)           | ✅           |
+| 5   | No emojis in lib/\*.md                       | ✅           |
+| 6   | PROMPT.md style                              | ⚠️           |
+| 7   | MODEL_FAILURES quality                       | ⚠️           |
+| 8   | No Retain/DeletionProtection                 | ✅           |
+| 9   | environmentSuffix usage                      | ⚠️           |
+| 10  | Integration tests (no mocks)                 | ⚠️           |
+| 11  | Claude review score >= 8                     | ✅           |
 
 ✅ = Blocks merge | ⚠️ = Warning only
