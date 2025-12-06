@@ -33,7 +33,7 @@ Run the review script which performs all 11 validations:
 ```bash
 # Always use .claude/reports/ for REPORT_FILE
 REPORT_FILE=".claude/reports/report-$(date +%Y-%m-%d).json"
-bash .claude/scripts/review-pr-fast.sh "$PR_NUMBER" "$BRANCH" "$REPORT_FILE" "$ASSIGNEE"
+bash .claude/scripts/review-pr.sh "$PR_NUMBER" "$BRANCH" "$REPORT_FILE" "$ASSIGNEE"
 ```
 
 ## Validations

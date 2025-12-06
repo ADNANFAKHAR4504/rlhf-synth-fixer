@@ -7,9 +7,7 @@ model: sonnet
 
 # Task Review Command
 
-Reviews all archiving-ready PRs for production readiness.
-
-**Fast Mode**: Uses `git show` instead of worktrees + parallel processing (5-10x faster)
+Reviews all archiving-ready PRs for production readiness and generates a report.
 
 ## Workflow
 
@@ -19,14 +17,12 @@ Reviews all archiving-ready PRs for production readiness.
 REPORT_DIR=".claude/reports"
 REPORT_FILE="$REPORT_DIR/report-$(date +%Y-%m-%d).json"
 ASSIGNEE="mayanksethi-turing"
-PARALLEL_JOBS=4  # Number of parallel reviews
 
 mkdir -p "$REPORT_DIR"
 
 # Initialize or update existing report
 if [ -f "$REPORT_FILE" ]; then
   echo "Updating existing report: $REPORT_FILE"
-  # Update timestamp, preserve existing reviews
   jq --arg ts "$(date -Iseconds)" '.generated_at = $ts' "$REPORT_FILE" > "${REPORT_FILE}.tmp"
   mv "${REPORT_FILE}.tmp" "$REPORT_FILE"
   EXISTING_REVIEWS=$(jq '.reviews | length' "$REPORT_FILE")
@@ -45,28 +41,26 @@ fi
 
 echo ""
 echo "═══════════════════════════════════════════════════"
-echo "TASK REVIEW - FAST MODE"
+echo "TASK REVIEW"
 echo "═══════════════════════════════════════════════════"
 echo "Report: $REPORT_FILE"
-echo "Parallel jobs: $PARALLEL_JOBS"
 echo ""
 ```
 
-### Step 2: Fetch All Branches (Single Fetch)
+### Step 2: Fetch Branches
 
 ```bash
-echo "Fetching all remote branches..."
-git fetch origin --prune --quiet
+echo "Fetching remote branches..."
+git fetch origin --prune --quiet 2>/dev/null || echo "Fetch skipped (lock issue)"
 echo "Done"
 echo ""
 ```
 
-### Step 3: Get Archiving-Ready PRs (Batch API)
+### Step 3: Get Archiving-Ready PRs
 
 ```bash
 echo "Fetching archiving-ready PRs..."
 
-# Use batch script for single API call
 ARCHIVING_PRS=$(bash .claude/scripts/batch-fetch-pr-data.sh "$ASSIGNEE" 2>/dev/null || \
                 bash .claude/scripts/fetch-archiving-prs.sh "$ASSIGNEE")
 
@@ -75,38 +69,31 @@ PR_COUNT=$(echo "$ARCHIVING_PRS" | jq 'length')
 echo "Found $PR_COUNT archiving-ready PRs"
 echo ""
 
-# Display PR list
-echo "PRs to review:"
-echo "$ARCHIVING_PRS" | jq -r '.[] | "  #\(.pr_number) \(.branch) - \(.title[:50])..."'
-echo ""
+if [ "$PR_COUNT" -gt 0 ]; then
+  echo "PRs to review:"
+  echo "$ARCHIVING_PRS" | jq -r '.[] | "  #\(.pr_number) \(.branch)"'
+  echo ""
+fi
 ```
 
-### Step 4: Review PRs in Parallel
+### Step 4: Review Each PR
 
 ```bash
 if [ "$PR_COUNT" -eq 0 ]; then
   echo "No archiving-ready PRs found."
 else
   echo "═══════════════════════════════════════════════════"
-  echo "REVIEWING PRs (parallel: $PARALLEL_JOBS)"
+  echo "REVIEWING PRs"
   echo "═══════════════════════════════════════════════════"
   echo ""
   
-  # Create temp file for parallel processing
-  TEMP_PR_LIST=$(mktemp)
-  echo "$ARCHIVING_PRS" | jq -c '.[]' > "$TEMP_PR_LIST"
-  
-  # Process PRs in parallel using xargs
-  cat "$TEMP_PR_LIST" | xargs -P"$PARALLEL_JOBS" -I{} bash -c '
-    PR_JSON="{}"
-    PR_NUM=$(echo "$PR_JSON" | jq -r ".pr_number")
-    BRANCH=$(echo "$PR_JSON" | jq -r ".branch")
-    CLAUDE_SCORE=$(echo "$PR_JSON" | jq -r ".claude_score // empty")
+  # Review each PR sequentially for reliability
+  for PR_JSON in $(echo "$ARCHIVING_PRS" | jq -c '.[]'); do
+    PR_NUM=$(echo "$PR_JSON" | jq -r '.pr_number')
+    BRANCH=$(echo "$PR_JSON" | jq -r '.branch')
     
-    bash .claude/scripts/review-pr-fast.sh "$PR_NUM" "$BRANCH" "'"$REPORT_FILE"'" "'"$ASSIGNEE"'" "$CLAUDE_SCORE"
-  '
-  
-  rm -f "$TEMP_PR_LIST"
+    bash .claude/scripts/review-pr.sh "$PR_NUM" "$BRANCH" "$REPORT_FILE" "$ASSIGNEE"
+  done
   
   echo ""
   echo "All reviews complete"
@@ -125,13 +112,10 @@ TOTAL=$(jq '.reviews | length' "$REPORT_FILE")
 READY=$(jq '[.reviews[] | select(.ready_to_merge == true)] | length' "$REPORT_FILE")
 NOT_READY=$((TOTAL - READY))
 
-# Build ready PRs list
 READY_PRS=$(jq '[.reviews[] | select(.ready_to_merge == true) | {pr_number: .pr_number, branch: .branch}]' "$REPORT_FILE")
-
-# Build not-ready PRs list with reasons
 NOT_READY_PRS=$(jq '[.reviews[] | select(.ready_to_merge == false) | {pr_number: .pr_number, branch: .branch, reason: .failure_reason}]' "$REPORT_FILE")
 
-# Update report with summary at the top
+# Update report with summary
 jq --argjson total "$TOTAL" --argjson ready "$READY" --argjson not_ready "$NOT_READY" \
    --argjson ready_prs "$READY_PRS" --argjson not_ready_prs "$NOT_READY_PRS" \
   '{
@@ -149,8 +133,7 @@ jq --argjson total "$TOTAL" --argjson ready "$READY" --argjson not_ready "$NOT_R
   }' "$REPORT_FILE" > "${REPORT_FILE}.tmp"
 mv "${REPORT_FILE}.tmp" "$REPORT_FILE"
 
-# Clean up lock file
-rm -f "${REPORT_FILE}.lock"
+rm -rf "${REPORT_FILE}.lockdir" 2>/dev/null
 
 echo ""
 echo "┌─────────────────────────────────────────────────┐"
@@ -178,13 +161,6 @@ echo "════════════════════════�
 echo "Report saved: $REPORT_FILE"
 echo "═══════════════════════════════════════════════════"
 ```
-
-## Performance Comparison
-
-| Mode | Per PR | 10 PRs | Bottleneck |
-|------|--------|--------|------------|
-| **Standard** | ~30s | ~5 min | Worktrees, sequential |
-| **Fast** | ~3-5s | ~15-30s | Parallel git show |
 
 ## Validations (11 checks)
 
