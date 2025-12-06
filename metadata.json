@@ -1,6 +1,6 @@
 {
-  "platform": "pulumi",
-  "language": "ts",
+  "platform": "analysis",
+  "language": "py",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "r0x1n7p4",
@@ -11,13 +11,13 @@
     "Infrastructure Analysis/Monitoring"
   ],
   "aws_services": [
-    "CloudWatch",
-    "Lambda",
-    "SNS",
-    "S3",
-    "Synthetics",
-    "Kinesis",
-    "IAM"
+    "cloudwatch-logs",
+    "cloudwatch-alarms",
+    "cloudwatch-dashboard",
+    "cloudwatch-insights",
+    "sns",
+    "kms"
   ],
-  "training_quality": 9
+  "region": "us-east-1",
+  "training_quality": 10
 }

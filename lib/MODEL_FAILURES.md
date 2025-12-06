@@ -1,98 +1,128 @@
 # Model Failures
 
 ## Summary
-The model generated a comprehensive CloudWatch monitoring infrastructure but made two critical errors related to Pulumi-specific syntax that prevented successful deployment.
+
+The model initially generated infrastructure code using the wrong platform and language combination. The task required a Python analysis script (`platform: analysis`, `language: py`) but the model generated Pulumi TypeScript code (`platform: pulumi`, `language: ts`). This fundamental mismatch caused CI/CD pipeline failures.
 
 ## Failures
 
-### 1. IAM Policy Pulumi Output Handling (CRITICAL)
+### 1. Platform/Language Mismatch (CRITICAL)
+
 **Category**: Configuration Error
-**Severity**: High
-**Impact**: Deployment failure
+**Severity**: Critical
+**Impact**: Complete deployment failure
 
-The model failed to use `pulumi.interpolate` when embedding Pulumi Output values into JSON policy strings. This caused runtime errors because Pulumi Outputs are not directly serializable to JSON.
+The model failed to recognize that the subject label "Infrastructure Analysis/Monitoring" requires a Python analysis script, not infrastructure-as-code. The metadata.json was incorrectly configured with:
 
-**Locations**:
-- Canary IAM policy: bucket ARN reference
-- Composite alarm rule: alarm ARN references
-- Metric stream policy: firehose ARN reference
-- Firehose policy: S3 bucket ARN reference
-
-**Fix Applied**:
-Changed from direct string interpolation to `pulumi.interpolate` for all policy definitions containing Output values.
-
-Example:
-```typescript
-// BEFORE (incorrect)
-policy: JSON.stringify({
-  Statement: [{
-    Resource: [canaryBucket.arn + "/*"]
-  }]
-})
-
-// AFTER (correct)
-policy: pulumi.interpolate`{
-  "Statement": [{
-    "Resource": ["${canaryBucket.arn}/*"]
-  }]
-}`
+**Incorrect Configuration**:
+```json
+{
+  "platform": "pulumi",
+  "language": "ts"
+}
 ```
 
-### 2. CloudWatch Dashboard Metric Syntax (MODERATE)
-**Category**: Configuration Error
+**Correct Configuration**:
+```json
+{
+  "platform": "analysis",
+  "language": "py"
+}
+```
+
+**Error Message**:
+```
+Error: Subject label 'Infrastructure Analysis/Monitoring' requires platform='analysis', but got 'pulumi'
+```
+
+**Fix Applied**:
+- Updated metadata.json to use `platform: "analysis"` and `language: "py"`
+- Rewrote PROMPT.md to specify Python analysis requirements
+- Created analyse.py instead of Pulumi TypeScript code
+
+### 2. Incorrect Implementation Approach (CRITICAL)
+
+**Category**: Architectural Error
+**Severity**: Critical
+**Impact**: Wrong deliverable type
+
+The model created infrastructure deployment code (Pulumi TypeScript) when the task required an infrastructure analysis/validation script (Python). This represents a fundamental misunderstanding of the task requirements.
+
+**What Was Generated**:
+- Pulumi TypeScript code to deploy CloudWatch resources
+- S3 buckets, Lambda functions, SNS topics, CloudWatch alarms
+- Infrastructure-as-code for creating resources
+
+**What Was Required**:
+- Python analysis script to validate existing resources
+- boto3 API calls to check resource configurations
+- Compliance scoring and recommendation generation
+- Report generation for infrastructure validation
+
+**Fix Applied**:
+- Created `lib/analyse.py` with InfrastructureAnalyzer class
+- Implemented boto3-based AWS API calls for resource validation
+- Added compliance scoring algorithm (0-100%)
+- Added recommendation generation for missing/misconfigured resources
+
+### 3. Missing Test Structure (MODERATE)
+
+**Category**: Testing Error
 **Severity**: Medium
-**Impact**: Dashboard rendering issues
+**Impact**: Test suite incomplete
 
-The model generated dashboard widgets with incorrect metric dimension syntax and missing positioning coordinates.
+The model did not create the correct test structure for a Python analysis script. Python analysis tasks require:
 
-**Issues**:
-- Missing widget positioning (x, y, width, height)
-- Incorrect metric array format for dimensions
-- Missing dimension name-value pairs
+**Required Test Files**:
+- `tests/__init__.py` - Package init
+- `tests/unit/__init__.py` - Unit tests package init
+- `tests/unit/test_analyse.py` - Unit tests with mocking
+- `tests/integration/__init__.py` - Integration tests package init
+- `tests/integration/test_analyse.py` - Integration tests against AWS
+- `tests/test-analysis-analyse.py` - Analysis tests for CI/CD
 
 **Fix Applied**:
-Added proper widget coordinates and corrected metric dimension syntax to match CloudWatch API requirements.
-
-Example:
-```typescript
-// BEFORE (incorrect)
-{
-  type: 'metric',
-  properties: {
-    metrics: [
-      ['AWS/ECS', 'CPUUtilization', { stat: 'Average' }]
-    ]
-  }
-}
-
-// AFTER (correct)
-{
-  type: 'metric',
-  x: 0,
-  y: 0,
-  width: 12,
-  height: 6,
-  properties: {
-    metrics: [
-      ['AWS/ECS', 'CPUUtilization', 'ClusterName',
-       `payment-cluster-${environmentSuffix}`,
-       { stat: 'Average' }]
-    ]
-  }
-}
-```
+- Created all required test package init files
+- Created comprehensive unit tests with mocked AWS services
+- Created integration tests for deployed resource validation
+- Created analysis tests for CI/CD pipeline
 
 ## Root Causes
 
-1. **Pulumi Output Handling**: The model did not properly understand that Pulumi Output types require special handling when embedded in string contexts, particularly JSON policy definitions.
+1. **Subject Label Misinterpretation**: The model did not correctly map the subject label "Infrastructure Analysis/Monitoring" to the required platform type "analysis".
 
-2. **CloudWatch API Knowledge**: The model had incomplete knowledge of CloudWatch dashboard widget positioning requirements and metric dimension array formatting.
+2. **Platform Confusion**: The model assumed all AWS infrastructure tasks should use IaC platforms (Pulumi, Terraform, CDK) rather than analysis scripts.
+
+3. **PROMPT.md Mismatch**: The initial PROMPT.md content did not clearly specify Python analysis requirements, allowing the model to interpret it as an IaC task.
 
 ## Training Value
 
-These failures represent important learning opportunities:
-- Pulumi-specific patterns for handling Output types in policy definitions
-- CloudWatch dashboard API requirements for widget layout
-- The distinction between infrastructure definition and runtime value resolution in IaC
+These failures represent critical learning opportunities:
 
-Both errors are typical of production Pulumi code and provide valuable training data for improving model understanding of IaC-specific patterns.
+1. **Subject Label to Platform Mapping**: Models must learn the correct mapping between subject labels and required platforms:
+   - "Infrastructure Analysis/Monitoring" -> platform: "analysis"
+   - "Infrastructure Deployment" -> platform: "pulumi" | "terraform" | "cdk"
+
+2. **Task Type Recognition**: Analysis/validation tasks require different deliverables than deployment tasks:
+   - Analysis: Python scripts using boto3 to validate existing resources
+   - Deployment: IaC code to create/manage resources
+
+3. **Test Structure Requirements**: Different platforms have different test structure requirements:
+   - Python analysis: unittest with mocking, pytest-compatible
+   - TypeScript IaC: Jest-based tests
+
+## Corrective Actions Taken
+
+1. Fixed metadata.json with correct platform/language
+2. Rewrote PROMPT.md with clear Python analysis requirements
+3. Created analyse.py with InfrastructureAnalyzer class
+4. Created complete test suite (unit, integration, analysis)
+5. Updated IDEAL_RESPONSE.md with complete Python source code
+6. Documented failures in MODEL_FAILURES.md
+
+## Prevention Recommendations
+
+1. Always verify subject label requirements before selecting platform
+2. Check metadata.json validation rules in CI/CD scripts
+3. Ensure PROMPT.md clearly specifies platform and language requirements
+4. Validate that deliverable type matches task category (analysis vs deployment)

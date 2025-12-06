@@ -1,123 +1,135 @@
-Hey team,
+# Infrastructure QA and Management
 
-We need to build a comprehensive monitoring and observability platform for a fintech startup's payment processing infrastructure. They're looking for real-time alerting on transaction anomalies, API performance issues, and infrastructure health. The system needs to integrate with their incident management workflow and provide visibility into both infrastructure metrics and business KPIs.
+> **CRITICAL REQUIREMENT: This task MUST be implemented using analysis with py**
+>
+> Platform: **analysis**
+> Language: **py**
+> Region: **us-east-1**
+>
+> **Do not substitute or change the platform or language.** All infrastructure analysis code must be written using the specified platform and language combination.
 
-I've been asked to create this using **Pulumi with TypeScript**. The business wants a production-ready monitoring solution that can track payment transactions, alert on performance degradation, and provide dashboards for operations teams to monitor system health in real-time.
+---
 
-The monitoring needs to be comprehensive - from CloudWatch log aggregation and custom metrics tracking to synthetic monitoring of critical endpoints. They also want long-term metric storage for trend analysis and composite alarms that only trigger when multiple conditions are met to reduce alert fatigue.
+## Background
 
-## What we need to build
+A fintech startup needs centralized monitoring for their payment processing infrastructure. They require real-time alerts, custom metrics tracking, and dashboard visualization to ensure transaction reliability and performance SLA compliance. The infrastructure team needs an analysis tool to validate that all monitoring resources are properly deployed and configured.
 
-Create a CloudWatch-based observability platform using **Pulumi with TypeScript** for monitoring payment processing infrastructure.
+## Problem Statement
 
-### Core Requirements
+Create a Python analysis script (analyse.py) to validate and report on CloudWatch monitoring infrastructure for payment processing services. The script must analyze:
 
-1. **Log Management**:
-   - CloudWatch Log Groups with 30-day retention for ECS application logs
-   - Centralized logging for payment processing services
-   - Log analysis using Lambda functions
+1. CloudWatch Log Groups for 'payment-api', 'transaction-processor', and 'fraud-detector' services - verify they exist with KMS encryption and 7-day retention
+2. Metric Filters - verify they are configured to extract error rates, response times, and transaction amounts from JSON logs
+3. CloudWatch Alarms - verify alarms exist for API error rate > 1%, response time > 500ms, and failed transactions > 5 per minute
+4. Composite Alarm - verify it triggers when 2 or more service alarms are in ALARM state
+5. SNS Topic - verify it exists with email subscription for alert notifications
+6. CloudWatch Dashboard - verify it has widgets showing service health, transaction volume trends, and error distribution (9 widgets in 3-column layout)
+7. Custom Metrics - verify namespaces follow pattern 'FinTech/Service/Environment'
+8. CloudWatch Logs Insights queries - verify saved searches exist for incident investigation
 
-2. **Custom Metrics and Monitoring**:
-   - Custom CloudWatch metrics for payment transactions per minute
-   - Custom metrics for payment failure rates
-   - Lambda functions to analyze logs and calculate business metrics every 5 minutes
+Expected output: A Python analysis script that connects to AWS using boto3, validates all monitoring resources, generates recommendations for missing or misconfigured resources, calculates a compliance score (0-100%), and outputs a detailed report.
 
-3. **Synthetic Monitoring**:
-   - CloudWatch Synthetics canaries monitoring critical API endpoints
-   - Execute health checks every 2 minutes
-   - Track API availability and latency
+## Constraints and Requirements
 
-4. **Alerting and Notifications**:
-   - SNS topics with email and webhook subscriptions for different alert severities
-   - CloudWatch alarms for CPU usage over 80%
-   - CloudWatch alarms for memory usage over 85%
-   - CloudWatch alarms for API latency over 500ms
-   - Composite alarms that trigger only when multiple conditions are met
+- Analysis script must use boto3 for AWS API calls
+- All CloudWatch alarms must be checked for SNS topic notification routing
+- Custom metrics namespaces must follow pattern 'FinTech/Service/Environment'
+- Dashboard widgets must be verified to be in a 3-column layout with 9 widgets
+- Log groups must be verified to have 7-day retention and KMS encryption
+- Composite alarm must be verified to combine at least 3 individual alarm states
+- All resources must be checked for consistent tagging with Cost Center and Environment tags
+- Analysis must generate actionable recommendations for any missing or misconfigured resources
 
-5. **Visualization and Dashboards**:
-   - CloudWatch dashboard with widgets for infrastructure metrics
-   - Dashboard widgets for custom business metrics
-   - Alarm status visualization
-   - Dashboard auto-refresh with 1-minute intervals
+## Environment Setup
 
-6. **Metric Analysis and Export**:
-   - Metric math expressions to calculate error rates
-   - Metric math expressions for availability percentages
-   - CloudWatch metric streams to export metrics to S3 for long-term analysis
-   - Cross-region metric aggregation using CloudWatch Streams
+Production monitoring infrastructure deployed in us-east-1 for a payment processing system. The analysis script will connect to AWS using boto3 and validate the deployed CloudWatch monitoring resources. The script must support environment suffix configuration via ENVIRONMENT_SUFFIX environment variable.
 
-### Technical Requirements
+---
 
-- All infrastructure defined using **Pulumi with TypeScript**
-- Use **CloudWatch Logs** for centralized logging
-- Use **CloudWatch Metrics** for custom and standard metrics
-- Use **CloudWatch Synthetics** for API endpoint monitoring
-- Use **CloudWatch Alarms** for threshold-based alerting
-- Use **CloudWatch Dashboards** for visualization
-- Use **SNS** for notification routing
-- Use **Lambda** for custom metric processing and log analysis
-- Use **S3** for long-term metric storage
-- Resource names must include **environmentSuffix** for uniqueness
-- Follow naming convention: `{resource-type}-${environmentSuffix}`
-- Deploy to **us-east-1** region
-- Lambda runtime: Node.js 18+ (use SDK v3 bundled with runtime, no aws-sdk package needed)
+## Implementation Guidelines
 
-### Constraints
+### Platform Requirements
 
-- Configure metric math expressions for calculated metrics (MANDATORY)
-- Use SNS topics with different subscriptions based on alarm severity (MANDATORY)
-- Implement cross-region metric aggregation using CloudWatch Streams (MANDATORY)
-- Configure alarms with multiple severity levels (warning, critical, emergency)
-- All resources must be destroyable (no Retain policies, no deletion protection)
-- Include proper error handling and logging in Lambda functions
-- VPC endpoints for CloudWatch services to ensure private connectivity
-- Support environment-specific configuration via parameters
+- Use Python 3.12+ as the analysis platform
+- All code must be written in Python
+- Use boto3 for AWS SDK interactions
+- Ensure all resource name lookups use the `environment_suffix` variable for naming
 
-## Deployment Requirements (CRITICAL)
+### Security and Compliance
 
-### Resource Naming
-- ALL named resources MUST include the **environmentSuffix** parameter
-- Pattern: `{resourceName}-${environmentSuffix}`
-- Example: `payment-logs-dev`, `cpu-alarm-prod`
-- This is REQUIRED for parallel deployment testing
+- Analysis script must verify KMS encryption is enabled for all log groups
+- Verify SNS topics use encryption
+- Check that all resources have proper tagging
 
-### Destroyability
-- NO RemovalPolicy.RETAIN or DeletionPolicy: Retain
-- NO deletionProtection: true on any resources
-- All resources must be cleanly destroyable for testing
-- This includes S3 buckets (use autoDeleteObjects or equivalent)
+### Testing
 
-### Lambda Considerations
-- Node.js 18+ runtime includes AWS SDK v3 by default
-- DO NOT add aws-sdk or @aws-sdk packages to dependencies
-- Use the SDK bundled with the Lambda runtime
+- Write unit tests with good coverage (90%+ target)
+- Unit tests must use mocking for AWS API calls
+- Integration tests must validate against deployed resources using Moto or real AWS
+- Analysis tests run against mocked AWS services
+
+### Script Requirements
+
+- Analysis script must be named `analyse.py` in the `lib/` directory
+- Script must use boto3 for all AWS interactions
+- Script must accept ENVIRONMENT_SUFFIX from environment variable
+- Script must output a compliance score (0-100%)
+- Script must generate recommendations for non-compliant resources
+- Script must support JSON report export
+
+## Analysis Script Requirements (CRITICAL)
+
+### Resource Naming Validation
+
+- **MANDATORY**: All resource lookups MUST include `environment_suffix` in their names
+- Pattern: `{resource-name}-{environment_suffix}`
+- Examples:
+  - Log Group: `/aws/payment-api-{environment_suffix}`
+  - Alarm: `payment-api-error-rate-{environment_suffix}`
+  - Dashboard: `payment-monitoring-{environment_suffix}`
+- **Validation**: Script must check resources using the environment suffix pattern
+
+### Expected Resources to Validate
+
+#### CloudWatch Log Groups (3 expected)
+
+- `/aws/payment-api-{environment_suffix}`
+- `/aws/transaction-processor-{environment_suffix}`
+- `/aws/fraud-detector-{environment_suffix}`
+
+#### CloudWatch Alarms (6 expected)
+
+- `payment-api-error-rate-{environment_suffix}`
+- `payment-api-response-time-{environment_suffix}`
+- `failed-transactions-{environment_suffix}`
+- `transaction-processor-errors-{environment_suffix}`
+- `fraud-detector-errors-{environment_suffix}`
+- `payment-high-load-{environment_suffix}`
+
+#### Composite Alarm (1 expected)
+
+- `multi-service-failure-{environment_suffix}`
+
+#### CloudWatch Dashboard (1 expected)
+
+- `payment-monitoring-{environment_suffix}` with 9 widgets
+
+### Compliance Scoring
+
+- Each resource type contributes to overall score
+- Missing resources reduce score
+- Misconfigured resources (wrong retention, missing encryption) reduce score
+- Score ranges: 80-100% (compliant), 50-79% (warnings), 0-49% (non-compliant)
+
+## Target Region
+
+Analyze resources in: **us-east-1**
 
 ## Success Criteria
 
-- **Functionality**: All CloudWatch resources deployed and operational
-- **Logging**: Log groups collecting application logs with proper retention
-- **Metrics**: Custom metrics tracking business KPIs (transactions, failures)
-- **Alerting**: SNS topics configured with email/webhook subscriptions
-- **Alarms**: CloudWatch alarms monitoring CPU, memory, API latency thresholds
-- **Composite Alarms**: Multi-condition alarms to reduce false positives
-- **Monitoring**: Synthetics canaries checking API endpoints every 2 minutes
-- **Visualization**: Dashboard displaying all key metrics and alarm statuses
-- **Analysis**: Metric math expressions calculating error rates and availability
-- **Export**: Metric streams exporting to S3 for long-term storage
-- **Resource Naming**: All resources include environmentSuffix
-- **Code Quality**: TypeScript, well-structured, documented
-
-## What to deliver
-
-- Complete Pulumi TypeScript implementation
-- CloudWatch Log Groups with retention policies
-- Custom CloudWatch metrics for business KPIs
-- Lambda functions for log analysis and metric calculation
-- CloudWatch Synthetics canaries for endpoint monitoring
-- SNS topics with subscriptions for alerting
-- CloudWatch alarms (standard and composite)
-- CloudWatch dashboard with comprehensive widgets
-- CloudWatch metric streams with S3 export
-- Metric math expressions for calculated metrics
-- Unit tests for Lambda functions
-- Documentation and deployment instructions
+- Analysis script runs successfully against deployed resources
+- All expected resources are validated
+- Compliance score is calculated correctly
+- Recommendations are generated for missing/misconfigured resources
+- Unit tests pass with 90%+ coverage
+- Integration tests validate end-to-end analysis workflow
