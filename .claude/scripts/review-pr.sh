@@ -1,9 +1,12 @@
 #!/bin/bash
+# Enhanced PR Review Script
+# Validates synthetic PRs for merge readiness
 set -e
 
 PR_NUMBER="${1}"
 BRANCH="${2}"
 REPORT_FILE="${3:-.claude/reports/report-$(date +%Y-%m-%d).json}"
+ASSIGNEE="${4:-mayanksethi-turing}"
 
 echo "Setting up review environment..."
 
@@ -41,13 +44,18 @@ echo "Worktree ready: $REVIEW_DIR"
 echo ""
 
 # ═══════════════════════════════════════════════════════
-# STEP 2: Metadata Validation
+# STEP 1: Metadata Validation
 # ═══════════════════════════════════════════════════════
-echo "VALIDATING METADATA"
+echo "1. VALIDATING METADATA"
 echo "────────────────────────────────────────────────"
 
 METADATA_ISSUES=()
 METADATA_INFO=()
+PLATFORM="unknown"
+LANGUAGE="unknown"
+COMPLEXITY="unknown"
+TQ=0
+SUBTASK="unknown"
 
 if [ ! -f "metadata.json" ]; then
   METADATA_ISSUES+=("metadata.json not found")
@@ -185,19 +193,89 @@ for info in "${METADATA_INFO[@]}"; do
 done
 echo ""
 if [ "$METADATA_VALID" == "true" ]; then
-  echo "  Metadata: VALID"
+  echo "  Result: PASS"
 else
-  echo "  Metadata: INVALID"
+  echo "  Result: FAIL"
   for issue in "${METADATA_ISSUES[@]}"; do
     echo "     - $issue"
   done
 fi
 
 # ═══════════════════════════════════════════════════════
-# STEP 3: File/Folder Validation
+# STEP 2: Subtask <-> Subject Label Mapping Validation
 # ═══════════════════════════════════════════════════════
 echo ""
-echo "VALIDATING FILES/FOLDERS"
+echo "2. VALIDATING SUBTASK/SUBJECT LABEL MAPPING"
+echo "────────────────────────────────────────────────"
+
+MAPPING_ISSUES=()
+
+# Define valid subject labels per subtask
+declare -A SUBTASK_LABELS
+SUBTASK_LABELS["Provisioning of Infrastructure Environments"]="Environment Migration|Cloud Environment Setup|Multi-Environment Consistency and Replication"
+SUBTASK_LABELS["Application Deployment"]="Web Application Deployment|Serverless Infrastructure (Functions as Code)"
+SUBTASK_LABELS["CI/CD Pipeline Integration"]="CI/CD Pipeline"
+SUBTASK_LABELS["Failure Recovery and High Availability"]="Failure Recovery Automation"
+SUBTASK_LABELS["Security, Compliance, and Governance"]="Security Configuration as Code"
+SUBTASK_LABELS["IaC Program Optimization"]="IaC Diagnosis/Edits|IaC Optimization"
+SUBTASK_LABELS["Infrastructure QA and Management"]="Infrastructure Analysis/Monitoring|General Infrastructure Tooling QA"
+
+# Platform requirements for special subtasks
+declare -A SUBTASK_PLATFORM
+SUBTASK_PLATFORM["CI/CD Pipeline Integration"]="cicd"
+SUBTASK_PLATFORM["Infrastructure QA and Management"]="analysis"
+
+declare -A SUBTASK_LANGUAGES
+SUBTASK_LANGUAGES["CI/CD Pipeline Integration"]="yaml|yml"
+SUBTASK_LANGUAGES["Infrastructure QA and Management"]="py"
+
+# Get subject labels from metadata
+SUBJECT_LABELS_RAW=$(jq -r '.subject_labels[]?' metadata.json 2>/dev/null || echo "")
+
+# Validate subject_labels match subtask
+if [ -n "${SUBTASK_LABELS[$SUBTASK]}" ]; then
+  VALID_LABELS="${SUBTASK_LABELS[$SUBTASK]}"
+  
+  while IFS= read -r label; do
+    [[ -z "$label" ]] && continue
+    if [[ ! "$label" =~ ^($VALID_LABELS)$ ]]; then
+      MAPPING_ISSUES+=("Subject label '$label' not valid for subtask '$SUBTASK'")
+    fi
+  done <<< "$SUBJECT_LABELS_RAW"
+fi
+
+# Validate platform requirement for special subtasks
+if [ -n "${SUBTASK_PLATFORM[$SUBTASK]}" ]; then
+  REQUIRED_PLATFORM="${SUBTASK_PLATFORM[$SUBTASK]}"
+  if [ "$PLATFORM" != "$REQUIRED_PLATFORM" ]; then
+    MAPPING_ISSUES+=("Subtask '$SUBTASK' requires platform='$REQUIRED_PLATFORM', got '$PLATFORM'")
+  fi
+  
+  REQUIRED_LANG="${SUBTASK_LANGUAGES[$SUBTASK]}"
+  if [[ ! "$LANGUAGE" =~ ^($REQUIRED_LANG)$ ]]; then
+    MAPPING_ISSUES+=("Subtask '$SUBTASK' requires language matching '$REQUIRED_LANG', got '$LANGUAGE'")
+  fi
+fi
+
+MAPPING_VALID=$([[ ${#MAPPING_ISSUES[@]} -eq 0 ]] && echo "true" || echo "false")
+
+echo "  Subtask: $SUBTASK"
+echo "  Subject Labels: $(jq -c '.subject_labels // []' metadata.json 2>/dev/null)"
+echo ""
+if [ "$MAPPING_VALID" == "true" ]; then
+  echo "  Result: PASS"
+else
+  echo "  Result: FAIL"
+  for issue in "${MAPPING_ISSUES[@]}"; do
+    echo "     - $issue"
+  done
+fi
+
+# ═══════════════════════════════════════════════════════
+# STEP 3: Strict File/Folder Validation
+# ═══════════════════════════════════════════════════════
+echo ""
+echo "3. VALIDATING FILES/FOLDERS (STRICT)"
 echo "────────────────────────────────────────────────"
 
 FILE_ISSUES=()
@@ -207,27 +285,29 @@ cd ../..
 CHANGED_FILES=$(git diff --name-only origin/main...origin/$BRANCH 2>/dev/null || echo "")
 cd "$REVIEW_DIR"
 
-# Allowed folders
-ALLOWED_FOLDERS=("bin/" "lib/" "test/" "tests/" "gradle/")
-
-# Allowed root-level files
-ALLOWED_ROOT_FILES=(
-  "package.json"
-  "package-lock.json"
-  "cdk.json"
-  "cdktf.json"
-  "Pulumi.yaml"
-  "tap.py"
-  "tap.go"
-  "metadata.json"
-  "Pipfile"
-  "Pipfile.lock"
-  "requirements.txt"
-  "build.gradle"
-  "settings.gradle"
-  "pom.xml"
-  "gradlew"
-  "gradlew.bat"
+# Strict allowed patterns
+ALLOWED_PATTERNS=(
+  "^bin/.*"
+  "^lib/.*"
+  "^test/.*"
+  "^tests/.*"
+  "^gradle/.*"
+  "^metadata\.json$"
+  "^package\.json$"
+  "^package-lock\.json$"
+  "^cdk\.json$"
+  "^cdktf\.json$"
+  "^Pulumi\.yaml$"
+  "^tap\.py$"
+  "^tap\.go$"
+  "^Pipfile$"
+  "^Pipfile\.lock$"
+  "^requirements\.txt$"
+  "^build\.gradle$"
+  "^settings\.gradle$"
+  "^pom\.xml$"
+  "^gradlew$"
+  "^gradlew\.bat$"
 )
 
 FILE_COUNT=0
@@ -237,27 +317,15 @@ while IFS= read -r file; do
   [[ -z "$file" ]] && continue
   FILE_COUNT=$((FILE_COUNT + 1))
 
-  valid="false"
-
-  # Check if in allowed folder
-  for folder in "${ALLOWED_FOLDERS[@]}"; do
-    if [[ "$file" == "$folder"* ]]; then
-      valid="true"
+  is_allowed="false"
+  for pattern in "${ALLOWED_PATTERNS[@]}"; do
+    if [[ "$file" =~ $pattern ]]; then
+      is_allowed="true"
       break
     fi
   done
 
-  # Check if allowed root file
-  if [ "$valid" == "false" ]; then
-    for allowed in "${ALLOWED_ROOT_FILES[@]}"; do
-      if [ "$file" == "$allowed" ]; then
-        valid="true"
-        break
-      fi
-    done
-  fi
-
-  if [ "$valid" == "false" ]; then
+  if [ "$is_allowed" == "false" ]; then
     FILE_ISSUES+=("$file")
     INVALID_COUNT=$((INVALID_COUNT + 1))
   fi
@@ -267,19 +335,74 @@ FILES_VALID=$([[ ${#FILE_ISSUES[@]} -eq 0 ]] && echo "true" || echo "false")
 
 echo "  Total files in PR: $FILE_COUNT"
 if [ "$FILES_VALID" == "true" ]; then
-  echo "  Files: ALL VALID"
+  echo "  Result: PASS (all files in allowed locations)"
 else
-  echo "  Files: $INVALID_COUNT INVALID"
+  echo "  Result: FAIL ($INVALID_COUNT unexpected files)"
   for file in "${FILE_ISSUES[@]}"; do
     echo "     - $file"
   done
 fi
 
 # ═══════════════════════════════════════════════════════
-# STEP 4: Emoji Check in lib/*.md
+# STEP 4: Required Files Validation
 # ═══════════════════════════════════════════════════════
 echo ""
-echo "CHECKING FOR EMOJIS"
+echo "4. VALIDATING REQUIRED FILES"
+echo "────────────────────────────────────────────────"
+
+REQUIRED_FILES_ISSUES=()
+
+# Base required files for all tasks
+BASE_REQUIRED=("lib/PROMPT.md" "lib/MODEL_RESPONSE.md" "lib/IDEAL_RESPONSE.md" "lib/MODEL_FAILURES.md" "metadata.json")
+
+for file in "${BASE_REQUIRED[@]}"; do
+  if [ ! -f "$file" ]; then
+    REQUIRED_FILES_ISSUES+=("Missing: $file")
+  fi
+done
+
+# Platform-specific required files
+case "$PLATFORM" in
+  cdk)
+    [ ! -f "cdk.json" ] && REQUIRED_FILES_ISSUES+=("Missing: cdk.json (required for CDK)")
+    ;;
+  cdktf)
+    [ ! -f "cdktf.json" ] && REQUIRED_FILES_ISSUES+=("Missing: cdktf.json (required for CDKTF)")
+    ;;
+  pulumi)
+    [ ! -f "Pulumi.yaml" ] && REQUIRED_FILES_ISSUES+=("Missing: Pulumi.yaml (required for Pulumi)")
+    ;;
+  cicd)
+    [ ! -f "lib/ci-cd.yml" ] && REQUIRED_FILES_ISSUES+=("Missing: lib/ci-cd.yml (required for CI/CD tasks)")
+    ;;
+  analysis)
+    if [ ! -f "lib/analyse.py" ] && [ ! -f "lib/analyze.py" ]; then
+      REQUIRED_FILES_ISSUES+=("Missing: lib/analyse.py or lib/analyze.py (required for Analysis tasks)")
+    fi
+    ;;
+esac
+
+# Optimization tasks need optimize.py
+if [ "$SUBTASK" == "IaC Program Optimization" ]; then
+  [ ! -f "lib/optimize.py" ] && REQUIRED_FILES_ISSUES+=("Missing: lib/optimize.py (required for Optimization tasks)")
+fi
+
+REQUIRED_FILES_VALID=$([[ ${#REQUIRED_FILES_ISSUES[@]} -eq 0 ]] && echo "true" || echo "false")
+
+if [ "$REQUIRED_FILES_VALID" == "true" ]; then
+  echo "  Result: PASS (all required files present)"
+else
+  echo "  Result: FAIL"
+  for issue in "${REQUIRED_FILES_ISSUES[@]}"; do
+    echo "     - $issue"
+  done
+fi
+
+# ═══════════════════════════════════════════════════════
+# STEP 5: Emoji Check in lib/*.md
+# ═══════════════════════════════════════════════════════
+echo ""
+echo "5. CHECKING FOR EMOJIS IN lib/*.md"
 echo "────────────────────────────────────────────────"
 
 EMOJI_ISSUES=()
@@ -297,19 +420,170 @@ done
 NO_EMOJIS=$([[ ${#EMOJI_ISSUES[@]} -eq 0 ]] && echo "true" || echo "false")
 
 if [ "$NO_EMOJIS" == "true" ]; then
-  echo "  No emojis found in lib/*.md"
+  echo "  Result: PASS (no emojis found)"
 else
-  echo "  Emojis found in:"
+  echo "  Result: FAIL (emojis found in:)"
   for file in "${EMOJI_ISSUES[@]}"; do
     echo "     - $file"
   done
 fi
 
 # ═══════════════════════════════════════════════════════
-# STEP 5: Claude Review Validation
+# STEP 6: PROMPT.md Style Validation
 # ═══════════════════════════════════════════════════════
 echo ""
-echo "CHECKING CLAUDE REVIEW"
+echo "6. VALIDATING PROMPT.md STYLE"
+echo "────────────────────────────────────────────────"
+
+PROMPT_ISSUES=()
+
+if [ -f "lib/PROMPT.md" ]; then
+  # Check for forbidden AI patterns
+  AI_PATTERNS=$(grep -cE '(^ROLE:|^CONTEXT:|^CONSTRAINTS:|Here is a comprehensive|Let me provide|I will create)' lib/PROMPT.md 2>/dev/null || echo 0)
+  if [ "$AI_PATTERNS" -gt 0 ]; then
+    PROMPT_ISSUES+=("AI-generated patterns found ($AI_PATTERNS occurrences)")
+  fi
+
+  # Check for conversational opening
+  CONVERSATIONAL=$(head -10 lib/PROMPT.md | grep -cE '(Hey|Hi|We need|I need|Our|The|Create|Build|Deploy|Implement)' 2>/dev/null || echo 0)
+  if [ "$CONVERSATIONAL" -eq 0 ]; then
+    PROMPT_ISSUES+=("Missing conversational opening")
+  fi
+
+  # Check for bold platform statement
+  BOLD_PLATFORM=$(grep -cE '\*\*.*\s(with|using)\s.*\*\*' lib/PROMPT.md 2>/dev/null || echo 0)
+  if [ "$BOLD_PLATFORM" -eq 0 ]; then
+    PROMPT_ISSUES+=("Missing bold platform statement")
+  fi
+else
+  PROMPT_ISSUES+=("lib/PROMPT.md not found")
+fi
+
+PROMPT_VALID=$([[ ${#PROMPT_ISSUES[@]} -eq 0 ]] && echo "true" || echo "false")
+
+if [ "$PROMPT_VALID" == "true" ]; then
+  echo "  Result: PASS (human-style prompt)"
+else
+  echo "  Result: FAIL"
+  for issue in "${PROMPT_ISSUES[@]}"; do
+    echo "     - $issue"
+  done
+fi
+
+# ═══════════════════════════════════════════════════════
+# STEP 7: MODEL_FAILURES Quality Check
+# ═══════════════════════════════════════════════════════
+echo ""
+echo "7. CHECKING MODEL_FAILURES QUALITY"
+echo "────────────────────────────────────────────────"
+
+MODEL_FAILURES_QUALITY="unknown"
+FAILURE_COUNT=0
+CAT_A_FIXES=0
+
+if [ -f "lib/MODEL_FAILURES.md" ]; then
+  # Count documented failures
+  FAILURE_COUNT=$(grep -cE '^[-*]\s|^[0-9]+\.' lib/MODEL_FAILURES.md 2>/dev/null || echo 0)
+
+  # Check for Category A fixes (significant)
+  CAT_A_FIXES=$(grep -ciE 'security|encryption|iam|architecture|monitoring|authentication|kms|multi-az|scaling' lib/MODEL_FAILURES.md 2>/dev/null || echo 0)
+
+  # Determine quality
+  if [ "$FAILURE_COUNT" -lt 3 ]; then
+    MODEL_FAILURES_QUALITY="low"
+  elif [ "$CAT_A_FIXES" -gt 0 ]; then
+    MODEL_FAILURES_QUALITY="high"
+  else
+    MODEL_FAILURES_QUALITY="medium"
+  fi
+fi
+
+echo "  Documented failures: $FAILURE_COUNT"
+echo "  Category A fixes: $CAT_A_FIXES"
+echo "  Quality: $MODEL_FAILURES_QUALITY"
+
+# ═══════════════════════════════════════════════════════
+# STEP 8: No Retain/DeletionProtection Check
+# ═══════════════════════════════════════════════════════
+echo ""
+echo "8. CHECKING FOR RETAIN/DELETION PROTECTION"
+echo "────────────────────────────────────────────────"
+
+RETAIN_COUNT=$(grep -rE 'RemovalPolicy\.RETAIN|removalPolicy:\s*RETAIN|deletion_protection\s*=\s*true|DeletionProtection.*true|deletionProtection:\s*true' lib/ 2>/dev/null | wc -l || echo 0)
+
+NO_RETAIN=$([[ "$RETAIN_COUNT" -eq 0 ]] && echo "true" || echo "false")
+
+if [ "$NO_RETAIN" == "true" ]; then
+  echo "  Result: PASS (no retain policies found)"
+else
+  echo "  Result: FAIL ($RETAIN_COUNT retain/deletion protection found)"
+  echo "  Resources with Retain policies cannot be destroyed"
+fi
+
+# ═══════════════════════════════════════════════════════
+# STEP 9: environmentSuffix Usage Check
+# ═══════════════════════════════════════════════════════
+echo ""
+echo "9. CHECKING environmentSuffix USAGE"
+echo "────────────────────────────────────────────────"
+
+SUFFIX_USAGE=0
+SUFFIX_VALID="true"
+
+# Check for environmentSuffix in stack files
+STACK_FILES=$(find lib -name "*.ts" -o -name "*.py" -o -name "*.go" -o -name "*.java" 2>/dev/null | head -5)
+
+for stack_file in $STACK_FILES; do
+  [[ ! -f "$stack_file" ]] && continue
+  SUFFIX_USAGE=$((SUFFIX_USAGE + $(grep -c 'environmentSuffix\|environment_suffix\|props\.environmentSuffix\|props\.environment_suffix' "$stack_file" 2>/dev/null || echo 0)))
+done
+
+if [ "$SUFFIX_USAGE" -gt 0 ]; then
+  echo "  Result: PASS ($SUFFIX_USAGE references found)"
+else
+  echo "  Result: WARNING (no environmentSuffix references found)"
+  SUFFIX_VALID="false"
+fi
+
+# ═══════════════════════════════════════════════════════
+# STEP 10: Integration Tests Check (No Mocks)
+# ═══════════════════════════════════════════════════════
+echo ""
+echo "10. CHECKING INTEGRATION TESTS"
+echo "────────────────────────────────────────────────"
+
+INTEGRATION_ISSUES=()
+
+# Check for mock usage (not allowed in integration tests)
+MOCK_COUNT=$(grep -rE 'jest\.mock|sinon\.|@Mock|Mockito\.|mock\(' test/ tests/ 2>/dev/null | wc -l || echo 0)
+if [ "$MOCK_COUNT" -gt 0 ]; then
+  INTEGRATION_ISSUES+=("Mocking found in tests ($MOCK_COUNT occurrences) - integration tests should use real resources")
+fi
+
+# Check if tests use cfn-outputs
+CFN_OUTPUT_USAGE=$(grep -r 'cfn-outputs\|flat-outputs' test/ tests/ 2>/dev/null | wc -l || echo 0)
+if [ "$CFN_OUTPUT_USAGE" -eq 0 ] && [ -d "test" ]; then
+  INTEGRATION_ISSUES+=("Tests don't reference cfn-outputs - integration tests should use deployment outputs")
+fi
+
+INTEGRATION_VALID=$([[ ${#INTEGRATION_ISSUES[@]} -eq 0 ]] && echo "true" || echo "false")
+
+echo "  Mock usage: $MOCK_COUNT"
+echo "  cfn-outputs references: $CFN_OUTPUT_USAGE"
+if [ "$INTEGRATION_VALID" == "true" ]; then
+  echo "  Result: PASS"
+else
+  echo "  Result: WARNING"
+  for issue in "${INTEGRATION_ISSUES[@]}"; do
+    echo "     - $issue"
+  done
+fi
+
+# ═══════════════════════════════════════════════════════
+# STEP 11: Claude Review Validation
+# ═══════════════════════════════════════════════════════
+echo ""
+echo "11. CHECKING CLAUDE REVIEW"
 echo "────────────────────────────────────────────────"
 
 CLAUDE_SCORE=""
@@ -324,7 +598,6 @@ echo "  Checking PR comments..."
 COMMENTS=$(gh pr view $PR_NUMBER --json comments --jq '.comments[].body' 2>/dev/null || echo "")
 
 if [ -n "$COMMENTS" ]; then
-  # Look for SCORE:X pattern (case insensitive, with or without space)
   SCORE_MATCH=$(echo "$COMMENTS" | grep -oE "SCORE:[[:space:]]*[0-9]+" | tail -1 || echo "")
 
   if [ -n "$SCORE_MATCH" ]; then
@@ -332,7 +605,6 @@ if [ -n "$COMMENTS" ]; then
     CLAUDE_SOURCE="PR comments"
     echo "    Found SCORE:$CLAUDE_SCORE in PR comments"
 
-    # Extract critical issues (lines with X marks or failures)
     CRITICAL_LINES=$(echo "$COMMENTS" | grep -E "CRITICAL|FAIL|ERROR" | head -5 || echo "")
     if [ -n "$CRITICAL_LINES" ]; then
       while IFS= read -r line; do
@@ -342,11 +614,10 @@ if [ -n "$COMMENTS" ]; then
   fi
 fi
 
-# Method 2: Check CI/CD Job Logs (if not found in comments)
+# Method 2: Check CI/CD Job Logs
 if [ -z "$CLAUDE_SCORE" ]; then
   echo "    Not found in comments, checking CI/CD logs..."
 
-  # Get Claude Review job details
   CLAUDE_JOB=$(gh pr checks $PR_NUMBER --json name,state,conclusion,detailsUrl 2>/dev/null | \
     jq -r '.[] | select(.name | test("Claude|Review"; "i"))' || echo "")
 
@@ -363,7 +634,6 @@ if [ -z "$CLAUDE_SCORE" ]; then
         echo "    Claude Review job PASSED (score >= 8)"
       else
         CLAUDE_SOURCE="CI/CD job ($JOB_CONCLUSION)"
-        echo "    Claude Review job: $JOB_CONCLUSION"
         echo "    Check logs: $JOB_URL"
       fi
     fi
@@ -375,42 +645,53 @@ fi
 
 cd "$REVIEW_DIR"
 
-# Determine Claude review validity
 CLAUDE_VALID="false"
 if [ -n "$CLAUDE_SCORE" ] && [ "$CLAUDE_SCORE" -ge 8 ] 2>/dev/null; then
   CLAUDE_VALID="true"
 fi
 
 if [ "$CLAUDE_VALID" == "true" ]; then
-  echo "  Claude Review: SCORE $CLAUDE_SCORE (source: $CLAUDE_SOURCE)"
+  echo "  Result: PASS (SCORE $CLAUDE_SCORE)"
 else
-  echo "  Claude Review: ${CLAUDE_SCORE:-not found}"
-  if [ ${#CRITICAL_ISSUES[@]} -gt 0 ]; then
-    echo "     Critical issues found:"
-    for issue in "${CRITICAL_ISSUES[@]:0:3}"; do
-      echo "     - ${issue:0:80}..."
-    done
-  fi
+  echo "  Result: FAIL (score: ${CLAUDE_SCORE:-not found})"
 fi
 
 # ═══════════════════════════════════════════════════════
-# STEP 6: Generate Result & Update Report
+# FINAL: Generate Result & Update Report
 # ═══════════════════════════════════════════════════════
 echo ""
 echo "════════════════════════════════════════════════"
-echo "REVIEW RESULT"
+echo "REVIEW SUMMARY"
 echo "════════════════════════════════════════════════"
 
-# Determine overall merge readiness
+# Determine overall merge readiness (core checks)
 READY_TO_MERGE="false"
-if [[ "$METADATA_VALID" == "true" && "$FILES_VALID" == "true" && "$NO_EMOJIS" == "true" && "$CLAUDE_VALID" == "true" ]]; then
+if [[ "$METADATA_VALID" == "true" && "$MAPPING_VALID" == "true" && "$FILES_VALID" == "true" && "$REQUIRED_FILES_VALID" == "true" && "$NO_EMOJIS" == "true" && "$CLAUDE_VALID" == "true" && "$NO_RETAIN" == "true" ]]; then
   READY_TO_MERGE="true"
+fi
+
+# Build failure reason
+FAILURE_REASON=""
+if [ "$READY_TO_MERGE" == "false" ]; then
+  REASON_PARTS=()
+  [[ "$METADATA_VALID" == "false" ]] && REASON_PARTS+=("metadata")
+  [[ "$MAPPING_VALID" == "false" ]] && REASON_PARTS+=("subtask_mapping")
+  [[ "$FILES_VALID" == "false" ]] && REASON_PARTS+=("unexpected_files")
+  [[ "$REQUIRED_FILES_VALID" == "false" ]] && REASON_PARTS+=("missing_files")
+  [[ "$NO_EMOJIS" == "false" ]] && REASON_PARTS+=("emojis")
+  [[ "$CLAUDE_VALID" == "false" ]] && REASON_PARTS+=("claude_review")
+  [[ "$NO_RETAIN" == "false" ]] && REASON_PARTS+=("retain_policies")
+  FAILURE_REASON=$(IFS='; '; echo "${REASON_PARTS[*]}")
 fi
 
 # Build validation results JSON
 METADATA_ISSUES_JSON=$(printf '%s\n' "${METADATA_ISSUES[@]:-}" | jq -R . | jq -s . 2>/dev/null || echo "[]")
+MAPPING_ISSUES_JSON=$(printf '%s\n' "${MAPPING_ISSUES[@]:-}" | jq -R . | jq -s . 2>/dev/null || echo "[]")
 FILE_ISSUES_JSON=$(printf '%s\n' "${FILE_ISSUES[@]:-}" | jq -R . | jq -s . 2>/dev/null || echo "[]")
+REQUIRED_FILES_ISSUES_JSON=$(printf '%s\n' "${REQUIRED_FILES_ISSUES[@]:-}" | jq -R . | jq -s . 2>/dev/null || echo "[]")
 EMOJI_ISSUES_JSON=$(printf '%s\n' "${EMOJI_ISSUES[@]:-}" | jq -R . | jq -s . 2>/dev/null || echo "[]")
+PROMPT_ISSUES_JSON=$(printf '%s\n' "${PROMPT_ISSUES[@]:-}" | jq -R . | jq -s . 2>/dev/null || echo "[]")
+INTEGRATION_ISSUES_JSON=$(printf '%s\n' "${INTEGRATION_ISSUES[@]:-}" | jq -R . | jq -s . 2>/dev/null || echo "[]")
 CRITICAL_ISSUES_JSON=$(printf '%s\n' "${CRITICAL_ISSUES[@]:-}" | jq -R . | jq -s . 2>/dev/null || echo "[]")
 
 # Build review JSON
@@ -420,24 +701,58 @@ REVIEW_JSON=$(cat <<EOF
   "pr_url": "https://github.com/TuringGpt/iac-test-automations/pull/$PR_NUMBER",
   "branch": "$BRANCH",
   "task_id": "$TASK_ID",
+  "assignee": "$ASSIGNEE",
   "validations": {
     "metadata": {
       "valid": $METADATA_VALID,
       "issues": $METADATA_ISSUES_JSON,
-      "platform": "${PLATFORM:-unknown}",
-      "language": "${LANGUAGE:-unknown}",
-      "complexity": "${COMPLEXITY:-unknown}",
-      "training_quality": ${TQ:-0}
+      "platform": "$PLATFORM",
+      "language": "$LANGUAGE",
+      "complexity": "$COMPLEXITY",
+      "training_quality": $TQ
+    },
+    "subtask_mapping": {
+      "valid": $MAPPING_VALID,
+      "subtask": "$SUBTASK",
+      "subject_labels": $(jq -c '.subject_labels // []' metadata.json 2>/dev/null || echo "[]"),
+      "issues": $MAPPING_ISSUES_JSON
     },
     "files": {
       "valid": $FILES_VALID,
       "total_files": $FILE_COUNT,
-      "invalid_count": ${INVALID_COUNT:-0},
+      "unexpected_count": $INVALID_COUNT,
       "issues": $FILE_ISSUES_JSON
+    },
+    "required_files": {
+      "valid": $REQUIRED_FILES_VALID,
+      "issues": $REQUIRED_FILES_ISSUES_JSON
     },
     "emojis": {
       "valid": $NO_EMOJIS,
       "issues": $EMOJI_ISSUES_JSON
+    },
+    "prompt_style": {
+      "valid": $PROMPT_VALID,
+      "issues": $PROMPT_ISSUES_JSON
+    },
+    "model_failures": {
+      "count": $FAILURE_COUNT,
+      "quality": "$MODEL_FAILURES_QUALITY",
+      "category_a_fixes": $CAT_A_FIXES
+    },
+    "retain_policies": {
+      "valid": $NO_RETAIN,
+      "count": $RETAIN_COUNT
+    },
+    "environment_suffix": {
+      "valid": $SUFFIX_VALID,
+      "usage_count": $SUFFIX_USAGE
+    },
+    "integration_tests": {
+      "valid": $INTEGRATION_VALID,
+      "mock_count": $MOCK_COUNT,
+      "cfn_output_usage": $CFN_OUTPUT_USAGE,
+      "issues": $INTEGRATION_ISSUES_JSON
     },
     "claude_review": {
       "valid": $CLAUDE_VALID,
@@ -447,24 +762,31 @@ REVIEW_JSON=$(cat <<EOF
     }
   },
   "ready_to_merge": $READY_TO_MERGE,
+  "failure_reason": $([ -n "$FAILURE_REASON" ] && echo "\"$FAILURE_REASON\"" || echo "null"),
   "reviewed_at": "$(date -Iseconds)"
 }
 EOF
 )
 
-# Display summary box
+# Display summary
 echo ""
-echo "PR #$PR_NUMBER Validation Summary"
-echo "─────────────────────────────────────────────"
-printf "%-20s %s\n" "Metadata:" "$([ "$METADATA_VALID" == "true" ] && echo "PASS" || echo "FAIL")"
-printf "%-20s %s\n" "Files:" "$([ "$FILES_VALID" == "true" ] && echo "PASS" || echo "FAIL")"
-printf "%-20s %s\n" "No Emojis:" "$([ "$NO_EMOJIS" == "true" ] && echo "PASS" || echo "FAIL")"
-printf "%-20s %s\n" "Claude Review:" "$([ "$CLAUDE_VALID" == "true" ] && echo "PASS (${CLAUDE_SCORE})" || echo "FAIL")"
-echo "─────────────────────────────────────────────"
+printf "%-25s %s\n" "1.  Metadata:" "$([ "$METADATA_VALID" == "true" ] && echo "PASS" || echo "FAIL")"
+printf "%-25s %s\n" "2.  Subtask Mapping:" "$([ "$MAPPING_VALID" == "true" ] && echo "PASS" || echo "FAIL")"
+printf "%-25s %s\n" "3.  File Locations:" "$([ "$FILES_VALID" == "true" ] && echo "PASS" || echo "FAIL")"
+printf "%-25s %s\n" "4.  Required Files:" "$([ "$REQUIRED_FILES_VALID" == "true" ] && echo "PASS" || echo "FAIL")"
+printf "%-25s %s\n" "5.  No Emojis:" "$([ "$NO_EMOJIS" == "true" ] && echo "PASS" || echo "FAIL")"
+printf "%-25s %s\n" "6.  PROMPT Style:" "$([ "$PROMPT_VALID" == "true" ] && echo "PASS" || echo "FAIL")"
+printf "%-25s %s\n" "7.  MODEL_FAILURES:" "$MODEL_FAILURES_QUALITY ($FAILURE_COUNT fixes)"
+printf "%-25s %s\n" "8.  No Retain Policies:" "$([ "$NO_RETAIN" == "true" ] && echo "PASS" || echo "FAIL")"
+printf "%-25s %s\n" "9.  environmentSuffix:" "$([ "$SUFFIX_VALID" == "true" ] && echo "PASS" || echo "WARN")"
+printf "%-25s %s\n" "10. Integration Tests:" "$([ "$INTEGRATION_VALID" == "true" ] && echo "PASS" || echo "WARN")"
+printf "%-25s %s\n" "11. Claude Review:" "$([ "$CLAUDE_VALID" == "true" ] && echo "PASS ($CLAUDE_SCORE)" || echo "FAIL")"
+echo "════════════════════════════════════════════════"
+
 if [ "$READY_TO_MERGE" == "true" ]; then
   echo "READY TO MERGE"
 else
-  echo "NOT READY - Fix issues above"
+  echo "NOT READY: $FAILURE_REASON"
 fi
 echo ""
 
@@ -472,7 +794,6 @@ echo ""
 cd ../..
 
 if [ -f "$REPORT_FILE" ]; then
-  # Add this review to the reviews array
   jq --argjson review "$REVIEW_JSON" '.reviews += [$review]' "$REPORT_FILE" > "${REPORT_FILE}.tmp"
   mv "${REPORT_FILE}.tmp" "$REPORT_FILE"
   echo "Report updated: $REPORT_FILE"
