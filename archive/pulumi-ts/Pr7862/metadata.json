@@ -1,0 +1,28 @@
+{
+  "po_id": "s4r2q0w6",
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-12-04T09:30:00Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "Lambda",
+    "S3 Bucket",
+    "SNS",
+    "IAM",
+    "CloudWatch LogGroup",
+    "EventBridge"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

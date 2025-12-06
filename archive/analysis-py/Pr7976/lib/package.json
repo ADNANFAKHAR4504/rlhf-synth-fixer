@@ -1,0 +1,75 @@
+{
+  "name": "aws-security-auditor",
+  "version": "1.0.0",
+  "description": "AWS Infrastructure Security Audit Tool using Pulumi Automation API",
+  "main": "index.ts",
+  "scripts": {
+    "build": "tsc",
+    "start": "ts-node index.ts",
+    "audit": "ts-node index.ts",
+    "test": "jest --coverage --verbose",
+    "test:unit": "jest --testPathPattern=unit.test --coverage",
+    "test:integration": "jest --testPathPattern=integration.test",
+    "lint": "eslint *.ts --max-warnings=0"
+  },
+  "keywords": [
+    "aws",
+    "security",
+    "audit",
+    "pulumi",
+    "compliance"
+  ],
+  "dependencies": {
+    "@pulumi/pulumi": "^3.100.0",
+    "@pulumi/aws": "^6.15.0",
+    "@aws-sdk/client-ec2": "^3.470.0",
+    "@aws-sdk/client-rds": "^3.470.0",
+    "@aws-sdk/client-s3": "^3.470.0",
+    "@aws-sdk/client-iam": "^3.470.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/jest": "^29.5.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.50.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.0"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "roots": [
+      "<rootDir>"
+    ],
+    "testMatch": [
+      "**/*.test.ts",
+      "**/*.unit.test.ts"
+    ],
+    "collectCoverageFrom": [
+      "*.ts",
+      "!*.test.ts",
+      "!jest.config.js",
+      "!index.ts"
+    ],
+    "coverageDirectory": "../coverage",
+    "coverageReporters": [
+      "text",
+      "lcov",
+      "json-summary"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "branches": 100,
+        "functions": 100,
+        "lines": 100,
+        "statements": 100
+      }
+    },
+    "modulePathIgnorePatterns": [
+      "dist/"
+    ]
+  }
+}

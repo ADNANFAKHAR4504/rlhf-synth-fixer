@@ -1,0 +1,44 @@
+{
+  "po_id": "a9p0g9t1",
+  "platform": "pulumi",
+  "language": "ts",
+  "region": "us-east-1",
+  "complexity": "hard",
+  "subtask": "Infrastructure QA and Management",
+  "team": "synth",
+  "startedAt": "2025-12-03T18:00:00Z",
+  "turn_type": "single",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring"
+  ],
+  "training_quality": 10,
+  "po_quality_report_url": "",
+  "test_cases": [
+    {
+      "name": "Unit Tests",
+      "status": "passed",
+      "coverage": "100%",
+      "test_count": 35
+    },
+    {
+      "name": "Integration Tests",
+      "status": "passed",
+      "coverage": "100%",
+      "test_count": 49
+    }
+  ],
+  "validation_results": {
+    "lint": "passed",
+    "build": "passed",
+    "synth": "passed",
+    "test_coverage": "100%",
+    "deployment_time_estimate": "2-3 minutes",
+    "analysis_time_estimate": "5-8 minutes for 100 buckets"
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

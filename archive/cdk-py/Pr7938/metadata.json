@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "v2g7w9v0",
+  "team": "synth",
+  "startedAt": "2025-12-04T17:32:22.299592+00:00",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "Kinesis Data Streams",
+    "ECS Fargate",
+    "RDS PostgreSQL",
+    "ElastiCache Redis",
+    "EFS",
+    "CodePipeline",
+    "API Gateway",
+    "Secrets Manager"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

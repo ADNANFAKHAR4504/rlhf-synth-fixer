@@ -163,6 +163,7 @@
     "aws-sdk-client-mock": "^4.1.0",
     "aws4": "^1.13.2",
     "axios": "^1.12.2",
+    "commitlint": "^20.2.0",
     "conventional-changelog-conventionalcommits": "^9.1.0",
     "esbuild": "^0.24.0",
     "eslint": "^8.57.0",

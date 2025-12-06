@@ -1,0 +1,31 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "101000938",
+  "team": "synth",
+  "startedAt": "2025-12-02T01:14:13+00:00",
+  "subtask": "Multi-Environment Consistency & Replication",
+  "subject_labels": [
+    "infrastructure",
+    "multi-environment",
+    "terraform",
+    "workspaces"
+  ],
+  "aws_services": [
+    "VPC",
+    "ALB",
+    "Auto Scaling",
+    "RDS",
+    "S3"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "akshat-jain355",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

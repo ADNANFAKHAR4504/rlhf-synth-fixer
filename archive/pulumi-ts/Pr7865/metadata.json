@@ -1,0 +1,30 @@
+{
+  "task_id": "e2v6b6h3",
+  "po_id": "e2v6b6h3",
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-12-04T06:42:00-06:00",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "Lambda",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "X-Ray"
+  ],
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "test_coverage": 100,
+  "completedAt": "2025-12-04T09:53:00-06:00",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

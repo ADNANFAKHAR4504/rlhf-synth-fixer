@@ -1,0 +1,1424 @@
+# ideal_response.md
+
+## Overview
+
+Deliver a production-ready, security-hardened AWS CloudFormation stack that **successfully creates on the first pipeline run**—no CLI interaction required. The stack provisions VPC networking, VPC endpoints, S3 (logs + app), KMS CMK, CloudTrail, AWS Config (recorder + delivery channel), GuardDuty, IAM baseline (password policy, MFA group), CloudWatch alarms, ALB with access logging, Auto Scaling Group with Launch Template, API Gateway, and optional WAF. It must avoid early-validation failures, name collisions, and long-running custom resources.
+
+## Objectives
+
+* Eliminate `AWS::EarlyValidation::ResourceExistenceCheck` conflicts by not hard-coding physical names that must be globally unique.
+* Fix ALB access logging permissions and KMS usage so `AWS::ElasticLoadBalancingV2::LoadBalancer` creates cleanly.
+* Replace legacy `cfnresponse` custom resources with self-contained Python 3.12 handlers that reliably signal success or failure.
+* Ensure AWS Config recorder **actually starts** and the custom resource returns only when `recording=true`.
+* Make secret rotation **optional** and transform-free; allow supplying an external rotation Lambda ARN when needed.
+
+## Scope
+
+* One CloudFormation template suitable for non-interactive CI/CD pipelines.
+* Zero external transforms required for a successful baseline deployment.
+* Defaults and Conditions that enable minimal parameters while keeping strict security settings.
+
+## Key Design Decisions
+
+* Do not set explicit bucket names or other globally unique identifiers; let CloudFormation generate them.
+* Use S3 access logging with `BucketOwnerPreferred` ownership controls and the ALB log delivery principal in the bucket policy.
+* Encrypt logs and data with a customer-managed KMS key; include principals for CloudTrail, CloudWatch Logs, and Secrets Manager.
+* Prefer deterministic waiting in custom resources (polling AWS Config status) to avoid 30-minute CREATE stalls.
+* Keep rotation off by default to avoid `AWS::SecretsManager` transform; allow BYO rotation Lambda via parameter and condition.
+
+## Acceptance Criteria
+
+* Stack completes `CREATE_COMPLETE` in a single pipeline attempt.
+* No transforms are required for success.
+* No resource remains in `*_IN_PROGRESS` for more than a few minutes due to handler issues.
+* ALB is healthy with access logging active to the logs bucket.
+* Config recorder status is `recording=true`.
+* Outputs include core identifiers and endpoints necessary for verification.
+
+## Validation Plan
+
+* Review stack events to confirm no early validation or permission failures.
+* Check S3 logs bucket for ALB log objects after traffic.
+* Confirm CloudTrail writes to S3 and CloudWatch Logs.
+* Verify AWS Config configuration recorder status.
+* Confirm ASG instances join the target group and health checks pass.
+* Invoke API Gateway mock resource to ensure stage, logging, and tracing function as expected.
+
+```yaml
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Security-hardened AWS infrastructure stack with comprehensive compliance controls
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: tapstack
+    Description: Project name for resource naming
+    AllowedPattern: '^[a-z0-9-]{3,32}$'
+    ConstraintDescription: Must be lowercase letters, numbers, and hyphens (3-32 chars)
+  EnvironmentSuffix:
+    Type: String
+    Description: Environment suffix for resource naming
+    AllowedPattern: '^[a-z0-9-]{3,32}$'
+    ConstraintDescription: Must be lowercase letters, numbers, and hyphens (3-32 chars)
+  KnownAdminCidr:
+    Type: String
+    Default: '203.0.113.0/32'
+    Description: CIDR for admin access (SSH)
+    AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$'
+  VpcCidr:
+    Type: String
+    Default: '10.0.0.0/16'
+    Description: CIDR block for VPC
+  PublicSubnetACidr:
+    Type: String
+    Default: '10.0.1.0/24'
+    Description: CIDR for public subnet A
+  PublicSubnetBCidr:
+    Type: String
+    Default: '10.0.2.0/24'
+    Description: CIDR for public subnet B
+  PrivateSubnetACidr:
+    Type: String
+    Default: '10.0.10.0/24'
+    Description: CIDR for private subnet A
+  PrivateSubnetBCidr:
+    Type: String
+    Default: '10.0.11.0/24'
+    Description: CIDR for private subnet B
+  RdsInstanceClass:
+    Type: String
+    Default: 'db.t3.micro'
+    Description: RDS instance class
+  RdsEngine:
+    Type: String
+    Default: 'mysql'
+    AllowedValues: [mysql, postgres]
+    Description: RDS engine type
+  RdsEngineVersion:
+    Type: String
+    Default: '8.0.37'
+    Description: RDS engine version
+  RdsBackupRetentionDays:
+    Type: Number
+    Default: 7
+    MinValue: 7
+    MaxValue: 35
+    Description: RDS backup retention period
+  RdsDeletionProtection:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true','false']
+    Description: Enable RDS deletion protection
+  AlarmEmail:
+    Type: String
+    Default: ''
+    Description: Email for CloudWatch alarms (optional)
+    AllowedPattern: '^$|^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+  EnableOrganizationTrail:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true','false']
+    Description: Enable organization-level CloudTrail
+  EnableWAF:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true','false']
+    Description: Enable WAF for ALB/API Gateway
+  LogRetentionDays:
+    Type: Number
+    Default: 90
+    AllowedValues: [30, 60, 90, 180, 365]
+    Description: CloudWatch log retention period
+  ApiAccessLogFormat:
+    Type: String
+    Default: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength"}'
+    Description: API Gateway access log format
+  KeyRotationDays:
+    Type: Number
+    Default: 30
+    MinValue: 7
+    MaxValue: 90
+    Description: Secrets Manager rotation schedule in days
+  AcmCertificateArn:
+    Type: String
+    Default: ''
+    Description: '(Optional) ACM certificate ARN for HTTPS on ALB. Leave empty to skip HTTPS listener.'
+  EnableSecretRotation:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true','false']
+    Description: Enable secret rotation using an external rotation Lambda (supply ARN below)
+  ExternalRotationLambdaArn:
+    Type: String
+    Default: ''
+    Description: '(Optional) ARN of an existing Secrets Manager rotation Lambda (e.g., from SAR). Required if EnableSecretRotation=true.'
+
+Conditions:
+  IsOrganizationTrail: !Equals [!Ref EnableOrganizationTrail, 'true']
+  EnableWAFCondition: !Equals [!Ref EnableWAF, 'true']
+  IsMySQL: !Equals [!Ref RdsEngine, 'mysql']
+  HasCertificate: !Not [!Equals [!Ref AcmCertificateArn, ""]]
+  HasAlarmEmail:  !Not [!Equals [!Ref AlarmEmail, ""]]
+  DoRotate: !Equals [!Ref EnableSecretRotation, 'true']
+  HasExternalRotArn: !Not [!Equals [!Ref ExternalRotationLambdaArn, ""]]
+
+Resources:
+  # ---------------------- Helper (no-op) ----------------------
+  StackIdParts:
+    Type: AWS::SSM::Parameter
+    Condition: EnableWAFCondition
+    Properties:
+      Name: !Sub '/dummy/${AWS::StackName}'
+      Type: String
+      Value: ok
+
+  # ---------------------- KMS ----------------------
+  DataEncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub 'KMS key for ${ProjectName}-${EnvironmentSuffix} data encryption'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow CloudTrail to describe key
+            Effect: Allow
+            Principal: { Service: cloudtrail.amazonaws.com }
+            Action: kms:DescribeKey
+            Resource: '*'
+          - Sid: Allow CloudTrail to encrypt logs
+            Effect: Allow
+            Principal: { Service: cloudtrail.amazonaws.com }
+            Action: kms:GenerateDataKey*
+            Resource: '*'
+            Condition:
+              StringLike:
+                kms:EncryptionContext:aws:cloudtrail:arn: !Sub 'arn:aws:cloudtrail:*:${AWS::AccountId}:trail/*'
+          - Sid: Allow principals in the account to decrypt log files
+            Effect: Allow
+            Principal: { AWS: '*' }
+            Action: kms:Decrypt*
+            Resource: '*'
+            Condition:
+              StringEquals:
+                kms:CallerAccount: !Ref AWS::AccountId
+              StringLike:
+                kms:EncryptionContext:aws:cloudtrail:arn: !Sub 'arn:aws:cloudtrail:*:${AWS::AccountId}:trail/*'
+          - Sid: Allow CloudWatch Logs
+            Effect: Allow
+            Principal: { Service: !Sub 'logs.${AWS::Region}.amazonaws.com' }
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:CreateGrant
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              ArnEquals:
+                kms:EncryptionContext:aws:logs:arn: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+          - Sid: AllowSecretsManagerUsage
+            Effect: Allow
+            Principal: { Service: secretsmanager.amazonaws.com }
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              StringEquals:
+                kms:ViaService: !Sub 'secretsmanager.${AWS::Region}.amazonaws.com'
+              StringLike:
+                kms:EncryptionContext:aws:secretsmanager:arn: !Sub 'arn:aws:secretsmanager:*:${AWS::AccountId}:secret:*'
+          - Sid: AllowEBSUsage
+            Effect: Allow
+            Principal: '*'
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+              - kms:CreateGrant
+            Resource: '*'
+            Condition:
+              StringEquals:
+                kms:CallerAccount: !Ref AWS::AccountId
+              StringLike:
+                kms:ViaService: !Sub 'ec2.${AWS::Region}.amazonaws.com'
+
+  DataEncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Join
+        - ''
+        - - 'alias/'
+          - !Ref ProjectName
+          - '-'
+          - !Ref EnvironmentSuffix
+          - '-'
+          - !Select [2, !Split ['/', !Ref 'AWS::StackId']]
+          - '-data-key'
+      TargetKeyId: !Ref DataEncryptionKey
+
+  # ---------------------- Network ----------------------
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-vpc' }]
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-igw' }]
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Ref PublicSubnetACidr
+      MapPublicIpOnLaunch: false
+      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-subnet-a' }]
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Ref PublicSubnetBCidr
+      MapPublicIpOnLaunch: false
+      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-subnet-b' }]
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Ref PrivateSubnetACidr
+      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-subnet-a' }]
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Ref PrivateSubnetBCidr
+      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-subnet-b' }]
+
+  NATGatewayEIPA:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NATGatewayEIPB:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NATGatewayA:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGatewayEIPA.AllocationId
+      SubnetId: !Ref PublicSubnetA
+      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-nat-gateway-a' }]
+
+  NATGatewayB:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGatewayEIPB.AllocationId
+      SubnetId: !Ref PublicSubnetB
+      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-nat-gateway-b' }]
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-public-rt' }]
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetA
+
+  PublicSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetB
+
+  PrivateRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-rt-a' }]
+
+  PrivateRouteA:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableA
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NATGatewayA
+
+  PrivateSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableA
+      SubnetId: !Ref PrivateSubnetA
+
+  PrivateRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-rt-b' }]
+
+  PrivateRouteB:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NATGatewayB
+
+  PrivateSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
+      SubnetId: !Ref PrivateSubnetB
+
+  # ---------------------- VPC Endpoints ----------------------
+  VPCEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for VPC endpoints
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref VpcCidr
+      SecurityGroupEgress: []
+      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-vpc-endpoint-sg' }]
+
+  S3Endpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      RouteTableIds: [!Ref PrivateRouteTableA, !Ref PrivateRouteTableB]
+
+  SSMEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssm'
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds: [!Ref PrivateSubnetA, !Ref PrivateSubnetB]
+      SecurityGroupIds: [!Ref VPCEndpointSecurityGroup]
+
+  SSMMessagesEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssmmessages'
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds: [!Ref PrivateSubnetA, !Ref PrivateSubnetB]
+      SecurityGroupIds: [!Ref VPCEndpointSecurityGroup]
+
+  EC2MessagesEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ec2messages'
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds: [!Ref PrivateSubnetA, !Ref PrivateSubnetB]
+      SecurityGroupIds: [!Ref VPCEndpointSecurityGroup]
+
+  SecretsManagerEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.secretsmanager'
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds: [!Ref PrivateSubnetA, !Ref PrivateSubnetB]
+      SecurityGroupIds: [!Ref VPCEndpointSecurityGroup]
+
+  # ---------------------- Security Groups ----------------------
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ALB
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+          Description: HTTP from internet
+        - !If
+          - HasCertificate
+          - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: '0.0.0.0/0', Description: HTTPS from internet }
+          - !Ref 'AWS::NoValue'
+      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-alb-sg' }]
+
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for application instances
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: HTTP from ALB
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref KnownAdminCidr
+          Description: SSH from KnownAdminCidr
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+          Description: HTTPS to AWS services
+      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-app-sg' }]
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref AppSecurityGroup
+          Description: MySQL from app instances
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref AppSecurityGroup
+          Description: PostgreSQL from app instances
+      SecurityGroupEgress: []
+      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-sg' }]
+
+  AppToRdsMysqlEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref AppSecurityGroup
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+      DestinationSecurityGroupId: !Ref RDSSecurityGroup
+      Description: MySQL to RDS
+
+  AppToRdsPostgresEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref AppSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      DestinationSecurityGroupId: !Ref RDSSecurityGroup
+      Description: PostgreSQL to RDS
+
+  # ---------------------- S3 (logs) ----------------------
+  LoggingBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration: { Status: Enabled }
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToGlacier
+            Status: Enabled
+            Transitions: [{ TransitionInDays: 90, StorageClass: GLACIER }]
+          - Id: ExpireOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 365
+      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-logs-bucket' }]
+
+  LoggingBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LoggingBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub 'arn:aws:s3:::${LoggingBucket}'
+              - !Sub 'arn:aws:s3:::${LoggingBucket}/*'
+            Condition: { Bool: { 'aws:SecureTransport': 'false' } }
+          - Sid: AllowCloudTrailAccess
+            Effect: Allow
+            Principal: { Service: cloudtrail.amazonaws.com }
+            Action: 's3:GetBucketAcl'
+            Resource: !Sub 'arn:aws:s3:::${LoggingBucket}'
+          - Sid: AllowCloudTrailWrite
+            Effect: Allow
+            Principal: { Service: cloudtrail.amazonaws.com }
+            Action: 's3:PutObject'
+            Resource: !Sub 'arn:aws:s3:::${LoggingBucket}/cloudtrail/*'
+            Condition: { StringEquals: { 's3:x-amz-acl': 'bucket-owner-full-control' } }
+          - Sid: AllowAWSConfigAccess
+            Effect: Allow
+            Principal: { Service: config.amazonaws.com }
+            Action: ['s3:GetBucketVersioning','s3:ListBucket']
+            Resource: !Sub 'arn:aws:s3:::${LoggingBucket}'
+          - Sid: AllowAWSConfigWrite
+            Effect: Allow
+            Principal: { Service: config.amazonaws.com }
+            Action: 's3:PutObject'
+            Resource: !Sub 'arn:aws:s3:::${LoggingBucket}/config/*'
+            Condition: { StringEquals: { 's3:x-amz-acl': 'bucket-owner-full-control' } }
+          - Sid: AllowALBLogDelivery
+            Effect: Allow
+            Principal: { Service: "logdelivery.elasticloadbalancing.amazonaws.com" }
+            Action: "s3:PutObject"
+            Resource: !Sub 'arn:aws:s3:::${LoggingBucket}/alb-logs/AWSLogs/${AWS::AccountId}/*'
+
+  # ---------------------- App bucket ----------------------
+  ApplicationBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !GetAtt DataEncryptionKey.Arn
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration: { Status: Enabled }
+      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-app-bucket' }]
+
+  ApplicationBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ApplicationBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt ApplicationBucket.Arn
+              - !Sub '${ApplicationBucket.Arn}/*'
+            Condition: { Bool: { 'aws:SecureTransport': 'false' } }
+
+  # ---------------------- CloudTrail ----------------------
+  CloudTrailLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: !Ref LogRetentionDays
+      KmsKeyId: !GetAtt DataEncryptionKey.Arn
+
+  CloudTrailLogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: cloudtrail.amazonaws.com }
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: CloudTrailLogPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ['logs:CreateLogStream','logs:PutLogEvents']
+                Resource: !GetAtt CloudTrailLogGroup.Arn
+
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: LoggingBucketPolicy
+    Properties:
+      S3BucketName: !Ref LoggingBucket
+      S3KeyPrefix: cloudtrail
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+      IsOrganizationTrail: !If [IsOrganizationTrail, true, false]
+      EnableLogFileValidation: true
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+      KMSKeyId: !GetAtt DataEncryptionKey.Arn
+      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
+      CloudWatchLogsRoleArn: !GetAtt CloudTrailLogRole.Arn
+      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-trail' }]
+
+  # ---------------------- IAM password policy (custom) ----------------------
+  PasswordPolicyLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns: ['arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole']
+      Policies:
+        - PolicyName: PasswordPolicyPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: 'iam:UpdateAccountPasswordPolicy'
+                Resource: '*'
+
+  PasswordPolicyFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt PasswordPolicyLambdaRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import json, boto3, urllib.request, botocore.exceptions as be
+          def send_response(event, context, status, data=None, reason=None, physical_id=None):
+              response_body = {
+                  'Status': status,
+                  'Reason': reason or f'See CloudWatch Logs: {context.log_stream_name}',
+                  'PhysicalResourceId': physical_id or context.log_stream_name,
+                  'StackId': event['StackId'],
+                  'RequestId': event['RequestId'],
+                  'LogicalResourceId': event['LogicalResourceId'],
+                  'NoEcho': False,
+                  'Data': data or {}
+              }
+              req = urllib.request.Request(event['ResponseURL'], data=json.dumps(response_body).encode('utf-8'), method='PUT')
+              req.add_header('content-type', 'application/json')
+              req.add_header('content-length', str(len(json.dumps(response_body))))
+              with urllib.request.urlopen(req) as resp:
+                  resp.read()
+              print(f'Response sent: {status}')
+          def handler(event, context):
+              iam = boto3.client('iam')
+              print(f'Handling {event.get("RequestType", "Create")}')
+              try:
+                  req_type = event.get('RequestType', 'Create')
+                  if req_type in ['Create','Update']:
+                      iam.update_account_password_policy(
+                          MinimumPasswordLength=14, RequireSymbols=True, RequireNumbers=True,
+                          RequireUppercaseCharacters=True, RequireLowercaseCharacters=True,
+                          AllowUsersToChangePassword=True, MaxPasswordAge=90,
+                          PasswordReusePrevention=24, HardExpiry=False
+                      )
+                      print('Policy updated successfully')
+                  send_response(event, context, 'SUCCESS')
+              except be.ClientError as e:
+                  code = e.response['Error']['Code']
+                  print(f'IAM ClientError {code}: {e}')
+                  send_response(event, context, 'FAILED', reason=f'IAM Error {code}: {str(e)}')
+              except Exception as e:
+                  print(f'Error: {e}')
+                  send_response(event, context, 'FAILED', reason=str(e))
+
+  PasswordPolicyResource:
+    Type: Custom::PasswordPolicy
+    Properties:
+      ServiceToken: !GetAtt PasswordPolicyFunction.Arn
+
+  # ---------------------- MFA enforcement ----------------------
+  MFAEnforcementGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      Policies:
+        - PolicyName: RequireMFA
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: DenyNonMFAAccess
+                Effect: Deny
+                Action: '*'
+                Resource: '*'
+                Condition: { BoolIfExists: { 'aws:MultiFactorAuthPresent': 'false' } }
+              - Sid: AllowMFAManagement
+                Effect: Allow
+                Action:
+                  - 'iam:CreateVirtualMFADevice'
+                  - 'iam:EnableMFADevice'
+                  - 'iam:ListMFADevices'
+                  - 'iam:ResyncMFADevice'
+                  - 'iam:GetUser'
+                  - 'iam:ChangePassword'
+                Resource:
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:mfa/${!aws:username}'
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:user/${!aws:username}'
+
+  # ---------------------- CloudWatch alarms ----------------------
+  SecurityAlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: Security Alarms
+      KmsMasterKeyId: !Ref DataEncryptionKey
+      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-security-alarms' }]
+
+  SecurityAlarmEmailSubscription:
+    Condition: HasAlarmEmail
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref SecurityAlarmTopic
+      Protocol: email
+      Endpoint: !Ref AlarmEmail
+
+  UnauthorizedApiCallsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref CloudTrailLogGroup
+      FilterPattern: '{ ($.errorCode = "*UnauthorizedOperation") || ($.errorCode = "AccessDenied*") }'
+      MetricTransformations:
+        - MetricName: UnauthorizedAPICalls
+          MetricNamespace: !Sub '${ProjectName}-${EnvironmentSuffix}/Security'
+          MetricValue: '1'
+          DefaultValue: 0
+
+  UnauthorizedApiCallsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Alarm for unauthorized API calls
+      MetricName: UnauthorizedAPICalls
+      Namespace: !Sub '${ProjectName}-${EnvironmentSuffix}/Security'
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions: [!Ref SecurityAlarmTopic]
+      TreatMissingData: notBreaching
+
+  RootAccountUsageMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref CloudTrailLogGroup
+      FilterPattern: '{ $.userIdentity.type = "Root" && $.userIdentity.invokedBy NOT EXISTS && $.eventType != "AwsServiceEvent" }'
+      MetricTransformations:
+        - MetricName: RootAccountUsage
+          MetricNamespace: !Sub '${ProjectName}-${EnvironmentSuffix}/Security'
+          MetricValue: '1'
+          DefaultValue: 0
+
+  RootAccountUsageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Alarm for root account usage
+      MetricName: RootAccountUsage
+      Namespace: !Sub '${ProjectName}-${EnvironmentSuffix}/Security'
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions: [!Ref SecurityAlarmTopic]
+      TreatMissingData: notBreaching
+
+  # ---------------------- GuardDuty ----------------------
+  GuardDutyDetector:
+    Type: AWS::GuardDuty::Detector
+    Properties:
+      Enable: true
+      FindingPublishingFrequency: FIFTEEN_MINUTES
+      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-guardduty' }]
+
+  GuardDutyEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Route GuardDuty high-severity findings to SNS
+      EventPattern:
+        source: [aws.guardduty]
+        detail-type: [GuardDuty Finding]
+        detail:
+          severity:
+            - numeric: ['>=', 7]
+      State: ENABLED
+      Targets:
+        - Arn: !Ref SecurityAlarmTopic
+          Id: SecurityAlarmTopic
+
+  # ---------------------- AWS Config ----------------------
+  ConfigRecorderRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
+      Policies:
+        - PolicyName: S3BucketAccessForConfig
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetBucketVersioning'
+                  - 's3:ListBucket'
+                  - 's3:PutObject'
+                  - 's3:GetObject'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${LoggingBucket}'
+                  - !Sub 'arn:aws:s3:::${LoggingBucket}/*'
+
+  ConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Properties:
+      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-recorder'
+      RoleARN: !GetAtt ConfigRecorderRole.Arn
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+
+  ConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    Properties:
+      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-channel'
+      S3BucketName: !Ref LoggingBucket
+      S3KeyPrefix: config
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: TwentyFour_Hours
+
+  ConfigRecorderStatusRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns: ['arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole']
+      Policies:
+        - PolicyName: ConfigRecorderPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ['config:StartConfigurationRecorder','config:StopConfigurationRecorder','config:DescribeConfigurationRecorderStatus']
+                Resource: '*'
+
+  ConfigRecorderStatusFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt ConfigRecorderStatusRole.Arn
+      Timeout: 300
+      Code:
+        ZipFile: |
+          import time, json, urllib.request, boto3, botocore.exceptions as be
+          def send_response(event, context, status, data=None, reason=None, physical_id=None):
+              body = {
+                  'Status': status,
+                  'Reason': reason or f'See CloudWatch Logs: {context.log_stream_name}',
+                  'PhysicalResourceId': physical_id or context.log_stream_name,
+                  'StackId': event['StackId'],
+                  'RequestId': event['RequestId'],
+                  'LogicalResourceId': event['LogicalResourceId'],
+                  'NoEcho': False,
+                  'Data': data or {}
+              }
+              req = urllib.request.Request(event['ResponseURL'], data=json.dumps(body).encode('utf-8'), method='PUT')
+              req.add_header('content-type', 'application/json')
+              req.add_header('content-length', str(len(json.dumps(body))))
+              with urllib.request.urlopen(req) as resp:
+                  resp.read()
+              print(f'Response sent: {status}')
+          def handler(event, context):
+              cfg = boto3.client('config')
+              name = event['ResourceProperties']['ConfigRecorderName']
+              print(f'Handling {event["RequestType"]} for recorder: {name}')
+              try:
+                  req_type = event.get('RequestType', 'Create')
+                  if req_type in ['Create','Update']:
+                      # Initial check if already recording
+                      try:
+                          st = cfg.describe_configuration_recorder_status()
+                          rec = next((r for r in st.get('ConfigurationRecordersStatus', []) if r.get('name') == name), None)
+                          if rec and rec.get('recording', False):
+                              print('Already recording')
+                              send_response(event, context, 'SUCCESS', data={'AlreadyRecording': True})
+                              return
+                      except Exception as init_err:
+                          print(f'Initial status check failed: {init_err}')
+                      # Start recorder (idempotent, ignores if already started)
+                      try:
+                          cfg.start_configuration_recorder(ConfigurationRecorderName=name)
+                          print('Start command sent')
+                      except be.ClientError as e:
+                          code = e.response['Error']['Code']
+                          if code == 'NoSuchConfigurationRecorderException':
+                              send_response(event, context, 'FAILED', reason=f'Recorder {name} not found')
+                              return
+                          elif code == 'InvalidRecordingGroupException':
+                              send_response(event, context, 'FAILED', reason='Delivery channel not ready')
+                              return
+                          raise
+                      # Poll with longer timeout and backoff
+                      deadline = time.time() + 300
+                      while time.time() < deadline:
+                          try:
+                              st = cfg.describe_configuration_recorder_status()['ConfigurationRecordersStatus']
+                              rec = next((r for r in st if r['name'] == name), None)
+                              if rec and rec['recording']:
+                                  print('Recording confirmed')
+                                  send_response(event, context, 'SUCCESS', data={'Recording': True})
+                                  return
+                              print('Still not recording, waiting...')
+                          except Exception as poll_err:
+                              print(f'Poll error: {poll_err}')
+                          time.sleep(10)
+                      send_response(event, context, 'FAILED', reason=f'Timeout: {name} not recording')
+                      return
+                  else:  # Delete
+                      try:
+                          cfg.stop_configuration_recorder(ConfigurationRecorderName=name)
+                          print('Stopped recorder')
+                      except Exception as stop_err:
+                          print(f'Stop ignored: {stop_err}')
+                      send_response(event, context, 'SUCCESS', data={'Stopped': True})
+              except Exception as e:
+                  print(f'Fatal error: {e}')
+                  send_response(event, context, 'FAILED', reason=str(e))
+
+  ConfigRecorderStatus:
+    Type: Custom::ConfigRecorderStatus
+    DependsOn: [ConfigDeliveryChannel]
+    Properties:
+      ServiceToken: !GetAtt ConfigRecorderStatusFunction.Arn
+      ConfigRecorderName: !Ref ConfigRecorder
+
+  # ---------------------- Secrets + RDS ----------------------
+  RDSMasterSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: RDS master user credentials
+      KmsKeyId: !Ref DataEncryptionKey
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"admin"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-master-secret' }]
+
+  RDSSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS
+      SubnetIds: [!Ref PrivateSubnetA, !Ref PrivateSubnetB]
+      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-subnet-group' }]
+
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    DependsOn: [PasswordPolicyResource, ConfigRecorderStatus]
+    Properties:
+      DBInstanceClass: !Ref RdsInstanceClass
+      Engine: !Ref RdsEngine
+      EngineVersion: !Ref RdsEngineVersion
+      MasterUsername: !Sub '{{resolve:secretsmanager:${RDSMasterSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${RDSMasterSecret}:SecretString:password}}'
+      AllocatedStorage: '20'
+      StorageType: gp3
+      StorageEncrypted: true
+      KmsKeyId: !GetAtt DataEncryptionKey.Arn
+      MultiAZ: true
+      DBSubnetGroupName: !Ref RDSSubnetGroup
+      VPCSecurityGroups: [!Ref RDSSecurityGroup]
+      BackupRetentionPeriod: !Ref RdsBackupRetentionDays
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      CopyTagsToSnapshot: true
+      DeletionProtection: !Ref RdsDeletionProtection
+      EnableCloudwatchLogsExports:
+        - !If [IsMySQL, 'error', 'postgresql']
+      Tags:
+        - { Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rds' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+
+  RDSSecretTargetAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties:
+      SecretId: !Ref RDSMasterSecret
+      TargetId: !Ref RDSInstance
+      TargetType: AWS::RDS::DBInstance
+
+  RDSSecretRotation:
+    Condition: DoRotate
+    Type: AWS::SecretsManager::RotationSchedule
+    DependsOn: RDSSecretTargetAttachment
+    Properties:
+      SecretId: !Ref RDSMasterSecret
+      RotationRules:
+        AutomaticallyAfterDays: !Ref KeyRotationDays
+      RotationLambdaARN: !If [HasExternalRotArn, !Ref ExternalRotationLambdaArn, !Ref 'AWS::NoValue']
+
+  # ---------------------- EC2 + ASG ----------------------
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ec2.amazonaws.com }
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+        - 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
+      Policies:
+        - PolicyName: AppAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ['s3:GetObject','s3:PutObject','s3:DeleteObject','s3:ListBucket']
+                Resource: [!GetAtt ApplicationBucket.Arn, !Sub '${ApplicationBucket.Arn}/*']
+              - Effect: Allow
+                Action: ['secretsmanager:GetSecretValue']
+                Resource: !Ref RDSMasterSecret
+              - Effect: Allow
+                Action: ['kms:Decrypt','kms:GenerateDataKey']
+                Resource: !GetAtt DataEncryptionKey.Arn
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref EC2InstanceRole]
+
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+        InstanceType: t3.micro
+        IamInstanceProfile: { Arn: !GetAtt EC2InstanceProfile.Arn }
+        SecurityGroupIds: [!Ref AppSecurityGroup]
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 20
+              VolumeType: gp3
+              Encrypted: true
+              KmsKeyId: !GetAtt DataEncryptionKey.Arn
+              DeleteOnTermination: true
+        MetadataOptions:
+          HttpEndpoint: enabled
+          HttpTokens: required
+          InstanceMetadataTags: enabled
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            yum update -y
+            yum install -y amazon-cloudwatch-agent httpd
+            systemctl start httpd
+            systemctl enable httpd
+            cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
+            {
+              "metrics": {
+                "namespace": "${ProjectName}-${EnvironmentSuffix}",
+                "metrics_collected": {
+                  "mem": { "measurement": ["mem_used_percent"] },
+                  "disk": { "measurement": ["used_percent"], "resources": ["*"] }
+                }
+              }
+            }
+            EOF
+            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - { Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-instance' }
+              - { Key: Environment, Value: !Ref EnvironmentSuffix }
+          - ResourceType: volume
+            Tags:
+              - { Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-volume' }
+              - { Key: Environment, Value: !Ref EnvironmentSuffix }
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      HealthCheckEnabled: true
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      TargetType: instance
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      MinSize: 2
+      MaxSize: 4
+      DesiredCapacity: 2
+      VPCZoneIdentifier: [!Ref PrivateSubnetA, !Ref PrivateSubnetB]
+      TargetGroupARNs: [!Ref ALBTargetGroup]
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      Tags:
+        - { Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-asg-instance', PropagateAtLaunch: true }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix, PropagateAtLaunch: true }
+
+  # ---------------------- ALB ----------------------
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: LoggingBucketPolicy
+    Properties:
+      Type: application
+      IpAddressType: ipv4
+      SecurityGroups: [!Ref ALBSecurityGroup]
+      Subnets: [!Ref PublicSubnetA, !Ref PublicSubnetB]
+      LoadBalancerAttributes:
+        - { Key: access_logs.s3.enabled, Value: 'true' }
+        - { Key: access_logs.s3.bucket,  Value: !Ref LoggingBucket }
+        - { Key: access_logs.s3.prefix,  Value: 'alb-logs' }
+      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-alb' }]
+
+  ALBListenerHTTP:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ALB
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - !If
+          - HasCertificate
+          - Type: redirect
+            RedirectConfig: { Protocol: HTTPS, Port: '443', StatusCode: HTTP_301 }
+          - Type: forward
+            TargetGroupArn: !Ref ALBTargetGroup
+
+  ALBListenerHTTPS:
+    Condition: HasCertificate
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ALB
+      Port: 443
+      Protocol: HTTPS
+      Certificates: [{ CertificateArn: !Ref AcmCertificateArn }]
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+
+  # ---------------------- API Gateway ----------------------
+  APIGatewayLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: !Ref LogRetentionDays
+      KmsKeyId: !GetAtt DataEncryptionKey.Arn
+
+  APIGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-api'
+      Description: API Gateway for application
+      EndpointConfiguration: { Types: [EDGE] }
+      Policy:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: 'execute-api:Invoke'
+            Resource: '*'
+
+  APIGatewayResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref APIGateway
+      ParentId: !GetAtt APIGateway.RootResourceId
+      PathPart: example
+
+  APIGatewayMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref APIGateway
+      ResourceId: !Ref APIGatewayResource
+      HttpMethod: GET
+      AuthorizationType: AWS_IAM
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseTemplates:
+              application/json: '{"message":"Hello from API Gateway"}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+
+  APIGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: [APIGatewayMethod]
+    Properties:
+      RestApiId: !Ref APIGateway
+      Description: Initial deployment
+
+  APIGatewayStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      StageName: v1
+      RestApiId: !Ref APIGateway
+      DeploymentId: !Ref APIGatewayDeployment
+      AccessLogSetting:
+        DestinationArn: !GetAtt APIGatewayLogGroup.Arn
+        Format: !Ref ApiAccessLogFormat
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          LoggingLevel: INFO
+          DataTraceEnabled: true
+          MetricsEnabled: true
+      TracingEnabled: true
+      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-api-stage' }]
+
+  # ---------------------- WAF (optional) ----------------------
+  WAFWebACL:
+    Type: AWS::WAFv2::WebACL
+    Condition: EnableWAFCondition
+    Properties:
+      Name: !Join
+        - ''
+        - - !Ref ProjectName
+          - '-'
+          - !Ref EnvironmentSuffix
+          - '-'
+          - !Select [2, !Split ['/', !Ref 'AWS::StackId']]
+          - '-waf'
+      Scope: REGIONAL
+      DefaultAction: { Allow: {} }
+      Rules:
+        - Name: RateLimitRule
+          Priority: 1
+          Statement: { RateBasedStatement: { Limit: 2000, AggregateKeyType: IP } }
+          Action: { Block: {} }
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: RateLimitRule
+        - Name: AWSManagedRulesCommonRuleSet
+          Priority: 2
+          Statement: { ManagedRuleGroupStatement: { VendorName: AWS, Name: AWSManagedRulesCommonRuleSet } }
+          OverrideAction: { None: {} }
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: CommonRuleSet
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub '${ProjectName}-${EnvironmentSuffix}-waf'
+      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-waf' }]
+
+  WAFAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Condition: EnableWAFCondition
+    Properties:
+      WebACLArn: !GetAtt WAFWebACL.Arn
+      ResourceArn: !Ref ALB
+
+Outputs:
+  VPCId: { Description: VPC ID, Value: !Ref VPC, Export: { Name: !Sub '${ProjectName}-${EnvironmentSuffix}-vpc-id' } }
+  PublicSubnetAId: { Description: Public Subnet A ID, Value: !Ref PublicSubnetA }
+  PublicSubnetBId: { Description: Public Subnet B ID, Value: !Ref PublicSubnetB }
+  PrivateSubnetAId: { Description: Private Subnet A ID, Value: !Ref PrivateSubnetA }
+  PrivateSubnetBId: { Description: Private Subnet B ID, Value: !Ref PrivateSubnetB }
+  ALBSecurityGroupId: { Description: ALB Security Group ID, Value: !Ref ALBSecurityGroup }
+  AppSecurityGroupId: { Description: App Security Group ID, Value: !Ref AppSecurityGroup }
+  RDSSecurityGroupId: { Description: RDS Security Group ID, Value: !Ref RDSSecurityGroup }
+  KMSKeyArn: { Description: KMS Key ARN, Value: !GetAtt DataEncryptionKey.Arn }
+  KMSKeyAlias: { Description: KMS Key Alias, Value: !Ref DataEncryptionKeyAlias }
+  LoggingBucketName: { Description: Logging S3 Bucket Name, Value: !Ref LoggingBucket }
+  LoggingBucketArn: { Description: Logging S3 Bucket ARN, Value: !Sub 'arn:aws:s3:::${LoggingBucket}' }
+  ApplicationBucketName: { Description: Application S3 Bucket Name, Value: !Ref ApplicationBucket }
+  ApplicationBucketArn: { Description: Application S3 Bucket ARN, Value: !GetAtt ApplicationBucket.Arn }
+  CloudTrailName: { Description: CloudTrail Name, Value: !Ref CloudTrail }
+  CloudTrailArn: { Description: CloudTrail ARN, Value: !GetAtt CloudTrail.Arn }
+  CloudTrailLogGroupArn: { Description: CloudTrail Log Group ARN, Value: !GetAtt CloudTrailLogGroup.Arn }
+  APIGatewayId: { Description: API Gateway ID, Value: !Ref APIGateway }
+  APIGatewayInvokeURL:
+    Description: API Gateway Invoke URL
+    Value: !Sub 'https://${APIGateway}.execute-api.${AWS::Region}.amazonaws.com/v1'
+  APIGatewayLogGroupArn: { Description: API Gateway Log Group ARN, Value: !GetAtt APIGatewayLogGroup.Arn }
+  RDSEndpoint: { Description: RDS Endpoint, Value: !GetAtt RDSInstance.Endpoint.Address }
+  RDSPort: { Description: RDS Port, Value: !GetAtt RDSInstance.Endpoint.Port }
+  RDSInstanceIdentifier: { Description: RDS Instance Identifier, Value: !Ref RDSInstance }
+  RDSSecretArn: { Description: RDS Master Secret ARN, Value: !Ref RDSMasterSecret }
+  GuardDutyDetectorId: { Description: GuardDuty Detector ID, Value: !Ref GuardDutyDetector }
+  SecurityAlarmTopicArn: { Description: Security Alarm SNS Topic ARN, Value: !Ref SecurityAlarmTopic }
+  ConfigRecorderName: { Description: AWS Config Recorder Name, Value: !Ref ConfigRecorder }
+  ConfigDeliveryChannelName: { Description: AWS Config Delivery Channel Name, Value: !Ref ConfigDeliveryChannel }
+  ALBDNSName: { Description: ALB DNS Name, Value: !GetAtt ALB.DNSName }
+  ALBArn: { Description: ALB ARN, Value: !Ref ALB }
+  ALBTargetGroupArn: { Description: ALB Target Group ARN, Value: !Ref ALBTargetGroup }
+```

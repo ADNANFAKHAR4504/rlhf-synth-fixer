@@ -1,54 +1,66 @@
 #!/bin/bash
-# Shared Task Type Detection Script
-# Used by iac-infra-generator and iac-infra-qa-trainer to detect special task types
-# Returns: JSON object with task type flags
+# detect-task-type.sh
+# Centralized task type detection to prevent inconsistency across Claude reviews
+# Outputs one of: cicd-pipeline, analysis, optimization, iac-standard
 
-set -euo pipefail
+set -eo pipefail
 
 # Check if metadata.json exists
 if [ ! -f "metadata.json" ]; then
-    echo "ERROR: metadata.json not found" >&2
-    exit 1
+    echo "iac-standard"
+    exit 0
 fi
 
-# Read metadata fields
-SUBTASK=$(jq -r '.subtask // "Unknown"' metadata.json)
-PLATFORM=$(jq -r '.platform // "Unknown"' metadata.json)
-SUBJECT_LABELS=$(jq -r '.subject_labels[]? // empty' metadata.json)
+# Extract platform and subject_labels
+PLATFORM=$(jq -r '.platform // "unknown"' metadata.json 2>/dev/null || echo "unknown")
+SUBTASK=$(jq -r '.subtask // ""' metadata.json 2>/dev/null || echo "")
+SUBJECT_LABELS=$(jq -r '.subject_labels[]?' metadata.json 2>/dev/null || echo "")
 
-# Initialize task type flags
-IS_CICD_TASK=false
-IS_OPTIMIZATION_TASK=false
-IS_ANALYSIS_TASK=false
-TASK_TYPE="standard"
-
-# Detect CI/CD Pipeline Integration task
-if [ "$SUBTASK" = "CI/CD Pipeline Integration" ] || echo "$SUBJECT_LABELS" | grep -q "CI/CD Pipeline"; then
-    IS_CICD_TASK=true
-    TASK_TYPE="cicd"
+# CI/CD Pipeline detection
+# Matches: platform=cicd OR subject_labels contains "CI/CD Pipeline"
+if [ "$PLATFORM" = "cicd" ]; then
+    echo "cicd-pipeline"
+    exit 0
 fi
 
-# Detect IaC Optimization task
+if echo "$SUBJECT_LABELS" | grep -q "CI/CD Pipeline"; then
+    echo "cicd-pipeline"
+    exit 0
+fi
+
+# Analysis task detection
+# Matches: platform=analysis OR subtask="Infrastructure QA and Management" OR subject_labels contains "Infrastructure Analysis"
+if [ "$PLATFORM" = "analysis" ]; then
+    echo "analysis"
+    exit 0
+fi
+
+if [ "$SUBTASK" = "Infrastructure QA and Management" ]; then
+    echo "analysis"
+    exit 0
+fi
+
+if echo "$SUBJECT_LABELS" | grep -q "Infrastructure Analysis"; then
+    echo "analysis"
+    exit 0
+fi
+
+if echo "$SUBJECT_LABELS" | grep -q "Infrastructure Monitoring"; then
+    echo "analysis"
+    exit 0
+fi
+
+# Optimization task detection
+# Matches: subject_labels contains "IaC Optimization" or "IaC Diagnosis"
 if echo "$SUBJECT_LABELS" | grep -q "IaC Optimization"; then
-    IS_OPTIMIZATION_TASK=true
-    TASK_TYPE="optimization"
+    echo "optimization"
+    exit 0
 fi
 
-# Detect Infrastructure Analysis/QA task
-if [ "$SUBTASK" = "Infrastructure QA and Management" ] || [ "$PLATFORM" = "analysis" ]; then
-    IS_ANALYSIS_TASK=true
-    TASK_TYPE="analysis"
+if echo "$SUBJECT_LABELS" | grep -q "IaC Diagnosis"; then
+    echo "optimization"
+    exit 0
 fi
 
-# Output JSON result
-cat <<EOF
-{
-  "task_type": "$TASK_TYPE",
-  "is_cicd_task": $IS_CICD_TASK,
-  "is_optimization_task": $IS_OPTIMIZATION_TASK,
-  "is_analysis_task": $IS_ANALYSIS_TASK,
-  "subtask": "$SUBTASK",
-  "platform": "$PLATFORM"
-}
-EOF
-
+# Default to standard IaC review
+echo "iac-standard"
