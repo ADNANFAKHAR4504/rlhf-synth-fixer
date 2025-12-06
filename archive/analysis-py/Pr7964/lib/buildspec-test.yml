@@ -1,0 +1,49 @@
+version: 0.2
+
+# BuildSpec for Unit Testing
+# This buildspec runs unit tests for the payment processing microservices
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 18
+    commands:
+      - echo "Installing dependencies..."
+      - npm ci
+
+  pre_build:
+    commands:
+      - echo "Running linting and security checks..."
+      - npm run lint || true
+      - echo "Checking for security vulnerabilities..."
+      - npm audit --audit-level=moderate || true
+
+  build:
+    commands:
+      - echo "Running unit tests..."
+      - npm run test:unit
+      - echo "Unit tests completed successfully"
+
+  post_build:
+    commands:
+      - echo "Generating test coverage report..."
+      - npm run test:coverage || true
+      - echo "Test phase completed"
+
+reports:
+  unit-test-reports:
+    files:
+      - 'coverage/lcov-report/**/*'
+    file-format: 'JUNITXML'
+    base-directory: 'coverage'
+
+artifacts:
+  files:
+    - '**/*'
+  name: unit-test-artifact
+  exclude-paths:
+    - node_modules/**/*
+
+cache:
+  paths:
+    - 'node_modules/**/*'
