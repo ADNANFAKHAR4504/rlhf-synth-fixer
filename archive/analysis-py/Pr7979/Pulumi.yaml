@@ -1,0 +1,12 @@
+name: payment-monitoring
+runtime:
+  name: nodejs
+description: CloudWatch monitoring and observability platform for payment processing
+main: lib/index.ts
+config:
+  payment-monitoring:environmentSuffix:
+    description: Environment suffix for resource naming
+    default: dev
+  payment-monitoring:alertEmail:
+    description: Email address for alert notifications
+    default: ops@example.com
