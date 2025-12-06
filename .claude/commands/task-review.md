@@ -23,8 +23,17 @@ PARALLEL_JOBS=4  # Number of parallel reviews
 
 mkdir -p "$REPORT_DIR"
 
-# Initialize empty report
-cat > "$REPORT_FILE" << EOF
+# Initialize or update existing report
+if [ -f "$REPORT_FILE" ]; then
+  echo "Updating existing report: $REPORT_FILE"
+  # Update timestamp, preserve existing reviews
+  jq --arg ts "$(date -Iseconds)" '.generated_at = $ts' "$REPORT_FILE" > "${REPORT_FILE}.tmp"
+  mv "${REPORT_FILE}.tmp" "$REPORT_FILE"
+  EXISTING_REVIEWS=$(jq '.reviews | length' "$REPORT_FILE")
+  echo "Existing reviews in report: $EXISTING_REVIEWS"
+else
+  echo "Creating new report: $REPORT_FILE"
+  cat > "$REPORT_FILE" << EOF
 {
   "generated_at": "$(date -Iseconds)",
   "assignee": "$ASSIGNEE",
@@ -32,7 +41,9 @@ cat > "$REPORT_FILE" << EOF
   "reviews": []
 }
 EOF
+fi
 
+echo ""
 echo "═══════════════════════════════════════════════════"
 echo "TASK REVIEW - FAST MODE"
 echo "═══════════════════════════════════════════════════"

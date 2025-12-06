@@ -396,8 +396,19 @@ if [ -f "$REPORT_FILE" ]; then
     sleep 0.1
   done
   
-  # Update report
-  jq --argjson review "$REVIEW_JSON" '.reviews += [$review]' "$REPORT_FILE" > "${REPORT_FILE}.tmp" 2>/dev/null
+  # Check if PR already exists in report - update it, otherwise add new
+  EXISTING=$(jq --arg pr "$PR_NUMBER" '.reviews | map(select(.pr_number == ($pr | tonumber))) | length' "$REPORT_FILE" 2>/dev/null || echo "0")
+  
+  if [ "$EXISTING" -gt 0 ]; then
+    # Update existing review for this PR
+    jq --argjson review "$REVIEW_JSON" --arg pr "$PR_NUMBER" \
+      '.reviews = [.reviews[] | if .pr_number == ($pr | tonumber) then $review else . end]' \
+      "$REPORT_FILE" > "${REPORT_FILE}.tmp" 2>/dev/null
+  else
+    # Add new review
+    jq --argjson review "$REVIEW_JSON" '.reviews += [$review]' "$REPORT_FILE" > "${REPORT_FILE}.tmp" 2>/dev/null
+  fi
+  
   mv "${REPORT_FILE}.tmp" "$REPORT_FILE"
   
   # Release lock

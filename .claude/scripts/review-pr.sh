@@ -794,9 +794,22 @@ echo ""
 cd ../..
 
 if [ -f "$REPORT_FILE" ]; then
-  jq --argjson review "$REVIEW_JSON" '.reviews += [$review]' "$REPORT_FILE" > "${REPORT_FILE}.tmp"
+  # Check if PR already exists in report - update it, otherwise add new
+  EXISTING=$(jq --arg pr "$PR_NUMBER" '.reviews | map(select(.pr_number == ($pr | tonumber))) | length' "$REPORT_FILE" 2>/dev/null || echo "0")
+  
+  if [ "$EXISTING" -gt 0 ]; then
+    # Update existing review for this PR
+    jq --argjson review "$REVIEW_JSON" --arg pr "$PR_NUMBER" \
+      '.reviews = [.reviews[] | if .pr_number == ($pr | tonumber) then $review else . end]' \
+      "$REPORT_FILE" > "${REPORT_FILE}.tmp"
+    echo "Report updated (existing PR #$PR_NUMBER): $REPORT_FILE"
+  else
+    # Add new review
+    jq --argjson review "$REVIEW_JSON" '.reviews += [$review]' "$REPORT_FILE" > "${REPORT_FILE}.tmp"
+    echo "Report updated (new PR #$PR_NUMBER): $REPORT_FILE"
+  fi
+  
   mv "${REPORT_FILE}.tmp" "$REPORT_FILE"
-  echo "Report updated: $REPORT_FILE"
 fi
 
 # Cleanup worktree
