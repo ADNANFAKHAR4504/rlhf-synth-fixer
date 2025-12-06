@@ -105,7 +105,7 @@ CHANGED_FILES=$(git diff --name-only origin/main...origin/$BRANCH 2>/dev/null ||
 FILE_COUNT=0
 INVALID_COUNT=0
 
-ALLOWED_PATTERN='^(bin/|lib/|test/|tests/|gradle/|metadata\.json|package\.json|package-lock\.json|cdk\.json|cdktf\.json|Pulumi\.yaml|tap\.(py|go)|Pipfile|Pipfile\.lock|requirements\.txt|build\.gradle|settings\.gradle|pom\.xml|gradlew|gradlew\.bat)$'
+ALLOWED_PATTERN='^(bin/.*|lib/.*|test/.*|tests/.*|gradle/.*|metadata\.json|package\.json|package-lock\.json|cdk\.json|cdktf\.json|Pulumi\.yaml|tap\.(py|go)|Pipfile|Pipfile\.lock|requirements\.txt|build\.gradle|settings\.gradle|pom\.xml|gradlew|gradlew\.bat)$'
 
 while IFS= read -r file; do
   [[ -z "$file" ]] && continue
@@ -183,8 +183,12 @@ CAT_A_FIXES=0
 
 MF_CONTENT=$(read_file "lib/MODEL_FAILURES.md" || echo "")
 if [ -n "$MF_CONTENT" ]; then
-  FAILURE_COUNT=$(echo "$MF_CONTENT" | grep -cE '^[-*]\s|^[0-9]+\.' || echo 0)
-  CAT_A_FIXES=$(echo "$MF_CONTENT" | grep -ciE 'security|encryption|iam|architecture|monitoring' || echo 0)
+  FAILURE_COUNT=$(echo "$MF_CONTENT" | grep -cE '^[-*]\s|^[0-9]+\.' 2>/dev/null || echo "0")
+  FAILURE_COUNT=$(echo "$FAILURE_COUNT" | tr -d '[:space:]')
+  [ -z "$FAILURE_COUNT" ] && FAILURE_COUNT=0
+  CAT_A_FIXES=$(echo "$MF_CONTENT" | grep -ciE 'security|encryption|iam|architecture|monitoring' 2>/dev/null || echo "0")
+  CAT_A_FIXES=$(echo "$CAT_A_FIXES" | tr -d '[:space:]')
+  [ -z "$CAT_A_FIXES" ] && CAT_A_FIXES=0
   
   if [ "$FAILURE_COUNT" -lt 3 ]; then
     MODEL_FAILURES_QUALITY="low"
@@ -206,7 +210,9 @@ STACK_FILES=$(git ls-tree --name-only -r "origin/$BRANCH" lib/ 2>/dev/null | gre
 
 for sf in $STACK_FILES; do
   CONTENT=$(read_file "$sf" || echo "")
-  RC=$(echo "$CONTENT" | grep -cE 'RemovalPolicy\.RETAIN|deletion_protection\s*=\s*true' || echo 0)
+  RC=$(echo "$CONTENT" | grep -cE 'RemovalPolicy\.RETAIN|deletion_protection\s*=\s*true' 2>/dev/null || echo "0")
+  RC=$(echo "$RC" | tr -d '[:space:]')
+  [ -z "$RC" ] && RC=0
   RETAIN_COUNT=$((RETAIN_COUNT + RC))
 done
 
@@ -220,7 +226,9 @@ SUFFIX_USAGE=0
 
 for sf in $STACK_FILES; do
   CONTENT=$(read_file "$sf" || echo "")
-  SU=$(echo "$CONTENT" | grep -c 'environmentSuffix\|environment_suffix' || echo 0)
+  SU=$(echo "$CONTENT" | grep -c 'environmentSuffix\|environment_suffix' 2>/dev/null || echo "0")
+  SU=$(echo "$SU" | tr -d '[:space:]')
+  [ -z "$SU" ] && SU=0
   SUFFIX_USAGE=$((SUFFIX_USAGE + SU))
 done
 
@@ -237,9 +245,13 @@ TEST_FILES=$(git ls-tree --name-only -r "origin/$BRANCH" test/ tests/ 2>/dev/nul
 
 for tf in $TEST_FILES; do
   CONTENT=$(read_file "$tf" || echo "")
-  MC=$(echo "$CONTENT" | grep -cE 'jest\.mock|sinon\.|@Mock' || echo 0)
+  MC=$(echo "$CONTENT" | grep -cE 'jest\.mock|sinon\.|@Mock' 2>/dev/null || echo "0")
+  MC=$(echo "$MC" | tr -d '[:space:]')
+  [ -z "$MC" ] && MC=0
   MOCK_COUNT=$((MOCK_COUNT + MC))
-  CU=$(echo "$CONTENT" | grep -c 'cfn-outputs\|flat-outputs' || echo 0)
+  CU=$(echo "$CONTENT" | grep -c 'cfn-outputs\|flat-outputs' 2>/dev/null || echo "0")
+  CU=$(echo "$CU" | tr -d '[:space:]')
+  [ -z "$CU" ] && CU=0
   CFN_OUTPUT_USAGE=$((CFN_OUTPUT_USAGE + CU))
 done
 
