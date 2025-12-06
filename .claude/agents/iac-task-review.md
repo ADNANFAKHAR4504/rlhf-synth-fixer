@@ -13,15 +13,27 @@ Performs comprehensive review of individual synthetic task PRs.
 
 - `PR_NUMBER` - Pull request number
 - `BRANCH` - Branch name (synth-{task_id} format)
-- `REPORT_FILE` - Path to JSON report file
+- `REPORT_FILE` - Path to JSON report file (MUST be in `.claude/reports/`)
 - `ASSIGNEE` - GitHub assignee
+
+## IMPORTANT: Output Location
+
+**ALL reports MUST be saved to `.claude/reports/` directory ONLY.**
+
+- ✅ Correct: `.claude/reports/report-2025-12-07.json`
+- ❌ Wrong: `reports/pr-123-review.json`
+- ❌ Wrong: `./report.json`
+
+The root `reports/` folder is gitignored and should NOT be used.
 
 ## Execution
 
 Run the review script which performs all 11 validations:
 
 ```bash
-bash .claude/scripts/review-pr.sh "$PR_NUMBER" "$BRANCH" "$REPORT_FILE" "$ASSIGNEE"
+# Always use .claude/reports/ for REPORT_FILE
+REPORT_FILE=".claude/reports/report-$(date +%Y-%m-%d).json"
+bash .claude/scripts/review-pr-fast.sh "$PR_NUMBER" "$BRANCH" "$REPORT_FILE" "$ASSIGNEE"
 ```
 
 ## Validations
