@@ -1,6 +1,7 @@
 #!/bin/bash
 # Fast PR Review Script - No worktrees, uses git show
 # 5-10x faster than standard review
+# Compatible with macOS/zsh and Linux/bash
 set -e
 
 PR_NUMBER="${1}"
@@ -44,18 +45,16 @@ if [ -z "$METADATA_JSON" ]; then
   METADATA_ISSUES+=("metadata.json not found")
   METADATA_VALID="false"
 else
-  # Extract all values in single jq call
-  eval $(echo "$METADATA_JSON" | jq -r '
-    "PLATFORM=\(.platform // "unknown")",
-    "LANGUAGE=\(.language // "unknown")",
-    "COMPLEXITY=\(.complexity // "unknown")",
-    "SUBTASK=\(.subtask // "unknown")",
-    "TQ=\(.training_quality // 0)",
-    "TURN_TYPE=\(.turn_type // "unknown")",
-    "PO_ID=\(.po_id // "unknown")",
-    "TEAM=\(.team // "unknown")",
-    "STARTED_AT=\(.startedAt // "unknown")"
-  ' 2>/dev/null || echo "METADATA_VALID=false")
+  # Parse metadata fields individually (zsh/bash compatible)
+  PLATFORM=$(echo "$METADATA_JSON" | jq -r '.platform // "unknown"' 2>/dev/null || echo "unknown")
+  LANGUAGE=$(echo "$METADATA_JSON" | jq -r '.language // "unknown"' 2>/dev/null || echo "unknown")
+  COMPLEXITY=$(echo "$METADATA_JSON" | jq -r '.complexity // "unknown"' 2>/dev/null || echo "unknown")
+  SUBTASK=$(echo "$METADATA_JSON" | jq -r '.subtask // "unknown"' 2>/dev/null || echo "unknown")
+  TQ=$(echo "$METADATA_JSON" | jq -r '.training_quality // 0' 2>/dev/null || echo "0")
+  TURN_TYPE=$(echo "$METADATA_JSON" | jq -r '.turn_type // "unknown"' 2>/dev/null || echo "unknown")
+  PO_ID=$(echo "$METADATA_JSON" | jq -r '.po_id // "unknown"' 2>/dev/null || echo "unknown")
+  TEAM=$(echo "$METADATA_JSON" | jq -r '.team // "unknown"' 2>/dev/null || echo "unknown")
+  STARTED_AT=$(echo "$METADATA_JSON" | jq -r '.startedAt // "unknown"' 2>/dev/null || echo "unknown")
 
   # Quick validations
   VALID_PLATFORMS="cdk cdktf cfn tf pulumi cicd analysis"
@@ -376,13 +375,19 @@ REVIEW_JSON=$(cat <<EOF
 EOF
 )
 
-# Update report file (with lock for parallel safety)
+# Update report file (with macOS-compatible locking)
 if [ -f "$REPORT_FILE" ]; then
-  LOCK_FILE="${REPORT_FILE}.lock"
-  (
-    flock -x 200
-    jq --argjson review "$REVIEW_JSON" '.reviews += [$review]' "$REPORT_FILE" > "${REPORT_FILE}.tmp"
-    mv "${REPORT_FILE}.tmp" "$REPORT_FILE"
-  ) 200>"$LOCK_FILE"
+  LOCK_DIR="${REPORT_FILE}.lockdir"
+  
+  # Acquire lock (mkdir is atomic)
+  while ! mkdir "$LOCK_DIR" 2>/dev/null; do
+    sleep 0.1
+  done
+  
+  # Update report
+  jq --argjson review "$REVIEW_JSON" '.reviews += [$review]' "$REPORT_FILE" > "${REPORT_FILE}.tmp" 2>/dev/null
+  mv "${REPORT_FILE}.tmp" "$REPORT_FILE"
+  
+  # Release lock
+  rmdir "$LOCK_DIR" 2>/dev/null || true
 fi
-
