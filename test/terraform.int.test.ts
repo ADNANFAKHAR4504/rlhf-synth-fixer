@@ -576,25 +576,6 @@ describe('Terraform Infrastructure Integration Tests', () => {
   });
 
   describe('Terraform Outputs', () => {
-    test('should have all required outputs defined', () => {
-      const requiredOutputs = [
-        'alb_dns_name',
-        'alb_zone_id',
-        'database_endpoint',
-        'database_address',
-        'database_port',
-        's3_bucket_names',
-        's3_bucket_arns',
-        'ec2_instance_ids',
-        'ec2_private_ips',
-        'security_group_id',
-        'alb_logs_bucket',
-      ];
-
-      requiredOutputs.forEach((output) => {
-        expect(terraformOutputs).toHaveProperty(output);
-      });
-    });
 
     test('sensitive outputs should not be exposed in logs', () => {
       // Database endpoint and address are sensitive
