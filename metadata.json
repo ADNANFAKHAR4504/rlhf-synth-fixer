@@ -1,7 +1,7 @@
 {
   "task_id": "a0v1c9x0",
-  "platform": "cdktf",
-  "language": "ts",
+  "platform": "cicd",
+  "language": "yml",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "synth",
