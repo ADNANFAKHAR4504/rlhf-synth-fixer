@@ -132,7 +132,13 @@ class TestCompositeAlarmAnalysis(unittest.TestCase):
     @patch('analyse.boto3.client')
     def test_analyze_composite_alarms_name_format(self, mock_boto_client):
         """Test composite alarm name format"""
+        mock_cloudwatch = Mock()
+        mock_cloudwatch.describe_alarms.return_value = {'CompositeAlarms': []}
+        mock_boto_client.return_value = mock_cloudwatch
+
         analyzer = InfrastructureAnalyzer('test-suffix')
+        analyzer.cloudwatch_client = mock_cloudwatch
+
         result = analyzer.analyze_composite_alarms()
 
         self.assertIn('multi-service-failure', result[0]['name'])
@@ -146,7 +152,13 @@ class TestDashboardAnalysis(unittest.TestCase):
     def test_analyze_dashboards_returns_one(self, mock_boto_client):
         """Test that analyze_dashboards returns exactly 1 dashboard"""
         mock_cloudwatch = Mock()
-        mock_cloudwatch.get_dashboard.side_effect = Exception("Not found")
+        # Create proper exception class for DashboardNotFoundError
+        mock_cloudwatch.exceptions = Mock()
+        mock_cloudwatch.exceptions.DashboardNotFoundError = type(
+            'DashboardNotFoundError', (Exception,), {}
+        )
+        mock_cloudwatch.get_dashboard.side_effect = \
+            mock_cloudwatch.exceptions.DashboardNotFoundError("Not found")
         mock_boto_client.return_value = mock_cloudwatch
 
         analyzer = InfrastructureAnalyzer('test')
@@ -158,7 +170,19 @@ class TestDashboardAnalysis(unittest.TestCase):
     @patch('analyse.boto3.client')
     def test_analyze_dashboards_name_format(self, mock_boto_client):
         """Test dashboard name format"""
+        mock_cloudwatch = Mock()
+        # Create proper exception class for DashboardNotFoundError
+        mock_cloudwatch.exceptions = Mock()
+        mock_cloudwatch.exceptions.DashboardNotFoundError = type(
+            'DashboardNotFoundError', (Exception,), {}
+        )
+        mock_cloudwatch.get_dashboard.side_effect = \
+            mock_cloudwatch.exceptions.DashboardNotFoundError("Not found")
+        mock_boto_client.return_value = mock_cloudwatch
+
         analyzer = InfrastructureAnalyzer('test-suffix')
+        analyzer.cloudwatch_client = mock_cloudwatch
+
         result = analyzer.analyze_dashboards()
 
         self.assertIn('payment-monitoring', result[0]['name'])
