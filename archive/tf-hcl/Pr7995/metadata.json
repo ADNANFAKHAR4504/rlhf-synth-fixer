@@ -1,0 +1,27 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "b5b1b7x5",
+  "team": "synth",
+  "startedAt": "2025-12-05T18:30:00-05:00",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Diagnosis/Edits"
+  ],
+  "aws_services": [
+    "S3",
+    "EC2",
+    "VPC",
+    "IAM",
+    "CloudWatch"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
