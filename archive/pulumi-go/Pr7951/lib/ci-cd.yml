@@ -1,0 +1,301 @@
+# CI/CD Pipeline Configuration for Multi-Stage Infrastructure Deployment
+# Pulumi Go - Multi-environment CodePipeline and CodeBuild Infrastructure
+
+name: Multi-Stage CI/CD Pipeline - Pulumi Infrastructure
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - staging
+      - develop
+  pull_request:
+    branches:
+      - main
+
+env:
+  AWS_REGION: us-east-1
+  GO_VERSION: '1.19'
+  PULUMI_VERSION: '3.x'
+  BUILD_TIMEOUT: '120'
+  LOG_RETENTION_DAYS: '7'
+
+jobs:
+  source:
+    name: Source Stage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Source
+
+  build:
+    name: Build and Validate
+    runs-on: ubuntu-latest
+    needs: source
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Build
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Run linting
+        run: golangci-lint run ./...
+
+      - name: Run Pulumi preview
+        run: |
+          export ENVIRONMENT_SUFFIX="ci"
+          pulumi preview --stack dev
+
+      - name: Run security checks
+        run: |
+          pip install checkov
+          checkov -d . --framework pulumi --quiet
+        continue-on-error: true
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulumi-outputs
+          path: |
+            Pulumi.*.yaml
+            go.mod
+            go.sum
+          retention-days: 7
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Run unit tests
+        run: go test -v -coverprofile=coverage.out ./...
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.out
+          flags: unittests
+          name: codecov-umbrella
+
+  deploy-dev:
+    name: Deploy to Dev
+    runs-on: ubuntu-latest
+    needs: [build, test]
+    environment: dev
+    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Dev
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Deploy to Dev
+        run: |
+          export ENVIRONMENT_SUFFIX="dev"
+          export AWS_REGION="${{ env.AWS_REGION }}"
+          pulumi up --stack project-dev-us-east-1 --yes
+
+      - name: Verify deployment
+        run: |
+          aws codepipeline list-pipelines | grep -i dev
+          aws codebuild list-projects | grep -i dev
+          aws s3 ls | grep artifacts-dev
+
+      - name: Send notification
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          echo "Dev deployment $STATUS for CI/CD pipeline infrastructure"
+
+  manual-approval-staging:
+    name: Approve Staging Deployment
+    runs-on: ubuntu-latest
+    needs: deploy-dev
+    environment: staging-approval
+    if: github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/main'
+    steps:
+      - name: Manual approval checkpoint
+        run: echo "Deployment to staging approved"
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: manual-approval-staging
+    environment: staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Staging
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Deploy to Staging
+        run: |
+          export ENVIRONMENT_SUFFIX="staging"
+          export AWS_REGION="${{ env.AWS_REGION }}"
+          pulumi up --stack project-staging-us-east-1 --yes
+
+      - name: Run smoke tests
+        run: go test -v -tags=smoke ./...
+
+      - name: Verify staging deployment
+        run: |
+          aws codepipeline list-pipelines | grep -i staging
+          aws codebuild list-projects | grep -i staging
+
+  manual-approval-prod:
+    name: Approve Production Deployment
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    environment: prod-approval
+    steps:
+      - name: Manual approval checkpoint
+        run: echo "Deployment to production approved"
+
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: manual-approval-prod
+    environment: prod
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Prod
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Create backup of existing infrastructure
+        run: |
+          pulumi stack export --stack project-prod-us-east-1 \
+            > prod-backup-$(date +%Y%m%d-%H%M%S).json \
+            || echo "No existing stack"
+
+      - name: Deploy to Production
+        run: |
+          export ENVIRONMENT_SUFFIX="prod"
+          export AWS_REGION="${{ env.AWS_REGION }}"
+          pulumi up --stack project-prod-us-east-1 --yes
+
+      - name: Verify production deployment
+        run: |
+          aws codepipeline list-pipelines | grep -i prod
+          aws codebuild list-projects | grep -i prod
+          aws sns list-topics | grep -i pipeline-notifications
+
+      - name: Run production validation tests
+        run: go test -v -tags=e2e ./...
+
+      - name: Send notification
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          echo "Production deployment $STATUS for CI/CD pipeline infrastructure"
+
+  rollback:
+    name: Rollback (Manual Trigger)
+    runs-on: ubuntu-latest
+    if: failure() && github.event_name == 'workflow_dispatch'
+    needs: [deploy-dev, deploy-staging, deploy-prod]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Destroy failed deployment
+        run: |
+          export ENVIRONMENT_SUFFIX="${{ github.event.inputs.environment }}"
+          pulumi destroy --stack ${{ github.event.inputs.environment }} --yes
+
+      - name: Notify rollback
+        run: echo "Rollback initiated for CI/CD pipeline infrastructure"

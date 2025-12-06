@@ -1,0 +1,29 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "w7b4r1s3",
+  "team": "synth",
+  "startedAt": "2025-12-03T20:44:48+05:30",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Optimization"
+  ],
+  "aws_services": [
+    "AWS Config",
+    "S3",
+    "Lambda",
+    "CloudWatch",
+    "SNS",
+    "EventBridge",
+    "IAM"
+  ],
+  "author": "mayanksethi-turing",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

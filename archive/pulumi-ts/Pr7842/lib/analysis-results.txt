@@ -1,0 +1,16 @@
+==========================================
+S3 Bucket Analysis System
+==========================================
+
+This infrastructure provides asynchronous S3 bucket analysis.
+The analysis is performed by a Lambda function, not during deployment.
+
+To run the analysis:
+  1. Deploy the infrastructure: npm run deploy
+  2. Get the Lambda function name from outputs
+  3. Invoke: aws lambda invoke --function-name <name> response.json
+
+Results will be available in the analysis results S3 bucket.
+
+For more details, see lib/PROMPT.md
+==========================================
