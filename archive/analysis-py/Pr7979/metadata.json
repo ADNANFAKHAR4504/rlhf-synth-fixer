@@ -19,5 +19,11 @@
     "kms"
   ],
   "region": "us-east-1",
-  "training_quality": 10
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
