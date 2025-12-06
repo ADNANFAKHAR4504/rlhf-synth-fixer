@@ -9,14 +9,17 @@ model: sonnet
 
 Reviews all archiving-ready PRs for production readiness.
 
+**Fast Mode**: Uses `git show` instead of worktrees + parallel processing (5-10x faster)
+
 ## Workflow
 
-### Step 1: Initialize Report
+### Step 1: Initialize
 
 ```bash
 REPORT_DIR=".claude/reports"
 REPORT_FILE="$REPORT_DIR/report-$(date +%Y-%m-%d).json"
 ASSIGNEE="mayanksethi-turing"
+PARALLEL_JOBS=4  # Number of parallel reviews
 
 mkdir -p "$REPORT_DIR"
 
@@ -30,54 +33,76 @@ cat > "$REPORT_FILE" << EOF
 }
 EOF
 
-echo "Report initialized: $REPORT_FILE"
+echo "═══════════════════════════════════════════════════"
+echo "TASK REVIEW - FAST MODE"
+echo "═══════════════════════════════════════════════════"
+echo "Report: $REPORT_FILE"
+echo "Parallel jobs: $PARALLEL_JOBS"
+echo ""
 ```
 
-### Step 2: Fetch Archiving-Ready PRs
+### Step 2: Fetch All Branches (Single Fetch)
 
 ```bash
+echo "Fetching all remote branches..."
+git fetch origin --prune --quiet
+echo "Done"
 echo ""
-echo "═══════════════════════════════════════════════════"
-echo "FETCHING ARCHIVING-READY PRs"
-echo "═══════════════════════════════════════════════════"
+```
 
-ARCHIVING_PRS=$(bash .claude/scripts/fetch-archiving-prs.sh "$ASSIGNEE")
+### Step 3: Get Archiving-Ready PRs (Batch API)
+
+```bash
+echo "Fetching archiving-ready PRs..."
+
+# Use batch script for single API call
+ARCHIVING_PRS=$(bash .claude/scripts/batch-fetch-pr-data.sh "$ASSIGNEE" 2>/dev/null || \
+                bash .claude/scripts/fetch-archiving-prs.sh "$ASSIGNEE")
 
 PR_COUNT=$(echo "$ARCHIVING_PRS" | jq 'length')
 
-echo ""
 echo "Found $PR_COUNT archiving-ready PRs"
+echo ""
+
+# Display PR list
+echo "PRs to review:"
+echo "$ARCHIVING_PRS" | jq -r '.[] | "  #\(.pr_number) \(.branch) - \(.title[:50])..."'
 echo ""
 ```
 
-### Step 3: Review Each PR
+### Step 4: Review PRs in Parallel
 
 ```bash
 if [ "$PR_COUNT" -eq 0 ]; then
   echo "No archiving-ready PRs found."
 else
   echo "═══════════════════════════════════════════════════"
-  echo "REVIEWING PRs"
+  echo "REVIEWING PRs (parallel: $PARALLEL_JOBS)"
   echo "═══════════════════════════════════════════════════"
+  echo ""
   
-  for PR_JSON in $(echo "$ARCHIVING_PRS" | jq -c '.[]'); do
-    PR_NUM=$(echo "$PR_JSON" | jq -r '.pr_number')
-    BRANCH=$(echo "$PR_JSON" | jq -r '.branch')
-    TITLE=$(echo "$PR_JSON" | jq -r '.title')
+  # Create temp file for parallel processing
+  TEMP_PR_LIST=$(mktemp)
+  echo "$ARCHIVING_PRS" | jq -c '.[]' > "$TEMP_PR_LIST"
+  
+  # Process PRs in parallel using xargs
+  cat "$TEMP_PR_LIST" | xargs -P"$PARALLEL_JOBS" -I{} bash -c '
+    PR_JSON="{}"
+    PR_NUM=$(echo "$PR_JSON" | jq -r ".pr_number")
+    BRANCH=$(echo "$PR_JSON" | jq -r ".branch")
+    CLAUDE_SCORE=$(echo "$PR_JSON" | jq -r ".claude_score // empty")
     
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "PR #$PR_NUM: $TITLE"
-    echo "Branch: $BRANCH"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    
-    # Run review script (updates report incrementally)
-    bash .claude/scripts/review-pr.sh "$PR_NUM" "$BRANCH" "$REPORT_FILE" "$ASSIGNEE"
-  done
+    bash .claude/scripts/review-pr-fast.sh "$PR_NUM" "$BRANCH" "'"$REPORT_FILE"'" "'"$ASSIGNEE"'" "$CLAUDE_SCORE"
+  '
+  
+  rm -f "$TEMP_PR_LIST"
+  
+  echo ""
+  echo "All reviews complete"
 fi
 ```
 
-### Step 4: Generate Final Summary
+### Step 5: Generate Final Summary
 
 ```bash
 echo ""
@@ -113,20 +138,27 @@ jq --argjson total "$TOTAL" --argjson ready "$READY" --argjson not_ready "$NOT_R
   }' "$REPORT_FILE" > "${REPORT_FILE}.tmp"
 mv "${REPORT_FILE}.tmp" "$REPORT_FILE"
 
+# Clean up lock file
+rm -f "${REPORT_FILE}.lock"
+
 echo ""
-echo "Total PRs Reviewed: $TOTAL"
-echo "Ready to Merge:     $READY"
-echo "Not Ready:          $NOT_READY"
+echo "┌─────────────────────────────────────────────────┐"
+echo "│ SUMMARY                                         │"
+echo "├─────────────────────────────────────────────────┤"
+printf "│ %-30s %16s │\n" "Total PRs Reviewed:" "$TOTAL"
+printf "│ %-30s %16s │\n" "Ready to Merge:" "$READY"
+printf "│ %-30s %16s │\n" "Not Ready:" "$NOT_READY"
+echo "└─────────────────────────────────────────────────┘"
 echo ""
 
 if [ "$READY" -gt 0 ]; then
-  echo "✅ Ready PRs:"
+  echo "✅ READY TO MERGE:"
   echo "$READY_PRS" | jq -r '.[] | "   PR #\(.pr_number) (\(.branch))"'
 fi
 
 if [ "$NOT_READY" -gt 0 ]; then
   echo ""
-  echo "❌ Not Ready PRs:"
+  echo "❌ NOT READY:"
   echo "$NOT_READY_PRS" | jq -r '.[] | "   PR #\(.pr_number) - \(.reason)"'
 fi
 
@@ -136,20 +168,27 @@ echo "Report saved: $REPORT_FILE"
 echo "═══════════════════════════════════════════════════"
 ```
 
-## Validations Performed (11 checks)
+## Performance Comparison
 
-| # | Validation | Description | Critical |
-|---|------------|-------------|----------|
-| 1 | **Metadata** | Required fields, platform, language, complexity, subtask, TQ>=8 | ✅ |
-| 2 | **Subtask Mapping** | Subject labels match subtask, platform requirements | ✅ |
-| 3 | **File Locations** | All files in allowed folders/patterns only | ✅ |
-| 4 | **Required Files** | PROMPT.md, MODEL_RESPONSE.md, etc. present | ✅ |
-| 5 | **No Emojis** | No emojis in lib/*.md files | ✅ |
-| 6 | **PROMPT Style** | Human-style, conversational, no AI patterns | ⚠️ |
-| 7 | **MODEL_FAILURES** | Quality assessment (count, Category A fixes) | ⚠️ |
-| 8 | **No Retain Policies** | No RemovalPolicy.RETAIN in code | ✅ |
-| 9 | **environmentSuffix** | Props passed to resources correctly | ⚠️ |
-| 10 | **Integration Tests** | No mocks, uses cfn-outputs | ⚠️ |
-| 11 | **Claude Review** | Score >= 8 from comments or CI/CD | ✅ |
+| Mode | Per PR | 10 PRs | Bottleneck |
+|------|--------|--------|------------|
+| **Standard** | ~30s | ~5 min | Worktrees, sequential |
+| **Fast** | ~3-5s | ~15-30s | Parallel git show |
+
+## Validations (11 checks)
+
+| # | Validation | Blocks Merge |
+|---|------------|--------------|
+| 1 | Metadata (fields, platform, language, TQ>=8) | ✅ |
+| 2 | Subtask ↔ Subject Label mapping | ✅ |
+| 3 | File locations (strict patterns) | ✅ |
+| 4 | Required files (platform-specific) | ✅ |
+| 5 | No emojis in lib/*.md | ✅ |
+| 6 | PROMPT.md style | ⚠️ |
+| 7 | MODEL_FAILURES quality | ⚠️ |
+| 8 | No Retain/DeletionProtection | ✅ |
+| 9 | environmentSuffix usage | ⚠️ |
+| 10 | Integration tests (no mocks) | ⚠️ |
+| 11 | Claude review score >= 8 | ✅ |
 
 ✅ = Blocks merge | ⚠️ = Warning only
