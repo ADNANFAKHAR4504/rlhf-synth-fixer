@@ -296,12 +296,6 @@ variable "runtime" {
   default     = "python3.12"
 }
 
-variable "reserved_concurrency" {
-  description = "Reserved concurrent executions for Lambdas"
-  type        = number
-  default     = 100
-}
-
 # Redis Configuration
 variable "node_type" {
   description = "ElastiCache Redis node type"

@@ -108,6 +108,42 @@ resource "aws_kms_key" "telematics" {
   deletion_window_in_days = 7
   enable_key_rotation     = true
 
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.us-east-1.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:us-east-1:${data.aws_caller_identity.current.account_id}:log-group:*"
+          }
+        }
+      }
+    ]
+  })
+
   tags = merge(
     local.tags,
     {
@@ -119,6 +155,10 @@ resource "aws_kms_key" "telematics" {
 resource "aws_kms_alias" "telematics" {
   name          = "alias/${local.name_prefix}"
   target_key_id = aws_kms_key.telematics.key_id
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 ################################################################################
@@ -750,7 +790,7 @@ resource "aws_dynamodb_table" "compliance_status" {
 resource "random_password" "redis_auth_token" {
   length           = 32
   special          = true
-  override_special = "!#$%&*()-_=+[]{}<>:?"
+  override_special = "!&#$^<>-"
 }
 
 resource "aws_secretsmanager_secret" "redis_auth_token" {
@@ -797,7 +837,7 @@ resource "aws_elasticache_replication_group" "redis" {
   security_group_ids = [aws_security_group.redis.id]
 
   at_rest_encryption_enabled = true
-  kms_key_id                 = aws_kms_key.telematics.arn
+  kms_key_id                 = aws_kms_key.telematics.id
   transit_encryption_enabled = true
   auth_token                 = random_password.redis_auth_token.result
 
@@ -867,7 +907,7 @@ resource "aws_rds_cluster" "aurora" {
 
   engine         = "aurora-postgresql"
   engine_mode    = "provisioned"
-  engine_version = "15.4"
+  engine_version = "15.8"
 
   database_name   = var.database_name
   master_username = var.master_username
@@ -1269,7 +1309,7 @@ resource "aws_sqs_queue_policy" "training" {
 ################################################################################
 
 resource "aws_s3_bucket" "reports" {
-  bucket        = "${local.name_prefix}-${var.reports_bucket}"
+  bucket        = "${local.name_prefix}-${var.reports_bucket}-${data.aws_caller_identity.current.account_id}"
   force_destroy = true
 
   tags = merge(
@@ -1312,7 +1352,7 @@ resource "aws_s3_bucket_object_lock_configuration" "reports" {
 }
 
 resource "aws_s3_bucket" "data_lake" {
-  bucket        = "${local.name_prefix}-${var.data_lake_bucket}"
+  bucket        = "${local.name_prefix}-${var.data_lake_bucket}-${data.aws_caller_identity.current.account_id}"
   force_destroy = true
 
   tags = merge(
@@ -1361,7 +1401,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "data_lake" {
 }
 
 resource "aws_s3_bucket" "athena_results" {
-  bucket        = "${local.name_prefix}-${var.output_bucket}"
+  bucket        = "${local.name_prefix}-${var.output_bucket}-${data.aws_caller_identity.current.account_id}"
   force_destroy = true
 
   tags = merge(
@@ -1844,6 +1884,8 @@ resource "aws_cloudwatch_log_group" "lambda_logs" {
   retention_in_days = var.log_retention_days
   kms_key_id        = aws_kms_key.telematics.arn
 
+  depends_on = [aws_kms_key.telematics]
+
   tags = merge(
     local.tags,
     {
@@ -1861,8 +1903,6 @@ resource "aws_lambda_function" "diagnostics_processor" {
   handler     = "index.handler"
   timeout     = var.timeout_s
   memory_size = local.capacity_map[var.env].lambda_memory.processor
-
-  reserved_concurrent_executions = var.reserved_concurrency
 
   environment {
     variables = {
@@ -1902,7 +1942,6 @@ resource "aws_lambda_function" "anomaly_detector" {
   timeout     = var.timeout_s
   memory_size = local.capacity_map[var.env].lambda_memory.anomaly
 
-  reserved_concurrent_executions = var.reserved_concurrency
 
   environment {
     variables = {
@@ -1941,7 +1980,6 @@ resource "aws_lambda_function" "maintenance_handler" {
   timeout     = var.timeout_s
   memory_size = var.maintenance_memory
 
-  reserved_concurrent_executions = var.reserved_concurrency
 
   environment {
     variables = {
@@ -1979,7 +2017,6 @@ resource "aws_lambda_function" "driver_notifier" {
   timeout     = var.timeout_s
   memory_size = var.driver_notifier_memory
 
-  reserved_concurrent_executions = var.reserved_concurrency
 
   environment {
     variables = {
@@ -2011,7 +2048,6 @@ resource "aws_lambda_function" "fleet_manager" {
   timeout     = var.timeout_s
   memory_size = var.fleet_memory
 
-  reserved_concurrent_executions = var.reserved_concurrency
 
   environment {
     variables = {
@@ -2048,7 +2084,6 @@ resource "aws_lambda_function" "predictive_maintenance" {
   timeout     = var.timeout_s
   memory_size = local.capacity_map[var.env].lambda_memory.predictive
 
-  reserved_concurrent_executions = var.reserved_concurrency
 
   environment {
     variables = {
@@ -2088,7 +2123,6 @@ resource "aws_lambda_function" "hos_processor" {
   timeout     = var.timeout_s
   memory_size = var.hos_memory
 
-  reserved_concurrent_executions = var.reserved_concurrency
 
   environment {
     variables = {
@@ -2127,7 +2161,6 @@ resource "aws_lambda_function" "location_processor" {
   timeout     = var.timeout_s
   memory_size = var.location_memory
 
-  reserved_concurrent_executions = var.reserved_concurrency
 
   environment {
     variables = {
@@ -2167,7 +2200,6 @@ resource "aws_lambda_function" "fuel_analytics" {
   timeout     = var.timeout_s
   memory_size = var.fuel_memory
 
-  reserved_concurrent_executions = var.reserved_concurrency
 
   environment {
     variables = {
@@ -2206,7 +2238,6 @@ resource "aws_lambda_function" "coaching_handler" {
   timeout     = var.timeout_s
   memory_size = var.coaching_memory
 
-  reserved_concurrent_executions = var.reserved_concurrency
 
   environment {
     variables = {
