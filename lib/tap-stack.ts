@@ -54,13 +54,13 @@ export class TapStack extends pulumi.ComponentResource {
     const apiSecret = new aws.secretsmanager.Secret(
       `envmig-apikeys-${envSuffix}`,
       {
-        name: `envmig-apikeys-${envSuffix}`,
+        name: `envmig-webhook-apikeys-${envSuffix}`,
         description: 'Payment provider API keys for webhook processing',
         recoveryWindowInDays: 0, // Immediate deletion without recovery window
         tags: {
           Environment: 'prod',
           MigrationPhase: 'testing',
-          Name: `envmig-apikeys-${envSuffix}`,
+          Name: `envmig-webhook-apikeys-${envSuffix}`,
         },
       },
       { parent: this }

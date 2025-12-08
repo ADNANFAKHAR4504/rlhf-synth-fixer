@@ -118,7 +118,7 @@ describe('Payment Webhook Infrastructure Integration Tests', () => {
       const env = response.Configuration?.Environment?.Variables;
       expect(env).toBeDefined();
       expect(env?.TABLE_NAME).toContain('envmig-transactions');
-      expect(env?.SECRET_ARN).toContain('envmig-apikeys');
+      expect(env?.SECRET_ARN).toContain('envmig-webhook-apikeys');
       expect(env?.ENVIRONMENT).toBe('prod');
       expect(env?.MIGRATION_PHASE).toBe('testing');
     }, 30000);
@@ -129,7 +129,7 @@ describe('Payment Webhook Infrastructure Integration Tests', () => {
 
     it('should have API keys secret configured', async () => {
       const secretName = outputs.lambdaArn.split(':function:')[0]
-        .replace(':lambda:', ':secretsmanager:') + `:secret:envmig-apikeys-${envSuffix}`;
+        .replace(':lambda:', ':secretsmanager:') + `:secret:envmig-webhook-apikeys-${envSuffix}`;
 
       // Get secret ARN from Lambda environment
       const lambdaClient = new LambdaClient({ region });
@@ -211,7 +211,7 @@ describe('Payment Webhook Infrastructure Integration Tests', () => {
 
       const secretArn = response.Configuration?.Environment?.Variables?.SECRET_ARN;
       expect(secretArn).toBeDefined();
-      expect(secretArn).toContain('envmig-apikeys');
+      expect(secretArn).toContain('envmig-webhook-apikeys');
     }, 30000);
   });
 
