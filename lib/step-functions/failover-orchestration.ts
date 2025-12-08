@@ -7,7 +7,7 @@ import { CloudwatchEventRule } from '@cdktf/provider-aws/lib/cloudwatch-event-ru
 import { CloudwatchEventTarget } from '@cdktf/provider-aws/lib/cloudwatch-event-target';
 
 // Generate unique suffix to avoid resource naming conflicts
-const uniqueSuffix = 'k7m2';
+const uniqueSuffix = 'q8t3';
 
 export interface FailoverOrchestrationProps {
   provider: AwsProvider;
