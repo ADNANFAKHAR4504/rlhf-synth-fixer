@@ -22,8 +22,8 @@ def main():
     # Get environment configuration from environment variables
     environment_suffix = os.getenv("ENVIRONMENT_SUFFIX", "dev")
     aws_region = os.getenv("AWS_REGION", "us-east-1")
-    state_bucket = os.getenv("CDKTF_STATE_BUCKET", f"cdktf-state-{aws_region}")
-    state_bucket_region = os.getenv("CDKTF_STATE_BUCKET_REGION", aws_region)
+    state_bucket = os.getenv("TERRAFORM_STATE_BUCKET", f"cdktf-state-{aws_region}")
+    state_bucket_region = os.getenv("TERRAFORM_STATE_BUCKET_REGION", aws_region)
 
     # Default tags for all resources
     default_tags = {
