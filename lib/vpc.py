@@ -121,30 +121,17 @@ class ZeroTrustVpc(Construct):
         self._create_vpc_endpoints()
 
     def _create_vpc_endpoints(self) -> None:
-        """Create VPC endpoints for all required AWS services"""
+        """Create VPC endpoints for essential AWS services only"""
 
-        # Interface endpoints for AWS services
+        # Essential interface endpoints only (to stay under VPC endpoint limits)
+        # Only including the most critical services for Zero Trust architecture
         interface_services = [
             "ec2",
             "ec2messages",
             "ssm",
             "ssmmessages",
             "logs",
-            "monitoring",
             "kms",
-            "secretsmanager",
-            "sts",
-            "elasticloadbalancing",
-            "autoscaling",
-            "ecs",
-            "ecr.api",
-            "ecr.dkr",
-            "rds",
-            "sns",
-            "sqs",
-            "lambda",
-            "events",
-            "execute-api",
         ]
 
         subnet_ids = [subnet.id for subnet in self.private_subnets]
@@ -165,19 +152,17 @@ class ZeroTrustVpc(Construct):
                 },
             )
 
-        # Gateway endpoints (S3 and DynamoDB)
-        gateway_services = ["s3", "dynamodb"]
-
-        for service in gateway_services:
-            VpcEndpoint(
-                self,
-                f"gateway_endpoint_{service}",
-                vpc_id=self.vpc.id,
-                service_name=f"com.amazonaws.{self.aws_region}.{service}",
-                vpc_endpoint_type="Gateway",
-                route_table_ids=[self.private_route_table.id],
-                tags={
-                    "Name": f"zero-trust-{service}-gateway-{self.environment_suffix}",
-                    "Environment": self.environment_suffix,
-                },
-            )
+        # Gateway endpoints (S3 only - DynamoDB may hit limits)
+        # S3 is critical for CloudTrail and Config
+        VpcEndpoint(
+            self,
+            "gateway_endpoint_s3",
+            vpc_id=self.vpc.id,
+            service_name=f"com.amazonaws.{self.aws_region}.s3",
+            vpc_endpoint_type="Gateway",
+            route_table_ids=[self.private_route_table.id],
+            tags={
+                "Name": f"zero-trust-s3-gateway-{self.environment_suffix}",
+                "Environment": self.environment_suffix,
+            },
+        )

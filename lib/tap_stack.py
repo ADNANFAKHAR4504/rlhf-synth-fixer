@@ -96,12 +96,15 @@ class TapStack(TerraformStack):
         )
 
         # 5. Enable security services
+        # Note: Config and Security Hub are disabled by default to avoid account limits
         security_construct = ZeroTrustSecurity(
             self,
             "security",
             environment_suffix=environment_suffix,
             aws_region=aws_region,
             config_role_arn=iam_construct.security_audit_role.arn,
+            enable_config=False,  # Set to True if your account has no existing Config Recorder
+            enable_security_hub=False,  # Set to True if your account is subscribed to Security Hub
         )
 
         # 6. Create WAF

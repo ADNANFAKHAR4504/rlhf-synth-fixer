@@ -32,29 +32,32 @@ class ZeroTrustSecurity(Construct):
         environment_suffix: str,
         aws_region: str,
         config_role_arn: str,
+        enable_config: bool = False,
+        enable_security_hub: bool = False,
     ):
         super().__init__(scope, construct_id)
 
         self.environment_suffix = environment_suffix
         self.aws_region = aws_region
         self.config_role_arn = config_role_arn
+        self.enable_config = enable_config
+        self.enable_security_hub = enable_security_hub
 
-        # Enable Security Hub
-        self.security_hub = self._enable_security_hub()
+        # Enable Security Hub (only if enabled)
+        if self.enable_security_hub:
+            self.security_hub = self._enable_security_hub()
+            # Create custom insights
+            self._create_custom_insights()
 
-        # Create custom insights
-        self._create_custom_insights()
-
-        # Create AWS Config
-        self.config_bucket = self._create_config_bucket()
-        self.config_recorder = self._create_config_recorder()
-        self.config_delivery_channel = self._create_config_delivery_channel()
-
-        # Enable Config rules
-        self._create_config_rules()
-
-        # Enable Config Recorder
-        self._enable_config_recorder()
+        # Create AWS Config (only if enabled)
+        if self.enable_config:
+            self.config_bucket = self._create_config_bucket()
+            self.config_recorder = self._create_config_recorder()
+            self.config_delivery_channel = self._create_config_delivery_channel()
+            # Enable Config rules
+            self._create_config_rules()
+            # Enable Config Recorder
+            self._enable_config_recorder()
 
     def _enable_security_hub(self) -> SecurityhubAccount:
         """Enable Security Hub"""

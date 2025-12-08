@@ -170,25 +170,9 @@ class ZeroTrustMonitoring(Construct):
                     "Condition": {
                         "StringNotEquals": {
                             "s3:x-amz-server-side-encryption": "aws:kms"
-                        }
-                    }
-                },
-                {
-                    "Sid": "DenyPublicAccess",
-                    "Effect": "Deny",
-                    "Principal": "*",
-                    "Action": [
-                        "s3:GetObject",
-                        "s3:PutObject"
-                    ],
-                    "Resource": f"{bucket.arn}/*",
-                    "Condition": {
-                        "StringEquals": {
-                            "s3:x-amz-acl": [
-                                "public-read",
-                                "public-read-write",
-                                "authenticated-read"
-                            ]
+                        },
+                        "Null": {
+                            "s3:x-amz-server-side-encryption": "false"
                         }
                     }
                 }
