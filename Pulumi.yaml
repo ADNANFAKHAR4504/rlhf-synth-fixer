@@ -3,11 +3,3 @@ runtime:
   name: nodejs
 description: Pulumi infrastructure for TAP
 main: bin/tap.ts
-config:
-  TapStack:environmentSuffix:
-    type: string
-    description: Environment suffix for resource naming
-  TapStack:region:
-    type: string
-    default: us-east-1
-    description: AWS region for deployment
