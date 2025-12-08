@@ -1,15 +1,15 @@
 import {
   CloudFormationClient,
-  DetectStackDriftCommand,
   DescribeStackDriftDetectionStatusCommand,
   DescribeStackResourceDriftsCommand,
+  DetectStackDriftCommand,
   ListStacksCommand,
-  StackStatus,
   StackDriftDetectionStatus,
   StackDriftStatus,
+  StackStatus,
 } from '@aws-sdk/client-cloudformation';
 import { DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb';
-import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
+import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
 
 const region = process.env.AWS_REGION || 'us-east-1';
 const cfnClient = new CloudFormationClient({ region });
@@ -31,7 +31,7 @@ interface DriftResult {
   }>;
 }
 
-export const handler = async (event: any): Promise<void> => {
+export const handler = async (event: unknown): Promise<void> => {
   console.log('Starting drift detection process', JSON.stringify(event));
 
   try {

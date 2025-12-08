@@ -38,7 +38,9 @@ export class TapStack extends cdk.Stack {
         type: dynamodb.AttributeType.NUMBER,
       },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      removalPolicy: isProd
+        ? cdk.RemovalPolicy.RETAIN
+        : cdk.RemovalPolicy.DESTROY,
     });
 
     // SNS topic for drift alerts
@@ -49,7 +51,9 @@ export class TapStack extends cdk.Stack {
 
     // Add email subscription if provided and looks like an email
     if (props.alertEmail && /\S+@\S+\.\S+/.test(props.alertEmail)) {
-      alertTopic.addSubscription(new subscriptions.EmailSubscription(props.alertEmail));
+      alertTopic.addSubscription(
+        new subscriptions.EmailSubscription(props.alertEmail)
+      );
     }
 
     // Lambda function for drift detection
