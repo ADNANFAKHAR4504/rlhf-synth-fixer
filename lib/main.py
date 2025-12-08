@@ -20,6 +20,7 @@ from stacks.routing_stack import RoutingStack
 from stacks.events_stack import EventsStack
 from stacks.backup_stack import BackupStack
 from stacks.monitoring_stack import MonitoringStack
+from stacks.replication_stack import ReplicationStack
 
 
 class DisasterRecoveryStack(TerraformStack):
@@ -183,8 +184,50 @@ class GlobalResourcesStack(TerraformStack):
         )
 
 
+class S3ReplicationStack(TerraformStack):
+    """Stack for S3 cross-region replication configuration
+
+    This stack must be deployed AFTER both regional stacks
+    to ensure the destination bucket exists.
+    """
+
+    def __init__(
+        self,
+        scope: Construct,
+        stack_id: str,
+        environment_suffix: str
+    ):
+        super().__init__(scope, stack_id)
+
+        self.environment_suffix = environment_suffix
+
+        # AWS Provider (us-east-1 for primary bucket replication config)
+        self.provider = AwsProvider(
+            self,
+            "aws",
+            region="us-east-1",
+            default_tags=[{
+                "tags": {
+                    "DR-Region": "primary",
+                    "EnvironmentSuffix": environment_suffix,
+                    "ManagedBy": "CDKTF",
+                    "Task": "64457522"
+                }
+            }]
+        )
+
+        # S3 Cross-Region Replication configuration
+        self.replication_stack = ReplicationStack(
+            self, "s3-replication",
+            environment_suffix,
+            primary_bucket_id=f"dr-payment-data-us-east-1-{environment_suffix}",
+            primary_bucket_arn=f"arn:aws:s3:::dr-payment-data-us-east-1-{environment_suffix}",
+            secondary_bucket_arn=f"arn:aws:s3:::dr-payment-data-us-east-2-{environment_suffix}"
+        )
+
+
 # Unique suffix to avoid resource naming conflicts
-UNIQUE_SUFFIX = "x8r4"
+UNIQUE_SUFFIX = "m5v2"
 
 
 def main():
@@ -215,6 +258,17 @@ def main():
     )
     # Add dependency: secondary stack depends on primary stack
     secondary_stack.add_dependency(primary_stack)
+
+    # Deploy S3 replication stack after both regional stacks
+    # This ensures destination bucket exists before replication is configured
+    replication_stack = S3ReplicationStack(
+        app,
+        "disaster-recovery-replication",
+        environment_suffix=environment_suffix
+    )
+    # Replication stack depends on both regional stacks
+    replication_stack.add_dependency(primary_stack)
+    replication_stack.add_dependency(secondary_stack)
 
     # Deploy global resources
     # Note: In real implementation, you would reference outputs from regional stacks
