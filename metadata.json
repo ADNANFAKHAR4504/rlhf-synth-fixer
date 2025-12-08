@@ -1,10 +1,11 @@
 {
-  "platform": "tf",
-  "language": "hcl",
+  "platform": "analysis",
+  "language": "py",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "i6r8t3p6",
   "team": "synth",
+  "author": "mayanksethi-turing",
   "startedAt": "2025-12-05T20:37:20+05:30",
   "subtask": "Infrastructure QA and Management",
   "subject_labels": [
@@ -17,5 +18,5 @@
     "IAM",
     "X-Ray"
   ],
-  "training_quality": 10
+  "training_quality": 8
 }

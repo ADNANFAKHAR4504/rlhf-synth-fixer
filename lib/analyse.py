@@ -1,29 +1,3 @@
-# Ideal Infrastructure Analysis Response
-
-This document contains the ideal Python-based infrastructure analysis implementation for analyzing deployed Currency Exchange API resources on AWS. The analysis script uses boto3 to audit Lambda, API Gateway, CloudWatch, IAM, and X-Ray resources and generates compliance recommendations.
-
-## Overview
-
-The solution consists of:
-1. **analyse.py** - Main Python analysis script using boto3
-2. **Unit Tests** - Comprehensive test coverage with mocked AWS services
-3. **Integration Tests** - Tests against actual deployed AWS resources
-
-## Architecture
-
-The analysis script (`analyse.py`) provides:
-- Lambda function analysis (runtime, memory, timeout, X-Ray tracing)
-- API Gateway analysis (endpoints, stages, API keys, usage plans)
-- CloudWatch Logs analysis (log groups, retention policies)
-- IAM role analysis (policies, permissions)
-- X-Ray tracing analysis (active traces)
-- API throttling analysis (usage plans, rate limits)
-- Compliance score calculation
-- Actionable recommendations generation
-
-## File: lib/analyse.py
-
-```python
 #!/usr/bin/env python3
 """
 Infrastructure Analysis Script for Currency Exchange API
@@ -353,6 +327,7 @@ class CurrencyAPIAnalyzer:
         }
 
         try:
+            # Check for recent traces
             end_time = datetime.now(timezone.utc)
             start_time = datetime(
                 end_time.year, end_time.month, end_time.day,
@@ -378,7 +353,7 @@ class CurrencyAPIAnalyzer:
                         'has_error': t.get('HasError', False),
                         'has_fault': t.get('HasFault', False)
                     }
-                    for t in traces[:10]
+                    for t in traces[:10]  # Limit to 10 traces
                 ]
 
         except Exception as e:
@@ -460,6 +435,7 @@ class CurrencyAPIAnalyzer:
             'compliance_score': 0
         }
 
+        # Analyze each component
         print("  [STEP] Analyzing Lambda functions...")
         analysis_results['lambda_functions'] = self.analyze_lambda_functions()
 
@@ -478,10 +454,12 @@ class CurrencyAPIAnalyzer:
         print("  [STEP] Analyzing API Throttling...")
         analysis_results['api_throttling'] = self.analyze_api_throttling()
 
+        # Generate recommendations
         analysis_results['recommendations'] = self._generate_recommendations(
             analysis_results
         )
 
+        # Calculate compliance score
         analysis_results['compliance_score'] = self._calculate_compliance_score(
             analysis_results
         )
@@ -520,6 +498,13 @@ class CurrencyAPIAnalyzer:
                         'resource': func['name'],
                         'message': f"Enable X-Ray tracing on Lambda '{func['name']}'."
                     })
+                if not compliance.get('memory_1gb', False):
+                    recommendations.append({
+                        'priority': 'medium',
+                        'category': 'performance',
+                        'resource': func['name'],
+                        'message': f"Lambda '{func['name']}' memory should be >= 1024MB."
+                    })
 
         # API Gateway recommendations
         for api in analysis['api_gateways']:
@@ -532,6 +517,20 @@ class CurrencyAPIAnalyzer:
                 })
             elif api.get('status') == 'found':
                 compliance = api.get('compliant', {})
+                if not compliance.get('has_convert_endpoint', False):
+                    recommendations.append({
+                        'priority': 'critical',
+                        'category': 'api_gateway',
+                        'resource': api['name'],
+                        'message': "Missing /convert endpoint in API Gateway."
+                    })
+                if not compliance.get('xray_tracing_enabled', False):
+                    recommendations.append({
+                        'priority': 'medium',
+                        'category': 'observability',
+                        'resource': api['name'],
+                        'message': "Enable X-Ray tracing on API Gateway stage."
+                    })
                 if not compliance.get('has_api_key', False):
                     recommendations.append({
                         'priority': 'high',
@@ -556,6 +555,14 @@ class CurrencyAPIAnalyzer:
                     'resource': lg['name'],
                     'message': f"CloudWatch Log Group '{lg['name']}' is missing."
                 })
+            elif lg.get('status') == 'found':
+                if lg.get('retention_days') == 'unlimited':
+                    recommendations.append({
+                        'priority': 'low',
+                        'category': 'cost_optimization',
+                        'resource': lg['name'],
+                        'message': f"Set retention policy on log group '{lg['name']}'."
+                    })
 
         # IAM recommendations
         for role in analysis['iam_roles']:
@@ -594,14 +601,17 @@ class CurrencyAPIAnalyzer:
         total_checks = 0
         passed_checks = 0
 
+        # Lambda checks
         for func in analysis['lambda_functions']:
             if func.get('status') == 'found':
                 compliance = func.get('compliant', {})
                 total_checks += len(compliance)
                 passed_checks += sum(1 for v in compliance.values() if v)
             else:
-                total_checks += 6
+                total_checks += 6  # Expected compliance checks
+                # No passed checks for missing function
 
+        # API Gateway checks
         for api in analysis['api_gateways']:
             if api.get('status') == 'found':
                 compliance = api.get('compliant', {})
@@ -609,21 +619,26 @@ class CurrencyAPIAnalyzer:
                 passed_checks += sum(1 for v in compliance.values() if v)
             else:
                 total_checks += 6
+                # No passed checks for missing API
 
+        # CloudWatch Logs checks
         for lg in analysis['cloudwatch_logs']:
-            total_checks += 1
+            total_checks += 1  # existence check
             if lg.get('status') == 'found':
                 passed_checks += 1
 
+        # IAM checks
         for role in analysis['iam_roles']:
-            total_checks += 1
+            total_checks += 1  # existence check
             if role.get('status') == 'found':
                 passed_checks += 1
 
+        # X-Ray check
         total_checks += 1
         if analysis.get('xray_tracing', {}).get('status') == 'active':
             passed_checks += 1
 
+        # Throttling check
         total_checks += 1
         if analysis.get('api_throttling', {}).get('status') == 'configured':
             passed_checks += 1
@@ -645,7 +660,72 @@ class CurrencyAPIAnalyzer:
         print(f"Compliance Score: {analysis['compliance_score']}%")
         print()
 
-        # Print sections...
+        # Lambda Functions
+        print("-" * 70)
+        print("Lambda Functions:")
+        for func in analysis['lambda_functions']:
+            status_icon = "[OK]" if func.get('status') == 'found' else "[MISSING]"
+            print(f"  {status_icon} {func['name']}")
+            if func.get('status') == 'found':
+                print(f"        Runtime: {func.get('runtime', 'N/A')}")
+                print(f"        Memory: {func.get('memory_size', 'N/A')} MB")
+                print(f"        X-Ray: {'Enabled' if func.get('xray_enabled') else 'Disabled'}")
+        print()
+
+        # API Gateway
+        print("-" * 70)
+        print("API Gateway:")
+        for api in analysis['api_gateways']:
+            status_icon = "[OK]" if api.get('status') == 'found' else "[MISSING]"
+            print(f"  {status_icon} {api['name']}")
+            if api.get('status') == 'found':
+                print(f"        Endpoint Type: {api.get('endpoint_configuration', [])}")
+                print(f"        /convert endpoint: {'Yes' if api.get('has_convert_endpoint') else 'No'}")
+                print(f"        v1 Stage: {'Yes' if api.get('has_v1_stage') else 'No'}")
+                print(f"        X-Ray: {'Enabled' if api.get('xray_enabled') else 'Disabled'}")
+        print()
+
+        # CloudWatch Logs
+        print("-" * 70)
+        print("CloudWatch Log Groups:")
+        for lg in analysis['cloudwatch_logs']:
+            status_icon = "[OK]" if lg.get('status') == 'found' else "[MISSING]"
+            print(f"  {status_icon} {lg['name']}")
+            if lg.get('status') == 'found':
+                print(f"        Retention: {lg.get('retention_days', 'N/A')} days")
+        print()
+
+        # IAM Roles
+        print("-" * 70)
+        print("IAM Roles:")
+        for role in analysis['iam_roles']:
+            status_icon = "[OK]" if role.get('status') == 'found' else "[MISSING]"
+            print(f"  {status_icon} {role['name']}")
+            if role.get('status') == 'found':
+                policies = role.get('attached_policies', [])
+                print(f"        Policies: {', '.join(policies) if policies else 'None'}")
+        print()
+
+        # X-Ray Tracing
+        print("-" * 70)
+        print("X-Ray Tracing:")
+        xray = analysis.get('xray_tracing', {})
+        print(f"  Status: {xray.get('status', 'unknown')}")
+        print(f"  Recent Traces: {xray.get('trace_count', 0)}")
+        print()
+
+        # API Throttling
+        print("-" * 70)
+        print("API Throttling:")
+        throttling = analysis.get('api_throttling', {})
+        print(f"  Status: {throttling.get('status', 'unknown')}")
+        for plan in throttling.get('usage_plans', []):
+            print(f"  Plan: {plan.get('name', 'N/A')}")
+            print(f"        Rate Limit: {plan.get('rate_limit', 0)} req/sec")
+            print(f"        Burst Limit: {plan.get('burst_limit', 0)}")
+        print()
+
+        # Recommendations
         if analysis['recommendations']:
             print("-" * 70)
             print("Recommendations:")
@@ -679,6 +759,7 @@ def main():
     if output_file:
         analyzer.export_json_report(analysis, output_file)
 
+    # Return exit code based on compliance score
     if analysis['compliance_score'] >= 80:
         print("[RESULT] Infrastructure is compliant")
         return 0
@@ -691,107 +772,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-```
-
-## Testing
-
-### Unit Tests (tests/unit/test_analyse.py)
-
-The unit tests use mocked AWS services to test each component of the analyzer:
-
-- **TestCurrencyAPIAnalyzerInit**: Tests initialization with default/custom regions
-- **TestAnalyzeLambdaFunctions**: Tests Lambda function discovery and compliance checking
-- **TestAnalyzeAPIGateway**: Tests API Gateway analysis including endpoints, stages, API keys
-- **TestAnalyzeCloudWatchLogs**: Tests log group discovery and retention policy detection
-- **TestAnalyzeIAMRoles**: Tests IAM role and policy detection
-- **TestAnalyzeXRayTracing**: Tests X-Ray trace analysis
-- **TestAnalyzeAPIThrottling**: Tests usage plan and throttling configuration analysis
-- **TestGenerateRecommendations**: Tests recommendation generation logic
-- **TestCalculateComplianceScore**: Tests compliance score calculation
-- **TestMainFunction**: Tests main entry point exit codes
-
-### Integration Tests (tests/integration/test_integration.py)
-
-The integration tests run against actual deployed AWS resources:
-
-- **TestLambdaIntegration**: Validates Lambda function existence and configuration
-- **TestAPIGatewayIntegration**: Validates API Gateway setup
-- **TestCloudWatchLogsIntegration**: Validates log group configuration
-- **TestIAMRolesIntegration**: Validates IAM roles and policies
-- **TestXRayIntegration**: Validates X-Ray service accessibility
-- **TestAnalysisScriptIntegration**: Validates the complete analysis script execution
-
-## Usage
-
-### Running the Analysis Script
-
-```bash
-# Set environment variables
-export ENVIRONMENT_SUFFIX=dev
-export AWS_REGION=us-east-1
-
-# Run analysis
-python lib/analyse.py
-
-# Export to JSON file
-export OUTPUT_FILE=analysis-report.json
-python lib/analyse.py
-```
-
-### Running Unit Tests
-
-```bash
-python -m pytest tests/unit/test_analyse.py -v
-```
-
-### Running Integration Tests
-
-```bash
-# Requires deployed infrastructure and AWS credentials
-export ENVIRONMENT_SUFFIX=dev
-export AWS_REGION=us-east-1
-python -m pytest tests/integration/test_integration.py -v
-```
-
-## Compliance Checks
-
-The script validates the following requirements:
-
-### Lambda Function
-- Runtime is nodejs18.x
-- Memory size >= 1024 MB
-- Timeout is 10 seconds
-- X-Ray tracing is active
-- API_VERSION environment variable is set
-- RATE_PRECISION environment variable is set
-
-### API Gateway
-- Edge-optimized endpoint configuration
-- /convert endpoint exists
-- v1 stage is configured
-- X-Ray tracing enabled on stage
-- API key authentication configured
-- Usage plan with rate limiting
-
-### CloudWatch Logs
-- Lambda log group exists
-- API Gateway log group exists
-- Retention policies configured
-
-### IAM Roles
-- Lambda execution role exists
-- API Gateway CloudWatch role exists
-- Required policies attached (Lambda Basic Execution, X-Ray Write)
-
-### X-Ray Tracing
-- Active traces visible
-
-### API Throttling
-- Usage plan configured
-- Rate and burst limits set
-
-## Exit Codes
-
-- **0**: Infrastructure is compliant (score >= 80%)
-- **1**: Infrastructure has warnings (score >= 50% but < 80%)
-- **2**: Infrastructure is non-compliant (score < 50%)
