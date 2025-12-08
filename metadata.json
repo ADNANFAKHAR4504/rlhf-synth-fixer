@@ -10,6 +10,6 @@
   "subject_labels": [
     "Infrastructure Analysis/Monitoring"
   ],
-  "aws_services": [],
+  "aws_services": ["ec2", "vpc", "rds", "iam", "s3"],
   "training_quality": 10
 }

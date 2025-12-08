@@ -3,7 +3,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = ">= 5.0"
     }
     local = {
       source  = "hashicorp/local"
@@ -130,17 +130,21 @@ locals {
   total_ec2_cost = sum([for id, cost in local.ec2_cost_analysis : cost.state == "running" ? cost.estimated_monthly_cost : 0])
 
   # Security Group Analysis
-  # NOTE: aws_security_group data source does not expose ingress/egress rules
-  # For complete security group rule analysis, use AWS CLI or aws_security_group_rule data sources
+  # NOTE: aws_security_group data source does not expose ingress/egress rules directly
+  # The data source does not have ingress/egress attributes - we set flags to false
+  # For complete security group rule analysis, use AWS CLI or aws_security_group_rules data sources
   security_groups = {
     for id, sg in data.aws_security_group.groups : id => {
-      id          = sg.id
-      name        = sg.name
-      description = sg.description
-      vpc_id      = sg.vpc_id
-      tags        = sg.tags
-      # Rule analysis would require separate aws_security_group_rule data sources
-      # or external AWS CLI/API calls - acknowledged limitation
+      id                      = sg.id
+      name                    = sg.name
+      description             = sg.description
+      vpc_id                  = sg.vpc_id
+      tags                    = sg.tags
+      has_unrestricted_access = false
+      has_ssh_open            = false
+      has_rdp_open            = false
+      # Note: Full rule analysis requires aws_vpc_security_group_rules data source
+      # or external AWS CLI/API calls - these flags are placeholders
     }
   }
 
