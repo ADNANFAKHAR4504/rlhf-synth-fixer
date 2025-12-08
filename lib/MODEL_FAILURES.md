@@ -144,7 +144,7 @@ While this technically works, it's inflexible.
 **IDEAL_RESPONSE Fix**:
 The fix is the same (using region from args), but documents that best practice would be to use `process.env.AWS_REGION` in Lambda:
 
-```javascript
+```typescript
 // Better: Use environment variable
 const dynamoClient = new DynamoDBClient({
   region: process.env.AWS_REGION || 'us-east-1'
@@ -170,7 +170,7 @@ const dynamoClient = new DynamoDBClient({
 **MODEL_RESPONSE Issue**:
 The Lambda handler has basic try-catch but doesn't handle specific error cases:
 
-```javascript
+```typescript
 exports.handler = async (event) => {
   try {
     const body = JSON.parse(event.body || "{}");
@@ -187,7 +187,7 @@ exports.handler = async (event) => {
 **IDEAL_RESPONSE Fix**:
 While not changed in the deployed code, the ideal solution would add:
 
-```javascript
+```typescript
 try {
   const secrets = await getSecrets();
 } catch (error) {

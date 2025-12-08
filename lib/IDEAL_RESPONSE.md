@@ -88,7 +88,7 @@ The Lambda function is generated dynamically with:
 - Environment variables for configuration
 
 **Key Features**:
-```javascript
+```typescript
 const { DynamoDBClient, PutItemCommand } = require("@aws-sdk/client-dynamodb");
 const { SecretsManagerClient, GetSecretValueCommand } = require("@aws-sdk/client-secrets-manager");
 
