@@ -2,7 +2,7 @@
 # This configuration contains intentional inefficiencies and code duplication
 
 locals {
-  name_prefix = "TapStack-${var.environmentSuffix}"
+  name_prefix = "TapStack${var.environmentSuffix}"
 }
 
 # VPC Configuration - Hardcoded values
