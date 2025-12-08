@@ -85,3 +85,4 @@ fi
 
 echo "✅ Analysis completed. Output saved to lib/analysis-results.txt"
 echo "=== Analysis job completed successfully ==="
+
