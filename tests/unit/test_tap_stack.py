@@ -52,6 +52,65 @@ class TestVpcConstruct(unittest.TestCase):
         # VPC should have core networking methods
         self.assertGreater(len(method_names), 0)
 
+    def test_vpc_has_vpc_endpoint_method(self):
+        """Test VPC has method to create VPC endpoints."""
+        from lib.vpc import ZeroTrustVpc
+        self.assertTrue(hasattr(ZeroTrustVpc, '_create_vpc_endpoints'))
+
+    def test_vpc_cidr_configuration(self):
+        """Test VPC CIDR block configuration."""
+        from lib.vpc import ZeroTrustVpc
+        import inspect
+
+        source = inspect.getsource(ZeroTrustVpc.__init__)
+        # Verify VPC CIDR is configured
+        self.assertIn('10.0.0.0/16', source)
+        self.assertIn('enable_dns_hostnames', source)
+        self.assertIn('enable_dns_support', source)
+
+    def test_vpc_private_subnets_configuration(self):
+        """Test VPC creates private subnets."""
+        from lib.vpc import ZeroTrustVpc
+        import inspect
+
+        source = inspect.getsource(ZeroTrustVpc.__init__)
+        # Verify private subnets configuration
+        self.assertIn('private_subnets', source)
+        self.assertIn('map_public_ip_on_launch=False', source)
+        self.assertIn('availability_zone', source)
+
+    def test_vpc_security_group_configuration(self):
+        """Test VPC security group for endpoints."""
+        from lib.vpc import ZeroTrustVpc
+        import inspect
+
+        source = inspect.getsource(ZeroTrustVpc.__init__)
+        # Verify security group configuration
+        self.assertIn('endpoint_security_group', source)
+        self.assertIn('from_port=443', source)
+        self.assertIn('to_port=443', source)
+
+    def test_vpc_endpoints_list(self):
+        """Test VPC endpoints for AWS services."""
+        from lib.vpc import ZeroTrustVpc
+        import inspect
+
+        source = inspect.getsource(ZeroTrustVpc._create_vpc_endpoints)
+        # Verify essential VPC endpoints
+        essential_services = ['ec2', 'ssm', 'logs', 'kms', 's3']
+        for service in essential_services:
+            self.assertIn(service, source)
+
+    def test_vpc_endpoint_types(self):
+        """Test VPC endpoint types."""
+        from lib.vpc import ZeroTrustVpc
+        import inspect
+
+        source = inspect.getsource(ZeroTrustVpc._create_vpc_endpoints)
+        # Verify both interface and gateway endpoints
+        self.assertIn('Interface', source)
+        self.assertIn('Gateway', source)
+
 
 class TestIamConstruct(unittest.TestCase):
     """Test IAM security components."""
@@ -70,6 +129,62 @@ class TestIamConstruct(unittest.TestCase):
         # Verify MFA-related configuration exists
         self.assertIn('mfa', source.lower())
 
+    def test_iam_has_role_creation_methods(self):
+        """Test IAM has methods to create different role types."""
+        from lib.iam import ZeroTrustIam
+        self.assertTrue(hasattr(ZeroTrustIam, '_create_cross_account_role'))
+        self.assertTrue(hasattr(ZeroTrustIam, '_create_security_audit_role'))
+        self.assertTrue(hasattr(ZeroTrustIam, '_create_session_manager_role'))
+
+    def test_iam_cross_account_role_mfa(self):
+        """Test cross-account role requires MFA."""
+        from lib.iam import ZeroTrustIam
+        import inspect
+
+        source = inspect.getsource(ZeroTrustIam._create_cross_account_role)
+        self.assertIn('MultiFactorAuthPresent', source)
+        self.assertIn('ExternalId', source)
+        self.assertIn('AssumeRole', source)
+
+    def test_iam_session_duration_limits(self):
+        """Test IAM roles have session duration limits."""
+        from lib.iam import ZeroTrustIam
+        import inspect
+
+        source = inspect.getsource(ZeroTrustIam._create_cross_account_role)
+        self.assertIn('max_session_duration', source)
+        self.assertIn('3600', source)  # 1 hour
+
+    def test_iam_least_privilege_policies(self):
+        """Test IAM uses least-privilege access policies."""
+        from lib.iam import ZeroTrustIam
+        import inspect
+
+        source = inspect.getsource(ZeroTrustIam._create_cross_account_role)
+        # Verify read-only permissions
+        self.assertIn('Describe', source)
+        self.assertIn('List', source)
+        self.assertIn('Get', source)
+
+    def test_iam_security_audit_role(self):
+        """Test security audit role configuration."""
+        from lib.iam import ZeroTrustIam
+        import inspect
+
+        source = inspect.getsource(ZeroTrustIam._create_security_audit_role)
+        self.assertIn('config.amazonaws.com', source)
+        self.assertIn('securityhub.amazonaws.com', source)
+        self.assertIn('AWS_ConfigRole', source)
+
+    def test_iam_session_manager_role(self):
+        """Test session manager role for EC2."""
+        from lib.iam import ZeroTrustIam
+        import inspect
+
+        source = inspect.getsource(ZeroTrustIam._create_session_manager_role)
+        self.assertIn('ec2.amazonaws.com', source)
+        self.assertIn('AmazonSSMManagedInstanceCore', source)
+
 
 class TestEncryptionConstruct(unittest.TestCase):
     """Test encryption and key management."""
@@ -87,6 +202,69 @@ class TestEncryptionConstruct(unittest.TestCase):
         source = inspect.getsource(ZeroTrustEncryption)
         # Verify KMS configuration exists
         self.assertIn('kms', source.lower())
+
+    def test_encryption_has_key_creation_methods(self):
+        """Test encryption has methods to create different KMS keys."""
+        from lib.encryption import ZeroTrustEncryption
+        self.assertTrue(hasattr(ZeroTrustEncryption, '_create_cloudtrail_key'))
+        self.assertTrue(hasattr(ZeroTrustEncryption, '_create_s3_key'))
+        self.assertTrue(hasattr(ZeroTrustEncryption, '_create_rds_key'))
+        self.assertTrue(hasattr(ZeroTrustEncryption, '_create_general_key'))
+
+    def test_kms_key_rotation_enabled(self):
+        """Test KMS keys have automatic rotation enabled."""
+        from lib.encryption import ZeroTrustEncryption
+        import inspect
+
+        source = inspect.getsource(ZeroTrustEncryption)
+        self.assertIn('enable_key_rotation=True', source)
+
+    def test_kms_key_deletion_window(self):
+        """Test KMS keys have deletion window configured."""
+        from lib.encryption import ZeroTrustEncryption
+        import inspect
+
+        source = inspect.getsource(ZeroTrustEncryption)
+        self.assertIn('deletion_window_in_days=10', source)
+
+    def test_cloudtrail_key_policy(self):
+        """Test CloudTrail KMS key policy."""
+        from lib.encryption import ZeroTrustEncryption
+        import inspect
+
+        source = inspect.getsource(ZeroTrustEncryption._create_cloudtrail_key)
+        self.assertIn('cloudtrail.amazonaws.com', source)
+        self.assertIn('GenerateDataKey', source)
+        self.assertIn('DecryptDataKey', source)
+        self.assertIn('DescribeKey', source)
+
+    def test_s3_key_policy(self):
+        """Test S3 KMS key policy."""
+        from lib.encryption import ZeroTrustEncryption
+        import inspect
+
+        source = inspect.getsource(ZeroTrustEncryption._create_s3_key)
+        self.assertIn('s3.amazonaws.com', source)
+        self.assertIn('Decrypt', source)
+        self.assertIn('GenerateDataKey', source)
+
+    def test_rds_key_policy(self):
+        """Test RDS KMS key policy."""
+        from lib.encryption import ZeroTrustEncryption
+        import inspect
+
+        source = inspect.getsource(ZeroTrustEncryption._create_rds_key)
+        self.assertIn('rds.amazonaws.com', source)
+        self.assertIn('CreateGrant', source)
+
+    def test_kms_aliases_created(self):
+        """Test KMS key aliases are created."""
+        from lib.encryption import ZeroTrustEncryption
+        import inspect
+
+        source = inspect.getsource(ZeroTrustEncryption)
+        self.assertIn('KmsAlias', source)
+        self.assertIn('alias/zero-trust', source)
 
 
 class TestMonitoringConstruct(unittest.TestCase):
@@ -115,6 +293,57 @@ class TestMonitoringConstruct(unittest.TestCase):
         # Verify Flow Logs are configured
         self.assertIn('flow_log', source.lower())
 
+    def test_monitoring_has_bucket_creation_methods(self):
+        """Test monitoring has methods to create S3 buckets."""
+        from lib.monitoring import ZeroTrustMonitoring
+        self.assertTrue(hasattr(ZeroTrustMonitoring, '_create_cloudtrail_bucket'))
+        self.assertTrue(hasattr(ZeroTrustMonitoring, '_create_flow_logs_bucket'))
+
+    def test_monitoring_has_trail_creation_method(self):
+        """Test monitoring has method to create CloudTrail."""
+        from lib.monitoring import ZeroTrustMonitoring
+        self.assertTrue(hasattr(ZeroTrustMonitoring, '_create_cloudtrail'))
+
+    def test_monitoring_has_flow_logs_method(self):
+        """Test monitoring has method to create VPC flow logs."""
+        from lib.monitoring import ZeroTrustMonitoring
+        self.assertTrue(hasattr(ZeroTrustMonitoring, '_create_vpc_flow_logs'))
+
+    def test_monitoring_has_athena_method(self):
+        """Test monitoring has method to create Athena database."""
+        from lib.monitoring import ZeroTrustMonitoring
+        self.assertTrue(hasattr(ZeroTrustMonitoring, '_create_athena_database'))
+
+    def test_monitoring_has_alarms_method(self):
+        """Test monitoring has method to create security alarms."""
+        from lib.monitoring import ZeroTrustMonitoring
+        self.assertTrue(hasattr(ZeroTrustMonitoring, '_create_security_alarms'))
+
+    def test_s3_bucket_versioning(self):
+        """Test S3 buckets have versioning enabled."""
+        from lib.monitoring import ZeroTrustMonitoring
+        import inspect
+
+        source = inspect.getsource(ZeroTrustMonitoring)
+        self.assertIn('Versioning', source)
+        self.assertIn('Enabled', source)
+
+    def test_s3_bucket_encryption(self):
+        """Test S3 buckets have encryption enabled."""
+        from lib.monitoring import ZeroTrustMonitoring
+        import inspect
+
+        source = inspect.getsource(ZeroTrustMonitoring)
+        self.assertIn('ServerSideEncryption', source)
+
+    def test_object_lock_enabled(self):
+        """Test CloudTrail bucket has object lock."""
+        from lib.monitoring import ZeroTrustMonitoring
+        import inspect
+
+        source = inspect.getsource(ZeroTrustMonitoring._create_cloudtrail_bucket)
+        self.assertIn('object_lock_enabled=True', source)
+
 
 class TestSecurityConstruct(unittest.TestCase):
     """Test security controls and policies."""
@@ -141,6 +370,50 @@ class TestSecurityConstruct(unittest.TestCase):
         source = inspect.getsource(ZeroTrustSecurity)
         # Verify AWS Config is configured
         self.assertIn('config', source.lower())
+
+    def test_security_has_security_hub_method(self):
+        """Test security has method to enable Security Hub."""
+        from lib.security import ZeroTrustSecurity
+        self.assertTrue(hasattr(ZeroTrustSecurity, '_enable_security_hub'))
+
+    def test_security_has_insights_method(self):
+        """Test security has method to create custom insights."""
+        from lib.security import ZeroTrustSecurity
+        self.assertTrue(hasattr(ZeroTrustSecurity, '_create_custom_insights'))
+
+    def test_security_has_config_bucket_method(self):
+        """Test security has method to create Config bucket."""
+        from lib.security import ZeroTrustSecurity
+        self.assertTrue(hasattr(ZeroTrustSecurity, '_create_config_bucket'))
+
+    def test_security_has_config_recorder_method(self):
+        """Test security has method to create Config recorder."""
+        from lib.security import ZeroTrustSecurity
+        self.assertTrue(hasattr(ZeroTrustSecurity, '_create_config_recorder'))
+
+    def test_security_has_config_rules_method(self):
+        """Test security has method to create Config rules."""
+        from lib.security import ZeroTrustSecurity
+        self.assertTrue(hasattr(ZeroTrustSecurity, '_create_config_rules'))
+
+    def test_security_hub_standards(self):
+        """Test Security Hub standards subscription."""
+        from lib.security import ZeroTrustSecurity
+        import inspect
+
+        source = inspect.getsource(ZeroTrustSecurity._enable_security_hub)
+        self.assertIn('SecurityhubStandardsSubscription', source)
+        self.assertIn('cis-aws-foundations-benchmark', source)
+        self.assertIn('aws-foundational-security-best-practices', source)
+
+    def test_security_enable_flags(self):
+        """Test security construct has enable flags."""
+        from lib.security import ZeroTrustSecurity
+        import inspect
+
+        source = inspect.getsource(ZeroTrustSecurity.__init__)
+        self.assertIn('enable_config', source)
+        self.assertIn('enable_security_hub', source)
 
 
 class TestWafConstruct(unittest.TestCase):
@@ -169,6 +442,54 @@ class TestWafConstruct(unittest.TestCase):
         # Verify IP reputation is configured
         self.assertIn('ip', source.lower())
 
+    def test_waf_has_ip_set_method(self):
+        """Test WAF has method to create blocked IP set."""
+        from lib.waf import ZeroTrustWaf
+        self.assertTrue(hasattr(ZeroTrustWaf, '_create_blocked_ip_set'))
+
+    def test_waf_has_web_acl_method(self):
+        """Test WAF has method to create Web ACL."""
+        from lib.waf import ZeroTrustWaf
+        self.assertTrue(hasattr(ZeroTrustWaf, '_create_web_acl'))
+
+    def test_waf_rate_limit_configuration(self):
+        """Test WAF rate limit configuration."""
+        from lib.waf import ZeroTrustWaf
+        import inspect
+
+        source = inspect.getsource(ZeroTrustWaf._create_web_acl)
+        self.assertIn('rate_based_statement', source)
+        self.assertIn('limit', source)
+        self.assertIn('2000', source)
+
+    def test_waf_managed_rules(self):
+        """Test WAF includes AWS managed rules."""
+        from lib.waf import ZeroTrustWaf
+        import inspect
+
+        source = inspect.getsource(ZeroTrustWaf._create_web_acl)
+        self.assertIn('AWSManagedRulesCommonRuleSet', source)
+        self.assertIn('AWSManagedRulesKnownBadInputsRuleSet', source)
+        self.assertIn('AWSManagedRulesAmazonIpReputationList', source)
+
+    def test_waf_cloudwatch_metrics(self):
+        """Test WAF CloudWatch metrics enabled."""
+        from lib.waf import ZeroTrustWaf
+        import inspect
+
+        source = inspect.getsource(ZeroTrustWaf._create_web_acl)
+        self.assertIn('cloudwatch_metrics_enabled', source)
+        self.assertIn('True', source)
+
+    def test_waf_ip_set_scope(self):
+        """Test WAF IP set scope configuration."""
+        from lib.waf import ZeroTrustWaf
+        import inspect
+
+        source = inspect.getsource(ZeroTrustWaf._create_blocked_ip_set)
+        self.assertIn('REGIONAL', source)
+        self.assertIn('IPV4', source)
+
 
 class TestComplianceConstruct(unittest.TestCase):
     """Test compliance and governance components."""
@@ -178,14 +499,139 @@ class TestComplianceConstruct(unittest.TestCase):
         from lib.compliance import ZeroTrustCompliance
         self.assertTrue(hasattr(ZeroTrustCompliance, '__init__'))
 
-    def test_security_hub_configuration(self):
-        """Test Security Hub configuration."""
+    def test_scp_policies_configuration(self):
+        """Test SCP policies for security service protection."""
         from lib.compliance import ZeroTrustCompliance
         import inspect
 
         source = inspect.getsource(ZeroTrustCompliance)
-        # Verify Security Hub is configured
-        self.assertIn('security_hub', source.lower())
+        # Verify Security Hub actions are configured in SCPs
+        self.assertIn('securityhub', source.lower())
+        # Verify other critical security services are protected
+        self.assertIn('guardduty', source.lower())
+        self.assertIn('cloudtrail', source.lower())
+
+    def test_encryption_scp_policies(self):
+        """Test SCP policies enforce encryption requirements."""
+        from lib.compliance import ZeroTrustCompliance
+        import inspect
+
+        source = inspect.getsource(ZeroTrustCompliance)
+        # Verify encryption requirements for S3, EBS, and RDS
+        self.assertIn('s3:putobject', source.lower())
+        self.assertIn('ec2:encrypted', source.lower())
+        self.assertIn('rds:storageencrypted', source.lower())
+
+    def test_public_access_prevention(self):
+        """Test SCP policies prevent public access."""
+        from lib.compliance import ZeroTrustCompliance
+        import inspect
+
+        source = inspect.getsource(ZeroTrustCompliance)
+        # Verify public access prevention for S3 and RDS
+        self.assertIn('preventpublic', source.lower())
+        self.assertIn('rds:publiclyaccessible', source.lower())
+
+    def test_compliance_has_all_scp_methods(self):
+        """Test that all SCP creation methods exist."""
+        from lib.compliance import ZeroTrustCompliance
+
+        self.assertTrue(hasattr(ZeroTrustCompliance, '_create_prevent_disable_scp'))
+        self.assertTrue(hasattr(ZeroTrustCompliance, '_create_require_encryption_scp'))
+        self.assertTrue(hasattr(ZeroTrustCompliance, '_create_prevent_public_access_scp'))
+
+    def test_compliance_initialization_attributes(self):
+        """Test compliance construct initialization creates SCP attributes."""
+        from lib.compliance import ZeroTrustCompliance
+        import inspect
+
+        source = inspect.getsource(ZeroTrustCompliance.__init__)
+        # Verify all SCP policies are assigned as attributes
+        self.assertIn('prevent_security_service_disable_scp', source)
+        self.assertIn('require_encryption_scp', source)
+        self.assertIn('prevent_public_access_scp', source)
+        self.assertIn('environment_suffix', source)
+
+    def test_compliance_policy_version(self):
+        """Test that all SCP policies use correct IAM policy version."""
+        from lib.compliance import ZeroTrustCompliance
+        import inspect
+
+        source = inspect.getsource(ZeroTrustCompliance)
+        # Count occurrences of IAM policy version
+        self.assertIn('"Version": "2012-10-17"', source)
+
+    def test_compliance_deny_effect(self):
+        """Test that SCPs use Deny effect for restrictive policies."""
+        from lib.compliance import ZeroTrustCompliance
+        import inspect
+
+        source = inspect.getsource(ZeroTrustCompliance)
+        # SCPs should use Deny effect
+        self.assertIn('"Effect": "Deny"', source)
+
+    def test_compliance_statement_structure(self):
+        """Test that all SCPs include required Statement structure."""
+        from lib.compliance import ZeroTrustCompliance
+        import inspect
+
+        source = inspect.getsource(ZeroTrustCompliance)
+        # All policies should have Statement arrays
+        self.assertIn('"Statement"', source)
+        # Should include Sids for clarity
+        self.assertIn('"Sid"', source)
+
+    def test_compliance_security_services_protected(self):
+        """Test that critical security services are protected."""
+        from lib.compliance import ZeroTrustCompliance
+        import inspect
+
+        source = inspect.getsource(ZeroTrustCompliance._create_prevent_disable_scp)
+
+        # Check for critical security service actions
+        security_services = [
+            'cloudtrail:StopLogging',
+            'cloudtrail:DeleteTrail',
+            'config:DeleteConfigRule',
+            'guardduty:DeleteDetector',
+            'securityhub:DisableSecurityHub',
+        ]
+
+        for service_action in security_services:
+            self.assertIn(service_action, source)
+
+    def test_encryption_requirements_comprehensive(self):
+        """Test encryption requirements cover all major services."""
+        from lib.compliance import ZeroTrustCompliance
+        import inspect
+
+        source = inspect.getsource(ZeroTrustCompliance._create_require_encryption_scp)
+
+        # Check for S3 encryption
+        self.assertIn('s3:PutObject', source)
+        self.assertIn('s3:x-amz-server-side-encryption', source)
+
+        # Check for EBS encryption
+        self.assertIn('ec2:RunInstances', source)
+        self.assertIn('ec2:Encrypted', source)
+
+        # Check for RDS encryption
+        self.assertIn('rds:CreateDBInstance', source)
+        self.assertIn('rds:StorageEncrypted', source)
+
+    def test_public_access_prevention_comprehensive(self):
+        """Test public access prevention covers critical services."""
+        from lib.compliance import ZeroTrustCompliance
+        import inspect
+
+        source = inspect.getsource(ZeroTrustCompliance._create_prevent_public_access_scp)
+
+        # Check for S3 public access blocks
+        self.assertIn('s3:PutBucketPublicAccessBlock', source)
+        self.assertIn('s3:BlockPublicAcls', source)
+
+        # Check for RDS public accessibility
+        self.assertIn('rds:PubliclyAccessible', source)
 
 
 class TestImports(unittest.TestCase):
