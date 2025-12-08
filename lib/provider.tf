@@ -17,14 +17,4 @@ terraform {
 # Primary AWS provider
 provider "aws" {
   region = var.aws_region
-
-  default_tags {
-    tags = {
-      Environment = var.environmentSuffix
-      Repository  = var.repository
-      Author      = var.commit_author
-      PRNumber    = var.pr_number
-      Team        = var.team
-    }
-  }
 }

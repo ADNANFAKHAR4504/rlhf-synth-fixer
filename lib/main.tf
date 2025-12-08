@@ -1,10 +1,6 @@
 # Payment Processing Infrastructure - Baseline (Needs Optimization)
 # This configuration contains intentional inefficiencies and code duplication
 
-locals {
-  name_prefix = "TapStack${var.environmentSuffix}"
-}
-
 # VPC Configuration - Hardcoded values
 resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
@@ -12,8 +8,8 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = {
-    Name        = "${local.name_prefix}-vpc"
-    Environment = var.environmentSuffix
+    Name        = "TapStack${var.environment_suffix}-vpc"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
@@ -26,8 +22,8 @@ resource "aws_subnet" "public_1" {
   availability_zone = "${var.aws_region}a"
 
   tags = {
-    Name        = "${local.name_prefix}-public-subnet-1"
-    Environment = var.environmentSuffix
+    Name        = "TapStack${var.environment_suffix}-public-subnet-1"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
     Type        = "public"
@@ -40,8 +36,8 @@ resource "aws_subnet" "public_2" {
   availability_zone = "${var.aws_region}b"
 
   tags = {
-    Name        = "${local.name_prefix}-public-subnet-2"
-    Environment = var.environmentSuffix
+    Name        = "TapStack${var.environment_suffix}-public-subnet-2"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
     Type        = "public"
@@ -54,8 +50,8 @@ resource "aws_subnet" "public_3" {
   availability_zone = "${var.aws_region}c"
 
   tags = {
-    Name        = "${local.name_prefix}-public-subnet-3"
-    Environment = var.environmentSuffix
+    Name        = "TapStack${var.environment_suffix}-public-subnet-3"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
     Type        = "public"
@@ -69,8 +65,8 @@ resource "aws_subnet" "private_1" {
   availability_zone = "${var.aws_region}a"
 
   tags = {
-    Name        = "${local.name_prefix}-private-subnet-1"
-    Environment = var.environmentSuffix
+    Name        = "TapStack${var.environment_suffix}-private-subnet-1"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
     Type        = "private"
@@ -83,8 +79,8 @@ resource "aws_subnet" "private_2" {
   availability_zone = "${var.aws_region}b"
 
   tags = {
-    Name        = "${local.name_prefix}-private-subnet-2"
-    Environment = var.environmentSuffix
+    Name        = "TapStack${var.environment_suffix}-private-subnet-2"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
     Type        = "private"
@@ -97,8 +93,8 @@ resource "aws_subnet" "private_3" {
   availability_zone = "${var.aws_region}c"
 
   tags = {
-    Name        = "${local.name_prefix}-private-subnet-3"
-    Environment = var.environmentSuffix
+    Name        = "TapStack${var.environment_suffix}-private-subnet-3"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
     Type        = "private"
@@ -110,8 +106,8 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name        = "${local.name_prefix}-igw"
-    Environment = var.environmentSuffix
+    Name        = "TapStack${var.environment_suffix}-igw"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
@@ -119,13 +115,13 @@ resource "aws_internet_gateway" "main" {
 
 # Security Groups - Repetitive rules (not using dynamic blocks)
 resource "aws_security_group" "alb" {
-  name        = "${local.name_prefix}-alb-sg"
+  name        = "TapStack${var.environment_suffix}-alb-sg"
   description = "Security group for ALB"
   vpc_id      = aws_vpc.main.id
 
   tags = {
-    Name        = "${local.name_prefix}-alb-sg"
-    Environment = var.environmentSuffix
+    Name        = "TapStack${var.environment_suffix}-alb-sg"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
@@ -160,13 +156,13 @@ resource "aws_security_group_rule" "alb_egress" {
 
 # ECS Security Group - Repetitive
 resource "aws_security_group" "ecs" {
-  name        = "${local.name_prefix}-ecs-sg"
+  name        = "TapStack${var.environment_suffix}-ecs-sg"
   description = "Security group for ECS tasks"
   vpc_id      = aws_vpc.main.id
 
   tags = {
-    Name        = "${local.name_prefix}-ecs-sg"
-    Environment = var.environmentSuffix
+    Name        = "TapStack${var.environment_suffix}-ecs-sg"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
@@ -192,11 +188,11 @@ resource "aws_security_group_rule" "ecs_egress" {
 
 # S3 Buckets - Duplicated configuration (should be a module or for_each)
 resource "aws_s3_bucket" "alb_logs" {
-  bucket = "${lower(local.name_prefix)}-alb-logs"
+  bucket = "tapstack${var.environment_suffix}-alb-logs"
 
   tags = {
-    Name        = "${local.name_prefix}-alb-logs"
-    Environment = var.environmentSuffix
+    Name        = "TapStack${var.environment_suffix}-alb-logs"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
     Purpose     = "alb-logs"
@@ -220,11 +216,11 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "alb_logs" {
 }
 
 resource "aws_s3_bucket" "application_logs" {
-  bucket = "${lower(local.name_prefix)}-app-logs"
+  bucket = "tapstack${var.environment_suffix}-app-logs"
 
   tags = {
-    Name        = "${local.name_prefix}-app-logs"
-    Environment = var.environmentSuffix
+    Name        = "TapStack${var.environment_suffix}-app-logs"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
     Purpose     = "application-logs"
@@ -248,11 +244,11 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "application_logs"
 }
 
 resource "aws_s3_bucket" "audit_logs" {
-  bucket = "${lower(local.name_prefix)}-audit-logs"
+  bucket = "tapstack${var.environment_suffix}-audit-logs"
 
   tags = {
-    Name        = "${local.name_prefix}-audit-logs"
-    Environment = var.environmentSuffix
+    Name        = "TapStack${var.environment_suffix}-audit-logs"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
     Purpose     = "audit-logs"
@@ -277,11 +273,11 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "audit_logs" {
 
 # ECS Cluster
 resource "aws_ecs_cluster" "main" {
-  name = "${local.name_prefix}-cluster"
+  name = "TapStack${var.environment_suffix}-cluster"
 
   tags = {
-    Name        = "${local.name_prefix}-cluster"
-    Environment = var.environmentSuffix
+    Name        = "TapStack${var.environment_suffix}-cluster"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
@@ -289,7 +285,7 @@ resource "aws_ecs_cluster" "main" {
 
 # IAM Role - Inline policy (should use data source)
 resource "aws_iam_role" "ecs_task_execution" {
-  name = "${local.name_prefix}-ecs-task-execution-role"
+  name = "TapStack${var.environment_suffix}-ecs-task-execution-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -303,8 +299,8 @@ resource "aws_iam_role" "ecs_task_execution" {
   })
 
   tags = {
-    Name        = "${local.name_prefix}-ecs-execution-role"
-    Environment = var.environmentSuffix
+    Name        = "TapStack${var.environment_suffix}-ecs-execution-role"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
@@ -312,7 +308,7 @@ resource "aws_iam_role" "ecs_task_execution" {
 
 # Inline policy - Should use managed policy data source
 resource "aws_iam_role_policy" "ecs_task_execution" {
-  name = "${local.name_prefix}-ecs-task-execution-policy"
+  name = "TapStack${var.environment_suffix}-ecs-task-execution-policy"
   role = aws_iam_role.ecs_task_execution.id
 
   policy = jsonencode({
@@ -336,7 +332,7 @@ resource "aws_iam_role_policy" "ecs_task_execution" {
 
 # ALB
 resource "aws_lb" "main" {
-  name               = "${local.name_prefix}-alb"
+  name               = "TapStack${var.environment_suffix}-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -349,8 +345,8 @@ resource "aws_lb" "main" {
   enable_deletion_protection = false
 
   tags = {
-    Name        = "${local.name_prefix}-alb"
-    Environment = var.environmentSuffix
+    Name        = "TapStack${var.environment_suffix}-alb"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
@@ -358,36 +354,36 @@ resource "aws_lb" "main" {
 
 # CloudWatch Log Groups - Repetitive
 resource "aws_cloudwatch_log_group" "api" {
-  name              = "/ecs/${local.name_prefix}-api"
+  name              = "/ecs/TapStack${var.environment_suffix}-api"
   retention_in_days = 7
 
   tags = {
-    Name        = "${local.name_prefix}-api-logs"
-    Environment = var.environmentSuffix
+    Name        = "TapStack${var.environment_suffix}-api-logs"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
 }
 
 resource "aws_cloudwatch_log_group" "worker" {
-  name              = "/ecs/${local.name_prefix}-worker"
+  name              = "/ecs/TapStack${var.environment_suffix}-worker"
   retention_in_days = 7
 
   tags = {
-    Name        = "${local.name_prefix}-worker-logs"
-    Environment = var.environmentSuffix
+    Name        = "TapStack${var.environment_suffix}-worker-logs"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
 }
 
 resource "aws_cloudwatch_log_group" "scheduler" {
-  name              = "/ecs/${local.name_prefix}-scheduler"
+  name              = "/ecs/TapStack${var.environment_suffix}-scheduler"
   retention_in_days = 7
 
   tags = {
-    Name        = "${local.name_prefix}-scheduler-logs"
-    Environment = var.environmentSuffix
+    Name        = "TapStack${var.environment_suffix}-scheduler-logs"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
