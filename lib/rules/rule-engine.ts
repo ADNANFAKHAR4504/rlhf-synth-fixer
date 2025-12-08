@@ -1,3 +1,4 @@
+// eslint-disable-next-line import/no-extraneous-dependencies
 import * as yaml from 'js-yaml';
 import * as fs from 'fs';
 import { IConstruct } from 'constructs';

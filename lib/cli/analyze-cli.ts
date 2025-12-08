@@ -1,3 +1,4 @@
+// eslint-disable-next-line import/no-extraneous-dependencies
 import * as yargs from 'yargs';
 import * as fs from 'fs';
 import { StackComparator } from '../comparator/stack-comparator';
