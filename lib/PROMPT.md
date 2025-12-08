@@ -1,6 +1,6 @@
 # IaC Program Optimization
 
-> **⚠️ CRITICAL REQUIREMENT: This task MUST be implemented using Pulumi with Go**
+> **CRITICAL REQUIREMENT: This task MUST be implemented using Pulumi with Go**
 >
 > Platform: **pulumi**
 > Language: **go**
@@ -101,22 +101,22 @@ Production environment in us-east-1 with existing ECS cluster running 12 microse
 
 #### AWS Config
 - **CRITICAL**: If creating AWS Config roles, use correct managed policy:
-  - ✅ CORRECT: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
-  - ❌ WRONG: `arn:aws:iam::aws:policy/service-role/ConfigRole`
-  - ❌ WRONG: `arn:aws:iam::aws:policy/AWS_ConfigRole`
+  - CORRECT: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
+  - WRONG: `arn:aws:iam::aws:policy/service-role/ConfigRole`
+  - WRONG: `arn:aws:iam::aws:policy/AWS_ConfigRole`
 - **Alternative**: Use service-linked role `AWSServiceRoleForConfig` (auto-created)
 
 #### Lambda Functions
 - **Node.js 18.x+**: Do NOT use `require('aws-sdk')` - AWS SDK v2 not available
-  - ✅ Use AWS SDK v3: `import { S3Client } from '@aws-sdk/client-s3'`
-  - ✅ Or extract data from event object directly
+  - Use AWS SDK v3: `import { S3Client } from '@aws-sdk/client-s3'`
+  - Or extract data from event object directly
 - **Reserved Concurrency**: Avoid setting `reservedConcurrentExecutions` unless required
   - If required, use low values (1-5) to avoid account limit issues
 
 #### CloudWatch Synthetics
 - **CRITICAL**: Use current runtime version
-  - ✅ CORRECT: `synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0`
-  - ❌ WRONG: `SYNTHETICS_NODEJS_PUPPETEER_5_1` (deprecated)
+  - CORRECT: `synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0`
+  - WRONG: `SYNTHETICS_NODEJS_PUPPETEER_5_1` (deprecated)
 
 #### RDS Databases
 - **Prefer**: Aurora Serverless v2 (faster provisioning, auto-scaling)
@@ -145,10 +145,10 @@ Production environment in us-east-1 with existing ECS cluster running 12 microse
 ### Correct Resource Naming (Pulumi Go)
 ```go
 bucket, err := s3.NewBucket(ctx, "dataBucket", &s3.BucketArgs{
-    Bucket: pulumi.Sprintf("data-bucket-%s", environmentSuffix),  // ✅ CORRECT
+    Bucket: pulumi.Sprintf("data-bucket-%s", environmentSuffix),  // CORRECT
 })
 
-// ❌ WRONG:
+// WRONG:
 // Bucket: pulumi.String("data-bucket-prod"),  // Hardcoded, will fail
 ```
 
@@ -159,10 +159,10 @@ bucket, err := s3.NewBucket(ctx, "dataBucket", &s3.BucketArgs{
 
 // For stateful resources like S3:
 bucket, err := s3.NewBucket(ctx, "dataBucket", &s3.BucketArgs{
-    ForceDestroy: pulumi.Bool(true),  // ✅ CORRECT - allows deletion even with objects
+    ForceDestroy: pulumi.Bool(true),  // CORRECT - allows deletion even with objects
 })
 
-// ❌ WRONG:
+// WRONG:
 // ForceDestroy: pulumi.Bool(false)  // Will block cleanup if bucket has objects
 ```
 
@@ -178,11 +178,11 @@ configRole, err := iam.NewRole(ctx, "configRole", &iam.RoleArgs{
         }]
     }`),
     ManagedPolicyArns: pulumi.StringArray{
-        pulumi.String("arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"),  // ✅ CORRECT
+        pulumi.String("arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"),  // CORRECT
     },
 })
 
-// ❌ WRONG:
+// WRONG:
 // pulumi.String("arn:aws:iam::aws:policy/service-role/ConfigRole"),  // Policy doesn't exist
 // pulumi.String("arn:aws:iam::aws:policy/AWS_ConfigRole"),  // Missing service-role/ prefix
 ```
