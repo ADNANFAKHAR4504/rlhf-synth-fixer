@@ -2,7 +2,7 @@
 
 ## Summary
 
-This CDKTF Python project implements a production-ready multi-region disaster recovery solution for a trading platform. The infrastructure spans us-east-1 (primary) and us-east-2 (secondary) regions with automated failover capabilities.
+This CDKTF Python project implements a production-ready multi-region disaster recovery solution for a trading platform. The infrastructure spans us-east-1 (primary) and us-east-2 (secondary) regions with automated failover capabilities
 
 ## Architecture Components
 
