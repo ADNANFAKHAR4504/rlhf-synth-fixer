@@ -57,12 +57,11 @@ class DatabaseStack(Construct):
         # DynamoDB Global Table - only create in primary region with replica
         if self.is_primary:
             other_region = "us-east-2" if region == "us-east-1" else "us-east-1"
-            # For Global Tables with KMS, replicas need their own KMS key ARN
-            # Using AWS managed key for replicas to avoid cross-region KMS complexity
+            # For Global Tables, omit kms_key_arn in replica to use AWS managed encryption
             replica_config = [
                 DynamodbTableReplica(
-                    region_name=other_region,
-                    kms_key_arn="alias/aws/dynamodb"  # Use AWS managed key for replica
+                    region_name=other_region
+                    # AWS managed encryption is used by default when kms_key_arn is omitted
                 )
             ]
 
@@ -102,8 +101,9 @@ class DatabaseStack(Construct):
                 stream_enabled=True,
                 stream_view_type="NEW_AND_OLD_IMAGES",
                 server_side_encryption={
-                    "enabled": True,
-                    "kms_key_arn": self.kms_key.arn
+                    "enabled": True
+                    # Use AWS managed encryption for Global Tables
+                    # Custom KMS requires valid ARN in each replica region
                 },
                 tags={
                     "Name": f"dr-payments-{environment_suffix}"
