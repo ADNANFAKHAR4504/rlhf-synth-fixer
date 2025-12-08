@@ -482,5 +482,311 @@ describe('Validation Framework Components Unit Tests', () => {
       // Should not throw error when accessing nested properties
       expect(engine).toBeDefined();
     });
+
+    test('handles null in nested property path', () => {
+      const engine = new RuleEngine();
+
+      // Create rules config with nested property check
+      const nestedRulesConfig = {
+        rules: [
+          {
+            name: 'nested-null-test',
+            severity: 'warning',
+            category: 'Test',
+            resourceType: 'AWS::Test::Resource',
+            condition: {
+              property: 'nested.deep.value',
+              operator: 'exists',
+            },
+            message: 'Nested property check',
+            remediation: 'Add nested property',
+          },
+        ],
+      };
+
+      const yaml = require('js-yaml');
+      fs.writeFileSync('test-nested-rules.yaml', yaml.dump(nestedRulesConfig));
+
+      engine.loadRules('test-nested-rules.yaml');
+      const mockNode = { node: { path: 'Test/Resource' } } as any;
+
+      // Test with null in property path - should handle gracefully
+      engine.evaluateRules(mockNode, 'AWS::Test::Resource', {
+        nested: null, // null in path should return undefined
+      });
+
+      // Clean up
+      fs.unlinkSync('test-nested-rules.yaml');
+
+      // Should create finding since property doesn't exist
+      const findings = ValidationRegistry.getFindings();
+      expect(findings.length).toBeGreaterThan(0);
+    });
+
+    test('handles unknown operator in rule condition', () => {
+      const engine = new RuleEngine();
+
+      // Create rules config with unknown operator
+      const unknownOpRulesConfig = {
+        rules: [
+          {
+            name: 'unknown-op-test',
+            severity: 'warning',
+            category: 'Test',
+            resourceType: 'AWS::Test::Resource',
+            condition: {
+              property: 'value',
+              operator: 'unknownOperator', // Invalid operator
+              value: 'test',
+            },
+            message: 'Unknown operator test',
+            remediation: 'Fix operator',
+          },
+        ],
+      };
+
+      const yaml = require('js-yaml');
+      fs.writeFileSync('test-unknown-op-rules.yaml', yaml.dump(unknownOpRulesConfig));
+
+      engine.loadRules('test-unknown-op-rules.yaml');
+      const mockNode = { node: { path: 'Test/Resource' } } as any;
+
+      // Should not throw with unknown operator - defaults to pass=true
+      engine.evaluateRules(mockNode, 'AWS::Test::Resource', {
+        value: 'test',
+      });
+
+      // Clean up
+      fs.unlinkSync('test-unknown-op-rules.yaml');
+
+      // Unknown operator defaults to pass=true, so no violation should be found
+      const findings = ValidationRegistry.getFindingsByCategory('Test');
+      expect(findings).toHaveLength(0);
+    });
+
+    test('handles notEquals operator', () => {
+      const engine = new RuleEngine();
+
+      const notEqualsRulesConfig = {
+        rules: [
+          {
+            name: 'not-equals-test',
+            severity: 'warning',
+            category: 'Test',
+            resourceType: 'AWS::Test::Resource',
+            condition: {
+              property: 'status',
+              operator: 'notEquals',
+              value: 'active',
+            },
+            message: 'Status should not be active',
+            remediation: 'Change status',
+          },
+        ],
+      };
+
+      const yaml = require('js-yaml');
+      fs.writeFileSync('test-not-equals-rules.yaml', yaml.dump(notEqualsRulesConfig));
+
+      engine.loadRules('test-not-equals-rules.yaml');
+      const mockNode = { node: { path: 'Test/Resource' } } as any;
+
+      // Test with value that equals - should NOT create finding (pass=true)
+      engine.evaluateRules(mockNode, 'AWS::Test::Resource', {
+        status: 'active',
+      });
+
+      fs.unlinkSync('test-not-equals-rules.yaml');
+
+      const findings = ValidationRegistry.getFindingsByCategory('Test');
+      expect(findings).toHaveLength(0);
+    });
+
+    test('handles notExists operator', () => {
+      const engine = new RuleEngine();
+
+      const notExistsRulesConfig = {
+        rules: [
+          {
+            name: 'not-exists-test',
+            severity: 'warning',
+            category: 'Test',
+            resourceType: 'AWS::Test::Resource',
+            condition: {
+              property: 'deprecated',
+              operator: 'notExists',
+            },
+            message: 'Deprecated property should not exist',
+            remediation: 'Remove deprecated property',
+          },
+        ],
+      };
+
+      const yaml = require('js-yaml');
+      fs.writeFileSync('test-not-exists-rules.yaml', yaml.dump(notExistsRulesConfig));
+
+      engine.loadRules('test-not-exists-rules.yaml');
+      const mockNode = { node: { path: 'Test/Resource' } } as any;
+
+      // Test with property that exists - should create finding (violation)
+      engine.evaluateRules(mockNode, 'AWS::Test::Resource', {
+        deprecated: 'old-value',
+      });
+
+      fs.unlinkSync('test-not-exists-rules.yaml');
+
+      const findings = ValidationRegistry.getFindingsByCategory('Test');
+      expect(findings.length).toBeGreaterThan(0);
+    });
+
+    test('handles contains operator', () => {
+      const engine = new RuleEngine();
+
+      const containsRulesConfig = {
+        rules: [
+          {
+            name: 'contains-test',
+            severity: 'warning',
+            category: 'Test',
+            resourceType: 'AWS::Test::Resource',
+            condition: {
+              property: 'tags',
+              operator: 'contains',
+              value: 'production',
+            },
+            message: 'Should contain production tag',
+            remediation: 'Add production tag',
+          },
+        ],
+      };
+
+      const yaml = require('js-yaml');
+      fs.writeFileSync('test-contains-rules.yaml', yaml.dump(containsRulesConfig));
+
+      engine.loadRules('test-contains-rules.yaml');
+      const mockNode = { node: { path: 'Test/Resource' } } as any;
+
+      // Test with array that does not contain value - should create finding
+      engine.evaluateRules(mockNode, 'AWS::Test::Resource', {
+        tags: ['development', 'test'],
+      });
+
+      fs.unlinkSync('test-contains-rules.yaml');
+
+      const findings = ValidationRegistry.getFindingsByCategory('Test');
+      expect(findings.length).toBeGreaterThan(0);
+    });
+
+    test('handles lessThan operator', () => {
+      const engine = new RuleEngine();
+
+      const lessThanRulesConfig = {
+        rules: [
+          {
+            name: 'less-than-test',
+            severity: 'warning',
+            category: 'Test',
+            resourceType: 'AWS::Test::Resource',
+            condition: {
+              property: 'memory',
+              operator: 'lessThan',
+              value: 256,
+            },
+            message: 'Memory is too low',
+            remediation: 'Increase memory',
+          },
+        ],
+      };
+
+      const yaml = require('js-yaml');
+      fs.writeFileSync('test-less-than-rules.yaml', yaml.dump(lessThanRulesConfig));
+
+      engine.loadRules('test-less-than-rules.yaml');
+      const mockNode = { node: { path: 'Test/Resource' } } as any;
+
+      // Test with value less than threshold - should create finding (violation)
+      engine.evaluateRules(mockNode, 'AWS::Test::Resource', {
+        memory: 128,
+      });
+
+      fs.unlinkSync('test-less-than-rules.yaml');
+
+      const findings = ValidationRegistry.getFindingsByCategory('Test');
+      expect(findings.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('StackComparator - Edge Cases', () => {
+    test('detects removed properties in output comparison', () => {
+      const template1 = {
+        Resources: {},
+        Outputs: {
+          Output1: { Value: 'value1' },
+          Output2: { Value: 'value2' },
+        },
+        Parameters: {},
+      };
+
+      const template2 = {
+        Resources: {},
+        Outputs: {
+          Output1: { Value: 'value1' },
+          // Output2 is removed
+        },
+        Parameters: {},
+      };
+
+      fs.writeFileSync('test-removed-output-1.json', JSON.stringify(template1));
+      fs.writeFileSync('test-removed-output-2.json', JSON.stringify(template2));
+
+      const differences = StackComparator.compareTemplates(
+        'test-removed-output-1.json',
+        'test-removed-output-2.json'
+      );
+
+      fs.unlinkSync('test-removed-output-1.json');
+      fs.unlinkSync('test-removed-output-2.json');
+
+      const removedOutputs = differences.filter(
+        (d) => d.type === 'removed' && d.path.includes('Outputs')
+      );
+      expect(removedOutputs.length).toBeGreaterThan(0);
+    });
+
+    test('detects removed parameters', () => {
+      const template1 = {
+        Resources: {},
+        Outputs: {},
+        Parameters: {
+          Param1: { Type: 'String' },
+          Param2: { Type: 'Number' },
+        },
+      };
+
+      const template2 = {
+        Resources: {},
+        Outputs: {},
+        Parameters: {
+          Param1: { Type: 'String' },
+          // Param2 is removed
+        },
+      };
+
+      fs.writeFileSync('test-removed-param-1.json', JSON.stringify(template1));
+      fs.writeFileSync('test-removed-param-2.json', JSON.stringify(template2));
+
+      const differences = StackComparator.compareTemplates(
+        'test-removed-param-1.json',
+        'test-removed-param-2.json'
+      );
+
+      fs.unlinkSync('test-removed-param-1.json');
+      fs.unlinkSync('test-removed-param-2.json');
+
+      const removedParams = differences.filter(
+        (d) => d.type === 'removed' && d.path.includes('Parameters')
+      );
+      expect(removedParams.length).toBeGreaterThan(0);
+    });
   });
 });

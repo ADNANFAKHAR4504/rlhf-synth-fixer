@@ -1,7 +1,13 @@
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import { TapStack } from '../lib/TapStack';
 import { ValidationRegistry } from '../lib/core/validation-registry';
+import { LambdaConfigAspect } from '../lib/aspects/lambda-config-aspect';
+import { S3EncryptionAspect } from '../lib/aspects/s3-encryption-aspect';
+import { IAMPolicyAspect } from '../lib/aspects/iam-policy-aspect';
 
 const environmentSuffix = 'test';
 
@@ -290,6 +296,318 @@ describe('Validation Aspects Unit Tests', () => {
         );
         expect(hasActionableWord).toBe(true);
       });
+    });
+  });
+
+  describe('Lambda Config Aspect - Edge Cases', () => {
+    test('detects deprecated runtime (python2)', () => {
+      const app = new cdk.App();
+      const stack = new cdk.Stack(app, 'TestDeprecatedRuntimeStack');
+
+      // Create a CfnFunction with deprecated runtime
+      new lambda.CfnFunction(stack, 'DeprecatedPythonFunction', {
+        functionName: 'deprecated-python-function',
+        runtime: 'python2.7',
+        handler: 'index.handler',
+        role: 'arn:aws:iam::123456789012:role/test-role',
+        code: {
+          zipFile: 'def handler(event, context): return "OK"',
+        },
+      });
+
+      // Apply aspect
+      cdk.Aspects.of(stack).add(new LambdaConfigAspect());
+
+      app.synth();
+
+      const findings = ValidationRegistry.getFindings();
+      const deprecatedRuntimeFindings = findings.filter(
+        f => f.category === 'Lambda' && f.message.includes('deprecated runtime')
+      );
+
+      expect(deprecatedRuntimeFindings.length).toBeGreaterThan(0);
+      expect(deprecatedRuntimeFindings[0].severity).toBe('critical');
+    });
+
+    test('detects deprecated runtime (nodejs10)', () => {
+      const app = new cdk.App();
+      const stack = new cdk.Stack(app, 'TestDeprecatedNode10Stack');
+
+      new lambda.CfnFunction(stack, 'DeprecatedNode10Function', {
+        functionName: 'deprecated-node10-function',
+        runtime: 'nodejs10.x',
+        handler: 'index.handler',
+        role: 'arn:aws:iam::123456789012:role/test-role',
+        code: {
+          zipFile: 'exports.handler = () => {}',
+        },
+      });
+
+      cdk.Aspects.of(stack).add(new LambdaConfigAspect());
+
+      app.synth();
+
+      const findings = ValidationRegistry.getFindings();
+      const deprecatedRuntimeFindings = findings.filter(
+        f => f.category === 'Lambda' && f.message.includes('deprecated runtime')
+      );
+
+      expect(deprecatedRuntimeFindings.length).toBeGreaterThan(0);
+    });
+
+    test('detects deprecated runtime (nodejs12)', () => {
+      const app = new cdk.App();
+      const stack = new cdk.Stack(app, 'TestDeprecatedNode12Stack');
+
+      new lambda.CfnFunction(stack, 'DeprecatedNode12Function', {
+        functionName: 'deprecated-node12-function',
+        runtime: 'nodejs12.x',
+        handler: 'index.handler',
+        role: 'arn:aws:iam::123456789012:role/test-role',
+        code: {
+          zipFile: 'exports.handler = () => {}',
+        },
+      });
+
+      cdk.Aspects.of(stack).add(new LambdaConfigAspect());
+
+      app.synth();
+
+      const findings = ValidationRegistry.getFindings();
+      const deprecatedRuntimeFindings = findings.filter(
+        f => f.category === 'Lambda' && f.message.includes('deprecated runtime')
+      );
+
+      expect(deprecatedRuntimeFindings.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('S3 Encryption Aspect - Edge Cases', () => {
+    test('detects invalid encryption configuration (empty rules array)', () => {
+      const app = new cdk.App();
+      const stack = new cdk.Stack(app, 'TestInvalidEncryptionStack');
+
+      // Create a CfnBucket with invalid encryption config (empty array)
+      new s3.CfnBucket(stack, 'InvalidEncryptionBucket', {
+        bucketName: 'invalid-encryption-bucket',
+        bucketEncryption: {
+          serverSideEncryptionConfiguration: [], // Empty array - invalid
+        },
+      });
+
+      cdk.Aspects.of(stack).add(new S3EncryptionAspect());
+
+      app.synth();
+
+      const findings = ValidationRegistry.getFindings();
+      const invalidEncryptionFindings = findings.filter(
+        f =>
+          f.category === 'S3' &&
+          f.severity === 'critical' &&
+          f.message.includes('invalid')
+      );
+
+      expect(invalidEncryptionFindings.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('IAM Policy Aspect - Edge Cases', () => {
+    test('handles policy document without Statement property', () => {
+      const app = new cdk.App();
+      const stack = new cdk.Stack(app, 'TestNoStatementStack');
+
+      // Create CfnPolicy with empty/invalid policy document
+      new iam.CfnPolicy(stack, 'InvalidPolicy', {
+        policyName: 'invalid-policy',
+        policyDocument: {
+          Version: '2012-10-17',
+          // No Statement property
+        },
+        roles: ['test-role'],
+      });
+
+      cdk.Aspects.of(stack).add(new IAMPolicyAspect());
+
+      app.synth();
+
+      // Should not throw error, just skip validation
+      expect(true).toBe(true);
+    });
+
+    test('handles CfnRole with inline policies', () => {
+      const app = new cdk.App();
+      const stack = new cdk.Stack(app, 'TestCfnRoleInlineStack');
+
+      // Create CfnRole with inline policy containing wildcard
+      new iam.CfnRole(stack, 'CfnRoleWithInlinePolicy', {
+        roleName: 'cfn-role-with-inline',
+        assumeRolePolicyDocument: {
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: { Service: 'lambda.amazonaws.com' },
+              Action: 'sts:AssumeRole',
+            },
+          ],
+        },
+        policies: [
+          {
+            policyName: 'inline-policy',
+            policyDocument: {
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: '*',
+                  Resource: '*',
+                },
+              ],
+            },
+          },
+        ],
+      });
+
+      cdk.Aspects.of(stack).add(new IAMPolicyAspect());
+
+      app.synth();
+
+      const findings = ValidationRegistry.getFindings();
+      const iamFindings = findings.filter(f => f.category === 'IAM');
+
+      // Should detect wildcard policy
+      expect(iamFindings.length).toBeGreaterThan(0);
+    });
+
+    test('handles L2 Role with inline policy via addToPolicy', () => {
+      const app = new cdk.App();
+      const stack = new cdk.Stack(app, 'TestL2RoleInlineStack');
+
+      // Create L2 Role - IAMPolicyAspect checks the underlying CfnRole
+      const role = new iam.Role(stack, 'L2RoleWithPolicy', {
+        roleName: 'l2-role-with-policy',
+        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+        inlinePolicies: {
+          'inline-policy': new iam.PolicyDocument({
+            statements: [
+              new iam.PolicyStatement({
+                effect: iam.Effect.ALLOW,
+                actions: ['*'],
+                resources: ['*'],
+              }),
+            ],
+          }),
+        },
+      });
+
+      cdk.Aspects.of(stack).add(new IAMPolicyAspect());
+
+      app.synth();
+
+      const findings = ValidationRegistry.getFindings();
+      const iamFindings = findings.filter(f => f.category === 'IAM');
+
+      // Should detect wildcard policy
+      expect(iamFindings.length).toBeGreaterThan(0);
+    });
+
+    test('detects wildcard actions only (not resources)', () => {
+      const app = new cdk.App();
+      const stack = new cdk.Stack(app, 'TestWildcardActionsOnlyStack');
+
+      new iam.CfnPolicy(stack, 'WildcardActionsPolicy', {
+        policyName: 'wildcard-actions-policy',
+        policyDocument: {
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: '*',
+              Resource: 'arn:aws:s3:::specific-bucket/*',
+            },
+          ],
+        },
+        roles: ['test-role'],
+      });
+
+      cdk.Aspects.of(stack).add(new IAMPolicyAspect());
+
+      app.synth();
+
+      const findings = ValidationRegistry.getFindings();
+      const wildcardActionFindings = findings.filter(
+        f =>
+          f.category === 'IAM' &&
+          f.severity === 'warning' &&
+          f.message.includes('wildcard') &&
+          f.message.includes('actions')
+      );
+
+      expect(wildcardActionFindings.length).toBeGreaterThan(0);
+    });
+
+    test('detects wildcard resources only (not actions)', () => {
+      const app = new cdk.App();
+      const stack = new cdk.Stack(app, 'TestWildcardResourcesOnlyStack');
+
+      new iam.CfnPolicy(stack, 'WildcardResourcesPolicy', {
+        policyName: 'wildcard-resources-policy',
+        policyDocument: {
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: ['s3:GetObject', 's3:PutObject'],
+              Resource: '*',
+            },
+          ],
+        },
+        roles: ['test-role'],
+      });
+
+      cdk.Aspects.of(stack).add(new IAMPolicyAspect());
+
+      app.synth();
+
+      const findings = ValidationRegistry.getFindings();
+      const wildcardResourceFindings = findings.filter(
+        f =>
+          f.category === 'IAM' &&
+          f.severity === 'warning' &&
+          f.message.includes('wildcard') &&
+          f.message.includes('resources')
+      );
+
+      expect(wildcardResourceFindings.length).toBeGreaterThan(0);
+    });
+
+    test('handles wildcard in array of actions', () => {
+      const app = new cdk.App();
+      const stack = new cdk.Stack(app, 'TestWildcardInArrayStack');
+
+      new iam.CfnPolicy(stack, 'WildcardInArrayPolicy', {
+        policyName: 'wildcard-in-array-policy',
+        policyDocument: {
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: ['s3:GetObject', '*', 's3:PutObject'],
+              Resource: ['arn:aws:s3:::bucket/*'],
+            },
+          ],
+        },
+        roles: ['test-role'],
+      });
+
+      cdk.Aspects.of(stack).add(new IAMPolicyAspect());
+
+      app.synth();
+
+      const findings = ValidationRegistry.getFindings();
+      const wildcardFindings = findings.filter(f => f.category === 'IAM');
+
+      expect(wildcardFindings.length).toBeGreaterThan(0);
     });
   });
 });
