@@ -69,6 +69,7 @@ self.iam = boto3.client('iam', **client_config)
 
 **Real-World Impact:**
 A development team wants to add a new check to the analyzer:
+
 - MODEL_RESPONSE: Must create real EFS file systems in AWS, run script, verify results, delete resources ($$$)
 - IDEAL_RESPONSE: Set `AWS_ENDPOINT_URL`, run with Moto mock server, instant feedback, zero cost
 
@@ -158,6 +159,7 @@ if not should_ignore_age_filter():
 
 **Real-World Scenario:**
 Developer creates Moto test:
+
 - MODEL_RESPONSE: Creates EFS file system, runs analyzer, gets 0 results (system too new)
 - IDEAL_RESPONSE: Creates EFS file system, sets `AWS_ENDPOINT_URL`, runs analyzer, gets results immediately
 
@@ -286,48 +288,9 @@ Both responses have similar implementation. Best practice would be to extract va
 
 ---
 
-### 7. Emoji Usage in Console Output
-
-**Location:** MODEL_RESPONSE.md lines 786-810
-
-**Problem:**
-The MODEL_RESPONSE uses emoji characters in console output:
-
-```python
-# Lines 786-810
-print(f"\n📊 EFS Analysis Summary")
-print("=" * 120)
-print(tabulate(summary_data, headers=headers, tablefmt='grid'))
-
-print(f"\n📈 Total Findings: {len(self.findings)}")
-print(f"   🔴 Critical: {total_critical}")
-print(f"   🟠 High: {total_high}")
-print(f"   🟡 Medium: {total_medium}")
-print(f"   💰 Total Potential Monthly Savings: ${total_savings:,.2f}")
-
-print("\n🎯 Top Recommendations:")
-```
-
-**PROMPT Requirements:**
-The prompt does not request emoji usage. Based on the global instructions in CLAUDE.md: "Only use emojis if the user explicitly requests it. Avoid adding emojis to files unless asked" and "keep in mind when running any task from ./ItBenchEval.md do not add emojis to any the task you deliver from it."
-
-**IDEAL_RESPONSE Approach:**
-Uses emojis (same as MODEL_RESPONSE)
-
-**Why This is a Consideration:**
-
-1. **Terminal Compatibility**: Some terminals don't render emojis correctly
-2. **CI/CD Logs**: Build logs may show garbled characters
-3. **Professional Context**: Enterprise environments may prefer plain text
-4. **Explicit Instructions**: User's global instructions say to avoid emojis unless requested
-
-**Impact:** LOW - User preference violation per global instructions, but not functional issue
-
----
-
 ## Medium-Severity Failures
 
-### 8. Missing Documentation of Environment Variables
+### 7. Missing Documentation of Environment Variables
 
 **Location:** MODEL_RESPONSE.md lines 953-962 (Usage section)
 
@@ -366,7 +329,7 @@ python lib/analyse.py
 
 ---
 
-### 9. No Graceful Degradation for Tabulate
+### 8. No Graceful Degradation for Tabulate
 
 **Location:** MODEL_RESPONSE.md line 84
 
@@ -414,83 +377,100 @@ except ImportError:
 Despite the above failures, the MODEL_RESPONSE correctly implements all core audit requirements from PROMPT.md:
 
 **Requirement 1: Throughput Waste (Cost Optimization)**
+
 - Correctly identifies provisioned throughput < 30% utilization (lines 313-346)
 - Calculates potential monthly savings
 - Recommends Elastic or reduced provisioned throughput
 
 **Requirement 2: Burst Credit Risk (Performance)**
+
 - Checks bursting mode file systems for credit depletion (lines 348-381)
 - Calculates credit percentage thresholds (< 10% of max)
 - Recommends switching to Provisioned/Elastic mode
 
 **Requirement 3: Storage Tier Waste (Cost Optimization)**
+
 - Identifies missing IA lifecycle policies (lines 383-417)
 - Estimates 50% data eligible for IA tier
 - Calculates cost savings (Standard $0.30/GB vs IA $0.016/GB)
 
 **Requirement 4: Performance Misconfiguration**
+
 - Flags Max I/O mode with low metadata operations (lines 419-446)
 - Recommends General Purpose mode for lower latency
 
 **Requirement 5: Cleanup Candidates (Cost Optimization)**
+
 - Identifies file systems with zero connections for 60 days (lines 448-474)
 - Calculates storage cost savings from deletion
 
 **Requirement 6: Missing Encryption (Security)**
+
 - Detects unencrypted file systems (lines 476-493)
 - Flags as CRITICAL severity
 - Recommends KMS encryption
 
 **Requirement 7: No TLS in Transit (Security)**
+
 - Checks for TLS enforcement on mount targets (lines 495-523)
 - Validates via tags or access point configuration
 - Recommends TLS mount options
 
 **Requirement 8: Wide-Open Access (Security)**
+
 - Audits security groups for 0.0.0.0/0 on port 2049 (lines 525-550)
 - Flags as CRITICAL severity
 - Recommends VPC CIDR restrictions
 
 **Requirement 9: No IAM Authorization (Security)**
+
 - Checks for IAM-enabled access points (lines 552-569)
 - Recommends fine-grained access control via access points
 
 **Requirement 10: Root Risk (Security)**
+
 - Validates root squashing configuration (lines 571-601)
 - Checks POSIX user UID != 0
 - Recommends enabling root squashing
 
 **Requirement 11: Disaster Recovery (Resilience)**
+
 - Identifies critical systems without cross-region replication (lines 602-624)
 - Checks for DataCritical tag
 - Recommends EFS Replication
 
 **Requirement 12: No Backup Plan (Resilience)**
+
 - Validates AWS Backup integration (lines 637-658)
 - Checks backup policy status
 - Recommends automatic backups
 
 **Requirement 13: Single AZ Risk (Resilience)**
+
 - Flags production systems using One Zone storage (lines 660-679)
 - Checks production tags
 - Recommends Regional (Multi-AZ) storage
 
 **Requirement 14: Missing Alarms (Operational)**
+
 - Verifies CloudWatch alarms for critical metrics (lines 681-714)
 - Checks BurstCreditBalance, PercentIOLimit, ClientConnections
 - Recommends alarm creation
 
 **Requirement 15: Metadata Bottlenecks (Performance)**
+
 - Calculates metadata operations per second (lines 716-740)
 - Flags > 1000 ops/sec as bottleneck
 - Recommends workload sharding
 
 **Filters:**
+
 - Excludes ExcludeFromAnalysis: true tags (line 163)
 - Excludes Temporary: true tags (line 163)
 - Only audits file systems > 30 days old (lines 151-153)
 
 **Deliverables:**
+
 - Console output with summary table (lines 742-810)
 - JSON report with findings and access points (lines 812-873)
 
@@ -502,17 +482,16 @@ The core analysis logic, EFS API usage, finding categorization, and report gener
 
 ### Implementation Deficiencies
 
-| Aspect | MODEL_RESPONSE | IDEAL_RESPONSE | Impact |
-|--------|----------------|----------------|--------|
-| Testing infrastructure | No endpoint_url support | Environment-aware clients | Cannot test locally |
-| OS module import | Missing | Present | Configuration fails |
-| Age filter bypass | Hardcoded | Conditional for testing | Test systems excluded |
-| Backup policy handling | Inconsistent null safety | Always dict | Potential crash |
-| Lifecycle config handling | Inconsistent null safety | Always list | Potential crash |
-| Dictionary lookups | Inline nested calls | Similar | Minor code quality |
-| Emoji usage | Present | Present | User preference issue |
-| Environment docs | Missing | Should document | Poor developer experience |
-| Tabulate fallback | No fallback | Should have fallback | Dependency fragility |
+| Aspect                    | MODEL_RESPONSE           | IDEAL_RESPONSE            | Impact                    |
+| ------------------------- | ------------------------ | ------------------------- | ------------------------- |
+| Testing infrastructure    | No endpoint_url support  | Environment-aware clients | Cannot test locally       |
+| OS module import          | Missing                  | Present                   | Configuration fails       |
+| Age filter bypass         | Hardcoded                | Conditional for testing   | Test systems excluded     |
+| Backup policy handling    | Inconsistent null safety | Always dict               | Potential crash           |
+| Lifecycle config handling | Inconsistent null safety | Always list               | Potential crash           |
+| Dictionary lookups        | Inline nested calls      | Similar                   | Minor code quality        |
+| Environment docs          | Missing                  | Should document           | Poor developer experience |
+| Tabulate fallback         | No fallback              | Should have fallback      | Dependency fragility      |
 
 ---
 
@@ -527,6 +506,7 @@ The MODEL_RESPONSE failures stem from:
 5. **Documentation Gaps**: No guidance on testing or configuration options
 
 The model demonstrated strong understanding of:
+
 - EFS API operations and data structures
 - AWS security and cost optimization best practices
 - Comprehensive check implementation across 15 requirements
@@ -566,10 +546,10 @@ This comparison provides valuable lessons for model training:
 3. **Import Completeness**: Include all required standard library modules (os, sys, etc.)
 4. **Configuration Documentation**: Document all environment variables and configuration options
 5. **Graceful Degradation**: Provide fallbacks for optional dependencies
-6. **Emoji Usage**: Follow user preferences and avoid unless explicitly requested
-7. **Code Quality**: Extract nested dictionary lookups to intermediate variables for clarity
+6. **Code Quality**: Extract nested dictionary lookups to intermediate variables for clarity
 
 The MODEL_RESPONSE shows strong domain knowledge and comprehensive feature coverage but needs improvement in:
+
 - Test-driven development practices
 - Environment-based configuration
 - Type safety and null handling
