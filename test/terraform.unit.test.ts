@@ -3,14 +3,14 @@ import * as path from 'path';
 
 describe('Terraform Configuration Unit Tests', () => {
   const libDir = path.join(process.cwd(), 'lib');
+  let mainTfContent: string;
+
+  beforeAll(() => {
+    const mainTfPath = path.join(libDir, 'main.tf');
+    mainTfContent = fs.readFileSync(mainTfPath, 'utf8');
+  });
 
   describe('main.tf', () => {
-    let mainTfContent: string;
-
-    beforeAll(() => {
-      const mainTfPath = path.join(libDir, 'main.tf');
-      mainTfContent = fs.readFileSync(mainTfPath, 'utf8');
-    });
 
     it('should exist', () => {
       const mainTfPath = path.join(libDir, 'main.tf');
