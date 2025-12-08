@@ -22,10 +22,10 @@
     "IAM",
     "ALB"
   ],
-  "training_quality": 0,
+  "training_quality": 9,
   "coverage": {
-    "lines": 0,
-    "branches": 0
+    "lines": 100,
+    "branches": 78.57
   },
   "author": "claude-code",
   "dockerS3Location": ""
