@@ -589,9 +589,11 @@ describe('Validation Framework Components Unit Tests', () => {
       engine.loadRules('test-not-equals-rules.yaml');
       const mockNode = { node: { path: 'Test/Resource' } } as any;
 
-      // Test with value that equals - should NOT create finding (pass=true)
+      // Test with value that is different - should NOT create finding (rule passes)
+      // Rule says "status notEquals 'active'" meaning status should NOT be active
+      // Since status is 'inactive', the rule passes and no finding is created
       engine.evaluateRules(mockNode, 'AWS::Test::Resource', {
-        status: 'active',
+        status: 'inactive',
       });
 
       fs.unlinkSync('test-not-equals-rules.yaml');
