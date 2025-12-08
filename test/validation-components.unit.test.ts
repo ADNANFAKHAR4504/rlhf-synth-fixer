@@ -3,6 +3,8 @@ import { StackComparator } from '../lib/comparator/stack-comparator';
 import { RuleEngine } from '../lib/rules/rule-engine';
 import * as fs from 'fs';
 import * as path from 'path';
+// eslint-disable-next-line import/no-extraneous-dependencies
+import * as yaml from 'js-yaml';
 
 describe('Validation Framework Components Unit Tests', () => {
   describe('ValidationRegistry', () => {
@@ -368,7 +370,6 @@ describe('Validation Framework Components Unit Tests', () => {
 
     beforeAll(() => {
       // Create test rules file
-      const yaml = require('js-yaml');
       fs.writeFileSync('test-rules.yaml', yaml.dump(testRulesConfig));
     });
 
@@ -504,7 +505,6 @@ describe('Validation Framework Components Unit Tests', () => {
         ],
       };
 
-      const yaml = require('js-yaml');
       fs.writeFileSync('test-nested-rules.yaml', yaml.dump(nestedRulesConfig));
 
       engine.loadRules('test-nested-rules.yaml');
@@ -545,7 +545,6 @@ describe('Validation Framework Components Unit Tests', () => {
         ],
       };
 
-      const yaml = require('js-yaml');
       fs.writeFileSync('test-unknown-op-rules.yaml', yaml.dump(unknownOpRulesConfig));
 
       engine.loadRules('test-unknown-op-rules.yaml');
@@ -585,7 +584,6 @@ describe('Validation Framework Components Unit Tests', () => {
         ],
       };
 
-      const yaml = require('js-yaml');
       fs.writeFileSync('test-not-equals-rules.yaml', yaml.dump(notEqualsRulesConfig));
 
       engine.loadRules('test-not-equals-rules.yaml');
@@ -622,7 +620,6 @@ describe('Validation Framework Components Unit Tests', () => {
         ],
       };
 
-      const yaml = require('js-yaml');
       fs.writeFileSync('test-not-exists-rules.yaml', yaml.dump(notExistsRulesConfig));
 
       engine.loadRules('test-not-exists-rules.yaml');
@@ -660,7 +657,6 @@ describe('Validation Framework Components Unit Tests', () => {
         ],
       };
 
-      const yaml = require('js-yaml');
       fs.writeFileSync('test-contains-rules.yaml', yaml.dump(containsRulesConfig));
 
       engine.loadRules('test-contains-rules.yaml');
@@ -698,7 +694,6 @@ describe('Validation Framework Components Unit Tests', () => {
         ],
       };
 
-      const yaml = require('js-yaml');
       fs.writeFileSync('test-less-than-rules.yaml', yaml.dump(lessThanRulesConfig));
 
       engine.loadRules('test-less-than-rules.yaml');

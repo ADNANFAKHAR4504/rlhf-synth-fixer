@@ -3,11 +3,14 @@ import { Template } from 'aws-cdk-lib/assertions';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as fs from 'fs';
+import * as path from 'path';
 import { TapStack } from '../lib/TapStack';
 import { ValidationRegistry } from '../lib/core/validation-registry';
 import { LambdaConfigAspect } from '../lib/aspects/lambda-config-aspect';
 import { S3EncryptionAspect } from '../lib/aspects/s3-encryption-aspect';
 import { IAMPolicyAspect } from '../lib/aspects/iam-policy-aspect';
+import { ValidationReporter } from '../lib/reporters/validation-reporter';
 
 const environmentSuffix = 'test';
 
@@ -300,6 +303,14 @@ describe('Validation Aspects Unit Tests', () => {
   });
 
   describe('Lambda Config Aspect - Edge Cases', () => {
+    beforeEach(() => {
+      ValidationRegistry.clear();
+    });
+
+    afterEach(() => {
+      ValidationRegistry.clear();
+    });
+
     test('detects deprecated runtime (python2)', () => {
       const app = new cdk.App();
       const stack = new cdk.Stack(app, 'TestDeprecatedRuntimeStack');
@@ -383,6 +394,14 @@ describe('Validation Aspects Unit Tests', () => {
   });
 
   describe('S3 Encryption Aspect - Edge Cases', () => {
+    beforeEach(() => {
+      ValidationRegistry.clear();
+    });
+
+    afterEach(() => {
+      ValidationRegistry.clear();
+    });
+
     test('detects invalid encryption configuration (empty rules array)', () => {
       const app = new cdk.App();
       const stack = new cdk.Stack(app, 'TestInvalidEncryptionStack');
@@ -412,6 +431,14 @@ describe('Validation Aspects Unit Tests', () => {
   });
 
   describe('IAM Policy Aspect - Edge Cases', () => {
+    beforeEach(() => {
+      ValidationRegistry.clear();
+    });
+
+    afterEach(() => {
+      ValidationRegistry.clear();
+    });
+
     test('handles policy document without Statement property', () => {
       const app = new cdk.App();
       const stack = new cdk.Stack(app, 'TestNoStatementStack');
@@ -608,6 +635,46 @@ describe('Validation Aspects Unit Tests', () => {
       const wildcardFindings = findings.filter(f => f.category === 'IAM');
 
       expect(wildcardFindings.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('ValidationReporter - Edge Cases', () => {
+    beforeEach(() => {
+      ValidationRegistry.clear();
+    });
+
+    afterEach(() => {
+      ValidationRegistry.clear();
+    });
+
+    test('creates output directory when it does not exist', () => {
+      const app = new cdk.App();
+      const stack = new cdk.Stack(app, 'TestReporterDirCreationStack');
+
+      // Create a simple S3 bucket
+      new s3.CfnBucket(stack, 'TestBucket', {
+        bucketName: 'test-bucket-reporter',
+      });
+
+      cdk.Aspects.of(stack).add(new S3EncryptionAspect());
+
+      // Use a nested directory path that doesn't exist
+      const testOutputDir = './test-output-dir-' + Date.now();
+      const testOutputPath = path.join(testOutputDir, 'nested', 'validation-report.json');
+
+      // Add ValidationReporter with non-existent directory path
+      new ValidationReporter(stack, 'TestReporter', {
+        environmentSuffix: 'test-dir-creation',
+        outputPath: testOutputPath,
+      });
+
+      app.synth();
+
+      // Verify the directory was created and report was written
+      expect(fs.existsSync(testOutputPath)).toBe(true);
+
+      // Clean up
+      fs.rmSync(testOutputDir, { recursive: true, force: true });
     });
   });
 });
