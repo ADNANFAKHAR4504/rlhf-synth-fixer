@@ -1,25 +1,8 @@
 # Payment Processing Infrastructure - Baseline (Needs Optimization)
 # This configuration contains intentional inefficiencies and code duplication
 
-terraform {
-  required_version = ">= 1.5.0"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
-  backend "s3" {
-    bucket         = "payment-infra-terraform-state"
-    key            = "production/terraform.tfstate"
-    region         = "us-east-1"
-    encrypt        = true
-    dynamodb_table = "terraform-state-lock"
-  }
-}
-
-provider "aws" {
-  region = "us-east-1"
+locals {
+  name_prefix = "TapStack-${var.environment_suffix}"
 }
 
 # VPC Configuration - Hardcoded values
@@ -29,8 +12,8 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = {
-    Name        = "payment-vpc"
-    Environment = "production"
+    Name        = "${local.name_prefix}-vpc"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
@@ -40,11 +23,11 @@ resource "aws_vpc" "main" {
 resource "aws_subnet" "public_1" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.0.1.0/24"
-  availability_zone = "us-east-1a"
+  availability_zone = "${var.aws_region}a"
 
   tags = {
-    Name        = "payment-public-subnet-1"
-    Environment = "production"
+    Name        = "${local.name_prefix}-public-subnet-1"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
     Type        = "public"
@@ -54,11 +37,11 @@ resource "aws_subnet" "public_1" {
 resource "aws_subnet" "public_2" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.0.2.0/24"
-  availability_zone = "us-east-1b"
+  availability_zone = "${var.aws_region}b"
 
   tags = {
-    Name        = "payment-public-subnet-2"
-    Environment = "production"
+    Name        = "${local.name_prefix}-public-subnet-2"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
     Type        = "public"
@@ -68,11 +51,11 @@ resource "aws_subnet" "public_2" {
 resource "aws_subnet" "public_3" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.0.3.0/24"
-  availability_zone = "us-east-1c"
+  availability_zone = "${var.aws_region}c"
 
   tags = {
-    Name        = "payment-public-subnet-3"
-    Environment = "production"
+    Name        = "${local.name_prefix}-public-subnet-3"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
     Type        = "public"
@@ -83,11 +66,11 @@ resource "aws_subnet" "public_3" {
 resource "aws_subnet" "private_1" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.0.11.0/24"
-  availability_zone = "us-east-1a"
+  availability_zone = "${var.aws_region}a"
 
   tags = {
-    Name        = "payment-private-subnet-1"
-    Environment = "production"
+    Name        = "${local.name_prefix}-private-subnet-1"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
     Type        = "private"
@@ -97,11 +80,11 @@ resource "aws_subnet" "private_1" {
 resource "aws_subnet" "private_2" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.0.12.0/24"
-  availability_zone = "us-east-1b"
+  availability_zone = "${var.aws_region}b"
 
   tags = {
-    Name        = "payment-private-subnet-2"
-    Environment = "production"
+    Name        = "${local.name_prefix}-private-subnet-2"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
     Type        = "private"
@@ -111,11 +94,11 @@ resource "aws_subnet" "private_2" {
 resource "aws_subnet" "private_3" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.0.13.0/24"
-  availability_zone = "us-east-1c"
+  availability_zone = "${var.aws_region}c"
 
   tags = {
-    Name        = "payment-private-subnet-3"
-    Environment = "production"
+    Name        = "${local.name_prefix}-private-subnet-3"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
     Type        = "private"
@@ -127,8 +110,8 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name        = "payment-igw"
-    Environment = "production"
+    Name        = "${local.name_prefix}-igw"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
@@ -136,13 +119,13 @@ resource "aws_internet_gateway" "main" {
 
 # Security Groups - Repetitive rules (not using dynamic blocks)
 resource "aws_security_group" "alb" {
-  name        = "payment-alb-sg"
+  name        = "${local.name_prefix}-alb-sg"
   description = "Security group for ALB"
   vpc_id      = aws_vpc.main.id
 
   tags = {
-    Name        = "payment-alb-sg"
-    Environment = "production"
+    Name        = "${local.name_prefix}-alb-sg"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
@@ -177,13 +160,13 @@ resource "aws_security_group_rule" "alb_egress" {
 
 # ECS Security Group - Repetitive
 resource "aws_security_group" "ecs" {
-  name        = "payment-ecs-sg"
+  name        = "${local.name_prefix}-ecs-sg"
   description = "Security group for ECS tasks"
   vpc_id      = aws_vpc.main.id
 
   tags = {
-    Name        = "payment-ecs-sg"
-    Environment = "production"
+    Name        = "${local.name_prefix}-ecs-sg"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
@@ -209,11 +192,11 @@ resource "aws_security_group_rule" "ecs_egress" {
 
 # S3 Buckets - Duplicated configuration (should be a module or for_each)
 resource "aws_s3_bucket" "alb_logs" {
-  bucket = "payment-prod-alb-logs-12345"
+  bucket = "${lower(local.name_prefix)}-alb-logs"
 
   tags = {
-    Name        = "payment-prod-alb-logs"
-    Environment = "production"
+    Name        = "${local.name_prefix}-alb-logs"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
     Purpose     = "alb-logs"
@@ -237,11 +220,11 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "alb_logs" {
 }
 
 resource "aws_s3_bucket" "application_logs" {
-  bucket = "payment-prod-app-logs-12345"
+  bucket = "${lower(local.name_prefix)}-app-logs"
 
   tags = {
-    Name        = "payment-prod-app-logs"
-    Environment = "production"
+    Name        = "${local.name_prefix}-app-logs"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
     Purpose     = "application-logs"
@@ -265,11 +248,11 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "application_logs"
 }
 
 resource "aws_s3_bucket" "audit_logs" {
-  bucket = "payment-prod-audit-logs-12345"
+  bucket = "${lower(local.name_prefix)}-audit-logs"
 
   tags = {
-    Name        = "payment-prod-audit-logs"
-    Environment = "production"
+    Name        = "${local.name_prefix}-audit-logs"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
     Purpose     = "audit-logs"
@@ -294,11 +277,11 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "audit_logs" {
 
 # ECS Cluster
 resource "aws_ecs_cluster" "main" {
-  name = "payment-cluster"
+  name = "${local.name_prefix}-cluster"
 
   tags = {
-    Name        = "payment-cluster"
-    Environment = "production"
+    Name        = "${local.name_prefix}-cluster"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
@@ -306,7 +289,7 @@ resource "aws_ecs_cluster" "main" {
 
 # IAM Role - Inline policy (should use data source)
 resource "aws_iam_role" "ecs_task_execution" {
-  name = "payment-ecs-task-execution-role"
+  name = "${local.name_prefix}-ecs-task-execution-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -320,8 +303,8 @@ resource "aws_iam_role" "ecs_task_execution" {
   })
 
   tags = {
-    Name        = "payment-ecs-execution-role"
-    Environment = "production"
+    Name        = "${local.name_prefix}-ecs-execution-role"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
@@ -329,7 +312,7 @@ resource "aws_iam_role" "ecs_task_execution" {
 
 # Inline policy - Should use managed policy data source
 resource "aws_iam_role_policy" "ecs_task_execution" {
-  name = "ecs-task-execution-policy"
+  name = "${local.name_prefix}-ecs-task-execution-policy"
   role = aws_iam_role.ecs_task_execution.id
 
   policy = jsonencode({
@@ -353,7 +336,7 @@ resource "aws_iam_role_policy" "ecs_task_execution" {
 
 # ALB
 resource "aws_lb" "main" {
-  name               = "payment-alb"
+  name               = "${local.name_prefix}-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -363,184 +346,48 @@ resource "aws_lb" "main" {
     aws_subnet.public_3.id
   ]
 
-  enable_deletion_protection = true
+  enable_deletion_protection = false
 
   tags = {
-    Name        = "payment-alb"
-    Environment = "production"
+    Name        = "${local.name_prefix}-alb"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
-}
-
-# Duplicate ECS Services - Should use for_each
-resource "aws_ecs_service" "api" {
-  name            = "payment-api-service"
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = "payment-api:1"
-  desired_count   = 3
-  launch_type     = "FARGATE"
-
-  network_configuration {
-    subnets = [
-      aws_subnet.private_1.id,
-      aws_subnet.private_2.id,
-      aws_subnet.private_3.id
-    ]
-    security_groups = [aws_security_group.ecs.id]
-  }
-
-  tags = {
-    Name        = "payment-api-service"
-    Environment = "production"
-    ManagedBy   = "terraform"
-    Owner       = "platform-team"
-    Service     = "api"
-  }
-}
-
-resource "aws_ecs_service" "worker" {
-  name            = "payment-worker-service"
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = "payment-worker:1"
-  desired_count   = 2
-  launch_type     = "FARGATE"
-
-  network_configuration {
-    subnets = [
-      aws_subnet.private_1.id,
-      aws_subnet.private_2.id,
-      aws_subnet.private_3.id
-    ]
-    security_groups = [aws_security_group.ecs.id]
-  }
-
-  tags = {
-    Name        = "payment-worker-service"
-    Environment = "production"
-    ManagedBy   = "terraform"
-    Owner       = "platform-team"
-    Service     = "worker"
-  }
-}
-
-resource "aws_ecs_service" "scheduler" {
-  name            = "payment-scheduler-service"
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = "payment-scheduler:1"
-  desired_count   = 1
-  launch_type     = "FARGATE"
-
-  network_configuration {
-    subnets = [
-      aws_subnet.private_1.id,
-      aws_subnet.private_2.id,
-      aws_subnet.private_3.id
-    ]
-    security_groups = [aws_security_group.ecs.id]
-  }
-
-  tags = {
-    Name        = "payment-scheduler-service"
-    Environment = "production"
-    ManagedBy   = "terraform"
-    Owner       = "platform-team"
-    Service     = "scheduler"
-  }
-}
-
-# RDS Aurora - Hardcoded values
-resource "aws_rds_cluster" "main" {
-  cluster_identifier      = "payment-db-cluster"
-  engine                  = "aurora-postgresql"
-  engine_version          = "15.3"
-  database_name           = "payments"
-  master_username         = "dbadmin"
-  master_password         = "ChangeMe123!" # Hardcoded password - bad practice
-  db_subnet_group_name    = aws_db_subnet_group.main.name
-  vpc_security_group_ids  = [aws_security_group.rds.id]
-  backup_retention_period = 7
-  preferred_backup_window = "03:00-04:00"
-  storage_encrypted       = true
-
-  tags = {
-    Name        = "payment-db-cluster"
-    Environment = "production"
-    ManagedBy   = "terraform"
-    Owner       = "platform-team"
-  }
-}
-
-resource "aws_db_subnet_group" "main" {
-  name = "payment-db-subnet-group"
-  subnet_ids = [
-    aws_subnet.private_1.id,
-    aws_subnet.private_2.id,
-    aws_subnet.private_3.id
-  ]
-
-  tags = {
-    Name        = "payment-db-subnet-group"
-    Environment = "production"
-    ManagedBy   = "terraform"
-    Owner       = "platform-team"
-  }
-}
-
-resource "aws_security_group" "rds" {
-  name        = "payment-rds-sg"
-  description = "Security group for RDS"
-  vpc_id      = aws_vpc.main.id
-
-  tags = {
-    Name        = "payment-rds-sg"
-    Environment = "production"
-    ManagedBy   = "terraform"
-    Owner       = "platform-team"
-  }
-}
-
-resource "aws_security_group_rule" "rds_from_ecs" {
-  type                     = "ingress"
-  from_port                = 5432
-  to_port                  = 5432
-  protocol                 = "tcp"
-  source_security_group_id = aws_security_group.ecs.id
-  security_group_id        = aws_security_group.rds.id
 }
 
 # CloudWatch Log Groups - Repetitive
 resource "aws_cloudwatch_log_group" "api" {
-  name              = "/ecs/payment-api"
+  name              = "/ecs/${local.name_prefix}-api"
   retention_in_days = 7
 
   tags = {
-    Name        = "payment-api-logs"
-    Environment = "production"
+    Name        = "${local.name_prefix}-api-logs"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
 }
 
 resource "aws_cloudwatch_log_group" "worker" {
-  name              = "/ecs/payment-worker"
+  name              = "/ecs/${local.name_prefix}-worker"
   retention_in_days = 7
 
   tags = {
-    Name        = "payment-worker-logs"
-    Environment = "production"
+    Name        = "${local.name_prefix}-worker-logs"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
 }
 
 resource "aws_cloudwatch_log_group" "scheduler" {
-  name              = "/ecs/payment-scheduler"
+  name              = "/ecs/${local.name_prefix}-scheduler"
   retention_in_days = 7
 
   tags = {
-    Name        = "payment-scheduler-logs"
-    Environment = "production"
+    Name        = "${local.name_prefix}-scheduler-logs"
+    Environment = var.environment_suffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
