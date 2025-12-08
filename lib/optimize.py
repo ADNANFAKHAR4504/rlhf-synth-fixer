@@ -749,14 +749,17 @@ def main():  # pragma: no cover
     """Main execution function."""
     import argparse
 
+    # Get the directory where this script is located
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
     parser = argparse.ArgumentParser(
         description="Optimize Terraform configuration for payment processing infrastructure"
     )
     parser.add_argument(
         '--dir',
         '-d',
-        default=".",
-        help='Directory containing Terraform files (default: current directory)'
+        default=script_dir,
+        help='Directory containing Terraform files (default: script directory)'
     )
 
     args = parser.parse_args()
