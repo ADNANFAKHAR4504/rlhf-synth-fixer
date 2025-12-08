@@ -610,12 +610,8 @@ resource "aws_dynamodb_table" "vendor_scores" {
 # ===========================
 
 resource "aws_elasticache_subnet_group" "redis" {
-  name       = "${local.name_prefix}-redis-subnet-group"
+  name       = "${local.name_prefix}-redis-subnet-group-v1"
   subnet_ids = aws_subnet.private[*].id
-
-  lifecycle {
-    create_before_destroy = false
-  }
 
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-redis-subnet-group"
@@ -1773,10 +1769,6 @@ resource "aws_lambda_event_source_mapping" "vendor_notifier_sqs" {
   event_source_arn = aws_sqs_queue.vendor_notifications.arn
   function_name    = aws_lambda_function.vendor_notifier.arn
   batch_size       = 10
-
-  lifecycle {
-    create_before_destroy = false
-  }
 }
 
 # Status Processor Lambda
@@ -2694,24 +2686,16 @@ resource "aws_cloudwatch_log_group" "lambda_validator" {
 }
 
 resource "aws_cloudwatch_log_group" "lambda_router" {
-  name              = "/aws/lambda/${local.lambda_functions.router}"
+  name              = "/aws/lambda/${local.lambda_functions.router}-v1"
   retention_in_days = var.cloudwatch_log_retention_days
   kms_key_id        = aws_kms_key.maintenance_data.arn
-
-  lifecycle {
-    create_before_destroy = false
-  }
 
   tags = local.tags
 }
 
 resource "aws_cloudwatch_log_group" "redis_slow_log" {
-  name              = "/aws/elasticache/${local.name_prefix}-redis"
+  name              = "/aws/elasticache/${local.name_prefix}-redis-v1"
   retention_in_days = var.cloudwatch_log_retention_days
-
-  lifecycle {
-    create_before_destroy = false
-  }
 
   tags = local.tags
 }
