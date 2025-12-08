@@ -1,6 +1,4 @@
-# Financial Transaction Processing Platform
-
-Build a production-grade web application infrastructure for processing financial transactions using CDKTF with Python.
+Hey! We need to build a production-grade web application infrastructure for processing financial transactions using **CDKTF with Python**.
 
 ## Requirements
 
