@@ -175,13 +175,16 @@ class TapStack(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(parent=self)
         )
 
-        # Store a placeholder value (would be updated manually in real scenario)
-        aws.secretsmanager.SecretVersion(
-            f"github-oauth-token-version-{self.environment_suffix}",
-            secret_id=self.github_secret.id,
-            secret_string="placeholder-token-replace-manually",
-            opts=pulumi.ResourceOptions(parent=self)
-        )
+        # Store token from environment variable (must be set before deployment)
+        # In production, this would be provided via CI/CD environment or parameter store
+        github_token = get_env("GITHUB_OAUTH_TOKEN", "")
+        if github_token:
+            aws.secretsmanager.SecretVersion(
+                f"github-oauth-token-version-{self.environment_suffix}",
+                secret_id=self.github_secret.id,
+                secret_string=github_token,
+                opts=pulumi.ResourceOptions(parent=self)
+            )
 
     def _create_sns_topic(self):
         """Create SNS topic for pipeline failure notifications."""

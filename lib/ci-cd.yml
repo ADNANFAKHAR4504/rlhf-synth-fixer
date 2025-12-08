@@ -1,9 +1,10 @@
+---
 # CI/CD Pipeline Configuration
 # This workflow demonstrates a multi-stage Pulumi deployment pipeline
 
 name: Pulumi CI/CD Pipeline
 
-on:
+"on":
   workflow_dispatch:
   push:
     branches:
@@ -162,4 +163,5 @@ jobs:
         if: failure()
         run: |
           echo "Deployment failed - notification would be sent to SNS topic"
-          # In real scenario: aws sns publish --topic-arn $SNS_TOPIC_ARN --message "Deployment failed"
+          # In real scenario:
+          # aws sns publish --topic-arn $SNS_TOPIC_ARN --message "Failed"
