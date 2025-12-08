@@ -76,7 +76,7 @@ class StorageStack(Construct):
         )
 
         # Enable versioning (required for replication)
-        S3BucketVersioningA(
+        self.bucket_versioning = S3BucketVersioningA(
             self,
             "bucket-versioning",
             bucket=self.bucket.id,
@@ -174,6 +174,8 @@ class StorageStack(Construct):
             )
 
             # Replication configuration with RTC
+            # Note: Destination bucket must have versioning enabled before this can be created
+            # Since destination bucket is in another stack/region, we rely on proper deployment order
             S3BucketReplicationConfigurationA(
                 self,
                 "replication-config",
@@ -205,5 +207,6 @@ class StorageStack(Construct):
                             )
                         )
                     )
-                )]
+                )],
+                depends_on=[self.bucket_versioning]
             )

@@ -196,7 +196,7 @@ def main():
     base_suffix = os.environ.get("ENVIRONMENT_SUFFIX", "dev")
     environment_suffix = f"{base_suffix}-{UNIQUE_SUFFIX}"
 
-    # Deploy primary region stack
+    # Deploy primary region stack first
     primary_stack = DisasterRecoveryStack(
         app,
         "disaster-recovery-primary",
@@ -204,13 +204,17 @@ def main():
         environment_suffix=environment_suffix
     )
 
-    # Deploy secondary region stack
+    # Deploy secondary region stack after primary
+    # This ensures destination S3 bucket versioning is enabled before replication config
+    # and global Aurora cluster exists before secondary cluster joins
     secondary_stack = DisasterRecoveryStack(
         app,
         "disaster-recovery-secondary",
         region="us-east-2",
         environment_suffix=environment_suffix
     )
+    # Add dependency: secondary stack depends on primary stack
+    secondary_stack.add_dependency(primary_stack)
 
     # Deploy global resources
     # Note: In real implementation, you would reference outputs from regional stacks

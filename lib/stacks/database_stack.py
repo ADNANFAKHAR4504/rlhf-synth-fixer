@@ -57,7 +57,14 @@ class DatabaseStack(Construct):
         # DynamoDB Global Table - only create in primary region with replica
         if self.is_primary:
             other_region = "us-east-2" if region == "us-east-1" else "us-east-1"
-            replica_config = [DynamodbTableReplica(region_name=other_region)]
+            # For Global Tables with KMS, replicas need their own KMS key ARN
+            # Using AWS managed key for replicas to avoid cross-region KMS complexity
+            replica_config = [
+                DynamodbTableReplica(
+                    region_name=other_region,
+                    kms_key_arn="alias/aws/dynamodb"  # Use AWS managed key for replica
+                )
+            ]
 
             self.dynamodb_table = DynamodbTable(
                 self,
@@ -163,7 +170,9 @@ class DatabaseStack(Construct):
                 }
             )
         else:
-            # Secondary cluster (read-only replica) - no master credentials needed
+            # Secondary cluster (read-only replica) joining global cluster
+            # AWS Terraform provider requires master_username even for secondary clusters
+            # but the actual credentials are inherited from the primary
             self.aurora_cluster = RdsCluster(
                 self,
                 "aurora-cluster",
@@ -179,9 +188,14 @@ class DatabaseStack(Construct):
                 deletion_protection=False,
                 skip_final_snapshot=True,
                 global_cluster_identifier=f"dr-aurora-global-{environment_suffix}",
-                source_region="us-east-1",
+                # Required by Terraform even for secondary clusters
+                master_username="dbadmin",
+                manage_master_user_password=True,
                 tags={
                     "Name": f"dr-aurora-{region}-{environment_suffix}"
+                },
+                lifecycle={
+                    "ignore_changes": ["master_username", "master_password"]
                 }
             )
 
