@@ -1,6 +1,6 @@
 {
-  "platform": "cdk",
-  "language": "py",
+  "platform": "cicd",
+  "language": "yaml",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "o1r1z1s4",
