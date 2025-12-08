@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
-import { Tags } from 'aws-cdk-lib';
+import { DefaultStackSynthesizer, Tags } from 'aws-cdk-lib';
 import 'source-map-support/register';
 import { TapStack } from '../lib/tap-stack';
 
@@ -29,7 +29,7 @@ Tags.of(app).add('CreatedAt', createdAt);
 const account = process.env.CDK_DEFAULT_ACCOUNT || process.env.AWS_ACCOUNT_ID;
 const region = process.env.CDK_DEFAULT_REGION || process.env.AWS_REGION || 'us-east-1';
 
-// Validate that account and region are set
+// Validate that account is set
 if (!account) {
   throw new Error('AWS Account ID must be set via CDK_DEFAULT_ACCOUNT or AWS_ACCOUNT_ID environment variable');
 }
@@ -42,6 +42,9 @@ new TapStack(app, stackName, {
     account: account,
     region: region,
   },
+  synthesizer: new DefaultStackSynthesizer({
+    generateBootstrapVersionRule: false, // Skip bootstrap version check
+  }),
   description: 'Automated CloudFormation drift detection system',
 });
 
