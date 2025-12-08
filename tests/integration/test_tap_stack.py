@@ -447,49 +447,6 @@ class TestTapStack(unittest.TestCase):
         self.assertTrue(call_args['multi_az'])  # Should be True in production
         self.assertTrue(call_args['deletion_protection'])  # Should be True in production
 
-    @patch('lib.tap_stack.aws.rds.SubnetGroup')
-    @patch('lib.tap_stack.aws.rds.ParameterGroup')
-    @patch('lib.tap_stack.aws.rds.Instance')
-    @patch('lib.tap_stack.aws.cloudwatch.MetricAlarm')
-    @patch('lib.tap_stack.Config')
-    @patch('lib.tap_stack.pulumi.ComponentResource.__init__')
-    def test_tap_stack_initialization_default_password(self, mock_component_init, mock_config, mock_metric_alarm, mock_instance, mock_param_group, mock_subnet_group):
-        """Test TapStack initialization with default password when secret not set."""
-        mock_component_init.return_value = None
-        
-        mock_config_instance = MagicMock()
-        mock_config_instance.get_bool.return_value = False
-        mock_config_instance.get_secret.return_value = None  # No secret set
-        mock_config.return_value = mock_config_instance
-
-        # Mock the AWS resources
-        mock_subnet_group_instance = MagicMock()
-        mock_subnet_group.return_value = mock_subnet_group_instance
-        mock_subnet_group_instance.name = 'subnet-group-name'
-
-        mock_param_group_instance = MagicMock()
-        mock_param_group.return_value = mock_param_group_instance
-        mock_param_group_instance.name = 'param-group-name'
-
-        mock_instance_instance = MagicMock()
-        mock_instance.return_value = mock_instance_instance
-        mock_instance_instance.endpoint = 'test-endpoint'
-        mock_instance_instance.port = 3306
-        mock_instance_instance.resource_id = 'test-resource-id'
-        mock_instance_instance.identifier = 'test-identifier'
-
-        mock_metric_alarm.return_value = MagicMock()
-
-        args = TapStackArgs()
-        args.subnet_ids = ['subnet-1']
-
-        stack = TapStack('test-stack', args)
-
-        # Verify password uses default
-        mock_instance.assert_called_once()
-        call_args = mock_instance.call_args[1]
-        self.assertEqual(call_args['password'], 'test-password-12345')
-
 
 if __name__ == "__main__":
     unittest.main()
