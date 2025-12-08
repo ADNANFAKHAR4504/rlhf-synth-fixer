@@ -427,11 +427,13 @@ variable "sns_topic_escalation_alerts" {
 variable "sqs_vendor_notifications_queue" {
   description = "Name for vendor notifications queue"
   type        = string
+  default     = "vendor-notifications"
 }
 
 variable "sqs_tenant_acknowledgments_queue" {
   description = "Name for tenant acknowledgments queue"
   type        = string
+  default     = "tenant-acknowledgments"
 }
 
 variable "sqs_visibility_timeout" {
@@ -475,11 +477,13 @@ variable "eventbridge_emergency_pattern" {
 variable "s3_archive_bucket" {
   description = "Name for archive S3 bucket"
   type        = string
+  default     = "archive"
 }
 
 variable "s3_compliance_bucket" {
   description = "Name for compliance S3 bucket"
   type        = string
+  default     = "compliance"
 }
 
 variable "s3_archive_lifecycle_days" {
