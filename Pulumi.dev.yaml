@@ -1,3 +1,0 @@
-config:
-  ecs-optimization:environmentSuffix: "dev"
-  aws:region: us-east-1

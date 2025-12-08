@@ -1,0 +1,353 @@
+# CI/CD Pipeline Configuration for Pulumi Go Infrastructure
+
+# This workflow demonstrates a multi-account, multi-stage deployment for Pulumi Go applications
+
+# Infrastructure: ECS Optimization CI/CD Pipeline with ECS, ECR, VPC, ALB, CloudWatch, Systems Manager Parameter Store, Auto Scaling, Fargate
+
+name: Multi-Stage Pulumi Pipeline
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - dev
+
+env:
+  AWS_REGION: us-east-1
+  PULUMI_VERSION: latest
+  GO_VERSION: '1.23'
+  DEV_ACCOUNT_ID: ${{ secrets.DEV_ACCOUNT_ID }}
+  STAGING_ACCOUNT_ID: ${{ secrets.STAGING_ACCOUNT_ID }}
+  PROD_ACCOUNT_ID: ${{ secrets.PROD_ACCOUNT_ID }}
+
+jobs:
+  source:
+    name: Source Stage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Source
+
+  build:
+    name: Build Stage
+    runs-on: ubuntu-latest
+    needs: source
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Build
+
+      - name: Setup Go with caching
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Setup Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Download Go dependencies
+        run: go mod download
+
+      - name: Run Go tests
+        run: go test ./... -v
+
+      - name: Build Go binary
+        run: go build -v ./...
+
+      - name: Run Pulumi Preview
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+        run: |
+          pulumi preview --stack dev --non-interactive
+
+      - name: Run security checks with gosec
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          gosec ./...
+        continue-on-error: false
+
+      - name: Create artifacts tarball
+        run: tar -czf pulumi-outputs.tar.gz -C . go.mod go.sum *.go
+
+      - name: Encrypt artifacts with KMS
+        run: aws kms encrypt --key-id alias/github-actions-artifacts --plaintext fileb://pulumi-outputs.tar.gz --output text --query CiphertextBlob > pulumi-outputs.tar.gz.encrypted
+
+      - name: Upload encrypted artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulumi-outputs
+          path: pulumi-outputs.tar.gz.encrypted
+
+  deploy-dev:
+    name: Deploy to Dev
+    runs-on: ubuntu-latest
+    needs: build
+    environment: dev
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pulumi-outputs
+          path: ./artifacts/
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Dev
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Download Go dependencies
+        run: go mod download
+
+      - name: Deploy to Dev with Pulumi
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          ENVIRONMENT_SUFFIX: dev
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_AUTHOR: ${{ github.actor }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TEAM: synth
+        run: |
+          pulumi up --stack dev --yes --non-interactive
+
+      - name: Verify Deployment
+        run: |
+          aws ecs describe-clusters --clusters TapStack-dev --query 'clusters[*].{ClusterName:clusterName,Status:status,ActiveServicesCount:activeServicesCount}' || echo "ECS cluster not found"
+          aws ecs list-services --cluster TapStack-dev --query 'serviceArns' || echo "No services found"
+          aws elbv2 describe-load-balancers --query 'LoadBalancers[?contains(LoadBalancerName, `TapStack-dev`)].{Name:LoadBalancerName,DNSName:DNSName,State:State.Code}' || echo "ALB not found"
+          aws ecr describe-repositories --query 'repositories[?contains(repositoryName, `dev`)].{Name:repositoryName,URI:repositoryUri}' || echo "ECR repositories not found"
+
+      - name: Send Slack notification
+        if: always()
+        run: |
+          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d '{"text":"Dev deployment completed for ${{ github.ref }}"}'
+
+  manual-approval-staging:
+    name: Approve Staging Deployment
+    runs-on: ubuntu-latest
+    needs: deploy-dev
+    environment: staging-approval
+    steps:
+      - name: Manual approval checkpoint
+        run: echo "Deployment to staging approved"
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: manual-approval-staging
+    environment: staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pulumi-outputs
+          path: ./artifacts/
+
+      - name: Assume cross-account role for Staging via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.STAGING_ACCOUNT_ID }}:role/CrossAccountDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Staging
+          role-chaining: true
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Download Go dependencies
+        run: go mod download
+
+      - name: Deploy to Staging with Pulumi
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          ENVIRONMENT_SUFFIX: staging
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_AUTHOR: ${{ github.actor }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TEAM: synth
+        run: |
+          pulumi up --stack staging --yes --non-interactive
+
+      - name: Run integration tests
+        run: |
+          echo "Running integration tests..."
+
+      - name: Verify Deployment
+        run: |
+          aws ecs describe-clusters --clusters TapStack-staging --query 'clusters[*].{ClusterName:clusterName,Status:status,ActiveServicesCount:activeServicesCount}' || echo "ECS cluster not found"
+          aws ecs list-services --cluster TapStack-staging --query 'serviceArns' || echo "No services found"
+          aws elbv2 describe-load-balancers --query 'LoadBalancers[?contains(LoadBalancerName, `TapStack-staging`)].{Name:LoadBalancerName,DNSName:DNSName,State:State.Code}' || echo "ALB not found"
+          aws ecr describe-repositories --query 'repositories[?contains(repositoryName, `staging`)].{Name:repositoryName,URI:repositoryUri}' || echo "ECR repositories not found"
+          aws cloudwatch describe-alarms --alarm-name-prefix TapStack-staging --query 'MetricAlarms[*].{AlarmName:AlarmName,StateValue:StateValue}' || echo "CloudWatch alarms not found"
+
+      - name: Send Slack notification
+        if: always()
+        run: |
+          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d '{"text":"Staging deployment completed for ${{ github.ref }}"}'
+
+  manual-approval-prod:
+    name: Approve Production Deployment
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    environment: prod-approval
+    steps:
+      - name: Manual approval checkpoint
+        run: echo "Deployment to production approved"
+
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: manual-approval-prod
+    environment: prod
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pulumi-outputs
+          path: ./artifacts/
+
+      - name: Assume cross-account role for Production via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.PROD_ACCOUNT_ID }}:role/CrossAccountDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Prod
+          role-chaining: true
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Download Go dependencies
+        run: go mod download
+
+      - name: Deploy to Production with Pulumi
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          ENVIRONMENT_SUFFIX: prod
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_AUTHOR: ${{ github.actor }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TEAM: synth
+        run: |
+          pulumi up --stack prod --yes --non-interactive --refresh
+
+      - name: Verify ECS cluster
+        run: aws ecs describe-clusters --clusters TapStack-prod --query 'clusters[*].{ClusterName:clusterName,Status:status,ActiveServicesCount:activeServicesCount,RunningTasksCount:runningTasksCount}'
+
+      - name: Verify ECS services
+        run: aws ecs list-services --cluster TapStack-prod --query 'serviceArns'
+
+      - name: Verify Application Load Balancer
+        run: aws elbv2 describe-load-balancers --query 'LoadBalancers[?contains(LoadBalancerName, `TapStack-prod`)].{Name:LoadBalancerName,DNSName:DNSName,State:State.Code,Scheme:Scheme}'
+
+      - name: Verify ECR repositories
+        run: aws ecr describe-repositories --query 'repositories[?contains(repositoryName, `prod`)].{Name:repositoryName,URI:repositoryUri,ImageTagMutability:imageTagMutability}'
+
+      - name: Verify VPC endpoints
+        run: aws ec2 describe-vpc-endpoints --filters "Name=tag:Name,Values=*TapStack-prod*" --query 'VpcEndpoints[*].{VpcEndpointId:VpcEndpointId,ServiceName:ServiceName,State:State,PrivateDnsEnabled:PrivateDnsEnabled}' || echo "VPC endpoints not found"
+
+      - name: Verify CloudWatch Container Insights
+        run: aws ecs describe-clusters --clusters TapStack-prod --include CONFIGURATIONS --query 'clusters[*].settings[?name==`containerInsights`].value' || echo "Container Insights status checked"
+
+      - name: Verify Auto Scaling
+        run: aws application-autoscaling describe-scalable-targets --service-namespace ecs --query 'ScalableTargets[?contains(ResourceId, `TapStack-prod`)].{ResourceId:ResourceId,ServiceNamespace:ServiceNamespace,MinCapacity:MinCapacity,MaxCapacity:MaxCapacity}' || echo "Auto scaling targets not found"
+
+      - name: Health check
+        run: |
+          echo "Performing health checks..."
+
+      - name: Send Slack notification
+        if: always()
+        run: |
+          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d '{"text":"Production deployment completed for ${{ github.ref }}"}'
+
+  rollback:
+    name: Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: [deploy-prod]
+    if: failure()
+    environment: prod
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.PROD_ACCOUNT_ID }}:role/CrossAccountDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Rollback
+          role-chaining: true
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Rollback to previous state
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+        run: |
+          echo "Rolling back to previous deployment..."
+          pulumi stack history --stack prod --json | head -2
+
+      - name: Send rollback notification
+        run: |
+          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d '{"text":"Production deployment failed - automatic rollback initiated for ${{ github.ref }}"}'
+

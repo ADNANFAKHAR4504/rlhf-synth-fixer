@@ -5,9 +5,9 @@
   "turn_type": "single",
   "team": "synth",
   "startedAt": "2025-12-05T20:35:11+0530",
-  "subtask": "IaC Program Optimization",
+  "subtask": "CI/CD Pipeline Integration",
   "subject_labels": [
-    "IaC Optimization"
+    "CI/CD Pipeline"
   ],
   "po_id": "p8c5x7i5",
   "aws_services": [
@@ -23,5 +23,6 @@
     "Fargate"
   ],
   "region": "us-east-1",
+  "author": "mayankseth-turing",
   "training_quality": 10
 }
