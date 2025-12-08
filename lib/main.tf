@@ -357,7 +357,7 @@ resource "aws_lb" "main" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
-  subnets           = [
+  subnets = [
     aws_subnet.public_1.id,
     aws_subnet.public_2.id,
     aws_subnet.public_3.id
@@ -456,7 +456,7 @@ resource "aws_rds_cluster" "main" {
   engine_version          = "15.3"
   database_name           = "payments"
   master_username         = "dbadmin"
-  master_password         = "ChangeMe123!"  # Hardcoded password - bad practice
+  master_password         = "ChangeMe123!" # Hardcoded password - bad practice
   db_subnet_group_name    = aws_db_subnet_group.main.name
   vpc_security_group_ids  = [aws_security_group.rds.id]
   backup_retention_period = 7
@@ -472,7 +472,7 @@ resource "aws_rds_cluster" "main" {
 }
 
 resource "aws_db_subnet_group" "main" {
-  name       = "payment-db-subnet-group"
+  name = "payment-db-subnet-group"
   subnet_ids = [
     aws_subnet.private_1.id,
     aws_subnet.private_2.id,
