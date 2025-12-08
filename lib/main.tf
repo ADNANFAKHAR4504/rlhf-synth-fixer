@@ -2,7 +2,7 @@
 # This configuration contains intentional inefficiencies and code duplication
 
 locals {
-  name_prefix = "TapStack-${var.environment_suffix}"
+  name_prefix = "TapStack-${var.environmentSuffix}"
 }
 
 # VPC Configuration - Hardcoded values
@@ -13,7 +13,7 @@ resource "aws_vpc" "main" {
 
   tags = {
     Name        = "${local.name_prefix}-vpc"
-    Environment = var.environment_suffix
+    Environment = var.environmentSuffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
@@ -27,7 +27,7 @@ resource "aws_subnet" "public_1" {
 
   tags = {
     Name        = "${local.name_prefix}-public-subnet-1"
-    Environment = var.environment_suffix
+    Environment = var.environmentSuffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
     Type        = "public"
@@ -41,7 +41,7 @@ resource "aws_subnet" "public_2" {
 
   tags = {
     Name        = "${local.name_prefix}-public-subnet-2"
-    Environment = var.environment_suffix
+    Environment = var.environmentSuffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
     Type        = "public"
@@ -55,7 +55,7 @@ resource "aws_subnet" "public_3" {
 
   tags = {
     Name        = "${local.name_prefix}-public-subnet-3"
-    Environment = var.environment_suffix
+    Environment = var.environmentSuffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
     Type        = "public"
@@ -70,7 +70,7 @@ resource "aws_subnet" "private_1" {
 
   tags = {
     Name        = "${local.name_prefix}-private-subnet-1"
-    Environment = var.environment_suffix
+    Environment = var.environmentSuffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
     Type        = "private"
@@ -84,7 +84,7 @@ resource "aws_subnet" "private_2" {
 
   tags = {
     Name        = "${local.name_prefix}-private-subnet-2"
-    Environment = var.environment_suffix
+    Environment = var.environmentSuffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
     Type        = "private"
@@ -98,7 +98,7 @@ resource "aws_subnet" "private_3" {
 
   tags = {
     Name        = "${local.name_prefix}-private-subnet-3"
-    Environment = var.environment_suffix
+    Environment = var.environmentSuffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
     Type        = "private"
@@ -111,7 +111,7 @@ resource "aws_internet_gateway" "main" {
 
   tags = {
     Name        = "${local.name_prefix}-igw"
-    Environment = var.environment_suffix
+    Environment = var.environmentSuffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
@@ -125,7 +125,7 @@ resource "aws_security_group" "alb" {
 
   tags = {
     Name        = "${local.name_prefix}-alb-sg"
-    Environment = var.environment_suffix
+    Environment = var.environmentSuffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
@@ -166,7 +166,7 @@ resource "aws_security_group" "ecs" {
 
   tags = {
     Name        = "${local.name_prefix}-ecs-sg"
-    Environment = var.environment_suffix
+    Environment = var.environmentSuffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
@@ -196,7 +196,7 @@ resource "aws_s3_bucket" "alb_logs" {
 
   tags = {
     Name        = "${local.name_prefix}-alb-logs"
-    Environment = var.environment_suffix
+    Environment = var.environmentSuffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
     Purpose     = "alb-logs"
@@ -224,7 +224,7 @@ resource "aws_s3_bucket" "application_logs" {
 
   tags = {
     Name        = "${local.name_prefix}-app-logs"
-    Environment = var.environment_suffix
+    Environment = var.environmentSuffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
     Purpose     = "application-logs"
@@ -252,7 +252,7 @@ resource "aws_s3_bucket" "audit_logs" {
 
   tags = {
     Name        = "${local.name_prefix}-audit-logs"
-    Environment = var.environment_suffix
+    Environment = var.environmentSuffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
     Purpose     = "audit-logs"
@@ -281,7 +281,7 @@ resource "aws_ecs_cluster" "main" {
 
   tags = {
     Name        = "${local.name_prefix}-cluster"
-    Environment = var.environment_suffix
+    Environment = var.environmentSuffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
@@ -304,7 +304,7 @@ resource "aws_iam_role" "ecs_task_execution" {
 
   tags = {
     Name        = "${local.name_prefix}-ecs-execution-role"
-    Environment = var.environment_suffix
+    Environment = var.environmentSuffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
@@ -350,7 +350,7 @@ resource "aws_lb" "main" {
 
   tags = {
     Name        = "${local.name_prefix}-alb"
-    Environment = var.environment_suffix
+    Environment = var.environmentSuffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
@@ -363,7 +363,7 @@ resource "aws_cloudwatch_log_group" "api" {
 
   tags = {
     Name        = "${local.name_prefix}-api-logs"
-    Environment = var.environment_suffix
+    Environment = var.environmentSuffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
@@ -375,7 +375,7 @@ resource "aws_cloudwatch_log_group" "worker" {
 
   tags = {
     Name        = "${local.name_prefix}-worker-logs"
-    Environment = var.environment_suffix
+    Environment = var.environmentSuffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }
@@ -387,7 +387,7 @@ resource "aws_cloudwatch_log_group" "scheduler" {
 
   tags = {
     Name        = "${local.name_prefix}-scheduler-logs"
-    Environment = var.environment_suffix
+    Environment = var.environmentSuffix
     ManagedBy   = "terraform"
     Owner       = "platform-team"
   }

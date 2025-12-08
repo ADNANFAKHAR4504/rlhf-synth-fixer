@@ -20,7 +20,7 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Environment = var.environment_suffix
+      Environment = var.environmentSuffix
       Repository  = var.repository
       Author      = var.commit_author
       PRNumber    = var.pr_number

@@ -6,7 +6,7 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
-variable "environment_suffix" {
+variable "environmentSuffix" {
   description = "Environment suffix for resource naming (e.g., pr7999)"
   type        = string
   default     = "dev"
