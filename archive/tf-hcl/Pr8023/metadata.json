@@ -13,8 +13,8 @@
   "aws_services": [
     "API Gateway",
     "Lambda",
-    "DynamoDB (with streams)",
-    "ElastiCache Redis",
+    "DynamoDB",
+    "ElastiCache",
     "Aurora PostgreSQL",
     "SNS",
     "SQS",
@@ -22,12 +22,19 @@
     "EventBridge",
     "S3",
     "CloudWatch",
-    "VPC (with NAT & endpoints)",
+    "VPC",
     "IAM",
     "Secrets Manager",
     "KMS"
   ],
   "task_config": {
     "deploy_env": "dev.tfvars"
-  }
+  },
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
 }
