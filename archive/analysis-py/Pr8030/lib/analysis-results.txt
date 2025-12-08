@@ -1,0 +1,19 @@
+2025-12-08 09:01:53,149 - INFO - Found credentials in environment variables.
+2025-12-08 09:01:53,191 - INFO - Found endpoint for elbv2 via: environment_global.
+2025-12-08 09:01:53,201 - INFO - Found endpoint for cloudwatch via: environment_global.
+2025-12-08 09:01:53,258 - INFO - Found endpoint for ec2 via: environment_global.
+2025-12-08 09:01:53,266 - INFO - Found endpoint for wafv2 via: environment_global.
+2025-12-08 09:01:53,270 - INFO - Found endpoint for acm via: environment_global.
+2025-12-08 09:01:53,279 - INFO - Found endpoint for logs via: environment_global.
+2025-12-08 09:01:53,287 - INFO - Found endpoint for lambda via: environment_global.
+2025-12-08 09:01:53,297 - INFO - Found endpoint for ecs via: environment_global.
+2025-12-08 09:01:53,300 - INFO - Found endpoint for pricing via: environment_global.
+Starting Load Balancer Audit...
+Region: us-east-1
+Timestamp: 2025-12-08T09:01:53.302058+00:00
+
+Found 0 load balancers to analyze
+
+No load balancers found matching criteria
+
+Audit complete!
