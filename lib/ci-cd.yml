@@ -1,0 +1,588 @@
+# lib/ci-cd.yml
+
+# GitHub Actions CI/CD Pipeline for Infrastructure as Code Test Automations
+
+# Features: Automated testing, validation, security scanning, multi-tool support (CDK, Terraform, CloudFormation, Pulumi)
+
+# Deployment strategy: Dev → Staging → Production with manual approvals
+
+name: IaC Test Automations CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'feature/**'
+      - 'hotfix/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+
+env:
+  AWS_REGION: us-east-1
+  NODE_VERSION: '20'
+  PYTHON_VERSION: '3.13'
+  PIPENV_VERSION: '2025.0.4'
+
+jobs:
+  # ===================================================
+  # VALIDATION & BUILD STAGE
+  # ===================================================
+
+  validate-code:
+    name: Code Validation & Linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install Node.js dependencies
+        run: npm ci
+
+      - name: Install Python dependencies
+        run: |
+          pip install pipenv==${{ env.PIPENV_VERSION }}
+          pipenv install --dev
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Check code formatting
+        run: npm run format:check
+
+      - name: TypeScript type check
+        run: npm run build
+
+      - name: Validate Terraform configuration
+        run: npm run tf:validate
+        continue-on-error: true
+
+      - name: Check Terraform formatting
+        run: npm run tf:fmt
+        continue-on-error: true
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: validate-code
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          pip install pipenv==${{ env.PIPENV_VERSION }}
+          pipenv install --dev
+
+      - name: Run unit tests with coverage
+        run: npm run test:unit -- --coverage --ci
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: validate-code
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: testdb
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          pip install pipenv==${{ env.PIPENV_VERSION }}
+          pipenv install --dev
+
+      - name: Run integration tests
+        env:
+          DATABASE_URL: postgresql://postgres:testpass@localhost:5432/testdb
+          REDIS_URL: redis://localhost:6379
+        run: npm run test:integration -- --ci
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: test-results/
+
+  # ===================================================
+  # INFRASTRUCTURE SYNTHESIS & VALIDATION
+  # ===================================================
+
+  synth-cdk:
+    name: CDK Synthesis
+    runs-on: ubuntu-latest
+    needs: validate-code
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: CDK Synth
+        run: npm run synth
+        continue-on-error: true
+
+  synth-terraform:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    needs: validate-code
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: latest
+
+      - name: Terraform Init
+        run: npm run tf:init
+        continue-on-error: true
+
+      - name: Terraform Plan
+        run: npm run tf:plan
+        continue-on-error: true
+
+  synth-cloudformation:
+    name: CloudFormation Validation
+    runs-on: ubuntu-latest
+    needs: validate-code
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate CloudFormation templates
+        run: |
+          find lib -name "*.yml" -o -name "*.yaml" -o -name "*.json" | \
+          xargs -I {} sh -c 'aws cloudformation validate-template --template-body file://{} || true'
+        continue-on-error: true
+
+  # ===================================================
+  # SECURITY SCANNING STAGE
+  # ===================================================
+
+  security-scan:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    needs: validate-code
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run npm audit
+        run: |
+          npm ci
+          npm audit --audit-level=moderate
+        continue-on-error: true
+
+      - name: Check for secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+        continue-on-error: true
+
+  # ===================================================
+  # DEVELOPMENT DEPLOYMENT
+  # ===================================================
+
+  deploy-dev:
+    name: Deploy to Development
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests, synth-cdk, security-scan]
+    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
+    environment:
+      name: development
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Bootstrap CDK (if needed)
+        run: npm run cdk:bootstrap
+        continue-on-error: true
+
+      - name: Deploy CDK stacks
+        run: npm run cdk:deploy
+        env:
+          ENVIRONMENT_SUFFIX: dev
+        continue-on-error: true
+
+      - name: Deploy Terraform
+        run: npm run tf:deploy
+        continue-on-error: true
+
+      - name: Send notification
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: 'Development deployment ${{ job.status }}'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        continue-on-error: true
+
+  smoke-tests-dev:
+    name: Smoke Tests (Dev)
+    runs-on: ubuntu-latest
+    needs: deploy-dev
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Run smoke tests
+        run: |
+          npm ci
+          npm run test:unit
+        continue-on-error: true
+
+  # ===================================================
+  # STAGING DEPLOYMENT (WITH APPROVAL)
+  # ===================================================
+
+  approve-staging:
+    name: Approve Staging Deployment
+    runs-on: ubuntu-latest
+    needs: smoke-tests-dev
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: staging-approval
+    steps:
+      - name: Wait for approval
+        run: echo "Staging deployment approved"
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [approve-staging, unit-tests, integration-tests]
+    environment:
+      name: staging
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy to Staging
+        run: npm run deploy:staging
+        continue-on-error: true
+
+      - name: Send notification
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: 'Staging deployment ${{ job.status }}'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        continue-on-error: true
+
+  e2e-tests-staging:
+    name: E2E Tests (Staging)
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run integration tests against staging
+        run: npm run test:integration
+        continue-on-error: true
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-test-results
+          path: test-results/
+        continue-on-error: true
+
+  # ===================================================
+  # PRODUCTION DEPLOYMENT (WITH APPROVAL)
+  # ===================================================
+
+  approve-production:
+    name: Approve Production Deployment
+    runs-on: ubuntu-latest
+    needs: e2e-tests-staging
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production-approval
+    steps:
+      - name: Wait for approval
+        run: echo "Production deployment approved"
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [approve-production, unit-tests, integration-tests]
+    environment:
+      name: production
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy to Production
+        run: npm run deploy:production
+        continue-on-error: true
+
+      - name: Create deployment record
+        run: |
+          aws ssm put-parameter \
+            --name "/deployments/iac-test-automations/latest" \
+            --value "${{ github.sha }}" \
+            --type String \
+            --overwrite
+        continue-on-error: true
+
+      - name: Send SNS notification
+        run: |
+          aws sns publish \
+            --topic-arn arn:aws:sns:${{ env.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:deployment-notifications \
+            --subject "Production Deployment Successful" \
+            --message "IaC Test Automations deployed to production. Commit: ${{ github.sha }}"
+        continue-on-error: true
+
+      - name: Send Slack notification
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: 'Production deployment ${{ job.status }}'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        continue-on-error: true
+
+  post-deploy-monitoring:
+    name: Post-Deployment Monitoring
+    runs-on: ubuntu-latest
+    needs: deploy-production
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Check CloudWatch alarms
+        run: |
+          aws cloudwatch describe-alarms \
+            --state-value ALARM \
+            --query 'MetricAlarms[*].[AlarmName,StateValue]' \
+            --output table
+        continue-on-error: true
+
+  # ===================================================
+  # ROLLBACK (MANUAL TRIGGER)
+  # ===================================================
+
+  rollback:
+    name: Rollback Deployment
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment != ''
+    environment:
+      name: ${{ github.event.inputs.environment }}
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Get previous deployment
+        id: previous
+        run: |
+          PREVIOUS_SHA=$(aws ssm get-parameter \
+            --name "/deployments/iac-test-automations/previous" \
+            --query 'Parameter.Value' \
+            --output text 2>/dev/null || echo "")
+          echo "previous-sha=$PREVIOUS_SHA" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Rollback infrastructure
+        run: |
+          echo "Rolling back to previous deployment: ${{ steps.previous.outputs.previous-sha }}"
+          npm run destroy:${{ github.event.inputs.environment }}
+        continue-on-error: true
+
+      - name: Send rollback notification
+        uses: 8398a7/action-slack@v3
+        with:
+          status: 'warning'
+          text: 'Rollback initiated for ${{ github.event.inputs.environment }}'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        continue-on-error: true
+

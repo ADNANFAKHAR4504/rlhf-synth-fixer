@@ -428,19 +428,19 @@ The model should provide:
 ## Key Differentiators from "Trivial" Solutions
 
 An ideal response is NOT:
-- ❌ Just changing 3 default variable values
-- ❌ Simple search-and-replace operations
-- ❌ Superficial refactoring without understanding
+- Just changing 3 default variable values
+- Simple search-and-replace operations
+- Superficial refactoring without understanding
 
 An ideal response IS:
-- ✅ Comprehensive analysis of anti-patterns
-- ✅ Security-first approach with compliance awareness
-- ✅ Cost optimization with data-driven decisions
-- ✅ Advanced Terraform features (workspaces, dynamic blocks, for_each)
-- ✅ Production-ready error handling
-- ✅ Comprehensive testing (100% coverage)
-- ✅ Safe migration strategy with zero downtime
-- ✅ Quantified improvements (code reduction, cost savings)
+- Comprehensive analysis of anti-patterns
+- Security-first approach with compliance awareness
+- Cost optimization with data-driven decisions
+- Advanced Terraform features (workspaces, dynamic blocks, for_each)
+- Production-ready error handling
+- Comprehensive testing (100% coverage)
+- Safe migration strategy with zero downtime
+- Quantified improvements (code reduction, cost savings)
 
 ## Evaluation Criteria
 

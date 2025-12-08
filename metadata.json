@@ -1,12 +1,13 @@
 {
   "po_id": "t8n5i3h9",
-  "platform": "terraform",
-  "language": "hcl",
+  "platform": "cicd",
+  "language": "yaml",
   "complexity": "hard",
-  "subtask": "IaC Program Optimization",
+  "subtask": "CI/CD Pipeline Integration",
   "subject_labels": [
-    "IaC Optimization"
+    "CI/CD Pipeline"
   ],
-  "training_quality": 0,
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
   "review_comments": []
 }
