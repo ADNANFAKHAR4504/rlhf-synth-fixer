@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
+import 'source-map-support/register';
 import { TapStack } from '../lib/tap-stack';
 
 const app = new cdk.App();
@@ -29,8 +29,8 @@ new TapStack(app, stackName, {
   environmentSuffix: environmentSuffix, // Pass the suffix to the stack
   alertEmail: alertEmail, // Optional email for drift alerts
   env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
+    account: process.env.CDK_DEFAULT_ACCOUNT || process.env.AWS_ACCOUNT_ID,
+    region: process.env.CDK_DEFAULT_REGION || process.env.AWS_REGION || 'us-east-1',
   },
   description: 'Automated CloudFormation drift detection system',
 });
