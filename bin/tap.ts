@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
-import { DefaultStackSynthesizer, Tags } from 'aws-cdk-lib';
+import { Tags } from 'aws-cdk-lib';
 import 'source-map-support/register';
 import { TapStack } from '../lib/tap-stack';
 
@@ -49,9 +49,7 @@ new TapStack(app, stackName, {
     account: account,
     region: region,
   },
-  synthesizer: new DefaultStackSynthesizer({
-    generateBootstrapVersionRule: false, // Skip bootstrap version check (doesn't create toolkit)
-  }),
+  // Use default synthesizer without custom configuration to ensure proper bootstrap compatibility
   description: 'Automated CloudFormation drift detection system',
 });
 

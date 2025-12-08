@@ -18,11 +18,17 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
 
-    const { environmentSuffix, alertEmail } = props;
+    // sanitize suffix so resource names and CFN identifiers are safe
+    const rawSuffix = (props.environmentSuffix || 'dev').toString();
+    const environmentSuffix = rawSuffix.replace(/[^A-Za-z0-9_]/g, '');
+
+    // decide whether this looks like production (simple heuristic)
+    const isProd = /^(prod|production)$/i.test(environmentSuffix);
 
     // DynamoDB table to store drift detection results
     const driftTable = new dynamodb.Table(this, 'DriftTable', {
-      tableName: `drift-detection-${environmentSuffix}`,
+      // physical name — keep stable and CF-friendly
+      tableName: `drift_detection_${environmentSuffix}`,
       partitionKey: {
         name: 'stackName',
         type: dynamodb.AttributeType.STRING,
@@ -32,25 +38,23 @@ export class TapStack extends cdk.Stack {
         type: dynamodb.AttributeType.NUMBER,
       },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      removalPolicy: isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
     // SNS topic for drift alerts
     const alertTopic = new sns.Topic(this, 'AlertTopic', {
-      topicName: `drift-alerts-${environmentSuffix}`,
-      displayName: 'CloudFormation Drift Detection Alerts',
+      topicName: `drift_alerts_${environmentSuffix}`,
+      displayName: `CloudFormation Drift Detection Alerts (${environmentSuffix})`,
     });
 
-    // Add email subscription if provided
-    if (alertEmail) {
-      alertTopic.addSubscription(
-        new subscriptions.EmailSubscription(alertEmail)
-      );
+    // Add email subscription if provided and looks like an email
+    if (props.alertEmail && /\S+@\S+\.\S+/.test(props.alertEmail)) {
+      alertTopic.addSubscription(new subscriptions.EmailSubscription(props.alertEmail));
     }
 
     // Lambda function for drift detection
     const driftFunction = new lambda.Function(this, 'DriftFunction', {
-      functionName: `drift-detector-${environmentSuffix}`,
+      functionName: `drift_detector_${environmentSuffix}`,
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'index.handler',
       code: lambda.Code.fromAsset(path.join(__dirname, 'lambda')),
@@ -63,7 +67,9 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    // Grant Lambda permissions to read CloudFormation stacks
+    // Grant Lambda permissions to perform CloudFormation drift operations.
+    // Note: CloudFormation drift APIs often require '*' resource. If you have a small set of stack ARNs,
+    // replace '*' with those ARNs to follow least-privilege.
     driftFunction.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
@@ -73,20 +79,19 @@ export class TapStack extends cdk.Stack {
           'cloudformation:DetectStackDrift',
           'cloudformation:DescribeStackDriftDetectionStatus',
           'cloudformation:DescribeStackResourceDrifts',
+          'cloudformation:DescribeStackResources',
         ],
         resources: ['*'],
       })
     );
 
-    // Grant Lambda permissions to write to DynamoDB
+    // Grant Lambda permissions to write to DynamoDB and publish to SNS
     driftTable.grantWriteData(driftFunction);
-
-    // Grant Lambda permissions to publish to SNS
     alertTopic.grantPublish(driftFunction);
 
     // EventBridge rule to trigger Lambda every 6 hours
     const driftSchedule = new events.Rule(this, 'DriftSchedule', {
-      ruleName: `drift-detection-schedule-${environmentSuffix}`,
+      ruleName: `drift_detection_schedule_${environmentSuffix}`,
       description: 'Triggers drift detection every 6 hours',
       schedule: events.Schedule.rate(cdk.Duration.hours(6)),
     });
