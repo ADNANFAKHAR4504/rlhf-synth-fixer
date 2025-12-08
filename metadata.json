@@ -1,6 +1,6 @@
 {
   "platform": "cicd",
-  "language": "go",
+  "language": "yaml",
   "complexity": "hard",
   "turn_type": "single",
   "team": "synth",
