@@ -101,8 +101,7 @@ get_plan_script() {
             echo "localstack-cloudformation-plan.sh"
             ;;
         "cdk")
-            print_status $YELLOW "⚠️  CDK support is not yet implemented"
-            return 1
+            echo "localstack-cdk-plan.sh"
             ;;
         "cdktf")
             print_status $YELLOW "⚠️  CDKTF support is not yet implemented"
