@@ -1,0 +1,32 @@
+{
+  "task_id": "n5t7d8v5",
+  "po_id": "n5t7d8v5",
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-12-02T00:00:00Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Optimization"
+  ],
+  "aws_services": [
+    "Amazon ECS",
+    "Amazon ECR",
+    "Elastic Load Balancing",
+    "Amazon VPC",
+    "Amazon EC2",
+    "AWS IAM",
+    "Amazon CloudWatch Logs",
+    "Application Auto Scaling",
+    "Amazon CloudWatch"
+  ],
+  "author": "mayanksethi-turing",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

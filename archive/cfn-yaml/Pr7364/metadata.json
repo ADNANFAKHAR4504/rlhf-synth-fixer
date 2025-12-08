@@ -1,0 +1,37 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350169",
+  "team": "3",
+  "startedAt": "2025-11-26T10:12:26.351Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "S3 Bucket",
+    "EC2",
+    "IAM",
+    "RDS",
+    "ALB",
+    "ASG",
+    "VPC",
+    "SNS",
+    "CloudFormation",
+    "Backup",
+    "CloudWatch LogGroup",
+    "CloudWatch Dashboard",
+    "CloudWatch Alarm",
+    "SSM Parameter Store",
+    "Secrets Manager"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mikiaszerihun",
+  "dockerS3Location": ""
+}

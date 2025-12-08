@@ -1,0 +1,4 @@
+name: TapStack
+runtime: nodejs
+description: S3 bucket analysis system with Lambda-based async architecture
+main: bin/

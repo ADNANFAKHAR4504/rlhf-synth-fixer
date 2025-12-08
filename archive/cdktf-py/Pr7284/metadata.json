@@ -1,0 +1,30 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "r5i6r0f6",
+  "team": "synth",
+  "startedAt": "2025-11-25T22:08:58+05:30",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "EKS",
+    "Fargate",
+    "ECR",
+    "IAM",
+    "Secrets Manager",
+    "CloudWatch",
+    "VPC",
+    "OIDC"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,36 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-26T04:10:56+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "po_id": "e8e7g6h9",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "RDS",
+    "Aurora",
+    "ElastiCache",
+    "ALB",
+    "ACM",
+    "Secrets Manager",
+    "CloudWatch",
+    "IAM",
+    "Lambda",
+    "NAT Gateway"
+  ],
+  "region": "us-west-2",
+  "author": "mayanksethi-turing",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

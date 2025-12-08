@@ -1,0 +1,54 @@
+{
+  "repositories": [
+    {
+      "name": "frontend-app",
+      "description": "Frontend application repository",
+      "defaultBranch": "main",
+      "tags": {
+        "Application": "Frontend",
+        "Team": "WebDev"
+      },
+      "sizeAlarmThresholdMB": 500
+    },
+    {
+      "name": "backend-api",
+      "description": "Backend API repository",
+      "defaultBranch": "main",
+      "tags": {
+        "Application": "Backend",
+        "Team": "API"
+      },
+      "sizeAlarmThresholdMB": 1000
+    },
+    {
+      "name": "infrastructure",
+      "description": "Infrastructure as Code repository",
+      "defaultBranch": "main",
+      "tags": {
+        "Application": "IaC",
+        "Team": "DevOps"
+      },
+      "sizeAlarmThresholdMB": 300
+    },
+    {
+      "name": "mobile-app",
+      "description": "Mobile application repository",
+      "defaultBranch": "main",
+      "tags": {
+        "Application": "Mobile",
+        "Team": "MobileTeam"
+      },
+      "sizeAlarmThresholdMB": 750
+    },
+    {
+      "name": "data-pipeline",
+      "description": "Data processing pipeline repository",
+      "defaultBranch": "main",
+      "tags": {
+        "Application": "DataPipeline",
+        "Team": "DataEngineering"
+      },
+      "sizeAlarmThresholdMB": 500
+    }
+  ]
+}

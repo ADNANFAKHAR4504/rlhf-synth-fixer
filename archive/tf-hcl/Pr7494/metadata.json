@@ -1,0 +1,38 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912828",
+  "team": "synth",
+  "startedAt": "2025-11-28T00:25:47+00:00",
+  "subtask": "database-migration",
+  "subject_labels": [
+    "RDS Aurora",
+    "Database Migration Service (DMS)",
+    "S3 Storage",
+    "CloudWatch Monitoring",
+    "IAM Security",
+    "Multi-AZ Deployment",
+    "Data Replication",
+    "Blue-Green Deployment"
+  ],
+  "aws_services": [
+    "RDS Aurora PostgreSQL",
+    "AWS Database Migration Service (DMS)",
+    "S3",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "KMS",
+    "VPC"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

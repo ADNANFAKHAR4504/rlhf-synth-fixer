@@ -1,0 +1,171 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Database Stack - RDS Aurora MySQL Cluster",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Unique suffix for resource names",
+      "AllowedPattern": "^[a-z0-9]{6,12}$"
+    },
+    "PrivateSubnetIds": {
+      "Type": "CommaDelimitedList",
+      "Description": "Comma-separated list of private subnet IDs"
+    },
+    "DatabaseSecurityGroupId": {
+      "Type": "String",
+      "Description": "Security group ID for database"
+    },
+    "DatabaseMasterUsername": {
+      "Type": "String",
+      "Default": "admin",
+      "Description": "Master username for Aurora database"
+    },
+    "DatabasePasswordSecretArn": {
+      "Type": "String",
+      "Description": "ARN of the Secrets Manager secret containing the database password"
+    }
+  },
+  "Resources": {
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupName": { "Fn::Sub": "aurora-subnet-group-${EnvironmentSuffix}" },
+        "DBSubnetGroupDescription": "Subnet group for Aurora cluster",
+        "SubnetIds": { "Ref": "PrivateSubnetIds" },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "aurora-subnet-group-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "AuroraCluster": {
+      "Type": "AWS::RDS::DBCluster",
+      "DeletionPolicy": "Snapshot",
+      "UpdateReplacePolicy": "Snapshot",
+      "Properties": {
+        "Engine": "aurora-mysql",
+        "EngineVersion": "8.0.mysql_aurora.3.04.2",
+        "EngineMode": "provisioned",
+        "DatabaseName": { "Fn::Sub": "transactiondb${EnvironmentSuffix}" },
+        "MasterUsername": { "Ref": "DatabaseMasterUsername" },
+        "MasterUserPassword": { "Fn::Sub": "{{resolve:secretsmanager:${DatabasePasswordSecretArn}:SecretString:password}}" },
+        "DBSubnetGroupName": { "Ref": "DBSubnetGroup" },
+        "VpcSecurityGroupIds": [
+          { "Ref": "DatabaseSecurityGroupId" }
+        ],
+        "BackupRetentionPeriod": 7,
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+        "StorageEncrypted": true,
+        "EnableCloudwatchLogsExports": ["error", "general", "slowquery"],
+        "DBClusterIdentifier": { "Fn::Sub": "aurora-cluster-${EnvironmentSuffix}" },
+        "ServerlessV2ScalingConfiguration": {
+          "MinCapacity": 0.5,
+          "MaxCapacity": 2
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "aurora-cluster-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "AuroraInstance1": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "Engine": "aurora-mysql",
+        "DBClusterIdentifier": { "Ref": "AuroraCluster" },
+        "DBInstanceIdentifier": { "Fn::Sub": "aurora-instance-1-${EnvironmentSuffix}" },
+        "DBInstanceClass": "db.serverless",
+        "PubliclyAccessible": false,
+        "EnablePerformanceInsights": true,
+        "PerformanceInsightsRetentionPeriod": 7,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "aurora-instance-1-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "AuroraInstance2": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "Engine": "aurora-mysql",
+        "DBClusterIdentifier": { "Ref": "AuroraCluster" },
+        "DBInstanceIdentifier": { "Fn::Sub": "aurora-instance-2-${EnvironmentSuffix}" },
+        "DBInstanceClass": "db.serverless",
+        "PubliclyAccessible": false,
+        "EnablePerformanceInsights": true,
+        "PerformanceInsightsRetentionPeriod": 7,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "aurora-instance-2-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "DatabaseConnectionCountAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": { "Fn::Sub": "aurora-connection-count-${EnvironmentSuffix}" },
+        "AlarmDescription": "Triggers when Aurora connection count is too high",
+        "MetricName": "DatabaseConnections",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBClusterIdentifier",
+            "Value": { "Ref": "AuroraCluster" }
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    }
+  },
+  "Outputs": {
+    "ClusterEndpoint": {
+      "Description": "Aurora Cluster Write Endpoint",
+      "Value": { "Fn::GetAtt": ["AuroraCluster", "Endpoint.Address"] },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-ClusterEndpoint" }
+      }
+    },
+    "ClusterReadEndpoint": {
+      "Description": "Aurora Cluster Read Endpoint",
+      "Value": { "Fn::GetAtt": ["AuroraCluster", "ReadEndpoint.Address"] },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-ClusterReadEndpoint" }
+      }
+    },
+    "ClusterPort": {
+      "Description": "Aurora Cluster Port",
+      "Value": { "Fn::GetAtt": ["AuroraCluster", "Endpoint.Port"] },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-ClusterPort" }
+      }
+    },
+    "DatabaseName": {
+      "Description": "Database Name",
+      "Value": { "Fn::Sub": "transactiondb${EnvironmentSuffix}" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-DatabaseName" }
+      }
+    },
+    "ClusterArn": {
+      "Description": "Aurora Cluster ARN",
+      "Value": { "Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:aurora-cluster-${EnvironmentSuffix}" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-ClusterArn" }
+      }
+    }
+  }
+}

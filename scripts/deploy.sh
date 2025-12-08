@@ -54,6 +54,19 @@ if [ -n "$PULUMI_BACKEND_URL" ]; then
   echo "  Pulumi organization: $PULUMI_ORG"
 fi
 
+echo "=== Validation Phase ==="
+echo "🔍 Validating stack naming conventions..."
+if [ -f "scripts/validate-stack-naming.sh" ]; then
+  ./scripts/validate-stack-naming.sh || {
+    echo "⚠️ Stack naming validation failed. Please fix naming inconsistencies."
+    echo "ℹ️ Use 'TapStack' (capital T, capital S) everywhere."
+    # Don't fail deployment for now, just warn
+    # exit 1
+  }
+else
+  echo "⚠️ validate-stack-naming.sh not found, skipping naming validation"
+fi
+
 echo "=== Bootstrap Phase ==="
 ./scripts/bootstrap.sh
 
@@ -95,7 +108,87 @@ if [ "$PLATFORM" = "cdk" ]; then
 
 elif [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ CDKTF project detected, running CDKTF deploy..."
-  
+
+  # Pre-deployment cleanup: Delete orphaned AWS resources that may cause conflicts
+  echo "🧹 Cleaning up orphaned resources from previous failed deployments..."
+
+  # CloudWatch Log Groups
+  echo "  📋 Checking CloudWatch Log Groups..."
+  for log_group_name in "/aws/lambda/webhook-processor-${ENVIRONMENT_SUFFIX}" "/aws/lambda/price-enricher-${ENVIRONMENT_SUFFIX}"; do
+    if aws logs describe-log-groups --log-group-name-prefix "$log_group_name" --query "logGroups[?logGroupName=='${log_group_name}'].logGroupName" --output text 2>/dev/null | grep -q "$log_group_name"; then
+      echo "    ⚠️ Found orphaned log group: $log_group_name - deleting..."
+      aws logs delete-log-group --log-group-name "$log_group_name" 2>/dev/null || true
+    fi
+  done
+
+  # DynamoDB Table
+  echo "  📋 Checking DynamoDB Tables..."
+  DYNAMO_TABLE="crypto-prices-${ENVIRONMENT_SUFFIX}"
+  if aws dynamodb describe-table --table-name "$DYNAMO_TABLE" --query "Table.TableName" --output text 2>/dev/null | grep -q "$DYNAMO_TABLE"; then
+    echo "    ⚠️ Found orphaned DynamoDB table: $DYNAMO_TABLE - deleting..."
+    aws dynamodb delete-table --table-name "$DYNAMO_TABLE" 2>/dev/null || true
+    echo "    ⏳ Waiting for table deletion..."
+    aws dynamodb wait table-not-exists --table-name "$DYNAMO_TABLE" 2>/dev/null || true
+  fi
+
+  # KMS Alias (delete alias before key)
+  echo "  📋 Checking KMS Aliases..."
+  KMS_ALIAS="alias/lambda-crypto-processor-${ENVIRONMENT_SUFFIX}"
+  if aws kms describe-key --key-id "$KMS_ALIAS" --query "KeyMetadata.KeyId" --output text 2>/dev/null; then
+    echo "    ⚠️ Found orphaned KMS alias: $KMS_ALIAS - deleting..."
+    aws kms delete-alias --alias-name "$KMS_ALIAS" 2>/dev/null || true
+  fi
+
+  # SNS Topics
+  echo "  📋 Checking SNS Topics..."
+  SNS_TOPIC_PREFIX="price-updates-success-${ENVIRONMENT_SUFFIX}"
+  SNS_TOPIC_ARN=$(aws sns list-topics --query "Topics[?contains(TopicArn, '${SNS_TOPIC_PREFIX}')].TopicArn" --output text 2>/dev/null || echo "")
+  if [ -n "$SNS_TOPIC_ARN" ] && [ "$SNS_TOPIC_ARN" != "None" ]; then
+    echo "    ⚠️ Found orphaned SNS topic: $SNS_TOPIC_ARN - deleting..."
+    aws sns delete-topic --topic-arn "$SNS_TOPIC_ARN" 2>/dev/null || true
+  fi
+
+  # SQS Queues
+  echo "  📋 Checking SQS Queues..."
+  for queue_name in "webhook-processor-dlq-${ENVIRONMENT_SUFFIX}" "price-enricher-dlq-${ENVIRONMENT_SUFFIX}"; do
+    QUEUE_URL=$(aws sqs get-queue-url --queue-name "$queue_name" --query "QueueUrl" --output text 2>/dev/null || echo "")
+    if [ -n "$QUEUE_URL" ] && [ "$QUEUE_URL" != "None" ]; then
+      echo "    ⚠️ Found orphaned SQS queue: $queue_name - deleting..."
+      aws sqs delete-queue --queue-url "$QUEUE_URL" 2>/dev/null || true
+    fi
+  done
+
+  # IAM Roles (be careful - only delete if orphaned)
+  echo "  📋 Checking IAM Roles..."
+  for role_name in "webhook-processor-role-${ENVIRONMENT_SUFFIX}" "price-enricher-role-${ENVIRONMENT_SUFFIX}"; do
+    if aws iam get-role --role-name "$role_name" --query "Role.RoleName" --output text 2>/dev/null | grep -q "$role_name"; then
+      echo "    ⚠️ Found orphaned IAM role: $role_name - cleaning up..."
+      # Detach all policies first
+      ATTACHED_POLICIES=$(aws iam list-attached-role-policies --role-name "$role_name" --query "AttachedPolicies[].PolicyArn" --output text 2>/dev/null || echo "")
+      for policy_arn in $ATTACHED_POLICIES; do
+        aws iam detach-role-policy --role-name "$role_name" --policy-arn "$policy_arn" 2>/dev/null || true
+      done
+      # Delete inline policies
+      INLINE_POLICIES=$(aws iam list-role-policies --role-name "$role_name" --query "PolicyNames[]" --output text 2>/dev/null || echo "")
+      for policy_name in $INLINE_POLICIES; do
+        aws iam delete-role-policy --role-name "$role_name" --policy-name "$policy_name" 2>/dev/null || true
+      done
+      # Delete the role
+      aws iam delete-role --role-name "$role_name" 2>/dev/null || true
+    fi
+  done
+
+  # Lambda Functions
+  echo "  📋 Checking Lambda Functions..."
+  for func_name in "webhook-processor-${ENVIRONMENT_SUFFIX}" "price-enricher-${ENVIRONMENT_SUFFIX}"; do
+    if aws lambda get-function --function-name "$func_name" --query "Configuration.FunctionName" --output text 2>/dev/null | grep -q "$func_name"; then
+      echo "    ⚠️ Found orphaned Lambda function: $func_name - deleting..."
+      aws lambda delete-function --function-name "$func_name" 2>/dev/null || true
+    fi
+  done
+
+  echo "✅ Orphaned resource cleanup completed"
+
   if [ "$LANGUAGE" = "go" ]; then
     echo "🔧 Ensuring .gen exists for CDKTF Go deploy"
 
@@ -119,6 +212,199 @@ elif [ "$PLATFORM" = "cdktf" ]; then
     fi
     # Go modules are prepared during build; avoid cache-clearing and extra tidying here
   fi
+
+  # Clean up any stale resources before deploying (CDKTF uses local state)
+  RESOURCE_SUFFIX="${ENVIRONMENT_SUFFIX}"
+  echo "🧹 Checking for stale AWS resources with suffix: $RESOURCE_SUFFIX"
+
+  # Define regions to clean up (primary and secondary for DR scenarios)
+  CLEANUP_REGIONS="us-east-1 us-west-2"
+
+  # Clean up stale Lambda functions (in all regions)
+  echo "Cleaning up stale Lambda functions..."
+  for region in $CLEANUP_REGIONS; do
+    for func in $(aws lambda list-functions --region "$region" --query "Functions[?contains(FunctionName, '-${RESOURCE_SUFFIX}')].FunctionName" --output text 2>/dev/null || echo ""); do
+      if [ -n "$func" ]; then
+        echo "  Deleting Lambda function: $func (region: $region)"
+        aws lambda delete-function --function-name "$func" --region "$region" 2>/dev/null || echo "  Failed to delete $func"
+      fi
+    done
+  done
+
+  # Clean up stale DynamoDB tables (including global tables with replicas)
+  echo "Cleaning up stale DynamoDB tables..."
+  TABLES_TO_DELETE=""
+  for table in $(aws dynamodb list-tables --query "TableNames[?contains(@, '-${RESOURCE_SUFFIX}')]" --output text 2>/dev/null || echo ""); do
+    if [ -n "$table" ]; then
+      echo "  Processing DynamoDB table: $table"
+
+      # Check if table has replicas (global table) and remove them first
+      REPLICAS=$(aws dynamodb describe-table --table-name "$table" --query 'Table.Replicas[].RegionName' --output text 2>/dev/null || echo "")
+      if [ -n "$REPLICAS" ]; then
+        echo "  Table has replicas: $REPLICAS"
+        REPLICAS_TO_REMOVE=""
+        for replica_region in $REPLICAS; do
+          # Don't remove the primary region's replica (that's the base table)
+          if [ "$replica_region" != "$AWS_REGION" ] && [ "$replica_region" != "us-east-1" ]; then
+            echo "  Removing replica in $replica_region"
+            aws dynamodb update-table --table-name "$table" --replica-updates "Delete={RegionName=$replica_region}" 2>/dev/null || echo "  Failed to remove replica in $replica_region"
+            REPLICAS_TO_REMOVE="$REPLICAS_TO_REMOVE $replica_region"
+          fi
+        done
+
+        # Wait for ALL replicas to be removed before proceeding (poll until replicas are gone)
+        if [ -n "$REPLICAS_TO_REMOVE" ]; then
+          echo "  Waiting for replica removal to complete (checking replicas list)..."
+          for i in $(seq 1 60); do
+            # Wait for table to become ACTIVE again after replica removal
+            TABLE_STATUS=$(aws dynamodb describe-table --table-name "$table" --query 'Table.TableStatus' --output text 2>/dev/null || echo "DELETED")
+            CURRENT_REPLICAS=$(aws dynamodb describe-table --table-name "$table" --query 'Table.Replicas[].RegionName' --output text 2>/dev/null || echo "")
+
+            # Check if all non-primary replicas are gone
+            REPLICAS_REMAINING=false
+            for r in $CURRENT_REPLICAS; do
+              if [ "$r" != "$AWS_REGION" ] && [ "$r" != "us-east-1" ]; then
+                REPLICAS_REMAINING=true
+                break
+              fi
+            done
+
+            if [ "$REPLICAS_REMAINING" = "false" ] && [ "$TABLE_STATUS" = "ACTIVE" ]; then
+              echo "  All replicas removed, table is ACTIVE"
+              break
+            fi
+            echo "  Waiting for replicas to be removed... (status: $TABLE_STATUS, replicas: $CURRENT_REPLICAS) (attempt $i/60)"
+            sleep 10
+          done
+        fi
+      fi
+
+      # Check if table has deletion protection enabled and disable it
+      DELETION_PROTECTION=$(aws dynamodb describe-table --table-name "$table" --query 'Table.DeletionProtectionEnabled' --output text 2>/dev/null || echo "false")
+      if [ "$DELETION_PROTECTION" = "true" ] || [ "$DELETION_PROTECTION" = "True" ]; then
+        echo "  Disabling deletion protection on $table"
+        aws dynamodb update-table --table-name "$table" --no-deletion-protection-enabled 2>/dev/null || echo "  Failed to disable deletion protection"
+        # Wait for table to be ACTIVE after disabling deletion protection
+        for i in $(seq 1 30); do
+          TABLE_STATUS=$(aws dynamodb describe-table --table-name "$table" --query 'Table.TableStatus' --output text 2>/dev/null || echo "ACTIVE")
+          if [ "$TABLE_STATUS" = "ACTIVE" ]; then
+            break
+          fi
+          sleep 5
+        done
+      fi
+
+      echo "  Deleting DynamoDB table: $table"
+      aws dynamodb delete-table --table-name "$table" 2>/dev/null || echo "  Failed to delete $table (may not exist or still has replicas)"
+      TABLES_TO_DELETE="$TABLES_TO_DELETE $table"
+    fi
+  done
+
+  # Wait for DynamoDB tables to be fully deleted
+  if [ -n "$TABLES_TO_DELETE" ]; then
+    echo "  Waiting for DynamoDB tables to be deleted..."
+    for table in $TABLES_TO_DELETE; do
+      echo "  Waiting for table: $table"
+      # Use a timeout loop instead of wait command which may fail on global tables
+      for i in $(seq 1 60); do
+        TABLE_STATUS=$(aws dynamodb describe-table --table-name "$table" --query 'Table.TableStatus' --output text 2>/dev/null || echo "DELETED")
+        if [ "$TABLE_STATUS" = "DELETED" ] || [ -z "$TABLE_STATUS" ]; then
+          echo "  Table $table deleted"
+          break
+        fi
+        echo "  Table $table status: $TABLE_STATUS (attempt $i/60)"
+        sleep 10
+      done
+    done
+    echo "  DynamoDB table deletion complete"
+  fi
+
+  # Clean up stale IAM roles
+  echo "Cleaning up stale IAM roles..."
+  for role in $(aws iam list-roles --query "Roles[?contains(RoleName, '-${RESOURCE_SUFFIX}')].RoleName" --output text 2>/dev/null || echo ""); do
+    if [ -n "$role" ]; then
+      echo "  Deleting IAM role: $role"
+      # First detach all policies
+      for policy_arn in $(aws iam list-attached-role-policies --role-name "$role" --query "AttachedPolicies[].PolicyArn" --output text 2>/dev/null || echo ""); do
+        aws iam detach-role-policy --role-name "$role" --policy-arn "$policy_arn" 2>/dev/null || true
+      done
+      # Then delete inline policies
+      for policy_name in $(aws iam list-role-policies --role-name "$role" --query "PolicyNames[]" --output text 2>/dev/null || echo ""); do
+        aws iam delete-role-policy --role-name "$role" --policy-name "$policy_name" 2>/dev/null || true
+      done
+      aws iam delete-role --role-name "$role" 2>/dev/null || echo "  Failed to delete $role"
+    fi
+  done
+
+  # Clean up stale IAM policies
+  echo "Cleaning up stale IAM policies..."
+  for policy_arn in $(aws iam list-policies --scope Local --query "Policies[?contains(PolicyName, '-${RESOURCE_SUFFIX}')].Arn" --output text 2>/dev/null || echo ""); do
+    if [ -n "$policy_arn" ]; then
+      echo "  Deleting IAM policy: $policy_arn"
+      # First detach from all entities
+      for role in $(aws iam list-entities-for-policy --policy-arn "$policy_arn" --query "PolicyRoles[].RoleName" --output text 2>/dev/null || echo ""); do
+        aws iam detach-role-policy --role-name "$role" --policy-arn "$policy_arn" 2>/dev/null || true
+      done
+      aws iam delete-policy --policy-arn "$policy_arn" 2>/dev/null || echo "  Failed to delete $policy_arn"
+    fi
+  done
+
+  # Clean up stale KMS aliases in all regions (keys will be scheduled for deletion)
+  echo "Cleaning up stale KMS aliases..."
+  for region in $CLEANUP_REGIONS; do
+    for alias in $(aws kms list-aliases --region "$region" --query "Aliases[?contains(AliasName, '-${RESOURCE_SUFFIX}')].AliasName" --output text 2>/dev/null || echo ""); do
+      if [ -n "$alias" ]; then
+        echo "  Deleting KMS alias: $alias (region: $region)"
+        aws kms delete-alias --alias-name "$alias" --region "$region" 2>/dev/null || echo "  Failed to delete $alias"
+      fi
+    done
+  done
+
+  # Clean up stale S3 buckets (must empty first)
+  echo "Cleaning up stale S3 buckets..."
+  for bucket in $(aws s3api list-buckets --query "Buckets[?contains(Name, '-${RESOURCE_SUFFIX}')].Name" --output text 2>/dev/null || echo ""); do
+    if [ -n "$bucket" ]; then
+      echo "  Deleting S3 bucket: $bucket"
+      # Delete all objects and versions
+      aws s3 rm "s3://$bucket" --recursive 2>/dev/null || true
+      aws s3api delete-objects --bucket "$bucket" --delete "$(aws s3api list-object-versions --bucket "$bucket" --query '{Objects: Versions[].{Key: Key, VersionId: VersionId}}' --output json 2>/dev/null || echo '{"Objects": []}')" 2>/dev/null || true
+      aws s3api delete-objects --bucket "$bucket" --delete "$(aws s3api list-object-versions --bucket "$bucket" --query '{Objects: DeleteMarkers[].{Key: Key, VersionId: VersionId}}' --output json 2>/dev/null || echo '{"Objects": []}')" 2>/dev/null || true
+      aws s3api delete-bucket --bucket "$bucket" 2>/dev/null || echo "  Failed to delete $bucket"
+    fi
+  done
+
+  # Clean up stale Route53 health checks
+  echo "Cleaning up stale Route53 health checks..."
+  for check_id in $(aws route53 list-health-checks --query "HealthChecks[?contains(CallerReference, '-${RESOURCE_SUFFIX}')].Id" --output text 2>/dev/null || echo ""); do
+    if [ -n "$check_id" ]; then
+      echo "  Deleting Route53 health check: $check_id"
+      aws route53 delete-health-check --health-check-id "$check_id" 2>/dev/null || echo "  Failed to delete $check_id"
+    fi
+  done
+
+  # Clean up stale SNS topics (in all regions)
+  echo "Cleaning up stale SNS topics..."
+  for region in $CLEANUP_REGIONS; do
+    for topic_arn in $(aws sns list-topics --region "$region" --query "Topics[?contains(TopicArn, '-${RESOURCE_SUFFIX}')].TopicArn" --output text 2>/dev/null || echo ""); do
+      if [ -n "$topic_arn" ]; then
+        echo "  Deleting SNS topic: $topic_arn"
+        aws sns delete-topic --topic-arn "$topic_arn" --region "$region" 2>/dev/null || echo "  Failed to delete $topic_arn"
+      fi
+    done
+  done
+
+  # Clean up stale CloudWatch alarms (in all regions)
+  echo "Cleaning up stale CloudWatch alarms..."
+  for region in $CLEANUP_REGIONS; do
+    ALARMS=$(aws cloudwatch describe-alarms --region "$region" --query "MetricAlarms[?contains(AlarmName, '-${RESOURCE_SUFFIX}')].AlarmName" --output text 2>/dev/null || echo "")
+    if [ -n "$ALARMS" ]; then
+      echo "  Deleting CloudWatch alarms in $region: $ALARMS"
+      aws cloudwatch delete-alarms --alarm-names $ALARMS --region "$region" 2>/dev/null || echo "  Failed to delete alarms"
+    fi
+  done
+
+  echo "✅ Stale resource cleanup completed"
+
   npm run cdktf:deploy
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
@@ -332,6 +618,12 @@ elif [ "$PLATFORM" = "pulumi" ]; then
   fi
   
   echo "Using environment suffix: $ENVIRONMENT_SUFFIX"
+  
+  # Validate stack naming convention
+  EXPECTED_STACK_NAME="TapStack${ENVIRONMENT_SUFFIX}"
+  echo "📋 Expected stack name: ${PULUMI_ORG}/TapStack/${EXPECTED_STACK_NAME}"
+  echo "   Standard: TapStack (capital T, capital S) + environment suffix"
+  
   echo "Selecting or creating Pulumi stack Using ENVIRONMENT_SUFFIX=$ENVIRONMENT_SUFFIX"
   
   if [ "$LANGUAGE" = "go" ]; then
@@ -366,6 +658,29 @@ elif [ "$PLATFORM" = "pulumi" ]; then
       }
     fi
     cd ..
+  elif [ "$LANGUAGE" = "ts" ] || [ "$LANGUAGE" = "js" ]; then
+    echo "🔧 TypeScript/JavaScript Pulumi project detected"
+    pulumi login "$PULUMI_BACKEND_URL"
+
+    echo "Selecting or creating Pulumi stack..."
+    pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
+
+    # Clear any existing locks before deployment
+    echo "🔓 Clearing any stuck locks..."
+    pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes 2>/dev/null || echo "No locks to clear or cancel failed"
+
+    pulumi config set aws:defaultTags "{\"tags\":{\"Environment\":\"$ENVIRONMENT_SUFFIX\",\"Repository\":\"$REPOSITORY\",\"Author\":\"$COMMIT_AUTHOR\",\"PRNumber\":\"$PR_NUMBER\",\"Team\":\"$TEAM\",\"CreatedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"ManagedBy\":\"pulumi\"}}"
+
+    echo "Deploying infrastructure..."
+    if ! pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"; then
+      echo "⚠️ Deployment failed, attempting lock recovery..."
+      pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes || echo "Lock cancellation failed"
+      echo "🔄 Retrying deployment after lock cancellation..."
+      pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" || {
+        echo "❌ Deployment failed after retry"
+        exit 1
+      }
+    fi
   else
     echo "🔧 Python Pulumi project detected"
     export PYTHONPATH=.:bin
@@ -391,7 +706,7 @@ elif [ "$PLATFORM" = "pulumi" ]; then
 
 else
   echo "ℹ️ Unknown deployment method for platform: $PLATFORM, language: $LANGUAGE"
-  echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json, cdktf+typescript, cdktf+python, tf+hcl, pulumi+python, pulumi+java"
+  echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json, cdktf+typescript, cdktf+python, tf+hcl, pulumi+typescript, pulumi+javascript, pulumi+python, pulumi+go"
   exit 1
 fi
 

@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-12-01T19:32:45+05:30",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "MediaLive",
+    "MediaPackage",
+    "S3",
+    "CloudFront",
+    "Lambda",
+    "StepFunctions",
+    "CodePipeline",
+    "CodeBuild",
+    "CloudWatch",
+    "Logs",
+    "IAM"
+  ],
+  "po_id": "i2x7l8x2",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

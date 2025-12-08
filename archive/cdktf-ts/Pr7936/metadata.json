@@ -1,0 +1,31 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "i5x0y2m4",
+  "team": "synth",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "startedAt": "2025-12-05T00:00:00Z",
+  "aws_services": [
+    "CodePipeline",
+    "CodeBuild",
+    "S3",
+    "KMS",
+    "SSM Parameter Store",
+    "EventBridge",
+    "SNS",
+    "IAM",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

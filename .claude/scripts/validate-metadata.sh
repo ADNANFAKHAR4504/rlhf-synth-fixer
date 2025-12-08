@@ -48,8 +48,8 @@ done
 # 2. Validate platform
 PLATFORM=$(jq -r '.platform // empty' "$METADATA_FILE")
 if [ -n "$PLATFORM" ]; then
-    if [[ ! "$PLATFORM" =~ ^(cdk|cdktf|cfn|tf|pulumi)$ ]]; then
-        log_error "Invalid platform: '$PLATFORM' (must be: cdk, cdktf, cfn, tf, or pulumi)"
+    if [[ ! "$PLATFORM" =~ ^(cdk|cdktf|cfn|tf|pulumi|cicd|analysis)$ ]]; then
+        log_error "Invalid platform: '$PLATFORM' (must be: cdk, cdktf, cfn, tf, pulumi, cicd, or analysis)"
         ((ERRORS++))
     else
         log_info "Platform: $PLATFORM"
@@ -59,8 +59,8 @@ fi
 # 3. Validate language
 LANGUAGE=$(jq -r '.language // empty' "$METADATA_FILE")
 if [ -n "$LANGUAGE" ]; then
-    if [[ ! "$LANGUAGE" =~ ^(ts|py|js|go|java|hcl|yaml|json)$ ]]; then
-        log_error "Invalid language: '$LANGUAGE' (must be: ts, py, js, go, java, hcl, yaml, or json)"
+    if [[ ! "$LANGUAGE" =~ ^(ts|py|js|go|java|hcl|yaml|json|yml)$ ]]; then
+        log_error "Invalid language: '$LANGUAGE' (must be: ts, py, js, go, java, hcl, yaml, json, or yml)"
         ((ERRORS++))
     else
         log_info "Language: $LANGUAGE"
@@ -95,8 +95,20 @@ if [ -n "$PLATFORM" ] && [ -n "$LANGUAGE" ]; then
             fi
             ;;
         cfn)
-            if [[ ! "$LANGUAGE" =~ ^(yaml|json)$ ]]; then
-                log_error "Invalid platform-language combination: cfn-$LANGUAGE (cfn supports: yaml, json)"
+            if [[ ! "$LANGUAGE" =~ ^(yaml|json|yml)$ ]]; then
+                log_error "Invalid platform-language combination: cfn-$LANGUAGE (cfn supports: yaml, json, yml)"
+                ((ERRORS++))
+            fi
+            ;;
+        cicd)
+            if [[ ! "$LANGUAGE" =~ ^(yaml|yml)$ ]]; then
+                log_error "Invalid platform-language combination: cicd-$LANGUAGE (cicd supports: yaml, yml)"
+                ((ERRORS++))
+            fi
+            ;;
+        analysis)
+            if [ "$LANGUAGE" != "py" ]; then
+                log_error "Invalid platform-language combination: analysis-$LANGUAGE (analysis supports: py)"
                 ((ERRORS++))
             fi
             ;;
@@ -250,7 +262,107 @@ if [ -n "$REFERENCE_PATH" ] && jq -e '.subject_labels' "$METADATA_FILE" > /dev/n
         fi
     fi
 elif [ -z "$REFERENCE_PATH" ]; then
-    log_warn "Reference file not found: $REFERENCE_FILE (subject_labels values not validated)"
+    log_error "Reference file not found: $REFERENCE_FILE - subject_labels cannot be validated"
+    log_warn "Ensure the reference file exists at: .claude/docs/references/iac-subtasks-subject-labels.json"
+    ((ERRORS++))
+fi
+
+# 8c. Validate subject_label to platform/language requirements
+# Some subject labels have STRICT platform/language requirements
+# Reference: .claude/docs/references/iac-subtasks-subject-labels.json (single source of truth)
+if jq -e '.subject_labels' "$METADATA_FILE" > /dev/null 2>&1; then
+    METADATA_SUBJECT_LABELS=$(jq -r '.subject_labels[]?' "$METADATA_FILE" 2>/dev/null)
+    
+    if [ -n "$METADATA_SUBJECT_LABELS" ]; then
+        while IFS= read -r label; do
+            if [ -n "$label" ]; then
+                case "$label" in
+                    "Infrastructure Analysis/Monitoring")
+                        # This MUST use analysis platform with py language
+                        if [ "$PLATFORM" != "analysis" ]; then
+                            log_error "Subject label '$label' requires platform='analysis', but got '$PLATFORM'"
+                            log_warn "Analysis tasks use Python scripts with boto3, not IaC platforms"
+                            ((ERRORS++))
+                        fi
+                        if [ "$LANGUAGE" != "py" ]; then
+                            log_error "Subject label '$label' requires language='py', but got '$LANGUAGE'"
+                            log_warn "Analysis tasks only support Python (py) currently"
+                            ((ERRORS++))
+                        fi
+                        ;;
+                    "General Infrastructure Tooling QA")
+                        # This MUST use analysis platform with py or sh language
+                        if [ "$PLATFORM" != "analysis" ]; then
+                            log_error "Subject label '$label' requires platform='analysis', but got '$PLATFORM'"
+                            log_warn "QA tasks use Python/shell scripts, not IaC platforms"
+                            ((ERRORS++))
+                        fi
+                        if [[ ! "$LANGUAGE" =~ ^(py|sh)$ ]]; then
+                            log_error "Subject label '$label' requires language='py' or 'sh', but got '$LANGUAGE'"
+                            ((ERRORS++))
+                        fi
+                        ;;
+                    "CI/CD Pipeline")
+                        # This MUST use cicd platform with yaml/yml language
+                        if [ "$PLATFORM" != "cicd" ]; then
+                            log_error "Subject label '$label' requires platform='cicd', but got '$PLATFORM'"
+                            log_warn "CI/CD tasks use GitHub Actions workflows, not IaC platforms"
+                            ((ERRORS++))
+                        fi
+                        if [[ ! "$LANGUAGE" =~ ^(yaml|yml)$ ]]; then
+                            log_error "Subject label '$label' requires language='yaml' or 'yml', but got '$LANGUAGE'"
+                            ((ERRORS++))
+                        fi
+                        ;;
+                esac
+            fi
+        done <<< "$METADATA_SUBJECT_LABELS"
+        
+        # Log success if special labels validated correctly
+        if echo "$METADATA_SUBJECT_LABELS" | grep -qE "(Infrastructure Analysis/Monitoring|General Infrastructure Tooling QA|CI/CD Pipeline)"; then
+            if [ $ERRORS -eq 0 ] || ! echo "$METADATA_SUBJECT_LABELS" | grep -qE "(Infrastructure Analysis/Monitoring|General Infrastructure Tooling QA|CI/CD Pipeline)"; then
+                log_info "Subject label platform/language requirements: Valid"
+            fi
+        fi
+    fi
+fi
+
+# 8d. Validate that special platforms (analysis, cicd) are ONLY used with their required subject_labels
+# This is the REVERSE check - ensures analysis/cicd platforms aren't used with standard IaC subject_labels
+if [ "$PLATFORM" = "analysis" ]; then
+    HAS_VALID_ANALYSIS_LABEL=false
+    if [ -n "$METADATA_SUBJECT_LABELS" ]; then
+        while IFS= read -r label; do
+            if [[ "$label" == "Infrastructure Analysis/Monitoring" || "$label" == "General Infrastructure Tooling QA" ]]; then
+                HAS_VALID_ANALYSIS_LABEL=true
+                break
+            fi
+        done <<< "$METADATA_SUBJECT_LABELS"
+    fi
+    
+    if [ "$HAS_VALID_ANALYSIS_LABEL" = false ]; then
+        log_error "Platform 'analysis' can only be used with subject_labels: 'Infrastructure Analysis/Monitoring' or 'General Infrastructure Tooling QA'"
+        log_warn "Current subject_labels: $(jq -c '.subject_labels' "$METADATA_FILE")"
+        ((ERRORS++))
+    fi
+fi
+
+if [ "$PLATFORM" = "cicd" ]; then
+    HAS_VALID_CICD_LABEL=false
+    if [ -n "$METADATA_SUBJECT_LABELS" ]; then
+        while IFS= read -r label; do
+            if [[ "$label" == "CI/CD Pipeline" ]]; then
+                HAS_VALID_CICD_LABEL=true
+                break
+            fi
+        done <<< "$METADATA_SUBJECT_LABELS"
+    fi
+    
+    if [ "$HAS_VALID_CICD_LABEL" = false ]; then
+        log_error "Platform 'cicd' can only be used with subject_label: 'CI/CD Pipeline'"
+        log_warn "Current subject_labels: $(jq -c '.subject_labels' "$METADATA_FILE")"
+        ((ERRORS++))
+    fi
 fi
 
 # 9. Validate region format (if present)

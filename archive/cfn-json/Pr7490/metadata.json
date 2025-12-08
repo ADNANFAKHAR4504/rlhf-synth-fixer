@@ -1,0 +1,33 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912817",
+  "team": "synth",
+  "startedAt": "2025-11-27T23:03:22+00:00",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "ECS",
+    "ECR",
+    "ApplicationAutoScaling",
+    "ElasticLoadBalancingV2",
+    "EC2",
+    "IAM",
+    "Logs",
+    "S3",
+    "SecretsManager",
+    "X-Ray"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "akshat-jain355",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

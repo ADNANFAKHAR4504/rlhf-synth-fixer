@@ -1,0 +1,20 @@
+{
+  "platform": "cicd",
+  "language": "yml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912057",
+  "team": "3",
+  "startedAt": "2025-12-01T09:15:01.241Z",
+  "subtask": "CI/CD Pipeline",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
+}

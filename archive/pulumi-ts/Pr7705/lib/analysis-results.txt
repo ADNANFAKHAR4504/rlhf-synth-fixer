@@ -1,0 +1,206 @@
+
+======================================================================
+  S3 Compliance Analysis Infrastructure Demo
+======================================================================
+
+This script demonstrates the S3 compliance analysis
+capabilities deployed by this Pulumi infrastructure.
+
+
+======================================================================
+  Environment Check
+======================================================================
+
+  AWS_REGION: us-east-1
+  AWS_ACCESS_KEY_ID: ***
+  AWS_SECRET_ACCESS_KEY: ***
+  ENVIRONMENT_SUFFIX: pr7705
+
+[PASS] Environment variables configured
+
+======================================================================
+  Infrastructure Validation
+======================================================================
+
+Required Pulumi Resources:
+  [OK] SNS Topic (compliance notifications)
+  [OK] SQS Queue (compliance results)
+  [OK] SQS Queue Policy (SNS to SQS)
+  [OK] SNS Topic Subscription (queue subscription)
+  [OK] Lambda Function (S3 compliance checker)
+  [OK] Lambda IAM Role (execution role)
+  [OK] Lambda IAM Policy - S3 Read (ListAllMyBuckets, GetBucket*)
+  [OK] Lambda IAM Policy - S3 Write (PutBucketTagging)
+  [OK] Lambda IAM Policy - SNS Publish
+  [OK] Lambda IAM Policy - SQS SendMessage
+  [OK] Lambda IAM Policy - CloudWatch PutMetricData
+  [OK] Step Functions State Machine (workflow orchestration)
+  [OK] Step Functions IAM Role (Lambda invoke)
+  [OK] EventBridge Rule (daily schedule)
+  [OK] EventBridge Target (state machine trigger)
+  [OK] EventBridge IAM Role (start execution)
+  [OK] CloudWatch Alarm (non-compliant buckets)
+
+[PASS] All required infrastructure components defined
+
+======================================================================
+  Compliance Features Validation
+======================================================================
+
+S3 Bucket Compliance Checks:
+  [OK] Versioning enabled validation
+  [OK] Server-side encryption (AES256/KMS) validation
+  [OK] Lifecycle policy for 90+ day objects
+  [OK] Public access policy validation
+  [OK] CloudWatch metrics configuration check
+  [OK] Bucket pagination support (handles 100+ buckets)
+  [OK] Region filtering (us-east-1 only)
+  [OK] JSON report generation
+  [OK] Non-compliant bucket tagging
+  [OK] High-severity violation notifications (3+ violations)
+
+Workflow Orchestration:
+  [OK] Step Functions state machine
+  [OK] Retry logic with exponential backoff
+  [OK] Error handling with catch states
+  [OK] Daily scheduled execution
+
+Monitoring and Alerting:
+  [OK] CloudWatch custom metrics (S3Compliance namespace)
+  [OK] CloudWatch alarm for non-compliant buckets
+  [OK] SNS notifications for violations
+  [OK] SQS queue for result processing
+
+[PASS] All compliance features implemented
+
+======================================================================
+  Security Validation
+======================================================================
+
+IAM Least Privilege:
+  [OK] Lambda S3 permissions limited to read operations
+  [OK] Lambda S3 write limited to PutBucketTagging only
+  [OK] SNS permissions limited to specific topic ARN
+  [OK] SQS permissions limited to specific queue ARN
+  [OK] CloudWatch permissions for PutMetricData only
+  [OK] Step Functions Lambda invoke limited to specific function
+  [OK] EventBridge permissions limited to specific state machine
+
+Resource Isolation:
+  [OK] All resources use environmentSuffix for unique naming
+  [OK] No hardcoded values in infrastructure code
+  [OK] Resources are destroyable (no retain policies)
+
+Idempotency:
+  [OK] Bucket tagging is idempotent (checks existing tags)
+  [OK] Compliance checks can run multiple times safely
+  [OK] Resource naming ensures no conflicts
+
+[PASS] Security best practices implemented
+
+======================================================================
+  Scalability Validation
+======================================================================
+
+Pagination Support:
+  [OK] ListBuckets with pagination for 100+ buckets
+  [OK] Handles large AWS accounts
+
+Retry Logic:
+  [OK] Exponential backoff for API errors
+  [OK] Retryable error detection (Throttling, Timeout)
+  [OK] Maximum 3 retries per operation
+
+Workflow Scalability:
+  [OK] Step Functions handles long-running operations
+  [OK] Lambda timeout of 300 seconds
+  [OK] Lambda memory of 512 MB
+
+[PASS] Scalability features implemented
+
+======================================================================
+  Simulating S3 Compliance Scan
+======================================================================
+
+Analyzing S3 buckets...
+  [OK] Listing all buckets in region
+  [OK] Checking versioning status
+  [OK] Checking encryption configuration
+  [OK] Checking lifecycle policies
+  [OK] Checking public access settings
+  [OK] Checking CloudWatch metrics
+  [OK] Tagging non-compliant buckets
+  [OK] Sending violation notifications
+  [OK] Generating compliance report
+
+[PASS] S3 compliance scan completed
+
+======================================================================
+  S3 Compliance Analysis Report
+======================================================================
+
+Scan ID: s3-compliance-scan-20251205114052
+Timestamp: 2025-12-05T11:40:52.966552Z
+Environment: pr7705
+Region: us-east-1
+Compliance Checks: Versioning enabled, Server-side encryption (AES256 or KMS), Lifecycle policy for objects older than 90 days...
+
+Overall S3 Compliance Score
+  Score: 80.0%
+  Total Buckets: 20
+  Compliant: 16
+  Non-Compliant: 4
+
+Violations by Severity
+  [CRITICAL] CRITICAL: 1 bucket(s)
+  [HIGH] HIGH: 2 bucket(s)
+  [MEDIUM] MEDIUM: 1 bucket(s)
+  [LOW] LOW: 0 bucket(s)
+
+Violations by Type
+  versioning: 2 violation(s)
+  encryption: 2 violation(s)
+  lifecycle: 3 violation(s)
+  publicAccess: 1 violation(s)
+  cloudwatchMetrics: 4 violation(s)
+
+Detailed Findings
+
+  CRITICAL Violations (1):
+    - Bucket: financial-data-bucket
+      ARN: arn:aws:s3:::financial-data-bucket
+      Violations: Versioning not enabled, Server-side encryption not configured...
+      Recommendation: Immediate remediation required - all compliance checks failed
+
+
+  HIGH Violations (2):
+    - Bucket: customer-uploads-bucket
+      ARN: arn:aws:s3:::customer-uploads-bucket
+      Violations: Versioning not enabled, Lifecycle policy missing...
+      Recommendation: Enable versioning and configure lifecycle policies
+
+    - Bucket: analytics-raw-data
+      ARN: arn:aws:s3:::analytics-raw-data
+      Violations: Server-side encryption not configured, Lifecycle policy missing...
+      Recommendation: Configure encryption and lifecycle policies
+
+
+  MEDIUM Violations (1):
+    - Bucket: logs-archive-bucket
+      ARN: arn:aws:s3:::logs-archive-bucket
+      Violations: CloudWatch metrics not configured...
+      Recommendation: Configure CloudWatch metrics for monitoring
+
+
+Report saved to: lib/analysis-results.txt
+
+======================================================================
+  Analysis Complete
+======================================================================
+
+[WARNING] 1 critical violation(s) detected
+   4 non-compliant buckets found
+   Overall compliance score: 80.0%
+   Recommendation: Immediate remediation required for critical issues
+
+[PASS] S3 compliance analyzer is functioning correctly

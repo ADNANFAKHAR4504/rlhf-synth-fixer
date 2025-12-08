@@ -1,0 +1,17 @@
+{
+  "name": "compliance-analyzer",
+  "version": "1.0.0",
+  "description": "AWS Config compliance analyzer Lambda function",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@aws-sdk/client-config-service": "^3.450.0",
+    "@aws-sdk/client-sns": "^3.450.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}

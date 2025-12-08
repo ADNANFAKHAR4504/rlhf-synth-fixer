@@ -1,0 +1,36 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "j4j3v4u8",
+  "team": "stf",
+  "startedAt": "2025-12-01T20:53:00.000Z",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline Integration"
+  ],
+  "dockerS3Location": "",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "aws_services": [
+    "VPC",
+    "RDS",
+    "ElastiCache",
+    "CodePipeline",
+    "CodeBuild",
+    "CodeCommit",
+    "SecretsManager",
+    "KMS",
+    "CloudWatch",
+    "IAM",
+    "S3",
+    "EC2",
+    "NAT Gateway",
+    "Internet Gateway"
+  ],
+  "training_quality": 10,
+  "author": "mayanksethi-turing"
+}

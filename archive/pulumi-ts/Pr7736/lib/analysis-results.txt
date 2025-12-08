@@ -1,0 +1,149 @@
+S3 Compliance Analysis Report
+======================================================================
+
+Scan ID: s3-scan-20251202223800
+Timestamp: 2025-12-02T22:38:00.569300Z
+Environment: pr7736
+
+Overall Compliance Score: 53.3%
+Total Buckets: 15
+Compliant Buckets: 8
+Non-Compliant Buc  'scanId': f"s3-scan-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:70: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  'timestamp': datetime.utcnow().isoformat() + 'Z',
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:127: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  'timestamp': datetime.utcnow().isoformat() + 'Z',
+
+======================================================================
+  S3 Compliance Analysis Infrastructure Demo
+======================================================================
+
+This script demonstrates the S3 compliance analysis capabilities
+deployed by this Pulumi infrastructure.
+
+
+======================================================================
+  Environment Check
+======================================================================
+
+  AWS_REGION: us-east-1
+  AWS_ACCESS_KEY_ID: ***
+  AWS_SECRET_ACCESS_KEY: ***
+  ENVIRONMENT_SUFFIX: pr7736
+
+✅ Environment variables configured
+
+======================================================================
+  Infrastructure Validation
+======================================================================
+
+🏗️ Required Pulumi Resources:
+  ✓ S3 Bucket (compliance reports storage)
+  ✓ Lambda Function (S3 compliance analyzer)
+  ✓ IAM Role (Lambda execution role)
+  ✓ IAM Policy (S3 read, CloudWatch metrics, tagging permissions)
+  ✓ CloudWatch Log Group (Lambda logging)
+  ✓ CloudWatch Metric Filter (critical findings)
+  ✓ CloudWatch Alarm (critical compliance violations)
+  ✓ SNS Topic (critical alert notifications)
+  ✓ EventBridge Rule (daily scheduled analysis)
+  ✓ EventBridge Target (Lambda invocation)
+  ✓ Lambda Permission (EventBridge invoke)
+
+✅ All required infrastructure components defined
+
+======================================================================
+  Compliance Features Validation
+======================================================================
+
+📋 S3 Compliance Checks:
+  ✓ Server-side encryption detection
+  ✓ Public access block validation
+  ✓ Bucket policy analysis (overly permissive access)
+  ✓ Lifecycle policy verification (7-year retention for financial data)
+  ✓ CloudWatch metrics analysis (90-day inactivity detection)
+  ✓ Bucket tagging with compliance status
+  ✓ JSON report generation with severity categories
+  ✓ Report storage in S3 with timestamp
+
+✅ All compliance features implemented
+
+======================================================================
+  Simulating S3 Compliance Scan
+======================================================================
+
+📋 Analyzing S3 buckets...
+  ✓ Checking server-side encryption configuration
+  ✓ Verifying public access block settings
+  ✓ Analyzing bucket policies for overly permissive access
+  ✓ Validating lifecycle policies for financial data retention
+  ✓ Reviewing CloudWatch metrics for inactive buckets
+  ✓ Tagging buckets with compliance status
+
+✅ S3 compliance scan completed
+
+======================================================================
+  S3 Compliance Analysis Report
+======================================================================
+
+Scan ID: s3-scan-20251202223800
+Timestamp: 2025-12-02T22:38:00.569300Z
+Environment: pr7736
+
+📊 Overall S3 Compliance Score
+  Score: 53.3%
+  Total Buckets: 15
+  Compliant: 8
+  Non-Compliant: 7
+
+📈 Violations by Severity
+  🔴 CRITICAL: 2 violation(s)
+  🟠 HIGH: 3 violation(s)
+  🟡 MEDIUM: 2 violation(s)
+  🟢 LOW: 0 violation(s)
+
+🔍 Detailed Findings
+
+  CRITICAL Violations (2):
+    • Bucket: example-data-bucket
+      Issue: No server-side encryption configured
+      Recommendation: Enable SSE-S3 or SSE-KMS encryption
+
+    • Bucket: legacy-files-bucket
+      Issue: No public access block configuration
+      Recommendation: Configure Block Public Access settings
+
+
+  HIGH Violations (3):
+    • Bucket: user-uploads-bucket
+      Issue: Public access not fully blocked
+      Recommendation: Enable all Block Public Access settings
+
+    • Bucket: financial-invoices-2020
+      Issue: Financial data retention policy does not meet 7-year requirement
+      Recommendation: Configure lifecycle policy with minimum 7-year retention
+
+    • Bucket: reports-bucket
+      Issue: Bucket policy allows public access
+      Recommendation: Restrict bucket policy to specific principals
+
+
+  MEDIUM Violations (2):
+    • Bucket: temp-files-bucket
+      Issue: No access metrics in last 90 days - potential unused bucket
+      Recommendation: Review bucket usage and consider archival or deletion
+
+    • Bucket: archive-2019
+      Issue: No access metrics in last 90 days - potential unused bucket
+      Recommendation: Review bucket usage and consider archival or deletion
+
+
+📄 Report saved to: lib/analysis-results.txt
+
+======================================================================
+  Analysis Complete
+======================================================================
+
+⚠️  WARNING: 2 critical violation(s) detected
+   Overall compliance score: 53.3%
+   Recommendation: Immediate remediation required for critical issues

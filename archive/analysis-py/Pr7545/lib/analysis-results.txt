@@ -1,0 +1,128 @@
+2025-12-01 09:44:37,982 - INFO - Found credentials in environment variables.
+2025-12-01 09:44:38,109 - INFO - Starting EFS analysis in us-east-1
+2025-12-01 09:44:38,139 - INFO - Excluding fs-a2caa77b - ExcludeFromAnalysis tag
+2025-12-01 09:44:38,147 - INFO - Found 4 file systems to analyze
+2025-12-01 09:44:38,148 - INFO - Analyzing file system: fs-afbd4051
+2025-12-01 09:44:38,149 - INFO - Analyzing file system: fs-15e773e5
+2025-12-01 09:44:38,150 - INFO - Analyzing file system: fs-a6609b1c
+2025-12-01 09:44:38,150 - INFO - Analyzing file system: fs-8fd7a1b1
+2025-12-01 09:44:43,283 - ERROR - Error getting replication config for fs-afbd4051: An error occurred (500) when calling the DescribeReplicationConfigurations operation (reached max retries: 4): <!doctype html>
+<html lang=en>
+<title>500 Internal Server Error</title>
+<h1>Internal Server Error</h1>
+<p>The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application.</p>
+
+2025-12-01 09:44:43,574 - ERROR - Error getting replication config for fs-15e773e5: An error occurred (500) when calling the DescribeReplicationConfigurations operation (reached max retries: 4): <!doctype html>
+<html lang=en>
+<title>500 Internal Server Error</title>
+<h1>Internal Server Error</h1>
+<p>The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application.</p>
+
+2025-12-01 09:44:45,172 - ERROR - Error getting replication config for fs-a6609b1c: An error occurred (500) when calling the DescribeReplicationConfigurations operation (reached max retries: 4): <!doctype html>
+<html lang=en>
+<title>500 Internal Server Error</title>
+<h1>Internal Server Error</h1>
+<p>The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application.</p>
+
+2025-12-01 09:44:45,599 - ERROR - Error getting replication config for fs-8fd7a1b1: An error occurred (500) when calling the DescribeReplicationConfigurations operation (reached max retries: 4): <!doctype html>
+<html lang=en>
+<title>500 Internal Server Error</title>
+<h1>Internal Server Error</h1>
+<p>The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application.</p>
+
+2025-12-01 09:44:47,986 - ERROR - Error getting replication config for fs-8fd7a1b1: An error occurred (500) when calling the DescribeReplicationConfigurations operation (reached max retries: 4): <!doctype html>
+<html lang=en>
+<title>500 Internal Server Error</title>
+<h1>Internal Server Error</h1>
+<p>The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application.</p>
+
+2025-12-01 09:44:48,343 - ERROR - Error getting replication config for fs-afbd4051: An error occurred (500) when calling the DescribeReplicationConfigurations operation (reached max retries: 4): <!doctype html>
+<html lang=en>
+<title>500 Internal Server Error</title>
+<h1>Internal Server Error</h1>
+<p>The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application.</p>
+
+2025-12-01 09:44:50,679 - ERROR - Error getting replication config for fs-a6609b1c: An error occurred (500) when calling the DescribeReplicationConfigurations operation (reached max retries: 4): <!doctype html>
+<html lang=en>
+<title>500 Internal Server Error</title>
+<h1>Internal Server Error</h1>
+<p>The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application.</p>
+
+2025-12-01 09:44:55,456 - ERROR - Error getting replication config for fs-15e773e5: An error occurred (500) when calling the DescribeReplicationConfigurations operation (reached max retries: 4): <!doctype html>
+<html lang=en>
+<title>500 Internal Server Error</title>
+<h1>Internal Server Error</h1>
+<p>The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application.</p>
+
+2025-12-01 09:44:55,459 - INFO - Generated efs_analysis.json
+2025-12-01 09:44:55,460 - INFO - Generated storage_class_utilization.html
+2025-12-01 09:44:55,460 - INFO - Generated lifecycle_policy_recommendations.json
+2025-12-01 09:44:55,461 - INFO - Generated security_hardening_checklist.md
+
+====================================================================================================
+EFS ANALYSIS REPORT
+====================================================================================================
+
+SUMMARY
++------------------------+---------+
+| Metric                 | Value   |
++========================+=========+
+| Total File Systems     | 4       |
++------------------------+---------+
+| Total Storage (GB)     | 0.00    |
++------------------------+---------+
+| % with IA Storage      | 25.0%   |
++------------------------+---------+
+| Monthly Cost           | $600.00 |
++------------------------+---------+
+| Potential IA Savings   | $0.00   |
++------------------------+---------+
+| High Severity Issues   | 7       |
++------------------------+---------+
+| Medium Severity Issues | 9       |
++------------------------+---------+
+| Low Severity Issues    | 4       |
++------------------------+---------+
+
+FILE SYSTEMS
++-------------+-------------+--------------+-------------+-------------+----------+-----------+
+| FS ID       |   Size (GB) | Throughput   | Encrypted   | Lifecycle   |   Issues | Cost/Mo   |
++=============+=============+==============+=============+=============+==========+===========+
+| fs-8fd7a1b1 |           0 | provisioned  | Yes         | No          |        5 | $600.00   |
++-------------+-------------+--------------+-------------+-------------+----------+-----------+
+| fs-afbd4051 |           0 | bursting     | No          | No          |        8 | $0.00     |
++-------------+-------------+--------------+-------------+-------------+----------+-----------+
+| fs-a6609b1c |           0 | bursting     | No          | No          |        5 | $0.00     |
++-------------+-------------+--------------+-------------+-------------+----------+-----------+
+| fs-15e773e5 |           0 | bursting     | Yes         | Yes         |        2 | $0.00     |
++-------------+-------------+--------------+-------------+-------------+----------+-----------+
+
+ISSUES BY TYPE
++------------------------------+---------+
+| Issue Type                   |   Count |
++==============================+=========+
+| NO_BACKUP_POLICY             |       4 |
++------------------------------+---------+
+| NO_CLOUDWATCH_ALARMS         |       4 |
++------------------------------+---------+
+| NO_IAM_AUTHORIZATION         |       3 |
++------------------------------+---------+
+| NO_LIFECYCLE_MANAGEMENT      |       3 |
++------------------------------+---------+
+| NO_ENCRYPTION_IN_TRANSIT     |       2 |
++------------------------------+---------+
+| NO_ENCRYPTION_AT_REST        |       2 |
++------------------------------+---------+
+| UNRESTRICTED_MOUNT_TARGET_SG |       1 |
++------------------------------+---------+
+| REPLICATION_NOT_ENABLED      |       1 |
++------------------------------+---------+
+
+====================================================================================================
+Analysis complete! Generated files:
+  - efs_analysis.json
+  - storage_class_utilization.html
+  - lifecycle_policy_recommendations.json
+  - security_hardening_checklist.md
+====================================================================================================
+

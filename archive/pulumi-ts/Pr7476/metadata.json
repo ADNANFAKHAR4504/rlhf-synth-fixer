@@ -1,0 +1,30 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "i3k9m2t1",
+  "team": "synth",
+  "author": "mayanksethi-turing",
+  "startedAt": "2025-11-27T16:29:57+0000",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "Aurora",
+    "S3",
+    "Route53",
+    "Lambda",
+    "CloudWatch",
+    "SNS",
+    "VPC",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

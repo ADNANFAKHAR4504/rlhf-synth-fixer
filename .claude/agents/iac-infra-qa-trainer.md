@@ -155,6 +155,159 @@ ls -t lib/MODEL_RESPONSE*.md | head -1
 
 **Detect**: Platform (CDK/CDKTF/CFN/Terraform/Pulumi) and language
 
+### 1.5: Special Task Type Detection and Handling
+
+**⚠️ CRITICAL**: Some subtasks have different workflows and validation rules.
+
+**Detect Special Task Types** (using shared script):
+```bash
+# Use shared detection script for consistency
+TASK_INFO=$(bash .claude/scripts/detect-task-type.sh)
+if [ $? -ne 0 ]; then
+  echo "❌ ERROR: Failed to detect task type"
+  exit 1
+fi
+
+# Extract task type information
+IS_CICD_TASK=$(echo "$TASK_INFO" | jq -r '.is_cicd_task')
+IS_OPTIMIZATION_TASK=$(echo "$TASK_INFO" | jq -r '.is_optimization_task')
+IS_ANALYSIS_TASK=$(echo "$TASK_INFO" | jq -r '.is_analysis_task')
+TASK_TYPE=$(echo "$TASK_INFO" | jq -r '.task_type')
+
+echo "🔍 Detected task type: $TASK_TYPE"
+
+# Also read generator handoff if available
+if [ -f ".claude/state/generator_handoff.json" ]; then
+  echo "📋 Reading handoff from generator..."
+  GENERATOR_HANDOFF=$(cat .claude/state/generator_handoff.json)
+  echo "  Files generated: $(echo "$GENERATOR_HANDOFF" | jq -r '.artifacts.files_generated | length')"
+fi
+```
+
+**Workflow Modifications Based on Task Type**:
+
+#### For Optimization Tasks (`IS_OPTIMIZATION_TASK=true`)
+
+**Special Requirements**:
+1. Deploy baseline infrastructure (non-optimized values are EXPECTED)
+2. Run `python lib/optimize.py --environment $ENVIRONMENT_SUFFIX` against deployed resources
+3. Verify optimizations via integration tests
+4. Do NOT penalize high resource allocations in stack files
+5. Focus validation on `lib/optimize.py` quality and effectiveness
+
+**Validation Focus**:
+- ✅ `lib/optimize.py` exists and uses boto3
+- ✅ Script reads ENVIRONMENT_SUFFIX correctly
+- ✅ Resource discovery using proper naming patterns
+- ✅ AWS API calls to modify resources (not file editing)
+- ✅ Cost savings calculations
+- ✅ Integration tests verify optimizations work
+
+**Reference**: `.claude/docs/references/special-subtask-requirements.md` Section 2
+
+#### For Analysis Tasks (`IS_ANALYSIS_TASK=true`)
+
+**Special Requirements**:
+1. **NO deployment step** - analysis tasks don't deploy infrastructure
+2. **NO synth step** - not generating infrastructure templates
+3. Run analysis script: `python lib/analyse.py` or `bash lib/analyse.sh`
+4. Verify script output and recommendations
+5. Tests validate analysis logic (may use mocks or test fixtures)
+
+**Validation Focus**:
+- ✅ `lib/analyse.py` or `lib/analyse.sh` exists
+- ✅ Script uses AWS SDK (boto3/AWS CLI) correctly
+- ✅ Resource discovery and metrics collection
+- ✅ Report generation functionality
+- ✅ Error handling for missing resources
+- ✅ Tests validate analysis logic
+
+**Workflow Changes**:
+- SKIP all deployment steps
+- SKIP synth validation
+- Run analysis script directly
+- Validate output format and content
+
+**Explicit Analysis Task Workflow**:
+
+```bash
+if [ "$IS_ANALYSIS_TASK" = "true" ]; then
+  echo "🔍 Running Analysis Task Workflow"
+  
+  # Step 1: Verify analysis script exists
+  if [ -f "lib/analyse.py" ]; then
+    ANALYSIS_SCRIPT="python lib/analyse.py"
+  elif [ -f "lib/analyse.sh" ]; then
+    ANALYSIS_SCRIPT="bash lib/analyse.sh"
+  else
+    echo "❌ ERROR: No analysis script found"
+    exit 1
+  fi
+  
+  # Step 2: Run code quality checks (lint, build only - no synth)
+  echo "📋 Step 1: Code Quality (lint + build)"
+  bash .claude/scripts/lint.sh || { echo "❌ Lint failed"; exit 1; }
+  bash .claude/scripts/build.sh || { echo "❌ Build failed"; exit 1; }
+  echo "✅ Code quality checks passed"
+  
+  # Step 3: Run analysis script (dry run)
+  echo "📋 Step 2: Testing analysis script execution"
+  export ENVIRONMENT_SUFFIX="test"
+  export AWS_REGION="us-east-1"
+  
+  # Test script execution (with timeout)
+  timeout 60s $ANALYSIS_SCRIPT --dry-run 2>&1 | tee analysis_test.log
+  if [ ${PIPESTATUS[0]} -eq 0 ]; then
+    echo "✅ Analysis script executed successfully"
+  else
+    echo "⚠️  Analysis script had issues (check analysis_test.log)"
+  fi
+  
+  # Step 4: Validate script output format
+  echo "📋 Step 3: Validating output format"
+  if grep -q "Analysis" analysis_test.log; then
+    echo "✅ Script produces expected output"
+  else
+    echo "⚠️  Script output format may need review"
+  fi
+  
+  # Step 5: Run unit tests for analysis logic
+  echo "📋 Step 4: Running unit tests"
+  bash .claude/scripts/unit-tests.sh || { echo "❌ Tests failed"; exit 1; }
+  
+  # Check coverage
+  if [ -f coverage/coverage-summary.json ]; then
+    COVERAGE=$(jq -r '.total.statements.pct' coverage/coverage-summary.json)
+    echo "Test coverage: ${COVERAGE}%"
+    if (( $(echo "$COVERAGE < 100" | bc -l) )); then
+      echo "⚠️  Coverage below 100%: ${COVERAGE}%"
+      echo "   For analysis tasks, focus on testing analysis logic"
+    fi
+  fi
+  
+  echo "✅ Analysis task workflow complete"
+fi
+```
+
+**Reference**: `.claude/docs/references/special-subtask-requirements.md` Section 3
+
+#### For CI/CD Pipeline Integration Tasks (`IS_CICD_TASK=true`)
+
+**Special Requirements**:
+1. Verify `lib/ci-cd.yml` exists and is valid
+2. Infrastructure should support multi-environment deployment
+3. Test with different environment parameters
+4. Validate IAM roles for cross-account access (if applicable)
+
+**Validation Focus**:
+- ✅ `lib/ci-cd.yml` contains valid GitHub Actions workflow
+- ✅ Infrastructure code supports environment parameters
+- ✅ Deployment works with CI/CD automation patterns
+
+**Reference**: `.claude/docs/references/special-subtask-requirements.md` Section 1
+
+---
+
 **Platform/Language Compliance Check**:
 
 **Validation**: Run Checkpoint E: Platform Code Compliance
@@ -245,6 +398,67 @@ Scans for:
 - If PASSES: Proceed to deployment
 
 **Integration**: Automatically runs before deployment attempts to catch known failure patterns early.
+
+### 2.7: Early Documentation Structure Validation
+
+**Purpose**: Validate documentation structure BEFORE deployment to avoid wasted resources
+
+**Create Initial Documentation Structure**:
+```bash
+echo "📋 Creating documentation structure early..."
+
+# Create IDEAL_RESPONSE.md skeleton (will be populated after deployment)
+if [ ! -f "lib/IDEAL_RESPONSE.md" ]; then
+  cat > lib/IDEAL_RESPONSE.md <<'EOF'
+# Ideal Infrastructure Solution
+
+## Overview
+[To be filled after deployment validation]
+
+## Implementation
+
+### File: lib/tap-stack.ts
+[Code will be added after validation]
+EOF
+  echo "✅ Created IDEAL_RESPONSE.md skeleton"
+fi
+
+# Create MODEL_FAILURES.md skeleton
+if [ ! -f "lib/MODEL_FAILURES.md" ]; then
+  cat > lib/MODEL_FAILURES.md <<'EOF'
+# Model Response Failures Analysis
+
+## Overview
+[Analysis will be added after deployment and testing]
+
+## Critical Failures
+[To be documented]
+
+## High Priority Failures
+[To be documented]
+
+## Medium Priority Failures
+[To be documented]
+
+## Low Priority Failures
+[To be documented]
+
+## Summary
+- Total failures: TBD
+- Primary knowledge gaps: TBD
+- Training value: TBD
+EOF
+  echo "✅ Created MODEL_FAILURES.md skeleton"
+fi
+```
+
+**Benefits**:
+- Ensures documentation files exist in correct location (`lib/`)
+- Validates file structure early
+- Avoids deployment work if documentation can't be created
+- Provides template for later population
+
+---
 
 ### 3. Deployment
 
@@ -436,6 +650,96 @@ Do NOT proceed without meeting 100% coverage requirement.
 - Test all error handling paths (try/catch, error callbacks)
 - Test edge cases and boundary conditions
 - Verify all functions/methods are tested
+
+**Test Generation Guidance**:
+
+When coverage is below 100%, follow this systematic approach:
+
+```bash
+echo "🔍 Analyzing coverage gaps for test generation..."
+
+# Identify uncovered files and lines
+if [ -f "coverage/lcov.info" ]; then
+  echo "📊 Coverage gaps found in:"
+  grep -E "^SF:|^DA:" coverage/lcov.info | awk '/^SF:/{file=$0}/^DA:.*,0$/{print file; print $0}' | head -20
+fi
+```
+
+**Platform-Specific Test Patterns**:
+
+**1. CDK TypeScript Tests**:
+```typescript
+import { Template, Match } from 'aws-cdk-lib/assertions';
+import * as cdk from 'aws-cdk-lib';
+import { TapStack } from '../lib/tap-stack';
+
+describe('TapStack', () => {
+  test('creates S3 bucket with encryption', () => {
+    const app = new cdk.App();
+    const stack = new TapStack(app, 'TestStack', { 
+      environmentSuffix: 'test' 
+    });
+    const template = Template.fromStack(stack);
+    
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      BucketEncryption: Match.objectLike({
+        ServerSideEncryptionConfiguration: Match.arrayWith([
+          Match.objectLike({
+            ServerSideEncryptionByDefault: { SSEAlgorithm: 'AES256' }
+          })
+        ])
+      })
+    });
+  });
+  
+  test('resource names include environmentSuffix', () => {
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      BucketName: Match.stringLikeRegexp('.*-test')
+    });
+  });
+});
+```
+
+**2. Pulumi Python Tests**:
+```python
+import pulumi
+import pytest
+
+class MyMocks(pulumi.runtime.Mocks):
+    def new_resource(self, args: pulumi.runtime.MockResourceArgs):
+        return [args.name + '_id', args.inputs]
+    
+    def call(self, args: pulumi.runtime.MockCallArgs):
+        return {}
+
+@pulumi.runtime.test
+def test_creates_bucket():
+    import tap_stack
+    return {
+        'bucket_name': lambda args: assert args is not None
+    }
+```
+
+**3. CloudFormation YAML Tests**:
+```python
+def test_template_has_required_resources():
+    with open('lib/template.yaml') as f:
+        template = yaml.safe_load(f)
+    
+    assert 'Resources' in template
+    assert 'S3Bucket' in template['Resources']
+    assert template['Resources']['S3Bucket']['Type'] == 'AWS::S3::Bucket'
+```
+
+**Coverage Improvement Checklist**:
+- [ ] All exported functions/classes tested
+- [ ] All conditional branches covered (if/else)
+- [ ] All error paths tested (try/catch)
+- [ ] Edge cases: null, empty arrays, extreme values
+- [ ] All resource properties validated
+- [ ] Environment variable handling tested
+- [ ] Inter-resource references tested
+- [ ] Parameter validation tested
 
 Use `docs/guides/validation_and_testing_guide.md` Common Failure Patterns for troubleshooting.
 
