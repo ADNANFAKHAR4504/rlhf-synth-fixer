@@ -101,8 +101,7 @@ get_cleanup_script() {
             echo "localstack-cloudformation-cleanup.sh"
             ;;
         "cdk")
-            print_status $YELLOW "⚠️  CDK support is not yet implemented"
-            return 1
+            echo "localstack-cdk-cleanup.sh"
             ;;
         "cdktf")
             print_status $YELLOW "⚠️  CDKTF support is not yet implemented"
