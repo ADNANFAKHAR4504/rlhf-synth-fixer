@@ -614,7 +614,7 @@ resource "aws_elasticache_subnet_group" "redis" {
   subnet_ids = aws_subnet.private[*].id
 
   lifecycle {
-    ignore_changes = [name]
+    create_before_destroy = false
   }
 
   tags = merge(local.tags, {
@@ -1775,7 +1775,7 @@ resource "aws_lambda_event_source_mapping" "vendor_notifier_sqs" {
   batch_size       = 10
 
   lifecycle {
-    ignore_changes = [uuid]
+    create_before_destroy = false
   }
 }
 
@@ -2074,6 +2074,14 @@ resource "aws_iam_role_policy" "step_functions" {
           "logs:PutLogEvents"
         ]
         Resource = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey"
+        ]
+        Resource = aws_kms_key.maintenance_data.arn
       }
     ]
   })
@@ -2691,7 +2699,7 @@ resource "aws_cloudwatch_log_group" "lambda_router" {
   kms_key_id        = aws_kms_key.maintenance_data.arn
 
   lifecycle {
-    ignore_changes = [name]
+    create_before_destroy = false
   }
 
   tags = local.tags
@@ -2702,7 +2710,7 @@ resource "aws_cloudwatch_log_group" "redis_slow_log" {
   retention_in_days = var.cloudwatch_log_retention_days
 
   lifecycle {
-    ignore_changes = [name]
+    create_before_destroy = false
   }
 
   tags = local.tags

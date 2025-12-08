@@ -124,9 +124,9 @@ describe('Terraform Integration: E2E cloud workflow', () => {
     // - NodeGroups[0].PrimaryEndpoint (cluster mode with node groups)
     // - PrimaryEndpoint (non-cluster mode - what we're using)
     const matched = groups.some(g => {
-      const endpoint = g.ConfigurationEndpoint?.Address || 
-                      g.NodeGroups?.[0]?.PrimaryEndpoint?.Address || 
-                      g.PrimaryEndpoint?.Address;
+      const endpoint = g.ConfigurationEndpoint?.Address ||
+        g.NodeGroups?.[0]?.PrimaryEndpoint?.Address ||
+        g.PrimaryEndpoint?.Address;
       return endpoint === outputs.redisEndpoint;
     });
     expect(matched).toBe(true);
@@ -255,7 +255,7 @@ describe('Terraform Integration: E2E cloud workflow', () => {
 
   test('Lambda → DynamoDB: Invoke router and verify it can access tables', async () => {
     const routerArn = outputs.lambdaFunctions.router;
-    
+
     // Skip if ARN has version suffix (outputs may contain versioned ARNs that don't exist yet)
     if (!routerArn || routerArn.includes(':$LATEST')) {
       console.warn('Skipping Lambda invoke test - versioned ARN detected');
@@ -324,7 +324,7 @@ terraform {
       const overridePath = path.join(libDir, 'backend_override.tf');
       fs.writeFileSync(overridePath, backendOverride);
       backendOverrideCreated = true;
-      
+
       // Initialize with local backend
       execSync('terraform init -reconfigure', { cwd: libDir, stdio: 'pipe' });
     } catch (error) {
@@ -342,7 +342,7 @@ terraform {
         'terraform.tfstate.backup',
         'tfplan-test'
       ];
-      
+
       for (const file of filesToClean) {
         const filePath = path.join(libDir, file);
         if (fs.existsSync(filePath)) {
