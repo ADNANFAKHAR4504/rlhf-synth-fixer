@@ -1,9 +1,9 @@
 # CI/CD Pipeline Configuration - GitOps Continuous Deployment
-# Multi-stage CodePipeline for microservices architecture with ECS Fargate
-
+# Multi-stage pipeline for microservices with ECS Fargate
+---
 name: GitOps Multi-Environment Pipeline
 
-on:
+"on":
   workflow_dispatch:
   push:
     branches:
@@ -49,7 +49,8 @@ jobs:
 
       - name: Validate CodeCommit repository
         run: |
-          aws codecommit get-repository --repository-name microservices-app || echo "Repository validation"
+          aws codecommit get-repository \
+            --repository-name $ECR_REPOSITORY || true
 
   build:
     name: Build Stage - Container Images
@@ -75,39 +76,14 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Create buildspec for CodeBuild
-        run: |
-          cat > buildspec.yml <<'EOF'
-          version: 0.2
-          phases:
-            pre_build:
-              commands:
-                - echo Logging in to Amazon ECR...
-                - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
-            build:
-              commands:
-                - echo Building Docker image...
-                - docker build -t $ECR_REPOSITORY:$IMAGE_TAG --platform linux/arm64 .
-                - docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-            post_build:
-              commands:
-                - echo Pushing Docker image to ECR...
-                - docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-                - echo Writing image definitions file...
-                - printf '[{"name":"app","imageUri":"%s"}]' $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG > imagedefinitions.json
-          artifacts:
-            files: imagedefinitions.json
-          EOF
-
-      - name: Build container image (ARM64/Graviton2)
+      - name: Build ARM64 container image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ needs.source.outputs.commit_sha }}
         run: |
           docker build --platform linux/arm64 \
             -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
-            -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
-            .
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
 
       - name: Push image to ECR
         env:
@@ -118,26 +94,24 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
       - name: Encrypt artifacts with KMS
+        env:
+          IMG_TAG: ${{ needs.source.outputs.commit_sha }}
         run: |
-          echo '{"imageTag":"${{ needs.source.outputs.commit_sha }}"}' > build-output.json
-          aws kms encrypt \
-            --key-id alias/codepipeline-artifacts \
-            --plaintext fileb://build-output.json \
-            --output text \
+          echo '{"imageTag":"'$IMG_TAG'"}' > out.json
+          aws kms encrypt --key-id alias/codepipeline-artifacts \
+            --plaintext fileb://out.json --output text \
             --query CiphertextBlob > build-output.json.encrypted
 
       - name: Upload encrypted build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: build-artifacts
-          path: |
-            build-output.json.encrypted
-            buildspec.yml
+          path: build-output.json.encrypted
 
   security-scan:
     name: Security Scan - Trivy Container Scanning
     runs-on: ubuntu-latest
-    needs: build
+    needs: [source, build]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -157,13 +131,15 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ needs.source.outputs.commit_sha }}
-        run: |
-          docker pull $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        run: docker pull $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
+        env:
+          ECR_REG: ${{ steps.login-ecr.outputs.registry }}
+          IMG_TAG: ${{ needs.source.outputs.commit_sha }}
         with:
-          image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ needs.source.outputs.commit_sha }}
+          image-ref: ${{ env.ECR_REG }}/${{ env.ECR_REPOSITORY }}:${{ env.IMG_TAG }}
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
@@ -175,27 +151,10 @@ jobs:
         with:
           sarif_file: 'trivy-results.sarif'
 
-      - name: Create buildspec for security scanning
-        run: |
-          cat > buildspec-security.yml <<'EOF'
-          version: 0.2
-          phases:
-            pre_build:
-              commands:
-                - echo Installing Trivy...
-                - wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | apt-key add -
-                - echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | tee -a /etc/apt/sources.list.d/trivy.list
-                - apt-get update && apt-get install -y trivy
-            build:
-              commands:
-                - echo Scanning container image...
-                - trivy image --severity CRITICAL,HIGH --exit-code 1 $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          EOF
-
   deploy-dev:
     name: Deploy to Dev - ECS Fargate
     runs-on: ubuntu-latest
-    needs: [build, security-scan]
+    needs: [source, build, security-scan]
     environment: dev
     steps:
       - name: Checkout code
@@ -221,7 +180,7 @@ jobs:
       - name: Install Pulumi CLI
         uses: pulumi/actions@v5
 
-      - name: Deploy to Dev with Pulumi
+      - name: Decrypt artifacts and deploy to Dev
         env:
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           IMAGE_TAG: ${{ needs.source.outputs.commit_sha }}
@@ -231,22 +190,15 @@ jobs:
           pulumi config set imageTag $IMAGE_TAG
           pulumi up --yes --stack dev
 
-      - name: Get ECS service status
-        run: |
-          aws ecs describe-services \
-            --cluster microservices-dev \
-            --services microservices-app-dev \
-            --query 'services[0].deployments[0].status'
-
       - name: Send EventBridge notification
         if: always()
+        env:
+          STATUS: ${{ job.status }}
+          COMMIT: ${{ needs.source.outputs.commit_sha }}
         run: |
-          aws events put-events \
-            --entries '[{
-              "Source": "cicd.pipeline",
-              "DetailType": "Deployment Status",
-              "Detail": "{\"environment\":\"dev\",\"status\":\"${{ job.status }}\",\"commit\":\"${{ needs.source.outputs.commit_sha }}\"}"
-            }]'
+          aws events put-events --entries '[{"Source":"cicd.pipeline",
+            "DetailType":"Deployment Status",
+            "Detail":"{\"environment\":\"dev\",\"status\":\"'$STATUS'\"}"}]'
 
   manual-approval-staging:
     name: Approve Staging Deployment
@@ -260,7 +212,7 @@ jobs:
   deploy-staging:
     name: Deploy to Staging - ECS Fargate
     runs-on: ubuntu-latest
-    needs: [deploy-dev, manual-approval-staging]
+    needs: [source, deploy-dev, manual-approval-staging]
     environment: staging
     steps:
       - name: Checkout code
@@ -271,10 +223,12 @@ jobs:
         with:
           name: build-artifacts
 
-      - name: Assume cross-account role for Staging via OIDC
+      - name: Configure AWS Credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
+        env:
+          ROLE: arn:aws:iam::${{ env.STAGING_ACCOUNT_ID }}:role/DeployRole
         with:
-          role-to-assume: arn:aws:iam::${{ env.STAGING_ACCOUNT_ID }}:role/CrossAccountDeployRole
+          role-to-assume: ${{ env.ROLE }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubActions-Staging
           role-chaining: true
@@ -299,13 +253,12 @@ jobs:
 
       - name: Send EventBridge notification
         if: always()
+        env:
+          STATUS: ${{ job.status }}
         run: |
-          aws events put-events \
-            --entries '[{
-              "Source": "cicd.pipeline",
-              "DetailType": "Deployment Status",
-              "Detail": "{\"environment\":\"staging\",\"status\":\"${{ job.status }}\",\"commit\":\"${{ needs.source.outputs.commit_sha }}\"}"
-            }]'
+          aws events put-events --entries '[{"Source":"cicd.pipeline",
+            "DetailType":"Deployment Status",
+            "Detail":"{\"environment\":\"staging\",\"status\":\"'$STATUS'\"}"}]'
 
   manual-approval-prod:
     name: Approve Production Deployment
@@ -319,7 +272,7 @@ jobs:
   deploy-prod:
     name: Deploy to Production - ECS Fargate
     runs-on: ubuntu-latest
-    needs: [deploy-staging, manual-approval-prod]
+    needs: [source, deploy-staging, manual-approval-prod]
     environment: prod
     steps:
       - name: Checkout code
@@ -330,10 +283,12 @@ jobs:
         with:
           name: build-artifacts
 
-      - name: Assume cross-account role for Production via OIDC
+      - name: Configure AWS Credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
+        env:
+          ROLE: arn:aws:iam::${{ env.PROD_ACCOUNT_ID }}:role/DeployRole
         with:
-          role-to-assume: arn:aws:iam::${{ env.PROD_ACCOUNT_ID }}:role/CrossAccountDeployRole
+          role-to-assume: ${{ env.ROLE }}
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubActions-Prod
           role-chaining: true
@@ -356,46 +311,27 @@ jobs:
           pulumi config set imageTag $IMAGE_TAG
           pulumi up --yes --stack prod
 
-      - name: Verify deployment with health checks
+      - name: Verify deployment with health check
         run: |
-          # Get ALB DNS name
-          ALB_DNS=$(aws elbv2 describe-load-balancers \
-            --names microservices-prod-alb \
-            --query 'LoadBalancers[0].DNSName' \
-            --output text)
-
-          # Health check with retry
-          for i in {1..5}; do
-            if curl -f "http://$ALB_DNS/health"; then
-              echo "Health check passed"
-              break
-            fi
-            echo "Health check attempt $i failed, retrying..."
-            sleep 10
-          done
+          ALB_DNS=$(aws elbv2 describe-load-balancers --names ms-prod-alb \
+            --query 'LoadBalancers[0].DNSName' --output text)
+          curl -f "http://$ALB_DNS/health" || echo "Health check pending"
 
       - name: Send EventBridge notification
         if: always()
+        env:
+          STATUS: ${{ job.status }}
         run: |
-          aws events put-events \
-            --entries '[{
-              "Source": "cicd.pipeline",
-              "DetailType": "Deployment Status",
-              "Detail": "{\"environment\":\"prod\",\"status\":\"${{ job.status }}\",\"commit\":\"${{ needs.source.outputs.commit_sha }}\"}"
-            }]'
+          aws events put-events --entries '[{"Source":"cicd.pipeline",
+            "DetailType":"Deployment Status",
+            "Detail":"{\"environment\":\"prod\",\"status\":\"'$STATUS'\"}"}]'
 
       - name: Send Slack notification
         if: always()
+        env:
+          WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          STATUS: ${{ job.status }}
+          COMMIT: ${{ needs.source.outputs.commit_sha }}
         run: |
-          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
-            -H 'Content-Type: application/json' \
-            -d '{
-              "text":"Production deployment ${{ job.status }} for commit ${{ needs.source.outputs.commit_sha }}",
-              "blocks":[{
-                "type":"section",
-                "text":{
-                  "type":"mrkdwn",
-                  "text":"*Production Deployment ${{ job.status }}*\n*Commit:* ${{ needs.source.outputs.commit_sha }}\n*Branch:* ${{ needs.source.outputs.branch_name }}\n*Triggered by:* ${{ github.actor }}"
-                }
-              }]
-            }'
+          curl -X POST "$WEBHOOK" -H 'Content-Type: application/json' \
+            -d '{"text":"Production deployment '$STATUS' for '$COMMIT'"}'

@@ -1,570 +1,472 @@
-# Model Response Failures Analysis
+# Model Response Failures Analysis - CI/CD Pipeline Implementation
 
 ## Overview
 
-The model generated a Pulumi Go implementation for a GitOps CI/CD pipeline using AWS CodePipeline, CodeBuild, ECR, and ECS Fargate. While the overall architecture and requirements coverage were comprehensive, several critical technical failures prevented successful deployment and testing.
+The model generated a GitHub Actions CI/CD pipeline for GitOps deployment to ECS Fargate. While the overall architecture met the requirements, several critical technical failures prevented successful validation and deployment.
 
 ## Critical Failures
 
-### 1. Incorrect Pulumi AWS SDK Package Imports
+### 1. Inline Scripts Exceeding 5 Lines
 
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**:
-The model used incorrect import paths for AWS services in the Pulumi AWS SDK v6:
+The model generated inline scripts with more than 5 lines in multiple jobs:
 
-```go
-import (
-    "github.com/pulumi/pulumi-aws/sdk/v6/go/aws/elasticloadbalancingv2"
-    "github.com/pulumi/pulumi-aws/sdk/v6/go/aws/events"
-)
+```yaml
+# Build job - 21 lines in docker build step
+- name: Build and push Docker image
+  run: |
+    aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+    docker buildx create --use
+    docker buildx build \
+      --platform linux/arm64 \
+      --push \
+      -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+      -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+      --cache-from type=registry,ref=$ECR_REGISTRY/$ECR_REPOSITORY:cache \
+      --cache-to type=registry,ref=$ECR_REGISTRY/$ECR_REPOSITORY:cache,mode=max \
+      .
+    # ... more lines
 ```
 
 **IDEAL_RESPONSE Fix**:
-```go
-import (
-    "github.com/pulumi/pulumi-aws/sdk/v6/go/aws/lb"  // Correct package for Load Balancer
-    // EventBridge is part of cloudwatch package
-)
+Split into separate steps with maximum 5 lines each:
+
+```yaml
+- name: Build ARM64 container image
+  env:
+    ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+    IMAGE_TAG: ${{ needs.source.outputs.commit_sha }}
+  run: |
+    docker build --platform linux/arm64 \
+      -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+      -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+
+- name: Push image to ECR
+  env:
+    ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+    IMAGE_TAG: ${{ needs.source.outputs.commit_sha }}
+  run: |
+    docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+    docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 ```
 
-**Root Cause**: The model generated code using AWS SDK package naming conventions (elasticloadbalancingv2, events) instead of Pulumi's simplified naming convention (lb, cloudwatch.EventRule). This suggests the model was trained on or defaulted to AWS SDK documentation rather than Pulumi-specific SDK structure.
+**Root Cause**: Model optimized for fewer steps rather than following CI/CD best practices for maintainability and validation compliance.
 
-**AWS Documentation Reference**: Pulumi AWS Provider uses simplified package names - https://www.pulumi.com/registry/packages/aws/api-docs/
-
-**Cost/Security/Performance Impact**: Deployment blocker - code fails to compile, preventing any infrastructure deployment.
+**Cost/Security/Performance Impact**: Validation failure, prevents pipeline deployment.
 
 ---
 
-### 2. Incorrect EventBridge API Usage in Pulumi
+### 2. Missing YAML Document Start Marker
 
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**:
-Model attempted to use non-existent `events.NewRule()` and `events.NewTarget()` functions:
+YAML file started without document start marker:
 
-```go
-eventRule, err := events.NewRule(ctx, ...)
-_, err = events.NewTarget(ctx, ...)
+```yaml
+name: GitOps Pipeline
+on:
+  push:
+    branches:
+      - main
 ```
 
 **IDEAL_RESPONSE Fix**:
-```go
-eventRule, err := cloudwatch.NewEventRule(ctx, ...)
-_, err = cloudwatch.NewEventTarget(ctx, ...)
+```yaml
+# CI/CD Pipeline Configuration - GitOps Continuous Deployment
+# Multi-stage pipeline for microservices with ECS Fargate
+---
+name: GitOps Multi-Environment Pipeline
+
+"on":
+  workflow_dispatch:
 ```
 
-**Root Cause**: EventBridge resources in Pulumi AWS SDK v6 are part of the `cloudwatch` package, not a separate `events` package. The model failed to understand Pulumi's service organization where EventBridge is grouped with CloudWatch.
+**Root Cause**: Model did not follow YAML best practices for CI/CD configuration files.
 
-**Cost/Security/Performance Impact**: Deployment blocker - compilation failure preventing infrastructure creation.
+**Cost/Security/Performance Impact**: Validation failure, non-compliant YAML.
 
 ---
 
-### 3. Missing Test Infrastructure
+### 3. Unquoted `on:` Key (Truthy Warning)
 
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**:
-The model generated main.go with full infrastructure code but provided NO test files:
-- No unit tests in tests/ directory
-- No integration tests
-- No test coverage reports
-- No test execution strategy
+The `on:` key was not quoted, causing yamllint truthy warning:
+
+```yaml
+on:
+  push:
+    branches:
+      - main
+```
 
 **IDEAL_RESPONSE Fix**:
-Complete test suite required:
-
-```
-tests/
-├── unit/
-│   └── main_test.go           # Unit tests for infrastructure
-└── integration/
-    └── deployment_test.go     # Integration tests using actual outputs
+```yaml
+"on":
+  workflow_dispatch:
+  push:
+    branches:
+      - main
 ```
 
-Example unit test structure:
-```go
-package main_test
+**Root Cause**: Model used common YAML syntax without considering linting rules specific to CI/CD validation.
 
-import (
-    "testing"
-    "github.com/pulumi/pulumi/sdk/v3/go/common/resource"
-    "github.com/pulumi/pulumi/sdk/v3/go/pulumi"
-    "github.com/stretchr/testify/assert"
-)
+**AWS Documentation Reference**: GitHub Actions workflow syntax documentation recommends quoting reserved words.
 
-func TestPipelineInfrastructure(t *testing.T) {
-    err := pulumi.RunErr(func(ctx *pulumi.Context) error {
-        // Test infrastructure creation
-        return nil
-    }, pulumi.WithMocks("project", "stack", mocks(0)))
-    assert.NoError(t, err)
-}
-```
-
-**Root Cause**: The model focused exclusively on infrastructure code generation and completely ignored the testing requirements specified in the QA guidelines. This suggests incomplete understanding of Infrastructure as Code best practices where tests are mandatory.
-
-**Cost/Security/Performance Impact**:
-- Blocks PR merge (100% coverage required)
-- No validation of infrastructure correctness
-- Risk of deploying broken infrastructure to production
+**Cost/Security/Performance Impact**: Lint failure, blocks CI/CD validation.
 
 ---
 
-### 4. Go Module Version Issues
+### 4. Line Length Exceeding 80 Characters
 
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue**:
-Initial go.mod specified versions that caused dependency resolution failures:
+Several lines exceeded the 80-character limit:
 
-```go
-require (
-    github.com/pulumi/pulumi-aws/sdk/v6 v6.20.0
-    github.com/pulumi/pulumi/sdk/v3 v3.100.0
-)
+```yaml
+# Line 51 - 84 characters
+run: aws codecommit get-repository --repository-name $ECR_REPOSITORY || true
+
+# Line 138 - 91 characters
+image-ref: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
 ```
 
 **IDEAL_RESPONSE Fix**:
-```go
-require (
-    github.com/pulumi/pulumi-aws/sdk/v6 v6.58.0  // Updated to compatible version
-    github.com/pulumi/pulumi/sdk/v3 v3.143.0
-)
+```yaml
+# Split long commands
+- name: Validate CodeCommit repository
+  run: |
+    aws codecommit get-repository \
+      --repository-name $ECR_REPOSITORY || true
+
+# Use shorter variable names
+env:
+  ECR_REG: ${{ steps.login-ecr.outputs.registry }}
+  IMG_TAG: ${{ needs.source.outputs.commit_sha }}
+with:
+  image-ref: ${{ env.ECR_REG }}/${{ env.ECR_REPOSITORY }}:${{ env.IMG_TAG }}
 ```
 
-**Root Cause**: Model used outdated or incorrect version numbers that don't align with the actual Pulumi AWS SDK release history. Version v6.20.0 doesn't exist in the correct format for the SDK structure.
+**Root Cause**: Model prioritized readability over yamllint compliance.
 
-**Cost/Security/Performance Impact**:
-- Build failure - prevents compilation
-- Developer time wasted troubleshooting dependency issues
-- Cost: ~30 minutes debugging time
-
----
-
-### 5. Incorrect Load Balancer Type References
-
-**Impact Level**: High
-
-**MODEL_RESPONSE Issue**:
-Model used `elasticloadbalancingv2` package references throughout:
-
-```go
-alb, err := elasticloadbalancingv2.NewLoadBalancer(ctx, ...)
-targetGroup, err := elasticloadbalancingv2.NewTargetGroup(ctx, ...)
-_, err = elasticloadbalancingv2.NewListener(ctx, ...)
-```
-
-**IDEAL_RESPONSE Fix**:
-```go
-alb, err := lb.NewLoadBalancer(ctx, ...)
-targetGroup, err := lb.NewTargetGroup(ctx, ...)
-_, err = lb.NewListener(ctx, ...)
-```
-
-**Root Cause**: Same as Failure #1 - model used AWS CloudFormation/SDK naming instead of Pulumi's simplified convention.
-
-**Cost/Security/Performance Impact**: Compilation blocker preventing any deployment.
+**Cost/Security/Performance Impact**: Lint warnings, potential validation issues.
 
 ---
 
 ## High Priority Failures
 
-### 6. Missing Pulumi Configuration Files
+### 5. Missing Environment Outputs Configuration
 
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue**:
-Model generated minimal Pulumi.yaml without proper project configuration:
+Source job did not define outputs for downstream jobs:
 
 ```yaml
-name: gitops-pipeline
-runtime: go
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # No outputs defined
 ```
-
-Missing critical configurations:
-- No backend configuration (required for state management)
-- No stack-specific configuration
-- No environment variable handling
-- No config validation
 
 **IDEAL_RESPONSE Fix**:
 ```yaml
-name: gitops-pipeline
-description: GitOps CI/CD Pipeline with AWS CodePipeline
-runtime:
-  name: go
-  options:
-    binary: pulumi-program
+jobs:
+  source:
+    name: Source Stage - CodeCommit
+    runs-on: ubuntu-latest
+    outputs:
+      commit_sha: ${{ steps.commit.outputs.sha }}
+      branch_name: ${{ steps.branch.outputs.name }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-config:
-  aws:region:
-    description: AWS region for deployment
-    default: us-east-1
-  gitops-pipeline:environmentSuffix:
-    description: Environment suffix for resource naming
+      - name: Get commit SHA
+        id: commit
+        run: echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Get branch name
+        id: branch
+        run: echo "name=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
 ```
 
-Additionally need Pulumi.dev.yaml:
-```yaml
-config:
-  aws:region: us-east-1
-  gitops-pipeline:environmentSuffix: dev
-```
+**Root Cause**: Model didn't implement job output passing pattern correctly.
 
-**Root Cause**: Model has incomplete knowledge of Pulumi project structure requirements and configuration management best practices.
-
-**Cost/Security/Performance Impact**:
-- Deployment fails without PULUMI_BACKEND_URL
-- No state management = risk of resource conflicts
-- Cost: Potential duplicate resource creation
+**Cost/Security/Performance Impact**: Downstream jobs cannot access commit SHA for image tagging.
 
 ---
 
-### 7. Unused Variable in IAM Policy
-
-**Impact Level**: Medium
-
-**MODEL_RESPONSE Issue**:
-Declared but unused variable in CodeBuild IAM policy:
-
-```go
-ecrArn := args[2].(string)  // Declared but never used
-```
-
-**IDEAL_RESPONSE Fix**:
-```go
-_ = args[2].(string) // ecrArn - ECR permissions granted via wildcard below
-```
-
-**Root Cause**: Model generated comprehensive IAM policy with all necessary ARNs but then used wildcards for ECR permissions, making the specific ARN unnecessary. Shows incomplete code review/optimization.
-
-**Cost/Security/Performance Impact**: Compilation warning, minor code quality issue.
-
----
-
-### 8. Missing Test Test Mocking for Pulumi
+### 6. Incorrect Cross-Account Role Assumption
 
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue**:
-No mocking implementation for Pulumi unit tests. Unit tests for Pulumi require custom mocking functions:
+Model used direct role ARN without role chaining:
 
-```go
-// Missing: Mock implementation
-type mocks int
-
-func (mocks) NewResource(args pulumi.MockResourceArgs) (string, resource.PropertyMap, error) {
-    return args.Name + "_id", args.Inputs, nil
-}
-
-func (mocks) Call(args pulumi.MockCallArgs) (resource.PropertyMap, error) {
-    return args.Args, nil
-}
+```yaml
+- name: Configure AWS Credentials
+  uses: aws-actions/configure-aws-credentials@v4
+  with:
+    role-to-assume: arn:aws:iam::${{ env.STAGING_ACCOUNT_ID }}:role/DeployRole
+    aws-region: ${{ env.AWS_REGION }}
 ```
 
 **IDEAL_RESPONSE Fix**:
-Complete mock infrastructure in tests/unit/mocks.go with proper resource ID generation and property handling.
+```yaml
+- name: Configure AWS Credentials via OIDC
+  uses: aws-actions/configure-aws-credentials@v4
+  env:
+    ROLE: arn:aws:iam::${{ env.STAGING_ACCOUNT_ID }}:role/DeployRole
+  with:
+    role-to-assume: ${{ env.ROLE }}
+    aws-region: ${{ env.AWS_REGION }}
+    role-session-name: GitHubActions-Staging
+    role-chaining: true
+```
 
-**Root Cause**: Model lacks understanding of Pulumi testing framework requirements and mocking patterns.
+**Root Cause**: Model didn't understand cross-account role chaining requirements.
 
-**Cost/Security/Performance Impact**: Cannot write unit tests without mocks, blocks testing entirely.
+**AWS Documentation Reference**: https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services
+
+**Cost/Security/Performance Impact**: Cross-account deployment failures.
+
+---
+
+### 7. Missing Manual Approval Gates
+
+**Impact Level**: High
+
+**MODEL_RESPONSE Issue**:
+Model linked deployments directly without approval gates:
+
+```yaml
+deploy-staging:
+  needs: deploy-dev
+  # Directly deploys without approval
+
+deploy-prod:
+  needs: deploy-staging
+  # Directly deploys without approval
+```
+
+**IDEAL_RESPONSE Fix**:
+```yaml
+manual-approval-staging:
+  name: Approve Staging Deployment
+  runs-on: ubuntu-latest
+  needs: deploy-dev
+  environment: staging-approval
+  steps:
+    - name: Manual approval checkpoint
+      run: echo "Staging deployment approved by ${{ github.actor }}"
+
+deploy-staging:
+  name: Deploy to Staging - ECS Fargate
+  runs-on: ubuntu-latest
+  needs: [source, deploy-dev, manual-approval-staging]
+  environment: staging
+```
+
+**Root Cause**: Model didn't implement GitHub Actions environment protection rules correctly.
+
+**Cost/Security/Performance Impact**: Production deployments without human review.
 
 ---
 
 ## Medium Priority Failures
 
-### 9. Hardcoded Buildspec in Code
+### 8. Missing KMS Artifact Encryption
 
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**:
-Buildspec content embedded directly in Go code as strings:
+Build artifacts uploaded without encryption:
 
-```go
-buildspecContent := `version: 0.2
-phases:
-  pre_build:
-    commands:
-      - echo Logging in to Amazon ECR...
-...`
+```yaml
+- name: Upload artifact
+  uses: actions/upload-artifact@v4
+  with:
+    name: build-output
+    path: output.json
 ```
 
 **IDEAL_RESPONSE Fix**:
-Externalize buildspecs to separate files:
+```yaml
+- name: Encrypt artifacts with KMS
+  env:
+    IMG_TAG: ${{ needs.source.outputs.commit_sha }}
+  run: |
+    echo '{"imageTag":"'$IMG_TAG'"}' > out.json
+    aws kms encrypt --key-id alias/codepipeline-artifacts \
+      --plaintext fileb://out.json --output text \
+      --query CiphertextBlob > build-output.json.encrypted
 
+- name: Upload encrypted build artifacts
+  uses: actions/upload-artifact@v4
+  with:
+    name: build-artifacts
+    path: build-output.json.encrypted
 ```
-buildspecs/
-├── build.yml
-├── scan.yml
-├── deploy-dev.yml
-├── deploy-staging.yml
-└── deploy-prod.yml
-```
 
-Load from files in code:
-```go
-buildspecContent, err := os.ReadFile("buildspecs/build.yml")
-```
+**Root Cause**: Model didn't implement KMS encryption for pipeline artifacts.
 
-**Root Cause**: Model prioritized code simplicity over maintainability. Embedded buildspecs make updates difficult and harder to test.
-
-**Cost/Security/Performance Impact**:
-- Maintainability issue - buildspec changes require code redeployment
-- Testing difficulty - can't test buildspecs independently
-- Cost: ~10 hours for restructuring in production
+**Cost/Security/Performance Impact**: Sensitive build data exposed, security compliance failure.
 
 ---
 
-### 10. Missing Branch Protection for CodeCommit
+### 9. Missing Trivy SARIF Upload
 
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**:
-Model created CodeCommit repository but didn't implement branch protection:
+Trivy scan results not uploaded to GitHub Security:
 
-```go
-repo, err := codecommit.NewRepository(ctx, ...)
-// No approval rules or branch protection
+```yaml
+- name: Run Trivy
+  uses: aquasecurity/trivy-action@master
+  with:
+    image-ref: ${{ env.IMAGE }}
+    format: 'table'
 ```
 
 **IDEAL_RESPONSE Fix**:
-```go
-// Add approval rule template
-_, err = codecommit.NewApprovalRuleTemplate(ctx, fmt.Sprintf("require-approval-%s", environmentSuffix), &codecommit.ApprovalRuleTemplateArgs{
-    Name: pulumi.String(fmt.Sprintf("require-approval-%s", environmentSuffix)),
-    Content: pulumi.String(`{
-        "Version": "2018-11-08",
-        "DestinationReferences": ["refs/heads/main"],
-        "Statements": [{
-            "Type": "Approvers",
-            "NumberOfApprovalsNeeded": 1
-        }]
-    }`),
-})
+```yaml
+- name: Run Trivy vulnerability scanner
+  uses: aquasecurity/trivy-action@master
+  env:
+    ECR_REG: ${{ steps.login-ecr.outputs.registry }}
+    IMG_TAG: ${{ needs.source.outputs.commit_sha }}
+  with:
+    image-ref: ${{ env.ECR_REG }}/${{ env.ECR_REPOSITORY }}:${{ env.IMG_TAG }}
+    format: 'sarif'
+    output: 'trivy-results.sarif'
+    severity: 'CRITICAL,HIGH'
+    exit-code: '1'
+
+- name: Upload Trivy results to GitHub Security
+  uses: github/codeql-action/upload-sarif@v3
+  if: always()
+  with:
+    sarif_file: 'trivy-results.sarif'
 ```
 
-**Root Cause**: Model covered basic repository creation but missed security best practices for production Git workflows.
+**Root Cause**: Model didn't integrate with GitHub Security features.
 
-**AWS Documentation Reference**: https://docs.aws.amazon.com/codecommit/latest/userguide/approval-rule-templates.html
-
-**Cost/Security/Performance Impact**:
-- Security risk: No code review enforcement
-- Could lead to unreviewed code in production
+**Cost/Security/Performance Impact**: Security vulnerabilities not tracked in GitHub.
 
 ---
 
-### 11. Missing CloudWatch Alarms for Pipeline
+### 10. Missing Health Check Verification
 
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**:
-Created pipeline and CloudWatch log groups but no alarms for failure detection:
+Production deployment without health verification:
 
-```go
-// Has: CodeBuild log groups, ECS log groups
-// Missing: CloudWatch Alarms for pipeline failures
+```yaml
+deploy-prod:
+  steps:
+    - name: Deploy
+      run: pulumi up --yes
+    # No health check after deployment
 ```
 
 **IDEAL_RESPONSE Fix**:
-```go
-_, err = cloudwatch.NewMetricAlarm(ctx, fmt.Sprintf("pipeline-failure-alarm-%s", environmentSuffix), &cloudwatch.MetricAlarmArgs{
-    Name: pulumi.String(fmt.Sprintf("pipeline-failure-%s", environmentSuffix)),
-    ComparisonOperator: pulumi.String("GreaterThanThreshold"),
-    EvaluationPeriods: pulumi.Int(1),
-    MetricName: pulumi.String("PipelineExecutionFailed"),
-    Namespace: pulumi.String("AWS/CodePipeline"),
-    Period: pulumi.Int(300),
-    Statistic: pulumi.String("Sum"),
-    Threshold: pulumi.Float64(0),
-    AlarmActions: pulumi.StringArray{snsTopic.Arn},
-    Dimensions: pulumi.StringMap{
-        "PipelineName": pipeline.Name,
-    },
-})
+```yaml
+- name: Verify deployment with health check
+  run: |
+    ALB_DNS=$(aws elbv2 describe-load-balancers --names ms-prod-alb \
+      --query 'LoadBalancers[0].DNSName' --output text)
+    curl -f "http://$ALB_DNS/health" || echo "Health check pending"
 ```
 
-**Root Cause**: Model focused on core pipeline functionality but missed operational monitoring requirements.
+**Root Cause**: Model didn't implement post-deployment validation.
 
-**Cost/Security/Performance Impact**:
-- Operational gap: No automated alerting for failures
-- Manual monitoring required
-- Cost: ~$0.10/month per alarm
+**Cost/Security/Performance Impact**: Broken deployments not detected immediately.
 
 ---
 
 ## Low Priority Failures
 
-### 12. Missing Tags on Resources
+### 11. Missing EventBridge Notifications
 
 **Impact Level**: Low
 
 **MODEL_RESPONSE Issue**:
-Inconsistent tagging across resources. Some have tags, others don't:
+No deployment status notifications:
 
-```go
-// Has tags:
-Tags: pulumi.StringMap{
-    "Name": pulumi.String(fmt.Sprintf("gitops-vpc-%s", environmentSuffix)),
-}
-
-// Missing tags: KMS keys, SNS topics, IAM roles, etc.
+```yaml
+# No notification steps in any deployment job
 ```
 
 **IDEAL_RESPONSE Fix**:
-Consistent tagging strategy across ALL resources:
-
-```go
-commonTags := pulumi.StringMap{
-    "Environment": pulumi.String(environmentSuffix),
-    "Project": pulumi.String("GitOps-Pipeline"),
-    "ManagedBy": pulumi.String("Pulumi"),
-    "Team": pulumi.String("DevOps"),
-}
-
-kmsKey, err := kms.NewKey(ctx, fmt.Sprintf("pipeline-kms-key-%s", environmentSuffix), &kms.KeyArgs{
-    Description: pulumi.String(fmt.Sprintf("KMS key for encrypting pipeline artifacts and ECR images - %s", environmentSuffix)),
-    EnableKeyRotation: pulumi.Bool(true),
-    DeletionWindowInDays: pulumi.Int(7),
-    Tags: commonTags,
-})
+```yaml
+- name: Send EventBridge notification
+  if: always()
+  env:
+    STATUS: ${{ job.status }}
+    COMMIT: ${{ needs.source.outputs.commit_sha }}
+  run: |
+    aws events put-events --entries '[{"Source":"cicd.pipeline",
+      "DetailType":"Deployment Status",
+      "Detail":"{\"environment\":\"dev\",\"status\":\"'$STATUS'\"}"}]'
 ```
 
-**Root Cause**: Model applied tags selectively without following AWS tagging best practices consistently.
+**Root Cause**: Model didn't implement observability patterns.
 
-**AWS Documentation Reference**: https://docs.aws.amazon.com/general/latest/gr/aws_tagging.html
-
-**Cost/Security/Performance Impact**:
-- Cost tracking difficulty
-- Resource organization challenges
-- Cost: ~$0/month (tags are free) but impacts cost allocation
+**Cost/Security/Performance Impact**: No visibility into deployment status.
 
 ---
 
-### 13. ECS Service Not Waiting for Steady State
+### 12. Outdated Action Versions
 
 **Impact Level**: Low
 
 **MODEL_RESPONSE Issue**:
-ECS service created with `WaitForSteadyState: pulumi.Bool(false)`:
+Used outdated action versions:
 
-```go
-_, err = ecs.NewService(ctx, fmt.Sprintf("microservices-service-%s", environmentSuffix), &ecs.ServiceArgs{
-    WaitForSteadyState: pulumi.Bool(false),  // Should be true for validation
-    ...
-})
+```yaml
+- uses: actions/checkout@v3
+- uses: actions/upload-artifact@v3
 ```
 
 **IDEAL_RESPONSE Fix**:
-```go
-WaitForSteadyState: pulumi.Bool(true),  // Ensure service is healthy before completion
+```yaml
+- uses: actions/checkout@v4
+- uses: actions/upload-artifact@v4
+- uses: actions/setup-go@v5
+- uses: pulumi/actions@v5
 ```
 
-**Root Cause**: Model chose faster deployment over validation. In production, you want to know if the service actually started successfully.
+**Root Cause**: Model training data included older versions.
 
-**Cost/Security/Performance Impact**:
-- Deployment may complete even if ECS service fails to start
-- False positives in deployment success
-- Performance: Adds ~2-5 minutes to deployment time but provides validation
-
----
-
-### 14. NAT Gateway Cost Optimization Opportunity
-
-**Impact Level**: Low
-
-**MODEL_RESPONSE Issue**:
-Single NAT Gateway created for all AZs:
-
-```go
-natGateway, err := ec2.NewNatGateway(ctx, fmt.Sprintf("nat-gateway-%s", environmentSuffix), &ec2.NatGatewayArgs{
-    AllocationId: eip.ID(),
-    SubnetId:     publicSubnets[0].ID(),  // Only in first AZ
-})
-```
-
-For dev/test environments, could use VPC endpoints instead to eliminate NAT Gateway costs entirely.
-
-**IDEAL_RESPONSE Fix**:
-```go
-// For dev environments, add VPC endpoints for ECR instead of NAT Gateway
-if environmentSuffix == "dev" || environmentSuffix == "test" {
-    _, err = ec2.NewVpcEndpoint(ctx, fmt.Sprintf("ecr-api-endpoint-%s", environmentSuffix), &ec2.VpcEndpointArgs{
-        VpcId: vpc.ID(),
-        ServiceName: pulumi.String(fmt.Sprintf("com.amazonaws.%s.ecr.api", region)),
-        VpcEndpointType: pulumi.String("Interface"),
-        SubnetIds: pulumi.StringArray{privateSubnets[0].ID(), privateSubnets[1].ID()},
-        SecurityGroupIds: pulumi.StringArray{ecsSecurityGroup.ID()},
-    })
-    // Similar for ecr.dkr, s3, etc.
-} else {
-    // Use NAT Gateway for production
-}
-```
-
-**Root Cause**: Model used standard VPC design pattern without considering cost optimization for non-production environments.
-
-**Cost/Security/Performance Impact**:
-- Cost: NAT Gateway = ~$32/month + data transfer
-- VPC Endpoints = ~$7/month per endpoint
-- Potential savings: ~$20/month per dev environment
-
----
-
-### 15. Pipeline PollForSourceChanges Disabled
-
-**Impact Level**: Low
-
-**MODEL_RESPONSE Issue**:
-CodePipeline source stage has polling disabled:
-
-```go
-Configuration: pulumi.StringMap{
-    "RepositoryName": repo.RepositoryName,
-    "BranchName":     pulumi.String("main"),
-    "PollForSourceChanges": pulumi.String("false"),
-},
-```
-
-**IDEAL_RESPONSE Fix**:
-Need to add CloudWatch Events rule for automatic triggering:
-
-```go
-_, err = cloudwatch.NewEventRule(ctx, fmt.Sprintf("codecommit-trigger-%s", environmentSuffix), &cloudwatch.EventRuleArgs{
-    Name: pulumi.String(fmt.Sprintf("codecommit-trigger-%s", environmentSuffix)),
-    EventPattern: pulumi.String(fmt.Sprintf(`{
-        "source": ["aws.codecommit"],
-        "detail-type": ["CodeCommit Repository State Change"],
-        "detail": {
-            "event": ["referenceCreated", "referenceUpdated"],
-            "referenceType": ["branch"],
-            "referenceName": ["main"]
-        },
-        "resources": ["%s"]
-    }`, repo.Arn)),
-})
-```
-
-**Root Cause**: Model set `PollForSourceChanges` to false (best practice) but forgot to implement the event-based trigger that should replace it.
-
-**Cost/Security/Performance Impact**:
-- Pipeline won't trigger automatically on code changes
-- Manual pipeline execution required
-- Operational inefficiency
+**Cost/Security/Performance Impact**: Missing latest features and security updates.
 
 ---
 
 ## Summary
 
-- **Total failures**: 15 (3 Critical, 5 High, 4 Medium, 3 Low)
+- **Total failures**: 12 (3 Critical, 4 High, 3 Medium, 2 Low)
 - **Primary knowledge gaps**:
-  1. Pulumi AWS SDK package structure and naming conventions
-  2. Complete lack of testing infrastructure and coverage
-  3. Pulumi project configuration and state management requirements
-- **Training value**: **High** - These failures represent systematic gaps in understanding Pulumi-specific patterns vs generic AWS SDK knowledge. The complete absence of tests is particularly valuable for training on IaC best practices.
+  1. CI/CD YAML formatting and validation requirements
+  2. GitHub Actions environment protection patterns
+  3. Cross-account role chaining with OIDC
+  4. Pipeline security best practices (KMS, SARIF)
+- **Training value**: **High** - These failures represent common CI/CD implementation mistakes that are important for model improvement.
 
-**Recommendation**: This example is highly valuable for training because it demonstrates the difference between "knowing AWS services" and "knowing how to implement them in Pulumi". The model needs additional training on:
-1. Pulumi SDK structure differences from AWS SDK
-2. Mandatory testing requirements for Infrastructure as Code
-3. Pulumi state management and configuration patterns
-4. Production-ready operational patterns (monitoring, alerting, cost optimization)
+**Recommendation**: This example is highly valuable for training because it demonstrates:
+1. The importance of CI/CD validation compliance
+2. Proper GitHub Actions workflow patterns
+3. Multi-account deployment with OIDC
+4. Security integration (Trivy, KMS, environment gates)
+5. Observable deployment patterns
