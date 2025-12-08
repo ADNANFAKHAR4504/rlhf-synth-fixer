@@ -29,7 +29,6 @@ export PULUMI_CONFIG_PASSPHRASE=${PULUMI_CONFIG_PASSPHRASE:-}
 # Provide non-interactive defaults for TF variables if not set (CI safe)
 export TF_VAR_db_username=${TF_VAR_db_username:-temp_admin}
 export TF_VAR_db_password=${TF_VAR_db_password:-TempPassword123!}
-export TF_VAR_environmentSuffix=${ENVIRONMENT_SUFFIX:-dev}
 
 echo "Environment configuration:"
 echo "  Environment suffix: $ENVIRONMENT_SUFFIX"
