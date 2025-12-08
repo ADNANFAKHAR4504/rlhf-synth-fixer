@@ -1,5 +1,5 @@
 {
-  "platform": "pulumi",
+  "platform": "cicd",
   "language": "go",
   "complexity": "hard",
   "turn_type": "single",
