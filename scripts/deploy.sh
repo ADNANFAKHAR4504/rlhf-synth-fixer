@@ -704,39 +704,9 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     fi
   fi
 
-elif [ "$PLATFORM" = "analysis" ] && [ "$LANGUAGE" = "py" ]; then
-  echo "✅ Analysis Python project detected, running analysis script..."
-
-  # Check for analysis script
-  if [ -f "lib/analyse.py" ]; then
-    echo "Found analysis script: lib/analyse.py"
-
-    # Run unit tests first
-    echo "Running unit tests..."
-    if [ -d "tests/unit" ]; then
-      python -m pytest tests/unit/ -v --tb=short --no-cov || {
-        echo "⚠️ Unit tests failed, but continuing with analysis..."
-      }
-    fi
-
-    # Run the analysis script
-    echo "Running analysis script..."
-    export ENVIRONMENT_SUFFIX=${ENVIRONMENT_SUFFIX:-dev}
-    export AWS_REGION=${AWS_REGION:-us-east-1}
-
-    python lib/analyse.py 2>&1 | tee "lib/analysis-results.txt" || {
-      echo "⚠️ Analysis script completed with warnings or errors"
-    }
-
-    echo "✅ Analysis completed. Output saved to lib/analysis-results.txt"
-  else
-    echo "❌ No analysis script found at lib/analyse.py"
-    exit 1
-  fi
-
 else
   echo "ℹ️ Unknown deployment method for platform: $PLATFORM, language: $LANGUAGE"
-  echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json, cdktf+typescript, cdktf+python, tf+hcl, pulumi+typescript, pulumi+javascript, pulumi+python, pulumi+go, analysis+py"
+  echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json, cdktf+typescript, cdktf+python, tf+hcl, pulumi+typescript, pulumi+javascript, pulumi+python, pulumi+go"
   exit 1
 fi
 

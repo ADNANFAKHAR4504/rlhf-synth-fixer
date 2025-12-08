@@ -209,28 +209,6 @@ elif [ "$PLATFORM" = "tf" ]; then
   echo "✅ Flat outputs:"
   cat cfn-outputs/flat-outputs.json || echo "No flat outputs"    
 
-elif [ "$PLATFORM" = "analysis" ]; then
-  echo "✅ Analysis project detected, creating outputs from analysis results..."
-
-  # Create outputs directory if not exists
-  mkdir -p cfn-outputs
-
-  # If analysis results exist, use them as outputs
-  if [ -f "lib/analysis-results.txt" ]; then
-    echo "Found analysis results at lib/analysis-results.txt"
-    # Create a JSON output with analysis summary
-    echo "{\"analysis_completed\": true, \"results_file\": \"lib/analysis-results.txt\"}" > cfn-outputs/flat-outputs.json
-    echo "{\"analysis\": {\"completed\": true, \"results_file\": \"lib/analysis-results.txt\"}}" > cfn-outputs/all-outputs.json
-  else
-    echo "No analysis results found, creating empty outputs"
-    echo "{\"analysis_completed\": false}" > cfn-outputs/flat-outputs.json
-    echo "{}" > cfn-outputs/all-outputs.json
-  fi
-
-  if [ ! -f "cdk-stacks.json" ]; then
-    echo "# No CDK stacks for analysis projects" > cdk-stacks.json
-  fi
-
 else
   echo "ℹ️ Not a recognized platform, creating empty outputs for consistency"
   echo "{}" > cfn-outputs/all-outputs.json
