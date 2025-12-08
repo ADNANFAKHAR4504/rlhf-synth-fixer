@@ -33,7 +33,6 @@ export class TapStack extends cdk.Stack {
       },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      pointInTimeRecoverySpecification: false,
     });
 
     // SNS topic for drift alerts
