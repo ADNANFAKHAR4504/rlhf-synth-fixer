@@ -5,6 +5,12 @@ CDKTF Application Entry Point for Zero Trust Security Framework
 This file is the main entry point for synthesizing the CDKTF application.
 """
 import os
+import sys
+
+# Add the project root to the Python path to enable imports from lib/
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
+
 from cdktf import App
 from lib.tap_stack import TapStack
 
