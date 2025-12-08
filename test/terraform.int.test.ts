@@ -119,7 +119,16 @@ describe('Terraform Integration: E2E cloud workflow', () => {
   test('ElastiCache Redis replication group exists (DescribeReplicationGroups)', async () => {
     const res = await elasticache.send(new DescribeReplicationGroupsCommand({}));
     const groups = res.ReplicationGroups || [];
-    const matched = groups.some(g => (g.ConfigurationEndpoint?.Address || g.NodeGroups?.[0]?.PrimaryEndpoint?.Address) === outputs.redisEndpoint);
+    // For non-cluster mode replication groups, check multiple endpoint types:
+    // - ConfigurationEndpoint (cluster mode enabled)
+    // - NodeGroups[0].PrimaryEndpoint (cluster mode with node groups)
+    // - PrimaryEndpoint (non-cluster mode - what we're using)
+    const matched = groups.some(g => {
+      const endpoint = g.ConfigurationEndpoint?.Address || 
+                      g.NodeGroups?.[0]?.PrimaryEndpoint?.Address || 
+                      g.PrimaryEndpoint?.Address;
+      return endpoint === outputs.redisEndpoint;
+    });
     expect(matched).toBe(true);
   });
 

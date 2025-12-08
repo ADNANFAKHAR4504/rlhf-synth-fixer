@@ -106,7 +106,44 @@ data "aws_iam_policy_document" "eventbridge_assume_role" {
 resource "aws_kms_key" "maintenance_data" {
   description             = "KMS key for encrypting maintenance data"
   deletion_window_in_days = 10
-  tags                    = local.tags
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.us-east-1.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:us-east-1:${data.aws_caller_identity.current.account_id}:log-group:*"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = local.tags
 }
 
 resource "aws_kms_alias" "maintenance_data" {
@@ -576,6 +613,10 @@ resource "aws_elasticache_subnet_group" "redis" {
   name       = "${local.name_prefix}-redis-subnet-group"
   subnet_ids = aws_subnet.private[*].id
 
+  lifecycle {
+    ignore_changes = [name]
+  }
+
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-redis-subnet-group"
   })
@@ -667,7 +708,7 @@ resource "aws_rds_cluster" "aurora" {
   cluster_identifier              = "${local.name_prefix}-${var.aurora_cluster_identifier}"
   engine                          = "aurora-postgresql"
   engine_mode                     = "provisioned"
-  engine_version                  = "15.4"
+  engine_version                  = "15.8"
   database_name                   = var.aurora_database_name
   master_username                 = var.aurora_master_username
   master_password                 = random_password.aurora_master_password.result
@@ -1732,6 +1773,10 @@ resource "aws_lambda_event_source_mapping" "vendor_notifier_sqs" {
   event_source_arn = aws_sqs_queue.vendor_notifications.arn
   function_name    = aws_lambda_function.vendor_notifier.arn
   batch_size       = 10
+
+  lifecycle {
+    ignore_changes = [uuid]
+  }
 }
 
 # Status Processor Lambda
@@ -2625,6 +2670,8 @@ resource "aws_cloudwatch_log_group" "api_gateway" {
   retention_in_days = var.cloudwatch_log_retention_days
   kms_key_id        = aws_kms_key.maintenance_data.arn
 
+  depends_on = [aws_kms_key.maintenance_data]
+
   tags = local.tags
 }
 
@@ -2632,6 +2679,8 @@ resource "aws_cloudwatch_log_group" "lambda_validator" {
   name              = "/aws/lambda/${local.lambda_functions.validator}"
   retention_in_days = var.cloudwatch_log_retention_days
   kms_key_id        = aws_kms_key.maintenance_data.arn
+
+  depends_on = [aws_kms_key.maintenance_data]
 
   tags = local.tags
 }
@@ -2641,12 +2690,20 @@ resource "aws_cloudwatch_log_group" "lambda_router" {
   retention_in_days = var.cloudwatch_log_retention_days
   kms_key_id        = aws_kms_key.maintenance_data.arn
 
+  lifecycle {
+    ignore_changes = [name]
+  }
+
   tags = local.tags
 }
 
 resource "aws_cloudwatch_log_group" "redis_slow_log" {
   name              = "/aws/elasticache/${local.name_prefix}-redis"
   retention_in_days = var.cloudwatch_log_retention_days
+
+  lifecycle {
+    ignore_changes = [name]
+  }
 
   tags = local.tags
 }
@@ -2655,6 +2712,8 @@ resource "aws_cloudwatch_log_group" "step_functions" {
   name              = "/aws/vendedlogs/states/${local.name_prefix}-emergency-escalation"
   retention_in_days = var.cloudwatch_log_retention_days
   kms_key_id        = aws_kms_key.maintenance_data.arn
+
+  depends_on = [aws_kms_key.maintenance_data]
 
   tags = local.tags
 }
