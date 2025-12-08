@@ -101,8 +101,7 @@ get_deploy_script() {
             echo "localstack-cloudformation-deploy.sh"
             ;;
         "cdk")
-            print_status $YELLOW "⚠️  CDK support is not yet implemented"
-            return 1
+            echo "localstack-cdk-deploy.sh"
             ;;
         "cdktf")
             print_status $YELLOW "⚠️  CDKTF support is not yet implemented"
