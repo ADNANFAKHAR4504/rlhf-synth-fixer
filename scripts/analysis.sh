@@ -77,9 +77,6 @@ python -m pytest tests/test-analysis-*.py -v --tb=short --no-cov
 # Run analysis script
 echo "Running analysis script: $SCRIPT_PATH"
 if [ "$SCRIPT_TYPE" = "python" ]; then
-  # Set environment variables for testing mode
-  export SKIP_LB_AGE_CHECK=true
-  export SKIP_LB_NAME_FILTER=true
   python "$SCRIPT_PATH" 2>&1 | tee "lib/analysis-results.txt"
 else
   chmod +x "$SCRIPT_PATH"
@@ -88,4 +85,3 @@ fi
 
 echo "✅ Analysis completed. Output saved to lib/analysis-results.txt"
 echo "=== Analysis job completed successfully ==="
-
