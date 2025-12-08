@@ -7,11 +7,19 @@
   "po_id": "f4l6k0j1",
   "team": "synth",
   "startedAt": "2025-12-05T20:39:07+05:30",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "General Infrastructure Tooling QA"
+    "Cloud Environment Setup"
   ],
-  "aws_services": [],
+  "aws_services": [
+    "CloudWatch",
+    "X-Ray",
+    "SNS",
+    "EventBridge",
+    "KMS",
+    "IAM",
+    "CloudWatch Synthetics"
+  ],
   "training_quality": 9,
   "test_coverage": 100,
   "deployment_status": "blocked_infra_issue",
