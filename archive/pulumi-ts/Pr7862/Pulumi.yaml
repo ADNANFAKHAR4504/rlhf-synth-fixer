@@ -1,0 +1,13 @@
+name: TapStack
+runtime: nodejs
+description: Infrastructure compliance monitoring system for EC2 instances
+main: lib/
+config:
+  environmentSuffix:
+    type: string
+    description: Environment suffix for resource naming (required for uniqueness)
+    default: dev
+  alertEmail:
+    type: string
+    description: Email address for compliance alerts
+    default: compliance-team@example.com
