@@ -1,8 +1,8 @@
 {
   "po_id": "y3z9p7g2",
   "team": "synth",
-  "platform": "cdk",
-  "language": "ts",
+  "platform": "cicd",
+  "language": "yml",
   "complexity": "hard",
   "turn_type": "single",
   "startedAt": "2025-12-05T13:01:36.000Z",
@@ -24,5 +24,6 @@
     "IAM",
     "VPC"
   ],
+  "author": "mayanksethi-turing",
   "training_quality": 10
 }

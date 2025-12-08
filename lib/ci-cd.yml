@@ -1,20 +1,32 @@
 # CI/CD Pipeline Configuration
-# This workflow demonstrates a multi-account, multi-stage CodePipeline for CDK applications
+# Multi-stage pipeline for CDK TypeScript applications
+# Compatible with AWS CodePipeline infrastructure provisioned by CDK construct
 
-name: Multi-Stage Pipeline
+name: Multi-Stage CI/CD Pipeline
 
 on:
   workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
   push:
     branches:
       - main
-      - dev
+      - develop
+
+permissions:
+  id-token: write
+  contents: read
 
 env:
   AWS_REGION: us-east-1
-  DEV_ACCOUNT_ID: ${{ secrets.DEV_ACCOUNT_ID }}
-  STAGING_ACCOUNT_ID: ${{ secrets.STAGING_ACCOUNT_ID }}
-  PROD_ACCOUNT_ID: ${{ secrets.PROD_ACCOUNT_ID }}
+  NODE_VERSION: '22'
 
 jobs:
   source:
@@ -51,7 +63,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
@@ -60,31 +73,43 @@ jobs:
         run: npx cdk synth
 
       - name: Run cdk-nag security checks
-        run: |
-          npm install -D cdk-nag
-          npx cdk synth --app "npx ts-node --prefer-ts-exts bin/*.ts"
-        continue-on-error: false
+        run: npm install -D cdk-nag && npx cdk synth --app "npx ts-node --prefer-ts-exts bin/*.ts"
 
       - name: Encrypt artifacts with KMS
-        run: |
-          # Create tarball of artifacts
-          tar -czf cdk-outputs.tar.gz -C cdk.out .
-          # Encrypt with AWS KMS
-          aws kms encrypt \
-            --key-id alias/github-actions-artifacts \
-            --plaintext fileb://cdk-outputs.tar.gz \
-            --output text \
-            --query CiphertextBlob > cdk-outputs.tar.gz.encrypted
+        run: ./lib/encrypt-artifacts.sh
+
       - name: Upload encrypted artifacts
         uses: actions/upload-artifact@v4
         with:
           name: cdk-outputs
           path: cdk-outputs.tar.gz.encrypted
+          retention-days: 30
+
+  test:
+    name: Test Stage
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm test
 
   deploy-dev:
     name: Deploy to Dev
     runs-on: ubuntu-latest
-    needs: build
+    needs: test
+    if: github.ref == 'refs/heads/develop' || github.event.inputs.environment == 'dev'
     environment: dev
     steps:
       - name: Checkout code
@@ -106,24 +131,23 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Deploy to Dev with Change Set
-        run: |
-          npx cdk deploy --all --require-approval never --context environment=dev
-      - name: Verify Change Set
-        run: |
-          aws cloudformation describe-change-set --change-set-name cdk-deploy-change-set \
-            --stack-name MyStack-dev --query 'Changes[*].ResourceChange' || echo "No change set found"
-      - name: Send Slack notification
+      - name: Deploy to Dev
+        env:
+          ENVIRONMENT_SUFFIX: ${{ github.run_id }}-dev
+        run: npx cdk deploy --all --require-approval never --context environmentSuffix=${{ env.ENVIRONMENT_SUFFIX }}
+
+      - name: Send notification
         if: always()
-        run: |
-          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
-            -H 'Content-Type: application/json' \
-            -d '{"text":"Dev deployment completed for ${{ github.ref }}"}'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: ./lib/send-notification.sh dev ${{ github.ref }}
+
   manual-approval-staging:
     name: Approve Staging Deployment
     runs-on: ubuntu-latest
@@ -137,6 +161,7 @@ jobs:
     name: Deploy to Staging
     runs-on: ubuntu-latest
     needs: manual-approval-staging
+    if: github.ref == 'refs/heads/main' || github.event.inputs.environment == 'staging'
     environment: staging
     steps:
       - name: Checkout code
@@ -151,7 +176,7 @@ jobs:
       - name: Assume cross-account role for Staging via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ env.STAGING_ACCOUNT_ID }}:role/CrossAccountDeployRole
+          role-to-assume: arn:aws:iam::${{ secrets.STAGING_ACCOUNT_ID }}:role/CrossAccountDeployRole
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubActions-Staging
           role-chaining: true
@@ -159,20 +184,23 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
       - name: Deploy to Staging
-        run: |
-          npx cdk deploy --all --require-approval never --context environment=staging
-      - name: Send Slack notification
+        env:
+          ENVIRONMENT_SUFFIX: ${{ github.run_id }}-staging
+        run: npx cdk deploy --all --require-approval never --context environmentSuffix=${{ env.ENVIRONMENT_SUFFIX }}
+
+      - name: Send notification
         if: always()
-        run: |
-          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
-            -H 'Content-Type: application/json' \
-            -d '{"text":"Staging deployment completed for ${{ github.ref }}"}'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: ./lib/send-notification.sh staging ${{ github.ref }}
+
   manual-approval-prod:
     name: Approve Production Deployment
     runs-on: ubuntu-latest
@@ -186,7 +214,8 @@ jobs:
     name: Deploy to Production
     runs-on: ubuntu-latest
     needs: manual-approval-prod
-    environment: prod
+    if: github.event.inputs.environment == 'prod'
+    environment: production
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -200,7 +229,7 @@ jobs:
       - name: Assume cross-account role for Production via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ env.PROD_ACCOUNT_ID }}:role/CrossAccountDeployRole
+          role-to-assume: arn:aws:iam::${{ secrets.PROD_ACCOUNT_ID }}:role/CrossAccountDeployRole
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubActions-Prod
           role-chaining: true
@@ -208,17 +237,19 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
       - name: Deploy to Production
-        run: |
-          npx cdk deploy --all --require-approval never --context environment=prod
-      - name: Send Slack notification
+        env:
+          ENVIRONMENT_SUFFIX: ${{ github.run_id }}-prod
+        run: npx cdk deploy --all --require-approval never --context environmentSuffix=${{ env.ENVIRONMENT_SUFFIX }}
+
+      - name: Send notification
         if: always()
-        run: |
-          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
-            -H 'Content-Type: application/json' \
-            -d '{"text":"Production deployment completed for ${{ github.ref }}"}'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: ./lib/send-notification.sh prod ${{ github.ref }}
