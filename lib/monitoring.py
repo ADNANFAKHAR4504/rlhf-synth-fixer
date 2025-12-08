@@ -135,6 +135,7 @@ class ZeroTrustMonitoring(Construct):
         )
 
         # Bucket policy for CloudTrail
+        # Note: CloudTrail requires specific permissions without conflicting deny statements
         bucket_policy = {
             "Version": "2012-10-17",
             "Statement": [
@@ -154,7 +155,7 @@ class ZeroTrustMonitoring(Construct):
                         "Service": "cloudtrail.amazonaws.com"
                     },
                     "Action": "s3:PutObject",
-                    "Resource": f"{bucket.arn}/*",
+                    "Resource": f"{bucket.arn}/AWSLogs/{self.account_id}/*",
                     "Condition": {
                         "StringEquals": {
                             "s3:x-amz-acl": "bucket-owner-full-control"
@@ -162,17 +163,17 @@ class ZeroTrustMonitoring(Construct):
                     }
                 },
                 {
-                    "Sid": "DenyUnencryptedObjectUploads",
+                    "Sid": "DenyInsecureTransport",
                     "Effect": "Deny",
                     "Principal": "*",
-                    "Action": "s3:PutObject",
-                    "Resource": f"{bucket.arn}/*",
+                    "Action": "s3:*",
+                    "Resource": [
+                        bucket.arn,
+                        f"{bucket.arn}/*"
+                    ],
                     "Condition": {
-                        "StringNotEquals": {
-                            "s3:x-amz-server-side-encryption": "aws:kms"
-                        },
-                        "Null": {
-                            "s3:x-amz-server-side-encryption": "false"
+                        "Bool": {
+                            "aws:SecureTransport": "false"
                         }
                     }
                 }
