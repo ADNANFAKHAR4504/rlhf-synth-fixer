@@ -81,6 +81,10 @@
     "localstack:tf:deploy": "./scripts/localstack-terraform-deploy.sh",
     "localstack:tf:test": "./scripts/localstack-terraform-test.sh",
     "localstack:tf:cleanup": "./scripts/localstack-terraform-cleanup.sh",
+    "localstack:cdk:plan": "./scripts/localstack-cdk-plan.sh",
+    "localstack:cdk:deploy": "./scripts/localstack-cdk-deploy.sh",
+    "localstack:cdk:test": "./scripts/localstack-cdk-test.sh",
+    "localstack:cdk:cleanup": "./scripts/localstack-cdk-cleanup.sh",
     "release": "semantic-release",
     "prepare": "husky"
   },
