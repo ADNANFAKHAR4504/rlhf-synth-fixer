@@ -112,29 +112,21 @@ describe('Terraform Configuration Unit Tests', () => {
     });
   });
 
-  describe('provider.tf', () => {
-    let providerTfContent: string;
-
-    beforeAll(() => {
-      const providerTfPath = path.join(libDir, 'provider.tf');
-      providerTfContent = fs.readFileSync(providerTfPath, 'utf8');
-    });
-
-    it('should exist', () => {
-      const providerTfPath = path.join(libDir, 'provider.tf');
-      expect(fs.existsSync(providerTfPath)).toBe(true);
-    });
-
+  describe('terraform and provider configuration', () => {
     it('should require terraform version >= 1.5.0', () => {
-      expect(providerTfContent).toContain('required_version = ">= 1.5.0"');
+      expect(mainTfContent).toContain('required_version = ">= 1.5.0"');
     });
 
     it('should use AWS provider version ~> 5.0', () => {
-      expect(providerTfContent).toContain('version = "~> 5.0"');
+      expect(mainTfContent).toContain('version = "~> 5.0"');
     });
 
     it('should use S3 backend', () => {
-      expect(providerTfContent).toContain('backend "s3" {}');
+      expect(mainTfContent).toContain('backend "s3" {}');
+    });
+
+    it('should define AWS provider', () => {
+      expect(mainTfContent).toContain('provider "aws"');
     });
   });
 

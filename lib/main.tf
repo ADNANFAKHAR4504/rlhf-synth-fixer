@@ -1,6 +1,23 @@
 # Payment Processing Infrastructure - Baseline (Needs Optimization)
 # This configuration contains intentional inefficiencies and code duplication
 
+terraform {
+  required_version = ">= 1.5.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+
+  backend "s3" {}
+}
+
+provider "aws" {
+  region = var.aws_region
+}
+
 # VPC Configuration - Hardcoded values
 resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"

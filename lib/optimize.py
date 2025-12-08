@@ -63,365 +63,129 @@ class TerraformOptimizer:
     def _create_optimized_main_tf(self) -> str:
         """Create the optimized main.tf with all best practices applied."""
         return '''# Payment Processing Infrastructure - Optimized
-# Demonstrates Terraform best practices: DRY, variables, locals, for_each, dynamic blocks
+# Using for_each, dynamic blocks, locals for DRY code
 
 terraform {
   required_version = ">= 1.5.0"
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
+    aws = { source = "hashicorp/aws", version = "~> 5.0" }
   }
-  backend "s3" {
-    bucket         = "payment-infra-terraform-state"
-    key            = "production/terraform.tfstate"
-    region         = "us-east-1"
-    encrypt        = true
-    dynamodb_table = "terraform-state-lock"
-  }
+  backend "s3" {}
 }
 
 provider "aws" {
   region = var.aws_region
-  default_tags {
-    tags = local.common_tags
-  }
+  default_tags { tags = local.common_tags }
 }
 
-# Locals for centralized configuration
 locals {
-  # Naming convention: {environment}-{service}-{resource_type}-{identifier}
-  name_prefix = "${var.environment}-${var.service_name}"
-
-  # Centralized tags
-  common_tags = merge(
-    var.tags,
-    {
-      Environment = var.environment
-      Service     = var.service_name
-      ManagedBy   = "terraform"
-      Owner       = "platform-team"
-    }
-  )
-
-  # Subnet configuration for DRY
-  public_subnets = {
-    "az1" = { cidr = "10.0.1.0/24", az = "us-east-1a" }
-    "az2" = { cidr = "10.0.2.0/24", az = "us-east-1b" }
-    "az3" = { cidr = "10.0.3.0/24", az = "us-east-1c" }
-  }
-
-  private_subnets = {
-    "az1" = { cidr = "10.0.11.0/24", az = "us-east-1a" }
-    "az2" = { cidr = "10.0.12.0/24", az = "us-east-1b" }
-    "az3" = { cidr = "10.0.13.0/24", az = "us-east-1c" }
-  }
-
-  # ECS services configuration for for_each
-  ecs_services = {
-    "api" = {
-      task_definition = "payment-api:1"
-      desired_count   = 3
-    }
-    "worker" = {
-      task_definition = "payment-worker:1"
-      desired_count   = 2
-    }
-    "scheduler" = {
-      task_definition = "payment-scheduler:1"
-      desired_count   = 1
-    }
-  }
-
-  # Security group rules for dynamic blocks
-  alb_ingress_rules = [
-    { port = 80, protocol = "tcp", cidr_blocks = ["0.0.0.0/0"] },
-    { port = 443, protocol = "tcp", cidr_blocks = ["0.0.0.0/0"] }
-  ]
-
-  # S3 buckets configuration
-  log_buckets = {
-    "alb"         = { purpose = "alb-logs" }
-    "application" = { purpose = "application-logs" }
-    "audit"       = { purpose = "audit-logs" }
-  }
+  name_prefix = "TapStack${var.environment_suffix}"
+  common_tags = merge(var.tags, { Environment = var.environment_suffix, ManagedBy = "terraform", Owner = "platform-team" })
+  public_subnets  = { az1 = { cidr = "10.0.1.0/24", az = "${var.aws_region}a" }, az2 = { cidr = "10.0.2.0/24", az = "${var.aws_region}b" }, az3 = { cidr = "10.0.3.0/24", az = "${var.aws_region}c" } }
+  private_subnets = { az1 = { cidr = "10.0.11.0/24", az = "${var.aws_region}a" }, az2 = { cidr = "10.0.12.0/24", az = "${var.aws_region}b" }, az3 = { cidr = "10.0.13.0/24", az = "${var.aws_region}c" } }
+  ecs_services    = { api = { retention = 7 }, worker = { retention = 7 }, scheduler = { retention = 7 } }
+  alb_ingress     = [{ port = 80, cidr = ["0.0.0.0/0"] }, { port = 443, cidr = ["0.0.0.0/0"] }]
+  log_buckets     = { alb = "alb-logs", application = "app-logs", audit = "audit-logs" }
 }
 
-# VPC
 resource "aws_vpc" "main" {
-  cidr_block           = var.vpc_cidr
+  cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
   enable_dns_support   = true
-
-  tags = {
-    Name = "${local.name_prefix}-vpc"
-  }
+  tags                 = { Name = "${local.name_prefix}-vpc" }
 }
 
-# Public Subnets using for_each
 resource "aws_subnet" "public" {
-  for_each = local.public_subnets
-
+  for_each          = local.public_subnets
   vpc_id            = aws_vpc.main.id
   cidr_block        = each.value.cidr
   availability_zone = each.value.az
-
-  tags = {
-    Name = "${local.name_prefix}-public-subnet-${each.key}"
-    Type = "public"
-  }
+  tags              = { Name = "${local.name_prefix}-public-${each.key}", Type = "public" }
 }
 
-# Private Subnets using for_each
 resource "aws_subnet" "private" {
-  for_each = local.private_subnets
-
+  for_each          = local.private_subnets
   vpc_id            = aws_vpc.main.id
   cidr_block        = each.value.cidr
   availability_zone = each.value.az
-
-  tags = {
-    Name = "${local.name_prefix}-private-subnet-${each.key}"
-    Type = "private"
-  }
+  tags              = { Name = "${local.name_prefix}-private-${each.key}", Type = "private" }
 }
 
-# Internet Gateway
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
-
-  tags = {
-    Name = "${local.name_prefix}-igw"
-  }
+  tags   = { Name = "${local.name_prefix}-igw" }
 }
 
-# Security Group for ALB with dynamic blocks
 resource "aws_security_group" "alb" {
   name        = "${local.name_prefix}-alb-sg"
-  description = "Security group for ALB"
+  description = "ALB security group"
   vpc_id      = aws_vpc.main.id
-
-  # Dynamic ingress rules
   dynamic "ingress" {
-    for_each = local.alb_ingress_rules
-    content {
-      from_port   = ingress.value.port
-      to_port     = ingress.value.port
-      protocol    = ingress.value.protocol
-      cidr_blocks = ingress.value.cidr_blocks
-    }
+    for_each = local.alb_ingress
+    content { from_port = ingress.value.port; to_port = ingress.value.port; protocol = "tcp"; cidr_blocks = ingress.value.cidr }
   }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${local.name_prefix}-alb-sg"
-  }
+  egress { from_port = 0; to_port = 0; protocol = "-1"; cidr_blocks = ["0.0.0.0/0"] }
+  tags = { Name = "${local.name_prefix}-alb-sg" }
 }
 
-# ECS Security Group
 resource "aws_security_group" "ecs" {
   name        = "${local.name_prefix}-ecs-sg"
-  description = "Security group for ECS tasks"
+  description = "ECS security group"
   vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port       = 8080
-    to_port         = 8080
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${local.name_prefix}-ecs-sg"
-  }
+  ingress { from_port = 8080; to_port = 8080; protocol = "tcp"; security_groups = [aws_security_group.alb.id] }
+  egress  { from_port = 0; to_port = 0; protocol = "-1"; cidr_blocks = ["0.0.0.0/0"] }
+  tags    = { Name = "${local.name_prefix}-ecs-sg" }
 }
 
-# S3 Buckets using module-like pattern with for_each
 resource "aws_s3_bucket" "logs" {
   for_each = local.log_buckets
-
-  bucket = "${local.name_prefix}-${each.key}-logs-${var.s3_bucket_suffix}"
-
-  tags = merge(
-    local.common_tags,
-    {
-      Name    = "${local.name_prefix}-${each.key}-logs"
-      Purpose = each.value.purpose
-    }
-  )
+  bucket   = "tapstack${var.environment_suffix}-${each.value}"
+  tags     = merge(local.common_tags, { Name = "${local.name_prefix}-${each.key}-logs", Purpose = each.value })
 }
 
 resource "aws_s3_bucket_versioning" "logs" {
   for_each = aws_s3_bucket.logs
-
-  bucket = each.value.id
-  versioning_configuration {
-    status = "Enabled"
-  }
+  bucket   = each.value.id
+  versioning_configuration { status = "Enabled" }
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
   for_each = aws_s3_bucket.logs
-
-  bucket = each.value.id
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
+  bucket   = each.value.id
+  rule { apply_server_side_encryption_by_default { sse_algorithm = "AES256" } }
 }
 
-# ECS Cluster
 resource "aws_ecs_cluster" "main" {
   name = "${local.name_prefix}-cluster"
-
-  tags = {
-    Name = "${local.name_prefix}-cluster"
-  }
+  tags = { Name = "${local.name_prefix}-cluster" }
 }
 
-# Data source for ECS task execution role policy
-data "aws_iam_policy_document" "ecs_task_assume_role" {
-  statement {
-    actions = ["sts:AssumeRole"]
-    principals {
-      type        = "Service"
-      identifiers = ["ecs-tasks.amazonaws.com"]
-    }
-  }
-}
-
-# IAM Role using data sources
 resource "aws_iam_role" "ecs_task_execution" {
-  name               = "${local.name_prefix}-ecs-execution-role"
-  assume_role_policy = data.aws_iam_policy_document.ecs_task_assume_role.json
-
-  tags = {
-    Name = "${local.name_prefix}-ecs-execution-role"
-  }
-}
-
-# Attach AWS managed policy using data source
-data "aws_iam_policy" "ecs_task_execution" {
-  arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+  name               = "${local.name_prefix}-ecs-task-execution-role"
+  assume_role_policy = jsonencode({ Version = "2012-10-17", Statement = [{ Action = "sts:AssumeRole", Effect = "Allow", Principal = { Service = "ecs-tasks.amazonaws.com" } }] })
+  tags               = { Name = "${local.name_prefix}-ecs-execution-role" }
 }
 
 resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
   role       = aws_iam_role.ecs_task_execution.name
-  policy_arn = data.aws_iam_policy.ecs_task_execution.arn
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# ALB
 resource "aws_lb" "main" {
-  name               = "${local.name_prefix}-alb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
-  subnets            = [for s in aws_subnet.public : s.id]
-
-  enable_deletion_protection = var.enable_deletion_protection
-
-  tags = {
-    Name = "${local.name_prefix}-alb"
-  }
+  name                       = "${local.name_prefix}-alb"
+  internal                   = false
+  load_balancer_type         = "application"
+  security_groups            = [aws_security_group.alb.id]
+  subnets                    = [for s in aws_subnet.public : s.id]
+  enable_deletion_protection = false
+  tags                       = { Name = "${local.name_prefix}-alb" }
 }
 
-# ECS Services using for_each (eliminates duplication)
-resource "aws_ecs_service" "services" {
-  for_each = local.ecs_services
-
-  name            = "${local.name_prefix}-${each.key}-service"
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = each.value.task_definition
-  desired_count   = each.value.desired_count
-  launch_type     = "FARGATE"
-
-  network_configuration {
-    subnets         = [for s in aws_subnet.private : s.id]
-    security_groups = [aws_security_group.ecs.id]
-  }
-
-  tags = merge(
-    local.common_tags,
-    {
-      Name    = "${local.name_prefix}-${each.key}-service"
-      Service = each.key
-    }
-  )
-}
-
-# RDS Security Group
-resource "aws_security_group" "rds" {
-  name        = "${local.name_prefix}-rds-sg"
-  description = "Security group for RDS"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.ecs.id]
-  }
-
-  tags = {
-    Name = "${local.name_prefix}-rds-sg"
-  }
-}
-
-# DB Subnet Group
-resource "aws_db_subnet_group" "main" {
-  name       = "${local.name_prefix}-db-subnet-group"
-  subnet_ids = [for s in aws_subnet.private : s.id]
-
-  tags = {
-    Name = "${local.name_prefix}-db-subnet-group"
-  }
-}
-
-# RDS Aurora using variables
-resource "aws_rds_cluster" "main" {
-  cluster_identifier      = "${local.name_prefix}-db-cluster"
-  engine                  = "aurora-postgresql"
-  engine_version          = var.db_engine_version
-  database_name           = var.db_name
-  master_username         = var.db_username
-  master_password         = var.db_password
-  db_subnet_group_name    = aws_db_subnet_group.main.name
-  vpc_security_group_ids  = [aws_security_group.rds.id]
-  backup_retention_period = var.db_backup_retention_days
-  preferred_backup_window = "03:00-04:00"
-  storage_encrypted       = true
-
-  tags = {
-    Name = "${local.name_prefix}-db-cluster"
-  }
-}
-
-# CloudWatch Log Groups using for_each
-resource "aws_cloudwatch_log_group" "ecs_services" {
-  for_each = local.ecs_services
-
+resource "aws_cloudwatch_log_group" "ecs" {
+  for_each          = local.ecs_services
   name              = "/ecs/${local.name_prefix}-${each.key}"
-  retention_in_days = var.log_retention_days
-
-  tags = {
-    Name    = "${local.name_prefix}-${each.key}-logs"
-    Service = each.key
-  }
+  retention_in_days = each.value.retention
+  tags              = { Name = "${local.name_prefix}-${each.key}-logs" }
 }
 '''
 
