@@ -36,7 +36,8 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr7987';
 describe('Drift Detection System Integration Tests', () => {
   describe('CloudFormation Stack', () => {
     it('verifies the stack exists and is in CREATE_COMPLETE state', async () => {
-      const stackName = `TapStack-${environmentSuffix}`;
+      // Stack name format: TapStack${ENVIRONMENT_SUFFIX} (no hyphen)
+      const stackName = `TapStack${environmentSuffix}`;
       const command = new DescribeStacksCommand({
         StackName: stackName,
       });
@@ -48,7 +49,8 @@ describe('Drift Detection System Integration Tests', () => {
     });
 
     it('verifies stack has required outputs', async () => {
-      const stackName = `TapStack-${environmentSuffix}`;
+      // Stack name format: TapStack${ENVIRONMENT_SUFFIX} (no hyphen)
+      const stackName = `TapStack${environmentSuffix}`;
       const command = new DescribeStacksCommand({
         StackName: stackName,
       });

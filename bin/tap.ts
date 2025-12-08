@@ -9,7 +9,8 @@ const app = new cdk.App();
 // Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
 const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
 const alertEmail = app.node.tryGetContext('alertEmail');
-const stackName = `TapStack-${environmentSuffix}`;
+// Stack name format: TapStack${ENVIRONMENT_SUFFIX} (no hyphen, matching deploy script)
+const stackName = `TapStack${environmentSuffix}`;
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 const prNumber = process.env.PR_NUMBER || 'unknown';
@@ -24,13 +25,22 @@ Tags.of(app).add('PRNumber', prNumber);
 Tags.of(app).add('Team', team);
 Tags.of(app).add('CreatedAt', createdAt);
 
+// Ensure we use the correct account and region
+const account = process.env.CDK_DEFAULT_ACCOUNT || process.env.AWS_ACCOUNT_ID;
+const region = process.env.CDK_DEFAULT_REGION || process.env.AWS_REGION || 'us-east-1';
+
+// Validate that account and region are set
+if (!account) {
+  throw new Error('AWS Account ID must be set via CDK_DEFAULT_ACCOUNT or AWS_ACCOUNT_ID environment variable');
+}
+
 new TapStack(app, stackName, {
   stackName: stackName, // This ensures CloudFormation stack name includes the suffix
   environmentSuffix: environmentSuffix, // Pass the suffix to the stack
   alertEmail: alertEmail, // Optional email for drift alerts
   env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT || process.env.AWS_ACCOUNT_ID,
-    region: process.env.CDK_DEFAULT_REGION || process.env.AWS_REGION || 'us-east-1',
+    account: account,
+    region: region,
   },
   description: 'Automated CloudFormation drift detection system',
 });
