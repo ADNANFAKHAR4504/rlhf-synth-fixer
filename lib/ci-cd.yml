@@ -1,5 +1,6 @@
 # CI/CD Pipeline Configuration
-# This workflow demonstrates a multi-account, multi-stage CodePipeline for CDK applications
+# This workflow demonstrates a multi-account, multi-stage pipeline for CDK Python applications
+# Compatible with AWS CodePipeline infrastructure provisioned by CDK construct
 
 name: Multi-Stage Pipeline
 
@@ -48,33 +49,25 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubActions-Build
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          node-version: '22'
+          python-version: '3.11'
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          pip install -r requirements.txt
+          pip install aws-cdk-lib constructs
 
       - name: Run CDK Synth
-        run: npx cdk synth
+        run: cdk synth
 
       - name: Run cdk-nag security checks
-        run: |
-          npm install -D cdk-nag
-          npx cdk synth --app "npx ts-node --prefer-ts-exts bin/*.ts"
-        continue-on-error: false
+        run: pip install cdk-nag && cdk synth --app "python bin/tap.py"
 
       - name: Encrypt artifacts with KMS
-        run: |
-          # Create tarball of artifacts
-          tar -czf cdk-outputs.tar.gz -C cdk.out .
-          # Encrypt with AWS KMS
-          aws kms encrypt \
-            --key-id alias/github-actions-artifacts \
-            --plaintext fileb://cdk-outputs.tar.gz \
-            --output text \
-            --query CiphertextBlob > cdk-outputs.tar.gz.encrypted
+        run: ./lib/encrypt-artifacts.sh
+
       - name: Upload encrypted artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -103,27 +96,25 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           role-session-name: GitHubActions-Dev
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          node-version: '22'
+          python-version: '3.11'
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          pip install -r requirements.txt
+          pip install aws-cdk-lib constructs
 
-      - name: Deploy to Dev with Change Set
-        run: |
-          npx cdk deploy --all --require-approval never --context environment=dev
-      - name: Verify Change Set
-        run: |
-          aws cloudformation describe-change-set --change-set-name cdk-deploy-change-set \
-            --stack-name MyStack-dev --query 'Changes[*].ResourceChange' || echo "No change set found"
-      - name: Send Slack notification
+      - name: Deploy to Dev
+        run: cdk deploy --all --require-approval never --context environment=dev
+
+      - name: Send notification
         if: always()
-        run: |
-          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
-            -H 'Content-Type: application/json' \
-            -d '{"text":"Dev deployment completed for ${{ github.ref }}"}'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: ./lib/send-notification.sh dev ${{ github.ref }}
+
   manual-approval-staging:
     name: Approve Staging Deployment
     runs-on: ubuntu-latest
@@ -156,23 +147,25 @@ jobs:
           role-session-name: GitHubActions-Staging
           role-chaining: true
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          node-version: '22'
+          python-version: '3.11'
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          pip install -r requirements.txt
+          pip install aws-cdk-lib constructs
 
       - name: Deploy to Staging
-        run: |
-          npx cdk deploy --all --require-approval never --context environment=staging
-      - name: Send Slack notification
+        run: cdk deploy --all --require-approval never --context environment=staging
+
+      - name: Send notification
         if: always()
-        run: |
-          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
-            -H 'Content-Type: application/json' \
-            -d '{"text":"Staging deployment completed for ${{ github.ref }}"}'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: ./lib/send-notification.sh staging ${{ github.ref }}
+
   manual-approval-prod:
     name: Approve Production Deployment
     runs-on: ubuntu-latest
@@ -205,20 +198,21 @@ jobs:
           role-session-name: GitHubActions-Prod
           role-chaining: true
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          node-version: '22'
+          python-version: '3.11'
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          pip install -r requirements.txt
+          pip install aws-cdk-lib constructs
 
       - name: Deploy to Production
-        run: |
-          npx cdk deploy --all --require-approval never --context environment=prod
-      - name: Send Slack notification
+        run: cdk deploy --all --require-approval never --context environment=prod
+
+      - name: Send notification
         if: always()
-        run: |
-          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
-            -H 'Content-Type: application/json' \
-            -d '{"text":"Production deployment completed for ${{ github.ref }}"}'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: ./lib/send-notification.sh prod ${{ github.ref }}
