@@ -1,0 +1,123 @@
+"""Unit tests for StorageStack"""
+
+import unittest
+import aws_cdk as cdk
+from aws_cdk.assertions import Template, Match
+from pytest import mark
+
+from lib.storage_stack import StorageStack
+
+
+@mark.describe("StorageStack")
+class TestStorageStack(unittest.TestCase):
+    """Test cases for the StorageStack"""
+
+    def setUp(self):
+        """Set up a fresh CDK app for each test"""
+        self.app = cdk.App()
+        self.stack = cdk.Stack(self.app, "TestStack")
+
+    @mark.it("creates three S3 buckets")
+    def test_creates_s3_buckets(self):
+        # ARRANGE
+        env_suffix = "test"
+        storage = StorageStack(self.stack, "TestStorage", environment_suffix=env_suffix)
+        template = Template.from_stack(storage)
+
+        # ASSERT
+        template.resource_count_is("AWS::S3::Bucket", 3)  # Access logs, App, Backup
+
+    @mark.it("configures access logging on app bucket")
+    def test_configures_access_logging(self):
+        # ARRANGE
+        env_suffix = "test"
+        storage = StorageStack(self.stack, "TestStorage", environment_suffix=env_suffix)
+        template = Template.from_stack(storage)
+
+        # ASSERT - App bucket should have logging configuration
+        template.has_resource_properties("AWS::S3::Bucket", {
+            "LoggingConfiguration": Match.object_like({
+                "DestinationBucketName": Match.any_value(),
+                "LogFilePrefix": "access-logs/"
+            })
+        })
+
+    @mark.it("enables encryption on all buckets")
+    def test_enables_encryption(self):
+        # ARRANGE
+        env_suffix = "test"
+        storage = StorageStack(self.stack, "TestStorage", environment_suffix=env_suffix)
+        template = Template.from_stack(storage)
+
+        # ASSERT - All buckets should have encryption
+        template.has_resource_properties("AWS::S3::Bucket", {
+            "BucketEncryption": Match.object_like({
+                "ServerSideEncryptionConfiguration": Match.array_with([
+                    Match.object_like({
+                        "ServerSideEncryptionByDefault": Match.object_like({
+                            "SSEAlgorithm": "AES256"
+                        })
+                    })
+                ])
+            })
+        })
+
+    @mark.it("configures lifecycle rules for cost optimization")
+    def test_configures_lifecycle_rules(self):
+        # ARRANGE
+        env_suffix = "test"
+        storage = StorageStack(self.stack, "TestStorage", environment_suffix=env_suffix)
+        template = Template.from_stack(storage)
+
+        # ASSERT - Check for lifecycle rules (at least one bucket should have TransitionToIA rule)
+        template.has_resource_properties("AWS::S3::Bucket", {
+            "LifecycleConfiguration": Match.object_like({
+                "Rules": Match.array_with([
+                    Match.object_like({
+                        "Id": "TransitionToIA",
+                        "Status": "Enabled",
+                        "Transitions": Match.any_value()
+                    })
+                ])
+            })
+        })
+
+    @mark.it("blocks public access on all buckets")
+    def test_blocks_public_access(self):
+        # ARRANGE
+        env_suffix = "test"
+        storage = StorageStack(self.stack, "TestStorage", environment_suffix=env_suffix)
+        template = Template.from_stack(storage)
+
+        # ASSERT - All buckets should have public access blocked
+        template.has_resource_properties("AWS::S3::Bucket", {
+            "PublicAccessBlockConfiguration": Match.object_like({
+                "BlockPublicAcls": True,
+                "BlockPublicPolicy": True,
+                "IgnorePublicAcls": True,
+                "RestrictPublicBuckets": True
+            })
+        })
+
+    @mark.it("creates outputs for bucket names")
+    def test_creates_outputs(self):
+        # ARRANGE
+        env_suffix = "test"
+        storage = StorageStack(self.stack, "TestStorage", environment_suffix=env_suffix)
+        template = Template.from_stack(storage)
+
+        # ASSERT
+        outputs = template.find_outputs("*")
+        assert "AppBucketName" in outputs
+        assert "BackupBucketName" in outputs
+
+    @mark.it("exposes bucket references")
+    def test_exposes_bucket_references(self):
+        # ARRANGE
+        env_suffix = "test"
+        storage = StorageStack(self.stack, "TestStorage", environment_suffix=env_suffix)
+
+        # ASSERT
+        assert storage.access_logs_bucket is not None
+        assert storage.app_bucket is not None
+        assert storage.backup_bucket is not None
