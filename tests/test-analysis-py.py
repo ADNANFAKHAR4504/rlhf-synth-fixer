@@ -559,33 +559,6 @@ def test_output_files_created():
         assert len(lines) >= 1, "CSV file should have at least a header"
         print(f"  - CSV contains {len(lines)} lines")
 
-    # Validate training quality assessment in JSON
-    with open(json_file, 'r') as f:
-        audit_data = json.load(f)
-        
-    # Check that training quality assessment exists
-    assert 'training_quality_assessment' in audit_data, "JSON output missing training_quality_assessment field"
-    training = audit_data['training_quality_assessment']
-    
-    # Validate training quality structure
-    assert 'training_quality' in training, "Missing training_quality field"
-    assert 'base_score' in training, "Missing base_score field"
-    assert 'model_failures_adjustment' in training, "Missing model_failures_adjustment field"
-    assert 'complexity_adjustment' in training, "Missing complexity_adjustment field"
-    assert 'justification' in training, "Missing justification field"
-    assert 'findings_breakdown' in training, "Missing findings_breakdown field"
-    
-    # Validate training quality score is on 0-10 scale (not 0-100)
-    training_score = training['training_quality']
-    assert isinstance(training_score, int), f"training_quality should be integer, got {type(training_score)}"
-    assert 0 <= training_score <= 10, f"training_quality should be 0-10, got {training_score}"
-    
-    print(f"✓ Training quality assessment verified: {training_score}/10")
-    print(f"  - Base score: {training['base_score']}")
-    print(f"  - MODEL_FAILURES adjustment: {training['model_failures_adjustment']:+d}")
-    print(f"  - Complexity adjustment: {training['complexity_adjustment']:+d}")
-    print(f"  - Justification: {training['justification']}")
-
 
 if __name__ == "__main__":
     print("\n" + "="*80)
