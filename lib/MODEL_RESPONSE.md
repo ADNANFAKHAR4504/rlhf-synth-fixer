@@ -1013,14 +1013,14 @@ class AWSBackupAuditor:
         total_findings = metadata['total_findings']
 
         if total_findings == 0:
-            print("\n✅ No compliance issues found!")
+            print("\nNo compliance issues found!")
         else:
-            print(f"\n⚠️  Total Findings: {total_findings}")
-            print(f"   🔴 Critical: {summary['critical_findings']}")
-            print(f"   🟠 High: {summary['high_findings']}")
-            print(f"   🟡 Medium: {summary['medium_findings']}")
-            print(f"   🔵 Low: {summary['low_findings']}")
-            print(f"   ℹ️  Info: {summary['info_findings']}")
+            print(f"\nTotal Findings: {total_findings}")
+            print(f"   Critical: {summary['critical_findings']}")
+            print(f"   High: {summary['high_findings']}")
+            print(f"   Medium: {summary['medium_findings']}")
+            print(f"   Low: {summary['low_findings']}")
+            print(f"   Info: {summary['info_findings']}")
 
         print("\n" + "-"*80)
         print("INFRASTRUCTURE SUMMARY")
