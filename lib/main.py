@@ -227,7 +227,7 @@ class S3ReplicationStack(TerraformStack):
 
 
 # Unique suffix to avoid resource naming conflicts
-UNIQUE_SUFFIX = "m5v2"
+UNIQUE_SUFFIX = "r6k3"
 
 
 def main():

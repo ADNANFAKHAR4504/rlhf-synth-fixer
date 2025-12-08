@@ -171,8 +171,8 @@ class DatabaseStack(Construct):
             )
         else:
             # Secondary cluster (read-only replica) joining global cluster
-            # AWS Terraform provider requires master_username even for secondary clusters
-            # but the actual credentials are inherited from the primary
+            # For cross-region replicas, do NOT specify master_username or master_password
+            # The credentials are inherited from the primary cluster
             self.aurora_cluster = RdsCluster(
                 self,
                 "aurora-cluster",
@@ -188,14 +188,8 @@ class DatabaseStack(Construct):
                 deletion_protection=False,
                 skip_final_snapshot=True,
                 global_cluster_identifier=f"dr-aurora-global-{environment_suffix}",
-                # Required by Terraform even for secondary clusters
-                master_username="dbadmin",
-                manage_master_user_password=True,
                 tags={
                     "Name": f"dr-aurora-{region}-{environment_suffix}"
-                },
-                lifecycle={
-                    "ignore_changes": ["master_username", "master_password"]
                 }
             )
 
