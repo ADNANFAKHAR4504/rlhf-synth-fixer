@@ -24,5 +24,11 @@
   ],
   "author": "mayanksethi-turing",
   "startedAt": "2025-12-05T23:00:00Z",
-  "region": "us-east-1"
+  "region": "us-east-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
