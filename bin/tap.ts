@@ -7,17 +7,22 @@ import { TapStack } from '../lib/tap-stack';
 const app = new cdk.App();
 
 // Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
-const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
+let environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
+
+// sanitize suffix: allow only alphanumerics and underscore (prevent hyphens/spaces)
+environmentSuffix = String(environmentSuffix).replace(/[^A-Za-z0-9_]/g, '');
+
 const alertEmail = app.node.tryGetContext('alertEmail');
 // Stack name format: TapStack${ENVIRONMENT_SUFFIX} (no hyphen, matching deploy script)
 const stackName = `TapStack${environmentSuffix}`;
+
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 const prNumber = process.env.PR_NUMBER || 'unknown';
 const team = process.env.TEAM || 'unknown';
 const createdAt = new Date().toISOString();
 
-// Apply tags to all stacks in this app (optional - you can do this at stack level instead)
+// Apply tags to the whole app
 Tags.of(app).add('Environment', environmentSuffix);
 Tags.of(app).add('Repository', repositoryName);
 Tags.of(app).add('Author', commitAuthor);
@@ -29,13 +34,15 @@ Tags.of(app).add('CreatedAt', createdAt);
 const account = process.env.CDK_DEFAULT_ACCOUNT || process.env.AWS_ACCOUNT_ID;
 const region = process.env.CDK_DEFAULT_REGION || process.env.AWS_REGION || 'us-east-1';
 
-// Validate that account is set
 if (!account) {
-  throw new Error('AWS Account ID must be set via CDK_DEFAULT_ACCOUNT or AWS_ACCOUNT_ID environment variable');
+  throw new Error(
+    'AWS Account ID must be set via CDK_DEFAULT_ACCOUNT or AWS_ACCOUNT_ID environment variable. ' +
+    'Ensure GitHub Actions sets these or the job assumes a role that populates CDK_DEFAULT_ACCOUNT.'
+  );
 }
 
 new TapStack(app, stackName, {
-  stackName: stackName, // This ensures CloudFormation stack name includes the suffix
+  stackName: stackName, // Ensures CloudFormation stack name includes the suffix
   environmentSuffix: environmentSuffix, // Pass the suffix to the stack
   alertEmail: alertEmail, // Optional email for drift alerts
   env: {
@@ -43,7 +50,7 @@ new TapStack(app, stackName, {
     region: region,
   },
   synthesizer: new DefaultStackSynthesizer({
-    generateBootstrapVersionRule: false, // Skip bootstrap version check
+    generateBootstrapVersionRule: false, // Skip bootstrap version check (doesn't create toolkit)
   }),
   description: 'Automated CloudFormation drift detection system',
 });
