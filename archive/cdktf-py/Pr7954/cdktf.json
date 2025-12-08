@@ -1,0 +1,13 @@
+{
+  "language": "python",
+  "app": "pipenv run python tap.py",
+  "projectId": "financial-transaction-platform",
+  "terraformProviders": [
+    "aws@~> 5.0"
+  ],
+  "terraformModules": [],
+  "context": {
+    "excludeStackIdFromLogicalIds": "true",
+    "allowSepCharsInLogicalIds": "true"
+  }
+}

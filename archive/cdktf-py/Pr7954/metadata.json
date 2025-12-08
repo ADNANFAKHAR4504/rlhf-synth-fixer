@@ -1,0 +1,39 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "40487767",
+  "team": "synth",
+  "startedAt": "2025-12-05T00:00:00Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "Aurora",
+    "S3",
+    "CloudFront",
+    "WAF",
+    "Secrets Manager",
+    "Lambda",
+    "CloudWatch",
+    "SNS",
+    "KMS",
+    "IAM",
+    "ALB",
+    "Auto Scaling",
+    "NAT Gateway"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
