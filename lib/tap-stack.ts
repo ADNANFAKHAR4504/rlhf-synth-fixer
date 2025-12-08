@@ -56,6 +56,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         name: `envmig-apikeys-${envSuffix}`,
         description: 'Payment provider API keys for webhook processing',
+        recoveryWindowInDays: 0, // Immediate deletion without recovery window
         tags: {
           Environment: 'prod',
           MigrationPhase: 'testing',
