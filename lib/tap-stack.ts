@@ -106,25 +106,21 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'DriftTableName', {
       value: driftTable.tableName,
       description: 'DynamoDB table for drift detection results',
-      exportName: `DriftTableName-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'DriftFunctionName', {
       value: driftFunction.functionName,
       description: 'Lambda function for drift detection',
-      exportName: `DriftFunctionName-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'AlertTopicArn', {
       value: alertTopic.topicArn,
       description: 'SNS topic for drift alerts',
-      exportName: `AlertTopicArn-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'ScheduleRuleName', {
       value: driftSchedule.ruleName,
       description: 'EventBridge rule for drift detection schedule',
-      exportName: `ScheduleRuleName-${environmentSuffix}`,
     });
   }
 }
