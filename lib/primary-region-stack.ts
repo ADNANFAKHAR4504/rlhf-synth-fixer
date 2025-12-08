@@ -32,7 +32,7 @@ import { config } from './config/infrastructure-config';
 import { SharedConstructs } from './shared-constructs';
 
 // Generate unique suffix to avoid resource naming conflicts
-const uniqueSuffix = 'p9v5';
+const uniqueSuffix = 'k7m2';
 
 export interface PrimaryRegionStackProps {
   provider: AwsProvider;
