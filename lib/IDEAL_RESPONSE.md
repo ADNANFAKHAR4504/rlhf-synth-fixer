@@ -660,15 +660,15 @@ class ZeroTrustEncryption(Construct):
 
 ### Best Practices Implemented
 
-- ✅ Least privilege IAM policies
-- ✅ Encryption at rest and in transit
-- ✅ Network segmentation (private subnets only)
-- ✅ Automated compliance monitoring
-- ✅ Centralized logging and audit trails
-- ✅ Service-to-service least privilege access
-- ✅ MFA enforcement for cross-account access
-- ✅ Automatic key rotation for KMS
-- ✅ WAF with rate-based rules and IP reputation
+- Least privilege IAM policies
+- Encryption at rest and in transit
+- Network segmentation (private subnets only)
+- Automated compliance monitoring
+- Centralized logging and audit trails
+- Service-to-service least privilege access
+- MFA enforcement for cross-account access
+- Automatic key rotation for KMS
+- WAF with rate-based rules and IP reputation
 
 ### Test Coverage
 
