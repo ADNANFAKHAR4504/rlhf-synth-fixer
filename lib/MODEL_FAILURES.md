@@ -19,13 +19,13 @@ The generated code used `pulumi.Input<string>` for `environmentSuffix` and attem
 
 ```typescript
 export interface TapStackArgs {
-  environmentSuffix: pulumi.Input<string>;  // ❌ Wrong for resource names
+  environmentSuffix: pulumi.Input<string>;  // Wrong for resource names
   region?: string;
 }
 
 const envSuffix = pulumi.output(args.environmentSuffix);
 const transactionsTable = new aws.dynamodb.Table(
-  `envmig-transactions-${envSuffix}`,  // ❌ Can't use Output in template literal
+  `envmig-transactions-${envSuffix}`,  // Can't use Output in template literal
   {...}
 );
 ```
@@ -35,13 +35,13 @@ Changed to plain string type and removed `pulumi.output()` wrapper:
 
 ```typescript
 export interface TapStackArgs {
-  environmentSuffix: string;  // ✅ Plain string for resource names
+  environmentSuffix: string;  // Plain string for resource names
   region?: string;
 }
 
 const envSuffix = args.environmentSuffix;
 const transactionsTable = new aws.dynamodb.Table(
-  `envmig-transactions-${envSuffix}`,  // ✅ Works with plain string
+  `envmig-transactions-${envSuffix}`,  // Works with plain string
   {...}
 );
 ```
@@ -68,7 +68,7 @@ fs.writeFileSync(
   path.join(functionDir, 'package.json'),
   JSON.stringify(packageJson, null, 2)
 );
-// ❌ Missing: npm install step
+// Missing: npm install step
 ```
 
 **IDEAL_RESPONSE Fix**:
@@ -174,9 +174,9 @@ The Lambda handler has basic try-catch but doesn't handle specific error cases:
 exports.handler = async (event) => {
   try {
     const body = JSON.parse(event.body || "{}");
-    // ❌ No validation that transactionId exists
-    // ❌ No handling of DynamoDB throttling
-    // ❌ No handling of Secrets Manager errors specifically
+    // No validation that transactionId exists
+    // No handling of DynamoDB throttling
+    // No handling of Secrets Manager errors specifically
   } catch (error) {
     console.error("Error processing webhook:", error);
     return { statusCode: 500, body: JSON.stringify({ error: "Internal server error" }) };
@@ -221,7 +221,7 @@ const apiSecretVersion = new aws.secretsmanager.SecretVersion(
   `envmig-apikeys-version-${envSuffix}`,
   {...}
 );
-// ❌ Variable assigned but never used
+// Variable assigned but never used
 ```
 
 **IDEAL_RESPONSE Fix**:
@@ -250,7 +250,7 @@ The generated unit tests were incomplete placeholders:
 ```typescript
 describe("TapStack Structure", () => {
   it("instantiates successfully", () => {
-    expect(stack).toBeDefined();  // ❌ Too basic
+    expect(stack).toBeDefined();  // Too basic
   });
 });
 ```
@@ -259,7 +259,7 @@ And integration tests were just TODOs:
 
 ```typescript
 test('Dont forget!', async () => {
-  expect(false).toBe(true);  // ❌ Placeholder test that fails
+  expect(false).toBe(true);  // Placeholder test that fails
 });
 ```
 
@@ -319,7 +319,7 @@ The code explicitly sets properties that match defaults:
 ```typescript
 cors: {
   allowCredentials: true,
-  allowOrigins: ["*"],  // ❌ Conflicts with allowCredentials
+  allowOrigins: ["*"],  // Conflicts with allowCredentials
   allowMethods: ["POST"],
   allowHeaders: ["content-type", "x-amz-date", "authorization"],
   maxAge: 86400,
