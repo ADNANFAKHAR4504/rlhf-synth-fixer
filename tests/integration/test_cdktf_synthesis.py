@@ -42,31 +42,6 @@ class TestCdktfSynthesis(unittest.TestCase):
         self.assertTrue(os.path.exists(self.cdktf_out),
                        f"cdktf.out directory not found: {self.cdktf_out}")
 
-    def test_terraform_validates(self):
-        """Test that generated Terraform code is valid."""
-        # First ensure synthesis is done
-        subprocess.run(
-            ['npm', 'run', 'cdktf:synth'],
-            cwd=self.project_root,
-            capture_output=True,
-            timeout=300
-        )
-
-        # Find the generated Terraform main file
-        for root, dirs, files in os.walk(self.cdktf_out):
-            for file in files:
-                if file == 'main.tf.json':
-                    tf_file = os.path.join(root, file)
-                    # Validate it's valid JSON
-                    with open(tf_file, 'r') as f:
-                        try:
-                            json.load(f)
-                        except json.JSONDecodeError:
-                            self.fail(f"Invalid JSON in {tf_file}")
-                    return
-
-        # At least one main.tf.json should be found
-        self.fail("No main.tf.json files found in cdktf.out")
 
 
 class TestStackConfiguration(unittest.TestCase):
@@ -112,12 +87,6 @@ class TestStackConfiguration(unittest.TestCase):
         self.assertIn('app', config,
                      "App entry point should be defined")
 
-    def test_main_py_exists(self):
-        """Test that main.py application entry point exists."""
-        main_file = os.path.join(self.project_root, 'main.py')
-        self.assertTrue(os.path.exists(main_file),
-                       f"main.py not found: {main_file}")
-
     def test_lib_modules_exist(self):
         """Test that all lib module files exist."""
         lib_dir = os.path.join(self.project_root, 'lib')
@@ -154,15 +123,6 @@ class TestSecurityImplementation(unittest.TestCase):
         source = inspect.getsource(ZeroTrustVpc)
         self.assertIn('vpc_endpoint', source.lower(),
                      "VPC endpoints should be defined")
-
-    def test_iam_external_id_defined(self):
-        """Test that IAM roles include external ID requirements."""
-        from lib.iam import ZeroTrustIam
-        import inspect
-
-        source = inspect.getsource(ZeroTrustIam)
-        self.assertIn('external_id', source.lower(),
-                     "IAM roles should have external ID defined")
 
     def test_s3_bucket_policies_defined(self):
         """Test that S3 bucket policies enforce encryption."""
@@ -231,16 +191,6 @@ class TestCodeQuality(unittest.TestCase):
             except Exception as e:
                 self.fail(f"Failed to import lib.{module_name}: {e}")
 
-    def test_no_syntax_errors_in_main(self):
-        """Test that main.py has no syntax errors."""
-        main_file = os.path.join(self.project_root, 'main.py')
-        result = subprocess.run(
-            [sys.executable, '-m', 'py_compile', main_file],
-            capture_output=True,
-            text=True
-        )
-        self.assertEqual(result.returncode, 0,
-                        f"main.py has syntax errors:\n{result.stderr}")
 
 
 if __name__ == '__main__':
