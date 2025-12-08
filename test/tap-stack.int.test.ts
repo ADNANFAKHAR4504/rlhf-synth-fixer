@@ -8,6 +8,7 @@ import * as path from 'path';
 describe('Payment Webhook Infrastructure Integration Tests', () => {
   let outputs: any;
   const region = 'us-east-1';
+  const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'm4n0x5o8';
 
   beforeAll(() => {
     // Load deployment outputs
@@ -57,7 +58,7 @@ describe('Payment Webhook Infrastructure Integration Tests', () => {
     it('should have correct table configuration', async () => {
       const tableName = outputs.tableArn.split('/')[1];
       expect(tableName).toContain('envmig-transactions');
-      expect(tableName).toMatch(/m4n0x5o8/);
+      expect(tableName).toContain(envSuffix);
     });
   });
 
@@ -128,7 +129,7 @@ describe('Payment Webhook Infrastructure Integration Tests', () => {
 
     it('should have API keys secret configured', async () => {
       const secretName = outputs.lambdaArn.split(':function:')[0]
-        .replace(':lambda:', ':secretsmanager:') + ':secret:envmig-apikeys-m4n0x5o8';
+        .replace(':lambda:', ':secretsmanager:') + `:secret:envmig-apikeys-${envSuffix}`;
 
       // Get secret ARN from Lambda environment
       const lambdaClient = new LambdaClient({ region });
@@ -177,8 +178,8 @@ describe('Payment Webhook Infrastructure Integration Tests', () => {
 
   describe('Resource Naming', () => {
     it('should include environment suffix in all resource names', () => {
-      expect(outputs.lambdaArn).toContain('m4n0x5o8');
-      expect(outputs.tableArn).toContain('m4n0x5o8');
+      expect(outputs.lambdaArn).toContain(envSuffix);
+      expect(outputs.tableArn).toContain(envSuffix);
       expect(outputs.functionUrl).toBeDefined();
     });
 
@@ -186,8 +187,8 @@ describe('Payment Webhook Infrastructure Integration Tests', () => {
       const tableName = outputs.tableArn.split('/')[1];
       const functionName = outputs.lambdaArn.split(':').pop();
 
-      expect(tableName).toMatch(/^envmig-transactions-m4n0x5o8$/);
-      expect(functionName).toMatch(/^envmig-webhook-m4n0x5o8$/);
+      expect(tableName).toBe(`envmig-transactions-${envSuffix}`);
+      expect(functionName).toBe(`envmig-webhook-${envSuffix}`);
     });
   });
 
@@ -240,12 +241,12 @@ describe('Payment Webhook Infrastructure Integration Tests', () => {
 
     it('should export DynamoDB table ARN', () => {
       expect(outputs.tableArn).toBeDefined();
-      expect(outputs.tableArn).toMatch(/^arn:aws:dynamodb:.*:.*:table\/envmig-transactions-m4n0x5o8$/);
+      expect(outputs.tableArn).toMatch(new RegExp(`^arn:aws:dynamodb:.*:.*:table/envmig-transactions-${envSuffix}$`));
     });
 
     it('should export Lambda ARN', () => {
       expect(outputs.lambdaArn).toBeDefined();
-      expect(outputs.lambdaArn).toMatch(/^arn:aws:lambda:.*:.*:function:envmig-webhook-m4n0x5o8$/);
+      expect(outputs.lambdaArn).toMatch(new RegExp(`^arn:aws:lambda:.*:.*:function:envmig-webhook-${envSuffix}$`));
     });
   });
 });
