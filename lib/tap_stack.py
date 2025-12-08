@@ -11,7 +11,7 @@ from lib.monitoring import MonitoringConstruct
 from lib.traffic_management import TrafficManagementConstruct
 
 # Unique suffix to avoid resource naming conflicts
-UNIQUE_SUFFIX = "h3j9"
+UNIQUE_SUFFIX = "n4p7"
 
 
 class TapStack(TerraformStack):

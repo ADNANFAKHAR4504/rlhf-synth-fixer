@@ -3,6 +3,7 @@ from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
 from cdktf_cdktf_provider_aws.rds_cluster import RdsCluster
 from cdktf_cdktf_provider_aws.rds_cluster_instance import RdsClusterInstance
 from cdktf_cdktf_provider_aws.rds_global_cluster import RdsGlobalCluster
+from cdktf_cdktf_provider_aws.kms_key import KmsKey
 
 
 class DatabaseConstruct(Construct):
@@ -93,6 +94,17 @@ class DatabaseConstruct(Construct):
             provider=secondary_provider
         )
 
+        # KMS key for secondary cluster encryption (required for cross-region replica)
+        secondary_kms_key = KmsKey(
+            self,
+            "secondary-kms-key",
+            description=f"KMS key for Aurora secondary cluster encryption - {environment_suffix}",
+            deletion_window_in_days=7,
+            enable_key_rotation=True,
+            tags={"Name": f"secondary-aurora-kms-{environment_suffix}"},
+            provider=secondary_provider
+        )
+
         # Secondary Aurora cluster (read replica of global cluster)
         self.secondary_cluster = RdsCluster(
             self,
@@ -103,6 +115,7 @@ class DatabaseConstruct(Construct):
             db_subnet_group_name=secondary_subnet_group.name,
             vpc_security_group_ids=[secondary_security_group_id],
             storage_encrypted=True,
+            kms_key_id=secondary_kms_key.arn,
             enabled_cloudwatch_logs_exports=["audit", "error", "general", "slowquery"],
             global_cluster_identifier=self.global_cluster.id,
             skip_final_snapshot=True,

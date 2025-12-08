@@ -8,6 +8,7 @@ from cdktf_cdktf_provider_aws.lb import Lb
 from cdktf_cdktf_provider_aws.lb_target_group import LbTargetGroup, LbTargetGroupHealthCheck
 from cdktf_cdktf_provider_aws.lb_listener import LbListener, LbListenerDefaultAction
 from cdktf_cdktf_provider_aws.autoscaling_group import AutoscalingGroup, AutoscalingGroupTag
+from cdktf_cdktf_provider_aws.data_aws_ami import DataAwsAmi, DataAwsAmiFilter
 
 
 class ComputeConstruct(Construct):
@@ -32,6 +33,52 @@ class ComputeConstruct(Construct):
         secondary_vpc_id: str
     ):
         super().__init__(scope, construct_id)
+
+        # Lookup latest Amazon Linux 2023 AMI for primary region
+        primary_ami = DataAwsAmi(
+            self,
+            "primary-ami",
+            most_recent=True,
+            owners=["amazon"],
+            filter=[
+                DataAwsAmiFilter(
+                    name="name",
+                    values=["al2023-ami-2023.*-x86_64"]
+                ),
+                DataAwsAmiFilter(
+                    name="virtualization-type",
+                    values=["hvm"]
+                ),
+                DataAwsAmiFilter(
+                    name="architecture",
+                    values=["x86_64"]
+                )
+            ],
+            provider=primary_provider
+        )
+
+        # Lookup latest Amazon Linux 2023 AMI for secondary region
+        secondary_ami = DataAwsAmi(
+            self,
+            "secondary-ami",
+            most_recent=True,
+            owners=["amazon"],
+            filter=[
+                DataAwsAmiFilter(
+                    name="name",
+                    values=["al2023-ami-2023.*-x86_64"]
+                ),
+                DataAwsAmiFilter(
+                    name="virtualization-type",
+                    values=["hvm"]
+                ),
+                DataAwsAmiFilter(
+                    name="architecture",
+                    values=["x86_64"]
+                )
+            ],
+            provider=secondary_provider
+        )
 
         # IAM role for EC2 instances - Primary
         primary_instance_role = IamRole(
@@ -92,7 +139,7 @@ docker run -d -p 8080:8080 \
             self,
             "primary-launch-template",
             name=f"primary-lt-{environment_suffix}",
-            image_id="ami-0c55b159cbfafe1f0",
+            image_id=primary_ami.id,
             instance_type="t3.medium",
             user_data=primary_user_data,
             iam_instance_profile=LaunchTemplateIamInstanceProfile(
@@ -234,7 +281,7 @@ docker run -d -p 8080:8080 \
             self,
             "secondary-launch-template",
             name=f"secondary-lt-{environment_suffix}",
-            image_id="ami-0c55b159cbfafe1f0",
+            image_id=secondary_ami.id,
             instance_type="t3.medium",
             user_data=secondary_user_data,
             iam_instance_profile=LaunchTemplateIamInstanceProfile(
