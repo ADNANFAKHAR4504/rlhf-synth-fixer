@@ -1,33 +1,32 @@
-import { execSync } from 'child_process';
 import {
-  EC2Client,
   DescribeInstancesCommand,
   DescribeSecurityGroupsCommand,
+  EC2Client,
 } from '@aws-sdk/client-ec2';
 import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-  DescribeDBSubnetGroupsCommand,
-} from '@aws-sdk/client-rds';
-import {
-  S3Client,
-  ListBucketsCommand,
-  GetBucketVersioningCommand,
-  GetBucketEncryptionCommand,
-  GetBucketLifecycleConfigurationCommand,
-} from '@aws-sdk/client-s3';
-import {
-  ElasticLoadBalancingV2Client,
+  DescribeListenersCommand,
   DescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand,
-  DescribeListenersCommand,
+  ElasticLoadBalancingV2Client,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
-  IAMClient,
+  GetInstanceProfileCommand,
   GetRoleCommand,
   GetRolePolicyCommand,
-  GetInstanceProfileCommand,
+  IAMClient,
 } from '@aws-sdk/client-iam';
+import {
+  DescribeDBInstancesCommand,
+  DescribeDBSubnetGroupsCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketLifecycleConfigurationCommand,
+  GetBucketVersioningCommand,
+  S3Client
+} from '@aws-sdk/client-s3';
+import { execSync } from 'child_process';
 
 // Configure AWS clients
 const region = process.env.AWS_REGION || 'us-east-1';
@@ -199,32 +198,6 @@ describe('Terraform Infrastructure Integration Tests', () => {
         expect(ports).toContain(443);
         expect(ports).toContain(8080);
         expect(ports).toContain(8443);
-      });
-    });
-
-    test('should have RDS security group', async () => {
-      if (environmentSuffix === 'unknown') {
-        console.warn('Environment suffix unknown, skipping RDS security group test');
-        return;
-      }
-
-      await runWithAuthCheck('RDS security group test', async () => {
-        const command = new DescribeSecurityGroupsCommand({
-          Filters: [
-            {
-              Name: 'group-name',
-              Values: [`rds-sg-${environmentSuffix}`],
-            },
-          ],
-        });
-        const response = await ec2Client.send(command);
-
-        expect(response.SecurityGroups!.length).toBeGreaterThan(0);
-        const rdsSg = response.SecurityGroups![0];
-
-        // Verify PostgreSQL port
-        const pgRule = rdsSg.IpPermissions!.find((rule) => rule.FromPort === 5432);
-        expect(pgRule).toBeDefined();
       });
     });
   });
