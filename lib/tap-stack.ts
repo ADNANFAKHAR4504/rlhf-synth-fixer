@@ -1,12 +1,12 @@
 import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
-import * as iam from 'aws-cdk-lib/aws-iam';
+import { Construct } from 'constructs';
 import * as path from 'path';
 
 export interface TapStackProps extends cdk.StackProps {
@@ -33,7 +33,7 @@ export class TapStack extends cdk.Stack {
       },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      pointInTimeRecovery: false,
+      pointInTimeRecoverySpecification: false,
     });
 
     // SNS topic for drift alerts
