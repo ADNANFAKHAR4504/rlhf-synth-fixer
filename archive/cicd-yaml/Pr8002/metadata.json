@@ -1,0 +1,25 @@
+{
+  "platform": "cicd",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "h7s0j9j7",
+  "team": "synth",
+  "startedAt": "2025-12-05T20:38:29+05:30",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [],
+  "task_id": "h7s0j9j7",
+  "category": "CI/CD Pipeline",
+  "estimated_resources": 50,
+  "region": "us-east-1",
+  "author": "mayanksethi-turing",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
