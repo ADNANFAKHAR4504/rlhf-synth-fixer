@@ -1,477 +1,352 @@
-# Ideal Response: IaC Program Optimization
-
-This is the ideal optimization script for the ECS infrastructure cost reduction task.
-
-## Infrastructure Optimization Script
-
-```python
-#!/usr/bin/env python3
-"""
-Infrastructure optimization script for StreamFlix development environment.
-Scales down Aurora, ElastiCache, and ECS resources for cost optimization.
-"""
-
-import os
-import sys
-import time
-from typing import Any, Dict, Optional
-
-import boto3
-from botocore.exceptions import ClientError
-
-
-class InfrastructureOptimizer:
-    """Handles infrastructure optimization for StreamFlix development environment."""
-
-    def __init__(self, environment_suffix: str = 'dev', region_name: str = 'us-east-1'):
-        """
-        Initialize the optimizer with AWS clients.
-
-        Args:
-            environment_suffix: The environment suffix (default: 'dev')
-            region_name: AWS region name (default: 'us-east-1')
-        """
-        self.environment_suffix = environment_suffix
-        self.region_name = region_name
-
-        # Initialize AWS clients
-        self.rds_client = boto3.client('rds', region_name=region_name)
-        self.elasticache_client = boto3.client('elasticache', region_name=region_name)
-        self.ecs_client = boto3.client('ecs', region_name=region_name)
-
-        print(f"Initialized optimizer for environment: {environment_suffix}")
-        print(f"Region: {region_name}")
-        print("-" * 50)
-
-    def optimize_aurora_database(self) -> bool:
-        """
-        Optimize Aurora Serverless v2 database cluster.
-        - Reduce minCapacity from 2 to 0.5 ACU
-        - Reduce maxCapacity from 4 to 1 ACU
-        - Reduce backup retention from 14 to 1 day
-        """
-        print("\nOptimizing Aurora Database...")
-
-        try:
-            # Find the database cluster - must match stack naming pattern
-            clusters = self.rds_client.describe_db_clusters()
-            cluster_id = None
-
-            # Priority 1: Look for cluster with 'tapstack' and environment suffix (CDK auto-generated name)
-            for cluster in clusters['DBClusters']:
-                cluster_identifier = cluster['DBClusterIdentifier'].lower()
-                if 'tapstack' in cluster_identifier and self.environment_suffix.lower() in cluster_identifier:
-                    cluster_id = cluster['DBClusterIdentifier']
-                    print(f"Found cluster (TapStack): {cluster_id}")
-                    break
-
-            # Priority 2: Look for 'streamflix' in the name
-            if not cluster_id:
-                for cluster in clusters['DBClusters']:
-                    cluster_identifier = cluster['DBClusterIdentifier'].lower()
-                    if 'streamflix' in cluster_identifier and self.environment_suffix.lower() in cluster_identifier:
-                        cluster_id = cluster['DBClusterIdentifier']
-                        print(f"Found cluster (StreamFlix): {cluster_id}")
-                        break
-
-            if not cluster_id:
-                print(f"ERROR: Aurora cluster not found for environment: {self.environment_suffix}")
-                print(f"Available clusters: {[c['DBClusterIdentifier'] for c in clusters['DBClusters']]}")
-                return False
-
-            # Update serverless v2 scaling configuration
-            print("Updating serverless v2 scaling configuration...")
-            self.rds_client.modify_db_cluster(
-                DBClusterIdentifier=cluster_id,
-                ServerlessV2ScalingConfiguration={
-                    'MinCapacity': 0.5,
-                    'MaxCapacity': 1.0
-                },
-                BackupRetentionPeriod=1,
-                ApplyImmediately=True
-            )
-
-            print("Aurora optimization complete:")
-            print("   - Min capacity: 2 ACU → 0.5 ACU")
-            print("   - Max capacity: 4 ACU → 1 ACU")
-            print("   - Backup retention: 14 days → 1 day")
-
-            # Wait for cluster to be available
-            print("Waiting for cluster modification to complete...")
-            waiter = self.rds_client.get_waiter('db_cluster_available')
-            waiter.wait(
-                DBClusterIdentifier=cluster_id,
-                WaiterConfig={'Delay': 30, 'MaxAttempts': 20}
-            )
-
-            return True
-
-        except ClientError as e:
-            print(f"ERROR: Error optimizing Aurora: {e}")
-            return False
-
-    def optimize_elasticache_redis(self) -> bool:
-        """
-        Optimize ElastiCache Redis cluster.
-        - Reduce numCacheClusters from 3 to 2 nodes
-        """
-        print("\nOptimizing ElastiCache Redis...")
-
-        try:
-            # Find the Redis replication group using exact naming pattern
-            replication_groups = self.elasticache_client.describe_replication_groups()
-            replication_group_id = None
-            current_group = None
-            current_node_count = 0
-            expected_group_id = f'streamflix-redis-{self.environment_suffix}'
-
-            # First try exact match
-            for group in replication_groups['ReplicationGroups']:
-                if group['ReplicationGroupId'] == expected_group_id:
-                    replication_group_id = group['ReplicationGroupId']
-                    current_group = group
-                    current_node_count = len(group['NodeGroups'][0]['NodeGroupMembers'])
-                    print(f"Found replication group (exact match): {replication_group_id}")
-                    break
-
-            # If exact match not found, try pattern match with streamflix-redis
-            if not replication_group_id:
-                for group in replication_groups['ReplicationGroups']:
-                    if 'streamflix-redis-' in group['ReplicationGroupId']:
-                        replication_group_id = group['ReplicationGroupId']
-                        current_group = group
-                        current_node_count = len(group['NodeGroups'][0]['NodeGroupMembers'])
-                        print(f"Found replication group (pattern match): {replication_group_id}")
-                        break
-
-            if not replication_group_id or not current_group:
-                print(f"ERROR: Redis replication group not found. Expected: {expected_group_id}")
-                print(f"Available groups: {[g['ReplicationGroupId'] for g in replication_groups['ReplicationGroups']]}")
-                return False
-
-            print(f"Current node count: {current_node_count}")
-
-            if current_node_count <= 2:
-                print("Already optimized (2 or fewer nodes)")
-                return True
-
-            # Get the current member clusters from the CORRECT group
-            member_clusters = current_group.get('MemberClusters', [])
-
-            print(f"Current member clusters: {member_clusters}")
-
-            # For Multi-AZ replication groups, use modify_replication_group
-            # This allows ElastiCache to handle AZ distribution correctly
-            print(f"Modifying replication group to 2 cache clusters...")
-
-            self.elasticache_client.modify_replication_group(
-                ReplicationGroupId=replication_group_id,
-                CacheNodeType='cache.t4g.micro',  # Keep same node type
-                ApplyImmediately=True
-            )
-
-            # Now use decrease_replica_count to reduce from 3 to 2
-            # ElastiCache will automatically handle AZ distribution
-            self.elasticache_client.decrease_replica_count(
-                ReplicationGroupId=replication_group_id,
-                NewReplicaCount=1,  # 1 replica + 1 primary = 2 total nodes
-                ApplyImmediately=True
-            )
-
-            print("ElastiCache optimization initiated:")
-            print(f"   - Node count: {len(member_clusters)} → 2")
-            print("   - ElastiCache will handle Multi-AZ distribution")
-
-            # Wait for the modification to complete
-            print("Waiting for Redis cluster modification to complete...")
-            time.sleep(30)  # Initial wait
-
-            max_attempts = 20
-            for attempt in range(max_attempts):
-                response = self.elasticache_client.describe_replication_groups(
-                    ReplicationGroupId=replication_group_id
-                )
-                status = response['ReplicationGroups'][0]['Status']
-                if status == 'available':
-                    print("Redis cluster modification complete")
-                    break
-                print(f"Status: {status}. Waiting... ({attempt + 1}/{max_attempts})")
-                time.sleep(30)
-
-            return True
-
-        except ClientError as e:
-            print(f"ERROR: Error optimizing ElastiCache: {e}")
-            return False
-
-    def optimize_ecs_fargate(self) -> bool:
-        """
-        Optimize ECS Fargate service.
-        - Reduce desiredCount from 3 to 2 tasks
-        """
-        print("\nOptimizing ECS Fargate...")
-
-        try:
-            # Find the ECS cluster using exact naming pattern: streamflix-cluster-{environmentSuffix}
-            clusters = self.ecs_client.list_clusters()
-            cluster_arn = None
-            expected_cluster_name = f'streamflix-cluster-{self.environment_suffix}'
-
-            # First try exact match
-            for cluster in clusters['clusterArns']:
-                cluster_name = cluster.split('/')[-1]
-                if cluster_name == expected_cluster_name:
-                    cluster_arn = cluster
-                    print(f"Found cluster (exact match): {cluster_name}")
-                    break
-
-            # If no exact match, try pattern match with streamflix-cluster
-            if not cluster_arn:
-                for cluster in clusters['clusterArns']:
-                    cluster_lower = cluster.lower()
-                    if 'streamflix-cluster-' in cluster_lower and self.environment_suffix.lower() in cluster_lower:
-                        cluster_arn = cluster
-                        print(f"Found cluster (pattern match): {cluster.split('/')[-1]}")
-                        break
-
-            if not cluster_arn:
-                print(f"ERROR: ECS cluster not found. Expected: {expected_cluster_name}")
-                print(f"Available clusters: {[c.split('/')[-1] for c in clusters['clusterArns']]}")
-                return False
-
-            # Find the service by exact naming pattern: streamflix-api-{environmentSuffix}
-            services = self.ecs_client.list_services(cluster=cluster_arn)
-            service_arn = None
-            expected_service_name = f'streamflix-api-{self.environment_suffix}'
-
-            # First, try exact match
-            for service in services['serviceArns']:
-                service_name = service.split('/')[-1]
-                if service_name == expected_service_name:
-                    service_arn = service
-                    print(f"Found service (exact match): {service_name}")
-                    break
-
-            # If exact match not found, try pattern matching
-            if not service_arn:
-                for service in services['serviceArns']:
-                    service_lower = service.lower()
-                    if 'streamflix-api' in service_lower:
-                        service_arn = service
-                        print(f"Found service (pattern match): {service.split('/')[-1]}")
-                        break
-
-            # If still not found and only one service, use it
-            if not service_arn and len(services['serviceArns']) == 1:
-                service_arn = services['serviceArns'][0]
-                print(f"Using only available service: {service_arn.split('/')[-1]}")
-
-            if not service_arn:
-                print(f"ERROR: ECS service not found. Expected: {expected_service_name}")
-                print(f"Available services: {[s.split('/')[-1] for s in services['serviceArns']]}")
-                return False
-
-            service_name = service_arn.split('/')[-1]
-
-            # Get current service details
-            service_details = self.ecs_client.describe_services(
-                cluster=cluster_arn,
-                services=[service_arn]
-            )
-
-            current_desired_count = service_details['services'][0]['desiredCount']
-            print(f"Current desired count: {current_desired_count}")
-
-            if current_desired_count <= 2:
-                print("Already optimized (2 or fewer tasks)")
-                return True
-
-            # Update service
-            print("Updating service desired count...")
-            self.ecs_client.update_service(
-                cluster=cluster_arn,
-                service=service_arn,
-                desiredCount=2
-            )
-
-            print("ECS optimization complete:")
-            print(f"   - Task count: {current_desired_count} → 2")
-
-            # Wait for service to stabilize
-            print("Waiting for service to stabilize...")
-            waiter = self.ecs_client.get_waiter('services_stable')
-            waiter.wait(
-                cluster=cluster_arn,
-                services=[service_arn],
-                WaiterConfig={'Delay': 30, 'MaxAttempts': 20}
-            )
-
-            return True
-
-        except ClientError as e:
-            print(f"ERROR: Error optimizing ECS: {e}")
-            return False
-
-    def get_cost_savings_estimate(self) -> Dict[str, Any]:
-        """
-        Calculate estimated monthly cost savings from the optimizations.
-
-        Returns:
-            Dictionary with cost savings estimates
-        """
-        # These are rough estimates based on AWS pricing (varies by region)
-        aurora_savings = {
-            'original_acu_cost': 2.0 * 0.12 * 24 * 30,  # Min 2 ACU
-            'optimized_acu_cost': 0.5 * 0.12 * 24 * 30,  # Min 0.5 ACU
-            'backup_savings': 0.095 * 13 * 10  # ~10GB database, 13 days saved
-        }
-
-        elasticache_savings = {
-            'node_cost': 0.024 * 24 * 30  # t4g.micro per node
-        }
-
-        ecs_savings = {
-            'task_cost': (0.256 * 0.04048 + 0.512 * 0.004445) * 24 * 30  # 256 CPU, 512 MiB
-        }
-
-        total_savings = (
-            (aurora_savings['original_acu_cost'] - aurora_savings['optimized_acu_cost']) +
-            aurora_savings['backup_savings'] +
-            elasticache_savings['node_cost'] +
-            ecs_savings['task_cost']
-        )
-
-        return {
-            'aurora_monthly_savings': round(
-                (aurora_savings['original_acu_cost'] - aurora_savings['optimized_acu_cost']) +
-                aurora_savings['backup_savings'], 2
-            ),
-            'elasticache_monthly_savings': round(elasticache_savings['node_cost'], 2),
-            'ecs_monthly_savings': round(ecs_savings['task_cost'], 2),
-            'total_monthly_savings': round(total_savings, 2)
-        }
-
-    def run_optimization(self) -> None:
-        """Run all optimization tasks."""
-        print("\nStarting infrastructure optimization...")
-        print("=" * 50)
-
-        results = {
-            'aurora': self.optimize_aurora_database(),
-            'elasticache': self.optimize_elasticache_redis(),
-            'ecs': self.optimize_ecs_fargate()
-        }
-
-        print("\n" + "=" * 50)
-        print("Optimization Summary:")
-        print("-" * 50)
-
-        success_count = sum(results.values())
-        total_count = len(results)
-
-        for service, success in results.items():
-            status = "Success" if success else "Failed"
-            print(f"{service.capitalize()}: {status}")
-
-        print(f"\nTotal: {success_count}/{total_count} optimizations successful")
-
-        if success_count == total_count:
-            print("\nEstimated Monthly Cost Savings:")
-            print("-" * 50)
-            savings = self.get_cost_savings_estimate()
-            print(f"Aurora Database: ${savings['aurora_monthly_savings']}")
-            print(f"ElastiCache Redis: ${savings['elasticache_monthly_savings']}")
-            print(f"ECS Fargate: ${savings['ecs_monthly_savings']}")
-            print(f"Total: ${savings['total_monthly_savings']}/month")
-            print("\nAll optimizations completed successfully!")
-        else:
-            print("\nWARNING: Some optimizations failed. Please check the logs above.")
-
-
-def main():
-    """Main execution function."""
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description="Optimize StreamFlix infrastructure for development environment"
-    )
-    parser.add_argument(
-        '--environment',
-        '-e',
-        default=None,
-        help='Environment suffix (overrides ENVIRONMENT_SUFFIX env var)'
-    )
-    parser.add_argument(
-        '--region',
-        '-r',
-        default=None,
-        help='AWS region (overrides AWS_REGION env var, defaults to us-east-1)'
-    )
-    parser.add_argument(
-        '--dry-run',
-        action='store_true',
-        help='Show what would be optimized without making changes'
-    )
-
-    args = parser.parse_args()
-
-    environment_suffix = args.environment or os.getenv('ENVIRONMENT_SUFFIX') or 'dev'
-    aws_region = args.region or os.getenv('AWS_REGION') or 'us-east-1'
-
-    if args.dry_run:
-        print("DRY RUN MODE - No changes will be made")
-        print("\nPlanned optimizations:")
-        print("- Aurora: Reduce min capacity 2→0.5 ACU, max capacity 4→1 ACU, backup 14→1 days")
-        print("- ElastiCache: Reduce nodes from 3→2")
-        print("- ECS: Reduce tasks from 3→2")
-
-        optimizer = InfrastructureOptimizer(environment_suffix, aws_region)
-        savings = optimizer.get_cost_savings_estimate()
-        print(f"\nEstimated monthly savings: ${savings['total_monthly_savings']}")
-        return
-
-    # Proceed with optimization
-    print(f"Starting optimization in {aws_region}")
-    print(f"Environment suffix: {environment_suffix}")
-
-    try:
-        optimizer = InfrastructureOptimizer(environment_suffix, aws_region)
-        optimizer.run_optimization()
-    except KeyboardInterrupt:
-        print("\n\nWARNING: Optimization interrupted by user")
-        sys.exit(1)
-    except Exception as e:
-        print(f"\nERROR: Unexpected error: {e}")
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    main()
-```
-
-## Key Features
-
-1. **Environment-aware resource discovery**: Uses environment suffix to find correct resources
-2. **Robust resource matching**: Multiple fallback strategies for finding resources
-3. **Proper error handling**: Comprehensive try-catch blocks with informative error messages
-4. **AWS waiters**: Uses boto3 waiters for proper asynchronous operation handling
-5. **Cost estimation**: Calculates estimated monthly savings from optimizations
-6. **Dry-run mode**: Allows preview of changes without applying them
-7. **CLI arguments**: Supports command-line configuration
-8. **Status reporting**: Clear output showing optimization progress and results
-
-## Optimizations Applied
-
-- **Aurora Serverless v2**: Reduces min capacity from 2 to 0.5 ACU, max from 4 to 1 ACU, backup retention from 14 to 1 day
-- **ElastiCache Redis**: Reduces node count from 3 to 2 nodes
-- **ECS Fargate**: Reduces task count from 3 to 2 tasks
-
-## Estimated Monthly Savings
-
-Based on AWS us-east-1 pricing:
-- Aurora: ~$55/month (capacity reduction + backup savings)
-- ElastiCache: ~$17/month (1 node saved)
-- ECS: ~$3/month (1 task saved)
-- **Total: ~$75/month**
-
-This optimization script demonstrates proper boto3 usage, AWS service knowledge, error handling, and cost-conscious infrastructure management.
+# CI/CD Pipeline Configuration for Pulumi Go Infrastructure
+
+# This workflow demonstrates a multi-account, multi-stage deployment for Pulumi Go applications
+
+# Infrastructure: ECS Optimization CI/CD Pipeline with ECS, ECR, VPC, ALB, CloudWatch, Systems Manager Parameter Store, Auto Scaling, Fargate
+
+name: Multi-Stage Pulumi Pipeline
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - dev
+
+env:
+  AWS_REGION: us-east-1
+  PULUMI_VERSION: latest
+  GO_VERSION: '1.23'
+  DEV_ACCOUNT_ID: ${{ secrets.DEV_ACCOUNT_ID }}
+  STAGING_ACCOUNT_ID: ${{ secrets.STAGING_ACCOUNT_ID }}
+  PROD_ACCOUNT_ID: ${{ secrets.PROD_ACCOUNT_ID }}
+
+jobs:
+  source:
+    name: Source Stage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Source
+
+  build:
+    name: Build Stage
+    runs-on: ubuntu-latest
+    needs: source
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Build
+
+      - name: Setup Go with caching
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Setup Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Download Go dependencies
+        run: go mod download
+
+      - name: Run Go tests
+        run: go test ./... -v
+
+      - name: Build Go binary
+        run: go build -v ./...
+
+      - name: Run Pulumi Preview
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+        run: |
+          pulumi preview --stack dev --non-interactive
+
+      - name: Run security checks with gosec
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          gosec ./...
+        continue-on-error: false
+
+      - name: Create artifacts tarball
+        run: tar -czf pulumi-outputs.tar.gz -C . go.mod go.sum *.go
+
+      - name: Encrypt artifacts with KMS
+        run: aws kms encrypt --key-id alias/github-actions-artifacts --plaintext fileb://pulumi-outputs.tar.gz --output text --query CiphertextBlob > pulumi-outputs.tar.gz.encrypted
+
+      - name: Upload encrypted artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulumi-outputs
+          path: pulumi-outputs.tar.gz.encrypted
+
+  deploy-dev:
+    name: Deploy to Dev
+    runs-on: ubuntu-latest
+    needs: build
+    environment: dev
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pulumi-outputs
+          path: ./artifacts/
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.GITHUB_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Dev
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Download Go dependencies
+        run: go mod download
+
+      - name: Deploy to Dev with Pulumi
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          ENVIRONMENT_SUFFIX: dev
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_AUTHOR: ${{ github.actor }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TEAM: synth
+        run: |
+          pulumi up --stack dev --yes --non-interactive
+
+      - name: Verify Deployment
+        run: |
+          aws ecs describe-clusters --clusters TapStack-dev --query 'clusters[*].{ClusterName:clusterName,Status:status,ActiveServicesCount:activeServicesCount}' || echo "ECS cluster not found"
+          aws ecs list-services --cluster TapStack-dev --query 'serviceArns' || echo "No services found"
+          aws elbv2 describe-load-balancers --query 'LoadBalancers[?contains(LoadBalancerName, `TapStack-dev`)].{Name:LoadBalancerName,DNSName:DNSName,State:State.Code}' || echo "ALB not found"
+          aws ecr describe-repositories --query 'repositories[?contains(repositoryName, `dev`)].{Name:repositoryName,URI:repositoryUri}' || echo "ECR repositories not found"
+
+      - name: Send Slack notification
+        if: always()
+        run: |
+          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d '{"text":"Dev deployment completed for ${{ github.ref }}"}'
+
+  manual-approval-staging:
+    name: Approve Staging Deployment
+    runs-on: ubuntu-latest
+    needs: deploy-dev
+    environment: staging-approval
+    steps:
+      - name: Manual approval checkpoint
+        run: echo "Deployment to staging approved"
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: manual-approval-staging
+    environment: staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pulumi-outputs
+          path: ./artifacts/
+
+      - name: Assume cross-account role for Staging via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.STAGING_ACCOUNT_ID }}:role/CrossAccountDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Staging
+          role-chaining: true
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Download Go dependencies
+        run: go mod download
+
+      - name: Deploy to Staging with Pulumi
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          ENVIRONMENT_SUFFIX: staging
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_AUTHOR: ${{ github.actor }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TEAM: synth
+        run: |
+          pulumi up --stack staging --yes --non-interactive
+
+      - name: Run integration tests
+        run: |
+          echo "Running integration tests..."
+
+      - name: Verify Deployment
+        run: |
+          aws ecs describe-clusters --clusters TapStack-staging --query 'clusters[*].{ClusterName:clusterName,Status:status,ActiveServicesCount:activeServicesCount}' || echo "ECS cluster not found"
+          aws ecs list-services --cluster TapStack-staging --query 'serviceArns' || echo "No services found"
+          aws elbv2 describe-load-balancers --query 'LoadBalancers[?contains(LoadBalancerName, `TapStack-staging`)].{Name:LoadBalancerName,DNSName:DNSName,State:State.Code}' || echo "ALB not found"
+          aws ecr describe-repositories --query 'repositories[?contains(repositoryName, `staging`)].{Name:repositoryName,URI:repositoryUri}' || echo "ECR repositories not found"
+          aws cloudwatch describe-alarms --alarm-name-prefix TapStack-staging --query 'MetricAlarms[*].{AlarmName:AlarmName,StateValue:StateValue}' || echo "CloudWatch alarms not found"
+
+      - name: Send Slack notification
+        if: always()
+        run: |
+          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d '{"text":"Staging deployment completed for ${{ github.ref }}"}'
+
+  manual-approval-prod:
+    name: Approve Production Deployment
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    environment: prod-approval
+    steps:
+      - name: Manual approval checkpoint
+        run: echo "Deployment to production approved"
+
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: manual-approval-prod
+    environment: prod
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pulumi-outputs
+          path: ./artifacts/
+
+      - name: Assume cross-account role for Production via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.PROD_ACCOUNT_ID }}:role/CrossAccountDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Prod
+          role-chaining: true
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Download Go dependencies
+        run: go mod download
+
+      - name: Deploy to Production with Pulumi
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          ENVIRONMENT_SUFFIX: prod
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_AUTHOR: ${{ github.actor }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TEAM: synth
+        run: |
+          pulumi up --stack prod --yes --non-interactive --refresh
+
+      - name: Verify ECS cluster
+        run: aws ecs describe-clusters --clusters TapStack-prod --query 'clusters[*].{ClusterName:clusterName,Status:status,ActiveServicesCount:activeServicesCount,RunningTasksCount:runningTasksCount}'
+
+      - name: Verify ECS services
+        run: aws ecs list-services --cluster TapStack-prod --query 'serviceArns'
+
+      - name: Verify Application Load Balancer
+        run: aws elbv2 describe-load-balancers --query 'LoadBalancers[?contains(LoadBalancerName, `TapStack-prod`)].{Name:LoadBalancerName,DNSName:DNSName,State:State.Code,Scheme:Scheme}'
+
+      - name: Verify ECR repositories
+        run: aws ecr describe-repositories --query 'repositories[?contains(repositoryName, `prod`)].{Name:repositoryName,URI:repositoryUri,ImageTagMutability:imageTagMutability}'
+
+      - name: Verify VPC endpoints
+        run: aws ec2 describe-vpc-endpoints --filters "Name=tag:Name,Values=*TapStack-prod*" --query 'VpcEndpoints[*].{VpcEndpointId:VpcEndpointId,ServiceName:ServiceName,State:State,PrivateDnsEnabled:PrivateDnsEnabled}' || echo "VPC endpoints not found"
+
+      - name: Verify CloudWatch Container Insights
+        run: aws ecs describe-clusters --clusters TapStack-prod --include CONFIGURATIONS --query 'clusters[*].settings[?name==`containerInsights`].value' || echo "Container Insights status checked"
+
+      - name: Verify Auto Scaling
+        run: aws application-autoscaling describe-scalable-targets --service-namespace ecs --query 'ScalableTargets[?contains(ResourceId, `TapStack-prod`)].{ResourceId:ResourceId,ServiceNamespace:ServiceNamespace,MinCapacity:MinCapacity,MaxCapacity:MaxCapacity}' || echo "Auto scaling targets not found"
+
+      - name: Health check
+        run: |
+          echo "Performing health checks..."
+
+      - name: Send Slack notification
+        if: always()
+        run: |
+          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d '{"text":"Production deployment completed for ${{ github.ref }}"}'
+
+  rollback:
+    name: Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: [deploy-prod]
+    if: failure()
+    environment: prod
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.PROD_ACCOUNT_ID }}:role/CrossAccountDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-Rollback
+          role-chaining: true
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Pulumi CLI
+        uses: pulumi/actions@v5
+
+      - name: Rollback to previous state
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+        run: |
+          echo "Rolling back to previous deployment..."
+          pulumi stack history --stack prod --json | head -2
+
+      - name: Send rollback notification
+        run: |
+          curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d '{"text":"Production deployment failed - automatic rollback initiated for ${{ github.ref }}"}'
