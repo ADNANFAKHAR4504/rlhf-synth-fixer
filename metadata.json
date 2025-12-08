@@ -2,7 +2,7 @@
   "po_id": "y6r8p4l7",
   "team": "synth",
   "platform": "cicd",
-  "language": "py",
+  "language": "yaml",
   "complexity": "hard",
   "turn_type": "single",
   "subtask": "CI/CD Pipeline Integration",
