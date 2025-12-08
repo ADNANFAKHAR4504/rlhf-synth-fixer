@@ -20,7 +20,7 @@ export class TapStack extends cdk.Stack {
     const { environmentSuffix } = props;
 
     // Create example infrastructure for validation testing
-    // Note: This is minimal infrastructure to demonstrate the validation framework
+    // Includes both compliant and non-compliant resources to demonstrate validation
 
     // Example S3 bucket with encryption (compliant)
     const compliantBucket = new s3.Bucket(this, 'CompliantBucket', {
@@ -30,16 +30,15 @@ export class TapStack extends cdk.Stack {
       autoDeleteObjects: true,
     });
 
-    // Example S3 bucket with KMS encryption (testing different encryption type)
-    const kmsEncryptedBucket = new s3.Bucket(this, 'KMSEncryptedBucket', {
-      bucketName: `kms-encrypted-bucket-${environmentSuffix}`,
-      encryption: s3.BucketEncryption.KMS_MANAGED,
+    // Example S3 bucket WITHOUT encryption (non-compliant - for validation testing)
+    const nonCompliantBucket = new s3.Bucket(this, 'NonCompliantBucket', {
+      bucketName: `non-compliant-bucket-${environmentSuffix}`,
+      encryption: s3.BucketEncryption.UNENCRYPTED,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
     });
 
-    // Example Lambda function for validation testing
-    // Created without variable assignment - resources are registered with CDK via constructor
+    // Example Lambda function with proper configuration (compliant)
     new lambda.Function(this, 'ExampleFunction', {
       functionName: `example-function-${environmentSuffix}`,
       runtime: lambda.Runtime.NODEJS_18_X,
@@ -57,8 +56,7 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    // Example Lambda with issues (for testing)
-    // Created without variable assignment - resources are registered with CDK via constructor
+    // Example Lambda with configuration issues (non-compliant - for validation testing)
     new lambda.Function(this, 'ProblematicFunction', {
       functionName: `problematic-function-${environmentSuffix}`,
       runtime: lambda.Runtime.NODEJS_18_X,
@@ -68,23 +66,23 @@ export class TapStack extends cdk.Stack {
           return { statusCode: 200, body: 'OK' };
         };
       `),
-      timeout: cdk.Duration.seconds(900), // Excessive timeout
-      memorySize: 128, // Low memory
-      // Missing environment variables
+      timeout: cdk.Duration.seconds(900), // Excessive timeout - triggers warning
+      memorySize: 128, // Low memory - triggers info finding
+      // Missing environment variables - triggers warning
     });
 
-    // Example IAM role with specific permissions (compliant)
-    const exampleRole = new iam.Role(this, 'ExampleRole', {
-      roleName: `example-role-${environmentSuffix}`,
+    // Example IAM role with overly permissive policy (non-compliant - for validation testing)
+    const problematicRole = new iam.Role(this, 'ProblematicRole', {
+      roleName: `problematic-role-${environmentSuffix}`,
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
     });
 
-    // Add specific S3 permissions instead of wildcards
-    exampleRole.addToPolicy(
+    // Add wildcard permissions (non-compliant - triggers critical IAM finding)
+    problematicRole.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        actions: ['s3:GetObject', 's3:PutObject'], // Specific actions
-        resources: [compliantBucket.arnForObjects('*')], // Specific resource
+        actions: ['*'], // Wildcard action - security risk
+        resources: ['*'], // Wildcard resource - security risk
       })
     );
 
@@ -95,7 +93,6 @@ export class TapStack extends cdk.Stack {
     cdk.Aspects.of(this).add(new RDSConfigAspect());
 
     // Generate validation report after synthesis
-    // Created without variable assignment - reporter works via construct creation
     new ValidationReporter(this, 'ValidationReporter', {
       environmentSuffix,
       outputPath: './validation-report.json',
@@ -107,9 +104,9 @@ export class TapStack extends cdk.Stack {
       description: 'Name of the compliant S3 bucket',
     });
 
-    new cdk.CfnOutput(this, 'KMSEncryptedBucketName', {
-      value: kmsEncryptedBucket.bucketName,
-      description: 'Name of the KMS-encrypted S3 bucket',
+    new cdk.CfnOutput(this, 'NonCompliantBucketName', {
+      value: nonCompliantBucket.bucketName,
+      description: 'Name of the non-compliant S3 bucket',
     });
   }
 }

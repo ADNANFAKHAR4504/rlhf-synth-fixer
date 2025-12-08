@@ -41,18 +41,19 @@ describe('TapStack Unit Tests', () => {
           ServerSideEncryptionConfiguration: Match.arrayWith([
             Match.objectLike({
               ServerSideEncryptionByDefault: {
-                SSEAlgorithm: 'AES256'
-              }
-            })
-          ])
-        })
+                SSEAlgorithm: 'AES256',
+              },
+            }),
+          ]),
+        }),
       });
     });
 
     test('creates non-compliant S3 bucket without encryption', () => {
       const resources = template.findResources('AWS::S3::Bucket');
       const nonCompliantBucket = Object.values(resources).find(
-        (r: any) => r.Properties?.BucketName === `non-compliant-bucket-${environmentSuffix}`
+        (r: any) =>
+          r.Properties?.BucketName === `non-compliant-bucket-${environmentSuffix}`
       );
 
       expect(nonCompliantBucket).toBeDefined();
@@ -91,17 +92,20 @@ describe('TapStack Unit Tests', () => {
         RoleName: `problematic-role-${environmentSuffix}`,
       });
 
-      template.hasResourceProperties('AWS::IAM::Policy', Match.objectLike({
-        PolicyDocument: Match.objectLike({
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Effect: 'Allow',
-              Action: '*',
-              Resource: '*'
-            })
-          ])
+      template.hasResourceProperties(
+        'AWS::IAM::Policy',
+        Match.objectLike({
+          PolicyDocument: Match.objectLike({
+            Statement: Match.arrayWith([
+              Match.objectLike({
+                Effect: 'Allow',
+                Action: '*',
+                Resource: '*',
+              }),
+            ]),
+          }),
         })
-      }));
+      );
     });
   });
 
@@ -109,19 +113,27 @@ describe('TapStack Unit Tests', () => {
     test('exports compliant bucket name output', () => {
       const outputs = template.toJSON().Outputs;
       expect(outputs.CompliantBucketName).toBeDefined();
-      expect(outputs.CompliantBucketName.Description).toBe('Name of the compliant S3 bucket');
+      expect(outputs.CompliantBucketName.Description).toBe(
+        'Name of the compliant S3 bucket'
+      );
     });
 
     test('exports non-compliant bucket name output', () => {
       const outputs = template.toJSON().Outputs;
       expect(outputs.NonCompliantBucketName).toBeDefined();
-      expect(outputs.NonCompliantBucketName.Description).toBe('Name of the non-compliant S3 bucket');
+      expect(outputs.NonCompliantBucketName.Description).toBe(
+        'Name of the non-compliant S3 bucket'
+      );
     });
 
     test('has correct output descriptions', () => {
       const outputs = template.toJSON().Outputs;
-      expect(outputs.CompliantBucketName.Description).toBe('Name of the compliant S3 bucket');
-      expect(outputs.NonCompliantBucketName.Description).toBe('Name of the non-compliant S3 bucket');
+      expect(outputs.CompliantBucketName.Description).toBe(
+        'Name of the compliant S3 bucket'
+      );
+      expect(outputs.NonCompliantBucketName.Description).toBe(
+        'Name of the non-compliant S3 bucket'
+      );
     });
   });
 
@@ -136,23 +148,23 @@ describe('TapStack Unit Tests', () => {
       });
     });
 
-    test('all Lambda functions include environmentSuffix', () => {
+    test('all user-defined Lambda functions include environmentSuffix', () => {
       const resources = template.findResources('AWS::Lambda::Function');
-      Object.values(resources).forEach((resource: any) => {
-        const functionName = resource.Properties?.FunctionName;
-        if (functionName) {
-          expect(functionName).toContain(environmentSuffix);
-        }
+      const userFunctions = Object.values(resources).filter(
+        (r: any) => r.Properties?.FunctionName
+      );
+      userFunctions.forEach((resource: any) => {
+        expect(resource.Properties?.FunctionName).toContain(environmentSuffix);
       });
     });
 
-    test('all IAM roles include environmentSuffix', () => {
+    test('all user-defined IAM roles include environmentSuffix', () => {
       const resources = template.findResources('AWS::IAM::Role');
-      Object.values(resources).forEach((resource: any) => {
-        const roleName = resource.Properties?.RoleName;
-        if (roleName) {
-          expect(roleName).toContain(environmentSuffix);
-        }
+      const userRoles = Object.values(resources).filter(
+        (r: any) => r.Properties?.RoleName
+      );
+      userRoles.forEach((resource: any) => {
+        expect(resource.Properties?.RoleName).toContain(environmentSuffix);
       });
     });
   });
@@ -168,47 +180,46 @@ describe('TapStack Unit Tests', () => {
     test('S3 buckets have autoDeleteObjects enabled', () => {
       const resources = template.findResources('AWS::S3::Bucket');
       Object.values(resources).forEach((resource: any) => {
-        const hasCustomResource = resource.Properties?.Tags?.some(
+        const hasAutoDeleteTag = resource.Properties?.Tags?.some(
           (tag: any) => tag.Key === 'aws-cdk:auto-delete-objects'
         );
-        // Either has the tag or has autoDeleteObjects property
-        expect(hasCustomResource || resource.UpdateReplacePolicy === 'Delete').toBeTruthy();
+        expect(hasAutoDeleteTag || resource.UpdateReplacePolicy === 'Delete').toBeTruthy();
       });
     });
   });
 
   describe('Lambda Runtime Configuration', () => {
-    test('all Lambda functions use Node.js 18', () => {
+    test('user-defined Lambda functions use Node.js 18', () => {
       const resources = template.findResources('AWS::Lambda::Function');
-      const userFunctions = Object.values(resources).filter((r: any) =>
-        r.Properties?.FunctionName?.includes(environmentSuffix)
+      const userFunctions = Object.values(resources).filter(
+        (r: any) => r.Properties?.FunctionName?.includes(environmentSuffix)
       );
       userFunctions.forEach((resource: any) => {
         expect(resource.Properties?.Runtime).toBe('nodejs18.x');
       });
     });
 
-    test('Lambda functions have inline code', () => {
+    test('Lambda functions have code defined', () => {
       const resources = template.findResources('AWS::Lambda::Function');
-      const userFunctions = Object.values(resources).filter((r: any) =>
-        r.Properties?.FunctionName?.includes(environmentSuffix)
+      const userFunctions = Object.values(resources).filter(
+        (r: any) => r.Properties?.FunctionName?.includes(environmentSuffix)
       );
       userFunctions.forEach((resource: any) => {
-        // Check for inline code or other code types
-        expect(resource.Properties?.Code).toBeDefined();
+        const code = resource.Properties?.Code;
+        // User-defined functions have inline code (ZipFile) or S3 assets
+        expect(code?.ZipFile || (code?.S3Bucket && code?.S3Key)).toBeTruthy();
       });
     });
   });
 
   describe('Stack Properties', () => {
-    test('stack has description or resources', () => {
+    test('stack has resources defined', () => {
       const stackTemplate = template.toJSON();
-      // Stack may or may not have description, but should have resources
       expect(stackTemplate.Resources).toBeDefined();
       expect(Object.keys(stackTemplate.Resources).length).toBeGreaterThan(0);
     });
 
-    test('stack includes environmentSuffix in name', () => {
+    test('stack name contains TapStack', () => {
       expect(stack.stackName).toContain('TestTapStack');
     });
   });
@@ -218,18 +229,19 @@ describe('TapStack Unit Tests', () => {
       template.resourceCountIs('AWS::S3::Bucket', 2);
     });
 
-    test('creates user-defined Lambda functions', () => {
+    test('creates 2 user-defined Lambda functions', () => {
       const resources = template.findResources('AWS::Lambda::Function');
-      const userFunctions = Object.values(resources).filter((r: any) =>
-        r.Properties?.FunctionName?.includes(environmentSuffix)
+      const userFunctions = Object.values(resources).filter(
+        (r: any) => r.Properties?.FunctionName?.includes(environmentSuffix)
       );
       expect(userFunctions.length).toBe(2);
     });
 
-    test('creates exactly 1 IAM role with overly permissive policy', () => {
+    test('creates 1 IAM role with problematic policy', () => {
       const roles = template.findResources('AWS::IAM::Role');
       const problematicRoles = Object.values(roles).filter(
-        (r: any) => r.Properties?.RoleName === `problematic-role-${environmentSuffix}`
+        (r: any) =>
+          r.Properties?.RoleName === `problematic-role-${environmentSuffix}`
       );
       expect(problematicRoles.length).toBe(1);
     });
