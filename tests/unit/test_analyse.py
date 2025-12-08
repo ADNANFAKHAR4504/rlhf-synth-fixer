@@ -390,6 +390,26 @@ class TestAnalyzeIAMRoles(unittest.TestCase):
         self.assertGreater(len(found_roles), 0)
 
     @patch('analyse.boto3.client')
+    def test_analyze_iam_role_generic_exception(self, mock_boto_client):
+        """Test generic exception handling in IAM role analysis (lines 311-312)"""
+        mock_iam = Mock()
+        # Set up exception class
+        mock_iam.exceptions = Mock()
+        mock_iam.exceptions.NoSuchEntityException = type('NoSuchEntityException', (Exception,), {})
+        # Raise a different exception that is NOT NoSuchEntityException
+        mock_iam.get_role.side_effect = RuntimeError("Connection timeout")
+        mock_boto_client.return_value = mock_iam
+
+        analyzer = CurrencyAPIAnalyzer('test')
+        analyzer.iam_client = mock_iam
+
+        result = analyzer.analyze_iam_roles()
+
+        error_roles = [r for r in result if r.get('status') == 'error']
+        self.assertGreater(len(error_roles), 0)
+        self.assertIn('Connection timeout', error_roles[0].get('error', ''))
+
+    @patch('analyse.boto3.client')
     def test_analyze_iam_role_missing(self, mock_boto_client):
         """Test when IAM role is missing"""
         mock_iam = Mock()
@@ -872,6 +892,785 @@ class TestAPIComplianceChecks(unittest.TestCase):
         self.assertTrue(compliance['xray_tracing_enabled'])
         self.assertTrue(compliance['has_api_key'])
         self.assertTrue(compliance['has_usage_plan'])
+
+
+class TestAnalyzeInfrastructure(unittest.TestCase):
+    """Test analyze_infrastructure method (lines 420-467)"""
+
+    @patch('analyse.boto3.client')
+    def test_analyze_infrastructure_returns_complete_analysis(self, mock_boto_client):
+        """Test that analyze_infrastructure returns all required keys"""
+        mock_client = Mock()
+        mock_client.list_functions.return_value = {'Functions': []}
+        mock_client.get_rest_apis.return_value = {'items': []}
+        mock_client.describe_log_groups.return_value = {'logGroups': []}
+        mock_client.get_role.side_effect = Exception("Not found")
+        mock_client.get_trace_summaries.return_value = {'TraceSummaries': []}
+        mock_client.get_usage_plans.return_value = {'items': []}
+        mock_client.exceptions = Mock()
+        mock_client.exceptions.NoSuchEntityException = Exception
+        mock_boto_client.return_value = mock_client
+
+        analyzer = CurrencyAPIAnalyzer('test')
+        result = analyzer.analyze_infrastructure()
+
+        # Verify all keys are present
+        self.assertIn('environment_suffix', result)
+        self.assertIn('region', result)
+        self.assertIn('timestamp', result)
+        self.assertIn('lambda_functions', result)
+        self.assertIn('api_gateways', result)
+        self.assertIn('cloudwatch_logs', result)
+        self.assertIn('iam_roles', result)
+        self.assertIn('xray_tracing', result)
+        self.assertIn('api_throttling', result)
+        self.assertIn('recommendations', result)
+        self.assertIn('compliance_score', result)
+
+    @patch('analyse.boto3.client')
+    def test_analyze_infrastructure_calls_all_analyzers(self, mock_boto_client):
+        """Test that analyze_infrastructure calls all component analyzers"""
+        mock_client = Mock()
+        mock_client.list_functions.return_value = {'Functions': []}
+        mock_client.get_rest_apis.return_value = {'items': []}
+        mock_client.describe_log_groups.return_value = {'logGroups': []}
+        mock_client.get_role.side_effect = Exception("Not found")
+        mock_client.get_trace_summaries.return_value = {'TraceSummaries': []}
+        mock_client.get_usage_plans.return_value = {'items': []}
+        mock_client.exceptions = Mock()
+        mock_client.exceptions.NoSuchEntityException = Exception
+        mock_boto_client.return_value = mock_client
+
+        analyzer = CurrencyAPIAnalyzer('test')
+        result = analyzer.analyze_infrastructure()
+
+        # Verify lambda analysis was called
+        mock_client.list_functions.assert_called()
+        # Verify API Gateway analysis was called
+        mock_client.get_rest_apis.assert_called()
+        # Verify CloudWatch analysis was called
+        mock_client.describe_log_groups.assert_called()
+
+    @patch('analyse.boto3.client')
+    def test_analyze_infrastructure_sets_environment_suffix(self, mock_boto_client):
+        """Test that analyze_infrastructure sets environment suffix correctly"""
+        mock_client = Mock()
+        mock_client.list_functions.return_value = {'Functions': []}
+        mock_client.get_rest_apis.return_value = {'items': []}
+        mock_client.describe_log_groups.return_value = {'logGroups': []}
+        mock_client.get_role.side_effect = Exception("Not found")
+        mock_client.get_trace_summaries.return_value = {'TraceSummaries': []}
+        mock_client.get_usage_plans.return_value = {'items': []}
+        mock_client.exceptions = Mock()
+        mock_client.exceptions.NoSuchEntityException = Exception
+        mock_boto_client.return_value = mock_client
+
+        analyzer = CurrencyAPIAnalyzer('prod-abc123')
+        result = analyzer.analyze_infrastructure()
+
+        self.assertEqual(result['environment_suffix'], 'prod-abc123')
+        self.assertEqual(result['region'], 'us-east-1')
+
+
+class TestGenerateRecommendationsFound(unittest.TestCase):
+    """Test recommendation generation for found resources (lines 485-560)"""
+
+    @patch('analyse.boto3.client')
+    def test_generates_recommendation_for_wrong_runtime(self, mock_boto_client):
+        """Test recommendation for Lambda with wrong runtime (line 487-493)"""
+        mock_boto_client.return_value = Mock()
+        analyzer = CurrencyAPIAnalyzer('test')
+
+        analysis = {
+            'lambda_functions': [
+                {
+                    'name': 'test-func',
+                    'status': 'found',
+                    'compliant': {
+                        'runtime_nodejs18': False,
+                        'memory_1gb': True,
+                        'xray_active': True
+                    }
+                }
+            ],
+            'api_gateways': [],
+            'cloudwatch_logs': [],
+            'iam_roles': [],
+            'xray_tracing': {},
+            'api_throttling': {}
+        }
+
+        recommendations = analyzer._generate_recommendations(analysis)
+
+        lambda_recs = [r for r in recommendations if r['category'] == 'lambda']
+        self.assertGreater(len(lambda_recs), 0)
+        self.assertTrue(any('nodejs18.x' in r['message'] for r in lambda_recs))
+
+    @patch('analyse.boto3.client')
+    def test_generates_recommendation_for_xray_disabled(self, mock_boto_client):
+        """Test recommendation for Lambda with X-Ray disabled (lines 494-500)"""
+        mock_boto_client.return_value = Mock()
+        analyzer = CurrencyAPIAnalyzer('test')
+
+        analysis = {
+            'lambda_functions': [
+                {
+                    'name': 'test-func',
+                    'status': 'found',
+                    'compliant': {
+                        'runtime_nodejs18': True,
+                        'memory_1gb': True,
+                        'xray_active': False
+                    }
+                }
+            ],
+            'api_gateways': [],
+            'cloudwatch_logs': [],
+            'iam_roles': [],
+            'xray_tracing': {},
+            'api_throttling': {}
+        }
+
+        recommendations = analyzer._generate_recommendations(analysis)
+
+        obs_recs = [r for r in recommendations if r['category'] == 'observability']
+        self.assertGreater(len(obs_recs), 0)
+        self.assertTrue(any('X-Ray' in r['message'] for r in obs_recs))
+
+    @patch('analyse.boto3.client')
+    def test_generates_recommendation_for_low_memory(self, mock_boto_client):
+        """Test recommendation for Lambda with low memory (lines 501-507)"""
+        mock_boto_client.return_value = Mock()
+        analyzer = CurrencyAPIAnalyzer('test')
+
+        analysis = {
+            'lambda_functions': [
+                {
+                    'name': 'test-func',
+                    'status': 'found',
+                    'compliant': {
+                        'runtime_nodejs18': True,
+                        'memory_1gb': False,
+                        'xray_active': True
+                    }
+                }
+            ],
+            'api_gateways': [],
+            'cloudwatch_logs': [],
+            'iam_roles': [],
+            'xray_tracing': {},
+            'api_throttling': {}
+        }
+
+        recommendations = analyzer._generate_recommendations(analysis)
+
+        perf_recs = [r for r in recommendations if r['category'] == 'performance']
+        self.assertGreater(len(perf_recs), 0)
+        self.assertTrue(any('1024MB' in r['message'] for r in perf_recs))
+
+    @patch('analyse.boto3.client')
+    def test_generates_recommendation_for_missing_api_gateway(self, mock_boto_client):
+        """Test recommendation for missing API Gateway (lines 511-517)"""
+        mock_boto_client.return_value = Mock()
+        analyzer = CurrencyAPIAnalyzer('test')
+
+        analysis = {
+            'lambda_functions': [],
+            'api_gateways': [
+                {
+                    'name': 'test-api',
+                    'status': 'missing'
+                }
+            ],
+            'cloudwatch_logs': [],
+            'iam_roles': [],
+            'xray_tracing': {},
+            'api_throttling': {}
+        }
+
+        recommendations = analyzer._generate_recommendations(analysis)
+
+        api_recs = [r for r in recommendations if r['category'] == 'api_gateway']
+        critical_recs = [r for r in api_recs if r['priority'] == 'critical']
+        self.assertGreater(len(critical_recs), 0)
+
+    @patch('analyse.boto3.client')
+    def test_generates_recommendation_for_missing_convert_endpoint(self, mock_boto_client):
+        """Test recommendation for missing /convert endpoint (lines 520-526)"""
+        mock_boto_client.return_value = Mock()
+        analyzer = CurrencyAPIAnalyzer('test')
+
+        analysis = {
+            'lambda_functions': [],
+            'api_gateways': [
+                {
+                    'name': 'test-api',
+                    'status': 'found',
+                    'compliant': {
+                        'has_convert_endpoint': False,
+                        'xray_tracing_enabled': True,
+                        'has_api_key': True,
+                        'has_usage_plan': True
+                    }
+                }
+            ],
+            'cloudwatch_logs': [],
+            'iam_roles': [],
+            'xray_tracing': {},
+            'api_throttling': {}
+        }
+
+        recommendations = analyzer._generate_recommendations(analysis)
+
+        api_recs = [r for r in recommendations if r['category'] == 'api_gateway']
+        self.assertTrue(any('/convert' in r['message'] for r in api_recs))
+
+    @patch('analyse.boto3.client')
+    def test_generates_recommendation_for_api_xray_disabled(self, mock_boto_client):
+        """Test recommendation for API Gateway with X-Ray disabled (lines 527-533)"""
+        mock_boto_client.return_value = Mock()
+        analyzer = CurrencyAPIAnalyzer('test')
+
+        analysis = {
+            'lambda_functions': [],
+            'api_gateways': [
+                {
+                    'name': 'test-api',
+                    'status': 'found',
+                    'compliant': {
+                        'has_convert_endpoint': True,
+                        'xray_tracing_enabled': False,
+                        'has_api_key': True,
+                        'has_usage_plan': True
+                    }
+                }
+            ],
+            'cloudwatch_logs': [],
+            'iam_roles': [],
+            'xray_tracing': {},
+            'api_throttling': {}
+        }
+
+        recommendations = analyzer._generate_recommendations(analysis)
+
+        obs_recs = [r for r in recommendations if r['category'] == 'observability']
+        self.assertTrue(any('X-Ray' in r['message'] for r in obs_recs))
+
+    @patch('analyse.boto3.client')
+    def test_generates_recommendation_for_missing_usage_plan(self, mock_boto_client):
+        """Test recommendation for missing usage plan (lines 541-547)"""
+        mock_boto_client.return_value = Mock()
+        analyzer = CurrencyAPIAnalyzer('test')
+
+        analysis = {
+            'lambda_functions': [],
+            'api_gateways': [
+                {
+                    'name': 'test-api',
+                    'status': 'found',
+                    'compliant': {
+                        'has_convert_endpoint': True,
+                        'xray_tracing_enabled': True,
+                        'has_api_key': True,
+                        'has_usage_plan': False
+                    }
+                }
+            ],
+            'cloudwatch_logs': [],
+            'iam_roles': [],
+            'xray_tracing': {},
+            'api_throttling': {}
+        }
+
+        recommendations = analyzer._generate_recommendations(analysis)
+
+        throttle_recs = [r for r in recommendations if r['category'] == 'throttling']
+        self.assertGreater(len(throttle_recs), 0)
+
+    @patch('analyse.boto3.client')
+    def test_generates_recommendation_for_missing_log_group(self, mock_boto_client):
+        """Test recommendation for missing CloudWatch log group (lines 551-557)"""
+        mock_boto_client.return_value = Mock()
+        analyzer = CurrencyAPIAnalyzer('test')
+
+        analysis = {
+            'lambda_functions': [],
+            'api_gateways': [],
+            'cloudwatch_logs': [
+                {
+                    'name': '/aws/lambda/test',
+                    'status': 'missing'
+                }
+            ],
+            'iam_roles': [],
+            'xray_tracing': {},
+            'api_throttling': {}
+        }
+
+        recommendations = analyzer._generate_recommendations(analysis)
+
+        log_recs = [r for r in recommendations if r['category'] == 'logging']
+        self.assertGreater(len(log_recs), 0)
+
+    @patch('analyse.boto3.client')
+    def test_generates_recommendation_for_unlimited_retention(self, mock_boto_client):
+        """Test recommendation for log group with unlimited retention (lines 558-565)"""
+        mock_boto_client.return_value = Mock()
+        analyzer = CurrencyAPIAnalyzer('test')
+
+        analysis = {
+            'lambda_functions': [],
+            'api_gateways': [],
+            'cloudwatch_logs': [
+                {
+                    'name': '/aws/lambda/test',
+                    'status': 'found',
+                    'retention_days': 'unlimited'
+                }
+            ],
+            'iam_roles': [],
+            'xray_tracing': {},
+            'api_throttling': {}
+        }
+
+        recommendations = analyzer._generate_recommendations(analysis)
+
+        cost_recs = [r for r in recommendations if r['category'] == 'cost_optimization']
+        self.assertGreater(len(cost_recs), 0)
+
+    @patch('analyse.boto3.client')
+    def test_generates_recommendation_for_missing_iam_role(self, mock_boto_client):
+        """Test recommendation for missing IAM role (lines 567-575)"""
+        mock_boto_client.return_value = Mock()
+        analyzer = CurrencyAPIAnalyzer('test')
+
+        analysis = {
+            'lambda_functions': [],
+            'api_gateways': [],
+            'cloudwatch_logs': [],
+            'iam_roles': [
+                {
+                    'name': 'test-role',
+                    'status': 'missing'
+                }
+            ],
+            'xray_tracing': {},
+            'api_throttling': {}
+        }
+
+        recommendations = analyzer._generate_recommendations(analysis)
+
+        iam_recs = [r for r in recommendations if r['category'] == 'iam']
+        critical_recs = [r for r in iam_recs if r['priority'] == 'critical']
+        self.assertGreater(len(critical_recs), 0)
+
+    @patch('analyse.boto3.client')
+    def test_generates_recommendation_for_no_recent_traces(self, mock_boto_client):
+        """Test recommendation for no recent X-Ray traces (lines 577-585)"""
+        mock_boto_client.return_value = Mock()
+        analyzer = CurrencyAPIAnalyzer('test')
+
+        analysis = {
+            'lambda_functions': [],
+            'api_gateways': [],
+            'cloudwatch_logs': [],
+            'iam_roles': [],
+            'xray_tracing': {'status': 'no_recent_traces'},
+            'api_throttling': {}
+        }
+
+        recommendations = analyzer._generate_recommendations(analysis)
+
+        obs_recs = [r for r in recommendations if r['category'] == 'observability']
+        self.assertTrue(any('X-Ray' in r['message'] for r in obs_recs))
+
+    @patch('analyse.boto3.client')
+    def test_generates_recommendation_for_no_throttling(self, mock_boto_client):
+        """Test recommendation for no usage plans configured (lines 587-595)"""
+        mock_boto_client.return_value = Mock()
+        analyzer = CurrencyAPIAnalyzer('test')
+
+        analysis = {
+            'lambda_functions': [],
+            'api_gateways': [],
+            'cloudwatch_logs': [],
+            'iam_roles': [],
+            'xray_tracing': {},
+            'api_throttling': {'status': 'no_usage_plans'}
+        }
+
+        recommendations = analyzer._generate_recommendations(analysis)
+
+        throttle_recs = [r for r in recommendations if r['category'] == 'throttling']
+        self.assertGreater(len(throttle_recs), 0)
+
+
+class TestPrintReportDetailed(unittest.TestCase):
+    """Test print_report method detailed paths (lines 669-734)"""
+
+    @patch('analyse.boto3.client')
+    def test_print_report_with_found_lambda(self, mock_boto_client):
+        """Test print_report shows Lambda details when found (lines 669-672)"""
+        mock_boto_client.return_value = Mock()
+        analyzer = CurrencyAPIAnalyzer('test')
+
+        analysis = {
+            'environment_suffix': 'test',
+            'region': 'us-east-1',
+            'timestamp': '2024-01-01T00:00:00Z',
+            'compliance_score': 75.0,
+            'lambda_functions': [
+                {
+                    'name': 'test-func',
+                    'status': 'found',
+                    'runtime': 'nodejs18.x',
+                    'memory_size': 1024,
+                    'xray_enabled': True
+                }
+            ],
+            'api_gateways': [],
+            'cloudwatch_logs': [],
+            'iam_roles': [],
+            'xray_tracing': {'status': 'active', 'trace_count': 0},
+            'api_throttling': {'status': 'configured', 'usage_plans': []},
+            'recommendations': []
+        }
+
+        # Should not raise any exception
+        analyzer.print_report(analysis)
+
+    @patch('analyse.boto3.client')
+    def test_print_report_with_found_api_gateway(self, mock_boto_client):
+        """Test print_report shows API Gateway details when found (lines 681-685)"""
+        mock_boto_client.return_value = Mock()
+        analyzer = CurrencyAPIAnalyzer('test')
+
+        analysis = {
+            'environment_suffix': 'test',
+            'region': 'us-east-1',
+            'timestamp': '2024-01-01T00:00:00Z',
+            'compliance_score': 75.0,
+            'lambda_functions': [],
+            'api_gateways': [
+                {
+                    'name': 'test-api',
+                    'status': 'found',
+                    'endpoint_configuration': ['EDGE'],
+                    'has_convert_endpoint': True,
+                    'has_v1_stage': True,
+                    'xray_enabled': True
+                }
+            ],
+            'cloudwatch_logs': [],
+            'iam_roles': [],
+            'xray_tracing': {'status': 'active', 'trace_count': 0},
+            'api_throttling': {'status': 'configured', 'usage_plans': []},
+            'recommendations': []
+        }
+
+        # Should not raise any exception
+        analyzer.print_report(analysis)
+
+    @patch('analyse.boto3.client')
+    def test_print_report_with_found_log_groups(self, mock_boto_client):
+        """Test print_report shows log group retention when found (lines 694-695)"""
+        mock_boto_client.return_value = Mock()
+        analyzer = CurrencyAPIAnalyzer('test')
+
+        analysis = {
+            'environment_suffix': 'test',
+            'region': 'us-east-1',
+            'timestamp': '2024-01-01T00:00:00Z',
+            'compliance_score': 75.0,
+            'lambda_functions': [],
+            'api_gateways': [],
+            'cloudwatch_logs': [
+                {
+                    'name': '/aws/lambda/test',
+                    'status': 'found',
+                    'retention_days': 14
+                }
+            ],
+            'iam_roles': [],
+            'xray_tracing': {'status': 'active', 'trace_count': 0},
+            'api_throttling': {'status': 'configured', 'usage_plans': []},
+            'recommendations': []
+        }
+
+        # Should not raise any exception
+        analyzer.print_report(analysis)
+
+    @patch('analyse.boto3.client')
+    def test_print_report_with_found_iam_roles(self, mock_boto_client):
+        """Test print_report shows IAM role policies when found (lines 704-706)"""
+        mock_boto_client.return_value = Mock()
+        analyzer = CurrencyAPIAnalyzer('test')
+
+        analysis = {
+            'environment_suffix': 'test',
+            'region': 'us-east-1',
+            'timestamp': '2024-01-01T00:00:00Z',
+            'compliance_score': 75.0,
+            'lambda_functions': [],
+            'api_gateways': [],
+            'cloudwatch_logs': [],
+            'iam_roles': [
+                {
+                    'name': 'test-role',
+                    'status': 'found',
+                    'attached_policies': ['AWSLambdaBasicExecutionRole', 'AWSXRayDaemonWriteAccess']
+                }
+            ],
+            'xray_tracing': {'status': 'active', 'trace_count': 0},
+            'api_throttling': {'status': 'configured', 'usage_plans': []},
+            'recommendations': []
+        }
+
+        # Should not raise any exception
+        analyzer.print_report(analysis)
+
+    @patch('analyse.boto3.client')
+    def test_print_report_with_usage_plans(self, mock_boto_client):
+        """Test print_report shows usage plan details (lines 722-725)"""
+        mock_boto_client.return_value = Mock()
+        analyzer = CurrencyAPIAnalyzer('test')
+
+        analysis = {
+            'environment_suffix': 'test',
+            'region': 'us-east-1',
+            'timestamp': '2024-01-01T00:00:00Z',
+            'compliance_score': 75.0,
+            'lambda_functions': [],
+            'api_gateways': [],
+            'cloudwatch_logs': [],
+            'iam_roles': [],
+            'xray_tracing': {'status': 'active', 'trace_count': 0},
+            'api_throttling': {
+                'status': 'configured',
+                'usage_plans': [
+                    {
+                        'name': 'test-plan',
+                        'rate_limit': 100,
+                        'burst_limit': 200
+                    }
+                ]
+            },
+            'recommendations': []
+        }
+
+        # Should not raise any exception
+        analyzer.print_report(analysis)
+
+    @patch('analyse.boto3.client')
+    def test_print_report_with_recommendations(self, mock_boto_client):
+        """Test print_report shows recommendations (lines 728-734)"""
+        mock_boto_client.return_value = Mock()
+        analyzer = CurrencyAPIAnalyzer('test')
+
+        analysis = {
+            'environment_suffix': 'test',
+            'region': 'us-east-1',
+            'timestamp': '2024-01-01T00:00:00Z',
+            'compliance_score': 50.0,
+            'lambda_functions': [],
+            'api_gateways': [],
+            'cloudwatch_logs': [],
+            'iam_roles': [],
+            'xray_tracing': {'status': 'active', 'trace_count': 0},
+            'api_throttling': {'status': 'configured', 'usage_plans': []},
+            'recommendations': [
+                {
+                    'priority': 'critical',
+                    'category': 'lambda',
+                    'resource': 'test-func',
+                    'message': 'Lambda function is missing'
+                },
+                {
+                    'priority': 'high',
+                    'category': 'security',
+                    'resource': 'test-api',
+                    'message': 'Configure API key authentication'
+                }
+            ]
+        }
+
+        # Should not raise any exception
+        analyzer.print_report(analysis)
+
+
+class TestCalculateComplianceScoreZeroDivision(unittest.TestCase):
+    """Test compliance score calculation edge cases"""
+
+    @patch('analyse.boto3.client')
+    def test_compliance_score_empty_analysis(self, mock_boto_client):
+        """Test compliance score handles empty analysis (line 647)"""
+        mock_boto_client.return_value = Mock()
+        analyzer = CurrencyAPIAnalyzer('test')
+
+        # Empty analysis with no resources
+        analysis = {
+            'lambda_functions': [],
+            'api_gateways': [],
+            'cloudwatch_logs': [],
+            'iam_roles': [],
+            'xray_tracing': {},
+            'api_throttling': {}
+        }
+
+        score = analyzer._calculate_compliance_score(analysis)
+        self.assertEqual(score, 0.0)
+
+
+class TestMainFunctionEdgeCases(unittest.TestCase):
+    """Test main function edge cases"""
+
+    @patch('analyse.CurrencyAPIAnalyzer')
+    @patch.dict(os.environ, {'ENVIRONMENT_SUFFIX': 'test', 'AWS_REGION': 'us-east-1', 'OUTPUT_FILE': ''})
+    def test_main_without_output_file(self, mock_analyzer_class):
+        """Test main runs without output file"""
+        mock_analyzer = Mock()
+        mock_analyzer.analyze_infrastructure.return_value = {
+            'compliance_score': 85.0,
+            'recommendations': []
+        }
+        mock_analyzer_class.return_value = mock_analyzer
+
+        result = main()
+
+        self.assertEqual(result, 0)
+        mock_analyzer.export_json_report.assert_not_called()
+
+    @patch('analyse.CurrencyAPIAnalyzer')
+    @patch.dict(os.environ, {'ENVIRONMENT_SUFFIX': 'test', 'AWS_REGION': 'us-east-1', 'OUTPUT_FILE': '/tmp/output.json'})
+    def test_main_with_output_file(self, mock_analyzer_class):
+        """Test main exports to output file when specified"""
+        mock_analyzer = Mock()
+        mock_analyzer.analyze_infrastructure.return_value = {
+            'compliance_score': 85.0,
+            'recommendations': []
+        }
+        mock_analyzer_class.return_value = mock_analyzer
+
+        result = main()
+
+        self.assertEqual(result, 0)
+        mock_analyzer.export_json_report.assert_called_once()
+
+
+class TestThrottlingComplianceCheck(unittest.TestCase):
+    """Test throttling compliance checks"""
+
+    @patch('analyse.boto3.client')
+    def test_check_throttling_compliance_all_configured(self, mock_boto_client):
+        """Test throttling compliance when all configured"""
+        mock_boto_client.return_value = Mock()
+        analyzer = CurrencyAPIAnalyzer('test')
+
+        throttle = {'rateLimit': 100, 'burstLimit': 200}
+        quota = {'limit': 10000, 'period': 'MONTH'}
+
+        compliance = analyzer._check_throttling_compliance(throttle, quota)
+
+        self.assertTrue(compliance['rate_limit_configured'])
+        self.assertTrue(compliance['burst_limit_configured'])
+        self.assertTrue(compliance['quota_configured'])
+
+    @patch('analyse.boto3.client')
+    def test_check_throttling_compliance_none_configured(self, mock_boto_client):
+        """Test throttling compliance when nothing configured"""
+        mock_boto_client.return_value = Mock()
+        analyzer = CurrencyAPIAnalyzer('test')
+
+        throttle = {}
+        quota = {}
+
+        compliance = analyzer._check_throttling_compliance(throttle, quota)
+
+        self.assertFalse(compliance['rate_limit_configured'])
+        self.assertFalse(compliance['burst_limit_configured'])
+        self.assertFalse(compliance['quota_configured'])
+
+
+class TestLambdaComplianceAdditional(unittest.TestCase):
+    """Additional Lambda compliance tests"""
+
+    @patch('analyse.boto3.client')
+    def test_check_lambda_compliance_missing_env_vars(self, mock_boto_client):
+        """Test Lambda compliance fails for missing environment variables"""
+        mock_boto_client.return_value = Mock()
+        analyzer = CurrencyAPIAnalyzer('test')
+
+        config = {
+            'Runtime': 'nodejs18.x',
+            'MemorySize': 1024,
+            'Timeout': 10,
+            'TracingConfig': {'Mode': 'Active'},
+            'Environment': {'Variables': {}}  # No env vars
+        }
+
+        compliance = analyzer._check_lambda_compliance(config)
+
+        self.assertFalse(compliance['has_api_version_env'])
+        self.assertFalse(compliance['has_rate_precision_env'])
+
+    @patch('analyse.boto3.client')
+    def test_check_lambda_compliance_wrong_timeout(self, mock_boto_client):
+        """Test Lambda compliance fails for wrong timeout"""
+        mock_boto_client.return_value = Mock()
+        analyzer = CurrencyAPIAnalyzer('test')
+
+        config = {
+            'Runtime': 'nodejs18.x',
+            'MemorySize': 1024,
+            'Timeout': 30,  # Wrong timeout
+            'TracingConfig': {'Mode': 'Active'},
+            'Environment': {'Variables': {}}
+        }
+
+        compliance = analyzer._check_lambda_compliance(config)
+
+        self.assertFalse(compliance['timeout_10s'])
+
+
+class TestAPIComplianceAdditional(unittest.TestCase):
+    """Additional API Gateway compliance tests"""
+
+    @patch('analyse.boto3.client')
+    def test_check_api_compliance_regional_endpoint(self, mock_boto_client):
+        """Test API compliance fails for regional endpoint"""
+        mock_boto_client.return_value = Mock()
+        analyzer = CurrencyAPIAnalyzer('test')
+
+        api = {'endpointConfiguration': {'types': ['REGIONAL']}}  # Not EDGE
+        convert_resource = {'pathPart': 'convert'}
+        v1_stage = {'stageName': 'v1', 'tracingEnabled': True}
+        api_keys = []
+        usage_plans = []
+
+        compliance = analyzer._check_api_compliance(
+            api, convert_resource, v1_stage, api_keys, usage_plans
+        )
+
+        self.assertFalse(compliance['is_edge_optimized'])
+
+    @patch('analyse.boto3.client')
+    def test_check_api_compliance_no_v1_stage(self, mock_boto_client):
+        """Test API compliance handles missing v1 stage"""
+        mock_boto_client.return_value = Mock()
+        analyzer = CurrencyAPIAnalyzer('test')
+
+        api = {'endpointConfiguration': {'types': ['EDGE']}}
+        convert_resource = {'pathPart': 'convert'}
+        v1_stage = None  # No v1 stage
+        api_keys = [{'name': 'key'}]
+        usage_plans = [{'name': 'plan'}]
+
+        compliance = analyzer._check_api_compliance(
+            api, convert_resource, v1_stage, api_keys, usage_plans
+        )
+
+        self.assertFalse(compliance['has_v1_stage'])
+        self.assertFalse(compliance['xray_tracing_enabled'])
 
 
 if __name__ == '__main__':

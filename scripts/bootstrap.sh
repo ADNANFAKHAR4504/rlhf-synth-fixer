@@ -156,6 +156,12 @@ elif [ "$PLATFORM" = "cfn" ]; then
   echo "✅ CloudFormation project detected, no specific bootstrap required"
   echo "ℹ️ CloudFormation does not require bootstrapping"
 
+elif [ "$PLATFORM" = "analysis" ]; then
+  echo "✅ Analysis project detected, ensuring Python dependencies..."
+  # Install boto3 and pytest if not already installed
+  pip install boto3 pytest --quiet 2>/dev/null || echo "Dependencies already installed or pip not available"
+  echo "ℹ️ Analysis projects use boto3 for AWS API calls"
+
 else
   echo "ℹ️ Unknown or unsupported platform: $PLATFORM. Skipping bootstrap."
 fi
