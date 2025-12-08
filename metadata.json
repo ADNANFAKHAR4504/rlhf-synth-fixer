@@ -1,7 +1,7 @@
 {
   "po_id": "y6r8p4l7",
   "team": "synth",
-  "platform": "cdk",
+  "platform": "cicd",
   "language": "py",
   "complexity": "hard",
   "turn_type": "single",
