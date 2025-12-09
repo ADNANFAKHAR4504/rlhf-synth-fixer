@@ -26,7 +26,12 @@
     "vpc"
   ],
   "region": "us-east-1",
-  "training_quality": 7,
+  "training_quality": 10,
   "author": "iamarpit-turing",
-  "reviewer": "adnan-turing"
+  "reviewer": "adnan-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
