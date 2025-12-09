@@ -78,6 +78,7 @@
     "localstack:cleanup": "./scripts/localstack-cleanup.sh",
     "localstack:plan": "./scripts/localstack-plan.sh",
     "localstack:test": "./scripts/localstack-test.sh",
+    "localstack:archive": "./scripts/localstack-archive.sh",
     "localstack:cfn:plan": "./scripts/localstack-cloudformation-plan.sh",
     "localstack:cfn:deploy": "./scripts/localstack-cloudformation-deploy.sh",
     "localstack:cfn:test": "./scripts/localstack-cloudformation-test.sh",
