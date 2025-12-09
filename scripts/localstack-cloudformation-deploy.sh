@@ -52,6 +52,8 @@ echo -e "${YELLOW}📁 Working directory: $(pwd)${NC}"
 # Check template
 if [ -f "TapStack.yml" ]; then
     TEMPLATE_FILE="TapStack.yml"
+elif [ -f "TapStack.json" ]; then
+    TEMPLATE_FILE="TapStack.json"
 else
     echo -e "${RED}❌ CloudFormation template not found${NC}"
     exit 1
@@ -106,11 +108,12 @@ fi
 
 echo -e "${YELLOW}📦 Creating new stack...${NC}"
 
-awslocal cloudformation create-stack \
-    --stack-name $STACK_NAME \
-    --template-url https://cf-templates-$AWS_DEFAULT_REGION.s3.amazonaws.com/$TEMPLATE_FILE \
-    --parameters ParameterKey=EnvironmentSuffix,ParameterValue=$ENVIRONMENT_SUFFIX \
-    --capabilities CAPABILITY_IAM
+# Commented out - using local template file instead of S3 URL
+# awslocal cloudformation create-stack \
+#     --stack-name $STACK_NAME \
+#     --template-url https://cf-templates-$AWS_DEFAULT_REGION.s3.amazonaws.com/$TEMPLATE_FILE \
+#     --parameters ParameterKey=EnvironmentSuffix,ParameterValue=$ENVIRONMENT_SUFFIX \
+#     --capabilities CAPABILITY_IAM
 
 echo -e "${YELLOW}⏳ Waiting for stack creation to complete...${NC}"
 
