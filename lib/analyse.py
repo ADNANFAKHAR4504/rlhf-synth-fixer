@@ -599,7 +599,7 @@ class FinTechWebhookAnalyzer:
             ["Total Findings", len(self.findings)]
         ]
 
-        print("\n📊 INFRASTRUCTURE SUMMARY")
+        print("\nINFRASTRUCTURE SUMMARY")
         print(tabulate(summary_data, headers=["Resource Type", "Count"], tablefmt="grid"))
 
         # Findings by category
@@ -607,7 +607,7 @@ class FinTechWebhookAnalyzer:
         for finding in self.findings:
             findings_by_category[finding['category']].append(finding)
 
-        print("\n🔍 FINDINGS BY CATEGORY")
+        print("\nFINDINGS BY CATEGORY")
         category_summary = []
         for category, findings in sorted(findings_by_category.items()):
             high = sum(1 for f in findings if f['severity'] == 'HIGH')
@@ -620,7 +620,7 @@ class FinTechWebhookAnalyzer:
                       tablefmt="grid"))
 
         # Detailed findings
-        print("\n📋 DETAILED FINDINGS")
+        print("\nDETAILED FINDINGS")
         findings_table = []
         for i, finding in enumerate(self.findings, 1):
             findings_table.append([
@@ -637,10 +637,10 @@ class FinTechWebhookAnalyzer:
                           headers=["#", "Severity", "Category", "Resource Type", "Resource ID", "Issue"],
                           tablefmt="grid"))
         else:
-            print("✅ No issues found!")
+            print("No issues found!")
 
         # Recommendations
-        print("\n💡 TOP RECOMMENDATIONS")
+        print("\nTOP RECOMMENDATIONS")
         high_severity = [f for f in self.findings if f['severity'] == 'HIGH']
         for i, finding in enumerate(high_severity[:5], 1):
             print(f"\n{i}. [{finding['severity']}] {finding['resource_type']}: {finding['resource_id']}")
