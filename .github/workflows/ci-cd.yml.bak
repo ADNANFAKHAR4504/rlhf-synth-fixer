@@ -170,7 +170,7 @@ jobs:
           upload-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
-        
+
       - name: Validate Stack Naming
         run: |
           echo "🔍 Validating stack naming conventions..."
@@ -569,6 +569,7 @@ jobs:
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
+          provider: ${{ needs.detect-metadata.outputs.provider }}
 
       # Python setup is handled by the setup-environment action
 
@@ -593,6 +594,7 @@ jobs:
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
+          provider: ${{ needs.detect-metadata.outputs.provider }}
 
       - name: Run unit tests
         run: ./scripts/unit-tests.sh

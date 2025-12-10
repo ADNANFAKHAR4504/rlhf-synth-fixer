@@ -24,6 +24,10 @@ inputs:
     description: 'Whether to upload build artifacts'
     required: false
     default: 'false'
+  provider:
+    description: 'Cloud provider (aws or localstack)'
+    required: false
+    default: 'aws'
 
 runs:
   using: 'composite'
@@ -177,6 +181,48 @@ runs:
       uses: pulumi/actions@v5
       with:
         pulumi-version: ${{ inputs.pulumi-version }}
+
+    # === Install LocalStack Dependencies ===
+    - name: Install LocalStack Dependencies
+      if: ${{ inputs.provider == 'localstack' }}
+      shell: bash
+      run: |
+        echo "🚀 Installing LocalStack dependencies..."
+
+        # Install LocalStack CLI
+        pip install --upgrade localstack localstack-ext
+
+        # Install AWS CLI LocalStack wrappers
+        pip install awscli-local[ver1]
+
+        # Install CDK LocalStack wrapper
+        npm install -g aws-cdk-local aws-cdk
+
+        # Install Terraform LocalStack wrapper
+        pip install terraform-local
+
+        # Install CDKTF CLI if needed
+        if [ "${{ inputs.platform }}" == "cdktf" ]; then
+          npm install -g cdktf-cli
+        fi
+
+        # Install Pulumi LocalStack plugin if needed
+        if [ "${{ inputs.platform }}" == "pulumi" ]; then
+          echo "✅ Pulumi already installed, will configure for LocalStack in deploy script"
+        fi
+
+        # Verify installations
+        echo "✅ LocalStack CLI version:"
+        localstack --version || echo "⚠️ LocalStack CLI not found"
+
+        echo "✅ CDKLocal version:"
+        cdklocal --version || echo "⚠️ CDKLocal not found"
+
+        echo "✅ TFLocal version:"
+        tflocal --version || echo "⚠️ TFLocal not found"
+
+        echo "✅ AWS CLI Local version:"
+        awslocal --version || echo "⚠️ AWS Local not found"
 
     # === Execute setup.sh ===
     - name: Setup dependencies

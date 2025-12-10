@@ -1,0 +1,329 @@
+#!/bin/bash
+
+# LocalStack CI Test Script
+# Runs integration tests against LocalStack in CI/CD environments
+# Supports: CDK, CloudFormation, Terraform, CDKTF, Pulumi
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
+NC='\033[0m' # No Color
+
+# Script directory
+SCRIPT_DIR="$(dirname "$0")"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Function to print colored output
+print_status() {
+    local color=$1
+    local message=$2
+    echo -e "${color}${message}${NC}"
+}
+
+# Function to print banner
+print_banner() {
+    echo -e "${CYAN}╔══════════════════════════════════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║                      🧪 LocalStack CI/CD Integration Tests                                   ║${NC}"
+    echo -e "${CYAN}╚══════════════════════════════════════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+}
+
+# Function to check if LocalStack is running
+check_localstack() {
+    print_status $YELLOW "🔍 Checking LocalStack status..."
+    if ! curl -s http://localhost:4566/_localstack/health > /dev/null 2>&1; then
+        print_status $RED "❌ LocalStack is not running!"
+        print_status $YELLOW "💡 Please ensure LocalStack is started before running tests"
+        exit 1
+    fi
+    print_status $GREEN "✅ LocalStack is running"
+    echo ""
+}
+
+# Function to detect platform from metadata.json
+detect_platform() {
+    local metadata_file="$PROJECT_ROOT/metadata.json"
+
+    if [[ ! -f "$metadata_file" ]]; then
+        print_status $RED "❌ metadata.json not found in project root"
+        exit 1
+    fi
+
+    # Extract platform using jq
+    if command -v jq >/dev/null 2>&1; then
+        local platform=$(jq -r '.platform // "unknown"' "$metadata_file")
+        local language=$(jq -r '.language // "unknown"' "$metadata_file")
+    else
+        print_status $RED "❌ jq is required but not installed"
+        exit 1
+    fi
+
+    if [[ -z "$platform" || "$platform" == "null" || "$platform" == "unknown" ]]; then
+        print_status $RED "❌ Could not determine platform from metadata.json"
+        exit 1
+    fi
+
+    echo "$platform:$language"
+}
+
+# Function to run tests based on platform
+run_tests() {
+    local platform=$1
+    local language=$2
+
+    print_status $BLUE "📦 Platform: $platform"
+    print_status $BLUE "📝 Language: $language"
+    echo ""
+
+    # Set LocalStack environment variables
+    export AWS_ENDPOINT_URL=${AWS_ENDPOINT_URL:-http://localhost:4566}
+    export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-test}
+    export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-test}
+    export AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+    export AWS_REGION=${AWS_REGION:-us-east-1}
+
+    print_status $GREEN "✅ LocalStack test environment configured"
+    print_status $BLUE "   AWS_ENDPOINT_URL: $AWS_ENDPOINT_URL"
+    print_status $BLUE "   AWS_REGION: $AWS_DEFAULT_REGION"
+    echo ""
+
+    # Check for tests directory
+    if [ ! -d "$PROJECT_ROOT/tests" ] && [ ! -d "$PROJECT_ROOT/test" ]; then
+        print_status $YELLOW "⚠️  No tests directory found (tests/ or test/)"
+        print_status $YELLOW "⚠️  Skipping integration tests"
+        return 0
+    fi
+
+    case "$platform" in
+        "cdk"|"cdktf")
+            run_cdk_tests "$language"
+            ;;
+        "cfn"|"cloudformation")
+            run_cfn_tests
+            ;;
+        "tf"|"terraform")
+            run_terraform_tests
+            ;;
+        "pulumi")
+            run_pulumi_tests "$language"
+            ;;
+        *)
+            print_status $YELLOW "⚠️  No specific tests defined for platform: $platform"
+            print_status $YELLOW "⚠️  Running generic integration tests if available"
+            run_generic_tests "$language"
+            ;;
+    esac
+}
+
+# CDK/CDKTF tests
+run_cdk_tests() {
+    local language=$1
+    print_status $MAGENTA "🧪 Running CDK/CDKTF integration tests..."
+
+    if [ -d "$PROJECT_ROOT/test" ]; then
+        cd "$PROJECT_ROOT/test"
+
+        if [ -f "package.json" ]; then
+            print_status $YELLOW "📦 Installing test dependencies..."
+            npm install
+
+            print_status $YELLOW "🧪 Running tests..."
+            npm test
+        else
+            print_status $YELLOW "⚠️  No package.json found in test directory"
+        fi
+    fi
+
+    print_status $GREEN "✅ CDK/CDKTF tests completed!"
+}
+
+# CloudFormation tests
+run_cfn_tests() {
+    print_status $MAGENTA "🧪 Running CloudFormation integration tests..."
+
+    # Verify stack was deployed
+    print_status $YELLOW "🔍 Verifying stack deployment..."
+    local stack_name="localstack-stack-${ENVIRONMENT_SUFFIX:-dev}"
+
+    aws cloudformation describe-stacks \
+        --stack-name "$stack_name" \
+        --endpoint-url "$AWS_ENDPOINT_URL" \
+        --region "$AWS_DEFAULT_REGION" > /dev/null 2>&1
+
+    if [ $? -eq 0 ]; then
+        print_status $GREEN "✅ Stack verified successfully!"
+    else
+        print_status $RED "❌ Stack verification failed!"
+        exit 1
+    fi
+
+    # Run additional tests if they exist
+    if [ -d "$PROJECT_ROOT/tests" ] && [ -f "$PROJECT_ROOT/tests/test.sh" ]; then
+        print_status $YELLOW "🧪 Running custom test script..."
+        cd "$PROJECT_ROOT/tests"
+        bash test.sh
+    fi
+
+    print_status $GREEN "✅ CloudFormation tests completed!"
+}
+
+# Terraform tests
+run_terraform_tests() {
+    print_status $MAGENTA "🧪 Running Terraform integration tests..."
+
+    if [ -d "$PROJECT_ROOT/tests" ]; then
+        cd "$PROJECT_ROOT/tests"
+
+        # Check for Terratest or other Go-based tests
+        if [ -f "go.mod" ]; then
+            print_status $YELLOW "📦 Installing Go test dependencies..."
+            go mod download
+
+            print_status $YELLOW "🧪 Running Go tests..."
+            go test -v -timeout 30m
+        elif [ -f "test.sh" ]; then
+            print_status $YELLOW "🧪 Running test script..."
+            bash test.sh
+        else
+            print_status $YELLOW "⚠️  No test files found"
+        fi
+    fi
+
+    print_status $GREEN "✅ Terraform tests completed!"
+}
+
+# Pulumi tests
+run_pulumi_tests() {
+    local language=$1
+    print_status $MAGENTA "🧪 Running Pulumi integration tests..."
+
+    # Verify deployment
+    print_status $YELLOW "🔍 Verifying Pulumi stack..."
+    cd "$PROJECT_ROOT/lib"
+
+    export PULUMI_CONFIG_PASSPHRASE=${PULUMI_CONFIG_PASSPHRASE:-localstack}
+    pulumi login --local
+
+    local stack_name=${PULUMI_STACK_NAME:-localstack}
+    pulumi stack select $stack_name
+
+    pulumi stack output
+
+    print_status $GREEN "✅ Pulumi stack verified!"
+
+    # Run tests if they exist
+    if [ -d "$PROJECT_ROOT/tests" ]; then
+        cd "$PROJECT_ROOT/tests"
+
+        case "$language" in
+            "ts"|"js")
+                if [ -f "package.json" ]; then
+                    print_status $YELLOW "📦 Installing test dependencies..."
+                    npm install
+                    print_status $YELLOW "🧪 Running tests..."
+                    npm test
+                fi
+                ;;
+            "py"|"python")
+                if [ -f "requirements.txt" ]; then
+                    print_status $YELLOW "📦 Installing test dependencies..."
+                    pip install -r requirements.txt
+                    print_status $YELLOW "🧪 Running tests..."
+                    pytest -v
+                fi
+                ;;
+            "go")
+                if [ -f "go.mod" ]; then
+                    print_status $YELLOW "📦 Installing test dependencies..."
+                    go mod download
+                    print_status $YELLOW "🧪 Running tests..."
+                    go test -v
+                fi
+                ;;
+        esac
+    fi
+
+    print_status $GREEN "✅ Pulumi tests completed!"
+}
+
+# Generic tests
+run_generic_tests() {
+    local language=$1
+    print_status $MAGENTA "🧪 Running generic integration tests..."
+
+    local test_dir=""
+    if [ -d "$PROJECT_ROOT/tests" ]; then
+        test_dir="$PROJECT_ROOT/tests"
+    elif [ -d "$PROJECT_ROOT/test" ]; then
+        test_dir="$PROJECT_ROOT/test"
+    else
+        print_status $YELLOW "⚠️  No test directory found"
+        return 0
+    fi
+
+    cd "$test_dir"
+
+    case "$language" in
+        "ts"|"js")
+            if [ -f "package.json" ]; then
+                print_status $YELLOW "📦 Installing test dependencies..."
+                npm install
+                print_status $YELLOW "🧪 Running tests..."
+                npm test
+            fi
+            ;;
+        "py"|"python")
+            if [ -f "requirements.txt" ]; then
+                print_status $YELLOW "📦 Installing test dependencies..."
+                pip install -r requirements.txt
+                print_status $YELLOW "🧪 Running tests..."
+                pytest -v || python -m pytest -v || python -m unittest discover
+            fi
+            ;;
+        "go")
+            if [ -f "go.mod" ]; then
+                print_status $YELLOW "📦 Installing test dependencies..."
+                go mod download
+                print_status $YELLOW "🧪 Running tests..."
+                go test -v ./...
+            fi
+            ;;
+    esac
+
+    print_status $GREEN "✅ Generic tests completed!"
+}
+
+# Main function
+main() {
+    print_banner
+
+    # Check LocalStack
+    check_localstack
+
+    # Detect platform
+    print_status $YELLOW "🔍 Detecting platform from metadata.json..."
+    local platform_info
+    platform_info=$(detect_platform)
+
+    local platform="${platform_info%%:*}"
+    local language="${platform_info##*:}"
+
+    print_status $GREEN "✅ Detected platform: $platform"
+    print_status $GREEN "✅ Detected language: $language"
+    echo ""
+
+    # Run tests
+    run_tests "$platform" "$language"
+
+    echo ""
+    print_status $GREEN "🎉 LocalStack integration tests completed successfully!"
+}
+
+# Execute main
+main "$@"

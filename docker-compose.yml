@@ -1,20 +1,15 @@
 version: '3.8'
 
 services:
-  tap:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: tap-container
-    volumes:
-      - .:/app
-      - /app/node_modules
-      - /app/.venv
-    environment:
-      - NODE_ENV=development
-      - ENVIRONMENT_SUFFIX=dev
+  localstack:
+    image: localstack/localstack:latest
     ports:
-      - "3000:3000"
-    command: /bin/bash -c "tail -f /dev/null"
-    stdin_open: true
-    tty: true
+      - "4566:4566"
+    environment:
+      - SERVICES=${SERVICES:-s3,lambda,dynamodb,cloudformation,apigateway,sts,iam,cloudwatch,logs,events,sns,sqs,kinesis,ec2,rds,ecs}
+      - DEBUG=1
+      - DATA_DIR=/tmp/localstack/data
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - "${TMPDIR:-/tmp}/localstack:/tmp/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"

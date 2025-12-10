@@ -1,0 +1,18 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "133455",
+  "team": "1",
+  "startedAt": "2025-12-10T21:58:28.800Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "s3",
+    "Lambda"
+  ]
+}
