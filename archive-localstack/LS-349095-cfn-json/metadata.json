@@ -1,0 +1,24 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349095",
+  "team": "3",
+  "startedAt": "2025-12-09T14:42:13.279Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Lambda",
+    "API Gateway",
+    "S3",
+    "RDS",
+    "IAM",
+    "CloudWatch",
+    "Secrets Manager",
+    "Security Groups"
+  ]
+}
