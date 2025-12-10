@@ -37,54 +37,72 @@ def outputs():
 @pytest.fixture(scope='module')
 def ec2_client():
     """Create EC2 client"""
+    if IS_LOCALSTACK:
+        return boto3.client('ec2', region_name=AWS_REGION, endpoint_url=os.environ.get('AWS_ENDPOINT_URL'))
     return boto3.client('ec2', region_name=AWS_REGION)
 
 
 @pytest.fixture(scope='module')
 def rds_client():
     """Create RDS client"""
+    if IS_LOCALSTACK:
+        return boto3.client('rds', region_name=AWS_REGION, endpoint_url=os.environ.get('AWS_ENDPOINT_URL'))
     return boto3.client('rds', region_name=AWS_REGION)
 
 
 @pytest.fixture(scope='module')
 def ecs_client():
     """Create ECS client"""
+    if IS_LOCALSTACK:
+        return boto3.client('ecs', region_name=AWS_REGION, endpoint_url=os.environ.get('AWS_ENDPOINT_URL'))
     return boto3.client('ecs', region_name=AWS_REGION)
 
 
 @pytest.fixture(scope='module')
 def elbv2_client():
     """Create ELBv2 client"""
+    if IS_LOCALSTACK:
+        return boto3.client('elbv2', region_name=AWS_REGION, endpoint_url=os.environ.get('AWS_ENDPOINT_URL'))
     return boto3.client('elbv2', region_name=AWS_REGION)
 
 
 @pytest.fixture(scope='module')
 def lambda_client():
     """Create Lambda client"""
+    if IS_LOCALSTACK:
+        return boto3.client('lambda', region_name=AWS_REGION, endpoint_url=os.environ.get('AWS_ENDPOINT_URL'))
     return boto3.client('lambda', region_name=AWS_REGION)
 
 
 @pytest.fixture(scope='module')
 def secretsmanager_client():
     """Create Secrets Manager client"""
+    if IS_LOCALSTACK:
+        return boto3.client('secretsmanager', region_name=AWS_REGION, endpoint_url=os.environ.get('AWS_ENDPOINT_URL'))
     return boto3.client('secretsmanager', region_name=AWS_REGION)
 
 
 @pytest.fixture(scope='module')
 def cloudwatch_client():
     """Create CloudWatch client"""
+    if IS_LOCALSTACK:
+        return boto3.client('cloudwatch', region_name=AWS_REGION, endpoint_url=os.environ.get('AWS_ENDPOINT_URL'))
     return boto3.client('cloudwatch', region_name=AWS_REGION)
 
 
 @pytest.fixture(scope='module')
 def kms_client():
     """Create KMS client"""
+    if IS_LOCALSTACK:
+        return boto3.client('kms', region_name=AWS_REGION, endpoint_url=os.environ.get('AWS_ENDPOINT_URL'))
     return boto3.client('kms', region_name=AWS_REGION)
 
 
 @pytest.fixture(scope='module')
 def sns_client():
     """Create SNS client"""
+    if IS_LOCALSTACK:
+        return boto3.client('sns', region_name=AWS_REGION, endpoint_url=os.environ.get('AWS_ENDPOINT_URL'))
     return boto3.client('sns', region_name=AWS_REGION)
 
 
