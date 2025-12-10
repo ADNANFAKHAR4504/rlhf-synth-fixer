@@ -95,5 +95,12 @@
     "RdsSubnetGroup",
     "RdsParameterGroup",
     "RdsInstance"
-  ]
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
 }
