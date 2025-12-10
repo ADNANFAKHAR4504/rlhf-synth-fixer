@@ -108,8 +108,7 @@ get_deploy_script() {
             return 1
             ;;
         "pulumi")
-            print_status $YELLOW "⚠️  Pulumi support is not yet implemented"
-            return 1
+            echo "localstack-pulumi-deploy.sh"
             ;;
         *)
             print_status $RED "❌ Unsupported platform: $platform"
