@@ -1,0 +1,20 @@
+{
+  "APIGatewayId": "bfzrxi8vbn",
+  "APIGatewayURL": "https://bfzrxi8vbn.execute-api.amazonaws.com:4566/prod/app",
+  "DBSecretArn": "arn:aws:secretsmanager:us-east-1:000000000000:secret:projX-RDS-Credentials-dev-lOWGHD",
+  "EnvironmentSuffix": "dev",
+  "LambdaFunctionArn": "arn:aws:lambda:us-east-1:000000000000:function:projX-AppFunction-dev",
+  "LambdaFunctionName": "projX-AppFunction-dev",
+  "NATGatewayEIP": "127.104.189.80-eipalloc-fad93bfd028b2e2e9",
+  "NATGatewayId": "nat-5efc8b8997b87b8b5",
+  "PrivateSubnet1Id": "subnet-864ffc5fbae5257bb",
+  "PrivateSubnet2Id": "subnet-646df39464e575274",
+  "PublicSubnet1Id": "subnet-2db4beacf1af88456",
+  "PublicSubnet2Id": "subnet-6710c38b4076dd95f",
+  "RDSInstanceEndpoint": "localhost.localstack.cloud",
+  "RDSInstancePort": "4510",
+  "S3BucketArn": "arn:aws:s3:::projx-app-data-000000000000-dev",
+  "S3BucketName": "projx-app-data-000000000000-dev",
+  "StackName": "tap-stack-localstack",
+  "VPCId": "vpc-cb5bcf95a5b7375a0"
+}
