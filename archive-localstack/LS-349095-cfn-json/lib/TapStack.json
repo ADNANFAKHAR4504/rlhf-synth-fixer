@@ -1,0 +1,1601 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Cloud Environment Setup - Serverless Python Application with VPC, Lambda, API Gateway, RDS PostgreSQL, S3, and CloudWatch Monitoring",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Environment Configuration"
+          },
+          "Parameters": [
+            "EnvironmentSuffix"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Network Configuration"
+          },
+          "Parameters": [
+            "VpcCIDR",
+            "PublicSubnet1CIDR",
+            "PublicSubnet2CIDR",
+            "PrivateSubnet1CIDR",
+            "PrivateSubnet2CIDR"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Lambda Configuration"
+          },
+          "Parameters": [
+            "LambdaRuntime",
+            "LambdaMemorySize"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Database Configuration"
+          },
+          "Parameters": [
+            "DBInstanceClass",
+            "DBName"
+          ]
+        }
+      ]
+    }
+  },
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    },
+    "VpcCIDR": {
+      "Type": "String",
+      "Default": "10.0.0.0/16",
+      "Description": "CIDR block for VPC",
+      "AllowedPattern": "^(10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}/16)$"
+    },
+    "PublicSubnet1CIDR": {
+      "Type": "String",
+      "Default": "10.0.1.0/24",
+      "Description": "CIDR block for Public Subnet 1",
+      "AllowedPattern": "^(10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}/24)$"
+    },
+    "PublicSubnet2CIDR": {
+      "Type": "String",
+      "Default": "10.0.2.0/24",
+      "Description": "CIDR block for Public Subnet 2",
+      "AllowedPattern": "^(10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}/24)$"
+    },
+    "PrivateSubnet1CIDR": {
+      "Type": "String",
+      "Default": "10.0.3.0/24",
+      "Description": "CIDR block for Private Subnet 1",
+      "AllowedPattern": "^(10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}/24)$"
+    },
+    "PrivateSubnet2CIDR": {
+      "Type": "String",
+      "Default": "10.0.4.0/24",
+      "Description": "CIDR block for Private Subnet 2",
+      "AllowedPattern": "^(10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}/24)$"
+    },
+    "LambdaRuntime": {
+      "Type": "String",
+      "Default": "python3.11",
+      "Description": "Lambda function runtime",
+      "AllowedValues": [
+        "python3.11",
+        "python3.10",
+        "python3.9"
+      ]
+    },
+    "LambdaMemorySize": {
+      "Type": "Number",
+      "Default": 128,
+      "Description": "Lambda function memory size in MB",
+      "AllowedValues": [
+        128,
+        256,
+        512,
+        1024
+      ]
+    },
+    "DBInstanceClass": {
+      "Type": "String",
+      "Default": "db.t3.micro",
+      "Description": "RDS instance class",
+      "AllowedValues": [
+        "db.t3.micro",
+        "db.t3.small",
+        "db.t3.medium"
+      ]
+    },
+    "DBName": {
+      "Type": "String",
+      "Default": "projxdb",
+      "Description": "Database name",
+      "MinLength": "1",
+      "MaxLength": "64",
+      "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9]*$"
+    }
+  },
+  "Resources": {
+    "projXVPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "VpcCIDR"
+        },
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "projX-VPC-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "projX"
+          }
+        ]
+      }
+    },
+    "projXInternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "projX-IGW-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "projX"
+          }
+        ]
+      }
+    },
+    "projXAttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "projXVPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "projXInternetGateway"
+        }
+      }
+    },
+    "projXPublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "projXVPC"
+        },
+        "CidrBlock": {
+          "Ref": "PublicSubnet1CIDR"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": {
+                "Ref": "AWS::Region"
+              }
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "projX-PublicSubnet1-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "projX"
+          }
+        ]
+      }
+    },
+    "projXPublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "projXVPC"
+        },
+        "CidrBlock": {
+          "Ref": "PublicSubnet2CIDR"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": {
+                "Ref": "AWS::Region"
+              }
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "projX-PublicSubnet2-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "projX"
+          }
+        ]
+      }
+    },
+    "projXPrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "projXVPC"
+        },
+        "CidrBlock": {
+          "Ref": "PrivateSubnet1CIDR"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": {
+                "Ref": "AWS::Region"
+              }
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "projX-PrivateSubnet1-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "projX"
+          }
+        ]
+      }
+    },
+    "projXPrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "projXVPC"
+        },
+        "CidrBlock": {
+          "Ref": "PrivateSubnet2CIDR"
+        },
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": {
+                "Ref": "AWS::Region"
+              }
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "projX-PrivateSubnet2-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "projX"
+          }
+        ]
+      }
+    },
+    "projXNATGatewayEIP": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "projXAttachGateway",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "projX-NATGatewayEIP-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "projX"
+          }
+        ]
+      }
+    },
+    "projXNATGateway": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "projXNATGatewayEIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "projXPublicSubnet1"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "projX-NATGateway-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "projX"
+          }
+        ]
+      }
+    },
+    "projXPublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "projXVPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "projX-PublicRouteTable-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "projX"
+          }
+        ]
+      }
+    },
+    "projXPublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "projXAttachGateway",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "projXPublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "projXInternetGateway"
+        }
+      }
+    },
+    "projXPublicSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "projXPublicSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "projXPublicRouteTable"
+        }
+      }
+    },
+    "projXPublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "projXPublicSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "projXPublicRouteTable"
+        }
+      }
+    },
+    "projXPrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "projXVPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "projX-PrivateRouteTable-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "projX"
+          }
+        ]
+      }
+    },
+    "projXPrivateRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "projXPrivateRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "projXNATGateway"
+        }
+      }
+    },
+    "projXPrivateSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "projXPrivateSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "projXPrivateRouteTable"
+        }
+      }
+    },
+    "projXPrivateSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "projXPrivateSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "projXPrivateRouteTable"
+        }
+      }
+    },
+    "projXLambdaSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for Lambda functions in VPC",
+        "VpcId": {
+          "Ref": "projXVPC"
+        },
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "projX-LambdaSecurityGroup-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "projX"
+          }
+        ]
+      }
+    },
+    "projXRDSSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for RDS PostgreSQL - allows access from Lambda only",
+        "VpcId": {
+          "Ref": "projXVPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "SourceSecurityGroupId": {
+              "Ref": "projXLambdaSecurityGroup"
+            },
+            "Description": "PostgreSQL access from Lambda functions"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "projX-RDSSecurityGroup-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "projX"
+          }
+        ]
+      }
+    },
+    "projXDBSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "projX-RDS-Credentials-${EnvironmentSuffix}"
+        },
+        "Description": "RDS PostgreSQL database master credentials",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"projxadmin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\",
+          "RequireEachIncludedType": true
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "projX-DBSecret-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "projX"
+          }
+        ]
+      }
+    },
+    "projXDBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupDescription": "Subnet group for RDS PostgreSQL instance in private subnets",
+        "SubnetIds": [
+          {
+            "Ref": "projXPrivateSubnet1"
+          },
+          {
+            "Ref": "projXPrivateSubnet2"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "projX-DBSubnetGroup-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "projX"
+          }
+        ]
+      }
+    },
+    "projXRDSInstance": {
+      "Type": "AWS::RDS::DBInstance",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "projx-postgres-${EnvironmentSuffix}"
+        },
+        "DBInstanceClass": {
+          "Ref": "DBInstanceClass"
+        },
+        "Engine": "postgres",
+        "EngineVersion": "15.10",
+        "MasterUsername": {
+          "Fn::Sub": "{{resolve:secretsmanager:${projXDBSecret}:SecretString:username}}"
+        },
+        "MasterUserPassword": {
+          "Fn::Sub": "{{resolve:secretsmanager:${projXDBSecret}:SecretString:password}}"
+        },
+        "DBName": {
+          "Ref": "DBName"
+        },
+        "AllocatedStorage": "20",
+        "StorageType": "gp2",
+        "DBSubnetGroupName": {
+          "Ref": "projXDBSubnetGroup"
+        },
+        "VPCSecurityGroups": [
+          {
+            "Ref": "projXRDSSecurityGroup"
+          }
+        ],
+        "PubliclyAccessible": false,
+        "BackupRetentionPeriod": 7,
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "mon:04:00-mon:05:00",
+        "MultiAZ": false,
+        "StorageEncrypted": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "projX-RDSInstance-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "projX"
+          }
+        ]
+      }
+    },
+    "projXS3Bucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "projx-app-data-${AWS::AccountId}-${EnvironmentSuffix}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldVersions",
+              "Status": "Enabled",
+              "NoncurrentVersionExpirationInDays": 90
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "projX-S3Bucket-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "projX"
+          }
+        ]
+      }
+    },
+    "projXS3BucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "projXS3Bucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "DenyInsecureTransport",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "projXS3Bucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${projXS3Bucket.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "projXLambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "projX-LambdaExecutionRole-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "projXLambdaCloudWatchLogsPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "projXLambdaS3AccessPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "s3:ListBucket"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "projXS3Bucket",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${projXS3Bucket.Arn}/*"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "projXLambdaSecretsManagerPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue",
+                    "secretsmanager:DescribeSecret"
+                  ],
+                  "Resource": {
+                    "Ref": "projXDBSecret"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "projX-LambdaExecutionRole-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "projX"
+          }
+        ]
+      }
+    },
+    "projXAPIGatewayCloudWatchRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "apigateway.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "projX-APIGatewayCloudWatchRole-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "projX"
+          }
+        ]
+      }
+    },
+    "projXLambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "projX-AppFunction-${EnvironmentSuffix}"
+        },
+        "Runtime": {
+          "Ref": "LambdaRuntime"
+        },
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "projXLambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "MemorySize": {
+          "Ref": "LambdaMemorySize"
+        },
+        "Timeout": 30,
+        "VpcConfig": {
+          "SecurityGroupIds": [
+            {
+              "Ref": "projXLambdaSecurityGroup"
+            }
+          ],
+          "SubnetIds": [
+            {
+              "Ref": "projXPrivateSubnet1"
+            },
+            {
+              "Ref": "projXPrivateSubnet2"
+            }
+          ]
+        },
+        "Environment": {
+          "Variables": {
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentSuffix"
+            },
+            "S3_BUCKET": {
+              "Ref": "projXS3Bucket"
+            },
+            "DB_SECRET_ARN": {
+              "Ref": "projXDBSecret"
+            },
+            "DB_HOST": {
+              "Fn::GetAtt": [
+                "projXRDSInstance",
+                "Endpoint.Address"
+              ]
+            },
+            "DB_PORT": {
+              "Fn::GetAtt": [
+                "projXRDSInstance",
+                "Endpoint.Port"
+              ]
+            },
+            "DB_NAME": {
+              "Ref": "DBName"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": {
+            "Fn::Join": [
+              "\n",
+              [
+                "import json",
+                "import os",
+                "import boto3",
+                "",
+                "def lambda_handler(event, context):",
+                "    return {",
+                "        'statusCode': 200,",
+                "        'headers': {",
+                "            'Content-Type': 'application/json',",
+                "            'Access-Control-Allow-Origin': '*'",
+                "        },",
+                "        'body': json.dumps({",
+                "            'message': 'projX serverless application running',",
+                "            'environment': os.environ.get('ENVIRONMENT', 'unknown'),",
+                "            's3_bucket': os.environ.get('S3_BUCKET', 'unknown')",
+                "        })",
+                "    }"
+              ]
+            ]
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "projX-LambdaFunction-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "projX"
+          }
+        ]
+      }
+    },
+    "projXLambdaLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/projX-AppFunction-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30
+      }
+    },
+    "projXAPIGatewayRestAPI": {
+      "Type": "AWS::ApiGateway::RestApi",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "projX-API-${EnvironmentSuffix}"
+        },
+        "Description": "API Gateway for projX serverless application",
+        "EndpointConfiguration": {
+          "Types": [
+            "REGIONAL"
+          ]
+        },
+        "Policy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": "execute-api:Invoke",
+              "Resource": "*"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "projX-APIGateway-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "projX"
+          }
+        ]
+      }
+    },
+    "projXAPIGatewayAccount": {
+      "Type": "AWS::ApiGateway::Account",
+      "Properties": {
+        "CloudWatchRoleArn": {
+          "Fn::GetAtt": [
+            "projXAPIGatewayCloudWatchRole",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "projXAPIGatewayRequestValidator": {
+      "Type": "AWS::ApiGateway::RequestValidator",
+      "Properties": {
+        "Name": "projXRequestValidator",
+        "RestApiId": {
+          "Ref": "projXAPIGatewayRestAPI"
+        },
+        "ValidateRequestBody": true,
+        "ValidateRequestParameters": true
+      }
+    },
+    "projXAPIGatewayResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "projXAPIGatewayRestAPI"
+        },
+        "ParentId": {
+          "Fn::GetAtt": [
+            "projXAPIGatewayRestAPI",
+            "RootResourceId"
+          ]
+        },
+        "PathPart": "app"
+      }
+    },
+    "projXAPIGatewayMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "projXAPIGatewayRestAPI"
+        },
+        "ResourceId": {
+          "Ref": "projXAPIGatewayResource"
+        },
+        "HttpMethod": "GET",
+        "AuthorizationType": "NONE",
+        "RequestValidatorId": {
+          "Ref": "projXAPIGatewayRequestValidator"
+        },
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${projXLambdaFunction.Arn}/invocations"
+          }
+        },
+        "MethodResponses": [
+          {
+            "StatusCode": "200"
+          }
+        ]
+      }
+    },
+    "projXAPIGatewayDeployment": {
+      "Type": "AWS::ApiGateway::Deployment",
+      "DependsOn": "projXAPIGatewayMethod",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "projXAPIGatewayRestAPI"
+        },
+        "Description": "Production deployment"
+      }
+    },
+    "projXAPIGatewayStage": {
+      "Type": "AWS::ApiGateway::Stage",
+      "Properties": {
+        "StageName": "prod",
+        "RestApiId": {
+          "Ref": "projXAPIGatewayRestAPI"
+        },
+        "DeploymentId": {
+          "Ref": "projXAPIGatewayDeployment"
+        },
+        "Description": "Production stage",
+        "AccessLogSetting": {
+          "DestinationArn": {
+            "Fn::GetAtt": [
+              "projXAPIGatewayLogGroup",
+              "Arn"
+            ]
+          },
+          "Format": "$context.requestId $context.requestTime $context.httpMethod $context.resourcePath $context.status $context.error.message"
+        },
+        "MethodSettings": [
+          {
+            "ResourcePath": "/*",
+            "HttpMethod": "*",
+            "LoggingLevel": "INFO",
+            "DataTraceEnabled": true,
+            "MetricsEnabled": true
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "projX-APIGatewayStage-prod-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "projX"
+          }
+        ]
+      }
+    },
+    "projXAPIGatewayLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/apigateway/projX-API-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 30
+      }
+    },
+    "projXLambdaInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "projXLambdaFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${projXAPIGatewayRestAPI}/*/*"
+        }
+      }
+    },
+    "projXLambdaDurationAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "projX-Lambda-HighDuration-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when Lambda function duration is high",
+        "MetricName": "Duration",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 25000,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "projXLambdaFunction"
+            }
+          }
+        ]
+      }
+    },
+    "projXLambdaErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "projX-Lambda-Errors-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when Lambda function has errors",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "projXLambdaFunction"
+            }
+          }
+        ]
+      }
+    },
+    "projXAPIGateway4XXErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "projX-APIGateway-4XXErrors-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when API Gateway has high 4XX errors",
+        "MetricName": "4XXError",
+        "Namespace": "AWS/ApiGateway",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 10,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "ApiName",
+            "Value": {
+              "Fn::Sub": "projX-API-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "projXAPIGateway5XXErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "projX-APIGateway-5XXErrors-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when API Gateway has 5XX errors",
+        "MetricName": "5XXError",
+        "Namespace": "AWS/ApiGateway",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "ApiName",
+            "Value": {
+              "Fn::Sub": "projX-API-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "projXRDSCPUAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "projX-RDS-HighCPU-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when RDS CPU exceeds 80%",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBInstanceIdentifier",
+            "Value": {
+              "Ref": "projXRDSInstance"
+            }
+          }
+        ]
+      }
+    },
+    "projXRDSStorageAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "projX-RDS-LowStorage-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when RDS free storage space is low",
+        "MetricName": "FreeStorageSpace",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 2000000000,
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBInstanceIdentifier",
+            "Value": {
+              "Ref": "projXRDSInstance"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "VPCId": {
+      "Description": "VPC ID",
+      "Value": {
+        "Ref": "projXVPC"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPCId"
+        }
+      }
+    },
+    "PublicSubnet1Id": {
+      "Description": "Public Subnet 1 ID",
+      "Value": {
+        "Ref": "projXPublicSubnet1"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PublicSubnet1Id"
+        }
+      }
+    },
+    "PublicSubnet2Id": {
+      "Description": "Public Subnet 2 ID",
+      "Value": {
+        "Ref": "projXPublicSubnet2"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PublicSubnet2Id"
+        }
+      }
+    },
+    "PrivateSubnet1Id": {
+      "Description": "Private Subnet 1 ID",
+      "Value": {
+        "Ref": "projXPrivateSubnet1"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PrivateSubnet1Id"
+        }
+      }
+    },
+    "PrivateSubnet2Id": {
+      "Description": "Private Subnet 2 ID",
+      "Value": {
+        "Ref": "projXPrivateSubnet2"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PrivateSubnet2Id"
+        }
+      }
+    },
+    "LambdaFunctionArn": {
+      "Description": "ARN of the Lambda function",
+      "Value": {
+        "Fn::GetAtt": [
+          "projXLambdaFunction",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LambdaFunctionArn"
+        }
+      }
+    },
+    "LambdaFunctionName": {
+      "Description": "Name of the Lambda function",
+      "Value": {
+        "Ref": "projXLambdaFunction"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LambdaFunctionName"
+        }
+      }
+    },
+    "APIGatewayURL": {
+      "Description": "URL of the API Gateway in prod stage",
+      "Value": {
+        "Fn::Sub": "https://${projXAPIGatewayRestAPI}.execute-api.${AWS::Region}.amazonaws.com/prod/app"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-APIGatewayURL"
+        }
+      }
+    },
+    "APIGatewayId": {
+      "Description": "ID of the API Gateway REST API",
+      "Value": {
+        "Ref": "projXAPIGatewayRestAPI"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-APIGatewayId"
+        }
+      }
+    },
+    "S3BucketName": {
+      "Description": "Name of the S3 bucket for application data",
+      "Value": {
+        "Ref": "projXS3Bucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-S3BucketName"
+        }
+      }
+    },
+    "S3BucketArn": {
+      "Description": "ARN of the S3 bucket",
+      "Value": {
+        "Fn::GetAtt": [
+          "projXS3Bucket",
+          "Arn"
+        ]
+      }
+    },
+    "RDSInstanceEndpoint": {
+      "Description": "RDS PostgreSQL instance endpoint address",
+      "Value": {
+        "Fn::GetAtt": [
+          "projXRDSInstance",
+          "Endpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RDSEndpoint"
+        }
+      }
+    },
+    "RDSInstancePort": {
+      "Description": "RDS instance port",
+      "Value": {
+        "Fn::GetAtt": [
+          "projXRDSInstance",
+          "Endpoint.Port"
+        ]
+      }
+    },
+    "DBSecretArn": {
+      "Description": "ARN of the Secrets Manager secret containing database credentials",
+      "Value": {
+        "Ref": "projXDBSecret"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBSecretArn"
+        }
+      }
+    },
+    "NATGatewayId": {
+      "Description": "NAT Gateway ID",
+      "Value": {
+        "Ref": "projXNATGateway"
+      }
+    },
+    "NATGatewayEIP": {
+      "Description": "Elastic IP associated with NAT Gateway",
+      "Value": {
+        "Ref": "projXNATGatewayEIP"
+      }
+    },
+    "StackName": {
+      "Description": "Name of this CloudFormation stack",
+      "Value": {
+        "Ref": "AWS::StackName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StackName"
+        }
+      }
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for this deployment",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    }
+  }
+}
