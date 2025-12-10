@@ -1,22 +1,29 @@
-"""Unit Tests for AWS Multi-VPC Compliance & Connectivity Analysis Tool"""
+"""
+Unit Tests for AWS Multi-VPC Compliance & Connectivity Analysis Tool
+
+This file contains comprehensive unit tests for the ComplianceAnalyzer class.
+Unit tests use unittest.mock to test logic WITHOUT external services (no Moto).
+
+Test Coverage:
+- Initialization and AWS client setup
+- All compliance check methods
+- Helper methods
+- Main workflow (analyze method)
+- Report generation
+"""
 
 import sys
 import os
-import json
-import boto3
-import logging
-from contextlib import contextmanager
-from datetime import datetime, UTC, timedelta
-from types import ModuleType
+from datetime import datetime
 from unittest.mock import MagicMock, patch, mock_open
-from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
+from collections import defaultdict
 
 import pytest
 
 # Add parent directory to path to import the analysis module
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'lib'))
 
-from analyse import (  # type: ignore[import]
+from analyse import (
     AWSResourceDiscovery,
     ComplianceAnalyzer,
     ReportGenerator,
@@ -24,107 +31,910 @@ from analyse import (  # type: ignore[import]
     Framework,
     Severity,
     ResourceType,
+    get_boto_client,
+    create_mock_resources,
     main
 )
 
 
-def make_client_error(code: str, operation: str) -> ClientError:
-    """Helper to create a ClientError with a specific error code."""
-    return ClientError({'Error': {'Code': code, 'Message': code}}, operation)
+class TestGetBotoClient:
+    """Test boto client factory function"""
+
+    @patch('analyse.boto3.client')
+    def test_get_boto_client_without_endpoint_url(self, mock_boto_client):
+        """Test client creation without endpoint URL"""
+        with patch.dict(os.environ, {}, clear=True):
+            os.environ.pop('AWS_ENDPOINT_URL', None)
+            client = get_boto_client('ec2', 'us-east-1')
+            mock_boto_client.assert_called_with('ec2', region_name='us-east-1')
+
+    @patch('analyse.boto3.client')
+    def test_get_boto_client_with_endpoint_url(self, mock_boto_client):
+        """Test client creation with endpoint URL"""
+        with patch.dict(os.environ, {'AWS_ENDPOINT_URL': 'http://localhost:5001'}):
+            client = get_boto_client('ec2', 'us-east-1')
+            mock_boto_client.assert_called_with(
+                'ec2',
+                region_name='us-east-1',
+                endpoint_url='http://localhost:5001'
+            )
 
 
-@pytest.fixture
-def mock_aws_session():
-    """Provide a mock AWS session."""
-    session = MagicMock()
-    ec2_client = MagicMock()
-    route53_client = MagicMock()
-    s3_client = MagicMock()
-    logs_client = MagicMock()
-    
-    session.client.side_effect = lambda service: {
-        'ec2': ec2_client,
-        'route53': route53_client,
-        's3': s3_client,
-        'logs': logs_client
-    }[service]
-    
-    return session, ec2_client, route53_client, s3_client, logs_client
+class TestAWSResourceDiscovery:
+    """Test suite for AWSResourceDiscovery class"""
+
+    @patch('analyse.get_boto_client')
+    def test_initialization_creates_aws_clients(self, mock_get_client):
+        """Test that discovery initializes with correct AWS clients"""
+        discovery = AWSResourceDiscovery()
+        assert mock_get_client.call_count == 4
+        mock_get_client.assert_any_call('ec2', 'us-east-1')
+        mock_get_client.assert_any_call('route53', 'us-east-1')
+        mock_get_client.assert_any_call('s3', 'us-east-1')
+        mock_get_client.assert_any_call('logs', 'us-east-1')
+
+    @patch('analyse.get_boto_client')
+    def test_discover_vpcs_success(self, mock_get_client):
+        """Test successful VPC discovery"""
+        mock_ec2 = MagicMock()
+        mock_get_client.return_value = mock_ec2
+        mock_ec2.describe_vpcs.return_value = {
+            'Vpcs': [{'VpcId': 'vpc-123', 'CidrBlock': '10.1.0.0/16'}]
+        }
+
+        discovery = AWSResourceDiscovery()
+        vpcs = discovery.discover_vpcs()
+
+        assert len(vpcs) == 1
+        assert vpcs[0]['VpcId'] == 'vpc-123'
+
+    @patch('analyse.get_boto_client')
+    def test_discover_vpcs_handles_error(self, mock_get_client):
+        """Test VPC discovery handles errors gracefully"""
+        mock_ec2 = MagicMock()
+        mock_get_client.return_value = mock_ec2
+        mock_ec2.describe_vpcs.side_effect = Exception("API Error")
+
+        discovery = AWSResourceDiscovery()
+        vpcs = discovery.discover_vpcs()
+
+        assert vpcs == []
+
+    @patch('analyse.get_boto_client')
+    def test_discover_subnets_with_vpc_filter(self, mock_get_client):
+        """Test subnet discovery with VPC filter"""
+        mock_ec2 = MagicMock()
+        mock_get_client.return_value = mock_ec2
+        mock_ec2.describe_subnets.return_value = {
+            'Subnets': [{'SubnetId': 'subnet-123'}]
+        }
+
+        discovery = AWSResourceDiscovery()
+        subnets = discovery.discover_subnets('vpc-123')
+
+        mock_ec2.describe_subnets.assert_called_with(
+            Filters=[{'Name': 'vpc-id', 'Values': ['vpc-123']}]
+        )
+        assert len(subnets) == 1
+
+    @patch('analyse.get_boto_client')
+    def test_discover_subnets_without_filter(self, mock_get_client):
+        """Test subnet discovery without filter"""
+        mock_ec2 = MagicMock()
+        mock_get_client.return_value = mock_ec2
+        mock_ec2.describe_subnets.return_value = {'Subnets': []}
+
+        discovery = AWSResourceDiscovery()
+        subnets = discovery.discover_subnets()
+
+        mock_ec2.describe_subnets.assert_called_with()
+
+    @patch('analyse.get_boto_client')
+    def test_discover_subnets_handles_error(self, mock_get_client):
+        """Test subnet discovery handles errors"""
+        mock_ec2 = MagicMock()
+        mock_get_client.return_value = mock_ec2
+        mock_ec2.describe_subnets.side_effect = Exception("Error")
+
+        discovery = AWSResourceDiscovery()
+        subnets = discovery.discover_subnets()
+
+        assert subnets == []
+
+    @patch('analyse.get_boto_client')
+    def test_discover_route_tables_with_filter(self, mock_get_client):
+        """Test route table discovery with filter"""
+        mock_ec2 = MagicMock()
+        mock_get_client.return_value = mock_ec2
+        mock_ec2.describe_route_tables.return_value = {'RouteTables': []}
+
+        discovery = AWSResourceDiscovery()
+        route_tables = discovery.discover_route_tables('vpc-123')
+
+        mock_ec2.describe_route_tables.assert_called_with(
+            Filters=[{'Name': 'vpc-id', 'Values': ['vpc-123']}]
+        )
+
+    @patch('analyse.get_boto_client')
+    def test_discover_route_tables_handles_error(self, mock_get_client):
+        """Test route table discovery handles errors"""
+        mock_ec2 = MagicMock()
+        mock_get_client.return_value = mock_ec2
+        mock_ec2.describe_route_tables.side_effect = Exception("Error")
+
+        discovery = AWSResourceDiscovery()
+        route_tables = discovery.discover_route_tables()
+
+        assert route_tables == []
+
+    @patch('analyse.get_boto_client')
+    def test_discover_vpc_peerings_success(self, mock_get_client):
+        """Test VPC peering discovery"""
+        mock_ec2 = MagicMock()
+        mock_get_client.return_value = mock_ec2
+        mock_ec2.describe_vpc_peering_connections.return_value = {
+            'VpcPeeringConnections': [{'VpcPeeringConnectionId': 'pcx-123'}]
+        }
+
+        discovery = AWSResourceDiscovery()
+        peerings = discovery.discover_vpc_peerings()
+
+        assert len(peerings) == 1
+
+    @patch('analyse.get_boto_client')
+    def test_discover_vpc_peerings_handles_error(self, mock_get_client):
+        """Test VPC peering discovery handles errors"""
+        mock_ec2 = MagicMock()
+        mock_get_client.return_value = mock_ec2
+        mock_ec2.describe_vpc_peering_connections.side_effect = Exception("Error")
+
+        discovery = AWSResourceDiscovery()
+        peerings = discovery.discover_vpc_peerings()
+
+        assert peerings == []
+
+    @patch('analyse.get_boto_client')
+    def test_discover_security_groups_with_filter(self, mock_get_client):
+        """Test security group discovery with filter"""
+        mock_ec2 = MagicMock()
+        mock_get_client.return_value = mock_ec2
+        mock_ec2.describe_security_groups.return_value = {'SecurityGroups': []}
+
+        discovery = AWSResourceDiscovery()
+        sgs = discovery.discover_security_groups('vpc-123')
+
+        mock_ec2.describe_security_groups.assert_called_with(
+            Filters=[{'Name': 'vpc-id', 'Values': ['vpc-123']}]
+        )
+
+    @patch('analyse.get_boto_client')
+    def test_discover_security_groups_handles_error(self, mock_get_client):
+        """Test security group discovery handles errors"""
+        mock_ec2 = MagicMock()
+        mock_get_client.return_value = mock_ec2
+        mock_ec2.describe_security_groups.side_effect = Exception("Error")
+
+        discovery = AWSResourceDiscovery()
+        sgs = discovery.discover_security_groups()
+
+        assert sgs == []
+
+    @patch('analyse.get_boto_client')
+    def test_discover_instances_success(self, mock_get_client):
+        """Test EC2 instance discovery"""
+        mock_ec2 = MagicMock()
+        mock_get_client.return_value = mock_ec2
+        mock_ec2.describe_instances.return_value = {
+            'Reservations': [
+                {'Instances': [{'InstanceId': 'i-123'}]}
+            ]
+        }
+
+        discovery = AWSResourceDiscovery()
+        instances = discovery.discover_instances()
+
+        assert len(instances) == 1
+        assert instances[0]['InstanceId'] == 'i-123'
+
+    @patch('analyse.get_boto_client')
+    def test_discover_instances_handles_error(self, mock_get_client):
+        """Test instance discovery handles errors"""
+        mock_ec2 = MagicMock()
+        mock_get_client.return_value = mock_ec2
+        mock_ec2.describe_instances.side_effect = Exception("Error")
+
+        discovery = AWSResourceDiscovery()
+        instances = discovery.discover_instances()
+
+        assert instances == []
+
+    @patch('analyse.get_boto_client')
+    def test_discover_flow_logs_success(self, mock_get_client):
+        """Test flow log discovery"""
+        mock_ec2 = MagicMock()
+        mock_get_client.return_value = mock_ec2
+        mock_ec2.describe_flow_logs.return_value = {
+            'FlowLogs': [{'FlowLogId': 'fl-123'}]
+        }
+
+        discovery = AWSResourceDiscovery()
+        flow_logs = discovery.discover_flow_logs()
+
+        assert len(flow_logs) == 1
+
+    @patch('analyse.get_boto_client')
+    def test_discover_flow_logs_handles_error(self, mock_get_client):
+        """Test flow log discovery handles errors"""
+        mock_ec2 = MagicMock()
+        mock_get_client.return_value = mock_ec2
+        mock_ec2.describe_flow_logs.side_effect = Exception("Error")
+
+        discovery = AWSResourceDiscovery()
+        flow_logs = discovery.discover_flow_logs()
+
+        assert flow_logs == []
+
+    @patch('analyse.get_boto_client')
+    def test_discover_route53_zones_success(self, mock_get_client):
+        """Test Route53 zone discovery"""
+        mock_route53 = MagicMock()
+        mock_get_client.return_value = mock_route53
+        mock_route53.list_hosted_zones.return_value = {
+            'HostedZones': [{'Id': '/hostedzone/Z123'}]
+        }
+
+        discovery = AWSResourceDiscovery()
+        zones = discovery.discover_route53_zones()
+
+        assert len(zones) == 1
+
+    @patch('analyse.get_boto_client')
+    def test_discover_route53_zones_handles_error(self, mock_get_client):
+        """Test Route53 zone discovery handles errors"""
+        mock_route53 = MagicMock()
+        mock_get_client.return_value = mock_route53
+        mock_route53.list_hosted_zones.side_effect = Exception("Error")
+
+        discovery = AWSResourceDiscovery()
+        zones = discovery.discover_route53_zones()
+
+        assert zones == []
 
 
-@pytest.fixture
-def discovery_with_mocks(mock_aws_session):
-    """Provide AWSResourceDiscovery with mocked clients."""
-    session, ec2_client, route53_client, s3_client, logs_client = mock_aws_session
-    discovery = AWSResourceDiscovery(session)
-    return discovery, ec2_client, route53_client, s3_client, logs_client
+class TestComplianceAnalyzer:
+    """Test suite for ComplianceAnalyzer class"""
+
+    def create_mock_discovery(self):
+        """Create a mock discovery object"""
+        return MagicMock(spec=AWSResourceDiscovery)
+
+    def test_initialization(self):
+        """Test analyzer initialization"""
+        discovery = self.create_mock_discovery()
+        analyzer = ComplianceAnalyzer(discovery)
+
+        assert analyzer.findings == []
+        assert analyzer.checks_performed == 0
+        assert analyzer.checks_passed == 0
+        assert analyzer.checks_failed == 0
+
+    def test_add_finding(self):
+        """Test adding a compliance finding"""
+        discovery = self.create_mock_discovery()
+        analyzer = ComplianceAnalyzer(discovery)
+
+        analyzer._add_finding(
+            resource_id="vpc-123",
+            resource_type=ResourceType.VPC,
+            issue_type="Test Issue",
+            severity=Severity.HIGH,
+            frameworks=[Framework.SOC2],
+            current_state="Current",
+            required_state="Required",
+            remediation_steps="Fix it"
+        )
+
+        assert len(analyzer.findings) == 1
+        assert analyzer.findings[0].resource_id == "vpc-123"
+        assert analyzer.findings[0].severity == "HIGH"
+
+    def test_check_vpc_architecture_missing_payment_vpc(self):
+        """Test detection of missing Payment VPC"""
+        discovery = self.create_mock_discovery()
+        discovery.discover_vpcs.return_value = [
+            {'VpcId': 'vpc-123', 'CidrBlock': '10.2.0.0/16'}
+        ]
+        discovery.discover_subnets.return_value = []
+
+        analyzer = ComplianceAnalyzer(discovery)
+        analyzer._check_vpc_architecture(discovery.discover_vpcs())
+
+        payment_findings = [f for f in analyzer.findings if f.issue_type == "Missing Payment VPC"]
+        assert len(payment_findings) == 1
+        assert payment_findings[0].severity == "CRITICAL"
+
+    def test_check_vpc_architecture_missing_analytics_vpc(self):
+        """Test detection of missing Analytics VPC"""
+        discovery = self.create_mock_discovery()
+        discovery.discover_vpcs.return_value = [
+            {'VpcId': 'vpc-123', 'CidrBlock': '10.1.0.0/16'}
+        ]
+        discovery.discover_subnets.return_value = []
+
+        analyzer = ComplianceAnalyzer(discovery)
+        analyzer._check_vpc_architecture(discovery.discover_vpcs())
+
+        analytics_findings = [f for f in analyzer.findings if f.issue_type == "Missing Analytics VPC"]
+        assert len(analytics_findings) == 1
+
+    def test_check_vpc_subnets_insufficient(self):
+        """Test detection of insufficient subnets"""
+        discovery = self.create_mock_discovery()
+        discovery.discover_subnets.return_value = [
+            {'SubnetId': 'subnet-1', 'MapPublicIpOnLaunch': False, 'AvailabilityZone': 'us-east-1a'},
+            {'SubnetId': 'subnet-2', 'MapPublicIpOnLaunch': False, 'AvailabilityZone': 'us-east-1b'}
+        ]
+
+        analyzer = ComplianceAnalyzer(discovery)
+        vpc = {'VpcId': 'vpc-123', 'CidrBlock': '10.1.0.0/16'}
+        analyzer._check_vpc_subnets(vpc, "Payment")
+
+        subnet_findings = [f for f in analyzer.findings if f.issue_type == "Insufficient private subnets"]
+        assert len(subnet_findings) == 1
+
+    def test_check_vpc_subnets_insufficient_az_distribution(self):
+        """Test detection of insufficient AZ distribution"""
+        discovery = self.create_mock_discovery()
+        discovery.discover_subnets.return_value = [
+            {'SubnetId': 'subnet-1', 'MapPublicIpOnLaunch': False, 'AvailabilityZone': 'us-east-1a'},
+            {'SubnetId': 'subnet-2', 'MapPublicIpOnLaunch': False, 'AvailabilityZone': 'us-east-1a'},
+            {'SubnetId': 'subnet-3', 'MapPublicIpOnLaunch': False, 'AvailabilityZone': 'us-east-1b'}
+        ]
+
+        analyzer = ComplianceAnalyzer(discovery)
+        vpc = {'VpcId': 'vpc-123', 'CidrBlock': '10.1.0.0/16'}
+        analyzer._check_vpc_subnets(vpc, "Payment")
+
+        az_findings = [f for f in analyzer.findings if f.issue_type == "Insufficient AZ distribution"]
+        assert len(az_findings) == 1
+
+    def test_check_vpc_peering_missing(self):
+        """Test detection of missing VPC peering"""
+        discovery = self.create_mock_discovery()
+        vpcs = [
+            {'VpcId': 'vpc-1', 'CidrBlock': '10.1.0.0/16'},
+            {'VpcId': 'vpc-2', 'CidrBlock': '10.2.0.0/16'}
+        ]
+
+        analyzer = ComplianceAnalyzer(discovery)
+        analyzer._check_vpc_peering([], vpcs)
+
+        peering_findings = [f for f in analyzer.findings if f.issue_type == "Missing VPC peering"]
+        assert len(peering_findings) == 1
+        assert peering_findings[0].severity == "CRITICAL"
+
+    def test_check_vpc_peering_inactive(self):
+        """Test detection of inactive VPC peering"""
+        discovery = self.create_mock_discovery()
+        vpcs = [
+            {'VpcId': 'vpc-1', 'CidrBlock': '10.1.0.0/16'},
+            {'VpcId': 'vpc-2', 'CidrBlock': '10.2.0.0/16'}
+        ]
+        peerings = [{
+            'VpcPeeringConnectionId': 'pcx-123',
+            'AccepterVpcInfo': {'VpcId': 'vpc-1'},
+            'RequesterVpcInfo': {'VpcId': 'vpc-2'},
+            'Status': {'Code': 'pending-acceptance'}
+        }]
+
+        analyzer = ComplianceAnalyzer(discovery)
+        analyzer._check_vpc_peering(peerings, vpcs)
+
+        inactive_findings = [f for f in analyzer.findings if f.issue_type == "Inactive peering connection"]
+        assert len(inactive_findings) == 1
+
+    def test_check_vpc_peering_dns_disabled(self):
+        """Test detection of disabled DNS resolution"""
+        discovery = self.create_mock_discovery()
+        vpcs = [
+            {'VpcId': 'vpc-1', 'CidrBlock': '10.1.0.0/16'},
+            {'VpcId': 'vpc-2', 'CidrBlock': '10.2.0.0/16'}
+        ]
+        peerings = [{
+            'VpcPeeringConnectionId': 'pcx-123',
+            'AccepterVpcInfo': {
+                'VpcId': 'vpc-1',
+                'PeeringOptions': {'AllowDnsResolutionFromRemoteVpc': False}
+            },
+            'RequesterVpcInfo': {
+                'VpcId': 'vpc-2',
+                'PeeringOptions': {'AllowDnsResolutionFromRemoteVpc': False}
+            },
+            'Status': {'Code': 'active'}
+        }]
+
+        analyzer = ComplianceAnalyzer(discovery)
+        analyzer._check_vpc_peering(peerings, vpcs)
+
+        dns_findings = [f for f in analyzer.findings if "DNS resolution disabled" in f.issue_type]
+        assert len(dns_findings) == 2
+
+    def test_check_routing_missing_peer_route(self):
+        """Test detection of missing peer VPC route"""
+        discovery = self.create_mock_discovery()
+        discovery.discover_route_tables.return_value = [
+            {
+                'RouteTableId': 'rtb-123',
+                'Associations': [{'SubnetId': 'subnet-1'}],
+                'Routes': [{'DestinationCidrBlock': '10.1.0.0/16', 'GatewayId': 'local'}]
+            }
+        ]
+        discovery.discover_subnets.return_value = [
+            {'SubnetId': 'subnet-1', 'MapPublicIpOnLaunch': False}
+        ]
+
+        vpcs = [{'VpcId': 'vpc-1', 'CidrBlock': '10.1.0.0/16'}]
+        peerings = [{'VpcPeeringConnectionId': 'pcx-123', 'Status': {'Code': 'active'}}]
+
+        analyzer = ComplianceAnalyzer(discovery)
+        analyzer._check_routing(vpcs, peerings)
+
+        route_findings = [f for f in analyzer.findings if f.issue_type == "Missing peer VPC route"]
+        assert len(route_findings) == 1
+
+    def test_check_routing_no_route_table(self):
+        """Test detection of subnet with no route table"""
+        discovery = self.create_mock_discovery()
+        discovery.discover_route_tables.return_value = []
+        discovery.discover_subnets.return_value = [
+            {'SubnetId': 'subnet-1', 'MapPublicIpOnLaunch': False}
+        ]
+
+        vpcs = [{'VpcId': 'vpc-1', 'CidrBlock': '10.1.0.0/16'}]
+        peerings = []
+
+        analyzer = ComplianceAnalyzer(discovery)
+        analyzer._check_routing(vpcs, peerings)
+
+        rt_findings = [f for f in analyzer.findings if f.issue_type == "No route table found"]
+        assert len(rt_findings) == 1
+
+    def test_check_security_groups_wide_open(self):
+        """Test detection of wide open security group"""
+        discovery = self.create_mock_discovery()
+        discovery.discover_security_groups.return_value = [{
+            'GroupId': 'sg-123',
+            'IpPermissions': [{
+                'IpRanges': [{'CidrIp': '0.0.0.0/0'}],
+                'FromPort': 443,
+                'ToPort': 443
+            }]
+        }]
+
+        vpcs = [{'VpcId': 'vpc-1', 'CidrBlock': '10.1.0.0/16'}]
+
+        analyzer = ComplianceAnalyzer(discovery)
+        analyzer._check_security_groups(vpcs)
+
+        wide_open_findings = [f for f in analyzer.findings if f.issue_type == "Wide open security group"]
+        assert len(wide_open_findings) == 1
+        assert wide_open_findings[0].severity == "CRITICAL"
+
+    def test_check_security_groups_unencrypted_protocols(self):
+        """Test detection of unencrypted protocols"""
+        discovery = self.create_mock_discovery()
+        discovery.discover_security_groups.return_value = [{
+            'GroupId': 'sg-123',
+            'IpPermissions': [{
+                'IpRanges': [{'CidrIp': '10.0.0.0/8'}],
+                'FromPort': 80,
+                'ToPort': 80
+            }]
+        }]
+
+        vpcs = [{'VpcId': 'vpc-1', 'CidrBlock': '10.1.0.0/16'}]
+
+        analyzer = ComplianceAnalyzer(discovery)
+        analyzer._check_security_groups(vpcs)
+
+        unencrypted_findings = [f for f in analyzer.findings if f.issue_type == "Unencrypted protocols allowed"]
+        assert len(unencrypted_findings) == 1
+
+    def test_check_security_groups_missing_required_rules(self):
+        """Test detection of missing required security group rules"""
+        discovery = self.create_mock_discovery()
+        discovery.discover_security_groups.return_value = [{
+            'GroupId': 'sg-123',
+            'IpPermissions': []
+        }]
+
+        vpcs = [{'VpcId': 'vpc-1', 'CidrBlock': '10.1.0.0/16'}]
+
+        analyzer = ComplianceAnalyzer(discovery)
+        analyzer._check_security_groups(vpcs)
+
+        missing_findings = [f for f in analyzer.findings if f.issue_type == "Missing required security group rules"]
+        assert len(missing_findings) == 1
+
+    def test_check_ec2_instances_none_found(self):
+        """Test detection of missing EC2 instances"""
+        discovery = self.create_mock_discovery()
+        discovery.discover_instances.return_value = []
+
+        vpcs = [{'VpcId': 'vpc-1', 'CidrBlock': '10.1.0.0/16'}]
+
+        analyzer = ComplianceAnalyzer(discovery)
+        analyzer._check_ec2_instances(vpcs)
+
+        no_instance_findings = [f for f in analyzer.findings if f.issue_type == "No EC2 instances"]
+        assert len(no_instance_findings) == 1
+
+    def test_check_ec2_instances_public_ip(self):
+        """Test detection of instance with public IP"""
+        discovery = self.create_mock_discovery()
+        discovery.discover_instances.return_value = [{
+            'InstanceId': 'i-123',
+            'PublicIpAddress': '54.1.2.3',
+            'Tags': []
+        }]
+
+        vpcs = [{'VpcId': 'vpc-1', 'CidrBlock': '10.1.0.0/16'}]
+
+        analyzer = ComplianceAnalyzer(discovery)
+        analyzer._check_ec2_instances(vpcs)
+
+        public_ip_findings = [f for f in analyzer.findings if f.issue_type == "Instance has public IP"]
+        assert len(public_ip_findings) == 1
+        assert public_ip_findings[0].severity == "HIGH"
+
+    def test_check_ec2_instances_ssm_not_enabled(self):
+        """Test detection of instance without SSM tag"""
+        discovery = self.create_mock_discovery()
+        discovery.discover_instances.return_value = [{
+            'InstanceId': 'i-123',
+            'Tags': [{'Key': 'Name', 'Value': 'test'}]
+        }]
+
+        vpcs = [{'VpcId': 'vpc-1', 'CidrBlock': '10.1.0.0/16'}]
+
+        analyzer = ComplianceAnalyzer(discovery)
+        analyzer._check_ec2_instances(vpcs)
+
+        ssm_findings = [f for f in analyzer.findings if f.issue_type == "SSM not enabled"]
+        assert len(ssm_findings) == 1
+
+    def test_check_flow_logs_missing(self):
+        """Test detection of missing VPC flow logs"""
+        discovery = self.create_mock_discovery()
+
+        vpcs = [{'VpcId': 'vpc-1', 'CidrBlock': '10.1.0.0/16'}]
+        flow_logs = []
+
+        analyzer = ComplianceAnalyzer(discovery)
+        analyzer._check_flow_logs(vpcs, flow_logs)
+
+        missing_findings = [f for f in analyzer.findings if f.issue_type == "Missing VPC Flow Logs"]
+        assert len(missing_findings) == 1
+        assert missing_findings[0].severity == "CRITICAL"
+
+    def test_check_flow_logs_not_s3(self):
+        """Test detection of flow logs not using S3"""
+        discovery = self.create_mock_discovery()
+
+        vpcs = [{'VpcId': 'vpc-1', 'CidrBlock': '10.1.0.0/16'}]
+        flow_logs = [{
+            'FlowLogId': 'fl-123',
+            'ResourceId': 'vpc-1',
+            'LogDestinationType': 'cloud-watch-logs',
+            'TrafficType': 'ALL'
+        }]
+
+        analyzer = ComplianceAnalyzer(discovery)
+        analyzer._check_flow_logs(vpcs, flow_logs)
+
+        s3_findings = [f for f in analyzer.findings if f.issue_type == "Flow logs not using S3"]
+        assert len(s3_findings) == 1
+
+    def test_check_flow_logs_incomplete_capture(self):
+        """Test detection of incomplete flow log capture"""
+        discovery = self.create_mock_discovery()
+
+        vpcs = [{'VpcId': 'vpc-1', 'CidrBlock': '10.1.0.0/16'}]
+        flow_logs = [{
+            'FlowLogId': 'fl-123',
+            'ResourceId': 'vpc-1',
+            'LogDestinationType': 's3',
+            'TrafficType': 'ACCEPT'
+        }]
+
+        analyzer = ComplianceAnalyzer(discovery)
+        analyzer._check_flow_logs(vpcs, flow_logs)
+
+        capture_findings = [f for f in analyzer.findings if f.issue_type == "Incomplete flow log capture"]
+        assert len(capture_findings) == 1
+
+    def test_check_route53_dns_missing_zone(self):
+        """Test detection of missing private hosted zone"""
+        discovery = self.create_mock_discovery()
+        discovery.discover_route53_zones.return_value = []
+
+        vpcs = [{'VpcId': 'vpc-1', 'CidrBlock': '10.1.0.0/16'}]
+
+        analyzer = ComplianceAnalyzer(discovery)
+        analyzer._check_route53_dns(vpcs)
+
+        zone_findings = [f for f in analyzer.findings if f.issue_type == "Missing private hosted zone"]
+        assert len(zone_findings) == 1
+
+    def test_generate_summary(self):
+        """Test compliance summary generation"""
+        discovery = self.create_mock_discovery()
+        analyzer = ComplianceAnalyzer(discovery)
+        analyzer.checks_performed = 10
+        analyzer.checks_passed = 7
+        analyzer.checks_failed = 3
+
+        analyzer._add_finding(
+            resource_id="test",
+            resource_type=ResourceType.VPC,
+            issue_type="Test",
+            severity=Severity.HIGH,
+            frameworks=[Framework.SOC2],
+            current_state="Current",
+            required_state="Required",
+            remediation_steps="Fix"
+        )
+
+        summary = analyzer._generate_summary()
+
+        assert summary['total_checks'] == 10
+        assert summary['passed'] == 7
+        assert summary['failed'] == 3
+        assert summary['compliance_percentage'] == 70.0
+        assert 'frameworks' in summary
+        assert 'scan_timestamp' in summary
+
+    def test_analyze_runs_all_checks(self):
+        """Test that analyze() runs all compliance checks"""
+        discovery = self.create_mock_discovery()
+        discovery.discover_vpcs.return_value = []
+        discovery.discover_vpc_peerings.return_value = []
+        discovery.discover_flow_logs.return_value = []
+
+        analyzer = ComplianceAnalyzer(discovery)
+        results = analyzer.analyze()
+
+        assert 'compliance_summary' in results
+        assert 'findings' in results
 
 
-@pytest.fixture
-def analyzer_with_mocks(discovery_with_mocks):
-    """Provide ComplianceAnalyzer with mocked discovery."""
-    discovery, ec2_client, route53_client, s3_client, logs_client = discovery_with_mocks
-    
-    # Replace discovery methods with MagicMock to enable return_value setting
-    discovery.discover_subnets = MagicMock()
-    discovery.discover_route_tables = MagicMock()
-    discovery.discover_security_groups = MagicMock()
-    discovery.discover_instances = MagicMock()
-    discovery.discover_vpc_peerings = MagicMock()
-    discovery.discover_flow_logs = MagicMock()
-    discovery.discover_route53_zones = MagicMock()
-    discovery.discover_vpcs = MagicMock()
-    
-    analyzer = ComplianceAnalyzer(discovery)
-    return analyzer, discovery, ec2_client, route53_client, s3_client, logs_client
+class TestReportGenerator:
+    """Test suite for ReportGenerator class"""
+
+    def test_generate_json_report(self):
+        """Test JSON report generation"""
+        results = {
+            'compliance_summary': {
+                'total_checks': 10,
+                'passed': 8,
+                'failed': 2,
+                'compliance_percentage': 80.0,
+                'frameworks': {},
+                'scan_timestamp': '2024-01-01T00:00:00'
+            },
+            'findings': []
+        }
+
+        generator = ReportGenerator(results)
+
+        with patch('builtins.open', mock_open()) as mock_file:
+            generator.generate_json('test.json')
+            mock_file.assert_called_once_with('test.json', 'w')
+
+    def test_generate_html_report(self):
+        """Test HTML report generation"""
+        results = {
+            'compliance_summary': {
+                'total_checks': 10,
+                'passed': 8,
+                'failed': 2,
+                'compliance_percentage': 80.0,
+                'frameworks': {'SOC2': {'passed': 8, 'failed': 2}},
+                'scan_timestamp': '2024-01-01T00:00:00'
+            },
+            'findings': [{
+                'resource_id': 'vpc-123',
+                'resource_type': 'VPC',
+                'issue_type': 'Test Issue',
+                'severity': 'HIGH',
+                'frameworks': ['SOC2'],
+                'current_state': 'Current',
+                'required_state': 'Required',
+                'remediation_steps': 'Fix it'
+            }]
+        }
+
+        generator = ReportGenerator(results)
+
+        with patch('builtins.open', mock_open()) as mock_file:
+            generator.generate_html('test.html')
+            mock_file.assert_called_once_with('test.html', 'w')
 
 
-@contextmanager
-def stub_jinja2_module():
-    """Create lightweight stand-in for jinja2 for HTML report generation."""
-    fake_jinja2 = ModuleType("jinja2")
+class TestCreateMockResources:
+    """Test suite for create_mock_resources function"""
 
-    class FakeTemplate:
-        def __init__(self, text):
-            self.text = text
+    @patch('analyse.get_boto_client')
+    def test_create_mock_resources_creates_all_resources(self, mock_get_client):
+        """Test that create_mock_resources creates all required resources"""
+        mock_ec2 = MagicMock()
+        mock_route53 = MagicMock()
+        mock_s3 = MagicMock()
 
-        def render(self, **kwargs):
-            return f"<html>Rendered with {len(kwargs)} variables</html>"
+        def client_factory(service, region='us-east-1'):
+            if service == 'ec2':
+                return mock_ec2
+            elif service == 'route53':
+                return mock_route53
+            elif service == 's3':
+                return mock_s3
+            return MagicMock()
 
-    fake_jinja2.Template = FakeTemplate
+        mock_get_client.side_effect = client_factory
 
-    modules = {'jinja2': fake_jinja2}
-    
-    with patch.dict(sys.modules, modules, clear=False):
-        yield
+        mock_ec2.create_vpc.side_effect = [
+            {'Vpc': {'VpcId': 'vpc-1'}},
+            {'Vpc': {'VpcId': 'vpc-2'}}
+        ]
+        mock_ec2.create_subnet.return_value = {'Subnet': {'SubnetId': 'subnet-1'}}
+        mock_ec2.create_vpc_peering_connection.return_value = {
+            'VpcPeeringConnection': {'VpcPeeringConnectionId': 'pcx-1'}
+        }
+        mock_ec2.create_route_table.return_value = {'RouteTable': {'RouteTableId': 'rtb-1'}}
+        mock_ec2.create_security_group.return_value = {'GroupId': 'sg-1'}
+        mock_ec2.run_instances.return_value = {'Instances': [{'InstanceId': 'i-1'}]}
+
+        create_mock_resources()
+
+        # Verify VPCs created
+        assert mock_ec2.create_vpc.call_count == 2
+        # Verify subnets created (3 per VPC = 6 total)
+        assert mock_ec2.create_subnet.call_count == 6
+        # Verify peering created
+        assert mock_ec2.create_vpc_peering_connection.call_count == 1
 
 
-class TestFrameworkEnum:
-    """Test suite for Framework enum"""
-    
-    def test_framework_values(self):
-        """Test that framework enum has correct values"""
+class TestMainFunction:
+    """Test suite for main function"""
+
+    @patch('analyse.AWSResourceDiscovery')
+    @patch('analyse.ComplianceAnalyzer')
+    @patch('analyse.ReportGenerator')
+    @patch('analyse.argparse.ArgumentParser')
+    def test_main_executes_successfully(self, mock_parser, mock_generator, mock_analyzer, mock_discovery):
+        """Test main() function runs without errors"""
+        mock_args = MagicMock()
+        mock_args.output_json = 'test.json'
+        mock_args.output_html = 'test.html'
+        mock_args.region = 'us-east-1'
+        mock_args.create_mock_resources = False
+        mock_parser.return_value.parse_args.return_value = mock_args
+
+        mock_analyzer_instance = MagicMock()
+        mock_analyzer.return_value = mock_analyzer_instance
+        mock_analyzer_instance.analyze.return_value = {
+            'compliance_summary': {
+                'total_checks': 10,
+                'passed': 10,
+                'failed': 0,
+                'compliance_percentage': 100.0
+            },
+            'findings': []
+        }
+
+        result = main()
+
+        assert result == 0
+
+    @patch('analyse.AWSResourceDiscovery')
+    @patch('analyse.ComplianceAnalyzer')
+    @patch('analyse.ReportGenerator')
+    @patch('analyse.argparse.ArgumentParser')
+    def test_main_returns_error_on_non_compliance(self, mock_parser, mock_generator, mock_analyzer, mock_discovery):
+        """Test main() returns error code when compliance < 100%"""
+        mock_args = MagicMock()
+        mock_args.output_json = 'test.json'
+        mock_args.output_html = 'test.html'
+        mock_args.region = 'us-east-1'
+        mock_args.create_mock_resources = False
+        mock_parser.return_value.parse_args.return_value = mock_args
+
+        mock_analyzer_instance = MagicMock()
+        mock_analyzer.return_value = mock_analyzer_instance
+        mock_analyzer_instance.analyze.return_value = {
+            'compliance_summary': {
+                'total_checks': 10,
+                'passed': 5,
+                'failed': 5,
+                'compliance_percentage': 50.0
+            },
+            'findings': []
+        }
+
+        result = main()
+
+        assert result == 1
+
+    @patch('analyse.create_mock_resources')
+    @patch('analyse.AWSResourceDiscovery')
+    @patch('analyse.ComplianceAnalyzer')
+    @patch('analyse.ReportGenerator')
+    @patch('analyse.argparse.ArgumentParser')
+    def test_main_creates_mock_resources_when_flag_set(self, mock_parser, mock_generator, mock_analyzer, mock_discovery, mock_create):
+        """Test main() creates mock resources when flag is set"""
+        mock_args = MagicMock()
+        mock_args.output_json = 'test.json'
+        mock_args.output_html = 'test.html'
+        mock_args.region = 'us-east-1'
+        mock_args.create_mock_resources = True
+        mock_parser.return_value.parse_args.return_value = mock_args
+
+        mock_analyzer_instance = MagicMock()
+        mock_analyzer.return_value = mock_analyzer_instance
+        mock_analyzer_instance.analyze.return_value = {
+            'compliance_summary': {
+                'total_checks': 10,
+                'passed': 10,
+                'failed': 0,
+                'compliance_percentage': 100.0
+            },
+            'findings': []
+        }
+
+        main()
+
+        mock_create.assert_called_once()
+
+
+class TestFindingDataclass:
+    """Test Finding dataclass"""
+
+    def test_finding_creation(self):
+        """Test Finding dataclass creation"""
+        finding = Finding(
+            resource_id="vpc-123",
+            resource_type="VPC",
+            issue_type="Test Issue",
+            severity="HIGH",
+            frameworks=["SOC2", "PCI-DSS"],
+            current_state="Current",
+            required_state="Required",
+            remediation_steps="Fix it"
+        )
+
+        assert finding.resource_id == "vpc-123"
+        assert finding.severity == "HIGH"
+        assert len(finding.frameworks) == 2
+
+
+class TestEnums:
+    """Test enum classes"""
+
+    def test_framework_enum(self):
+        """Test Framework enum values"""
         assert Framework.SOC2.value == "SOC2"
         assert Framework.PCI_DSS.value == "PCI-DSS"
         assert Framework.GDPR.value == "GDPR"
 
-
-class TestSeverityEnum:
-    """Test suite for Severity enum"""
-    
-    def test_severity_values(self):
-        """Test that severity enum has correct values"""
+    def test_severity_enum(self):
+        """Test Severity enum values"""
         assert Severity.CRITICAL.value == "CRITICAL"
         assert Severity.HIGH.value == "HIGH"
         assert Severity.MEDIUM.value == "MEDIUM"
         assert Severity.LOW.value == "LOW"
 
-
-class TestResourceTypeEnum:
-    """Test suite for ResourceType enum"""
-    
-    def test_resource_type_values(self):
-        """Test that resource type enum has correct values"""
+    def test_resource_type_enum(self):
+        """Test ResourceType enum values"""
         assert ResourceType.VPC.value == "VPC"
         assert ResourceType.SUBNET.value == "SUBNET"
         assert ResourceType.ROUTE_TABLE.value == "ROUTE_TABLE"
@@ -134,837 +944,3 @@ class TestResourceTypeEnum:
         assert ResourceType.FLOW_LOGS.value == "FLOW_LOGS"
         assert ResourceType.ROUTE53_ZONE.value == "ROUTE53_ZONE"
 
-
-class TestFinding:
-    """Test suite for Finding dataclass"""
-    
-    def test_finding_creation(self):
-        """Test creating a Finding instance"""
-        finding = Finding(
-            resource_id="vpc-123",
-            resource_type="VPC",
-            issue_type="Missing VPC",
-            severity="CRITICAL",
-            frameworks=["SOC2", "PCI-DSS"],
-            current_state="VPC not found",
-            required_state="VPC must exist",
-            remediation_steps="Create VPC"
-        )
-        
-        assert finding.resource_id == "vpc-123"
-        assert finding.resource_type == "VPC"
-        assert finding.issue_type == "Missing VPC"
-        assert finding.severity == "CRITICAL"
-        assert finding.frameworks == ["SOC2", "PCI-DSS"]
-        assert finding.current_state == "VPC not found"
-        assert finding.required_state == "VPC must exist"
-        assert finding.remediation_steps == "Create VPC"
-
-
-class TestAWSResourceDiscovery:
-    """Test suite for AWSResourceDiscovery class"""
-    
-    def test_initialization_with_default_session(self):
-        """Test that discovery initializes with default session"""
-        with patch('boto3.Session') as mock_session:
-            discovery = AWSResourceDiscovery()
-            mock_session.assert_called_once()
-    
-    def test_initialization_with_custom_session(self, mock_aws_session):
-        """Test that discovery initializes with custom session"""
-        session, _, _, _, _ = mock_aws_session
-        discovery = AWSResourceDiscovery(session)
-        assert discovery.session == session
-    
-    def test_discover_vpcs_success(self, discovery_with_mocks):
-        """Test successful VPC discovery"""
-        discovery, ec2_client, _, _, _ = discovery_with_mocks
-        
-        mock_vpcs = [
-            {'VpcId': 'vpc-123', 'CidrBlock': '10.1.0.0/16'},
-            {'VpcId': 'vpc-456', 'CidrBlock': '10.2.0.0/16'}
-        ]
-        ec2_client.describe_vpcs.return_value = {'Vpcs': mock_vpcs}
-        
-        result = discovery.discover_vpcs()
-        
-        assert result == mock_vpcs
-        ec2_client.describe_vpcs.assert_called_once()
-    
-    def test_discover_vpcs_error_handling(self, discovery_with_mocks):
-        """Test VPC discovery error handling"""
-        discovery, ec2_client, _, _, _ = discovery_with_mocks
-        
-        ec2_client.describe_vpcs.side_effect = Exception("AWS Error")
-        
-        result = discovery.discover_vpcs()
-        
-        assert result == []
-    
-    def test_discover_subnets_success(self, discovery_with_mocks):
-        """Test successful subnet discovery"""
-        discovery, ec2_client, _, _, _ = discovery_with_mocks
-        
-        mock_subnets = [
-            {'SubnetId': 'subnet-123', 'VpcId': 'vpc-123', 'CidrBlock': '10.1.1.0/24'},
-            {'SubnetId': 'subnet-456', 'VpcId': 'vpc-123', 'CidrBlock': '10.1.2.0/24'}
-        ]
-        ec2_client.describe_subnets.return_value = {'Subnets': mock_subnets}
-        
-        result = discovery.discover_subnets('vpc-123')
-        
-        assert result == mock_subnets
-        ec2_client.describe_subnets.assert_called_once_with(
-            Filters=[{'Name': 'vpc-id', 'Values': ['vpc-123']}]
-        )
-    
-    def test_discover_subnets_no_vpc_filter(self, discovery_with_mocks):
-        """Test subnet discovery without VPC filter"""
-        discovery, ec2_client, _, _, _ = discovery_with_mocks
-        
-        mock_subnets = [{'SubnetId': 'subnet-123'}]
-        ec2_client.describe_subnets.return_value = {'Subnets': mock_subnets}
-        
-        result = discovery.discover_subnets()
-        
-        assert result == mock_subnets
-        ec2_client.describe_subnets.assert_called_once_with(Filters=[])
-    
-    def test_discover_route_tables_success(self, discovery_with_mocks):
-        """Test successful route table discovery"""
-        discovery, ec2_client, _, _, _ = discovery_with_mocks
-        
-        mock_route_tables = [{'RouteTableId': 'rtb-123', 'VpcId': 'vpc-123'}]
-        ec2_client.describe_route_tables.return_value = {'RouteTables': mock_route_tables}
-        
-        result = discovery.discover_route_tables('vpc-123')
-        
-        assert result == mock_route_tables
-        ec2_client.describe_route_tables.assert_called_once_with(
-            Filters=[{'Name': 'vpc-id', 'Values': ['vpc-123']}]
-        )
-    
-    def test_discover_vpc_peerings_success(self, discovery_with_mocks):
-        """Test successful VPC peering discovery"""
-        discovery, ec2_client, _, _, _ = discovery_with_mocks
-        
-        mock_peerings = [{'VpcPeeringConnectionId': 'pcx-123'}]
-        ec2_client.describe_vpc_peering_connections.return_value = {'VpcPeeringConnections': mock_peerings}
-        
-        result = discovery.discover_vpc_peerings()
-        
-        assert result == mock_peerings
-        ec2_client.describe_vpc_peering_connections.assert_called_once()
-    
-    def test_discover_security_groups_success(self, discovery_with_mocks):
-        """Test successful security group discovery"""
-        discovery, ec2_client, _, _, _ = discovery_with_mocks
-        
-        mock_sgs = [{'GroupId': 'sg-123', 'VpcId': 'vpc-123'}]
-        ec2_client.describe_security_groups.return_value = {'SecurityGroups': mock_sgs}
-        
-        result = discovery.discover_security_groups('vpc-123')
-        
-        assert result == mock_sgs
-        ec2_client.describe_security_groups.assert_called_once_with(
-            Filters=[{'Name': 'vpc-id', 'Values': ['vpc-123']}]
-        )
-    
-    def test_discover_instances_success(self, discovery_with_mocks):
-        """Test successful instance discovery"""
-        discovery, ec2_client, _, _, _ = discovery_with_mocks
-        
-        mock_instances = [{'InstanceId': 'i-123'}]
-        ec2_client.describe_instances.return_value = {
-            'Reservations': [{'Instances': mock_instances}]
-        }
-        
-        result = discovery.discover_instances('vpc-123')
-        
-        assert result == mock_instances
-        ec2_client.describe_instances.assert_called_once_with(
-            Filters=[{'Name': 'vpc-id', 'Values': ['vpc-123']}]
-        )
-    
-    def test_discover_flow_logs_success(self, discovery_with_mocks):
-        """Test successful flow log discovery"""
-        discovery, ec2_client, _, _, _ = discovery_with_mocks
-        
-        mock_flow_logs = [{'FlowLogId': 'fl-123', 'ResourceId': 'vpc-123'}]
-        ec2_client.describe_flow_logs.return_value = {'FlowLogs': mock_flow_logs}
-        
-        result = discovery.discover_flow_logs()
-        
-        assert result == mock_flow_logs
-        ec2_client.describe_flow_logs.assert_called_once()
-    
-    def test_discover_route53_zones_success(self, discovery_with_mocks):
-        """Test successful Route53 zone discovery"""
-        discovery, _, route53_client, _, _ = discovery_with_mocks
-        
-        mock_zones = [{'Id': '/hostedzone/Z123', 'Name': 'example.com'}]
-        route53_client.list_hosted_zones.return_value = {'HostedZones': mock_zones}
-        
-        result = discovery.discover_route53_zones()
-        
-        assert result == mock_zones
-        route53_client.list_hosted_zones.assert_called_once()
-
-
-class TestComplianceAnalyzer:
-    """Test suite for ComplianceAnalyzer class"""
-    
-    def test_initialization(self, discovery_with_mocks):
-        """Test analyzer initialization"""
-        discovery, _, _, _, _ = discovery_with_mocks
-        analyzer = ComplianceAnalyzer(discovery)
-        
-        assert analyzer.discovery == discovery
-        assert analyzer.findings == []
-        assert analyzer.checks_performed == 0
-        assert analyzer.checks_passed == 0
-        assert analyzer.checks_failed == 0
-    
-    def test_check_vpc_architecture_missing_payment_vpc(self, analyzer_with_mocks):
-        """Test VPC architecture check when payment VPC is missing"""
-        analyzer, discovery, _, _, _, _ = analyzer_with_mocks
-        
-        # Mock VPCs without payment VPC (Analytics VPC has sufficient subnets to avoid extra findings)
-        vpcs = [{'VpcId': 'vpc-456', 'CidrBlock': '10.2.0.0/16'}]
-        
-        # Mock sufficient subnets for Analytics VPC to avoid subnet-related findings
-        discovery.discover_subnets.return_value = [
-            {'SubnetId': 'subnet-1', 'MapPublicIpOnLaunch': False, 'AvailabilityZone': 'us-east-1a'},
-            {'SubnetId': 'subnet-2', 'MapPublicIpOnLaunch': False, 'AvailabilityZone': 'us-east-1b'},
-            {'SubnetId': 'subnet-3', 'MapPublicIpOnLaunch': False, 'AvailabilityZone': 'us-east-1c'}
-        ]
-        
-        analyzer._check_vpc_architecture(vpcs)
-        
-        # Should have one finding for missing payment VPC
-        payment_findings = [f for f in analyzer.findings if f.resource_id == "payment-vpc"]
-        assert len(payment_findings) == 1
-        finding = payment_findings[0]
-        assert finding.issue_type == "Missing Payment VPC"
-        assert finding.severity == Severity.CRITICAL.value
-    
-    def test_check_vpc_architecture_missing_analytics_vpc(self, analyzer_with_mocks):
-        """Test VPC architecture check when analytics VPC is missing"""
-        analyzer, discovery, _, _, _, _ = analyzer_with_mocks
-        
-        # Mock VPCs without analytics VPC
-        vpcs = [{'VpcId': 'vpc-123', 'CidrBlock': '10.1.0.0/16'}]
-        
-        # Mock subnets discovery for payment VPC
-        discovery.discover_subnets.return_value = [
-            {'SubnetId': 'subnet-1', 'MapPublicIpOnLaunch': False, 'AvailabilityZone': 'us-east-1a'},
-            {'SubnetId': 'subnet-2', 'MapPublicIpOnLaunch': False, 'AvailabilityZone': 'us-east-1b'},
-            {'SubnetId': 'subnet-3', 'MapPublicIpOnLaunch': False, 'AvailabilityZone': 'us-east-1c'}
-        ]
-        
-        analyzer._check_vpc_architecture(vpcs)
-        
-        # Should have one finding for missing analytics VPC
-        findings = [f for f in analyzer.findings if f.resource_id == "analytics-vpc"]
-        assert len(findings) == 1
-        finding = findings[0]
-        assert finding.issue_type == "Missing Analytics VPC"
-        assert finding.severity == Severity.CRITICAL.value
-    
-    def test_check_vpc_subnets_insufficient_subnets(self, analyzer_with_mocks):
-        """Test subnet check with insufficient private subnets"""
-        analyzer, discovery, _, _, _, _ = analyzer_with_mocks
-        
-        vpc = {'VpcId': 'vpc-123', 'CidrBlock': '10.1.0.0/16'}
-        
-        # Mock only 2 private subnets
-        discovery.discover_subnets.return_value = [
-            {'SubnetId': 'subnet-1', 'MapPublicIpOnLaunch': False, 'AvailabilityZone': 'us-east-1a'},
-            {'SubnetId': 'subnet-2', 'MapPublicIpOnLaunch': False, 'AvailabilityZone': 'us-east-1b'}
-        ]
-        
-        analyzer._check_vpc_subnets(vpc, "Payment")
-        
-        # Should have findings for insufficient subnets and AZs
-        subnet_findings = [f for f in analyzer.findings if "subnet" in f.issue_type.lower()]
-        assert len(subnet_findings) >= 1
-        
-        insufficient_finding = next(f for f in subnet_findings if "Insufficient private subnets" in f.issue_type)
-        assert insufficient_finding.severity == Severity.HIGH.value
-    
-    def test_check_vpc_peering_missing_vpcs(self, analyzer_with_mocks):
-        """Test VPC peering check when VPCs are missing"""
-        analyzer, _, _, _, _, _ = analyzer_with_mocks
-        
-        peerings = []
-        vpcs = []  # No VPCs
-        
-        analyzer._check_vpc_peering(peerings, vpcs)
-        
-        # Should return early without checking peering
-        assert len(analyzer.findings) == 0
-    
-    def test_check_vpc_peering_missing_connection(self, analyzer_with_mocks):
-        """Test VPC peering check when peering connection is missing"""
-        analyzer, _, _, _, _, _ = analyzer_with_mocks
-        
-        peerings = []
-        vpcs = [
-            {'VpcId': 'vpc-123', 'CidrBlock': '10.1.0.0/16'},
-            {'VpcId': 'vpc-456', 'CidrBlock': '10.2.0.0/16'}
-        ]
-        
-        analyzer._check_vpc_peering(peerings, vpcs)
-        
-        # Should have finding for missing peering
-        assert len(analyzer.findings) == 1
-        finding = analyzer.findings[0]
-        assert finding.resource_id == "vpc-peering"
-        assert finding.issue_type == "Missing VPC peering"
-        assert finding.severity == Severity.CRITICAL.value
-    
-    def test_check_vpc_peering_inactive_connection(self, analyzer_with_mocks):
-        """Test VPC peering check when connection is inactive"""
-        analyzer, _, _, _, _, _ = analyzer_with_mocks
-        
-        peerings = [{
-            'VpcPeeringConnectionId': 'pcx-123',
-            'Status': {'Code': 'pending-acceptance'},
-            'AccepterVpcInfo': {
-                'VpcId': 'vpc-456',
-                'PeeringOptions': {'AllowDnsResolutionFromRemoteVpc': True}  # Avoid DNS issues
-            },
-            'RequesterVpcInfo': {
-                'VpcId': 'vpc-123',
-                'PeeringOptions': {'AllowDnsResolutionFromRemoteVpc': True}  # Avoid DNS issues
-            }
-        }]
-        vpcs = [
-            {'VpcId': 'vpc-123', 'CidrBlock': '10.1.0.0/16'},
-            {'VpcId': 'vpc-456', 'CidrBlock': '10.2.0.0/16'}
-        ]
-        
-        analyzer._check_vpc_peering(peerings, vpcs)
-        
-        # Should have finding for inactive peering
-        inactive_findings = [f for f in analyzer.findings if "Inactive" in f.issue_type]
-        assert len(inactive_findings) == 1
-        finding = inactive_findings[0]
-        assert finding.issue_type == "Inactive peering connection"
-        assert finding.severity == Severity.HIGH.value
-    
-    def test_check_security_groups_wide_open(self, analyzer_with_mocks):
-        """Test security group check with wide open rules"""
-        analyzer, discovery, _, _, _, _ = analyzer_with_mocks
-        
-        vpcs = [{'VpcId': 'vpc-123', 'CidrBlock': '10.1.0.0/16'}]
-        
-        # Mock security group with wide open rule
-        discovery.discover_security_groups.return_value = [{
-            'GroupId': 'sg-123',
-            'IpPermissions': [{
-                'FromPort': 80,
-                'ToPort': 80,
-                'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
-            }]
-        }]
-        
-        analyzer._check_security_groups(vpcs)
-        
-        # Should have finding for wide open security group
-        wide_open_findings = [f for f in analyzer.findings if "Wide open" in f.issue_type]
-        assert len(wide_open_findings) >= 1
-        finding = wide_open_findings[0]
-        assert finding.severity == Severity.CRITICAL.value
-    
-    def test_check_ec2_instances_no_instances(self, analyzer_with_mocks):
-        """Test EC2 instance check with no instances"""
-        analyzer, discovery, _, _, _, _ = analyzer_with_mocks
-        
-        vpcs = [{'VpcId': 'vpc-123', 'CidrBlock': '10.1.0.0/16'}]
-        discovery.discover_instances.return_value = []
-        
-        analyzer._check_ec2_instances(vpcs)
-        
-        # Should have finding for no instances
-        assert len(analyzer.findings) == 1
-        finding = analyzer.findings[0]
-        assert finding.issue_type == "No EC2 instances"
-        assert finding.severity == Severity.MEDIUM.value
-    
-    def test_check_ec2_instances_public_ip(self, analyzer_with_mocks):
-        """Test EC2 instance check with public IP"""
-        analyzer, discovery, _, _, _, _ = analyzer_with_mocks
-        
-        vpcs = [{'VpcId': 'vpc-123', 'CidrBlock': '10.1.0.0/16'}]
-        discovery.discover_instances.return_value = [{
-            'InstanceId': 'i-123',
-            'PublicIpAddress': '1.2.3.4',
-            'Tags': []
-        }]
-        
-        analyzer._check_ec2_instances(vpcs)
-        
-        # Should have findings for public IP and missing SSM tag
-        assert len(analyzer.findings) == 2
-        public_ip_finding = next(f for f in analyzer.findings if "public IP" in f.issue_type)
-        assert public_ip_finding.severity == Severity.HIGH.value
-    
-    def test_check_flow_logs_missing(self, analyzer_with_mocks):
-        """Test flow logs check with missing logs"""
-        analyzer, _, _, _, _, _ = analyzer_with_mocks
-        
-        vpcs = [{'VpcId': 'vpc-123', 'CidrBlock': '10.1.0.0/16'}]
-        flow_logs = []  # No flow logs
-        
-        analyzer._check_flow_logs(vpcs, flow_logs)
-        
-        # Should have finding for missing flow logs
-        assert len(analyzer.findings) == 1
-        finding = analyzer.findings[0]
-        assert finding.issue_type == "Missing VPC Flow Logs"
-        assert finding.severity == Severity.CRITICAL.value
-    
-    def test_check_flow_logs_wrong_destination(self, analyzer_with_mocks):
-        """Test flow logs check with wrong destination"""
-        analyzer, _, _, _, _, _ = analyzer_with_mocks
-        
-        vpcs = [{'VpcId': 'vpc-123', 'CidrBlock': '10.1.0.0/16'}]
-        flow_logs = [{
-            'FlowLogId': 'fl-123',
-            'ResourceId': 'vpc-123',
-            'LogDestinationType': 'cloud-watch-logs',  # Should be 's3'
-            'TrafficType': 'ALL'
-        }]
-        
-        analyzer._check_flow_logs(vpcs, flow_logs)
-        
-        # Should have finding for wrong destination
-        dest_findings = [f for f in analyzer.findings if "not using S3" in f.issue_type]
-        assert len(dest_findings) == 1
-        finding = dest_findings[0]
-        assert finding.severity == Severity.MEDIUM.value
-    
-    def test_check_route53_dns_missing_zone(self, analyzer_with_mocks):
-        """Test Route53 DNS check with missing private zone"""
-        analyzer, discovery, _, _, _, _ = analyzer_with_mocks
-        
-        vpcs = [{'VpcId': 'vpc-123', 'CidrBlock': '10.1.0.0/16'}]
-        
-        # Mock zones without private zones
-        discovery.discover_route53_zones.return_value = [{
-            'Id': '/hostedzone/Z123',
-            'Config': {'PrivateZone': False}  # Public zone
-        }]
-        
-        analyzer._check_route53_dns(vpcs)
-        
-        # Should have finding for missing private zone
-        assert len(analyzer.findings) == 1
-        finding = analyzer.findings[0]
-        assert finding.issue_type == "Missing private hosted zone"
-        assert finding.severity == Severity.MEDIUM.value
-    
-    def test_generate_summary(self, analyzer_with_mocks):
-        """Test compliance summary generation"""
-        analyzer, _, _, _, _, _ = analyzer_with_mocks
-        
-        # Add mock findings and checks
-        analyzer.findings = [
-            Finding("res1", "VPC", "Issue1", "CRITICAL", ["SOC2"], "", "", ""),
-            Finding("res2", "SUBNET", "Issue2", "HIGH", ["PCI-DSS"], "", "", "")
-        ]
-        analyzer.checks_performed = 10
-        analyzer.checks_passed = 8
-        analyzer.checks_failed = 2
-        
-        summary = analyzer._generate_summary()
-        
-        assert summary['total_checks'] == 10
-        assert summary['passed'] == 8
-        assert summary['failed'] == 2
-        assert summary['compliance_percentage'] == 80.0
-        assert 'frameworks' in summary
-        assert 'scan_timestamp' in summary
-    
-    def test_analyze_full_workflow(self, analyzer_with_mocks):
-        """Test the complete analyze workflow"""
-        analyzer, discovery, _, _, _, _ = analyzer_with_mocks
-        
-        # Mock all discovery methods
-        discovery.discover_vpcs.return_value = []
-        discovery.discover_vpc_peerings.return_value = []
-        discovery.discover_flow_logs.return_value = []
-        
-        result = analyzer.analyze()
-        
-        assert 'compliance_summary' in result
-        assert 'findings' in result
-        assert isinstance(result['findings'], list)
-
-
-class TestReportGenerator:
-    """Test suite for ReportGenerator class"""
-    
-    def test_initialization(self):
-        """Test report generator initialization"""
-        results = {'test': 'data'}
-        generator = ReportGenerator(results)
-        
-        assert generator.results == results
-    
-    def test_generate_json(self, tmp_path):
-        """Test JSON report generation"""
-        results = {
-            'compliance_summary': {'total_checks': 10, 'passed': 8},
-            'findings': []
-        }
-        generator = ReportGenerator(results)
-        
-        output_file = tmp_path / "test_report.json"
-        generator.generate_json(str(output_file))
-        
-        # Verify file was created and contains correct data
-        assert output_file.exists()
-        with open(output_file, 'r') as f:
-            saved_data = json.load(f)
-        assert saved_data == results
-    
-    def test_generate_html_success(self, tmp_path):
-        """Test HTML report generation"""
-        results = {
-            'compliance_summary': {
-                'total_checks': 10,
-                'passed': 8,
-                'failed': 2,
-                'compliance_percentage': 80.0,
-                'frameworks': {
-                    'SOC2': {'total': 10, 'passed': 8, 'failed': 2}
-                },
-                'scan_timestamp': '2024-01-01T00:00:00Z'
-            },
-            'findings': [
-                {
-                    'resource_id': 'vpc-123',
-                    'resource_type': 'VPC',
-                    'issue_type': 'Test Issue',
-                    'severity': 'HIGH',
-                    'frameworks': ['SOC2'],
-                    'remediation_steps': 'Fix it'
-                }
-            ]
-        }
-        generator = ReportGenerator(results)
-        
-        output_file = tmp_path / "test_report.html"
-        
-        with stub_jinja2_module():
-            generator.generate_html(str(output_file))
-        
-        # Verify file was created
-        assert output_file.exists()
-        content = output_file.read_text()
-        assert "<html>" in content
-    
-    def test_generate_html_with_findings(self, tmp_path):
-        """Test HTML report generation with findings"""
-        results = {
-            'compliance_summary': {
-                'total_checks': 10,
-                'passed': 8,
-                'failed': 2,
-                'compliance_percentage': 80.0,
-                'frameworks': {
-                    'SOC2': {'total': 10, 'passed': 8, 'failed': 2}
-                },
-                'scan_timestamp': '2024-01-01T00:00:00Z'
-            },
-            'findings': [
-                {
-                    'resource_id': 'vpc-123',
-                    'resource_type': 'VPC',
-                    'issue_type': 'Test Issue',
-                    'severity': 'HIGH',
-                    'frameworks': ['SOC2'],
-                    'remediation_steps': 'Fix it'
-                }
-            ]
-        }
-        generator = ReportGenerator(results)
-        
-        output_file = tmp_path / "test_report.html"
-        
-        with stub_jinja2_module():
-            generator.generate_html(str(output_file))
-        
-        # Verify file was created
-        assert output_file.exists()
-        content = output_file.read_text()
-        assert "<html>" in content
-
-
-class TestMainFunction:
-    """Test suite for main function"""
-    
-    @patch('analyse.argparse.ArgumentParser')
-    @patch('analyse.boto3.Session')
-    @patch('analyse.AWSResourceDiscovery')
-    @patch('analyse.ComplianceAnalyzer')
-    @patch('analyse.ReportGenerator')
-    def test_main_with_default_args(self, mock_report_gen, mock_analyzer_class, 
-                                   mock_discovery_class, mock_session, mock_parser):
-        """Test main function with default arguments"""
-        # Setup mocks
-        mock_args = MagicMock()
-        mock_args.output_json = 'test.json'
-        mock_args.output_html = 'test.html'
-        mock_args.profile = None
-        mock_args.region = 'us-east-1'
-        
-        mock_parser.return_value.parse_args.return_value = mock_args
-        
-        mock_session_instance = MagicMock()
-        mock_session.return_value = mock_session_instance
-        
-        mock_discovery = MagicMock()
-        mock_discovery_class.return_value = mock_discovery
-        
-        mock_analyzer = MagicMock()
-        mock_analyzer.analyze.return_value = {
-            'compliance_summary': {
-                'total_checks': 10,
-                'passed': 8,
-                'failed': 2,
-                'compliance_percentage': 80.0
-            },
-            'findings': []
-        }
-        mock_analyzer_class.return_value = mock_analyzer
-        
-        mock_generator = MagicMock()
-        mock_report_gen.return_value = mock_generator
-        
-        # Should exit with code 1 due to compliance < 100%
-        with pytest.raises(SystemExit) as exc_info:
-            main()
-        
-        assert exc_info.value.code == 1
-        
-        # Verify calls
-        mock_session.assert_called_once_with(region_name='us-east-1')
-        mock_discovery_class.assert_called_once_with(mock_session_instance)
-        mock_analyzer_class.assert_called_once_with(mock_discovery)
-        mock_analyzer.analyze.assert_called_once()
-        mock_generator.generate_json.assert_called_once_with('test.json')
-        mock_generator.generate_html.assert_called_once_with('test.html')
-    
-    @patch('analyse.argparse.ArgumentParser')
-    @patch('analyse.boto3.Session')
-    @patch('analyse.AWSResourceDiscovery')
-    @patch('analyse.ComplianceAnalyzer')
-    @patch('analyse.ReportGenerator')
-    def test_main_with_profile_arg(self, mock_report_gen, mock_analyzer_class, 
-                                  mock_discovery_class, mock_session, mock_parser):
-        """Test main function with custom profile"""
-        # Setup mocks
-        mock_args = MagicMock()
-        mock_args.output_json = 'test.json'
-        mock_args.output_html = 'test.html'
-        mock_args.profile = 'my-profile'
-        mock_args.region = 'us-west-2'
-        
-        mock_parser.return_value.parse_args.return_value = mock_args
-        
-        mock_analyzer = MagicMock()
-        mock_analyzer.analyze.return_value = {
-            'compliance_summary': {
-                'total_checks': 10,
-                'passed': 10,
-                'failed': 0,
-                'compliance_percentage': 100.0
-            },
-            'findings': []
-        }
-        mock_analyzer_class.return_value = mock_analyzer
-        
-        mock_generator = MagicMock()
-        mock_report_gen.return_value = mock_generator
-        
-        # Should not exit due to 100% compliance
-        main()
-        
-        # Verify session created with profile and region
-        mock_session.assert_called_once_with(
-            profile_name='my-profile',
-            region_name='us-west-2'
-        )
-
-
-class TestIntegrationScenarios:
-    """Integration test scenarios using mocks"""
-    
-    @patch('analyse.boto3.Session')
-    def test_complete_compliance_scenario(self, mock_session_class):
-        """Test a complete compliant scenario"""
-        # Setup mock session and clients
-        mock_session = MagicMock()
-        mock_session_class.return_value = mock_session
-        
-        mock_ec2 = MagicMock()
-        mock_route53 = MagicMock()
-        mock_s3 = MagicMock()
-        mock_logs = MagicMock()
-        
-        mock_session.client.side_effect = lambda service: {
-            'ec2': mock_ec2,
-            'route53': mock_route53,
-            's3': mock_s3,
-            'logs': mock_logs
-        }[service]
-        
-        # Mock compliant infrastructure
-        mock_ec2.describe_vpcs.return_value = {'Vpcs': [
-            {'VpcId': 'vpc-payment', 'CidrBlock': '10.1.0.0/16'},
-            {'VpcId': 'vpc-analytics', 'CidrBlock': '10.2.0.0/16'}
-        ]}
-        
-        mock_ec2.describe_subnets.return_value = {'Subnets': [
-            {'SubnetId': 'subnet-1', 'MapPublicIpOnLaunch': False, 'AvailabilityZone': 'us-east-1a'},
-            {'SubnetId': 'subnet-2', 'MapPublicIpOnLaunch': False, 'AvailabilityZone': 'us-east-1b'},
-            {'SubnetId': 'subnet-3', 'MapPublicIpOnLaunch': False, 'AvailabilityZone': 'us-east-1c'}
-        ]}
-        
-        mock_ec2.describe_vpc_peering_connections.return_value = {
-            'VpcPeeringConnections': [{
-                'VpcPeeringConnectionId': 'pcx-123',
-                'Status': {'Code': 'active'},
-                'AccepterVpcInfo': {
-                    'VpcId': 'vpc-payment',
-                    'PeeringOptions': {'AllowDnsResolutionFromRemoteVpc': True}
-                },
-                'RequesterVpcInfo': {
-                    'VpcId': 'vpc-analytics',
-                    'PeeringOptions': {'AllowDnsResolutionFromRemoteVpc': True}
-                }
-            }]
-        }
-        
-        mock_ec2.describe_security_groups.return_value = {'SecurityGroups': [{
-            'GroupId': 'sg-123',
-            'IpPermissions': [
-                {
-                    'FromPort': 443,
-                    'ToPort': 443,
-                    'IpRanges': [{'CidrIp': '10.2.0.0/16'}]
-                },
-                {
-                    'FromPort': 5432,
-                    'ToPort': 5432,
-                    'IpRanges': [{'CidrIp': '10.2.0.0/16'}]
-                }
-            ]
-        }]}
-        
-        mock_ec2.describe_instances.return_value = {'Reservations': [{
-            'Instances': [{
-                'InstanceId': 'i-123',
-                'Tags': [{'Key': 'SSMEnabled', 'Value': 'true'}]
-                # No PublicIpAddress (private instance)
-            }]
-        }]}
-        
-        mock_ec2.describe_flow_logs.return_value = {'FlowLogs': [{
-            'FlowLogId': 'fl-123',
-            'ResourceId': 'vpc-payment',
-            'LogDestinationType': 's3',
-            'TrafficType': 'ALL'
-        }]}
-        
-        mock_ec2.describe_route_tables.return_value = {'RouteTables': [{
-            'RouteTableId': 'rtb-123',
-            'Routes': [{
-                'DestinationCidrBlock': '10.2.0.0/16',
-                'VpcPeeringConnectionId': 'pcx-123'
-            }],
-            'Associations': [{'SubnetId': 'subnet-1'}]
-        }]}
-        
-        mock_route53.list_hosted_zones.return_value = {'HostedZones': [{
-            'Id': '/hostedzone/Z123',
-            'Config': {'PrivateZone': True}
-        }]}
-        
-        # Run analysis
-        discovery = AWSResourceDiscovery(mock_session)
-        analyzer = ComplianceAnalyzer(discovery)
-        results = analyzer.analyze()
-        
-        # Should have high compliance
-        summary = results['compliance_summary']
-        assert summary['compliance_percentage'] > 50  # Should be mostly compliant
-        
-    def test_error_handling_in_discovery(self, discovery_with_mocks):
-        """Test error handling in resource discovery"""
-        discovery, ec2_client, route53_client, s3_client, logs_client = discovery_with_mocks
-        
-        # Make all clients raise errors
-        ec2_client.describe_vpcs.side_effect = ClientError(
-            {'Error': {'Code': 'UnauthorizedOperation', 'Message': 'Access denied'}},
-            'DescribeVpcs'
-        )
-        ec2_client.describe_subnets.side_effect = Exception("Network error")
-        route53_client.list_hosted_zones.side_effect = NoCredentialsError()
-        
-        # Should handle errors gracefully and return empty lists
-        assert discovery.discover_vpcs() == []
-        assert discovery.discover_subnets() == []
-        assert discovery.discover_route53_zones() == []
-
-
-class TestEdgeCases:
-    """Test edge cases and boundary conditions"""
-    
-    def test_finding_with_empty_frameworks(self):
-        """Test Finding creation with empty frameworks list"""
-        finding = Finding(
-            resource_id="test",
-            resource_type="VPC",
-            issue_type="Test",
-            severity="LOW",
-            frameworks=[],  # Empty list
-            current_state="",
-            required_state="",
-            remediation_steps=""
-        )
-        
-        assert finding.frameworks == []
-    
-    def test_analyzer_with_zero_checks(self, analyzer_with_mocks):
-        """Test analyzer behavior with zero checks performed"""
-        analyzer, _, _, _, _, _ = analyzer_with_mocks
-        
-        summary = analyzer._generate_summary()
-        
-        # Should handle division by zero gracefully
-        assert summary['compliance_percentage'] == 0
-        assert summary['total_checks'] == 0
-    
-    def test_vpc_peering_same_vpc_ids(self, analyzer_with_mocks):
-        """Test VPC peering check with same VPC IDs (invalid peering)"""
-        analyzer, _, _, _, _, _ = analyzer_with_mocks
-        
-        peerings = [{
-            'VpcPeeringConnectionId': 'pcx-123',
-            'Status': {'Code': 'active'},
-            'AccepterVpcInfo': {'VpcId': 'vpc-123'},
-            'RequesterVpcInfo': {'VpcId': 'vpc-123'}  # Same VPC
-        }]
-        vpcs = [
-            {'VpcId': 'vpc-123', 'CidrBlock': '10.1.0.0/16'},
-            {'VpcId': 'vpc-456', 'CidrBlock': '10.2.0.0/16'}
-        ]
-        
-        analyzer._check_vpc_peering(peerings, vpcs)
-        
-        # Should find missing valid peering
-        assert any(f.issue_type == "Missing VPC peering" for f in analyzer.findings)
