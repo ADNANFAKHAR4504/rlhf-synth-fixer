@@ -128,3 +128,65 @@
 > tap@0.1.0 test:integration
 > jest --testPathPattern=\.int\.test\.ts$ --testTimeout=30000
 
+ts-jest[ts-jest-transformer] (WARN) Define `ts-jest` config under `globals` is deprecated. Please do
+transform: {
+    <transform_regex>: ['ts-jest', { /* ts-jest config goes here in Jest */ }],
+},
+See more at https://kulshekhar.github.io/ts-jest/docs/getting-started/presets#advanced
+ts-jest[config] (WARN) 
+    The "ts-jest" config option "isolatedModules" is deprecated and will be removed in v30.0.0. Please use "isolatedModules: true" in /mnt/d/Projects/Turing/iac-test-automations/tsconfig.json instead, see https://www.typescriptlang.org/tsconfig/#isolatedModules
+  
+  console.log
+    Skipping connectivity test on LocalStack - ALB does not serve actual traffic
+
+      at Object.<anonymous> (test/tap-stack.int.test.ts:323:17)
+
+  console.log
+    Skipping connectivity test on LocalStack - ALB does not serve actual traffic
+
+      at Object.<anonymous> (test/tap-stack.int.test.ts:340:17)
+
+PASS test/tap-stack.int.test.ts (41.974 s)
+  TapStack Integration Tests
+    ECS Infrastructure
+      ✓ ECS Cluster should exist and be active (107 ms)
+      ✓ ECS Service should exist and be running (12 ms)
+      ✓ ECS Service should have CodeDeploy deployment controller (9 ms)
+    ECR Repository
+      ✓ ECR Repository should exist (12 ms)
+      ✓ ECR Repository should have image scanning enabled (11 ms)
+    CodePipeline
+      ✓ CodePipeline should exist and be active (14 ms)
+      ✓ CodePipeline should have required stages (8 ms)
+    CodeDeploy
+      ✓ CodeDeploy Application should exist (11 ms)
+      ✓ CodeDeploy should have deployment group (12 ms)
+    Application Load Balancer
+      ✓ ALB should exist and be active (39 ms)
+      ✓ Target Groups should exist (15 ms)
+    CloudWatch Alarms
+      ✓ CloudWatch Alarms should exist (15 ms)
+    Lambda Function
+      ✓ Slack Notifier Lambda should exist (28 ms)
+    S3 Buckets
+      ✓ Artifact Bucket should exist (23 ms)
+      ✓ Source Bucket should exist (if using S3 source) (13 ms)
+    SSM Parameters
+      ✓ SSM Parameters should exist (13 ms)
+    SNS Topic
+      ✓ Approval SNS Topic should exist (10 ms)
+    End-to-End Connectivity
+      ✓ Production URL should be accessible (3860 ms)
+      ✓ Staging URL should be accessible (2 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       19 passed, 19 total
+Snapshots:   0 total
+Time:        52.764 s, estimated 53 s
+Ran all test suites matching /.int.test.ts$/i.
+[0;32m🎉 Integration tests completed successfully![0m
+[0;34m📊 Test Summary:[0m
+[1;33m  • All infrastructure components validated[0m
+[1;33m  • LocalStack environment verified[0m
+[1;33m  • CDK resources properly configured[0m
+[0;32m🎉 Tests completed successfully![0m
