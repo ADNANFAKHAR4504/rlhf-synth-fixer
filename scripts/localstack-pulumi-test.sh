@@ -246,10 +246,10 @@ case "$PULUMI_RUNTIME" in
         if [ -d "tests" ]; then
             log_output "${BLUE}📋 Running Python integration tests with pytest...${NC}"
             # Integration tests don't execute source code, so override addopts to remove coverage
-            TEST_COMMAND="python -m pytest tests/integration/ -v --tb=short --override-ini addopts=-vv"
+            TEST_COMMAND="python -m pytest tests/integration/ -v --tb=short --no-header --override-ini addopts=-vv"
         elif [ -d "test" ]; then
             log_output "${BLUE}📋 Running Python integration tests with pytest...${NC}"
-            TEST_COMMAND="python -m pytest test/ -v --tb=short -k 'integration or int' --override-ini addopts=-vv"
+            TEST_COMMAND="python -m pytest test/ -v --tb=short --no-header -k 'integration or int' --override-ini addopts=-vv"
         fi
         ;;
     java)
@@ -276,8 +276,6 @@ if [ -z "$TEST_COMMAND" ]; then
 fi
 
 if [ -n "$TEST_COMMAND" ]; then
-    echo "**Test Command:** \`$TEST_COMMAND\`" >> "$OUTPUT_FILE"
-    echo "" >> "$OUTPUT_FILE"
     echo '```' >> "$OUTPUT_FILE"
     
     if $TEST_COMMAND 2>&1 | tee -a "$OUTPUT_FILE"; then
