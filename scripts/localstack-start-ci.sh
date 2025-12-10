@@ -3,7 +3,7 @@
 # LocalStack Start Script for CI/CD
 # Starts LocalStack using Docker for CI environments (GitHub Actions, etc.)
 
-set -e
+set -eo pipefail
 
 # Colors for output
 RED='\033[0;31m'
@@ -103,8 +103,37 @@ echo -e "${YELLOW}⏳ Waiting for LocalStack to be ready...${NC}"
 max_attempts=60
 attempt=0
 
+# Check if curl is available
+if ! command -v curl &> /dev/null; then
+    echo -e "${RED}❌ curl is not installed!${NC}"
+    echo -e "${YELLOW}💡 Installing curl...${NC}"
+    # In GitHub Actions Ubuntu, curl should be pre-installed, but just in case
+    sudo apt-get update && sudo apt-get install -y curl || true
+fi
+
+# Give LocalStack a few seconds to start before checking
+echo -e "${BLUE}⏱️  Waiting 5 seconds for LocalStack to initialize...${NC}"
+sleep 5
+
 while [ $attempt -lt $max_attempts ]; do
-    if curl -s http://localhost:4566/_localstack/health > /dev/null 2>&1; then
+    # Check container is still running
+    if ! docker ps | grep -q localstack; then
+        echo -e "${RED}❌ LocalStack container stopped unexpectedly!${NC}"
+        echo -e "${YELLOW}💡 Container logs:${NC}"
+        docker logs localstack 2>&1 | tail -50
+        exit 1
+    fi
+
+    # Try to connect to LocalStack health endpoint with verbose output on first few attempts
+    if [ $attempt -lt 3 ]; then
+        echo -e "${BLUE}🔍 Testing connectivity to localhost:4566 (attempt $((attempt + 1)))...${NC}"
+        curl -v --connect-timeout 5 --max-time 10 http://localhost:4566/_localstack/health 2>&1 | head -30 || echo "Connection failed, will retry..."
+    fi
+
+    # Regular health check (suppress output for cleaner logs)
+    HTTP_CODE=$(curl --connect-timeout 5 --max-time 10 -s -o /dev/null -w "%{http_code}" http://localhost:4566/_localstack/health 2>&1 || echo "000")
+
+    if [ "$HTTP_CODE" = "200" ]; then
         echo -e "${GREEN}✅ LocalStack is ready!${NC}"
         echo ""
 
@@ -122,19 +151,32 @@ while [ $attempt -lt $max_attempts ]; do
         exit 0
     fi
 
-    echo -e "${YELLOW}⏳ Attempt $((attempt + 1))/$max_attempts - waiting for LocalStack...${NC}"
-    sleep 2
+    echo -e "${YELLOW}⏳ Attempt $((attempt + 1))/$max_attempts - waiting for LocalStack (HTTP $HTTP_CODE)...${NC}"
+    sleep 3
     ((attempt++))
 done
 
 # If we reach here, LocalStack failed to start
 echo ""
 echo -e "${RED}❌ LocalStack failed to start or took too long to be ready${NC}"
-echo -e "${YELLOW}💡 Container logs:${NC}"
-docker logs localstack 2>&1 | tail -50
-
+echo -e "${YELLOW}💡 Debugging information:${NC}"
 echo ""
-echo -e "${YELLOW}💡 Container status:${NC}"
-docker ps -a | grep localstack
+
+echo -e "${BLUE}📊 Container status:${NC}"
+docker ps -a | grep localstack || echo "No LocalStack container found"
+echo ""
+
+echo -e "${BLUE}📋 Container logs (last 100 lines):${NC}"
+docker logs localstack 2>&1 | tail -100 || echo "Could not retrieve logs"
+echo ""
+
+echo -e "${BLUE}🔍 Network connectivity test:${NC}"
+echo "Testing connection to localhost:4566..."
+nc -zv localhost 4566 2>&1 || echo "Port 4566 is not accessible"
+echo ""
+
+echo -e "${BLUE}🐳 Docker network inspection:${NC}"
+docker inspect localstack --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' 2>&1 || echo "Could not inspect container"
+echo ""
 
 exit 1
