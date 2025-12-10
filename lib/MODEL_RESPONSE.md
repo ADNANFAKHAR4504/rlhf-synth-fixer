@@ -1068,10 +1068,10 @@ if __name__ == "__main__":
         print(f"Changed Resources: {len(report['drift_analysis']['changed_resources'])}")
 
         if report.get('alerts_triggered'):
-            print("\n⚠️  ALERT TRIGGERED - Drift exceeds threshold!")
+            print("\nALERT TRIGGERED - Drift exceeds threshold!")
 
         if report.get('errors'):
-            print(f"\n❌ Errors encountered: {report['errors']}")
+            print(f"\nErrors encountered: {report['errors']}")
 
         # Write full report to local file for inspection
         local_report_file = f"analysis_report_{report['metadata']['run_id']}.json"
@@ -1085,7 +1085,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n\nAnalysis interrupted by user")
     except Exception as e:
-        print(f"\n❌ Analysis failed: {str(e)}")
+        print(f"\nAnalysis failed: {str(e)}")
         logger.error(f"Analysis failed: {str(e)}\n{traceback.format_exc()}")
 ```
 
