@@ -83,6 +83,7 @@ deploy_platform() {
 
     # Set LocalStack environment variables
     export AWS_ENDPOINT_URL=${AWS_ENDPOINT_URL:-http://localhost:4566}
+    export AWS_ENDPOINT_URL_S3=${AWS_ENDPOINT_URL_S3:-http://localhost:4566}
     export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-test}
     export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-test}
     export AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
@@ -90,6 +91,7 @@ deploy_platform() {
 
     print_status $GREEN "✅ LocalStack environment configured"
     print_status $BLUE "   AWS_ENDPOINT_URL: $AWS_ENDPOINT_URL"
+    print_status $BLUE "   AWS_ENDPOINT_URL_S3: $AWS_ENDPOINT_URL_S3"
     print_status $BLUE "   AWS_REGION: $AWS_DEFAULT_REGION"
     echo ""
 

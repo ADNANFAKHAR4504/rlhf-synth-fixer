@@ -477,6 +477,7 @@ jobs:
           if [ "${{ needs.detect-metadata.outputs.provider }}" == "localstack" ]; then
             echo "Deploying to LocalStack..."
             export AWS_ENDPOINT_URL=http://localhost:4566
+            export AWS_ENDPOINT_URL_S3=http://localhost:4566
             export AWS_ACCESS_KEY_ID=test
             export AWS_SECRET_ACCESS_KEY=test
             export LOCALSTACK_API_KEY="${{ secrets.LOCALSTACK_API_KEY }}"
@@ -712,6 +713,7 @@ jobs:
           if [ "${{ needs.detect-metadata.outputs.provider }}" == "localstack" ]; then
             echo "Running integration tests against LocalStack..."
             export AWS_ENDPOINT_URL=http://localhost:4566
+            export AWS_ENDPOINT_URL_S3=http://localhost:4566
             export AWS_ACCESS_KEY_ID=test
             export AWS_SECRET_ACCESS_KEY=test
             export LOCALSTACK_API_KEY="${{ secrets.LOCALSTACK_API_KEY }}"
