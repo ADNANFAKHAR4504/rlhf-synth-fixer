@@ -81,24 +81,82 @@ import boto3
 from moto import mock_aws
 from moto.core import DEFAULT_ACCOUNT_ID as ACCOUNT_ID
 from datetime import datetime
+import urllib.request
+import functools
 
 # Import the analysis module
 from lib import analyse as analysis
 
+def conditional_mock_aws(func):
+    """Decorator that applies @mock_aws only when external moto server is not running"""
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        if not self.use_external_moto:
+            # Apply mock_aws when using in-process moto
+            with mock_aws():
+                # Re-create clients within the mock context
+                self.session = boto3.Session(region_name='us-east-1')
+                self.ec2 = self.session.client('ec2')
+                self.route53 = self.session.client('route53')
+                self.s3 = self.session.client('s3')
+                self.logs = self.session.client('logs')
+                # Create S3 bucket for flow logs
+                self.s3.create_bucket(Bucket='flow-logs-bucket')
+                return func(self, *args, **kwargs)
+        else:
+            # Use external moto server directly
+            return func(self, *args, **kwargs)
+    return wrapper
+
 class TestComplianceAnalyzer(unittest.TestCase):
     """Test suite for compliance analyzer"""
     
-    @mock_aws
     def setUp(self):
         """Set up test environment"""
-        self.session = boto3.Session(region_name='us-east-1')
-        self.ec2 = self.session.client('ec2')
-        self.route53 = self.session.client('route53')
-        self.s3 = self.session.client('s3')
-        self.logs = self.session.client('logs')
+        import urllib.request
+        
+        # Check if external moto server is running on port 5001
+        self.use_external_moto = False
+        try:
+            urllib.request.urlopen('http://127.0.0.1:5001/', timeout=2)
+            self.use_external_moto = True
+            print("✅ Detected external moto server, using endpoint mode")
+        except:
+            print("✅ Using in-process moto (@mock_aws mode)")
+        
+        # Configure session and clients based on detected mode
+        if self.use_external_moto:
+            # External moto server mode - configure clients with endpoint
+            endpoint_url = 'http://127.0.0.1:5001'
+            self.session = boto3.Session(
+                region_name='us-east-1',
+                aws_access_key_id='test',
+                aws_secret_access_key='test'
+            )
+            self.ec2 = self.session.client('ec2', endpoint_url=endpoint_url)
+            self.route53 = self.session.client('route53', endpoint_url=endpoint_url)
+            self.s3 = self.session.client('s3', endpoint_url=endpoint_url)
+            self.logs = self.session.client('logs', endpoint_url=endpoint_url)
+        else:
+            # In-process moto mode - this will be overridden by @mock_aws decorator
+            # when applied to individual test methods
+            self.session = boto3.Session(region_name='us-east-1')
+            self.ec2 = self.session.client('ec2')
+            self.route53 = self.session.client('route53')
+            self.s3 = self.session.client('s3')
+            self.logs = self.session.client('logs')
         
         # Create S3 bucket for flow logs
-        self.s3.create_bucket(Bucket='flow-logs-bucket')
+        try:
+            if self.use_external_moto:
+                # For external moto, create bucket directly
+                self.s3.create_bucket(Bucket='flow-logs-bucket')
+            else:
+                # For in-process moto, this will be handled in each test method
+                pass
+        except Exception as e:
+            # Bucket might already exist
+            pass
         
     def create_compliant_environment(self):
         """Create a fully compliant test environment"""
@@ -338,7 +396,7 @@ class TestComplianceAnalyzer(unittest.TestCase):
             }
         )
     
-    @mock_aws
+    @conditional_mock_aws
     def test_compliant_environment_passes_all_checks(self):
         """Test that a compliant environment passes all checks"""
         self.create_compliant_environment()
@@ -392,7 +450,7 @@ class TestComplianceAnalyzer(unittest.TestCase):
         self.assertEqual(len(results['findings']), 0)
         self.assertEqual(results['compliance_summary']['compliance_percentage'], 100.0)
     
-    @mock_aws
+    @conditional_mock_aws
     def test_missing_payment_vpc_detected(self):
         """Test that missing Payment VPC is detected"""
         # Only create Analytics VPC
@@ -409,7 +467,7 @@ class TestComplianceAnalyzer(unittest.TestCase):
         self.assertEqual(payment_vpc_findings[0]['severity'], 'CRITICAL')
         self.assertIn('SOC2', payment_vpc_findings[0]['frameworks'])
     
-    @mock_aws
+    @conditional_mock_aws
     def test_missing_analytics_vpc_detected(self):
         """Test that missing Analytics VPC is detected"""
         # Only create Payment VPC
@@ -425,7 +483,7 @@ class TestComplianceAnalyzer(unittest.TestCase):
         self.assertEqual(len(analytics_vpc_findings), 1)
         self.assertEqual(analytics_vpc_findings[0]['severity'], 'CRITICAL')
     
-    @mock_aws
+    @conditional_mock_aws
     def test_insufficient_subnets_detected(self):
         """Test that insufficient subnets are detected"""
         # Create VPC with only 2 subnets
@@ -449,7 +507,7 @@ class TestComplianceAnalyzer(unittest.TestCase):
                           if f['issue_type'] == 'Insufficient private subnets']
         self.assertGreater(len(subnet_findings), 0)
     
-    @mock_aws
+    @conditional_mock_aws
     def test_missing_vpc_peering_detected(self):
         """Test that missing VPC peering is detected"""
         # Create both VPCs but no peering
@@ -466,7 +524,7 @@ class TestComplianceAnalyzer(unittest.TestCase):
         self.assertEqual(len(peering_findings), 1)
         self.assertEqual(peering_findings[0]['severity'], 'CRITICAL')
     
-    @mock_aws
+    @conditional_mock_aws
     def test_inactive_peering_detected(self):
         """Test that inactive peering is detected"""
         # Create VPCs and peering but don't accept it
@@ -488,7 +546,7 @@ class TestComplianceAnalyzer(unittest.TestCase):
                             if f['issue_type'] == 'Inactive peering connection']
         self.assertEqual(len(inactive_findings), 1)
     
-    @mock_aws
+    @conditional_mock_aws
     def test_missing_routes_detected(self):
         """Test that missing routes are detected"""
         self.create_compliant_environment()
@@ -521,7 +579,7 @@ class TestComplianceAnalyzer(unittest.TestCase):
         
         self.assertGreater(len(route_findings), 0)
     
-    @mock_aws
+    @conditional_mock_aws
     def test_wide_open_security_group_detected(self):
         """Test that wide open security groups are detected"""
         # Create VPC and security group
@@ -555,7 +613,7 @@ class TestComplianceAnalyzer(unittest.TestCase):
         self.assertGreater(len(sg_findings), 0)
         self.assertEqual(sg_findings[0]['severity'], 'CRITICAL')
     
-    @mock_aws
+    @conditional_mock_aws
     def test_unencrypted_protocols_detected(self):
         """Test that unencrypted protocols are detected"""
         # Create VPC and security group
@@ -588,7 +646,7 @@ class TestComplianceAnalyzer(unittest.TestCase):
                                if f['issue_type'] == 'Unencrypted protocols allowed']
         self.assertGreater(len(unencrypted_findings), 0)
     
-    @mock_aws
+    @conditional_mock_aws
     def test_instance_with_public_ip_detected(self):
         """Test that instances with public IPs are detected"""
         # Create VPC and subnet
@@ -639,7 +697,7 @@ class TestComplianceAnalyzer(unittest.TestCase):
                              if f['issue_type'] == 'Instance has public IP']
         self.assertGreater(len(public_ip_findings), 0)
     
-    @mock_aws
+    @conditional_mock_aws
     def test_missing_ssm_tag_detected(self):
         """Test that missing SSM tags are detected"""
         # Create VPC and instance without SSM tag
@@ -673,7 +731,7 @@ class TestComplianceAnalyzer(unittest.TestCase):
                        if f['issue_type'] == 'SSM not enabled']
         self.assertGreater(len(ssm_findings), 0)
     
-    @mock_aws
+    @conditional_mock_aws
     def test_missing_flow_logs_detected(self):
         """Test that missing flow logs are detected"""
         # Create VPC without flow logs
@@ -689,7 +747,7 @@ class TestComplianceAnalyzer(unittest.TestCase):
         self.assertGreater(len(flow_log_findings), 0)
         self.assertEqual(flow_log_findings[0]['severity'], 'CRITICAL')
     
-    @mock_aws
+    @conditional_mock_aws
     def test_flow_logs_wrong_destination_detected(self):
         """Test that flow logs with wrong destination are detected"""
         self.create_compliant_environment()
@@ -723,7 +781,7 @@ class TestComplianceAnalyzer(unittest.TestCase):
                       if f['issue_type'] == 'Flow logs not using S3']
         self.assertGreater(len(s3_findings), 0)
     
-    @mock_aws
+    @conditional_mock_aws
     def test_partial_flow_logs_detected(self):
         """Test that partial flow log capture is detected"""
         # Create VPC with partial flow logs
@@ -767,7 +825,7 @@ class TestComplianceAnalyzer(unittest.TestCase):
         
         self.assertGreater(len(partial_findings), 0)
     
-    @mock_aws
+    @conditional_mock_aws
     def test_json_report_generation(self):
         """Test JSON report generation"""
         self.create_compliant_environment()
@@ -794,7 +852,7 @@ class TestComplianceAnalyzer(unittest.TestCase):
         # Clean up
         os.remove(test_json_file)
     
-    @mock_aws
+    @conditional_mock_aws
     def test_html_report_generation(self):
         """Test HTML report generation"""
         self.create_compliant_environment()
@@ -822,7 +880,7 @@ class TestComplianceAnalyzer(unittest.TestCase):
         # Clean up
         os.remove(test_html_file)
     
-    @mock_aws
+    @conditional_mock_aws
     def test_framework_mapping(self):
         """Test that findings are properly mapped to frameworks"""
         # Create non-compliant environment
@@ -839,7 +897,7 @@ class TestComplianceAnalyzer(unittest.TestCase):
             for framework in finding['frameworks']:
                 self.assertIn(framework, ['SOC2', 'PCI-DSS', 'GDPR'])
     
-    @mock_aws
+    @conditional_mock_aws
     def test_severity_levels(self):
         """Test that severity levels are properly assigned"""
         # Create various non-compliant scenarios
@@ -854,7 +912,7 @@ class TestComplianceAnalyzer(unittest.TestCase):
         for severity in severities:
             self.assertIn(severity, ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'])
     
-    @mock_aws
+    @conditional_mock_aws
     def test_remediation_steps_provided(self):
         """Test that remediation steps are provided for all findings"""
         # Create non-compliant environment
@@ -869,7 +927,7 @@ class TestComplianceAnalyzer(unittest.TestCase):
             self.assertIsNotNone(finding['remediation_steps'])
             self.assertNotEqual(finding['remediation_steps'], '')
     
-    @mock_aws
+    @conditional_mock_aws
     def test_compliance_percentage_calculation(self):
         """Test compliance percentage calculation"""
         self.create_compliant_environment()
@@ -888,7 +946,7 @@ class TestComplianceAnalyzer(unittest.TestCase):
         expected_percentage = (summary['passed'] / summary['total_checks']) * 100
         self.assertAlmostEqual(summary['compliance_percentage'], expected_percentage, places=2)
     
-    @mock_aws
+    @conditional_mock_aws
     def test_all_resource_types_checked(self):
         """Test that all required resource types are checked"""
         self.create_compliant_environment()
