@@ -1,0 +1,8 @@
+{
+  "ALBDnsName": "payment-service-alb-dev.elb.localhost.localstack.cloud",
+  "CodeDeployApplicationName": "payment-service-app-dev",
+  "ECRRepositoryUri": "000000000000.dkr.ecr.us-east-1.localhost.localstack.cloud:4566/payment-service-dev",
+  "PipelineName": "payment-service-pipeline-dev",
+  "ProductionURL": "http://payment-service-alb-dev.elb.localhost.localstack.cloud",
+  "StagingURL": "http://payment-service-alb-dev.elb.localhost.localstack.cloud:8080"
+}
