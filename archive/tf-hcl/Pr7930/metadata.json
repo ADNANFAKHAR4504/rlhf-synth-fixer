@@ -36,5 +36,12 @@
   ],
   "task_config": {
     "deploy_env": "dev.tfvars"
-  }
+  },
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
 }
