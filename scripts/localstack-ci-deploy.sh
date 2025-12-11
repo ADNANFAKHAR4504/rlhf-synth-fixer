@@ -189,10 +189,11 @@ deploy_cdk() {
         -c environmentSuffix="$env_suffix" \
         --no-rollback \
         --verbose || {
-            print_status $YELLOW "⚠️  Initial deployment failed, retrying with force..."
+            print_status $YELLOW "⚠️  Initial deployment failed, retrying with force and no-rollback..."
             cdklocal deploy --all --require-approval never \
                 -c environmentSuffix="$env_suffix" \
                 --force \
+                --no-rollback \
                 --verbose
         }
 
