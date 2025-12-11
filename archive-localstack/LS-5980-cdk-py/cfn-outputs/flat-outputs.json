@@ -1,0 +1,9 @@
+{
+  "ClusterName": "payment-cluster-dev",
+  "DatabaseEndpoint": "localhost.localstack.cloud",
+  "LambdaFunctionArn": "arn:aws:lambda:us-east-1:000000000000:function:payment-validation-dev",
+  "LoadBalancerDNS": "payment-alb-dev.elb.localhost.localstack.cloud",
+  "LogBucketName": "payment-logs-dev-us-east-1",
+  "SNSTopicArn": "arn:aws:sns:us-east-1:000000000000:payment-alerts-dev",
+  "VpcId": "vpc-122953b1d9a92dc84"
+}
