@@ -182,12 +182,18 @@ deploy_cdk() {
 
     # Deploy with LocalStack-specific flags
     print_status $YELLOW "🚀 Deploying stacks..."
-    # Use hotswap for LocalStack to skip asset publishing issues
-    # --hotswap-fallback will fall back to CloudFormation if hotswap fails
+    # Deploy to LocalStack with CloudFormation
+    # Note: Asset uploads may have issues with LocalStack S3, but we proceed anyway
     cdklocal deploy --all --require-approval never \
         -c environmentSuffix="$env_suffix" \
-        --hotswap-fallback \
-        --verbose
+        --no-rollback \
+        --verbose || {
+            print_status $YELLOW "⚠️  Initial deployment failed, retrying with force..."
+            cdklocal deploy --all --require-approval never \
+                -c environmentSuffix="$env_suffix" \
+                --force \
+                --verbose
+        }
 
     print_status $GREEN "✅ CDK deployment completed!"
 }
