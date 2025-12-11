@@ -6,7 +6,7 @@ The tool will run in us-east-1, using Python 3.12, Boto3, and Moto + pytest for 
 
 You must produce only two files + one HTML/Jinja2 template block, following the exact structure described below.
 
-Core Implementation Requirements
+Core Implementation Requirements:
 1. analyze_s3_security.py — Main Script
 
 Implement a fully functional S3 security scanner with:
