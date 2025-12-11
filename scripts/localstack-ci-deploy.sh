@@ -172,14 +172,22 @@ deploy_cdk() {
     # Additional S3 configuration for LocalStack
     export AWS_S3_ADDRESSING_STYLE=path
 
+    # Get environment suffix from environment variable or default to 'dev'
+    local env_suffix="${ENVIRONMENT_SUFFIX:-dev}"
+    print_status $BLUE "📌 Using environment suffix: $env_suffix"
+
     # Bootstrap CDK for LocalStack
     print_status $YELLOW "🔧 Bootstrapping CDK..."
-    cdklocal bootstrap || true
+    cdklocal bootstrap -c environmentSuffix="$env_suffix" || true
 
     # Deploy with LocalStack-specific flags
     print_status $YELLOW "🚀 Deploying stacks..."
-    # Use --no-asset-metadata to avoid asset metadata issues with LocalStack
-    cdklocal deploy --all --require-approval never --verbose
+    # Use hotswap for LocalStack to skip asset publishing issues
+    # --hotswap-fallback will fall back to CloudFormation if hotswap fails
+    cdklocal deploy --all --require-approval never \
+        -c environmentSuffix="$env_suffix" \
+        --hotswap-fallback \
+        --verbose
 
     print_status $GREEN "✅ CDK deployment completed!"
 }
