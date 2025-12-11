@@ -45,9 +45,12 @@ show_usage() {
     echo "This script will:"
     echo "  1. Create 'archive-localstack' folder if it doesn't exist"
     echo "  2. Extract metadata from metadata.json (po_id, platform, language)"
-    echo "  3. Get current git branch name"
-    echo "  4. Create folder: LS-{po_id}-{platform}-{language}"
-    echo "  5. Move lib/, test/, cfn-outputs/, and metadata.json to the new folder"
+    echo "  3. Create folder: LS-{po_id}-{platform}-{language}"
+    echo "  4. Move core files: lib/, test/, tests/, cfn-outputs/, metadata.json, execution-output.md, int-test-output.md"
+    echo "  5. Move platform-specific generated files based on platform:"
+    echo "     - pulumi: Pulumi.yaml, go.mod, go.sum"
+    echo "     - cdk: cdk.json"
+    echo "     - cfn/terraform: (no extra files)"
     echo
     echo "Examples:"
     echo "  $0                          # Archive current directory"
@@ -61,11 +64,11 @@ extract_metadata() {
     local metadata_file="$source_path/metadata.json"
     
     if [[ ! -f "$metadata_file" ]]; then
-        print_status $RED "❌ No metadata.json found in $source_path"
+        print_status $RED "❌ No metadata.json found in $source_path" >&2
         return 1
     fi
-    
-    print_status $YELLOW "🔍 Extracting metadata from $metadata_file..."
+
+    print_status $YELLOW "🔍 Extracting metadata from $metadata_file..." >&2
     
     # Extract fields using jq or fallback to grep/sed
     if command -v jq >/dev/null 2>&1; then
@@ -86,17 +89,17 @@ extract_metadata() {
     
     # Validate extracted data
     if [[ -z "$po_id" || "$po_id" == "null" || "$po_id" == "unknown" ]]; then
-        print_status $RED "❌ Could not extract po_id from metadata.json"
+        print_status $RED "❌ Could not extract po_id from metadata.json" >&2
         return 1
     fi
-    
+
     if [[ -z "$platform" || "$platform" == "null" || "$platform" == "unknown" ]]; then
-        print_status $RED "❌ Could not extract platform from metadata.json"
+        print_status $RED "❌ Could not extract platform from metadata.json" >&2
         return 1
     fi
-    
+
     if [[ -z "$language" || "$language" == "null" || "$language" == "unknown" ]]; then
-        print_status $RED "❌ Could not extract language from metadata.json"
+        print_status $RED "❌ Could not extract language from metadata.json" >&2
         return 1
     fi
     
@@ -119,24 +122,58 @@ get_git_branch() {
     fi
 }
 
+# Function to get platform-specific files based on metadata platform
+get_platform_specific_files() {
+    local platform=$1
+
+    case "$platform" in
+        pulumi)
+            echo "Pulumi.yaml go.mod go.sum"
+            ;;
+        cdk)
+            echo "cdk.json"
+            ;;
+        terraform|tf)
+            echo ""
+            ;;
+        cfn|cloudformation)
+            echo ""
+            ;;
+        *)
+            echo ""
+            ;;
+    esac
+}
+
 # Function to check if directory/file exists and can be moved
 check_movable_items() {
     local source_path=$1
-    local items=("lib" "test" "cfn-outputs" "metadata.json")
+    local platform=$2
+
+    # Core items (common across all platforms)
+    local items=("lib" "test" "tests" "cfn-outputs" "metadata.json" "execution-output.md" "int-test-output.md")
+
+    # Add platform-specific files
+    local platform_files=$(get_platform_specific_files "$platform")
+    if [[ -n "$platform_files" ]]; then
+        read -ra platform_array <<< "$platform_files"
+        items+=("${platform_array[@]}")
+    fi
+
     local found_items=()
-    
+
     for item in "${items[@]}"; do
         local item_path="$source_path/$item"
         if [[ -e "$item_path" ]]; then
             found_items+=("$item")
         fi
     done
-    
+
     if [[ ${#found_items[@]} -eq 0 ]]; then
-        print_status $RED "❌ No archivable items found (lib/, test/, cfn-outputs/, metadata.json)"
+        print_status $RED "❌ No archivable items found (lib/, test/, tests/, cfn-outputs/, metadata.json, execution-output.md, int-test-output.md)" >&2
         return 1
     fi
-    
+
     echo "${found_items[@]}"
     return 0
 }
@@ -278,9 +315,9 @@ main() {
         exit 1
     fi
     
-    # Check what items can be moved
+    # Check what items can be moved (pass platform for platform-specific files)
     local movable_items
-    if ! movable_items=$(check_movable_items "$source_path"); then
+    if ! movable_items=$(check_movable_items "$source_path" "$platform"); then
         exit 1
     fi
     
