@@ -177,6 +177,11 @@ deploy_cdk() {
     local env_suffix="${ENVIRONMENT_SUFFIX:-dev}"
     print_status $BLUE "📌 Using environment suffix: $env_suffix"
 
+    # Context flag to disable the CDK's VPC default security group restriction Custom Resource,
+    # which frequently fails deployment/deletion in LocalStack.
+    local cdk_localstack_context="-c vpc-restrict-default-security-group=false"
+    print_status $YELLOW "🔧 Applying LocalStack VPC context flag: $cdk_localstack_context"
+
     # Bootstrap CDK for LocalStack
     print_status $YELLOW "🔧 Bootstrapping CDK..."
     cdklocal bootstrap -c environmentSuffix="$env_suffix" || true
