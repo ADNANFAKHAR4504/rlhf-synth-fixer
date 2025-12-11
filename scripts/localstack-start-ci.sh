@@ -59,7 +59,7 @@ if docker ps -a | grep -q localstack; then
 fi
 
 # Determine which services to enable
-SERVICES="${LOCALSTACK_SERVICES:-s3,lambda,dynamodb,cloudformation,apigateway,sts,iam,cloudwatch,logs,events,sns,sqs,kinesis,ec2,rds,ecs,ecr}"
+SERVICES="${LOCALSTACK_SERVICES:-s3,lambda,dynamodb,cloudformation,apigateway,sts,iam,cloudwatch,logs,events,sns,sqs,kinesis,ec2,rds,ecs,ecr,ssm}"
 
 echo -e "${BLUE}📋 Services to enable: ${SERVICES}${NC}"
 
