@@ -1,4 +1,4 @@
-# analyze_s3_security.py
+# analyze_aws_infrastructure.py
 import json
 import boto3
 import os
@@ -7,12 +7,21 @@ from datetime import datetime
 from collections import defaultdict
 from jinja2 import Template
 
-class S3SecurityAnalyzer:
+class AWSInfrastructureAnalyzer:
     def __init__(self, region='us-east-1'):
         self.region = region
         # Support AWS_ENDPOINT_URL for Moto testing
         endpoint_url = os.environ.get('AWS_ENDPOINT_URL')
-        self.s3_client = boto3.client('s3', region_name=region, endpoint_url=endpoint_url)
+        
+        # Create clients with or without endpoint_url
+        if endpoint_url:
+            self.s3_client = boto3.client('s3', region_name=region, endpoint_url=endpoint_url)
+            self.ec2_client = boto3.client('ec2', region_name=region, endpoint_url=endpoint_url)
+            self.logs_client = boto3.client('logs', region_name=region, endpoint_url=endpoint_url)
+        else:
+            self.s3_client = boto3.client('s3', region_name=region)
+            self.ec2_client = boto3.client('ec2', region_name=region)
+            self.logs_client = boto3.client('logs', region_name=region)
         self.findings = []
         self.excluded_buckets = []
         self.analyzed_buckets = []
@@ -51,7 +60,7 @@ class S3SecurityAnalyzer:
                     if statement.get('Effect') == 'Allow' and statement.get('Principal') == '*':
                         public_policy = True
                         break
-            except self.s3_client.exceptions.NoSuchBucketPolicy:
+            except Exception:
                 pass
             
             return public_acl, public_policy
@@ -143,6 +152,142 @@ class S3SecurityAnalyzer:
         
         return findings
     
+    def analyze_ebs_volumes(self):
+        """Analyze unused EBS volumes"""
+        try:
+            response = self.ec2_client.describe_volumes()
+            unused_volumes = []
+            total_size = 0
+            
+            for volume in response.get('Volumes', []):
+                # Check if volume is attached
+                if volume['State'] == 'available':  # Unattached volumes
+                    volume_info = {
+                        'VolumeId': volume['VolumeId'],
+                        'Size': volume['Size'],
+                        'VolumeType': volume.get('VolumeType', 'standard')
+                    }
+                    unused_volumes.append(volume_info)
+                    total_size += volume['Size']
+            
+            return {
+                'UnusedEBSVolumes': {
+                    'Count': len(unused_volumes),
+                    'TotalSize': total_size,
+                    'Volumes': unused_volumes
+                }
+            }
+        except Exception as e:
+            print(f"Error analyzing EBS volumes: {e}")
+            return {
+                'UnusedEBSVolumes': {
+                    'Count': 0,
+                    'TotalSize': 0,
+                    'Volumes': []
+                }
+            }
+    
+    def analyze_security_groups(self):
+        """Analyze public security groups"""
+        try:
+            response = self.ec2_client.describe_security_groups()
+            public_sgs = []
+            
+            for sg in response.get('SecurityGroups', []):
+                public_rules = []
+                
+                # Check ingress rules for public access
+                for rule in sg.get('IpPermissions', []):
+                    for ip_range in rule.get('IpRanges', []):
+                        if ip_range.get('CidrIp') == '0.0.0.0/0':
+                            public_rules.append({
+                                'IpProtocol': rule.get('IpProtocol'),
+                                'FromPort': rule.get('FromPort'),
+                                'ToPort': rule.get('ToPort'),
+                                'Source': '0.0.0.0/0'
+                            })
+                
+                if public_rules:
+                    sg_info = {
+                        'GroupId': sg['GroupId'],
+                        'GroupName': sg['GroupName'],
+                        'PublicIngressRules': public_rules
+                    }
+                    public_sgs.append(sg_info)
+            
+            return {
+                'PublicSecurityGroups': {
+                    'Count': len(public_sgs),
+                    'SecurityGroups': public_sgs
+                }
+            }
+        except Exception as e:
+            print(f"Error analyzing security groups: {e}")
+            return {
+                'PublicSecurityGroups': {
+                    'Count': 0,
+                    'SecurityGroups': []
+                }
+            }
+    
+    def analyze_cloudwatch_logs(self):
+        """Analyze CloudWatch log streams"""
+        try:
+            log_groups_response = self.logs_client.describe_log_groups()
+            log_groups = log_groups_response.get('logGroups', [])
+            
+            total_streams = 0
+            total_size = 0
+            log_group_metrics = []
+            
+            for log_group in log_groups:
+                log_group_name = log_group['logGroupName']
+                
+                try:
+                    streams_response = self.logs_client.describe_log_streams(
+                        logGroupName=log_group_name
+                    )
+                    streams = streams_response.get('logStreams', [])
+                    
+                    group_stream_count = len(streams)
+                    group_total_size = sum(stream.get('storedBytes', 0) for stream in streams)
+                    group_avg_size = group_total_size / max(group_stream_count, 1)
+                    
+                    log_group_metrics.append({
+                        'LogGroupName': log_group_name,
+                        'StreamCount': group_stream_count,
+                        'TotalSize': group_total_size,
+                        'AverageStreamSize': int(group_avg_size)
+                    })
+                    
+                    total_streams += group_stream_count
+                    total_size += group_total_size
+                    
+                except Exception as e:
+                    print(f"Error processing log group {log_group_name}: {e}")
+                    continue
+            
+            avg_stream_size = total_size / max(total_streams, 1)
+            
+            return {
+                'CloudWatchLogMetrics': {
+                    'TotalLogStreams': total_streams,
+                    'TotalSize': total_size,
+                    'AverageStreamSize': int(avg_stream_size),
+                    'LogGroupMetrics': log_group_metrics
+                }
+            }
+        except Exception as e:
+            print(f"Error analyzing CloudWatch logs: {e}")
+            return {
+                'CloudWatchLogMetrics': {
+                    'TotalLogStreams': 0,
+                    'TotalSize': 0,
+                    'AverageStreamSize': 0,
+                    'LogGroupMetrics': []
+                }
+            }
+    
     def scan_buckets(self):
         response = self.s3_client.list_buckets()
         buckets = response.get('Buckets', [])
@@ -220,25 +365,33 @@ class S3SecurityAnalyzer:
                         print(f"    - {bucket}")
                 print()
     
-    def save_json_report(self):
-        compliance_summary = self.generate_compliance_summary()
-        report = {
-            'scan_date': datetime.now().isoformat(),
-            'region': self.region,
-            'findings': self.findings,
-            'compliance_summary': compliance_summary
-        }
+    def save_json_report(self, all_results=None):
+        """Save comprehensive analysis results to JSON files"""
+        # Backward compatibility for unit tests that call this without arguments
+        if all_results is None:
+            compliance_summary = self.generate_compliance_summary()
+            s3_report = {
+                'scan_date': datetime.now().isoformat(),
+                'region': self.region,
+                'findings': self.findings,
+                'compliance_summary': compliance_summary
+            }
+            
+            # Save to s3_security_audit.json (for direct use)
+            with open('s3_security_audit.json', 'w') as f:
+                json.dump(s3_report, f, indent=2)
+            
+            # Also save to aws_audit_results.json in the format expected by test framework
+            all_results = {'S3SecurityAudit': s3_report}
         
-        # Save to s3_security_audit.json (for direct use)
-        with open('s3_security_audit.json', 'w') as f:
-            json.dump(report, f, indent=2)
+        # Save to s3_security_audit.json (for direct use - S3 only)
+        if 'S3SecurityAudit' in all_results:
+            with open('s3_security_audit.json', 'w') as f:
+                json.dump(all_results['S3SecurityAudit'], f, indent=2)
         
-        # Also save to aws_audit_results.json in the format expected by test framework
-        aws_audit_results = {
-            'S3SecurityAudit': report
-        }
+        # Save complete results to aws_audit_results.json (expected by test framework)
         with open('aws_audit_results.json', 'w') as f:
-            json.dump(aws_audit_results, f, indent=2)
+            json.dump(all_results, f, indent=2)
     
     def generate_html_report(self):
         compliance_summary = self.generate_compliance_summary()
@@ -444,17 +597,61 @@ class S3SecurityAnalyzer:
             f.write(html_content)
 
 def main():
-    analyzer = S3SecurityAnalyzer()
+    analyzer = AWSInfrastructureAnalyzer()
+    
+    # Run all analyses
+    print("Running AWS Infrastructure Analysis...")
+    
+    # EBS Volume Analysis
+    print("Analyzing EBS volumes...")
+    ebs_results = analyzer.analyze_ebs_volumes()
+    
+    # Security Group Analysis
+    print("Analyzing security groups...")
+    sg_results = analyzer.analyze_security_groups()
+    
+    # CloudWatch Logs Analysis
+    print("Analyzing CloudWatch logs...")
+    logs_results = analyzer.analyze_cloudwatch_logs()
+    
+    # S3 Security Analysis
+    print("Analyzing S3 security...")
     analyzer.scan_buckets()
+    compliance_summary = analyzer.generate_compliance_summary()
+    s3_results = {
+        'S3SecurityAudit': {
+            'scan_date': datetime.now().isoformat(),
+            'region': analyzer.region,
+            'findings': analyzer.findings,
+            'compliance_summary': compliance_summary
+        }
+    }
+    
+    # Combine all results
+    all_results = {}
+    all_results.update(ebs_results)
+    all_results.update(sg_results)
+    all_results.update(logs_results)
+    all_results.update(s3_results)
+    
+    # Generate outputs
     analyzer.print_console_output()
-    analyzer.save_json_report()
+    analyzer.save_json_report(all_results)
     analyzer.generate_html_report()
     
-    print(f"\nAnalysis complete. Analyzed {len(analyzer.analyzed_buckets)} buckets.")
-    print(f"Excluded {len(analyzer.excluded_buckets)} buckets.")
+    print(f"\nAnalysis complete!")
+    print(f"- EBS volumes analyzed: {ebs_results['UnusedEBSVolumes']['Count']}")
+    print(f"- Security groups with public access: {sg_results['PublicSecurityGroups']['Count']}")
+    print(f"- CloudWatch log streams: {logs_results['CloudWatchLogMetrics']['TotalLogStreams']}")
+    print(f"- S3 buckets analyzed: {len(analyzer.analyzed_buckets)}")
+    print(f"- S3 buckets excluded: {len(analyzer.excluded_buckets)}")
     print("\nReports generated:")
+    print("  - aws_audit_results.json")
     print("  - s3_security_audit.json")
     print("  - s3_audit_report.html")
+
+# Backward compatibility for unit tests
+S3SecurityAnalyzer = AWSInfrastructureAnalyzer
 
 if __name__ == '__main__':
     main()

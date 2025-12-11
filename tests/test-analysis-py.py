@@ -78,13 +78,27 @@ import pytest
 
 
 def boto_client(service: str):
-    return boto3.client(
-        service,
-        endpoint_url=os.environ.get("AWS_ENDPOINT_URL"),
-        region_name=os.environ.get("AWS_DEFAULT_REGION"),
-        aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
-        aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
-    )
+    # Set up default values for moto testing if environment vars are not set
+    region = os.environ.get("AWS_DEFAULT_REGION") or "us-east-1"
+    access_key = os.environ.get("AWS_ACCESS_KEY_ID") or "testing"
+    secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY") or "testing"
+    endpoint_url = os.environ.get("AWS_ENDPOINT_URL")
+    
+    if endpoint_url:
+        return boto3.client(
+            service,
+            endpoint_url=endpoint_url,
+            region_name=region,
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+        )
+    else:
+        return boto3.client(
+            service,
+            region_name=region,
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+        )
 
 
 def setup_ebs_volumes():
@@ -294,25 +308,55 @@ def setup_s3_buckets():
 
 def run_analysis_script():
     """Helper to run the analysis script and return JSON results"""
-    # Path to script and output file
-    script = os.path.join(os.path.dirname(__file__), "..", "lib", "analyse.py")
+    # Import analysis module and run directly (works with moto mocking)
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "lib"))
+    from analyse import AWSInfrastructureAnalyzer
+    from datetime import datetime
+    
     json_output = os.path.join(os.path.dirname(__file__), "..", "aws_audit_results.json")
     
     # Remove old JSON file if it exists
     if os.path.exists(json_output):
         os.remove(json_output)
     
-    env = {**os.environ}
-    result = subprocess.run([sys.executable, script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
-    
-    # Read and parse the JSON output file
-    if os.path.exists(json_output):
-        with open(json_output, 'r') as f:
-            return json.load(f)
-    else:
-        # If JSON file wasn't created, return empty dict and print error
-        print(f"STDOUT: {result.stdout}")
-        print(f"STDERR: {result.stderr}")
+    try:
+        # Create analyzer and run all analyses
+        analyzer = AWSInfrastructureAnalyzer()
+        
+        # Run all analyses
+        ebs_results = analyzer.analyze_ebs_volumes()
+        sg_results = analyzer.analyze_security_groups()
+        logs_results = analyzer.analyze_cloudwatch_logs()
+        
+        # S3 Security Analysis
+        analyzer.scan_buckets()
+        compliance_summary = analyzer.generate_compliance_summary()
+        s3_results = {
+            'S3SecurityAudit': {
+                'scan_date': datetime.now().isoformat(),
+                'region': analyzer.region,
+                'findings': analyzer.findings,
+                'compliance_summary': compliance_summary
+            }
+        }
+        
+        # Combine all results
+        all_results = {}
+        all_results.update(ebs_results)
+        all_results.update(sg_results)
+        all_results.update(logs_results)
+        all_results.update(s3_results)
+        
+        # Save results using the analyzer method
+        analyzer.save_json_report(all_results)
+        
+        # Return the results
+        return all_results
+        
+    except Exception as e:
+        print(f"Error running analysis: {e}")
+        import traceback
+        traceback.print_exc()
         return {}
 
 
