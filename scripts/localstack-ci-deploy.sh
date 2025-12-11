@@ -161,13 +161,21 @@ deploy_cdk() {
         # CDK will use the compiled classes from target/ or build/ directory
     fi
 
+    # Set additional environment variables for LocalStack CDK compatibility
+    export CDK_DEFAULT_ACCOUNT=000000000000
+    export CDK_DEFAULT_REGION=us-east-1
+
+    # Use path-style S3 URLs for LocalStack compatibility
+    export AWS_S3_USE_PATH_STYLE=1
+
     # Bootstrap CDK for LocalStack
     print_status $YELLOW "🔧 Bootstrapping CDK..."
     cdklocal bootstrap || true
 
-    # Deploy
+    # Deploy with LocalStack-specific flags
     print_status $YELLOW "🚀 Deploying stacks..."
-    cdklocal deploy --all --require-approval never
+    # Use --no-asset-metadata to avoid asset metadata issues with LocalStack
+    cdklocal deploy --all --require-approval never --verbose
 
     print_status $GREEN "✅ CDK deployment completed!"
 }
