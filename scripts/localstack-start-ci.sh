@@ -83,7 +83,8 @@ DOCKER_CMD="docker run -d \
   -e DATA_DIR=/tmp/localstack/data \
   -e DOCKER_HOST=unix:///var/run/docker.sock \
   -e S3_SKIP_SIGNATURE_VALIDATION=1 \
-  -e ENFORCE_IAM=0"
+  -e ENFORCE_IAM=0 \
+  -e PROVIDER_OVERRIDE_S3=legacy"
 
 # Add API key if available
 if [ -n "$LOCALSTACK_API_KEY" ]; then
@@ -93,7 +94,7 @@ fi
 
 DOCKER_CMD="$DOCKER_CMD \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  localstack/localstack:3.0.2"
+  localstack/localstack:latest"
 
 # Execute the docker command
 eval $DOCKER_CMD
