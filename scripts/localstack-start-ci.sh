@@ -81,7 +81,9 @@ DOCKER_CMD="docker run -d \
   -e SERVICES=\"${SERVICES}\" \
   -e DEBUG=1 \
   -e DATA_DIR=/tmp/localstack/data \
-  -e DOCKER_HOST=unix:///var/run/docker.sock"
+  -e DOCKER_HOST=unix:///var/run/docker.sock \
+  -e S3_SKIP_SIGNATURE_VALIDATION=1 \
+  -e ENFORCE_IAM=0"
 
 # Add API key if available
 if [ -n "$LOCALSTACK_API_KEY" ]; then

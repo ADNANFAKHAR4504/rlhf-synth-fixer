@@ -167,6 +167,10 @@ deploy_cdk() {
 
     # Use path-style S3 URLs for LocalStack compatibility
     export AWS_S3_USE_PATH_STYLE=1
+    export AWS_S3_FORCE_PATH_STYLE=true
+
+    # Additional S3 configuration for LocalStack
+    export AWS_S3_ADDRESSING_STYLE=path
 
     # Bootstrap CDK for LocalStack
     print_status $YELLOW "🔧 Bootstrapping CDK..."
