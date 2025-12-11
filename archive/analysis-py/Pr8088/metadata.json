@@ -9,5 +9,12 @@
   "subtask": "Infrastructure QA and Management",
   "subject_labels": [
     "Infrastructure Analysis/Monitoring"
-  ]
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
 }
