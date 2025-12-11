@@ -82,8 +82,9 @@ deploy_platform() {
     echo ""
 
     # Set LocalStack environment variables
+    # Use s3.localhost.localstack.cloud for S3 endpoint to ensure proper bucket name parsing
     export AWS_ENDPOINT_URL=${AWS_ENDPOINT_URL:-http://localhost:4566}
-    export AWS_ENDPOINT_URL_S3=${AWS_ENDPOINT_URL_S3:-http://localhost:4566}
+    export AWS_ENDPOINT_URL_S3=${AWS_ENDPOINT_URL_S3:-http://s3.localhost.localstack.cloud:4566}
     export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-test}
     export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-test}
     export AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
