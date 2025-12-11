@@ -91,6 +91,10 @@
     "localstack:cdk:deploy": "./scripts/localstack-cdk-deploy.sh",
     "localstack:cdk:test": "./scripts/localstack-cdk-test.sh",
     "localstack:cdk:cleanup": "./scripts/localstack-cdk-cleanup.sh",
+    "localstack:pulumi:plan": "./scripts/localstack-pulumi-plan.sh",
+    "localstack:pulumi:deploy": "./scripts/localstack-pulumi-deploy.sh",
+    "localstack:pulumi:test": "./scripts/localstack-pulumi-test.sh",
+    "localstack:pulumi:cleanup": "./scripts/localstack-pulumi-cleanup.sh",
     "release": "semantic-release",
     "prepare": "husky"
   },
