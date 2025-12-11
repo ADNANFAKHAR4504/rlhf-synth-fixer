@@ -78,13 +78,12 @@ echo -e "${YELLOW}🔧 Starting LocalStack container...${NC}"
 DOCKER_CMD="docker run -d \
   --name localstack \
   -p 4566:4566 \
-  -e SERVICES=\"${SERVICES}\" \
   -e DEBUG=1 \
   -e DATA_DIR=/tmp/localstack/data \
   -e DOCKER_HOST=unix:///var/run/docker.sock \
   -e S3_SKIP_SIGNATURE_VALIDATION=1 \
   -e ENFORCE_IAM=0 \
-  -e PROVIDER_OVERRIDE_S3=legacy"
+  -e LEGACY_S3_PROVIDER=1"
 
 # Add API key if available
 if [ -n "$LOCALSTACK_API_KEY" ]; then
