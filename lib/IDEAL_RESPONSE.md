@@ -1,4 +1,4 @@
-﻿# IDEAL RESPONSE
+# IDEAL RESPONSE
 
 This is the complete implementation of the AWS Infrastructure Analysis tool.
 
