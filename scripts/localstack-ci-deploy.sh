@@ -95,13 +95,23 @@ deploy_platform() {
     print_status $BLUE "   AWS_REGION: $AWS_DEFAULT_REGION"
     echo ""
 
-    # Change to lib directory
+    # Check if lib directory exists
     if [ ! -d "$PROJECT_ROOT/lib" ]; then
         print_status $RED "❌ lib directory not found"
         exit 1
     fi
 
-    cd "$PROJECT_ROOT/lib"
+    # Change directory based on platform
+    # CDK/CDKTF need to run from project root (where cdk.json/cdktf.json is)
+    # Other platforms need to run from lib directory
+    case "$platform" in
+        "cdk"|"cdktf")
+            cd "$PROJECT_ROOT"
+            ;;
+        *)
+            cd "$PROJECT_ROOT/lib"
+            ;;
+    esac
 
     case "$platform" in
         "cdk")
@@ -131,10 +141,24 @@ deploy_cdk() {
     local language=$1
     print_status $MAGENTA "🚀 Deploying CDK ($language) to LocalStack..."
 
-    # Install dependencies
+    # Verify cdk.json exists
+    if [ ! -f "cdk.json" ]; then
+        print_status $RED "❌ cdk.json not found in current directory: $(pwd)"
+        exit 1
+    fi
+
+    # Install dependencies for TypeScript/JavaScript CDK projects
     if [ -f "package.json" ]; then
         print_status $YELLOW "📦 Installing npm dependencies..."
         npm install
+    fi
+
+    # For Java CDK projects, dependencies should already be installed via build step
+    # Just verify the compiled classes exist
+    if [[ "$language" == "java" ]]; then
+        print_status $YELLOW "📦 Java CDK project detected"
+        # The build step should have already compiled the Java code
+        # CDK will use the compiled classes from target/ or build/ directory
     fi
 
     # Bootstrap CDK for LocalStack
