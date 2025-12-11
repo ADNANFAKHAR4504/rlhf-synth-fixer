@@ -1,4 +1,4 @@
-Problem Context
+Problem Context:
 
 A fintech startup needs an automated, repeatable S3 security compliance analysis tool written in Python.
 The tool must detect misconfigurations, generate JSON and HTML reports, and print human-readable summaries grouped by severity.
