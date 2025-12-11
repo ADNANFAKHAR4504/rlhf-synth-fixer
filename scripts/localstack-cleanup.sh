@@ -108,8 +108,7 @@ get_cleanup_script() {
             return 1
             ;;
         "pulumi")
-            print_status $YELLOW "⚠️  Pulumi support is not yet implemented"
-            return 1
+            echo "localstack-pulumi-cleanup.sh"
             ;;
         *)
             # For unsupported platforms, fall back to generic cleanup
