@@ -28,7 +28,7 @@ class S3SecurityAnalyzer:
         try:
             response = self.s3_client.get_bucket_encryption(Bucket=bucket_name)
             return response.get('ServerSideEncryptionConfiguration', {})
-        except self.s3_client.exceptions.ServerSideEncryptionConfigurationNotFoundError:
+        except Exception:
             return None
     
     def get_bucket_public_access(self, bucket_name):
@@ -70,7 +70,7 @@ class S3SecurityAnalyzer:
             response = self.s3_client.get_bucket_tagging(Bucket=bucket_name)
             tags = {tag['Key']: tag['Value'] for tag in response.get('TagSet', [])}
             return tags
-        except self.s3_client.exceptions.NoSuchTagSet:
+        except Exception:
             return {}
     
     def analyze_bucket(self, bucket_name, bucket_arn):

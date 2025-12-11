@@ -3,7 +3,7 @@ import pytest
 import json
 import os
 import sys
-from moto import mock_s3
+from moto import mock_aws
 import boto3
 
 # Add lib directory to path to import the analysis module
@@ -13,7 +13,7 @@ from analyse import S3SecurityAnalyzer
 
 @pytest.fixture
 def s3_mock():
-    with mock_s3():
+    with mock_aws():
         yield boto3.client('s3', region_name='us-east-1')
 
 @pytest.fixture
