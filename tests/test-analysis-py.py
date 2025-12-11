@@ -319,6 +319,11 @@ def run_analysis_script():
     if os.path.exists(json_output):
         os.remove(json_output)
     
+    # Set up environment variables for AWS credentials and moto
+    os.environ.setdefault("AWS_ACCESS_KEY_ID", "testing")
+    os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "testing")  
+    os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
+    
     try:
         # Create analyzer and run all analyses
         analyzer = AWSInfrastructureAnalyzer()
@@ -361,6 +366,11 @@ def run_analysis_script():
 
 
 def test_ebs_volumes_analysis():
+    # Set up environment variables for AWS credentials and moto
+    os.environ.setdefault("AWS_ACCESS_KEY_ID", "testing")
+    os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "testing")  
+    os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
+    
     # Setup EBS volumes
     setup_ebs_volumes()
     
@@ -395,6 +405,11 @@ def test_ebs_volumes_analysis():
 
 
 def test_security_groups_analysis():
+    # Set up environment variables for AWS credentials and moto
+    os.environ.setdefault("AWS_ACCESS_KEY_ID", "testing")
+    os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "testing")  
+    os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
+    
     # Setup security groups
     setup_security_groups()
     
@@ -434,6 +449,11 @@ def test_security_groups_analysis():
 
 
 def test_log_streams_analysis():
+    # Set up environment variables for AWS credentials and moto
+    os.environ.setdefault("AWS_ACCESS_KEY_ID", "testing")
+    os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "testing")  
+    os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
+    
     # Setup log groups and streams
     setup_log_group_and_streams()
     
@@ -477,6 +497,11 @@ def test_s3_security_analysis():
     Creates 100+ mock S3 buckets with various security configurations
     and validates that the analysis correctly identifies security issues.
     """
+    # Set up environment variables for AWS credentials and moto
+    os.environ.setdefault("AWS_ACCESS_KEY_ID", "testing")
+    os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "testing")  
+    os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
+    
     # Setup S3 buckets with various configurations
     setup_s3_buckets()
     

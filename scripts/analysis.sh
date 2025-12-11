@@ -70,6 +70,12 @@ if ! curl -s http://127.0.0.1:$DOCKER_PORT/ >/dev/null 2>&1; then
 fi
 echo "✅ Moto server is responsive"
 
+# Set environment variables for tests to connect to moto server
+export AWS_ENDPOINT_URL="http://127.0.0.1:$DOCKER_PORT"
+export AWS_ACCESS_KEY_ID="testing"
+export AWS_SECRET_ACCESS_KEY="testing"
+export AWS_DEFAULT_REGION="us-east-1"
+
 # Run tests
 echo "Running analysis tests..."
 python -m pytest tests/test-analysis-*.py -v --tb=short --no-cov
@@ -77,10 +83,10 @@ python -m pytest tests/test-analysis-*.py -v --tb=short --no-cov
 # Run analysis script
 echo "Running analysis script: $SCRIPT_PATH"
 if [ "$SCRIPT_TYPE" = "python" ]; then
-  python "$SCRIPT_PATH" 2>&1 | tee "lib/analysis-results.txt"
+  AWS_ENDPOINT_URL="http://127.0.0.1:$DOCKER_PORT" python "$SCRIPT_PATH" 2>&1 | tee "lib/analysis-results.txt"
 else
   chmod +x "$SCRIPT_PATH"
-  bash "$SCRIPT_PATH" 2>&1 | tee "lib/analysis-results.txt"
+  AWS_ENDPOINT_URL="http://127.0.0.1:$DOCKER_PORT" bash "$SCRIPT_PATH" 2>&1 | tee "lib/analysis-results.txt"
 fi
 
 echo "✅ Analysis completed. Output saved to lib/analysis-results.txt"
