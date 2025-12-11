@@ -75,15 +75,18 @@ fi
 echo -e "${YELLOW}🔧 Starting LocalStack container...${NC}"
 
 # Build docker run command with optional API key
+# Using LocalStack 3.7.2 - last stable version before 4.0 removed legacy S3 provider
+# This version has better CDK compatibility and fewer S3 XML parsing issues
 DOCKER_CMD="docker run -d \
   --name localstack \
   -p 4566:4566 \
   -e DEBUG=1 \
   -e DATA_DIR=/tmp/localstack/data \
   -e DOCKER_HOST=unix:///var/run/docker.sock \
+  -e SERVICES=\"${SERVICES}\" \
   -e S3_SKIP_SIGNATURE_VALIDATION=1 \
   -e ENFORCE_IAM=0 \
-  -e LEGACY_S3_PROVIDER=1"
+  -e PROVIDER_OVERRIDE_S3=legacy_v2"
 
 # Add API key if available
 if [ -n "$LOCALSTACK_API_KEY" ]; then
@@ -93,7 +96,7 @@ fi
 
 DOCKER_CMD="$DOCKER_CMD \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  localstack/localstack:latest"
+  localstack/localstack:3.7.2"
 
 # Execute the docker command
 eval $DOCKER_CMD
