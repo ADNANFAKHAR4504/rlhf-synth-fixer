@@ -183,7 +183,7 @@ class TapStack extends Stack {
             
             // Create NAT Gateway with explicit EIP allocation ID
             CfnNatGateway natGateway = CfnNatGateway.Builder.create(this, "NatGateway")
-                    .allocationId(natEip.getAttrAllocationId())
+                    .allocationId(natEip.getRef())
                     .subnetId(publicSubnet.getSubnetId())
                     .build();
             
