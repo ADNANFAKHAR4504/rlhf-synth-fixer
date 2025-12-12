@@ -1,14 +1,14 @@
-[0;34m🧪 Running Integration Tests against LocalStack Pulumi Deployment...[0m
-[0;32m✅ LocalStack is running[0m
-[0;32m✅ Infrastructure outputs found[0m
-[0;32m✅ Infrastructure outputs validated[0m
-[1;33m📁 Working directory: /Users/chandangupta/Desktop/localstack-task/iac-test-automations[0m
-[1;33m🔧 Setting up LocalStack environment...[0m
-[0;34m🌐 Environment configured for LocalStack:[0m
+[0;34m Running Integration Tests against LocalStack Pulumi Deployment...[0m
+[0;32m LocalStack is running[0m
+[0;32m Infrastructure outputs found[0m
+[0;32m Infrastructure outputs validated[0m
+[1;33m Working directory: /Users/chandangupta/Desktop/localstack-task/iac-test-automations[0m
+[1;33m Setting up LocalStack environment...[0m
+[0;34m Environment configured for LocalStack:[0m
 [1;33m  • AWS_ENDPOINT_URL: http://localhost:4566[0m
 [1;33m  • AWS_REGION: us-east-1[0m
 [1;33m  • SSL Verification: Disabled[0m
-[0;34m📋 Stack Outputs:[0m
+[0;34m Stack Outputs:[0m
   • bucketName: prod-infrastructure-bucket-tapstackprdev
   • iamRoleArn: arn:aws:iam::000000000000:role/ec2-s3-role-2e42e4c
   • instanceId: skipped-for-localstack
@@ -17,7 +17,7 @@
   • subnetAId: subnet-7c4f78666bd0d8529
   • subnetBId: subnet-73a6fb1dd7bf06f2f
   • vpcId: vpc-b6a51d96df8da59ba
-[1;33m🚀 Running Go integration tests...[0m
+[1;33m Running Go integration tests...[0m
 [0;34m=== RUN   TestVPCDeployment[0m
 [0;36m    tap_stack_int_test.go:166: Warning: Could not read Pulumi outputs: exit status 255. Attempting AWS resource discovery...[0m
 [0;36m    tap_stack_int_test.go:648: Discovered fallback VPC: vpc-b6a51d96df8da59ba[0m
@@ -80,8 +80,8 @@
 [0;32m--- PASS: TestInternetConnectivity (0.11s)[0m
 [0;32mPASS[0m
 [0;36mok  	github.com/example/tap/templates/pulumi-go/tests/integration	1.725s[0m
-[0;32m🎉 Integration tests completed successfully![0m
-[0;34m📊 Test Summary:[0m
+[0;32m Integration tests completed successfully![0m
+[0;34m Test Summary:[0m
 [1;33m  • All infrastructure components validated[0m
 [1;33m  • LocalStack environment verified[0m
 [1;33m  • Pulumi resources properly configured[0m
