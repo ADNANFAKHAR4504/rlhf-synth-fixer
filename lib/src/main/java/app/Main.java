@@ -17,6 +17,9 @@ import software.amazon.awscdk.services.ec2.GatewayVpcEndpointAwsService;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
 import software.amazon.awscdk.services.ec2.Peer;
 import software.amazon.awscdk.services.ec2.Port;
+import software.amazon.awscdk.services.ec2.CfnEIP;
+import software.amazon.awscdk.services.ec2.CfnNatGateway;
+import software.amazon.awscdk.services.ec2.CfnRoute;
 import software.amazon.awscdk.services.iam.Effect;
 import software.amazon.awscdk.services.iam.PolicyDocument;
 import software.amazon.awscdk.services.iam.PolicyStatement;
@@ -145,14 +148,16 @@ class TapStack extends Stack {
     /**
      * Creates VPC with public and private subnets, NAT Gateway, and VPC endpoints.
      * VPC endpoints are used to reduce NAT Gateway data transfer costs for AWS service access.
+     * NAT Gateway is created manually to work around LocalStack limitations with EIP AllocationId.
      *
      * @return Created VPC
      */
     private Vpc createVpc() {
+        // Create VPC without NAT Gateways 
         Vpc newVpc = Vpc.Builder.create(this, "TapVpc")
                 .ipAddresses(IpAddresses.cidr("10.0.0.0/16"))
                 .maxAzs(2)
-                .natGateways(1)
+                .natGateways(0)
                 .subnetConfiguration(Arrays.asList(
                         SubnetConfiguration.builder()
                                 .name("Public")
@@ -166,6 +171,34 @@ class TapStack extends Stack {
                                 .build()
                 ))
                 .build();
+
+        // Create Elastic IP for NAT Gateway
+        CfnEIP natEip = CfnEIP.Builder.create(this, "NatGatewayEIP")
+                .domain("vpc")
+                .build();
+
+        // Get the first public subnet for NAT Gateway
+        if (!newVpc.getPublicSubnets().isEmpty()) {
+            software.amazon.awscdk.services.ec2.ISubnet publicSubnet = newVpc.getPublicSubnets().get(0);
+            
+            // Create NAT Gateway with explicit EIP allocation ID
+            CfnNatGateway natGateway = CfnNatGateway.Builder.create(this, "NatGateway")
+                    .allocationId(natEip.getAttrAllocationId())
+                    .subnetId(publicSubnet.getSubnetId())
+                    .build();
+            
+            // Add explicit dependency to ensure EIP is created before NAT Gateway
+            natGateway.addDependency(natEip);
+
+            // Update private subnet route tables to use the NAT Gateway
+            for (software.amazon.awscdk.services.ec2.ISubnet privateSubnet : newVpc.getPrivateSubnets()) {
+                CfnRoute.Builder.create(this, "NatRoute" + privateSubnet.getSubnetId())
+                        .routeTableId(privateSubnet.getRouteTable().getRouteTableId())
+                        .natGatewayId(natGateway.getRef())
+                        .destinationCidrBlock("0.0.0.0/0")
+                        .build();
+            }
+        }
 
         // Create VPC endpoints for S3 and DynamoDB to avoid NAT Gateway charges
         // Gateway endpoints are automatically added to ALL route tables in the VPC
