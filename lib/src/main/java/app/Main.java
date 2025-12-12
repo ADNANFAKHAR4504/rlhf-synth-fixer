@@ -191,12 +191,14 @@ class TapStack extends Stack {
             natGateway.addDependency(natEip);
 
             // Update private subnet route tables to use the NAT Gateway
+            int routeIndex = 0;
             for (software.amazon.awscdk.services.ec2.ISubnet privateSubnet : newVpc.getPrivateSubnets()) {
-                CfnRoute.Builder.create(this, "NatRoute" + privateSubnet.getSubnetId())
+                CfnRoute.Builder.create(this, "NatRoute" + routeIndex)
                         .routeTableId(privateSubnet.getRouteTable().getRouteTableId())
                         .natGatewayId(natGateway.getRef())
                         .destinationCidrBlock("0.0.0.0/0")
                         .build();
+                routeIndex++;
             }
         }
 
