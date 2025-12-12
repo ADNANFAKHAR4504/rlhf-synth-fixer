@@ -1,22 +1,39 @@
 {
+  "task_id": "101912529",
   "platform": "pulumi",
   "language": "py",
   "complexity": "expert",
-  "turn_type": "single",
-  "po_id": "synth-101912529",
   "team": "synth",
-  "startedAt": "2025-12-12T17:05:51.616Z",
-  "subtask": "IaC-Multi-Environment-Management",
-  "provider": "localstack",
+  "turn_type": "single",
+  "po_id": "101912529",
+  "subtask": "Multi-Tenant SaaS Infrastructure",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
   "subject_labels": [
-    "Multi-Environment Consistency"
-  ],
-  "aws_services": [
-    "S3 Bucket",
-    "CloudFormation",
+    "VPC",
+    "DynamoDB",
+    "KMS",
     "Lambda",
-    "EventBridge",
-    "CloudWatch LogGroup",
-    "VPC"
-  ]
+    "API Gateway",
+    "CloudWatch",
+    "IAM"
+  ],
+  "startedAt": "2025-11-21T09:30:00Z",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "DynamoDB",
+    "KMS",
+    "Lambda",
+    "API Gateway",
+    "CloudWatch",
+    "IAM"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
