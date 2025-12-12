@@ -1,0 +1,22 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "synth-101912529",
+  "team": "synth",
+  "startedAt": "2025-12-12T17:05:51.616Z",
+  "subtask": "IaC-Multi-Environment-Management",
+  "provider": "localstack",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "S3 Bucket",
+    "CloudFormation",
+    "Lambda",
+    "EventBridge",
+    "CloudWatch LogGroup",
+    "VPC"
+  ]
+}
