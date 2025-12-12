@@ -263,7 +263,7 @@ tasks.register('fatJar', Jar) {
 
     with jar
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    zip64.set(true)
+    zip64 = true
 }
 
 // Clean task for JaCoCo execution data
