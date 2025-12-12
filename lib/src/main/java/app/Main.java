@@ -153,6 +153,11 @@ class TapStack extends Stack {
      * @return Created VPC
      */
     private Vpc createVpc() {
+        // Detect if running in LocalStack
+        String endpointUrl = System.getenv("AWS_ENDPOINT_URL");
+        boolean isLocalStack = endpointUrl != null && 
+                (endpointUrl.contains("localhost") || endpointUrl.contains("localstack"));
+
         // Create VPC without NAT Gateways 
         Vpc newVpc = Vpc.Builder.create(this, "TapVpc")
                 .ipAddresses(IpAddresses.cidr("10.0.0.0/16"))
@@ -172,18 +177,19 @@ class TapStack extends Stack {
                 ))
                 .build();
 
-        // Create Elastic IP for NAT Gateway
-        CfnEIP natEip = CfnEIP.Builder.create(this, "NatGatewayEIP")
-                .domain("vpc")
-                .build();
+        // Skip NAT Gateway creation for LocalStack due to EIP resource limitations
+        // VPC endpoints will handle AWS service access
+        if (!isLocalStack && !newVpc.getPublicSubnets().isEmpty()) {
+            // Create Elastic IP for NAT Gateway
+            CfnEIP natEip = CfnEIP.Builder.create(this, "NatGatewayEIP")
+                    .domain("vpc")
+                    .build();
 
-        // Get the first public subnet for NAT Gateway
-        if (!newVpc.getPublicSubnets().isEmpty()) {
             software.amazon.awscdk.services.ec2.ISubnet publicSubnet = newVpc.getPublicSubnets().get(0);
             
             // Create NAT Gateway with explicit EIP allocation ID
             CfnNatGateway natGateway = CfnNatGateway.Builder.create(this, "NatGateway")
-                    .allocationId(natEip.getRef())
+                    .allocationId(natEip.getAttrAllocationId())
                     .subnetId(publicSubnet.getSubnetId())
                     .build();
             
