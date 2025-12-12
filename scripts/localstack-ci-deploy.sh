@@ -203,6 +203,36 @@ deploy_cdk() {
         }
 
     print_status $GREEN "✅ CDK deployment completed!"
+
+    # Collect outputs 
+    print_status $YELLOW "📊 Collecting deployment outputs..."
+    mkdir -p "$PROJECT_ROOT/cfn-outputs"
+    
+    # Generate cdk-stacks.json
+    cdklocal list --json > "$PROJECT_ROOT/cdk-stacks.json" 2>/dev/null || echo "[]" > "$PROJECT_ROOT/cdk-stacks.json"
+    
+    # Get stack outputs using awslocal
+    local stack_name="TapStack${env_suffix}"
+    local output_json="{}"
+    
+    if awslocal cloudformation describe-stacks --stack-name "$stack_name" > /dev/null 2>&1; then
+        output_json=$(awslocal cloudformation describe-stacks --stack-name "$stack_name" \
+            --query 'Stacks[0].Outputs' \
+            --output json 2>/dev/null | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    outputs = {}
+    for output in data:
+        outputs[output['OutputKey']] = output['OutputValue']
+    print(json.dumps(outputs, indent=2))
+except:
+    print('{}')
+" || echo "{}")
+    fi
+    
+    echo "$output_json" > "$PROJECT_ROOT/cfn-outputs/flat-outputs.json"
+    print_status $GREEN "✅ Outputs saved to cfn-outputs/flat-outputs.json"
 }
 
 # CloudFormation deployment
@@ -237,6 +267,32 @@ deploy_cloudformation() {
         --region "$AWS_DEFAULT_REGION"
 
     print_status $GREEN "✅ CloudFormation deployment completed!"
+
+    # Collect outputs
+    print_status $YELLOW "📊 Collecting deployment outputs..."
+    mkdir -p "$PROJECT_ROOT/cfn-outputs"
+    
+    local stack_name="localstack-stack-${ENVIRONMENT_SUFFIX:-dev}"
+    local output_json="{}"
+    
+    if awslocal cloudformation describe-stacks --stack-name "$stack_name" > /dev/null 2>&1; then
+        output_json=$(awslocal cloudformation describe-stacks --stack-name "$stack_name" \
+            --query 'Stacks[0].Outputs' \
+            --output json 2>/dev/null | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    outputs = {}
+    for output in data:
+        outputs[output['OutputKey']] = output['OutputValue']
+    print(json.dumps(outputs, indent=2))
+except:
+    print('{}')
+" || echo "{}")
+    fi
+    
+    echo "$output_json" > "$PROJECT_ROOT/cfn-outputs/flat-outputs.json"
+    print_status $GREEN "✅ Outputs saved to cfn-outputs/flat-outputs.json"
 }
 
 # Terraform deployment
@@ -256,6 +312,35 @@ deploy_terraform() {
     tflocal apply -auto-approve tfplan
 
     print_status $GREEN "✅ Terraform deployment completed!"
+
+    # Collect outputs
+    print_status $YELLOW "📊 Collecting deployment outputs..."
+    mkdir -p "$PROJECT_ROOT/cfn-outputs"
+    
+    local output_json="{}"
+    if tflocal output -json > "$PROJECT_ROOT/cfn-outputs/flat-outputs.json" 2>/dev/null; then
+        # Flatten Terraform outputs (they come as {"key": {"value": "actual", "type": "string"}})
+        output_json=$(python3 -c "
+import sys, json
+try:
+    with open('$PROJECT_ROOT/cfn-outputs/flat-outputs.json', 'r') as f:
+        data = json.load(f)
+    flattened = {}
+    for key, value in data.items():
+        if isinstance(value, dict) and 'value' in value:
+            flattened[key] = value['value']
+        else:
+            flattened[key] = value
+    print(json.dumps(flattened, indent=2))
+except:
+    print('{}')
+")
+        echo "$output_json" > "$PROJECT_ROOT/cfn-outputs/flat-outputs.json"
+        print_status $GREEN "✅ Outputs saved to cfn-outputs/flat-outputs.json"
+    else
+        echo "{}" > "$PROJECT_ROOT/cfn-outputs/flat-outputs.json"
+        print_status $YELLOW "⚠️  No Terraform outputs found"
+    fi
 }
 
 # CDKTF deployment
@@ -278,6 +363,17 @@ deploy_cdktf() {
     cdktf deploy --auto-approve
 
     print_status $GREEN "✅ CDKTF deployment completed!"
+
+    # Collect outputs
+    print_status $YELLOW "📊 Collecting deployment outputs..."
+    mkdir -p "$PROJECT_ROOT/cfn-outputs"
+    
+    if npx --yes cdktf output --outputs-file "$PROJECT_ROOT/cfn-outputs/flat-outputs.json" 2>/dev/null; then
+        print_status $GREEN "✅ Outputs saved to cfn-outputs/flat-outputs.json"
+    else
+        echo "{}" > "$PROJECT_ROOT/cfn-outputs/flat-outputs.json"
+        print_status $YELLOW "⚠️  No CDKTF outputs found"
+    fi
 }
 
 # Pulumi deployment
@@ -334,6 +430,18 @@ deploy_pulumi() {
     pulumi up --yes --skip-preview
 
     print_status $GREEN "✅ Pulumi deployment completed!"
+
+    # Collect outputs
+    print_status $YELLOW "📊 Collecting deployment outputs..."
+    mkdir -p "$PROJECT_ROOT/cfn-outputs"
+    
+    local output_json="{}"
+    if pulumi stack output --json > "$PROJECT_ROOT/cfn-outputs/flat-outputs.json" 2>/dev/null; then
+        print_status $GREEN "✅ Outputs saved to cfn-outputs/flat-outputs.json"
+    else
+        echo "{}" > "$PROJECT_ROOT/cfn-outputs/flat-outputs.json"
+        print_status $YELLOW "⚠️  No Pulumi outputs found"
+    fi
 }
 
 # Main function
