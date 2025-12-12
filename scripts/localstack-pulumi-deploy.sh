@@ -321,4 +321,3 @@ echo "**Status:** ✅ Completed successfully" >> "$OUTPUT_FILE"
 
 log_output "${GREEN}🎉 Pulumi deployment to LocalStack completed successfully!${NC}"
 log_output "${BLUE}📄 Execution output saved to: $OUTPUT_FILE${NC}"
-
