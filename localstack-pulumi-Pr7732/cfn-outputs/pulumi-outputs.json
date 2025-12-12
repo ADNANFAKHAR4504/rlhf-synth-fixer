@@ -1,0 +1,13 @@
+{
+  "api_gateway_endpoint": "https://nwlortshsg.execute-api.us-east-1.amazonaws.com/prod/execute",
+  "kms_key_arn": "arn:aws:kms:us-east-1:000000000000:key/85bbdc3f-e706-4ae8-84f0-e78530cf1c61",
+  "lambda_function_name": "zerotrust-function-dev",
+  "log_group_name": "/aws/zerotrust/dev",
+  "s3_bucket_name": "zerotrust-data-dev",
+  "subnet_ids": [
+    "subnet-9878b3472e18ad5ba",
+    "subnet-68c7477332cd1681a",
+    "subnet-70686783dc9a8d788"
+  ],
+  "vpc_id": "vpc-dc6d688bfe1648c9e"
+}
