@@ -1,0 +1,16 @@
+{
+  "AlbArn": "arn:aws:elasticloadbalancing:us-east-1:000000000000:loadbalancer/app/lb-e9557f1b/8840dd4fc8631248",
+  "AlbDnsName": "lb-e9557f1b.elb.localhost.localstack.cloud",
+  "AlbSecurityGroupId": "sg-234a5cefa7867f112",
+  "AppSecurityGroupId": "sg-bd61fcc9b73eecf50",
+  "AsgName": "AutoScalingGroup-2efbac2d",
+  "InstanceProfileName": "tap-stack-localstack-InstanceProfile-817783ee",
+  "InstanceRoleArn": "arn:aws:iam::000000000000:role/tap-stack-localstack-InstanceRole-d8e74f02",
+  "LaunchTemplateId": "LaunchConfiguration-e312401b",
+  "LogsBucketName": "tap-stack-localstack-logsbucket-477bed06",
+  "ParameterNamespace": "/tapstack/prod-us/tap-stack-localstack",
+  "PrivateSubnetIds": "subnet-fe69b65b334f738e2,subnet-dd0c8cfb823bff99d",
+  "PublicSubnetIds": "subnet-8187f50da21179a1a,subnet-f084ec6170cca3c1a",
+  "TargetGroupArn": "arn:aws:elasticloadbalancing:us-east-1:000000000000:targetgroup/tg-07588e8e/9ad9c2ec29ce7d55",
+  "VpcId": "vpc-3eac7942dac64dbd1"
+}
