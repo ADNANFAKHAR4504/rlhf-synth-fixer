@@ -1,6 +1,7 @@
 {
   "platform": "pulumi",
   "language": "go",
+  "provider": "localstack",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "310031",
