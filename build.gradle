@@ -239,14 +239,15 @@ jar {
                 'Main-Class': 'app.Main'
         )
     }
-    archiveFileName = 'app.jar'
+    archiveBaseName.set('app')
+    archiveVersion.set('')
 }
 
 // Create a fat JAR task separately if needed
 tasks.register('fatJar', Jar) {
     group = 'build'
     description = 'Creates a fat JAR with all dependencies'
-    archiveClassifier = 'fat'
+    archiveClassifier.set('fat')
 
     manifest {
         attributes(
@@ -262,7 +263,7 @@ tasks.register('fatJar', Jar) {
 
     with jar
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    zip64 = true
+    zip64.set(true)
 }
 
 // Clean task for JaCoCo execution data
