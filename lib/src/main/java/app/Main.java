@@ -155,8 +155,8 @@ class TapStack extends Stack {
     private Vpc createVpc() {
         // Detect if running in LocalStack
         String endpointUrl = System.getenv("AWS_ENDPOINT_URL");
-        boolean isLocalStack = endpointUrl != null && 
-                (endpointUrl.contains("localhost") || endpointUrl.contains("localstack"));
+        boolean isLocalStack = endpointUrl != null
+                && (endpointUrl.contains("localhost") || endpointUrl.contains("localstack"));
 
         // Create VPC without NAT Gateways 
         Vpc newVpc = Vpc.Builder.create(this, "TapVpc")
