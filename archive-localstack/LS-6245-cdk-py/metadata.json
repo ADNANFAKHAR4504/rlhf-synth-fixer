@@ -1,29 +1,30 @@
 {
   "platform": "cdk",
   "language": "py",
-  "complexity": "expert",
+  "complexity": "hard",
   "turn_type": "single",
+  "po_id": "1j448",
   "team": "synth",
-  "startedAt": "2025-11-25T23:23:00Z",
+  "startedAt": "2025-11-10T22:13:59.491405",
   "subtask": "Application Deployment",
   "subject_labels": [
     "Web Application Deployment",
     "Serverless Infrastructure (Functions as Code)"
   ],
-  "po_id": "u8o0j5r3",
   "aws_services": [
-    "Aurora PostgreSQL",
-    "ECS",
-    "Secrets Manager",
     "VPC",
-    "CloudWatch",
-    "IAM",
-    "Lambda",
+    "EC2",
+    "ECS",
+    "Fargate",
     "Application Load Balancer",
-    "NAT Gateway",
-    "RDS"
+    "Aurora PostgreSQL",
+    "Secrets Manager",
+    "WAF",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "IAM",
+    "CloudFormation"
   ],
-  "region": "us-east-1",
   "training_quality": 10,
   "coverage": {
     "lines": 100,

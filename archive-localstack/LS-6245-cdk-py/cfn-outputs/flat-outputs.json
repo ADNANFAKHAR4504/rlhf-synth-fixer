@@ -1,0 +1,12 @@
+{
+  "DBClusterIdentifier": "dbc-4baf4a1c",
+  "DBSecretArn": "arn:aws:secretsmanager:us-east-1:000000000000:secret:TapStackdev-DBSecretdevA22126CD-a37a3585-lxdWlD",
+  "DashboardName": "unknown",
+  "ECSClusterName": "PaymentClusterdevAEA31C2E-21de4235",
+  "ECSServiceName": "s-59712143",
+  "LoadBalancerArn": "arn:aws:elasticloadbalancing:us-east-1:000000000000:loadbalancer/app/lb-af1281bb/335ded236fb1d014",
+  "LoadBalancerDNS": "lb-af1281bb.elb.localhost.localstack.cloud",
+  "TargetGroupArn": "arn:aws:elasticloadbalancing:us-east-1:000000000000:targetgroup/tg-464d4e29/856d2b0ff900581e",
+  "VPCId": "vpc-23409031223996448",
+  "WebACLArn": "arn:aws:wafv2:us-east-1:000000000000:regional/webacl/PaymentWAF-dev/320dfafb-3e3e-4d38-b161-aa4149e3f6de"
+}
