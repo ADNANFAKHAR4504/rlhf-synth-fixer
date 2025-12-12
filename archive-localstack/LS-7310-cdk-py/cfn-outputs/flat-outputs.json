@@ -1,0 +1,11 @@
+{
+  "AuroraClusterEndpoint": "localhost.localstack.cloud",
+  "AuroraReaderEndpoint": "localhost.localstack.cloud",
+  "DatabaseSecretArn": "arn:aws:secretsmanager:us-east-1:000000000000:secret:aurora-credentials-dev-iANsyO",
+  "ECSClusterName": "app-cluster-dev",
+  "FargateServicedevLoadBalancerDNS549C0F61": "lb-0b911160.elb.localhost.localstack.cloud",
+  "FargateServicedevServiceURLE8B85574": "http://lb-0b911160.elb.localhost.localstack.cloud",
+  "LoadBalancerDNS": "lb-0b911160.elb.localhost.localstack.cloud",
+  "SchemaValidatorFunctionName": "schema-validator-dev",
+  "VPCId": "vpc-7369e6820a70fe82a"
+}
