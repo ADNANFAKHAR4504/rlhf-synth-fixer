@@ -75,7 +75,7 @@ jobs:
       - name: Fetch base branch
         run: git fetch origin main:main
 
-      - name: Validate package.json against a local schema
+      - name: Validate metadata.json
         uses: cardinalby/schema-validator-action@v3
         with:
           file: 'metadata.json'
