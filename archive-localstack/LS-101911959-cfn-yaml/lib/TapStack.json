@@ -1,0 +1,821 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "TapStack - Secure data processing pipeline for sensitive financial records. Private VPC (no internet), KMS-encrypted S3, DynamoDB, VPC endpoints, strict IAM, CloudWatch Logs + Alarms for audit and monitoring.\n",
+    "Resources": {
+        "TapVpc": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "10.0.0.0/16",
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "TapVpc"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "SecureFinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "TapPrivateSubnetA": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "TapVpc"
+                },
+                "CidrBlock": "10.0.1.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "TapPrivateSubnetA"
+                    },
+                    {
+                        "Key": "Tier",
+                        "Value": "Private"
+                    }
+                ]
+            }
+        },
+        "TapPrivateSubnetB": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "TapVpc"
+                },
+                "CidrBlock": "10.0.2.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "TapPrivateSubnetB"
+                    },
+                    {
+                        "Key": "Tier",
+                        "Value": "Private"
+                    }
+                ]
+            }
+        },
+        "TapPrivateSubnetC": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "TapVpc"
+                },
+                "CidrBlock": "10.0.3.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "TapPrivateSubnetC"
+                    },
+                    {
+                        "Key": "Tier",
+                        "Value": "Private"
+                    }
+                ]
+            }
+        },
+        "TapPrivateRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "TapVpc"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "TapPrivateRouteTable"
+                    }
+                ]
+            }
+        },
+        "TapPrivateSubnetARouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "TapPrivateSubnetA"
+                },
+                "RouteTableId": {
+                    "Ref": "TapPrivateRouteTable"
+                }
+            }
+        },
+        "TapPrivateSubnetBRouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "TapPrivateSubnetB"
+                },
+                "RouteTableId": {
+                    "Ref": "TapPrivateRouteTable"
+                }
+            }
+        },
+        "TapPrivateSubnetCRouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "TapPrivateSubnetC"
+                },
+                "RouteTableId": {
+                    "Ref": "TapPrivateRouteTable"
+                }
+            }
+        },
+        "TapS3GatewayEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "TapVpc"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
+                },
+                "VpcEndpointType": "Gateway",
+                "RouteTableIds": [
+                    {
+                        "Ref": "TapPrivateRouteTable"
+                    }
+                ]
+            }
+        },
+        "TapDynamoDBGatewayEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "TapVpc"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.dynamodb"
+                },
+                "VpcEndpointType": "Gateway",
+                "RouteTableIds": [
+                    {
+                        "Ref": "TapPrivateRouteTable"
+                    }
+                ]
+            }
+        },
+        "TapDataKmsKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": "KMS CMK for encrypting financial data in S3 and optionally DynamoDB.",
+                "Enabled": true,
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowAccountRootFullAccess",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "SecureFinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "TapDataKmsAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": "alias/tapstack-financial-data-key",
+                "TargetKeyId": {
+                    "Ref": "TapDataKmsKey"
+                }
+            }
+        },
+        "TapInputBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "TapDataKmsKey"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "InputDataComplianceRule",
+                            "Status": "Enabled",
+                            "NoncurrentVersionExpirationInDays": 365
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "tap-input-data"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "SecureFinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "TapOutputBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "TapDataKmsKey"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "OutputDataComplianceRule",
+                            "Status": "Enabled",
+                            "NoncurrentVersionExpirationInDays": 365
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "tap-output-data"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "SecureFinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "TapTransactionMetadataTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": "tap-transaction-metadata",
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "transactionId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "transactionId",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "KeyType": "RANGE"
+                    }
+                ],
+                "BillingMode": "PAY_PER_REQUEST",
+                "SSESpecification": {
+                    "SSEEnabled": true,
+                    "SSEType": "KMS",
+                    "KMSMasterKeyId": {
+                        "Ref": "TapDataKmsKey"
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "SecureFinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "TapLambdaSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Allow Lambda to talk only within VPC CIDR (including VPC endpoints).",
+                "VpcId": {
+                    "Ref": "TapVpc"
+                },
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "-1",
+                        "CidrIp": "10.0.0.0/16"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "TapLambdaSecurityGroup"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "TapLambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": "tap-lambda-secure-processor-role",
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "tap-lambda-secure-processor-policy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "AllowLogging",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "arn:aws:logs:*:*:*"
+                                },
+                                {
+                                    "Sid": "AllowS3DataAccess",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${TapInputBucket.Arn}/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "${TapOutputBucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "AllowDynamoDBWrite",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "TapTransactionMetadataTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Sid": "AllowKmsUse",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Encrypt",
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "TapDataKmsKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Sid": "ExplicitDenyDangerousActions",
+                                    "Effect": "Deny",
+                                    "Action": [
+                                        "s3:DeleteBucket",
+                                        "s3:PutBucketPolicy",
+                                        "kms:DisableKey",
+                                        "kms:ScheduleKeyDeletion",
+                                        "dynamodb:DeleteTable"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "SecureFinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "TapDataProcessorLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${TapDataProcessorFunction}"
+                },
+                "RetentionInDays": 3653,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "SecureFinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "TapDataProcessorFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${AWS::StackName}-data-processor"
+                },
+                "Runtime": "python3.11",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "TapLambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 60,
+                "MemorySize": 256,
+                "VpcConfig": {
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "TapLambdaSecurityGroup"
+                        }
+                    ],
+                    "SubnetIds": [
+                        {
+                            "Ref": "TapPrivateSubnetA"
+                        },
+                        {
+                            "Ref": "TapPrivateSubnetB"
+                        },
+                        {
+                            "Ref": "TapPrivateSubnetC"
+                        }
+                    ]
+                },
+                "Environment": {
+                    "Variables": {
+                        "OUTPUT_BUCKET_NAME": {
+                            "Ref": "TapOutputBucket"
+                        },
+                        "METADATA_TABLE_NAME": {
+                            "Ref": "TapTransactionMetadataTable"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import os\nimport json\nimport boto3\n\ns3 = boto3.client(\"s3\")\nddb = boto3.client(\"dynamodb\")\n\nOUTPUT_BUCKET = os.environ[\"OUTPUT_BUCKET_NAME\"]\nTABLE_NAME = os.environ[\"METADATA_TABLE_NAME\"]\n\ndef handler(event, context):\n    # Basic example: copy object from input to output and write metadata\n    for record in event.get(\"Records\", []):\n        src_bucket = record[\"s3\"][\"bucket\"][\"name\"]\n        key = record[\"s3\"][\"object\"][\"key\"]\n\n        copy_source = {\"Bucket\": src_bucket, \"Key\": key}\n        s3.copy_object(\n            Bucket=OUTPUT_BUCKET,\n            Key=key,\n            CopySource=copy_source,\n        )\n\n        ddb.put_item(\n            TableName=TABLE_NAME,\n            Item={\n                \"transactionId\": {\"S\": key},\n                \"timestamp\": {\"S\": context.aws_request_id},\n                \"status\": {\"S\": \"PROCESSED\"},\n            },\n        )\n\n    return {\"statusCode\": 200, \"body\": json.dumps({\"result\": \"ok\"})}\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "SecureFinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "TapInputBucketLambdaPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "Action": "lambda:InvokeFunction",
+                "FunctionName": {
+                    "Ref": "TapDataProcessorFunction"
+                },
+                "Principal": "s3.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "TapInputBucket",
+                        "Arn"
+                    ]
+                },
+                "SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                }
+            }
+        },
+        "TapS3NotificationConfigFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${AWS::StackName}-s3-notification-config"
+                },
+                "Runtime": "python3.11",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "TapS3NotificationConfigRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 60,
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport urllib.request\nimport urllib.error\n\ndef handler(event, context):\n    s3_client = boto3.client('s3')\n    \n    def send_response(response_status, response_data={}, physical_resource_id=None):\n        response_url = event.get('ResponseURL')\n        if not response_url:\n            print(\"No ResponseURL in event\")\n            return\n        \n        response_body = json.dumps({\n            'Status': response_status,\n            'Reason': f'See CloudWatch Log Stream: {context.log_stream_name}',\n            'PhysicalResourceId': physical_resource_id or context.log_stream_name,\n            'StackId': event.get('StackId'),\n            'RequestId': event.get('RequestId'),\n            'LogicalResourceId': event.get('LogicalResourceId'),\n            'Data': response_data\n        }).encode('utf-8')\n        \n        try:\n            req = urllib.request.Request(response_url, data=response_body, method='PUT')\n            req.add_header('Content-Type', '')\n            req.add_header('Content-Length', str(len(response_body)))\n            urllib.request.urlopen(req)\n        except Exception as e:\n            print(f\"Failed to send response: {e}\")\n    \n    try:\n        bucket_name = event['ResourceProperties']['BucketName']\n        lambda_arn = event['ResourceProperties']['LambdaArn']\n        \n        if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':\n            notification_config = {\n                'LambdaFunctionConfigurations': [{\n                    'Id': 'ObjectCreatedNotification',\n                    'LambdaFunctionArn': lambda_arn,\n                    'Events': ['s3:ObjectCreated:*']\n                }]\n            }\n            s3_client.put_bucket_notification_configuration(\n                Bucket=bucket_name,\n                NotificationConfiguration=notification_config\n            )\n            print(f\"Successfully configured S3 notifications for bucket {bucket_name}\")\n        elif event['RequestType'] == 'Delete':\n            s3_client.put_bucket_notification_configuration(\n                Bucket=bucket_name,\n                NotificationConfiguration={}\n            )\n            print(f\"Successfully removed S3 notifications for bucket {bucket_name}\")\n        \n        send_response('SUCCESS', {}, physical_resource_id=f'{bucket_name}-notification-config')\n    except Exception as e:\n        error_msg = f\"Error: {str(e)}\"\n        print(error_msg)\n        send_response('FAILED', {'Error': error_msg})\n"
+                }
+            }
+        },
+        "TapS3NotificationConfigRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "S3NotificationConfigPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutBucketNotification",
+                                        "s3:GetBucketNotification"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${TapInputBucket.Arn}"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "TapS3NotificationConfig": {
+            "Type": "Custom::S3BucketNotification",
+            "Properties": {
+                "ServiceToken": {
+                    "Fn::GetAtt": [
+                        "TapS3NotificationConfigFunction",
+                        "Arn"
+                    ]
+                },
+                "BucketName": {
+                    "Ref": "TapInputBucket"
+                },
+                "LambdaArn": {
+                    "Fn::GetAtt": [
+                        "TapDataProcessorFunction",
+                        "Arn"
+                    ]
+                }
+            },
+            "DependsOn": [
+                "TapS3NotificationConfigFunction",
+                "TapS3NotificationConfigRole",
+                "TapInputBucketLambdaPermission",
+                "TapDataProcessorFunction"
+            ]
+        },
+        "TapLambdaErrorAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-lambda-errors"
+                },
+                "AlarmDescription": "Alarm on any Lambda processing errors.",
+                "Namespace": "AWS/Lambda",
+                "MetricName": "Errors",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "TapDataProcessorFunction"
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 60,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "TapUnauthorizedAccessMetricFilter": {
+            "Type": "AWS::Logs::MetricFilter",
+            "Properties": {
+                "LogGroupName": {
+                    "Ref": "TapDataProcessorLogGroup"
+                },
+                "FilterPattern": "\"AccessDenied\"",
+                "MetricTransformations": [
+                    {
+                        "MetricName": "UnauthorizedAccessCount",
+                        "MetricNamespace": "TapSecurity",
+                        "MetricValue": "1"
+                    }
+                ]
+            }
+        },
+        "TapUnauthorizedAccessAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-unauthorized-access"
+                },
+                "AlarmDescription": "Alarm on unauthorized access attempts detected in Lambda logs.",
+                "Namespace": "TapSecurity",
+                "MetricName": "UnauthorizedAccessCount",
+                "Statistic": "Sum",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "TreatMissingData": "notBreaching"
+            }
+        }
+    },
+    "Outputs": {
+        "VpcId": {
+            "Description": "VPC ID for secure financial processing.",
+            "Value": {
+                "Ref": "TapVpc"
+            }
+        },
+        "InputBucketName": {
+            "Description": "Name of the KMS-encrypted input S3 bucket.",
+            "Value": {
+                "Ref": "TapInputBucket"
+            }
+        },
+        "OutputBucketName": {
+            "Description": "Name of the KMS-encrypted output S3 bucket.",
+            "Value": {
+                "Ref": "TapOutputBucket"
+            }
+        },
+        "TransactionMetadataTableName": {
+            "Description": "DynamoDB table storing transaction metadata.",
+            "Value": {
+                "Ref": "TapTransactionMetadataTable"
+            }
+        },
+        "DataProcessorFunctionName": {
+            "Description": "Lambda function that processes data from input to output bucket.",
+            "Value": {
+                "Ref": "TapDataProcessorFunction"
+            }
+        },
+        "DataKmsKeyArn": {
+            "Description": "KMS CMK ARN used for S3 and DynamoDB encryption.",
+            "Value": {
+                "Ref": "TapDataKmsKey"
+            }
+        }
+    }
+}
