@@ -1,28 +1,28 @@
-[0;32m Starting Pulumi Deploy to LocalStack...[0m
-[0;32m LocalStack is running[0m
-[1;33m Working directory: /Users/chandangupta/Desktop/localstack-task/iac-test-automations[0m
-[0;32m Pulumi project found: Pulumi.yaml[0m
-[0;32m Go module found: go.mod[0m
-[1;33m Installing Go dependencies...[0m
-[0;32m Go dependencies installed[0m
-[1;33m Building Go project...[0m
-[0;32m Go project builds successfully[0m
-[1;33m  pulumilocal not found, using pulumi with LocalStack configuration...[0m
-[0;34m Using Pulumi: pulumi[0m
-[0;36m Deploying Pulumi stack:[0m
+[0;32m🚀 Starting Pulumi Deploy to LocalStack...[0m
+[0;32m✅ LocalStack is running[0m
+[1;33m📁 Working directory: /Users/chandangupta/Desktop/localstack-task/iac-test-automations[0m
+[0;32m✅ Pulumi project found: Pulumi.yaml[0m
+[0;32m✅ Go module found: go.mod[0m
+[1;33m📦 Installing Go dependencies...[0m
+[0;32m✅ Go dependencies installed[0m
+[1;33m🔨 Building Go project...[0m
+[0;32m✅ Go project builds successfully[0m
+[1;33m⚠️  pulumilocal not found, using pulumi with LocalStack configuration...[0m
+[0;34m🔧 Using Pulumi: pulumi[0m
+[0;36m🔧 Deploying Pulumi stack:[0m
 [0;34m  • Stack Name: TapStackprdev[0m
 [0;34m  • Environment: dev[0m
 [0;34m  • Region: us-east-1[0m
-[1;33m Setting up Pulumi backend...[0m
+[1;33m📦 Setting up Pulumi backend...[0m
 Logged in to Mac.lan as chandangupta (file://~)
-[0;32m Pulumi backend configured[0m
-[1;33m Initializing Pulumi stack...[0m
-[1;33m Creating new stack: TapStackprdev[0m
+[0;32m✅ Pulumi backend configured[0m
+[1;33m📦 Initializing Pulumi stack...[0m
+[1;33m📦 Creating new stack: TapStackprdev[0m
 Created stack 'TapStackprdev'
-[0;32m Stack selected: TapStackprdev[0m
-[1;33m Configuring AWS region...[0m
-[0;32m AWS region configured: us-east-1[0m
-[1;33m Running Pulumi preview...[0m
+[0;32m✅ Stack selected: TapStackprdev[0m
+[1;33m🔧 Configuring AWS region...[0m
+[0;32m✅ AWS region configured: us-east-1[0m
+[1;33m📋 Running Pulumi preview...[0m
 [1;33mPreviewing update (TapStackprdev):[0m
 [0;32m+ pulumi:pulumi:Stack: (create)[0m
 [0;34m    [urn=urn:pulumi:TapStackprdev::TapStack::pulumi:pulumi:Stack::TapStack-TapStackprdev][0m
@@ -261,54 +261,54 @@ Created stack 'TapStackprdev'
 [0;34m    vpcId           : [unknown][0m
 [0;34mResources:[0m
 [0;32m    + 18 to create[0m
-[0;32m Preview completed successfully[0m
-[1;33m Deploying Pulumi stack...[0m
-[1;33m Updating (TapStackprdev):[0m
+[0;32m✅ Preview completed successfully[0m
+[1;33m📦 Deploying Pulumi stack...[0m
+[1;33m🔄 Updating (TapStackprdev):[0m
 [0;34m[0m
 [0;34m@ updating.......[0m
 [0;36m   +  pulumi:pulumi:Stack TapStack-TapStackprdev creating (0s) [0m
 [0;36m   +  pulumi:providers:aws localstack-provider creating (0s) [0m
-[0;32m  +  pulumi:providers:aws localstack-provider created (0.01s) [0m
+[0;32m✅  +  pulumi:providers:aws localstack-provider created (0.01s) [0m
 [0;36m   +  aws:iam:Role ec2-s3-role creating (0s) [0m
 [0;36m   +  aws:s3:BucketV2 main-bucket creating (0s) [0m
 [0;36m   +  aws:ec2:Vpc main-vpc creating (0s) [0m
-[0;32m  +  aws:iam:Role ec2-s3-role created (0.07s) [0m
+[0;32m✅  +  aws:iam:Role ec2-s3-role created (0.07s) [0m
 [0;36m   +  aws:iam:InstanceProfile ec2-instance-profile creating (0s) [0m
-[0;32m  +  aws:s3:BucketV2 main-bucket created (0.09s) [0m
+[0;32m✅  +  aws:s3:BucketV2 main-bucket created (0.09s) [0m
 [0;36m   +  aws:s3:BucketVersioningV2 bucket-versioning creating (0s) [0m
 [0;36m   +  aws:iam:Policy s3-read-policy creating (0s) [0m
 [0;36m   +  aws:s3:BucketServerSideEncryptionConfigurationV2 bucket-encryption creating (0s) [0m
-[0;32m  +  aws:s3:BucketServerSideEncryptionConfigurationV2 bucket-encryption created (0.01s) [0m
-[0;32m  +  aws:iam:Policy s3-read-policy created (0.01s) [0m
+[0;32m✅  +  aws:s3:BucketServerSideEncryptionConfigurationV2 bucket-encryption created (0.01s) [0m
+[0;32m✅  +  aws:iam:Policy s3-read-policy created (0.01s) [0m
 [0;36m   +  aws:iam:RolePolicyAttachment s3-policy-attachment creating (0s) [0m
-[0;32m  +  aws:iam:RolePolicyAttachment s3-policy-attachment created (0.01s) [0m
+[0;32m✅  +  aws:iam:RolePolicyAttachment s3-policy-attachment created (0.01s) [0m
 [0;34m@ updating.....[0m
-[0;32m  +  aws:s3:BucketVersioningV2 bucket-versioning created (1s) [0m
+[0;32m✅  +  aws:s3:BucketVersioningV2 bucket-versioning created (1s) [0m
 [0;34m@ updating.......[0m
-[0;32m  +  aws:iam:InstanceProfile ec2-instance-profile created (5s) [0m
+[0;32m✅  +  aws:iam:InstanceProfile ec2-instance-profile created (5s) [0m
 [0;34m@ updating.......[0m
-[0;32m  +  aws:ec2:Vpc main-vpc created (10s) [0m
+[0;32m✅  +  aws:ec2:Vpc main-vpc created (10s) [0m
 [0;36m   +  aws:ec2:SecurityGroup web-security-group creating (0s) [0m
 [0;36m   +  aws:ec2:Subnet subnet-a creating (0s) [0m
 [0;36m   +  aws:ec2:Subnet subnet-b creating (0s) [0m
 [0;36m   +  aws:ec2:InternetGateway main-igw creating (0s) [0m
 [0;36m   +  aws:ec2:RouteTable main-route-table creating (0s) [0m
-[0;32m  +  aws:ec2:InternetGateway main-igw created (0.04s) [0m
+[0;32m✅  +  aws:ec2:InternetGateway main-igw created (0.04s) [0m
 [0;34m@ updating....[0m
-[0;32m  +  aws:ec2:RouteTable main-route-table created (0.14s) [0m
+[0;32m✅  +  aws:ec2:RouteTable main-route-table created (0.14s) [0m
 [0;36m   +  aws:ec2:Route internet-route creating (0s) [0m
-[0;32m  +  aws:ec2:Route internet-route created (0.13s) [0m
-[0;32m  +  aws:ec2:SecurityGroup web-security-group created (0.28s) [0m
+[0;32m✅  +  aws:ec2:Route internet-route created (0.13s) [0m
+[0;32m✅  +  aws:ec2:SecurityGroup web-security-group created (0.28s) [0m
 [0;34m@ updating............[0m
-[0;32m  +  aws:ec2:Subnet subnet-a created (10s) [0m
-[0;32m  +  aws:ec2:Subnet subnet-b created (10s) [0m
+[0;32m✅  +  aws:ec2:Subnet subnet-a created (10s) [0m
+[0;32m✅  +  aws:ec2:Subnet subnet-b created (10s) [0m
 [0;36m   +  aws:ec2:RouteTableAssociation subnet-a-route-association creating (0s) [0m
 [0;36m   +  aws:ec2:RouteTableAssociation subnet-b-route-association creating (0s) [0m
 [0;34m@ updating....[0m
-[0;32m  +  aws:ec2:RouteTableAssociation subnet-a-route-association created (0.03s) [0m
-[0;32m  +  aws:ec2:RouteTableAssociation subnet-b-route-association created (0.03s) [0m
-[0;32m  +  pulumi:pulumi:Stack TapStack-TapStackprdev created (21s) [0m
-[0;36m Outputs:[0m
+[0;32m✅  +  aws:ec2:RouteTableAssociation subnet-a-route-association created (0.03s) [0m
+[0;32m✅  +  aws:ec2:RouteTableAssociation subnet-b-route-association created (0.03s) [0m
+[0;32m✅  +  pulumi:pulumi:Stack TapStack-TapStackprdev created (21s) [0m
+[0;36m📋 Outputs:[0m
 [0;36m      bucketName      : "prod-infrastructure-bucket-tapstackprdev"[0m
 [0;36m      iamRoleArn      : "arn:aws:iam::000000000000:role/ec2-s3-role-2e42e4c"[0m
 [0;36m      instanceId      : "skipped-for-localstack"[0m
@@ -319,15 +319,15 @@ Created stack 'TapStackprdev'
 [0;36m      vpcId           : "vpc-b6a51d96df8da59ba"[0m
 [0;34m[0m
 [0;36m  Resources:[0m
-[0;32m     + 18 created[0m
+[0;32m✅     + 18 created[0m
 [0;34m[0m
 [0;36m  Duration: 25s[0m
 [0;34m[0m
-[0;32m Pulumi deployment completed[0m
-[0;32m  Total deployment time: 38s[0m
-[1;33m Generating stack outputs...[0m
-[0;32m Outputs saved to cfn-outputs/flat-outputs.json[0m
-[0;34m Stack Outputs:[0m
+[0;32m✅ Pulumi deployment completed[0m
+[0;32m⏱️  Total deployment time: 38s[0m
+[1;33m📊 Generating stack outputs...[0m
+[0;32m✅ Outputs saved to cfn-outputs/flat-outputs.json[0m
+[0;34m📋 Stack Outputs:[0m
   • bucketName: prod-infrastructure-bucket-tapstackprdev
   • iamRoleArn: arn:aws:iam::000000000000:role/ec2-s3-role-2e42e4c
   • instanceId: skipped-for-localstack
@@ -336,9 +336,9 @@ Created stack 'TapStackprdev'
   • subnetAId: subnet-7c4f78666bd0d8529
   • subnetBId: subnet-73a6fb1dd7bf06f2f
   • vpcId: vpc-b6a51d96df8da59ba
-[0;36m Deployment Summary:[0m
+[0;36m🎯 Deployment Summary:[0m
 [0;34m  • Stack: TapStackprdev[0m
 [0;34m  • Resources: ~18 deployed[0m
 [0;34m  • Duration: 38s[0m
 [0;34m  • LocalStack: http://localhost:4566[0m
-[0;32m Pulumi deployment to LocalStack completed successfully![0m
+[0;32m🎉 Pulumi deployment to LocalStack completed successfully![0m
