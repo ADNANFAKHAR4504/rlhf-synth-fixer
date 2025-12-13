@@ -75,6 +75,12 @@ jobs:
       - name: Fetch base branch
         run: git fetch origin main:main
 
+      - name: Validate metadata.json
+        uses: cardinalby/schema-validator-action@v3
+        with:
+          file: 'metadata.json'
+          schema: 'config/schemas/metadata.schema.json'
+
       - name: Check Project Files
         id: check-files
         run: ./scripts/check-project-files.sh
