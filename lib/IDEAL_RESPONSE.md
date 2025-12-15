@@ -297,10 +297,10 @@ export class TapStack extends cdk.Stack {
 
   async executeAnalysis(): Promise<AnalysisResults> {
     const region = this.analysisRegion;
-    console.log(`🔍 Starting infrastructure analysis in region: ${region}...\n`);
+    console.log(`Starting infrastructure analysis in region: ${region}...\n`);
 
     const allStacks = await this.discoverStacks([region]);
-    console.log(`✓ Discovered ${allStacks.length} CDK stacks\n`);
+    console.log(`Discovered ${allStacks.length} CDK stacks\n`);
 
     const analysisPromises = allStacks.map(async ({ stack, region }) => {
       const stackFindings: Finding[] = [];
@@ -367,7 +367,7 @@ export class TapStack extends cdk.Stack {
         allStacks.push(...cdkStacks.map(stack => ({ stack, region })));
       }
     } catch (error) {
-      console.warn(`  ⚠️  Could not access region ${region}: ${error}`);
+      console.warn(`Could not access region ${region}: ${error}`);
     }
 
     return allStacks;
@@ -939,7 +939,7 @@ export class TapStack extends cdk.Stack {
 </head>
 <body>
     <div class="container">
-        <h1>🔒 AWS CDK Infrastructure Compliance Report</h1>
+        <h1>AWS CDK Infrastructure Compliance Report</h1>
         <p style="color: #666;">Generated on ${new Date().toLocaleString()}</p>
         
         <h2>Executive Summary</h2>
@@ -971,7 +971,7 @@ export class TapStack extends cdk.Stack {
           .map(
             stack => `
             <div class="stack-section">
-                <h3>📦 ${stack.stackName} (${stack.region})</h3>
+                <h3>${stack.stackName} (${stack.region})</h3>
                 <p><strong>Compliance Score:</strong> ${stack.complianceScore}/100 | 
                    <strong>Resources:</strong> ${stack.resourceCount} | 
                    <strong>Est. Monthly Cost:</strong> $${stack.estimatedMonthlyCost.toFixed(2)}</p>

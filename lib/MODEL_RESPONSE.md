@@ -72,7 +72,7 @@ import { TapStack } from './tapstack';
  * Orchestrates infrastructure analysis and report generation
  */
 async function main() {
-  console.log('🚀 Starting AWS CDK Infrastructure Compliance Analyzer...\n');
+  console.log('Starting AWS CDK Infrastructure Compliance Analyzer...\n');
   
   const app = new cdk.App();
   
@@ -95,7 +95,7 @@ async function main() {
   // Define target regions for multi-region analysis
   const targetRegions = ['us-east-1', 'eu-west-1'];
   
-  console.log(`📍 Analyzing CDK stacks across regions: ${targetRegions.join(', ')}\n`);
+  console.log(`Analyzing CDK stacks across regions: ${targetRegions.join(', ')}\n`);
   
   try {
     // Execute analysis with 5-minute timeout
@@ -110,20 +110,20 @@ async function main() {
     ]);
 
     // Display summary results
-    console.log('\n📊 Analysis Complete!\n');
+    console.log('\n Analysis Complete!\n');
     console.log('═══════════════════════════════════════════════════════');
     
     if (results) {
       const { summary, reportPaths } = results as any;
       
-      console.log('\n📈 Compliance Summary:');
+      console.log('\n Compliance Summary:');
       console.log(`   • Total Stacks Analyzed: ${summary.totalStacks}`);
       console.log(`   • Average Compliance Score: ${summary.averageScore}/100`);
       console.log(`   • Critical Findings: ${summary.criticalFindings}`);
       console.log(`   • High Severity Findings: ${summary.highFindings}`);
       console.log(`   • Total Monthly Cost Estimate: $${summary.totalMonthlyCost.toFixed(2)}`);
       
-      console.log('\n📁 Reports Generated:');
+      console.log('\n Reports Generated:');
       console.log(`   • JSON Report: ${reportPaths.json}`);
       console.log(`   • HTML Report: ${reportPaths.html}`);
       
