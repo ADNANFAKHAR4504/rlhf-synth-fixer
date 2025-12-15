@@ -769,12 +769,17 @@ Resources:
 
 
   AppAutoScalingGroupLocal:
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - W3005
     Condition: IsLocalStack
     Type: AWS::AutoScaling::AutoScalingGroup
     DependsOn:
+      - AppLaunchTemplate
       - AppTargetGroup
       - AppListener
-
     Properties:
       VPCZoneIdentifier:
         - !Ref PrivateSubnetA
@@ -783,10 +788,7 @@ Resources:
       MinSize: !Ref MinSize
       MaxSize: !Ref MaxSize
       HealthCheckType: ELB
-      # LocalStack workaround:
-      # - LocalStack keeps failing to resolve Ref AppTargetGroup when creating the ASG.
-      # - For LocalStack we give a deterministic TargetGroup ARN string instead of using Ref.
-      # - This ASG exists ONLY when IsLocalStack = true, so AWS behavior is unaffected.
+      # LocalStack workaround: avoid Ref AppTargetGroup and use deterministic ARN
       TargetGroupARNs:
         - !Sub 'arn:${AWS::Partition}:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:targetgroup/${ProjectName}-${EnvironmentSuffix}-tg/*'
       LaunchTemplate:
@@ -796,6 +798,7 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-asg'
           PropagateAtLaunch: true
+
 
 
 
