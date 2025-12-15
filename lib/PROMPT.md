@@ -30,7 +30,7 @@ Enable and store VPC Flow Logs in an S3 bucket with versioning.
 
 Enable and configure AWS GuardDuty for active threat detection.
 
-✅ Constraints:
+Constraints:
 
 The solution must be in YAML, and pass aws cloudformation validate-template without error.
 
