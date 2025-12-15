@@ -6,10 +6,10 @@
   "po_id": "101912401",
   "team": "synth",
   "startedAt": "2025-11-19T10:27:13+00:00",
-  "subtask": "CI/CD Pipeline Integration",
+  "subtask": "Application Deployment",
   "provider": "localstack",
   "subject_labels": [
-    "CI/CD Pipeline"
+    "Web Application Deployment"
   ],
   "aws_services": [
     "CodePipeline",
