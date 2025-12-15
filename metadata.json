@@ -6,14 +6,11 @@
   "po_id": "306957",
   "team": "6",
   "startedAt": "2025-08-19T14:11:59.009Z",
-  "subtask": "Security and Compliance Implementation",
+  "subtask": "Security, Compliance and Governance",
   "subject_labels": [
-    "Security Configuration",
-    "Access Control",
-    "Network Configuration",
+    "Security Configuration as Code",
     "General Infrastructure Tooling QA"
   ],
-  "training_quality": 9,
   "aws_services": [
     "KMS",
     "IAM",
@@ -27,11 +24,5 @@
     "SNS",
     "GuardDuty"
   ],
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "enyachoke-turing",
-  "dockerS3Location": "",
   "provider": "localstack"
 }
