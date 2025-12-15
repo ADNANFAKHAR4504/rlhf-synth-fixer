@@ -6,18 +6,14 @@
   "po_id": "348839",
   "team": "4",
   "startedAt": "2025-08-29T11:24:54.612Z",
-  "subtask": "Security and Compliance Implementation",
+  "subtask": "Security, Compliance and Governance",
   "subject_labels": [
-    "Security Configuration",
-    "API Authentication",
-    "Infrastructure QA",
-    "WAF Protection",
-    "CORS Configuration",
-    "Access Control",
-    "Monitoring Setup",
+    "Security Configuration as Code",
+    "Serverless Infrastructure (Functions as Code)",
+    "General Infrastructure Tooling QA",
+    "Infrastructure Analysis/Monitoring",
     "IaC Optimization"
   ],
-  "training_quality": 9,
   "aws_services": [
     "API Gateway",
     "Lambda",
@@ -29,11 +25,5 @@
     "WAF",
     "X-Ray"
   ],
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "santhosh-swe",
-  "dockerS3Location": "",
   "provider": "localstack"
 }
