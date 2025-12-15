@@ -1,0 +1,36 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "306957",
+  "team": "6",
+  "startedAt": "2025-08-19T14:11:59.009Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Access Control",
+    "Network Configuration",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "KMS",
+    "IAM",
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "WAF",
+    "ALB",
+    "CloudTrail",
+    "SNS",
+    "GuardDuty"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "enyachoke-turing",
+  "dockerS3Location": ""
+}
