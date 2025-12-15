@@ -6,7 +6,7 @@
   "po_id": "348839",
   "team": "4",
   "startedAt": "2025-08-29T11:24:54.612Z",
-  "subtask": "Security, Compliance, and Governance",
+  "subtask": "Security, Compliance and Governance",
   "subject_labels": [
     "Security Configuration as Code",
     "Serverless Infrastructure (Functions as Code)",
