@@ -689,12 +689,19 @@ Resources:
       - AppLoadBalancer
       - AppTargetGroup
     Properties:
-      LoadBalancerArn: !GetAtt AppLoadBalancer.LoadBalancerArn
+      LoadBalancerArn:
+        Fn::If:
+          - IsLocalStack
+          # LocalStack fix: build ARN manually (LocalStack can't always GetAtt LoadBalancerArn)
+          - Fn::Sub: 'arn:${AWS::Partition}:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:loadbalancer/app/${ProjectName}-${EnvironmentSuffix}-alb/*'
+          # AWS: correct reference (CloudFormation resolves the real ARN)
+          - !Ref AppLoadBalancer
       Port: 80
       Protocol: HTTP
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref AppTargetGroup
+
 
 
 
@@ -1166,7 +1173,12 @@ Outputs:
 
   AlbArn:
     Description: ALB ARN
-    Value: !GetAtt AppLoadBalancer.LoadBalancerArn
+    Value:
+      Fn::If:
+        - IsLocalStack
+        - Fn::Sub: 'arn:${AWS::Partition}:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:loadbalancer/app/${ProjectName}-${EnvironmentSuffix}-alb/*'
+        - !Ref AppLoadBalancer
+
 
 
   AlbDNSName:
