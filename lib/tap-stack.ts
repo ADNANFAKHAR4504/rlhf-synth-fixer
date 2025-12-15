@@ -792,8 +792,13 @@ export class TapStack extends cdk.Stack {
             },
           };
 
-          const costResponse =
-            await this.clients.costExplorer.send(commandInput);
+          const costResponse = (await this.clients.costExplorer.send(
+            commandInput
+          )) as {
+            ResultsByTime?: Array<{
+              Total?: { UnblendedCost?: { Amount?: string } };
+            }>;
+          };
 
           if (
             costResponse.ResultsByTime &&
