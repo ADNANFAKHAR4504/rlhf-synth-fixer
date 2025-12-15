@@ -241,6 +241,7 @@ deploy_cloudformation() {
     print_status $MAGENTA "🚀 Deploying CloudFormation ($language) to LocalStack..."
 
     # Find CloudFormation template
+    # Check for common naming conventions: template.*, TapStack.*, main.*, stack.*
     local template=""
     if [ -f "template.yaml" ]; then
         template="template.yaml"
@@ -248,9 +249,31 @@ deploy_cloudformation() {
         template="template.yml"
     elif [ -f "template.json" ]; then
         template="template.json"
+    elif [ -f "TapStack.yaml" ]; then
+        template="TapStack.yaml"
+    elif [ -f "TapStack.yml" ]; then
+        template="TapStack.yml"
+    elif [ -f "TapStack.json" ]; then
+        template="TapStack.json"
+    elif [ -f "main.yaml" ]; then
+        template="main.yaml"
+    elif [ -f "main.yml" ]; then
+        template="main.yml"
+    elif [ -f "main.json" ]; then
+        template="main.json"
+    elif [ -f "stack.yaml" ]; then
+        template="stack.yaml"
+    elif [ -f "stack.yml" ]; then
+        template="stack.yml"
+    elif [ -f "stack.json" ]; then
+        template="stack.json"
     else
-        print_status $RED "❌ No CloudFormation template found (template.yaml/yml/json)"
-        exit 1
+        # Last resort: find any yaml/yml/json file
+        template=$(find . -maxdepth 1 -name "*.yaml" -o -name "*.yml" -o -name "*.json" 2>/dev/null | head -1)
+        if [ -z "$template" ]; then
+            print_status $RED "❌ No CloudFormation template found (template.*, TapStack.*, main.*, stack.*)"
+            exit 1
+        fi
     fi
 
     print_status $YELLOW "📄 Using template: $template"
