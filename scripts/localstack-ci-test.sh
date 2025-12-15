@@ -153,19 +153,97 @@ run_cfn_tests() {
     print_status $YELLOW "🔍 Verifying stack deployment..."
     local stack_name="localstack-stack-${ENVIRONMENT_SUFFIX:-dev}"
 
-    aws cloudformation describe-stacks \
+    local stack_info
+    stack_info=$(aws cloudformation describe-stacks \
         --stack-name "$stack_name" \
         --endpoint-url "$AWS_ENDPOINT_URL" \
-        --region "$AWS_DEFAULT_REGION" > /dev/null 2>&1
+        --region "$AWS_DEFAULT_REGION" 2>&1)
 
     if [ $? -eq 0 ]; then
         print_status $GREEN "✅ Stack verified successfully!"
     else
         print_status $RED "❌ Stack verification failed!"
+        echo "$stack_info"
         exit 1
     fi
 
-    # Run additional tests if they exist
+    # Show stack status
+    print_status $CYAN "📊 Stack Status:"
+    echo "$stack_info" | jq -r '.Stacks[0] | "   Stack Name: \(.StackName)\n   Status: \(.StackStatus)\n   Created: \(.CreationTime)"' 2>/dev/null || echo "$stack_info"
+    echo ""
+
+    # List and verify resources
+    print_status $YELLOW "🔍 Verifying stack resources..."
+    local resources
+    resources=$(aws cloudformation list-stack-resources \
+        --stack-name "$stack_name" \
+        --endpoint-url "$AWS_ENDPOINT_URL" \
+        --region "$AWS_DEFAULT_REGION" 2>&1)
+
+    if [ $? -eq 0 ]; then
+        local total_resources=$(echo "$resources" | jq '.StackResourceSummaries | length' 2>/dev/null || echo "0")
+        local completed_resources=$(echo "$resources" | jq '[.StackResourceSummaries[] | select(.ResourceStatus == "CREATE_COMPLETE")] | length' 2>/dev/null || echo "0")
+        
+        print_status $CYAN "📋 Resource Summary:"
+        echo "   Total Resources: $total_resources"
+        echo "   Completed: $completed_resources"
+        echo ""
+
+        print_status $CYAN "📦 Resources Created:"
+        echo "$resources" | jq -r '.StackResourceSummaries[] | "   ✅ \(.LogicalResourceId) (\(.ResourceType)) - \(.ResourceStatus)"' 2>/dev/null || echo "$resources"
+        echo ""
+
+        # Check for any failed resources
+        local failed_resources=$(echo "$resources" | jq '[.StackResourceSummaries[] | select(.ResourceStatus | contains("FAILED"))] | length' 2>/dev/null || echo "0")
+        if [ "$failed_resources" -gt "0" ]; then
+            print_status $RED "❌ Some resources failed:"
+            echo "$resources" | jq -r '.StackResourceSummaries[] | select(.ResourceStatus | contains("FAILED")) | "   ❌ \(.LogicalResourceId): \(.ResourceStatusReason)"' 2>/dev/null
+            exit 1
+        fi
+    else
+        print_status $RED "❌ Failed to list resources!"
+        echo "$resources"
+        exit 1
+    fi
+
+    # Show stack outputs if any
+    print_status $YELLOW "🔍 Checking stack outputs..."
+    local outputs
+    outputs=$(echo "$stack_info" | jq -r '.Stacks[0].Outputs // []' 2>/dev/null)
+    local output_count=$(echo "$outputs" | jq 'length' 2>/dev/null || echo "0")
+    
+    if [ "$output_count" -gt "0" ]; then
+        print_status $CYAN "📤 Stack Outputs:"
+        echo "$outputs" | jq -r '.[] | "   \(.OutputKey): \(.OutputValue)"' 2>/dev/null
+        echo ""
+    else
+        print_status $YELLOW "   No outputs defined"
+        echo ""
+    fi
+
+    # Run Jest integration tests if they exist
+    if [ -d "$PROJECT_ROOT/test" ] && [ -f "$PROJECT_ROOT/test/tap-stack.int.test.ts" ]; then
+        print_status $MAGENTA "🧪 Running Jest integration tests..."
+        cd "$PROJECT_ROOT"
+        
+        # Ensure dependencies are installed
+        if [ -f "package.json" ]; then
+            print_status $YELLOW "📦 Installing test dependencies..."
+            npm install --silent
+        fi
+        
+        # Run integration tests with verbose output
+        print_status $YELLOW "🔬 Executing integration test suite..."
+        npm run test:integration -- --verbose --forceExit 2>&1 || {
+            local exit_code=$?
+            print_status $RED "❌ Integration tests failed with exit code: $exit_code"
+            exit $exit_code
+        }
+        print_status $GREEN "✅ Jest integration tests passed!"
+        echo ""
+    fi
+
+    # Run additional shell tests if they exist
     if [ -d "$PROJECT_ROOT/tests" ] && [ -f "$PROJECT_ROOT/tests/test.sh" ]; then
         print_status $YELLOW "🧪 Running custom test script..."
         cd "$PROJECT_ROOT/tests"
