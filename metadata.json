@@ -1,0 +1,27 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349054",
+  "team": "3",
+  "startedAt": "2025-12-15T14:18:11.889Z",
+  "subtask": "Security, Compliance and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "IAM",
+    "S3",
+    "EC2",
+    "VPC",
+    "Security Groups",
+    "Lambda",
+    "RDS",
+    "KMS",
+    "API Gateway",
+    "CloudFront",
+    "ECS (Fargate)"
+  ]
+}
