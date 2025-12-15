@@ -1,0 +1,17 @@
+{
+  "api_gateway_execution_arn": "arn:aws:execute-api:us-east-1:000000000000:2nqnonzhs6",
+  "api_gateway_id": "2nqnonzhs6",
+  "api_gateway_stage": "dev",
+  "api_gateway_url": "http://localhost:4566/restapis/2nqnonzhs6/dev/_user_request_",
+  "api_log_group": "/aws/apigateway/TapStack-dev",
+  "apigw_cloudwatch_role_arn": "arn:aws:iam::000000000000:role/apigw-cw-role-dev-4638030",
+  "echo_endpoint": "http://localhost:4566/restapis/2nqnonzhs6/dev/_user_request_/echo",
+  "health_endpoint": "http://localhost:4566/restapis/2nqnonzhs6/dev/_user_request_/health",
+  "info_endpoint": "http://localhost:4566/restapis/2nqnonzhs6/dev/_user_request_/info",
+  "lambda_function_arn": "arn:aws:lambda:us-east-1:000000000000:function:TapStack-handler-dev",
+  "lambda_function_name": "TapStack-handler-dev",
+  "lambda_log_group": "/aws/lambda/TapStack-handler-dev",
+  "lambda_version": "1",
+  "s3_log_bucket": "tapstack-logs-dev",
+  "s3_log_bucket_arn": "arn:aws:s3:::tapstack-logs-dev"
+}
