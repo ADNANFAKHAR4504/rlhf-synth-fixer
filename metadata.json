@@ -9,7 +9,7 @@
   "startedAt": "2025-10-23T05:21:54.248Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Web Application Deployment"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "CloudFormation",
