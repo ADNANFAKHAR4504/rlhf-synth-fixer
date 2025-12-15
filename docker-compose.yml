@@ -1,6 +1,19 @@
-version: '3.8'
+version: "3.8"
 
 services:
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=${SERVICES:-s3,lambda,dynamodb,cloudformation,apigateway,sts,iam,cloudwatch,logs,events,sns,sqs,kinesis,ec2,rds,ecs}
+      - DEBUG=1
+      - DATA_DIR=/tmp/localstack/data
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - "${TMPDIR:-/tmp}/localstack:/tmp/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+
   tap:
     build:
       context: .

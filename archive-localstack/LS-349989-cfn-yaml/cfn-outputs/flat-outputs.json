@@ -1,0 +1,10 @@
+{
+  "DatabaseSecretArn": "arn:aws:secretsmanager:us-east-1:000000000000:secret:SecureEnvDBMasterPassword-tapstack-b4589c80-jTMWJm",
+  "LoadBalancerDNS": "unknown",
+  "PrivateSubnet1Id": "subnet-9307155863915d506",
+  "PrivateSubnet2Id": "subnet-03ba97190b26c215a",
+  "PublicSubnet1Id": "subnet-b1c49412fa037ee56",
+  "PublicSubnet2Id": "subnet-22ff989e5b335846e",
+  "S3BucketName": "secureenv-000000000000-us-east-1-data-bucket-tapstack-b4589c80",
+  "VPCId": "vpc-3e0523b500a21f2ab"
+}

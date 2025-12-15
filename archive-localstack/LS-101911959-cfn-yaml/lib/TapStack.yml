@@ -1,0 +1,591 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  TapStack - Secure data processing pipeline for sensitive financial records.
+  Private VPC (no internet), KMS-encrypted S3, DynamoDB, VPC endpoints, strict IAM,
+  CloudWatch Logs + Alarms for audit and monitoring.
+
+Resources:
+  #######################################
+  # VPC & NETWORKING (PRIVATE ONLY)
+  #######################################
+  TapVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: TapVpc
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: SecureFinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  TapPrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TapVpc
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: TapPrivateSubnetA
+        - Key: Tier
+          Value: Private
+
+  TapPrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TapVpc
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: TapPrivateSubnetB
+        - Key: Tier
+          Value: Private
+
+  TapPrivateSubnetC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TapVpc
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: !Select [2, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: TapPrivateSubnetC
+        - Key: Tier
+          Value: Private
+
+  TapPrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref TapVpc
+      Tags:
+        - Key: Name
+          Value: TapPrivateRouteTable
+
+  TapPrivateSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref TapPrivateSubnetA
+      RouteTableId: !Ref TapPrivateRouteTable
+
+  TapPrivateSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref TapPrivateSubnetB
+      RouteTableId: !Ref TapPrivateRouteTable
+
+  TapPrivateSubnetCRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref TapPrivateSubnetC
+      RouteTableId: !Ref TapPrivateRouteTable
+
+  #######################################
+  # VPC GATEWAY ENDPOINTS (S3 & DYNAMODB)
+  #######################################
+  TapS3GatewayEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref TapVpc
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.s3
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref TapPrivateRouteTable
+
+  TapDynamoDBGatewayEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref TapVpc
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.dynamodb
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref TapPrivateRouteTable
+
+  #######################################
+  # KMS CUSTOMER-MANAGED KEY
+  #######################################
+  TapDataKmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS CMK for encrypting financial data in S3 and optionally DynamoDB.
+      Enabled: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowAccountRootFullAccess
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: "kms:*"
+            Resource: "*"
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: SecureFinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  TapDataKmsAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/tapstack-financial-data-key
+      TargetKeyId: !Ref TapDataKmsKey
+
+  #######################################
+  # S3 BUCKETS (INPUT & OUTPUT) - KMS, VERSIONING, LIFECYCLE
+  #######################################
+  TapInputBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref TapDataKmsKey
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: InputDataComplianceRule
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 365
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: tap-input-data
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: SecureFinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  TapOutputBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref TapDataKmsKey
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: OutputDataComplianceRule
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 365
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: tap-output-data
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: SecureFinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  #######################################
+  # DYNAMODB TABLE (TRANSACTION METADATA)
+  #######################################
+  TapTransactionMetadataTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: tap-transaction-metadata
+      AttributeDefinitions:
+        - AttributeName: transactionId
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: transactionId
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+        KMSMasterKeyId: !Ref TapDataKmsKey
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: SecureFinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  #######################################
+  # SECURITY GROUP (ONLY INTERNAL TRAFFIC)
+  #######################################
+  TapLambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow Lambda to talk only within VPC CIDR (including VPC endpoints).
+      VpcId: !Ref TapVpc
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: 10.0.0.0/16
+      # No inbound rules required; Lambda initiates outbound only
+      Tags:
+        - Key: Name
+          Value: TapLambdaSecurityGroup
+        - Key: Environment
+          Value: Production
+
+  #######################################
+  # IAM ROLE FOR LAMBDA (LEAST PRIVILEGE + EXPLICIT DENY)
+  #######################################
+  TapLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: tap-lambda-secure-processor-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: tap-lambda-secure-processor-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # Allow required access with least privilege
+              - Sid: AllowLogging
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: arn:aws:logs:*:*:*
+              - Sid: AllowS3DataAccess
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource:
+                  - !Sub "${TapInputBucket.Arn}/*"
+                  - !Sub "${TapOutputBucket.Arn}/*"
+              - Sid: AllowDynamoDBWrite
+                Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt TapTransactionMetadataTable.Arn
+              - Sid: AllowKmsUse
+                Effect: Allow
+                Action:
+                  - kms:Encrypt
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                Resource: !GetAtt TapDataKmsKey.Arn
+
+              # Explicit denies for destructive or out-of-scope actions
+              - Sid: ExplicitDenyDangerousActions
+                Effect: Deny
+                Action:
+                  - s3:DeleteBucket
+                  - s3:PutBucketPolicy
+                  - kms:DisableKey
+                  - kms:ScheduleKeyDeletion
+                  - dynamodb:DeleteTable
+                Resource: "*"
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: SecureFinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  #######################################
+  # LAMBDA FUNCTION (DATA PROCESSOR IN PRIVATE SUBNETS)
+  #######################################
+  TapDataProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${TapDataProcessorFunction}"
+      # CloudWatch doesn't support exactly 7 years as a discrete option;
+      # use long retention (e.g. 3653 days ~ 10 years) to exceed requirement.
+      RetentionInDays: 3653
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: SecureFinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  TapDataProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-data-processor"
+      Runtime: python3.11
+      Handler: index.handler
+      Role: !GetAtt TapLambdaExecutionRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref TapLambdaSecurityGroup
+        SubnetIds:
+          - !Ref TapPrivateSubnetA
+          - !Ref TapPrivateSubnetB
+          - !Ref TapPrivateSubnetC
+      Environment:
+        Variables:
+          OUTPUT_BUCKET_NAME: !Ref TapOutputBucket
+          METADATA_TABLE_NAME: !Ref TapTransactionMetadataTable
+      Code:
+        ZipFile: |
+          import os
+          import json
+          import boto3
+
+          s3 = boto3.client("s3")
+          ddb = boto3.client("dynamodb")
+
+          OUTPUT_BUCKET = os.environ["OUTPUT_BUCKET_NAME"]
+          TABLE_NAME = os.environ["METADATA_TABLE_NAME"]
+
+          def handler(event, context):
+              # Basic example: copy object from input to output and write metadata
+              for record in event.get("Records", []):
+                  src_bucket = record["s3"]["bucket"]["name"]
+                  key = record["s3"]["object"]["key"]
+
+                  copy_source = {"Bucket": src_bucket, "Key": key}
+                  s3.copy_object(
+                      Bucket=OUTPUT_BUCKET,
+                      Key=key,
+                      CopySource=copy_source,
+                  )
+
+                  ddb.put_item(
+                      TableName=TABLE_NAME,
+                      Item={
+                          "transactionId": {"S": key},
+                          "timestamp": {"S": context.aws_request_id},
+                          "status": {"S": "PROCESSED"},
+                      },
+                  )
+
+              return {"statusCode": 200, "body": json.dumps({"result": "ok"})}
+
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: SecureFinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  TapInputBucketLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref TapDataProcessorFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !GetAtt TapInputBucket.Arn
+      SourceAccount: !Ref AWS::AccountId
+
+  # Custom Resource Lambda to configure S3 bucket notification (breaks circular dependency)
+  TapS3NotificationConfigFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-s3-notification-config"
+      Runtime: python3.11
+      Handler: index.handler
+      Role: !GetAtt TapS3NotificationConfigRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import urllib.request
+          import urllib.error
+
+          def handler(event, context):
+              s3_client = boto3.client('s3')
+              
+              def send_response(response_status, response_data={}, physical_resource_id=None):
+                  response_url = event.get('ResponseURL')
+                  if not response_url:
+                      print("No ResponseURL in event")
+                      return
+                  
+                  response_body = json.dumps({
+                      'Status': response_status,
+                      'Reason': f'See CloudWatch Log Stream: {context.log_stream_name}',
+                      'PhysicalResourceId': physical_resource_id or context.log_stream_name,
+                      'StackId': event.get('StackId'),
+                      'RequestId': event.get('RequestId'),
+                      'LogicalResourceId': event.get('LogicalResourceId'),
+                      'Data': response_data
+                  }).encode('utf-8')
+                  
+                  try:
+                      req = urllib.request.Request(response_url, data=response_body, method='PUT')
+                      req.add_header('Content-Type', '')
+                      req.add_header('Content-Length', str(len(response_body)))
+                      urllib.request.urlopen(req)
+                  except Exception as e:
+                      print(f"Failed to send response: {e}")
+              
+              try:
+                  bucket_name = event['ResourceProperties']['BucketName']
+                  lambda_arn = event['ResourceProperties']['LambdaArn']
+                  
+                  if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':
+                      notification_config = {
+                          'LambdaFunctionConfigurations': [{
+                              'Id': 'ObjectCreatedNotification',
+                              'LambdaFunctionArn': lambda_arn,
+                              'Events': ['s3:ObjectCreated:*']
+                          }]
+                      }
+                      s3_client.put_bucket_notification_configuration(
+                          Bucket=bucket_name,
+                          NotificationConfiguration=notification_config
+                      )
+                      print(f"Successfully configured S3 notifications for bucket {bucket_name}")
+                  elif event['RequestType'] == 'Delete':
+                      s3_client.put_bucket_notification_configuration(
+                          Bucket=bucket_name,
+                          NotificationConfiguration={}
+                      )
+                      print(f"Successfully removed S3 notifications for bucket {bucket_name}")
+                  
+                  send_response('SUCCESS', {}, physical_resource_id=f'{bucket_name}-notification-config')
+              except Exception as e:
+                  error_msg = f"Error: {str(e)}"
+                  print(error_msg)
+                  send_response('FAILED', {'Error': error_msg})
+
+  TapS3NotificationConfigRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3NotificationConfigPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutBucketNotification
+                  - s3:GetBucketNotification
+                Resource: !Sub "${TapInputBucket.Arn}"
+
+  TapS3NotificationConfig:
+    Type: Custom::S3BucketNotification
+    Properties:
+      ServiceToken: !GetAtt TapS3NotificationConfigFunction.Arn
+      BucketName: !Ref TapInputBucket
+      LambdaArn: !GetAtt TapDataProcessorFunction.Arn
+    DependsOn:
+      - TapS3NotificationConfigFunction
+      - TapS3NotificationConfigRole
+      - TapInputBucketLambdaPermission
+      - TapDataProcessorFunction
+
+  #######################################
+  # CLOUDWATCH METRICS & ALARMS
+  #######################################
+  TapLambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-lambda-errors"
+      AlarmDescription: Alarm on any Lambda processing errors.
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref TapDataProcessorFunction
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+  # Metric filter to detect "AccessDenied" in logs as unauthorized access attempts
+  TapUnauthorizedAccessMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref TapDataProcessorLogGroup
+      FilterPattern: '"AccessDenied"'
+      MetricTransformations:
+        - MetricName: UnauthorizedAccessCount
+          MetricNamespace: TapSecurity
+          MetricValue: "1"
+
+  TapUnauthorizedAccessAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-unauthorized-access"
+      AlarmDescription: Alarm on unauthorized access attempts detected in Lambda logs.
+      Namespace: TapSecurity
+      MetricName: UnauthorizedAccessCount
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+Outputs:
+  VpcId:
+    Description: VPC ID for secure financial processing.
+    Value: !Ref TapVpc
+
+  InputBucketName:
+    Description: Name of the KMS-encrypted input S3 bucket.
+    Value: !Ref TapInputBucket
+
+  OutputBucketName:
+    Description: Name of the KMS-encrypted output S3 bucket.
+    Value: !Ref TapOutputBucket
+
+  TransactionMetadataTableName:
+    Description: DynamoDB table storing transaction metadata.
+    Value: !Ref TapTransactionMetadataTable
+
+  DataProcessorFunctionName:
+    Description: Lambda function that processes data from input to output bucket.
+    Value: !Ref TapDataProcessorFunction
+
+  DataKmsKeyArn:
+    Description: KMS CMK ARN used for S3 and DynamoDB encryption.
+    Value: !Ref TapDataKmsKey

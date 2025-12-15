@@ -1,0 +1,24 @@
+{
+  "platform": "pulumi",
+  "language": "go",
+  "provider": "localstack",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "310031",
+  "team": "3",
+  "startedAt": "2025-12-10T13:34:57.363Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "IAM",
+    "Internet Gateway",
+    "Security Group",
+    "Subnet",
+    "Route Table"
+  ]
+}

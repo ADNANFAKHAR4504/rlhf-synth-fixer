@@ -1,0 +1,28 @@
+2025-12-10 19:12:40,382 - INFO - Found credentials in environment variables.
+2025-12-10 19:12:40,503 - INFO - Starting compliance analysis...
+2025-12-10 19:12:40,523 - INFO - Checking VPC architecture...
+2025-12-10 19:12:40,535 - INFO - Checking VPC peering...
+2025-12-10 19:12:40,535 - INFO - Checking routing configuration...
+2025-12-10 19:12:40,557 - INFO - Checking security groups...
+2025-12-10 19:12:40,571 - INFO - Checking EC2 instances...
+2025-12-10 19:12:40,587 - INFO - Checking VPC Flow Logs...
+2025-12-10 19:12:40,587 - INFO - Checking Route53 private DNS...
+/home/runner/work/iac-test-automations/iac-test-automations/lib/analyse.py:776: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "scan_timestamp": datetime.utcnow().isoformat()
+2025-12-10 19:12:40,596 - INFO - Analysis complete. Checks: 36, Passed: 32, Failed: 4
+2025-12-10 19:12:40,596 - INFO - JSON report written to vpc_connectivity_audit.json
+2025-12-10 19:12:40,596 - INFO - HTML report written to vpc_connectivity_audit.html
+
+============================================================
+AWS Multi-VPC Compliance Analysis Complete
+============================================================
+Total Checks: 36
+Passed: 32
+Failed: 4
+Compliance: 88.89%
+
+Reports generated:
+  - JSON: vpc_connectivity_audit.json
+  - HTML: vpc_connectivity_audit.html
+============================================================
+

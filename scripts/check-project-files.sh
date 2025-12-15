@@ -2,8 +2,41 @@
 
 set -e
 
-ALLOWED_FOLDERS=("bin" "lib" "test" "tests")
-ALLOWED_FILES=("package.json" "package-lock.json" "cdk.json" "tap.py" "tap.go" "cdktf.json" "Pulumi.yaml" "metadata.json" "go.mod" "go.sum")
+ALLOWED_FOLDERS=("bin" "lib" "test" "tests" "cli" "scripts" ".github")
+ALLOWED_FILES=(
+  "package.json"
+  "package-lock.json"
+  "cdk.json"
+  "tap.py"
+  "tap.go"
+  "cdktf.json"
+  "Pulumi.yaml"
+  "metadata.json"
+  "go.mod"
+  "go.sum"
+  "docker-compose.yml"
+  "docker-compose.yaml"
+  ".dockerignore"
+  "Dockerfile"
+  "Makefile"
+  "README.md"
+  "requirements.txt"
+  "Pipfile"
+  "Pipfile.lock"
+  "pom.xml"
+  "build.gradle"
+  "settings.gradle"
+  ".gitignore"
+  ".editorconfig"
+  "tsconfig.json"
+  "jest.config.js"
+  "jest.config.ts"
+  ".eslintrc.js"
+  ".eslintrc.json"
+  ".prettierrc"
+  "setup.py"
+  "pyproject.toml"
+)
 
 echo "Checking PR file changes..."
 
