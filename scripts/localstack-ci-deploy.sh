@@ -282,12 +282,28 @@ deploy_cloudformation() {
     local stack_name="localstack-stack-${ENVIRONMENT_SUFFIX:-dev}"
     print_status $YELLOW "🚀 Deploying stack: $stack_name..."
 
-    aws cloudformation deploy \
+    # Deploy and fail on any error
+    if ! aws cloudformation deploy \
         --template-file "$template" \
         --stack-name "$stack_name" \
-        --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+        --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
         --endpoint-url "$AWS_ENDPOINT_URL" \
-        --region "$AWS_DEFAULT_REGION"
+        --region "$AWS_DEFAULT_REGION" \
+        --no-fail-on-empty-changeset 2>&1; then
+        
+        print_status $YELLOW "⚠️ Deployment encountered issues, checking stack events..."
+        
+        # Show stack events to help debug
+        aws cloudformation describe-stack-events \
+            --stack-name "$stack_name" \
+            --endpoint-url "$AWS_ENDPOINT_URL" \
+            --region "$AWS_DEFAULT_REGION" \
+            --query 'StackEvents[?ResourceStatus==`CREATE_FAILED` || ResourceStatus==`UPDATE_FAILED`].[LogicalResourceId,ResourceStatusReason]' \
+            --output table 2>/dev/null || true
+        
+        print_status $RED "❌ Stack deployment failed!"
+        exit 1
+    fi
 
     print_status $GREEN "✅ CloudFormation deployment completed!"
 
