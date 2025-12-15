@@ -4,13 +4,10 @@
   "complexity": "medium",
   "team": "synth",
   "startedAt": "2025-10-30T09:46:26+05:30",
-  "subtask": "Environment Migration",
+  "subtask": "IaC-Multi-Environment-Management",
   "subject_labels": [
-    "aws",
-    "infrastructure",
-    "migration",
-    "vpc",
-    "database"
+    "Environment Migration",
+    "Cloud Environment Setup"
   ],
   "po_id": "1gtk5t",
   "aws_services": [
