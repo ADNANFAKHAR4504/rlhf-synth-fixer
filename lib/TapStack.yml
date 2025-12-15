@@ -687,13 +687,16 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::Listener
     DependsOn:
       - AppLoadBalancer
+      - AppTargetGroup
     Properties:
-      LoadBalancerArn: !Ref AppLoadBalancer
+      LoadBalancerArn: !GetAtt AppLoadBalancer.LoadBalancerArn
       Port: 80
       Protocol: HTTP
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref AppTargetGroup
+
+
 
 
 
@@ -1163,7 +1166,8 @@ Outputs:
 
   AlbArn:
     Description: ALB ARN
-    Value: !Ref AppLoadBalancer
+    Value: !GetAtt AppLoadBalancer.LoadBalancerArn
+
 
   AlbDNSName:
     Description: ALB DNS name
