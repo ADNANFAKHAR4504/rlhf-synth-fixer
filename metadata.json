@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "229162",
+  "team": "synth",
+  "provider": "localstack",
+  "startedAt": "2025-12-15T14:00:00.000Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "RDS",
+    "Lambda",
+    "S3",
+    "CloudTrail",
+    "GuardDuty",
+    "CloudFront",
+    "SNS",
+    "EventBridge",
+    "IAM",
+    "Secrets Manager",
+    "Config",
+    "CloudWatch Logs",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Security Groups"
+  ]
+}
