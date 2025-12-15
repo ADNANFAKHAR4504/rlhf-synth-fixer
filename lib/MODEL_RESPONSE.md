@@ -778,7 +778,7 @@ export class TapStack extends cdk.Stack {
 </head>
 <body>
     <div class="container">
-        <h1>🔒 AWS CDK Infrastructure Compliance Report</h1>
+        <h1> AWS CDK Infrastructure Compliance Report</h1>
         <p style="color: #666;">Generated on ${new Date().toLocaleString()}</p>
         
         <h2>Executive Summary</h2>
@@ -808,7 +808,7 @@ export class TapStack extends cdk.Stack {
         <h2>Findings by Stack</h2>
         ${data.stacks.map((stack: any) => `
             <div class="stack-section">
-                <h3>📦 ${stack.stackName} (${stack.region})</h3>
+                <h3> ${stack.stackName} (${stack.region})</h3>
                 <p><strong>Compliance Score:</strong> ${stack.complianceScore}/100 | 
                    <strong>Resources:</strong> ${stack.resourceCount} | 
                    <strong>Est. Monthly Cost:</strong> $${stack.estimatedMonthlyCost.toFixed(2)}</p>
