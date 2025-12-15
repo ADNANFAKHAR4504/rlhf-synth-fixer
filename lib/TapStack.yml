@@ -273,6 +273,7 @@ Resources:
           Value: Security
   xyzAppNATGateway1:
     Type: AWS::EC2::NatGateway
+    DependsOn: xyzAppEIPNAT1
     Properties:
       AllocationId:
         Fn::GetAtt:
@@ -293,6 +294,7 @@ Resources:
           Value: Security
   xyzAppNATGateway2:
     Type: AWS::EC2::NatGateway
+    DependsOn: xyzAppEIPNAT2
     Properties:
       AllocationId:
         Fn::GetAtt:
