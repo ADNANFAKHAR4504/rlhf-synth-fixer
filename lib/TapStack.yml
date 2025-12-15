@@ -666,6 +666,7 @@ Resources:
   AppTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
+      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-tg'
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
@@ -677,6 +678,7 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-tg'
+
 
   AppListener:
     Metadata:
@@ -692,15 +694,18 @@ Resources:
       LoadBalancerArn:
         Fn::If:
           - IsLocalStack
-          # LocalStack fix: build ARN manually (LocalStack can't always GetAtt LoadBalancerArn)
           - Fn::Sub: 'arn:${AWS::Partition}:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:loadbalancer/app/${ProjectName}-${EnvironmentSuffix}-alb/*'
-          # AWS: correct reference (CloudFormation resolves the real ARN)
           - !Ref AppLoadBalancer
       Port: 80
       Protocol: HTTP
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref AppTargetGroup
+          TargetGroupArn:
+            Fn::If:
+              - IsLocalStack
+              - Fn::Sub: 'arn:${AWS::Partition}:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:targetgroup/${ProjectName}-${EnvironmentSuffix}-tg/*'
+              - !Ref AppTargetGroup
+
 
 
 
