@@ -47,7 +47,7 @@ interface TapStackProps extends cdk.StackProps {
 }
 
 interface CostExplorerClient {
-  send: (command: any) => Promise<any>;
+  send: (command: unknown) => Promise<unknown>;
 }
 
 interface Clients {
@@ -355,9 +355,7 @@ export class TapStack extends cdk.Stack {
    */
   async executeAnalysis(): Promise<AnalysisResults> {
     const region = this.analysisRegion;
-    console.log(
-      ` Starting infrastructure analysis in region: ${region}...\n`
-    );
+    console.log(` Starting infrastructure analysis in region: ${region}...\n`);
 
     //  Stack Discovery - single region only
     const allStacks = await this.discoverStacks([region]);
