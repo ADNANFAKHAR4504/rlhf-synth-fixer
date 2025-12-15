@@ -979,7 +979,12 @@ Resources:
       MetricName: HTTPCode_ELB_5XX_Count
       Dimensions:
         - Name: LoadBalancer
-          Value: !GetAtt AppLoadBalancer.LoadBalancerFullName
+          Value:
+            Fn::If:
+              - IsLocalStack
+              - !Sub 'localstack/${AWS::StackName}/alb'
+              - !GetAtt AppLoadBalancer.LoadBalancerFullName
+
       Statistic: Sum
       Period: 60
       EvaluationPeriods: 3
@@ -1000,9 +1005,18 @@ Resources:
       MetricName: UnHealthyHostCount
       Dimensions:
         - Name: TargetGroup
-          Value: !GetAtt AppTargetGroup.TargetGroupFullName
+          Value:
+            Fn::If:
+              - IsLocalStack
+              - !Sub 'localstack/${AWS::StackName}/tg'
+              - !GetAtt AppTargetGroup.TargetGroupFullName
         - Name: LoadBalancer
-          Value: !GetAtt AppLoadBalancer.LoadBalancerFullName
+          Value:
+            Fn::If:
+              - IsLocalStack
+              - !Sub 'localstack/${AWS::StackName}/alb'
+              - !GetAtt AppLoadBalancer.LoadBalancerFullName
+
       Statistic: Maximum
       Period: 60
       EvaluationPeriods: 5
