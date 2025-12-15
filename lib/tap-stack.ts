@@ -356,14 +356,14 @@ export class TapStack extends cdk.Stack {
   async executeAnalysis(): Promise<AnalysisResults> {
     const region = this.analysisRegion;
     console.log(
-      `🔍 Starting infrastructure analysis in region: ${region}...\n`
+      ` Starting infrastructure analysis in region: ${region}...\n`
     );
 
-    // 🔹 Stack Discovery - single region only
+    //  Stack Discovery - single region only
     const allStacks = await this.discoverStacks([region]);
-    console.log(`✓ Discovered ${allStacks.length} CDK stacks\n`);
+    console.log(` Discovered ${allStacks.length} CDK stacks\n`);
 
-    // 🔹 Parallel Analysis Execution
+    // Parallel Analysis Execution
     const analysisPromises = allStacks.map(async ({ stack, region }) => {
       const stackFindings: Finding[] = [];
 
@@ -400,7 +400,7 @@ export class TapStack extends cdk.Stack {
 
     this.stackAnalyses = await Promise.all(analysisPromises);
 
-    // 🔹 Report Generation
+    // Report Generation
     const reportPaths = await this.generateReports();
 
     // Calculate summary statistics
@@ -413,7 +413,7 @@ export class TapStack extends cdk.Stack {
     };
   }
 
-  // 🔹 Stack Discovery - single region
+  // Stack Discovery - single region
   private async discoverStacks(
     regions: string[]
   ): Promise<{ stack: Stack; region: string }[]> {
@@ -437,13 +437,13 @@ export class TapStack extends cdk.Stack {
         allStacks.push(...cdkStacks.map(stack => ({ stack, region })));
       }
     } catch (error) {
-      console.warn(`  ⚠️  Could not access region ${region}: ${error}`);
+      console.warn(` Could not access region ${region}: ${error}`);
     }
 
     return allStacks;
   }
 
-  // 🔹 Security Checks
+  // Security Checks
   private async performSecurityChecks(
     stack: Stack,
     region: string
@@ -625,7 +625,7 @@ export class TapStack extends cdk.Stack {
     return findings;
   }
 
-  // 🔹 Operational Checks
+  // Operational Checks
   private async performOperationalChecks(
     stack: Stack,
     region: string
@@ -759,7 +759,7 @@ export class TapStack extends cdk.Stack {
     return findings;
   }
 
-  // 🔹 Cost Analysis
+  //  Cost Analysis
   private async performCostAnalysis(
     stack: Stack,
     region: string
@@ -853,7 +853,7 @@ export class TapStack extends cdk.Stack {
     return { monthlyCost: estimatedMonthlyCost, resourceCount };
   }
 
-  // 🔹 Compliance Engine
+  // Compliance Engine
   private calculateComplianceScore(findings: Finding[]): number {
     let score = 100;
 
@@ -921,7 +921,7 @@ export class TapStack extends cdk.Stack {
     };
   }
 
-  // 🔹 Report Generation
+  // Report Generation
   protected fsExists(p: string): boolean {
     return fs.existsSync(p);
   }
@@ -1039,7 +1039,7 @@ export class TapStack extends cdk.Stack {
 </head>
 <body>
     <div class="container">
-        <h1>🔒 AWS CDK Infrastructure Compliance Report</h1>
+        <h1>AWS CDK Infrastructure Compliance Report</h1>
         <p style="color: #666;">Generated on ${new Date().toLocaleString()}</p>
         
         <h2>Executive Summary</h2>
@@ -1071,7 +1071,7 @@ export class TapStack extends cdk.Stack {
           .map(
             stack => `
             <div class="stack-section">
-                <h3>📦 ${stack.stackName} (${stack.region})</h3>
+                <h3>${stack.stackName} (${stack.region})</h3>
                 <p><strong>Compliance Score:</strong> ${stack.complianceScore}/100 | 
                    <strong>Resources:</strong> ${stack.resourceCount} | 
                    <strong>Est. Monthly Cost:</strong> $${stack.estimatedMonthlyCost.toFixed(2)}</p>
@@ -1106,7 +1106,7 @@ export class TapStack extends cdk.Stack {
                     </table>
                     ${stack.findings.length > 10 ? `<p style="text-align: center; color: #666;">... and ${stack.findings.length - 10} more findings</p>` : ''}
                 `
-                    : '<p style="color: #28a745;">✅ No compliance issues found!</p>'
+                    : '<p style="color: #28a745;"> No compliance issues found!</p>'
                 }
             </div>
         `

@@ -128,15 +128,15 @@ async function main() {
       console.log(`   • HTML Report: ${reportPaths.html}`);
       
       if (summary.criticalFindings > 0) {
-        console.log('\n⚠️  WARNING: Critical security findings detected!');
+        console.log('\n  WARNING: Critical security findings detected!');
         console.log('   Review the reports immediately for remediation steps.');
       }
     }
     
-    console.log('\n✅ Analysis completed successfully!');
+    console.log('\n Analysis completed successfully!');
     
   } catch (error) {
-    console.error('\n❌ Analysis failed:', error);
+    console.error('\n Analysis failed:', error);
     process.exit(1);
   }
 }
@@ -217,13 +217,13 @@ export class TapStack extends cdk.Stack {
    * Main execution method for infrastructure analysis
    */
   async executeAnalysis(regions: string[]): Promise<AnalysisResults> {
-    console.log('🔍 Starting infrastructure analysis...\n');
+    console.log(' Starting infrastructure analysis...\n');
     
-    // 🔹 Stack Discovery
+    //  Stack Discovery
     const allStacks = await this.discoverStacks(regions);
-    console.log(`✓ Discovered ${allStacks.length} CDK stacks\n`);
+    console.log(`Discovered ${allStacks.length} CDK stacks\n`);
     
-    // 🔹 Parallel Analysis Execution
+    //  Parallel Analysis Execution
     const analysisPromises = allStacks.map(async ({ stack, region }) => {
       const stackFindings: Finding[] = [];
       
@@ -257,7 +257,7 @@ export class TapStack extends cdk.Stack {
     
     this.stackAnalyses = await Promise.all(analysisPromises);
     
-    // 🔹 Report Generation
+    //  Report Generation
     const reportPaths = await this.generateReports();
     
     // Calculate summary statistics
@@ -270,7 +270,7 @@ export class TapStack extends cdk.Stack {
     };
   }
 
-  // 🔹 Stack Discovery
+  //  Stack Discovery
   private async discoverStacks(regions: string[]): Promise<{ stack: Stack; region: string }[]> {
     const allStacks: { stack: Stack; region: string }[] = [];
     
@@ -290,14 +290,14 @@ export class TapStack extends cdk.Stack {
           allStacks.push(...cdkStacks.map(stack => ({ stack, region })));
         }
       } catch (error) {
-        console.warn(`  ⚠️  Could not access region ${region}: ${error}`);
+        console.warn(`Could not access region ${region}: ${error}`);
       }
     }
     
     return allStacks;
   }
 
-  // 🔹 Security Checks
+  //  Security Checks
   private async performSecurityChecks(stack: Stack, region: string): Promise<Finding[]> {
     const findings: Finding[] = [];
     const stackName = stack.StackName!;
@@ -453,7 +453,7 @@ export class TapStack extends cdk.Stack {
     return findings;
   }
 
-  // 🔹 Operational Checks
+  //  Operational Checks
   private async performOperationalChecks(stack: Stack, region: string): Promise<Finding[]> {
     const findings: Finding[] = [];
     const stackName = stack.StackName!;
@@ -564,7 +564,7 @@ export class TapStack extends cdk.Stack {
     return findings;
   }
 
-  // 🔹 Cost Analysis
+  //  Cost Analysis
   private async performCostAnalysis(stack: Stack, region: string): Promise<{ monthlyCost: number; resourceCount: number }> {
     let estimatedMonthlyCost = 0;
     let resourceCount = 0;
@@ -638,7 +638,7 @@ export class TapStack extends cdk.Stack {
     return { monthlyCost: estimatedMonthlyCost, resourceCount };
   }
 
-  // 🔹 Compliance Engine
+  //  Compliance Engine
   private calculateComplianceScore(findings: Finding[]): number {
     let score = 100;
     
@@ -704,7 +704,7 @@ export class TapStack extends cdk.Stack {
     };
   }
 
-  // 🔹 Report Generation
+  //  Report Generation
   private async generateReports(): Promise<{ json: string; html: string }> {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const reportsDir = path.join(process.cwd(), 'reports');
@@ -835,7 +835,7 @@ export class TapStack extends cdk.Stack {
                         </tbody>
                     </table>
                     ${stack.findings.length > 10 ? `<p style="text-align: center; color: #666;">... and ${stack.findings.length - 10} more findings</p>` : ''}
-                ` : '<p style="color: #28a745;">✅ No compliance issues found!</p>'}
+                ` : '<p style="color: #28a745;"> No compliance issues found!</p>'}
             </div>
         `).join('')}
         

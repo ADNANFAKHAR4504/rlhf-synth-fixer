@@ -1006,7 +1006,7 @@ export class TapStack extends cdk.Stack {
                     </table>
                     ${stack.findings.length > 10 ? `<p style="text-align: center; color: #666;">... and ${stack.findings.length - 10} more findings</p>` : ''}
                 `
-                    : '<p style="color: #28a745;">✅ No compliance issues found!</p>'
+                    : '<p style="color: #28a745;"> No compliance issues found!</p>'
                 }
             </div>
         `
