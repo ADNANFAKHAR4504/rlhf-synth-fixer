@@ -724,10 +724,6 @@ Resources:
   AppAutoScalingGroupAws:
     Condition: IsAws
     Type: AWS::AutoScaling::AutoScalingGroup
-    DependsOn:
-      - AppLaunchTemplate
-      - AppTargetGroup
-      - AppListener
     Properties:
       VPCZoneIdentifier:
         - !Ref PrivateSubnetA
@@ -740,20 +736,16 @@ Resources:
         - !Ref AppTargetGroup
       LaunchTemplate:
         LaunchTemplateId: !Ref AppLaunchTemplate
-        #Version: !GetAtt AppLaunchTemplate.LatestVersionNumber
         Version: "1"
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-asg'
           PropagateAtLaunch: true
 
+
   AppAutoScalingGroupLocal:
     Condition: IsLocalStack
     Type: AWS::AutoScaling::AutoScalingGroup
-    DependsOn:
-      - AppLaunchTemplate
-      - AppTargetGroup
-      - AppListener
     Properties:
       VPCZoneIdentifier:
         - !Ref PrivateSubnetA
@@ -1102,11 +1094,12 @@ Resources:
       ServiceToken: !GetAtt ManagerLambda.Arn
       StackName: !Ref AWS::StackName
     DependsOn:
-      - AppAutoScalingGroup
+      - AppAutoScalingGroupAws
       - CloudTrailTrail
       - NotificationsTopic
       - RdsInstance
       - AppListener
+
 
 
   # -------------------------
@@ -1203,8 +1196,10 @@ Outputs:
 
 
   LambdaFunctionArn:
+    Condition: IsAws
     Description: Example Lambda function ARN
     Value: !GetAtt ExampleLambda.Arn
+
 
   TurnAroundPromptTableArn:
     Condition: IsLocalStack
