@@ -34,5 +34,6 @@
     "branches": 100
   },
   "author": "santhosh-swe",
-  "dockerS3Location": ""
+  "dockerS3Location": "",
+  "provider": "localstack"
 }
