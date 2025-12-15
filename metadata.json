@@ -32,5 +32,6 @@
     "branches": 100
   },
   "author": "enyachoke-turing",
-  "dockerS3Location": ""
+  "dockerS3Location": "",
+  "provider": "localstack"
 }
