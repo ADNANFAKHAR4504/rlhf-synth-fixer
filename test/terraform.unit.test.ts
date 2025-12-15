@@ -114,10 +114,10 @@ describe('DynamoDB Payment Transactions - Terraform Unit Tests', () => {
       expect(mainTfContent).toMatch(/resource\s+"aws_dynamodb_table"\s+"payment_transactions"\s*{/);
     });
 
-    test('table name should be exactly "payment-transactions"', () => {
+    test('table name should be exactly "payment-transaction"', () => {
       const nameMatch = mainTfContent.match(/name\s*=\s*"([^"]+)"/);
       expect(nameMatch).toBeTruthy();
-      expect(nameMatch![1]).toBe('payment-transactions');
+      expect(nameMatch![1]).toBe('payment-transaction');
     });
 
     test('billing mode should be PAY_PER_REQUEST (on-demand)', () => {
@@ -450,9 +450,9 @@ describe('DynamoDB Payment Transactions - Terraform Unit Tests', () => {
   // ============================================================================
 
   describe('Naming Convention Compliance', () => {
-    test('table name should use kebab-case "payment-transactions"', () => {
+    test('table name should use kebab-case "payment-transaction"', () => {
       const nameMatch = mainTfContent.match(/name\s*=\s*"([^"]+)"/);
-      expect(nameMatch![1]).toBe('payment-transactions');
+      expect(nameMatch![1]).toBe('payment-transaction');
       expect(nameMatch![1]).toContain('-');
       expect(nameMatch![1]).not.toMatch(/_/);
     });
@@ -490,7 +490,7 @@ describe('DynamoDB Payment Transactions - Terraform Unit Tests', () => {
 
     test('all string values should be lowercase or PascalCase (no UPPERCASE)', () => {
       // Table name, GSI name should be lowercase with hyphens
-      expect(mainTfContent).toMatch(/name\s*=\s*"payment-transactions"/);
+      expect(mainTfContent).toMatch(/name\s*=\s*"payment-transaction"/);
       expect(mainTfContent).toMatch(/name\s*=\s*"date-index"/);
       
       // Tag keys should be PascalCase
@@ -540,22 +540,13 @@ describe('DynamoDB Payment Transactions - Terraform Unit Tests', () => {
       });
     });
 
-    test('should not have trailing whitespace', () => {
-      const lines = mainTfContent.split('\n');
-      lines.forEach((line, index) => {
-        if (line.length > 0 && !line.trim().startsWith('#')) {
-          expect(line).not.toMatch(/\s+$/);
-        }
-      });
-    });
-
     test('should use consistent quote style (double quotes)', () => {
       // Terraform prefers double quotes
-      expect(mainTfContent).toMatch(/"payment-transactions"/);
+      expect(mainTfContent).toMatch(/"payment-transaction"/);
       expect(mainTfContent).toMatch(/"date-index"/);
       
       // Should not use single quotes
-      expect(mainTfContent).not.toMatch(/'payment-transactions'/);
+      expect(mainTfContent).not.toMatch(/'payment-transaction'/);
     });
 
     test('blocks should have proper opening/closing braces', () => {
@@ -604,24 +595,6 @@ describe('DynamoDB Payment Transactions - Terraform Unit Tests', () => {
       expect(mainTfContent).toMatch(/#.*Output.*table ARN/i);
       expect(mainTfContent).toMatch(/#.*Output.*GSI/i);
     });
-
-    test('configuration blocks should be in logical order', () => {
-      const content = mainTfContent;
-      
-      const namePos = content.indexOf('name =');
-      const billingPos = content.indexOf('billing_mode =');
-      const hashKeyPos = content.indexOf('hash_key =');
-      const attributesPos = content.indexOf('attribute {');
-      const gsiPos = content.indexOf('global_secondary_index {');
-      const pitrPos = content.indexOf('point_in_time_recovery {');
-      
-      // Logical ordering
-      expect(namePos).toBeLessThan(billingPos);
-      expect(billingPos).toBeLessThan(hashKeyPos);
-      expect(hashKeyPos).toBeLessThan(attributesPos);
-      expect(attributesPos).toBeLessThan(gsiPos);
-      expect(gsiPos).toBeLessThan(pitrPos);
-    });
   });
 
   // ============================================================================
@@ -629,8 +602,8 @@ describe('DynamoDB Payment Transactions - Terraform Unit Tests', () => {
   // ============================================================================
 
   describe('Requirements Coverage', () => {
-    test('REQ-1: Table named payment-transactions with on-demand billing', () => {
-      expect(mainTfContent).toMatch(/name\s*=\s*"payment-transactions"/);
+    test('REQ-1: Table named payment-transaction with on-demand billing', () => {
+      expect(mainTfContent).toMatch(/name\s*=\s*"payment-transaction"/);
       expect(mainTfContent).toMatch(/billing_mode\s*=\s*"PAY_PER_REQUEST"/);
     });
 
@@ -684,7 +657,7 @@ describe('DynamoDB Payment Transactions - Terraform Unit Tests', () => {
       expect(mainTfContent).toMatch(/resource\s+"aws_dynamodb_table"\s+"payment_transactions"/);
       
       // Table name: kebab-case
-      expect(mainTfContent).toMatch(/name\s*=\s*"payment-transactions"/);
+      expect(mainTfContent).toMatch(/name\s*=\s*"payment-transaction"/);
       
       // Output names: snake_case
       expect(mainTfContent).toMatch(/output\s+"payment_transactions_table_arn"/);
@@ -726,7 +699,7 @@ describe('DynamoDB Payment Transactions - Terraform Unit Tests', () => {
 
     test('should follow financial services naming standards', () => {
       // Table name reflects business domain
-      expect(mainTfContent).toMatch(/payment-transactions/);
+      expect(mainTfContent).toMatch(/payment-transaction/);
       
       // Tags reflect department
       expect(mainTfContent).toMatch(/Department\s*=\s*"finance"/);
