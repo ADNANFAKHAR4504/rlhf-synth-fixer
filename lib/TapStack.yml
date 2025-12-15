@@ -680,6 +680,10 @@ Resources:
 
   AppListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    # LocalStack sometimes fails to honor implicit Ref-based ordering.
+    # Force ALB to exist before Listener creation.
+    DependsOn:
+      - AppLoadBalancer
     Properties:
       LoadBalancerArn: !Ref AppLoadBalancer
       Port: 80
@@ -687,6 +691,7 @@ Resources:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref AppTargetGroup
+
 
   # -------------------------
   # LaunchTemplate + ASG (LocalStack safe with fixed Version)
