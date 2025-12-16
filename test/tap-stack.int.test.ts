@@ -24,9 +24,9 @@ import {
 } from '@aws-sdk/client-ec2';
 import {
   DescribeListenersCommand,
-  ElasticLoadBalancingV2Client,
   DescribeLoadBalancersCommand as ELBDescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand as ELBDescribeTargetGroupsCommand,
+  ElasticLoadBalancingV2Client,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
   GetInstanceProfileCommand,
@@ -43,7 +43,7 @@ import fs from 'fs';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const region = process.env.AWS_REGION || 'us-east-1';
-const stackName = process.env.STACK_NAME || `TapStack${environmentSuffix}`;
+const stackName = `localstack-stack-${environmentSuffix}`;
 
 // Initialize AWS SDK v3 clients
 const cloudformation = new CloudFormationClient({ region });
