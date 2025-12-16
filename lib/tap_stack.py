@@ -86,13 +86,16 @@ class TapStack(pulumi.ComponentResource):
 
     def _create_dynamodb_table(self):
         """Create DynamoDB table for webhook idempotency tracking."""
+        # Detect LocalStack environment - disable PITR as it's slow/unsupported
+        is_localstack = os.getenv('AWS_ENDPOINT_URL') is not None
+        
         self.dynamodb_table = aws.dynamodb.Table(
             f"webhook-processing-{self.environment_suffix}",
             name=f"webhook-processing-{self.environment_suffix}",
             hash_key="webhook_id",
             billing_mode="PAY_PER_REQUEST",
             point_in_time_recovery=aws.dynamodb.TablePointInTimeRecoveryArgs(
-                enabled=True
+                enabled=not is_localstack  # Disable PITR for LocalStack compatibility
             ),
             attributes=[
                 aws.dynamodb.TableAttributeArgs(

@@ -476,20 +476,11 @@ deploy_pulumi() {
     pulumi config set aws:skipCredentialsValidation true
     pulumi config set aws:skipMetadataApiCheck true
     pulumi config set aws:s3UsePathStyle true
-    # Increase retry attempts for LocalStack (DynamoDB can be slow)
-    pulumi config set aws:maxRetries 10
     pulumi config set aws:endpoints '[{"s3":"'$AWS_ENDPOINT_URL'","dynamodb":"'$AWS_ENDPOINT_URL'","lambda":"'$AWS_ENDPOINT_URL'","apigateway":"'$AWS_ENDPOINT_URL'","iam":"'$AWS_ENDPOINT_URL'","sts":"'$AWS_ENDPOINT_URL'","cloudformation":"'$AWS_ENDPOINT_URL'"}]'
 
-    # Deploy with increased timeout for LocalStack
+    # Deploy
     print_status $YELLOW "🚀 Deploying to LocalStack..."
-    # Set Pulumi timeout to handle slow LocalStack operations
-    export PULUMI_NODEJS_TIMEOUT=300000  # 5 minutes
-    pulumi up --yes --skip-preview || {
-        print_status $YELLOW "⚠️  Initial deployment failed, retrying..."
-        # Wait a bit for LocalStack to catch up
-        sleep 10
-        pulumi up --yes --skip-preview
-    }
+    pulumi up --yes --skip-preview
 
     print_status $GREEN "✅ Pulumi deployment completed!"
 
