@@ -2,6 +2,14 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'LocalStack compatible environment setup with VPC, EC2, RDS (optional), S3, and monitoring'
 
 Parameters:
+  EnableNATGateway:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: 'Enable NAT Gateway (may have issues in LocalStack Community). Set to false for LocalStack Community.'
+
   EnableRDS:
     Type: String
     Default: 'false'
@@ -9,7 +17,6 @@ Parameters:
       - 'true'
       - 'false'
     Description: 'Enable RDS resources (requires LocalStack Pro or AWS). Set to false for LocalStack Community.'
-
 
   EnvironmentSuffix:
     Type: String
@@ -97,6 +104,7 @@ Parameters:
     Description: AMI ID for EC2 instances (use a valid AMI for LocalStack)
 
 Conditions:
+  CreateNATGateway: !Equals [!Ref EnableNATGateway, 'true']
   CreateRDSResources: !Equals [!Ref EnableRDS, 'true']
 
 Resources:
@@ -159,9 +167,10 @@ Resources:
         - Key: Name
           Value: !Sub "${AWS::StackName}-${EnvironmentSuffix}-private-subnet-2"
 
-  # NAT Gateway
+  # NAT Gateway (conditional - may have issues in LocalStack Community)
   NatGatewayEIP:
     Type: AWS::EC2::EIP
+    Condition: CreateNATGateway
     DependsOn: InternetGatewayAttachment
     Properties:
       Domain: vpc
@@ -171,6 +180,7 @@ Resources:
 
   NatGateway:
     Type: AWS::EC2::NatGateway
+    Condition: CreateNATGateway
     Properties:
       AllocationId: !GetAtt NatGatewayEIP.AllocationId
       SubnetId: !Ref PublicSubnet1
@@ -212,6 +222,7 @@ Resources:
 
   DefaultPrivateRoute:
     Type: AWS::EC2::Route
+    Condition: CreateNATGateway
     Properties:
       RouteTableId: !Ref PrivateRouteTable
       DestinationCidrBlock: 0.0.0.0/0
@@ -468,12 +479,14 @@ Outputs:
       Name: !Sub "${AWS::StackName}-${EnvironmentSuffix}-InternetGatewayId"
 
   NatGatewayId:
+    Condition: CreateNATGateway
     Description: NAT Gateway ID
     Value: !Ref NatGateway
     Export:
       Name: !Sub "${AWS::StackName}-${EnvironmentSuffix}-NatGatewayId"
 
   NatGatewayEIP:
+    Condition: CreateNATGateway
     Description: NAT Gateway Elastic IP
     Value: !Ref NatGatewayEIP
     Export:

@@ -560,6 +560,18 @@ describe('TapStack - LocalStack Compatible Infrastructure Unit Tests', () => {
       expect(templateYaml).toMatch(/DBSubnetGroup:[\s\S]*?Condition: CreateRDSResources/);
       expect(templateYaml).toMatch(/RDSInstance:[\s\S]*?Condition: CreateRDSResources/);
     });
+
+    test('Template has EnableNATGateway parameter for LocalStack Community compatibility', () => {
+      // EnableNATGateway parameter allows disabling NAT Gateway for LocalStack Community
+      expect(templateYaml).toContain('EnableNATGateway:');
+      expect(templateYaml).toContain('CreateNATGateway:');
+    });
+
+    test('NAT Gateway resources are conditional (for LocalStack Community compatibility)', () => {
+      // NAT Gateway resources should have Condition: CreateNATGateway
+      expect(templateYaml).toMatch(/NatGatewayEIP:[\s\S]*?Condition: CreateNATGateway/);
+      expect(templateYaml).toMatch(/NatGateway:[\s\S]*?Condition: CreateNATGateway/);
+    });
   });
 
   // ==================
