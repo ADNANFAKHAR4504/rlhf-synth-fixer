@@ -241,6 +241,7 @@ deploy_cloudformation() {
     print_status $MAGENTA "🚀 Deploying CloudFormation ($language) to LocalStack..."
 
     # Find CloudFormation template
+    # Check for common naming conventions: template.*, TapStack.*, main.*, stack.*
     local template=""
     if [ -f "template.yaml" ]; then
         template="template.yaml"
@@ -248,9 +249,31 @@ deploy_cloudformation() {
         template="template.yml"
     elif [ -f "template.json" ]; then
         template="template.json"
+    elif [ -f "TapStack.yaml" ]; then
+        template="TapStack.yaml"
+    elif [ -f "TapStack.yml" ]; then
+        template="TapStack.yml"
+    elif [ -f "TapStack.json" ]; then
+        template="TapStack.json"
+    elif [ -f "main.yaml" ]; then
+        template="main.yaml"
+    elif [ -f "main.yml" ]; then
+        template="main.yml"
+    elif [ -f "main.json" ]; then
+        template="main.json"
+    elif [ -f "stack.yaml" ]; then
+        template="stack.yaml"
+    elif [ -f "stack.yml" ]; then
+        template="stack.yml"
+    elif [ -f "stack.json" ]; then
+        template="stack.json"
     else
-        print_status $RED "❌ No CloudFormation template found (template.yaml/yml/json)"
-        exit 1
+        # Last resort: find any yaml/yml/json file
+        template=$(find . -maxdepth 1 -name "*.yaml" -o -name "*.yml" -o -name "*.json" 2>/dev/null | head -1)
+        if [ -z "$template" ]; then
+            print_status $RED "❌ No CloudFormation template found (template.*, TapStack.*, main.*, stack.*)"
+            exit 1
+        fi
     fi
 
     print_status $YELLOW "📄 Using template: $template"
@@ -259,12 +282,28 @@ deploy_cloudformation() {
     local stack_name="localstack-stack-${ENVIRONMENT_SUFFIX:-dev}"
     print_status $YELLOW "🚀 Deploying stack: $stack_name..."
 
-    aws cloudformation deploy \
+    # Deploy and fail on any error
+    if ! aws cloudformation deploy \
         --template-file "$template" \
         --stack-name "$stack_name" \
-        --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+        --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
         --endpoint-url "$AWS_ENDPOINT_URL" \
-        --region "$AWS_DEFAULT_REGION"
+        --region "$AWS_DEFAULT_REGION" \
+        --no-fail-on-empty-changeset 2>&1; then
+        
+        print_status $YELLOW "⚠️ Deployment encountered issues, checking stack events..."
+        
+        # Show stack events to help debug
+        aws cloudformation describe-stack-events \
+            --stack-name "$stack_name" \
+            --endpoint-url "$AWS_ENDPOINT_URL" \
+            --region "$AWS_DEFAULT_REGION" \
+            --query 'StackEvents[?ResourceStatus==`CREATE_FAILED` || ResourceStatus==`UPDATE_FAILED`].[LogicalResourceId,ResourceStatusReason]' \
+            --output table 2>/dev/null || true
+        
+        print_status $RED "❌ Stack deployment failed!"
+        exit 1
+    fi
 
     print_status $GREEN "✅ CloudFormation deployment completed!"
 
@@ -394,6 +433,9 @@ deploy_pulumi() {
                 print_status $YELLOW "📦 Installing Python dependencies..."
                 pip install -r requirements.txt
             fi
+            # Set PYTHONPATH to include project root for module imports
+            export PYTHONPATH="$PROJECT_ROOT:${PYTHONPATH:-}"
+            print_status $BLUE "   PYTHONPATH: $PYTHONPATH"
             ;;
         "go")
             if [ -f "go.mod" ]; then
@@ -406,6 +448,12 @@ deploy_pulumi() {
     # Set Pulumi passphrase
     export PULUMI_CONFIG_PASSPHRASE=${PULUMI_CONFIG_PASSPHRASE:-localstack}
 
+    # Ensure local backend is used (unset any S3 backend URL)
+    unset PULUMI_BACKEND_URL
+    
+    # Clear any old workspace state that might point to S3 backend
+    rm -rf ~/.pulumi/workspaces 2>/dev/null || true
+
     # Login to local backend
     print_status $YELLOW "🔐 Setting up Pulumi backend..."
     pulumi login --local
@@ -413,7 +461,12 @@ deploy_pulumi() {
     # Select or create stack
     local stack_name=${PULUMI_STACK_NAME:-localstack}
     print_status $YELLOW "📚 Selecting stack: $stack_name..."
-    pulumi stack select $stack_name 2>/dev/null || pulumi stack init $stack_name
+    
+    # First try to select, if fails then init new stack
+    if ! pulumi stack select $stack_name 2>/dev/null; then
+        print_status $YELLOW "📝 Creating new stack: $stack_name..."
+        pulumi stack init $stack_name
+    fi
 
     # Configure AWS for LocalStack
     print_status $YELLOW "🔧 Configuring Pulumi for LocalStack..."
