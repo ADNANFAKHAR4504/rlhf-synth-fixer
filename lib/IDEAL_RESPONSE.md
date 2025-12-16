@@ -225,7 +225,7 @@ def download_modules():
     shutil.rmtree(TARGET_MODULES_PATH)  # Overwrite existing modules folder
   os.makedirs(TARGET_MODULES_PATH, exist_ok=True)
   for item in MODULES_LIST:
-    print(f"📥 Downloading {item}...")
+    print(f" Downloading {item}...")
     download_file(item, TARGET_MODULES_PATH)
 ```
 
