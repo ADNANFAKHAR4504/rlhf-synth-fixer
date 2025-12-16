@@ -1,0 +1,10 @@
+config:
+  TapStack:environmentSuffix: localstack
+  TapStack:dbPassword: TestPassword123!
+  aws:region: us-east-1
+  aws:accessKey: test
+  aws:secretKey: test
+  aws:skipCredentialsValidation: "true"
+  aws:skipMetadataApiCheck: "true"
+  aws:s3UsePathStyle: "true"
+
