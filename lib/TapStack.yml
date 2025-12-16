@@ -389,14 +389,6 @@ Resources:
             - secrets
           Provider:
             KeyArn: !GetAtt EKSKMSKey.Arn
-      Logging:
-        ClusterLogging:
-          EnabledTypes:
-            - Type: api
-            - Type: audit
-            - Type: authenticator
-            - Type: controllerManager
-            - Type: scheduler
       Tags:
         - Key: Name
           Value: !Sub 'eks-cluster-${environmentSuffix}'
