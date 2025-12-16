@@ -274,12 +274,8 @@ Resources:
   xyzAppNATGateway1:
     Type: AWS::EC2::NatGateway
     Properties:
-      AllocationId:
-        Fn::GetAtt:
-          - xyzAppEIPNAT1
-          - AllocationId
-      SubnetId:
-        Ref: xyzAppSubnetPublic1
+      AllocationId: !GetAtt xyzAppEIPNAT1.AllocationId
+      SubnetId: !Ref xyzAppSubnetPublic1
       Tags:
         - Key: Name
           Value: xyzApp-NATGateway-1
@@ -294,12 +290,8 @@ Resources:
   xyzAppNATGateway2:
     Type: AWS::EC2::NatGateway
     Properties:
-      AllocationId:
-        Fn::GetAtt:
-          - xyzAppEIPNAT2
-          - AllocationId
-      SubnetId:
-        Ref: xyzAppSubnetPublic2
+      AllocationId: !GetAtt xyzAppEIPNAT2.AllocationId
+      SubnetId: !Ref xyzAppSubnetPublic2
       Tags:
         - Key: Name
           Value: xyzApp-NATGateway-2
