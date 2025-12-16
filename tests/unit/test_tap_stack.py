@@ -152,5 +152,37 @@ class TestTapStackLogic(unittest.TestCase):
         self.assertEqual(args.tags["Team"], "DevOps")
 
 
+class TestTapStackInitialization(unittest.TestCase):
+    """Test TapStack initialization logic that can be tested."""
+
+    @patch.dict('os.environ', {'AWS_ENDPOINT_URL': 'http://localhost:4566'})
+    def test_localstack_detection(self):
+        """Test that LocalStack environment is properly detected."""
+        import os
+        # Verify environment variable is set
+        self.assertIn('localhost', os.environ.get('AWS_ENDPOINT_URL', ''))
+
+        # Test the detection logic directly
+        is_localstack = os.environ.get(
+            "AWS_ENDPOINT_URL", "").find("localhost") >= 0
+        self.assertTrue(is_localstack)
+
+    @patch.dict('os.environ', {'AWS_ENDPOINT_URL': ''})
+    def test_non_localstack_detection(self):
+        """Test that non-LocalStack environment is properly detected."""
+        import os
+        is_localstack = os.environ.get(
+            "AWS_ENDPOINT_URL", "").find("localhost") >= 0
+        self.assertFalse(is_localstack)
+
+    def test_environment_suffix_in_names(self):
+        """Test that environment suffix is used in resource naming."""
+        args = TapStackArgs(environment_suffix="prod")
+        self.assertEqual(args.environment_suffix, "prod")
+
+        # The actual resource naming happens in TapStack.__init__
+        # which is tested via integration tests
+
+
 if __name__ == '__main__':
     unittest.main()

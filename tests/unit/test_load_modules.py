@@ -32,7 +32,7 @@ class TestLoadModules(unittest.TestCase):
 
         # Verify requests.get was called with correct URL
         expected_url = f"{S3_PUBLIC_BASE_URL}{file_name}"
-        mock_get.assert_called_once_with(expected_url, stream=True)
+        mock_get.assert_called_once_with(expected_url, stream=True, timeout=30)
 
         # Verify response.raise_for_status was called
         mock_response.raise_for_status.assert_called_once()
