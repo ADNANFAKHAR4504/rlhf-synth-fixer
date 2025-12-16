@@ -7,12 +7,11 @@
   "po_id": "101911135",
   "team": "synth",
   "startedAt": "2025-12-02T14:39:05+00:00",
-  "subtask": "Zero-Trust Network Access Infrastructure",
+  "subtask": "Security, Compliance and Governance",
   "subject_labels": [
-    "Zero-Trust Network Access",
-    "VPC Infrastructure",
-    "Serverless Architecture",
-    "Security and Compliance"
+    "Security Configuration as Code",
+    "Cloud Environment Setup",
+    "Serverless Infrastructure (Functions as Code)"
   ],
   "aws_services": [
     "VPC",
@@ -27,13 +26,5 @@
     "AWS Config",
     "VPC Endpoints",
     "Network ACLs"
-  ],
-  "training_quality": 9,
-  "author": "iamarpit-turing",
-  "reviewer": "adnan-turing",
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "dockerS3Location": ""
+  ]
 }
