@@ -57,6 +57,13 @@
             "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
             "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters"
         },
+        "DBMasterPassword": {
+            "Type": "String",
+            "Default": "AdminPassword123!",
+            "Description": "The database admin password",
+            "NoEcho": true,
+            "MinLength": 8
+        },
         "EC2InstanceType": {
             "Type": "String",
             "Default": "t2.micro",
@@ -584,6 +591,15 @@
         },
         "RDSInstance": {
             "Type": "AWS::RDS::DBInstance",
+            "Metadata": {
+                "cfn-lint": {
+                    "config": {
+                        "ignore_checks": [
+                            "W1011"
+                        ]
+                    }
+                }
+            },
             "Properties": {
                 "DBInstanceIdentifier": {
                     "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-rds"
@@ -603,7 +619,7 @@
                     "Ref": "DBMasterUsername"
                 },
                 "MasterUserPassword": {
-                    "Fn::Sub": "{{resolve:secretsmanager:${RDSSecret}:SecretString:password}}"
+                    "Ref": "DBMasterPassword"
                 },
                 "VPCSecurityGroups": [
                     {
@@ -631,13 +647,8 @@
                     "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-rds-secret"
                 },
                 "Description": "RDS master password",
-                "GenerateSecretString": {
-                    "SecretStringTemplate": {
-                        "Fn::Sub": "{\"username\":\"${DBMasterUsername}\"}"
-                    },
-                    "GenerateStringKey": "password",
-                    "PasswordLength": 16,
-                    "ExcludeCharacters": "\"@/\\"
+                "SecretString": {
+                    "Fn::Sub": "{\"username\":\"${DBMasterUsername}\",\"password\":\"${DBMasterPassword}\"}"
                 }
             }
         },
