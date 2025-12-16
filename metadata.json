@@ -8,7 +8,7 @@
   "startedAt": "2025-11-06T14:39:10.197Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Web Application Deployment"
+    "Environment Migration"
   ],
   "aws_services": [
     "AutoScaling",
