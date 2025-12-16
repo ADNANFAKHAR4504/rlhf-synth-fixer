@@ -543,6 +543,23 @@ describe('TapStack - LocalStack Compatible Infrastructure Unit Tests', () => {
       // Uses direct password parameter reference instead
       expect(templateYaml).toContain('MasterUserPassword: !Ref DBMasterPassword');
     });
+
+    test('Template has EnableRDS parameter for LocalStack Community compatibility', () => {
+      // EnableRDS parameter allows disabling RDS for LocalStack Community (which doesn't support RDS)
+      expect(templateYaml).toContain('EnableRDS:');
+      expect(templateYaml).toContain("Default: 'false'");
+    });
+
+    test('Template has Conditions section for conditional RDS resources', () => {
+      expect(templateYaml).toContain('Conditions:');
+      expect(templateYaml).toContain('CreateRDSResources:');
+    });
+
+    test('RDS resources are conditional (for LocalStack Community compatibility)', () => {
+      // RDS resources should have Condition: CreateRDSResources
+      expect(templateYaml).toMatch(/DBSubnetGroup:[\s\S]*?Condition: CreateRDSResources/);
+      expect(templateYaml).toMatch(/RDSInstance:[\s\S]*?Condition: CreateRDSResources/);
+    });
   });
 
   // ==================

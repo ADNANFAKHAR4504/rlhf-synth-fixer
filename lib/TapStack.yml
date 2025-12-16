@@ -1,7 +1,16 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'LocalStack Pro compatible environment setup with VPC, EC2, RDS, S3, and monitoring'
+Description: 'LocalStack compatible environment setup with VPC, EC2, RDS (optional), S3, and monitoring'
 
 Parameters:
+  EnableRDS:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: 'Enable RDS resources (requires LocalStack Pro or AWS). Set to false for LocalStack Community.'
+
+
   EnvironmentSuffix:
     Type: String
     Description: 'Suffix for resource names to support multiple parallel deployments (e.g., PR number from CI/CD)'
@@ -86,6 +95,9 @@ Parameters:
     Type: AWS::EC2::Image::Id
     Default: ami-12345678
     Description: AMI ID for EC2 instances (use a valid AMI for LocalStack)
+
+Conditions:
+  CreateRDSResources: !Equals [!Ref EnableRDS, 'true']
 
 Resources:
   # VPC
@@ -319,9 +331,10 @@ Resources:
       Roles:
         - !Ref EC2Role
 
-  # KMS Key for RDS
+  # KMS Key for RDS (conditional - requires LocalStack Pro or AWS)
   RDSKMSKey:
     Type: AWS::KMS::Key
+    Condition: CreateRDSResources
     Properties:
       Description: KMS key for RDS encryption
       KeyPolicy:
@@ -339,13 +352,15 @@ Resources:
 
   RDSKMSKeyAlias:
     Type: AWS::KMS::Alias
+    Condition: CreateRDSResources
     Properties:
       AliasName: !Sub "alias/${AWS::StackName}-${EnvironmentSuffix}-rds-key"
       TargetKeyId: !Ref RDSKMSKey
 
-  # RDS Subnet Group
+  # RDS Subnet Group (conditional - requires LocalStack Pro or AWS)
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
+    Condition: CreateRDSResources
     Properties:
       DBSubnetGroupName: !Sub "${AWS::StackName}-${EnvironmentSuffix}-db-subnet-group"
       DBSubnetGroupDescription: Subnet group for RDS instance
@@ -356,9 +371,10 @@ Resources:
         - Key: Name
           Value: !Sub "${AWS::StackName}-${EnvironmentSuffix}-db-subnet-group"
 
-  # RDS Instance
+  # RDS Instance (conditional - requires LocalStack Pro or AWS)
   RDSInstance:
     Type: AWS::RDS::DBInstance
+    Condition: CreateRDSResources
     Metadata:
       cfn-lint:
         config:
@@ -383,9 +399,10 @@ Resources:
         - Key: Name
           Value: !Sub "${AWS::StackName}-${EnvironmentSuffix}-rds"
 
-  # Secrets Manager Secret (stores credentials for application use)
+  # Secrets Manager Secret (conditional - only created with RDS)
   RDSSecret:
     Type: AWS::SecretsManager::Secret
+    Condition: CreateRDSResources
     Properties:
       Name: !Sub "${AWS::StackName}-${EnvironmentSuffix}-rds-secret"
       Description: RDS master password
@@ -507,45 +524,52 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-${EnvironmentSuffix}-S3BucketArn"
 
-  # RDS Outputs
+  # RDS Outputs (conditional - only when EnableRDS is true)
   RDSInstanceId:
+    Condition: CreateRDSResources
     Description: RDS Instance ID
     Value: !Ref RDSInstance
     Export:
       Name: !Sub "${AWS::StackName}-${EnvironmentSuffix}-RDSInstanceId"
 
   RDSEndpoint:
+    Condition: CreateRDSResources
     Description: RDS Instance Endpoint
     Value: !GetAtt RDSInstance.Endpoint.Address
     Export:
       Name: !Sub "${AWS::StackName}-${EnvironmentSuffix}-RDSEndpoint"
 
   RDSPort:
+    Condition: CreateRDSResources
     Description: RDS Instance Port
     Value: !GetAtt RDSInstance.Endpoint.Port
     Export:
       Name: !Sub "${AWS::StackName}-${EnvironmentSuffix}-RDSPort"
 
   RDSConnectionString:
+    Condition: CreateRDSResources
     Description: RDS Connection String (without password)
     Value: !Sub "mysql://${DBMasterUsername}@${RDSInstance.Endpoint.Address}:${RDSInstance.Endpoint.Port}"
     Export:
       Name: !Sub "${AWS::StackName}-${EnvironmentSuffix}-RDSConnectionString"
 
   RDSSecretArn:
+    Condition: CreateRDSResources
     Description: RDS Secret ARN for password retrieval
     Value: !Ref RDSSecret
     Export:
       Name: !Sub "${AWS::StackName}-${EnvironmentSuffix}-RDSSecretArn"
 
-  # KMS Outputs
+  # KMS Outputs (conditional - only when EnableRDS is true)
   RDSKMSKeyId:
+    Condition: CreateRDSResources
     Description: RDS KMS Key ID
     Value: !Ref RDSKMSKey
     Export:
       Name: !Sub "${AWS::StackName}-${EnvironmentSuffix}-RDSKMSKeyId"
 
   RDSKMSKeyArn:
+    Condition: CreateRDSResources
     Description: RDS KMS Key ARN
     Value: !GetAtt RDSKMSKey.Arn
     Export:

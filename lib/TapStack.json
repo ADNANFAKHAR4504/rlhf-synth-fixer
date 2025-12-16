@@ -1,7 +1,16 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "LocalStack Pro compatible environment setup with VPC, EC2, RDS, S3, and monitoring",
+    "Description": "LocalStack compatible environment setup with VPC, EC2, RDS (optional), S3, and monitoring",
     "Parameters": {
+        "EnableRDS": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Enable RDS resources (requires LocalStack Pro or AWS). Set to false for LocalStack Community."
+        },
         "EnvironmentSuffix": {
             "Type": "String",
             "Description": "Suffix for resource names to support multiple parallel deployments (e.g., PR number from CI/CD)",
@@ -88,6 +97,16 @@
             "Type": "AWS::EC2::Image::Id",
             "Default": "ami-12345678",
             "Description": "AMI ID for EC2 instances (use a valid AMI for LocalStack)"
+        }
+    },
+    "Conditions": {
+        "CreateRDSResources": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableRDS"
+                },
+                "true"
+            ]
         }
     },
     "Resources": {
@@ -525,6 +544,7 @@
         },
         "RDSKMSKey": {
             "Type": "AWS::KMS::Key",
+            "Condition": "CreateRDSResources",
             "Properties": {
                 "Description": "KMS key for RDS encryption",
                 "KeyPolicy": {
@@ -555,6 +575,7 @@
         },
         "RDSKMSKeyAlias": {
             "Type": "AWS::KMS::Alias",
+            "Condition": "CreateRDSResources",
             "Properties": {
                 "AliasName": {
                     "Fn::Sub": "alias/${AWS::StackName}-${EnvironmentSuffix}-rds-key"
@@ -566,6 +587,7 @@
         },
         "DBSubnetGroup": {
             "Type": "AWS::RDS::DBSubnetGroup",
+            "Condition": "CreateRDSResources",
             "Properties": {
                 "DBSubnetGroupName": {
                     "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-db-subnet-group"
@@ -591,6 +613,7 @@
         },
         "RDSInstance": {
             "Type": "AWS::RDS::DBInstance",
+            "Condition": "CreateRDSResources",
             "Metadata": {
                 "cfn-lint": {
                     "config": {
@@ -642,6 +665,7 @@
         },
         "RDSSecret": {
             "Type": "AWS::SecretsManager::Secret",
+            "Condition": "CreateRDSResources",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-rds-secret"
@@ -871,6 +895,7 @@
             }
         },
         "RDSInstanceId": {
+            "Condition": "CreateRDSResources",
             "Description": "RDS Instance ID",
             "Value": {
                 "Ref": "RDSInstance"
@@ -882,6 +907,7 @@
             }
         },
         "RDSEndpoint": {
+            "Condition": "CreateRDSResources",
             "Description": "RDS Instance Endpoint",
             "Value": {
                 "Fn::GetAtt": [
@@ -896,6 +922,7 @@
             }
         },
         "RDSPort": {
+            "Condition": "CreateRDSResources",
             "Description": "RDS Instance Port",
             "Value": {
                 "Fn::GetAtt": [
@@ -910,6 +937,7 @@
             }
         },
         "RDSConnectionString": {
+            "Condition": "CreateRDSResources",
             "Description": "RDS Connection String (without password)",
             "Value": {
                 "Fn::Sub": "mysql://${DBMasterUsername}@${RDSInstance.Endpoint.Address}:${RDSInstance.Endpoint.Port}"
@@ -921,6 +949,7 @@
             }
         },
         "RDSSecretArn": {
+            "Condition": "CreateRDSResources",
             "Description": "RDS Secret ARN for password retrieval",
             "Value": {
                 "Ref": "RDSSecret"
@@ -932,6 +961,7 @@
             }
         },
         "RDSKMSKeyId": {
+            "Condition": "CreateRDSResources",
             "Description": "RDS KMS Key ID",
             "Value": {
                 "Ref": "RDSKMSKey"
@@ -943,6 +973,7 @@
             }
         },
         "RDSKMSKeyArn": {
+            "Condition": "CreateRDSResources",
             "Description": "RDS KMS Key ARN",
             "Value": {
                 "Fn::GetAtt": [
