@@ -271,19 +271,31 @@ run_pulumi_tests() {
     local language=$1
     print_status $MAGENTA "🧪 Running Pulumi integration tests..."
 
-    # Verify deployment
-    print_status $YELLOW "🔍 Verifying Pulumi stack..."
-    cd "$PROJECT_ROOT/lib"
-
-    export PULUMI_CONFIG_PASSPHRASE=${PULUMI_CONFIG_PASSPHRASE:-localstack}
-    pulumi login --local
-
-    local stack_name=${PULUMI_STACK_NAME:-localstack}
-    pulumi stack select $stack_name
-
-    pulumi stack output
-
-    print_status $GREEN "✅ Pulumi stack verified!"
+    # Verify deployment outputs exist (from flat-outputs.json)
+    print_status $YELLOW "🔍 Verifying deployment outputs..."
+    local outputs_file="$PROJECT_ROOT/cfn-outputs/flat-outputs.json"
+    
+    if [ ! -f "$outputs_file" ]; then
+        print_status $RED "❌ Deployment outputs file not found: $outputs_file"
+        print_status $YELLOW "💡 Make sure deployment step completed successfully"
+        exit 1
+    fi
+    
+    print_status $GREEN "✅ Deployment outputs file found"
+    
+    # Verify outputs file is not empty
+    local outputs_content
+    outputs_content=$(cat "$outputs_file" 2>/dev/null)
+    
+    if [ -z "$outputs_content" ] || [ "$outputs_content" = "{}" ]; then
+        print_status $RED "❌ Deployment outputs file is empty!"
+        exit 1
+    fi
+    
+    local output_count=$(echo "$outputs_content" | jq 'keys | length' 2>/dev/null || echo "0")
+    print_status $GREEN "✅ Found $output_count deployment outputs"
+    print_status $BLUE "   Outputs file: cfn-outputs/flat-outputs.json"
+    echo ""
 
     # Run tests if they exist
     if [ -d "$PROJECT_ROOT/tests" ]; then
@@ -295,7 +307,11 @@ run_pulumi_tests() {
                     print_status $YELLOW "📦 Installing test dependencies..."
                     npm install
                     print_status $YELLOW "🧪 Running tests..."
-                    npm test
+                    npm test || {
+                        local exit_code=$?
+                        print_status $RED "❌ npm tests failed with exit code: $exit_code"
+                        exit $exit_code
+                    }
                 fi
                 ;;
             "py"|"python")
@@ -303,7 +319,11 @@ run_pulumi_tests() {
                     print_status $YELLOW "📦 Installing test dependencies..."
                     pip install -r requirements.txt
                     print_status $YELLOW "🧪 Running tests..."
-                    pytest -v
+                    pytest -v || {
+                        local exit_code=$?
+                        print_status $RED "❌ Pytest tests failed with exit code: $exit_code"
+                        exit $exit_code
+                    }
                 fi
                 ;;
             "go")
@@ -311,12 +331,17 @@ run_pulumi_tests() {
                     print_status $YELLOW "📦 Installing test dependencies..."
                     go mod download
                     print_status $YELLOW "🧪 Running tests..."
-                    go test -v
+                    go test -v || {
+                        local exit_code=$?
+                        print_status $RED "❌ Go tests failed with exit code: $exit_code"
+                        exit $exit_code
+                    }
                 fi
                 ;;
         esac
     fi
 
+    # Only show success if we got here without errors
     print_status $GREEN "✅ Pulumi tests completed!"
 }
 
@@ -343,7 +368,11 @@ run_generic_tests() {
                 print_status $YELLOW "📦 Installing test dependencies..."
                 npm install
                 print_status $YELLOW "🧪 Running tests..."
-                npm test
+                npm test || {
+                    local exit_code=$?
+                    print_status $RED "❌ npm tests failed with exit code: $exit_code"
+                    exit $exit_code
+                }
             fi
             ;;
         "py"|"python")
@@ -351,7 +380,11 @@ run_generic_tests() {
                 print_status $YELLOW "📦 Installing test dependencies..."
                 pip install -r requirements.txt
                 print_status $YELLOW "🧪 Running tests..."
-                pytest -v || python -m pytest -v || python -m unittest discover
+                pytest -v || python -m pytest -v || python -m unittest discover || {
+                    local exit_code=$?
+                    print_status $RED "❌ Python tests failed with exit code: $exit_code"
+                    exit $exit_code
+                }
             fi
             ;;
         "go")
@@ -359,7 +392,11 @@ run_generic_tests() {
                 print_status $YELLOW "📦 Installing test dependencies..."
                 go mod download
                 print_status $YELLOW "🧪 Running tests..."
-                go test -v ./...
+                go test -v ./... || {
+                    local exit_code=$?
+                    print_status $RED "❌ Go tests failed with exit code: $exit_code"
+                    exit $exit_code
+                }
             fi
             ;;
     esac
@@ -386,8 +423,12 @@ main() {
     print_status $GREEN "✅ Detected language: $language"
     echo ""
 
-    # Run tests
-    run_tests "$platform" "$language"
+    # Run tests and capture exit code
+    if ! run_tests "$platform" "$language"; then
+        echo ""
+        print_status $RED "❌ LocalStack integration tests failed!"
+        exit 1
+    fi
 
     echo ""
     print_status $GREEN "🎉 LocalStack integration tests completed successfully!"
