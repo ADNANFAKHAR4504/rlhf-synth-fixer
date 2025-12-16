@@ -241,7 +241,6 @@ deploy_cloudformation() {
     print_status $MAGENTA "🚀 Deploying CloudFormation ($language) to LocalStack..."
 
     # Find CloudFormation template
-    # Check for common naming conventions: template.*, TapStack.*, main.*, stack.*
     local template=""
     if [ -f "template.yaml" ]; then
         template="template.yaml"
@@ -249,118 +248,25 @@ deploy_cloudformation() {
         template="template.yml"
     elif [ -f "template.json" ]; then
         template="template.json"
-    elif [ -f "TapStack.yaml" ]; then
-        template="TapStack.yaml"
-    elif [ -f "TapStack.yml" ]; then
-        template="TapStack.yml"
-    elif [ -f "TapStack.json" ]; then
-        template="TapStack.json"
-    elif [ -f "main.yaml" ]; then
-        template="main.yaml"
-    elif [ -f "main.yml" ]; then
-        template="main.yml"
-    elif [ -f "main.json" ]; then
-        template="main.json"
-    elif [ -f "stack.yaml" ]; then
-        template="stack.yaml"
-    elif [ -f "stack.yml" ]; then
-        template="stack.yml"
-    elif [ -f "stack.json" ]; then
-        template="stack.json"
     else
-        # Last resort: find any yaml/yml/json file
-        template=$(find . -maxdepth 1 -name "*.yaml" -o -name "*.yml" -o -name "*.json" 2>/dev/null | head -1)
-        if [ -z "$template" ]; then
-            print_status $RED "❌ No CloudFormation template found (template.*, TapStack.*, main.*, stack.*)"
-            exit 1
-        fi
+        print_status $RED "❌ No CloudFormation template found (template.yaml/yml/json)"
+        exit 1
     fi
 
     print_status $YELLOW "📄 Using template: $template"
 
-    # Deploy using create-stack instead of deploy (deploy uses change sets which have issues in LocalStack)
+    # Deploy using AWS CLI with LocalStack endpoint
     local stack_name="localstack-stack-${ENVIRONMENT_SUFFIX:-dev}"
     print_status $YELLOW "🚀 Deploying stack: $stack_name..."
 
-    # Check if stack exists and delete it first
-    if awslocal cloudformation describe-stacks --stack-name "$stack_name" > /dev/null 2>&1; then
-        print_status $YELLOW "🗑️  Existing stack found, deleting..."
-        awslocal cloudformation delete-stack --stack-name "$stack_name"
-
-        # Wait for deletion to complete
-        print_status $YELLOW "⏳ Waiting for stack deletion..."
-        local delete_timeout=120
-        local delete_elapsed=0
-        while [ $delete_elapsed -lt $delete_timeout ]; do
-            local delete_status=$(awslocal cloudformation describe-stacks --stack-name "$stack_name" \
-                --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DELETE_COMPLETE")
-
-            if [[ "$delete_status" == "DELETE_COMPLETE" ]] || [[ "$delete_status" == "" ]]; then
-                print_status $GREEN "✅ Stack deleted"
-                break
-            elif [[ "$delete_status" == "DELETE_FAILED" ]]; then
-                print_status $RED "❌ Stack deletion failed"
-                exit 1
-            fi
-
-            sleep 3
-            delete_elapsed=$((delete_elapsed + 3))
-        done
-    fi
-
-    # Create stack using create-stack (more reliable with LocalStack than deploy)
-    print_status $YELLOW "📦 Creating CloudFormation stack..."
-
-    if ! awslocal cloudformation create-stack \
+    aws cloudformation deploy \
+        --template-file "$template" \
         --stack-name "$stack_name" \
-        --template-body "file://$template" \
-        --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
-        --output json > /dev/null 2>&1; then
+        --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+        --endpoint-url "$AWS_ENDPOINT_URL" \
+        --region "$AWS_DEFAULT_REGION"
 
-        print_status $RED "❌ Failed to initiate stack creation"
-        exit 1
-    fi
-
-    print_status $GREEN "✅ Stack creation initiated"
-
-    # Wait for stack creation to complete
-    print_status $YELLOW "⏳ Waiting for stack creation to complete..."
-    local timeout=600
-    local elapsed=0
-
-    while [ $elapsed -lt $timeout ]; do
-        local stack_status=$(awslocal cloudformation describe-stacks --stack-name "$stack_name" \
-            --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "UNKNOWN")
-
-        if [[ "$stack_status" == "CREATE_COMPLETE" ]]; then
-            print_status $GREEN "✅ CloudFormation deployment completed!"
-            break
-        elif [[ "$stack_status" =~ ^(CREATE_FAILED|ROLLBACK_COMPLETE|ROLLBACK_FAILED|ROLLBACK_IN_PROGRESS)$ ]]; then
-            print_status $RED "❌ Stack deployment failed with status: $stack_status"
-
-            # Show stack events to help debug
-            print_status $YELLOW "📋 Failed resources:"
-            awslocal cloudformation describe-stack-events \
-                --stack-name "$stack_name" \
-                --query 'StackEvents[?ResourceStatus==`CREATE_FAILED`].[LogicalResourceId,ResourceStatusReason]' \
-                --output table 2>/dev/null || true
-
-            exit 1
-        elif [[ "$stack_status" == "CREATE_IN_PROGRESS" ]]; then
-            # Show progress
-            local resource_count=$(awslocal cloudformation list-stack-resources --stack-name "$stack_name" \
-                --query 'length(StackResourceSummaries[?ResourceStatus==`CREATE_COMPLETE`])' --output text 2>/dev/null || echo "0")
-            print_status $BLUE "📈 Progress: $resource_count resources created..."
-        fi
-
-        sleep 5
-        elapsed=$((elapsed + 5))
-    done
-
-    if [ $elapsed -ge $timeout ]; then
-        print_status $RED "❌ Stack creation timed out after ${timeout}s"
-        exit 1
-    fi
+    print_status $GREEN "✅ CloudFormation deployment completed!"
 
     # Collect outputs
     print_status $YELLOW "📊 Collecting deployment outputs..."
@@ -488,9 +394,6 @@ deploy_pulumi() {
                 print_status $YELLOW "📦 Installing Python dependencies..."
                 pip install -r requirements.txt
             fi
-            # Set PYTHONPATH to include project root for module imports
-            export PYTHONPATH="$PROJECT_ROOT:${PYTHONPATH:-}"
-            print_status $BLUE "   PYTHONPATH: $PYTHONPATH"
             ;;
         "go")
             if [ -f "go.mod" ]; then
@@ -503,12 +406,6 @@ deploy_pulumi() {
     # Set Pulumi passphrase
     export PULUMI_CONFIG_PASSPHRASE=${PULUMI_CONFIG_PASSPHRASE:-localstack}
 
-    # Ensure local backend is used (unset any S3 backend URL)
-    unset PULUMI_BACKEND_URL
-    
-    # Clear any old workspace state that might point to S3 backend
-    rm -rf ~/.pulumi/workspaces 2>/dev/null || true
-
     # Login to local backend
     print_status $YELLOW "🔐 Setting up Pulumi backend..."
     pulumi login --local
@@ -516,12 +413,7 @@ deploy_pulumi() {
     # Select or create stack
     local stack_name=${PULUMI_STACK_NAME:-localstack}
     print_status $YELLOW "📚 Selecting stack: $stack_name..."
-    
-    # First try to select, if fails then init new stack
-    if ! pulumi stack select $stack_name 2>/dev/null; then
-        print_status $YELLOW "📝 Creating new stack: $stack_name..."
-        pulumi stack init $stack_name
-    fi
+    pulumi stack select $stack_name 2>/dev/null || pulumi stack init $stack_name
 
     # Configure AWS for LocalStack
     print_status $YELLOW "🔧 Configuring Pulumi for LocalStack..."

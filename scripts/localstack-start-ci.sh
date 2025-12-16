@@ -58,14 +58,10 @@ if docker ps -a | grep -q localstack; then
     docker rm localstack 2>/dev/null || true
 fi
 
-# LocalStack enables all services by default when SERVICES is not set
-# Only set SERVICES if explicitly provided via environment variable
-if [ -n "$LOCALSTACK_SERVICES" ]; then
-    SERVICES="$LOCALSTACK_SERVICES"
-    echo -e "${BLUE}📋 Services to enable: ${SERVICES}${NC}"
-else
-    echo -e "${BLUE}📋 All LocalStack services enabled (default)${NC}"
-fi
+# Determine which services to enable
+SERVICES="${LOCALSTACK_SERVICES:-s3,lambda,dynamodb,cloudformation,apigateway,sts,iam,cloudwatch,logs,events,sns,sqs,kinesis,ec2,rds,ecs,ecr,ssm}"
+
+echo -e "${BLUE}📋 Services to enable: ${SERVICES}${NC}"
 
 # Check for LocalStack API Key
 if [ -n "$LOCALSTACK_API_KEY" ]; then
@@ -79,22 +75,18 @@ fi
 echo -e "${YELLOW}🔧 Starting LocalStack container...${NC}"
 
 # Build docker run command with optional API key
-# Using LocalStack latest (4.x) - supports EIP AllocationId and native S3 provider
-# Note: Do NOT set PROVIDER_OVERRIDE_S3 as it breaks S3 in 4.x
+# Using LocalStack 3.7.2 - last stable version before 4.0 removed legacy S3 provider
+# This version has better CDK compatibility and fewer S3 XML parsing issues
 DOCKER_CMD="docker run -d \
   --name localstack \
   -p 4566:4566 \
   -e DEBUG=1 \
   -e DATA_DIR=/tmp/localstack/data \
   -e DOCKER_HOST=unix:///var/run/docker.sock \
+  -e SERVICES=\"${SERVICES}\" \
   -e S3_SKIP_SIGNATURE_VALIDATION=1 \
-  -e ENFORCE_IAM=0"
-
-# Add SERVICES only if explicitly set
-if [ -n "$SERVICES" ]; then
-    DOCKER_CMD="$DOCKER_CMD \
-  -e SERVICES=\"${SERVICES}\""
-fi
+  -e ENFORCE_IAM=0 \
+  -e PROVIDER_OVERRIDE_S3=legacy_v2"
 
 # Add API key if available
 if [ -n "$LOCALSTACK_API_KEY" ]; then
@@ -104,7 +96,7 @@ fi
 
 DOCKER_CMD="$DOCKER_CMD \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  localstack/localstack-pro:latest"
+  localstack/localstack:3.7.2"
 
 # Execute the docker command
 eval $DOCKER_CMD
