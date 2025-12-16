@@ -1,12 +1,86 @@
-```yaml
+## lib/tap-stack.ts
+
+```typescript
+import * as cdk from 'aws-cdk-lib';
+import { Construct } from 'constructs';
+import { ResourcesStack } from './resources-stack';
+
+interface TapStackProps extends cdk.StackProps {
+  environmentSuffix?: string;
+}
+
+export class TapStack extends cdk.Stack {
+  public readonly resourcesStack: ResourcesStack;
+
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
+    super(scope, id, props);
+
+    const environmentSuffix = props?.environmentSuffix || 'dev';
+
+    // Create the resources infrastructure stack
+    this.resourcesStack = new ResourcesStack(this, 'ResourcesStack', {
+      environmentSuffix,
+      env: props?.env,
+    });
+
+    // Export outputs from ResourcesStack to parent stack for easy access
+    new cdk.CfnOutput(this, 'S3BucketName', {
+      value: this.resourcesStack.bucket.bucketName,
+      description: 'S3 Bucket Name',
+    });
+
+    new cdk.CfnOutput(this, 'S3BucketArn', {
+      value: this.resourcesStack.bucket.bucketArn,
+      description: 'S3 Bucket ARN',
+    });
+
+    new cdk.CfnOutput(this, 'EC2InstanceId', {
+      value: this.resourcesStack.instance.instanceId,
+      description: 'EC2 Instance ID',
+    });
+
+    new cdk.CfnOutput(this, 'EC2InstancePrivateIp', {
+      value: this.resourcesStack.instance.instancePrivateIp,
+      description: 'EC2 Instance Private IP',
+    });
+
+    new cdk.CfnOutput(this, 'ElasticIP', {
+      value: this.resourcesStack.eip.attrPublicIp,
+      description: 'Elastic IP Address',
+    });
+
+    new cdk.CfnOutput(this, 'SecurityGroupId', {
+      value: this.resourcesStack.securityGroup.securityGroupId,
+      description: 'Security Group ID',
+    });
+
+    new cdk.CfnOutput(this, 'VpcId', {
+      value: this.resourcesStack.vpc.vpcId,
+      description: 'VPC ID',
+    });
+
+    new cdk.CfnOutput(this, 'InstanceRoleArn', {
+      value: this.resourcesStack.instanceRole.roleArn,
+      description: 'EC2 Instance IAM Role ARN',
+    });
+  }
+}
+
+```
+
+## lib/resources-stack.ts
+
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import {
   CfnEIP,
   CfnEIPAssociation,
+  CfnInstance,
   Instance,
   InstanceClass,
   InstanceSize,
   InstanceType,
+  IVpc,
   MachineImage,
   Peer,
   Port,
@@ -18,140 +92,173 @@ import { Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { BlockPublicAccess, Bucket } from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
-interface TapStackProps extends cdk.StackProps {
+interface ResourcesStackProps extends cdk.StackProps {
   environmentSuffix?: string;
 }
 
-export class TapStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: TapStackProps) {
+export class ResourcesStack extends cdk.Stack {
+  public readonly bucket: Bucket;
+  public readonly instanceRole: Role;
+  public readonly vpc: IVpc;
+  public readonly securityGroup: SecurityGroup;
+  public readonly instance: Instance;
+  public readonly eip: CfnEIP;
+  public readonly eipAssociation: CfnEIPAssociation;
+
+  constructor(scope: Construct, id: string, props?: ResourcesStackProps) {
     super(scope, id, props);
 
-    // Get environment suffix from context or props
-    const environmentSuffix =
-      this.node.tryGetContext('environmentSuffix') ||
-      props?.environmentSuffix ||
-      'dev';
+    const environmentSuffix = props?.environmentSuffix || 'dev';
 
-    // Apply consistent tagging across all resources following CI/CD pipeline requirements
-    cdk.Tags.of(this).add('Environment', environmentSuffix);
-    cdk.Tags.of(this).add('ManagedBy', 'CDK');
-    cdk.Tags.of(this).add('Project', 'TapStack');
-    cdk.Tags.of(this).add('Repository', process.env.REPOSITORY || 'unknown');
-    cdk.Tags.of(this).add(
-      'CommitAuthor',
-      process.env.COMMIT_AUTHOR || 'unknown'
-    );
-
-    // Parameter for SSH IP address
-    const allowedSshIp = new cdk.CfnParameter(this, 'AllowedSshIp', {
-      type: 'String',
-      description: 'IP address allowed for SSH access to EC2 instance',
-      default: '0.0.0.0/0',
-      allowedPattern: '^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}$',
-      constraintDescription:
-        'Must be a valid IP address in CIDR format (e.g., 1.2.3.4/32)',
-    });
-
-    // 1. S3 Bucket Configuration
-    const bucket = new Bucket(this, `TapStackBucket${environmentSuffix}`, {
+    // S3 Bucket with security
+    this.bucket = new Bucket(this, `${environmentSuffix}-TapStackBucket`, {
       versioned: true,
       blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
+      encryption: cdk.aws_s3.BucketEncryption.S3_MANAGED,
     });
 
-    // 2. IAM Role and Permissions
-    const instanceRole = new Role(
+    // IAM Role for EC2
+    this.instanceRole = new Role(
       this,
-      `TapStackInstanceRole${environmentSuffix}`,
+      `${environmentSuffix}-TapStackInstanceRole`,
       {
         assumedBy: new ServicePrincipal('ec2.amazonaws.com'),
         description: 'IAM role for TapStack EC2 instance',
+        managedPolicies: [
+          cdk.aws_iam.ManagedPolicy.fromAwsManagedPolicyName(
+            'CloudWatchAgentServerPolicy'
+          ),
+        ],
       }
     );
 
-    // Grant S3 read/write permissions to the IAM role
-    bucket.grantReadWrite(instanceRole);
+    this.bucket.grantReadWrite(this.instanceRole);
 
-    // 3. Get default VPC
-    const vpc = Vpc.fromLookup(this, 'DefaultVpc', {
+    // Use default VPC
+    this.vpc = Vpc.fromLookup(this, 'DefaultVpc', {
       isDefault: true,
     });
 
-    // 4. Security Group Configuration
-    const securityGroup = new SecurityGroup(
+    // Security Group
+    this.securityGroup = new SecurityGroup(
       this,
-      `TapStackSecurityGroup${environmentSuffix}`,
+      `${environmentSuffix}-TapStackSecurityGroup`,
       {
-        vpc: vpc,
+        vpc: this.vpc,
         description: 'Security group for TapStack EC2 instance',
         allowAllOutbound: true,
       }
     );
 
-    // Add SSH ingress rule with parameter-based IP restriction
-    securityGroup.addIngressRule(
-      Peer.ipv4(allowedSshIp.valueAsString),
-      Port.tcp(22),
-      'SSH access from specified IP'
-    );
-
-    // 5. EC2 Instance Setup
-    const instance = new Instance(
+    // SSH Parameter
+    const allowedSshIp = new cdk.CfnParameter(
       this,
-      `TapStackInstance${environmentSuffix}`,
+      `${environmentSuffix}-AllowedSshIp`,
       {
-        instanceType: InstanceType.of(InstanceClass.T2, InstanceSize.MICRO),
-        machineImage: MachineImage.latestAmazonLinux2(),
-        vpc: vpc,
-        securityGroup: securityGroup,
-        role: instanceRole,
-        vpcSubnets: {
-          subnetType: SubnetType.PUBLIC,
-        },
+        type: 'String',
+        description: 'IP address range allowed for SSH access (CIDR format)',
+        default: '10.0.0.0/8',
       }
     );
 
-    // 6. Elastic IP Association
-    const eip = new CfnEIP(this, `TapStackEIP${environmentSuffix}`, {
+    // LocalStack compatibility: Create separate ingress rule instead of inline
+    // addIngressRule creates inline rules which LocalStack doesn't apply properly
+    const sshIngressRule = new cdk.aws_ec2.CfnSecurityGroupIngress(
+      this,
+      `${environmentSuffix}-SSHIngressRule`,
+      {
+        groupId: this.securityGroup.securityGroupId,
+        ipProtocol: 'tcp',
+        fromPort: 22,
+        toPort: 22,
+        cidrIp: allowedSshIp.valueAsString,
+        description: 'SSH access from specified IP range',
+      }
+    );
+
+    // EC2 Instance
+    this.instance = new Instance(
+      this,
+      `${environmentSuffix}-TapStackInstance`,
+      {
+        instanceType: InstanceType.of(InstanceClass.T2, InstanceSize.MICRO),
+        machineImage: MachineImage.latestAmazonLinux2(),
+        vpc: this.vpc,
+        securityGroup: this.securityGroup,
+        role: this.instanceRole,
+        vpcSubnets: {
+          subnetType: SubnetType.PUBLIC,
+        },
+        requireImdsv2: true,
+      }
+    );
+
+    // LocalStack compatibility: Override LaunchTemplate version reference
+    // CDK's Instance construct creates a LaunchTemplate behind the scenes
+    // and tries to use Fn::GetAtt for LatestVersionNumber, which doesn't work in LocalStack
+    const cfnInstance = this.instance.node.defaultChild as CfnInstance;
+    // Use addOverride to directly modify the CloudFormation template
+    cfnInstance.addOverride('Properties.LaunchTemplate.Version', '$Latest');
+
+    // Elastic IP
+    this.eip = new CfnEIP(this, `${environmentSuffix}-TapStackEIP`, {
       domain: 'vpc',
     });
 
-    // Associate Elastic IP with EC2 instance using proper association
-    new CfnEIPAssociation(this, `TapStackEIPAssociation${environmentSuffix}`, {
-      instanceId: instance.instanceId,
-      allocationId: eip.attrAllocationId,
+    this.eipAssociation = new CfnEIPAssociation(
+      this,
+      `${environmentSuffix}-TapStackEIPAssociation`,
+      {
+        instanceId: this.instance.instanceId,
+        allocationId: this.eip.attrAllocationId,
+      }
+    );
+
+    // Ensure EIP association happens after instance and EIP are created
+    this.eipAssociation.node.addDependency(this.instance);
+    this.eipAssociation.node.addDependency(this.eip);
+
+    // Outputs
+    new cdk.CfnOutput(this, 'S3BucketName', {
+      value: this.bucket.bucketName,
+      description: 'S3 Bucket Name',
     });
 
-    // CloudFormation Outputs for CI/CD pipeline consumption
-    new cdk.CfnOutput(this, 'S3BucketName', {
-      value: bucket.bucketName,
-      description: 'S3 Bucket Name',
-      exportName: `TapStack${environmentSuffix}-S3BucketName`,
+    new cdk.CfnOutput(this, 'S3BucketArn', {
+      value: this.bucket.bucketArn,
+      description: 'S3 Bucket ARN',
     });
 
     new cdk.CfnOutput(this, 'EC2InstanceId', {
-      value: instance.instanceId,
+      value: this.instance.instanceId,
       description: 'EC2 Instance ID',
-      exportName: `TapStack${environmentSuffix}-EC2InstanceId`,
+    });
+
+    new cdk.CfnOutput(this, 'EC2InstancePrivateIp', {
+      value: this.instance.instancePrivateIp,
+      description: 'EC2 Instance Private IP',
     });
 
     new cdk.CfnOutput(this, 'ElasticIP', {
-      value: eip.ref,
+      value: this.eip.attrPublicIp,
       description: 'Elastic IP Address',
-      exportName: `TapStack${environmentSuffix}-ElasticIP`,
     });
 
     new cdk.CfnOutput(this, 'SecurityGroupId', {
-      value: securityGroup.securityGroupId,
+      value: this.securityGroup.securityGroupId,
       description: 'Security Group ID',
-      exportName: `TapStack${environmentSuffix}-SecurityGroupId`,
     });
 
-    new cdk.CfnOutput(this, 'IAMRoleArn', {
-      value: instanceRole.roleArn,
-      description: 'IAM Role ARN',
-      exportName: `TapStack${environmentSuffix}-IAMRoleArn`,
+    new cdk.CfnOutput(this, 'VpcId', {
+      value: this.vpc.vpcId,
+      description: 'VPC ID',
+    });
+
+    new cdk.CfnOutput(this, 'InstanceRoleArn', {
+      value: this.instanceRole.roleArn,
+      description: 'EC2 Instance IAM Role ARN',
     });
   }
 }
