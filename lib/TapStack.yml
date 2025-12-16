@@ -444,31 +444,7 @@ Resources:
         Environment: !Ref environmentSuffix
 
 Outputs:
-  ClusterName:
-    Description: EKS Cluster Name
-    Value: !Ref EKSCluster
-    Export:
-      Name: !Sub '${AWS::StackName}-ClusterName'
-
-  ClusterEndpoint:
-    Description: EKS Cluster Endpoint
-    Value: !GetAtt EKSCluster.Endpoint
-    Export:
-      Name: !Sub '${AWS::StackName}-ClusterEndpoint'
-
-  ClusterSecurityGroupId:
-    Description: Security Group ID for the EKS cluster
-    Value: !Ref ClusterSecurityGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-ClusterSecurityGroupId'
-
-  NodeGroupName:
-    Description: EKS Node Group Name
-    Condition: ShouldCreateNodeGroup
-    Value: !Ref EKSNodeGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-NodeGroupName'
-
+  # Basic outputs that always work (no GetAtt on EKS resources)
   VpcId:
     Description: VPC ID
     Value: !Ref EKSVpc
@@ -499,6 +475,12 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-PublicSubnet2Id'
 
+  ClusterSecurityGroupId:
+    Description: Security Group ID for the EKS cluster
+    Value: !Ref ClusterSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-ClusterSecurityGroupId'
+
   KMSKeyId:
     Description: KMS Key ID for EKS encryption
     Value: !Ref EKSKMSKey
@@ -510,3 +492,18 @@ Outputs:
     Value: !Ref EKSClusterLogGroup
     Export:
       Name: !Sub '${AWS::StackName}-ClusterLogGroupName'
+
+  # EKS outputs - use Ref only (GetAtt may fail in LocalStack)
+  ClusterName:
+    Description: EKS Cluster Name
+    Value: !Ref EKSCluster
+    Export:
+      Name: !Sub '${AWS::StackName}-ClusterName'
+
+  # Conditional outputs for resources that may not be created
+  NodeGroupName:
+    Description: EKS Node Group Name
+    Condition: ShouldCreateNodeGroup
+    Value: !Ref EKSNodeGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-NodeGroupName'

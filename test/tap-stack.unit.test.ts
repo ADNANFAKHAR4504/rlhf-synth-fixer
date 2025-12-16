@@ -400,12 +400,6 @@ describe('EKS CloudFormation Template Unit Tests', () => {
       expect(output.Value).toEqual({ Ref: 'EKSCluster' });
     });
 
-    test('should have ClusterEndpoint output', () => {
-      const output = template.Outputs.ClusterEndpoint;
-      expect(output).toBeDefined();
-      expect(output.Value['Fn::GetAtt']).toEqual(['EKSCluster', 'Endpoint']);
-    });
-
     test('should have VpcId output', () => {
       const output = template.Outputs.VpcId;
       expect(output).toBeDefined();

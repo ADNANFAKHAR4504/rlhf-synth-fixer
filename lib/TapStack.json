@@ -788,54 +788,6 @@
         }
     },
     "Outputs": {
-        "ClusterName": {
-            "Description": "EKS Cluster Name",
-            "Value": {
-                "Ref": "EKSCluster"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-ClusterName"
-                }
-            }
-        },
-        "ClusterEndpoint": {
-            "Description": "EKS Cluster Endpoint",
-            "Value": {
-                "Fn::GetAtt": [
-                    "EKSCluster",
-                    "Endpoint"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-ClusterEndpoint"
-                }
-            }
-        },
-        "ClusterSecurityGroupId": {
-            "Description": "Security Group ID for the EKS cluster",
-            "Value": {
-                "Ref": "ClusterSecurityGroup"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-ClusterSecurityGroupId"
-                }
-            }
-        },
-        "NodeGroupName": {
-            "Description": "EKS Node Group Name",
-            "Condition": "ShouldCreateNodeGroup",
-            "Value": {
-                "Ref": "EKSNodeGroup"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-NodeGroupName"
-                }
-            }
-        },
         "VpcId": {
             "Description": "VPC ID",
             "Value": {
@@ -891,6 +843,17 @@
                 }
             }
         },
+        "ClusterSecurityGroupId": {
+            "Description": "Security Group ID for the EKS cluster",
+            "Value": {
+                "Ref": "ClusterSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ClusterSecurityGroupId"
+                }
+            }
+        },
         "KMSKeyId": {
             "Description": "KMS Key ID for EKS encryption",
             "Value": {
@@ -910,6 +873,29 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-ClusterLogGroupName"
+                }
+            }
+        },
+        "ClusterName": {
+            "Description": "EKS Cluster Name",
+            "Value": {
+                "Ref": "EKSCluster"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ClusterName"
+                }
+            }
+        },
+        "NodeGroupName": {
+            "Description": "EKS Node Group Name",
+            "Condition": "ShouldCreateNodeGroup",
+            "Value": {
+                "Ref": "EKSNodeGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-NodeGroupName"
                 }
             }
         }
