@@ -128,18 +128,69 @@ run_cdk_tests() {
     local language=$1
     print_status $MAGENTA "🧪 Running CDK/CDKTF integration tests..."
 
+    # Verify deployment outputs exist (from flat-outputs.json)
+    print_status $YELLOW "🔍 Verifying deployment outputs..."
+    local outputs_file="$PROJECT_ROOT/cfn-outputs/flat-outputs.json"
+    
+    if [ ! -f "$outputs_file" ]; then
+        print_status $RED "❌ Deployment outputs file not found: $outputs_file"
+        print_status $YELLOW "💡 Make sure deployment step completed successfully"
+        exit 1
+    fi
+    
+    print_status $GREEN "✅ Deployment outputs file found"
+    
+    # Verify outputs file is not empty
+    local outputs_content
+    outputs_content=$(cat "$outputs_file" 2>/dev/null)
+    
+    if [ -z "$outputs_content" ] || [ "$outputs_content" = "{}" ]; then
+        print_status $RED "❌ Deployment outputs file is empty!"
+        exit 1
+    fi
+    
+    local output_count=$(echo "$outputs_content" | jq 'keys | length' 2>/dev/null || echo "0")
+    print_status $GREEN "✅ Found $output_count deployment outputs"
+    
+    # Display outputs
+    print_status $CYAN "📤 Deployment Outputs:"
+    echo "$outputs_content" | jq -r 'to_entries[] | "   \(.key): \(.value)"' 2>/dev/null
+    echo ""
+
+    # Run Jest integration tests if they exist
     if [ -d "$PROJECT_ROOT/test" ]; then
-        cd "$PROJECT_ROOT/test"
-
-        if [ -f "package.json" ]; then
-            print_status $YELLOW "📦 Installing test dependencies..."
-            npm install
-
-            print_status $YELLOW "🧪 Running tests..."
-            npm test
+        # Check for any integration test files
+        local int_tests=$(find "$PROJECT_ROOT/test" -name "*.int.test.ts" 2>/dev/null | head -1)
+        
+        if [ -n "$int_tests" ]; then
+            print_status $MAGENTA "🧪 Running Jest integration tests..."
+            cd "$PROJECT_ROOT"
+            
+            # Ensure dependencies are installed
+            if [ -f "package.json" ]; then
+                print_status $YELLOW "📦 Installing test dependencies..."
+                npm install --silent
+            fi
+            
+            # Run integration tests with verbose output
+            print_status $YELLOW "🔬 Executing integration test suite..."
+            npm run test:integration -- --verbose --forceExit 2>&1 || {
+                local exit_code=$?
+                print_status $RED "❌ Integration tests failed with exit code: $exit_code"
+                exit $exit_code
+            }
+            print_status $GREEN "✅ Jest integration tests passed!"
+            echo ""
         else
-            print_status $YELLOW "⚠️  No package.json found in test directory"
+            print_status $YELLOW "⚠️  No integration test files found in test/"
         fi
+    fi
+
+    # Run additional shell tests if they exist
+    if [ -d "$PROJECT_ROOT/tests" ] && [ -f "$PROJECT_ROOT/tests/test.sh" ]; then
+        print_status $YELLOW "🧪 Running custom test script..."
+        cd "$PROJECT_ROOT/tests"
+        bash test.sh
     fi
 
     print_status $GREEN "✅ CDK/CDKTF tests completed!"
