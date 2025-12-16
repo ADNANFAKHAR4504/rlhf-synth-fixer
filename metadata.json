@@ -5,7 +5,6 @@
   "complexity": "medium",
   "turn_type": "single",
   "po_id": "10000000",
-  "team": "1",
   "startedAt": "2025-10-06T16:41:17.025Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
@@ -15,12 +14,5 @@
     "DynamoDB",
     "SNS",
     "CloudWatch"
-  ],
-  "training_quality": 9,
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "rajeshkumar-cloud",
-  "dockerS3Location": ""
+  ]
 }
