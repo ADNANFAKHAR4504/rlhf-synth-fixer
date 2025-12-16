@@ -123,7 +123,7 @@ describe('TapStack - LocalStack Compatible Infrastructure Unit Tests', () => {
 
     test('Direct AMI ID parameter is used (not SSM resolution)', () => {
       expect(templateYaml).toContain('LatestAmiId:');
-      expect(templateYaml).toContain('Type: String');
+      expect(templateYaml).toContain('Type: AWS::EC2::Image::Id');
       // Should NOT use SSM parameter resolution
       expect(templateYaml).not.toContain('resolve:ssm:');
     });
@@ -146,7 +146,6 @@ describe('TapStack - LocalStack Compatible Infrastructure Unit Tests', () => {
     test('Database parameters are configurable', () => {
       expect(templateYaml).toContain('DBInstanceClass:');
       expect(templateYaml).toContain('DBMasterUsername:');
-      expect(templateYaml).toContain('DBMasterPassword:'); // Direct password, not Secrets Manager resolution
       expect(templateYaml).toContain('AllowedValues:');
       expect(templateYaml).toContain('db.t3.micro');
     });
@@ -159,8 +158,9 @@ describe('TapStack - LocalStack Compatible Infrastructure Unit Tests', () => {
       expect(templateYaml).toContain('t3.micro');
     });
 
-    test('DBMasterPassword uses NoEcho for security', () => {
-      expect(templateYaml).toMatch(/DBMasterPassword:[\s\S]*?NoEcho: true/);
+    test('RDS password is managed via Secrets Manager', () => {
+      expect(templateYaml).toContain('GenerateSecretString:');
+      expect(templateYaml).toContain('GenerateStringKey: password');
     });
   });
 
@@ -198,8 +198,9 @@ describe('TapStack - LocalStack Compatible Infrastructure Unit Tests', () => {
     test('Private subnets are created for multi-AZ', () => {
       validateResourceExists('PrivateSubnet1', 'AWS::EC2::Subnet');
       validateResourceExists('PrivateSubnet2', 'AWS::EC2::Subnet');
-      expect(templateYaml).toContain('AvailabilityZone: us-east-1a');
-      expect(templateYaml).toContain('AvailabilityZone: us-east-1b');
+      // Uses dynamic AZ selection
+      expect(templateYaml).toContain('!Select [0, !GetAZs');
+      expect(templateYaml).toContain('!Select [1, !GetAZs');
     });
 
     test('Route tables are configured correctly', () => {
@@ -335,10 +336,9 @@ describe('TapStack - LocalStack Compatible Infrastructure Unit Tests', () => {
       expect(templateYaml).toContain('StorageType: gp2');
     });
 
-    test('RDS Instance uses direct password parameter (not Secrets Manager resolution)', () => {
-      expect(templateYaml).toContain('MasterUserPassword: !Ref DBMasterPassword');
-      // Should NOT use Secrets Manager resolution
-      expect(templateYaml).not.toContain('resolve:secretsmanager:');
+    test('RDS Instance uses Secrets Manager for password', () => {
+      expect(templateYaml).toContain('{{resolve:secretsmanager:');
+      expect(templateYaml).toContain('MasterUserPassword:');
     });
 
     test('RDS Instance has encryption enabled', () => {
@@ -366,9 +366,9 @@ describe('TapStack - LocalStack Compatible Infrastructure Unit Tests', () => {
       expect(templateYaml).toContain('Description: KMS key for RDS encryption');
     });
 
-    test('KMS Key has proper key policy for LocalStack', () => {
-      // LocalStack uses fixed account ID
-      expect(templateYaml).toContain('arn:aws:iam::000000000000:root');
+    test('KMS Key has proper key policy', () => {
+      // Uses dynamic account ID reference
+      expect(templateYaml).toContain('arn:aws:iam::${AWS::AccountId}:root');
       expect(templateYaml).toContain('Action: kms:*');
     });
 
@@ -387,8 +387,11 @@ describe('TapStack - LocalStack Compatible Infrastructure Unit Tests', () => {
       expect(templateYaml).toContain('Description: RDS master password');
     });
 
-    test('RDS Secret stores credentials', () => {
-      expect(templateYaml).toMatch(/SecretString:.*username.*password/s);
+    test('RDS Secret generates credentials', () => {
+      expect(templateYaml).toContain('GenerateSecretString:');
+      expect(templateYaml).toContain('SecretStringTemplate:');
+      expect(templateYaml).toContain('GenerateStringKey: password');
+      expect(templateYaml).toContain('PasswordLength: 16');
     });
   });
 
@@ -514,20 +517,19 @@ describe('TapStack - LocalStack Compatible Infrastructure Unit Tests', () => {
   });
 
   // ==================
-  // LOCALSTACK SPECIFIC
+  // AWS BEST PRACTICES
   // ==================
-  describe('LocalStack Specific Validations', () => {
-    test('Template uses LocalStack-compatible account ID reference', () => {
-      // Should use fixed account ID for LocalStack
-      expect(templateYaml).toContain('000000000000');
+  describe('AWS Best Practices Validations', () => {
+    test('Template uses dynamic account ID reference', () => {
+      // Uses AWS::AccountId for portability
+      expect(templateYaml).toContain('${AWS::AccountId}');
     });
 
-    test('Template uses hardcoded availability zones', () => {
-      // LocalStack requires explicit AZ specification
-      expect(templateYaml).toContain('us-east-1a');
-      expect(templateYaml).toContain('us-east-1b');
-      // Should NOT use !GetAZs or !Select for AZs
-      expect(templateYaml).not.toContain('!GetAZs');
+    test('Template uses dynamic availability zones', () => {
+      // Uses !GetAZs for region-agnostic deployment
+      expect(templateYaml).toContain('!GetAZs');
+      expect(templateYaml).toContain('!Select [0, !GetAZs');
+      expect(templateYaml).toContain('!Select [1, !GetAZs');
     });
 
     test('Template uses simplified S3 bucket naming', () => {
@@ -540,8 +542,9 @@ describe('TapStack - LocalStack Compatible Infrastructure Unit Tests', () => {
       expect(templateYaml).not.toContain('{{resolve:ssm:');
     });
 
-    test('Template does not use Secrets Manager resolution in RDS password', () => {
-      expect(templateYaml).not.toContain('{{resolve:secretsmanager:');
+    test('Template uses Secrets Manager for RDS password', () => {
+      expect(templateYaml).toContain('{{resolve:secretsmanager:');
+      expect(templateYaml).toContain('GenerateSecretString:');
     });
   });
 

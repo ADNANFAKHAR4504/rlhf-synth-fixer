@@ -56,13 +56,6 @@ Parameters:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     ConstraintDescription: Must begin with a letter and contain only alphanumeric characters
 
-  DBMasterPassword:
-    Type: String
-    Default: AdminPassword123!
-    Description: The database admin password
-    NoEcho: true
-    MinLength: 8
-
   EC2InstanceType:
     Type: String
     Default: t2.micro
@@ -83,7 +76,7 @@ Parameters:
     ConstraintDescription: Must be a valid EC2 instance type
 
   LatestAmiId:
-    Type: String
+    Type: AWS::EC2::Image::Id
     Default: ami-12345678
     Description: AMI ID for EC2 instances (use a valid AMI for LocalStack)
 
@@ -118,7 +111,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: us-east-1a
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: !Ref PublicSubnet1CidrBlock
       MapPublicIpOnLaunch: true
       Tags:
@@ -130,7 +123,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: us-east-1a
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: !Ref PrivateSubnet1CidrBlock
       Tags:
         - Key: Name
@@ -141,7 +134,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: us-east-1b
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !Ref PrivateSubnet2CidrBlock
       Tags:
         - Key: Name
@@ -330,7 +323,7 @@ Resources:
           - Sid: Enable IAM User Permissions
             Effect: Allow
             Principal:
-              AWS: !Sub "arn:aws:iam::000000000000:root"
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
             Action: kms:*
             Resource: '*'
       Tags:
@@ -367,9 +360,9 @@ Resources:
       StorageEncrypted: true
       KmsKeyId: !Ref RDSKMSKey
       Engine: mysql
-      EngineVersion: '8.0.28'
+      EngineVersion: '8.0.39'
       MasterUsername: !Ref DBMasterUsername
-      MasterUserPassword: !Ref DBMasterPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${RDSSecret}:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
@@ -384,7 +377,11 @@ Resources:
     Properties:
       Name: !Sub "${AWS::StackName}-${EnvironmentSuffix}-rds-secret"
       Description: RDS master password
-      SecretString: !Sub '{"username":"${DBMasterUsername}","password":"${DBMasterPassword}"}'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username":"${DBMasterUsername}"}'
+        GenerateStringKey: password
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
 
   # Launch Template
   LaunchTemplate:
