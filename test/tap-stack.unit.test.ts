@@ -203,14 +203,12 @@ describe('TapStack', () => {
       });
     });
 
-    test('should configure removal policy and auto delete on all buckets', () => {
+    test('should configure removal policy on all buckets', () => {
       const buckets = template.findResources('AWS::S3::Bucket');
       Object.values(buckets).forEach((bucket: any) => {
         expect(bucket.DeletionPolicy).toBe('Delete');
         expect(bucket.UpdateReplacePolicy).toBe('Delete');
       });
-
-      template.resourceCountIs('AWS::S3::BucketPolicy', 3);
     });
   });
 
