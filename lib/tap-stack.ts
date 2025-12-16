@@ -44,6 +44,7 @@ export class TapStack extends cdk.Stack {
       enableDnsHostnames: true,
       enableDnsSupport: true,
       natGateways: 0, // No NAT gateways for public-only setup
+      restrictDefaultSecurityGroup: false, // Disable custom resource to avoid Lambda runtime issues in LocalStack
     });
 
     // Create Internet Gateway and attach to VPC
