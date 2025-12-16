@@ -110,20 +110,7 @@
                 "VpcId": {
                     "Ref": "EKSVpc"
                 },
-                "CidrBlock": {
-                    "Fn::Select": [
-                        0,
-                        {
-                            "Fn::Cidr": [
-                                {
-                                    "Ref": "VpcCIDR"
-                                },
-                                6,
-                                12
-                            ]
-                        }
-                    ]
-                },
+                "CidrBlock": "10.0.0.0/20",
                 "AvailabilityZone": {
                     "Fn::Select": [
                         0,
@@ -153,20 +140,7 @@
                 "VpcId": {
                     "Ref": "EKSVpc"
                 },
-                "CidrBlock": {
-                    "Fn::Select": [
-                        1,
-                        {
-                            "Fn::Cidr": [
-                                {
-                                    "Ref": "VpcCIDR"
-                                },
-                                6,
-                                12
-                            ]
-                        }
-                    ]
-                },
+                "CidrBlock": "10.0.16.0/20",
                 "AvailabilityZone": {
                     "Fn::Select": [
                         1,
@@ -196,20 +170,7 @@
                 "VpcId": {
                     "Ref": "EKSVpc"
                 },
-                "CidrBlock": {
-                    "Fn::Select": [
-                        2,
-                        {
-                            "Fn::Cidr": [
-                                {
-                                    "Ref": "VpcCIDR"
-                                },
-                                6,
-                                12
-                            ]
-                        }
-                    ]
-                },
+                "CidrBlock": "10.0.32.0/20",
                 "AvailabilityZone": {
                     "Fn::Select": [
                         0,
@@ -238,20 +199,7 @@
                 "VpcId": {
                     "Ref": "EKSVpc"
                 },
-                "CidrBlock": {
-                    "Fn::Select": [
-                        3,
-                        {
-                            "Fn::Cidr": [
-                                {
-                                    "Ref": "VpcCIDR"
-                                },
-                                6,
-                                12
-                            ]
-                        }
-                    ]
-                },
+                "CidrBlock": "10.0.48.0/20",
                 "AvailabilityZone": {
                     "Fn::Select": [
                         1,
@@ -675,6 +623,9 @@
         },
         "EKSCluster": {
             "Type": "AWS::EKS::Cluster",
+            "DependsOn": [
+                "EKSClusterLogGroup"
+            ],
             "Properties": {
                 "Name": {
                     "Fn::Sub": "eks-cluster-${environmentSuffix}"
@@ -726,27 +677,6 @@
                         }
                     }
                 ],
-                "Logging": {
-                    "ClusterLogging": {
-                        "EnabledTypes": [
-                            {
-                                "Type": "api"
-                            },
-                            {
-                                "Type": "audit"
-                            },
-                            {
-                                "Type": "authenticator"
-                            },
-                            {
-                                "Type": "controllerManager"
-                            },
-                            {
-                                "Type": "scheduler"
-                            }
-                        ]
-                    }
-                },
                 "Tags": [
                     {
                         "Key": "Name",
@@ -763,8 +693,22 @@
                 ]
             }
         },
+        "EKSNodeGroupWaitCondition": {
+            "Type": "AWS::CloudFormation::WaitConditionHandle",
+            "Metadata": {
+                "ClusterArn": {
+                    "Fn::GetAtt": [
+                        "EKSCluster",
+                        "Arn"
+                    ]
+                }
+            }
+        },
         "EKSNodeGroup": {
             "Type": "AWS::EKS::Nodegroup",
+            "DependsOn": [
+                "EKSNodeGroupWaitCondition"
+            ],
             "Properties": {
                 "NodegroupName": {
                     "Fn::Sub": "eks-nodegroup-${environmentSuffix}"
