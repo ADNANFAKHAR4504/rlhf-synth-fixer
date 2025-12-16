@@ -82,7 +82,7 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    // 🔹 VPC Configuration
+    //  VPC Configuration
     const vpc = new ec2.Vpc(this, 'FraudAnalysisVPC', {
       maxAzs: 2,
       natGateways: 0,
@@ -95,7 +95,7 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    // 🔹 VPC Endpoints
+    //  VPC Endpoints
     vpc.addGatewayEndpoint('S3Endpoint', {
       service: ec2.GatewayVpcEndpointAwsService.S3,
     });
@@ -104,7 +104,7 @@ export class TapStack extends cdk.Stack {
       service: ec2.GatewayVpcEndpointAwsService.DYNAMODB,
     });
 
-    // 🔹 Security Group for EMR
+    //  Security Group for EMR
     const emrSecurityGroup = new ec2.SecurityGroup(this, 'EMRSecurityGroup', {
       vpc,
       description: 'Security group for EMR Serverless',
@@ -118,7 +118,7 @@ export class TapStack extends cdk.Stack {
       'HTTPS to VPC endpoints'
     );
 
-    // 🔹 S3 Buckets
+    //  S3 Buckets
     const rawTransactionsBucket = new s3.Bucket(this, 'RawTransactionsBucket', {
       bucketName: `fraud-analysis-raw-transactions-${this.account}-${environmentSuffix}`,
       versioned: true,
@@ -180,7 +180,7 @@ export class TapStack extends cdk.Stack {
       autoDeleteObjects: true,
     });
 
-    // 🔹 DynamoDB Table
+    //  DynamoDB Table
     const jobsTable = new dynamodb.Table(this, 'FraudAnalysisJobs', {
       tableName: `fraud-analysis-jobs-${environmentSuffix}`,
       partitionKey: { name: 'job_id', type: dynamodb.AttributeType.STRING },
@@ -190,7 +190,7 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // 🔹 SNS Topic
+    //  SNS Topic
     const notificationTopic = new sns.Topic(
       this,
       'FraudAnalysisNotifications',
@@ -204,7 +204,7 @@ export class TapStack extends cdk.Stack {
       new snsSubscriptions.EmailSubscription('fraud-alerts@example.com')
     );
 
-    // 🔹 EMR Serverless
+    //  EMR Serverless
     const emrRole = new iam.Role(this, 'EMRServerlessRole', {
       assumedBy: new iam.ServicePrincipal('emr-serverless.amazonaws.com'),
       description: 'Role for EMR Serverless application',
@@ -265,7 +265,7 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    // 🔹 Lambda Validator Function
+    //  Lambda Validator Function
     const validatorRole = new iam.Role(this, 'ValidatorRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
@@ -360,7 +360,7 @@ exports.handler = async (event) => {
       `),
     });
 
-    // 🔹 Step Functions State Machine
+    //  Step Functions State Machine
     const sfnRole = new iam.Role(this, 'StepFunctionsRole', {
       assumedBy: new iam.ServicePrincipal('states.amazonaws.com'),
     });
@@ -633,7 +633,7 @@ exports.handler = async (event) => {
       stateMachine.stateMachineArn
     );
 
-    // 🔹 EventBridge Rule
+    //  EventBridge Rule
     const s3EventRule = new events.Rule(this, 'S3NewFileRule', {
       eventPattern: {
         source: ['aws.s3'],
@@ -653,7 +653,7 @@ exports.handler = async (event) => {
       new s3n.LambdaDestination(validatorFunction)
     );
 
-    // 🔹 CloudWatch Dashboard
+    //  CloudWatch Dashboard
     const dashboard = new cloudwatch.Dashboard(this, 'FraudAnalysisDashboard', {
       dashboardName: `fraud-analysis-pipeline-${environmentSuffix}`,
       defaultInterval: cdk.Duration.hours(1),
@@ -728,7 +728,7 @@ exports.handler = async (event) => {
       })
     );
 
-    // 🔹 Outputs
+    //  Outputs
     new cdk.CfnOutput(this, 'RawTransactionsBucketName', {
       value: rawTransactionsBucket.bucketName,
       description: 'S3 bucket for raw transaction files',
