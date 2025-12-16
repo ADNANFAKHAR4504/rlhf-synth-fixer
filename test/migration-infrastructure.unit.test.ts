@@ -328,8 +328,11 @@ describe('Migration Infrastructure Unit Tests', () => {
     });
 
     it('should export RDS endpoint and address', () => {
-      expect(indexCode).toContain('export const rdsEndpoint = rdsInstance.endpoint');
-      expect(indexCode).toContain('export const rdsAddress = rdsInstance.address');
+      // RDS exports now have LocalStack fallback support
+      expect(indexCode).toContain('export const rdsEndpoint');
+      expect(indexCode).toContain('export const rdsAddress');
+      expect(indexCode).toContain('rdsInstance?.endpoint');
+      expect(indexCode).toContain('rdsInstance?.address');
     });
 
     it('should export EC2 private IPs', () => {
