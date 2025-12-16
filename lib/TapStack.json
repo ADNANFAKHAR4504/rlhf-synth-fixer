@@ -780,6 +780,10 @@
     },
     "MyAppRDSInstance": {
       "Type": "AWS::RDS::DBInstance",
+      "DependsOn": [
+        "DBSubnetGroup",
+        "DatabaseSecurityGroup"
+      ],
       "DeletionPolicy": "Delete",
       "UpdateReplacePolicy": "Retain",
       "Properties": {
