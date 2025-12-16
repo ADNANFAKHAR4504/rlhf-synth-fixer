@@ -58,10 +58,14 @@ if docker ps -a | grep -q localstack; then
     docker rm localstack 2>/dev/null || true
 fi
 
-# Determine which services to enable
-SERVICES="${LOCALSTACK_SERVICES:-s3,lambda,dynamodb,cloudformation,apigateway,sts,iam,cloudwatch,logs,events,sns,sqs,kinesis,ec2,rds,ecs,ecr,ssm}"
-
-echo -e "${BLUE}📋 Services to enable: ${SERVICES}${NC}"
+# LocalStack enables all services by default when SERVICES is not set
+# Only set SERVICES if explicitly provided via environment variable
+if [ -n "$LOCALSTACK_SERVICES" ]; then
+    SERVICES="$LOCALSTACK_SERVICES"
+    echo -e "${BLUE}📋 Services to enable: ${SERVICES}${NC}"
+else
+    echo -e "${BLUE}📋 All LocalStack services enabled (default)${NC}"
+fi
 
 # Check for LocalStack API Key
 if [ -n "$LOCALSTACK_API_KEY" ]; then
@@ -83,10 +87,15 @@ DOCKER_CMD="docker run -d \
   -e DEBUG=1 \
   -e DATA_DIR=/tmp/localstack/data \
   -e DOCKER_HOST=unix:///var/run/docker.sock \
-  -e SERVICES=\"${SERVICES}\" \
   -e S3_SKIP_SIGNATURE_VALIDATION=1 \
   -e ENFORCE_IAM=0 \
   -e PROVIDER_OVERRIDE_S3=legacy_v2"
+
+# Add SERVICES only if explicitly set
+if [ -n "$SERVICES" ]; then
+    DOCKER_CMD="$DOCKER_CMD \
+  -e SERVICES=\"${SERVICES}\""
+fi
 
 # Add API key if available
 if [ -n "$LOCALSTACK_API_KEY" ]; then
