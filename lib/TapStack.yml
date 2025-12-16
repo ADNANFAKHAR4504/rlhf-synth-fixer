@@ -681,36 +681,17 @@ Resources:
 
 
 
+
   AppListener:
-    Metadata:
-      cfn-lint:
-        config:
-          ignore_checks:
-            - W3005
+    Condition: IsAws
     Type: AWS::ElasticLoadBalancingV2::Listener
-    DependsOn:
-      - AppLoadBalancer
-      - AppTargetGroup
     Properties:
-      LoadBalancerArn:
-        Fn::If:
-          - IsLocalStack
-          - Fn::Sub: 'arn:${AWS::Partition}:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:loadbalancer/app/${ProjectName}-${EnvironmentSuffix}-alb/*'
-          - !Ref AppLoadBalancer
+      LoadBalancerArn: !Ref AppLoadBalancer
       Port: 80
       Protocol: HTTP
       DefaultActions:
         - Type: forward
-          TargetGroupArn:
-            Fn::If:
-              - IsLocalStack
-              - Fn::Sub: 'arn:${AWS::Partition}:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:targetgroup/${ProjectName}-${EnvironmentSuffix}-tg/*'
-              - !Ref AppTargetGroup
-
-
-
-
-
+          TargetGroupArn: !Ref AppTargetGroup
 
 
   # -------------------------
@@ -768,6 +749,8 @@ Resources:
           PropagateAtLaunch: true
 
 
+
+
   AppAutoScalingGroupLocal:
     Metadata:
       cfn-lint:
@@ -778,8 +761,6 @@ Resources:
     Type: AWS::AutoScaling::AutoScalingGroup
     DependsOn:
       - AppLaunchTemplate
-      - AppTargetGroup
-      - AppListener
     Properties:
       VPCZoneIdentifier:
         - !Ref PrivateSubnetA
@@ -787,10 +768,7 @@ Resources:
       DesiredCapacity: !Ref DesiredCapacity
       MinSize: !Ref MinSize
       MaxSize: !Ref MaxSize
-      HealthCheckType: ELB
-      # LocalStack workaround: avoid Ref AppTargetGroup and use deterministic ARN
-      TargetGroupARNs:
-        - !Sub 'arn:${AWS::Partition}:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:targetgroup/${ProjectName}-${EnvironmentSuffix}-tg/*'
+      HealthCheckType: EC2
       LaunchTemplate:
         LaunchTemplateId: !Ref AppLaunchTemplate
         Version: "1"
@@ -798,6 +776,7 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-asg'
           PropagateAtLaunch: true
+
 
 
 
@@ -997,7 +976,6 @@ Resources:
               - IsLocalStack
               - !Sub 'localstack/${AWS::StackName}/alb'
               - !GetAtt AppLoadBalancer.LoadBalancerFullName
-
       Statistic: Sum
       Period: 60
       EvaluationPeriods: 3
@@ -1029,7 +1007,6 @@ Resources:
               - IsLocalStack
               - !Sub 'localstack/${AWS::StackName}/alb'
               - !GetAtt AppLoadBalancer.LoadBalancerFullName
-
       Statistic: Maximum
       Period: 60
       EvaluationPeriods: 5
@@ -1041,6 +1018,7 @@ Resources:
         - !Ref NotificationsTopic
       OKActions:
         - !Ref NotificationsTopic
+
 
   RdsCpuAlarm:
     Condition: IsAws
