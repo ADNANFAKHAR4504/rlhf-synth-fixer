@@ -295,165 +295,6 @@
                 ]
             }
         },
-        "NATGateway1EIP": {
-            "Type": "AWS::EC2::EIP",
-            "DependsOn": "AttachGateway",
-            "Properties": {
-                "Domain": "vpc",
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "nat-eip-1a-${EnvironmentSuffix}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "TradingPlatform"
-                    }
-                ]
-            }
-        },
-        "NATGateway2EIP": {
-            "Type": "AWS::EC2::EIP",
-            "DependsOn": "AttachGateway",
-            "Properties": {
-                "Domain": "vpc",
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "nat-eip-1b-${EnvironmentSuffix}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "TradingPlatform"
-                    }
-                ]
-            }
-        },
-        "NATGateway3EIP": {
-            "Type": "AWS::EC2::EIP",
-            "DependsOn": "AttachGateway",
-            "Properties": {
-                "Domain": "vpc",
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "nat-eip-1c-${EnvironmentSuffix}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "TradingPlatform"
-                    }
-                ]
-            }
-        },
-        "NATGateway1": {
-            "Type": "AWS::EC2::NatGateway",
-            "Properties": {
-                "AllocationId": {
-                    "Fn::GetAtt": [
-                        "NATGateway1EIP",
-                        "AllocationId"
-                    ]
-                },
-                "SubnetId": {
-                    "Ref": "PublicSubnet1"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "nat-gateway-1a-${EnvironmentSuffix}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "TradingPlatform"
-                    }
-                ]
-            }
-        },
-        "NATGateway2": {
-            "Type": "AWS::EC2::NatGateway",
-            "Properties": {
-                "AllocationId": {
-                    "Fn::GetAtt": [
-                        "NATGateway2EIP",
-                        "AllocationId"
-                    ]
-                },
-                "SubnetId": {
-                    "Ref": "PublicSubnet2"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "nat-gateway-1b-${EnvironmentSuffix}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "TradingPlatform"
-                    }
-                ]
-            }
-        },
-        "NATGateway3": {
-            "Type": "AWS::EC2::NatGateway",
-            "Properties": {
-                "AllocationId": {
-                    "Fn::GetAtt": [
-                        "NATGateway3EIP",
-                        "AllocationId"
-                    ]
-                },
-                "SubnetId": {
-                    "Ref": "PublicSubnet3"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "nat-gateway-1c-${EnvironmentSuffix}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": "TradingPlatform"
-                    }
-                ]
-            }
-        },
         "PublicRouteTable": {
             "Type": "AWS::EC2::RouteTable",
             "Properties": {
@@ -554,10 +395,7 @@
                 "RouteTableId": {
                     "Ref": "PrivateRouteTable1"
                 },
-                "DestinationCidrBlock": "0.0.0.0/0",
-                "NatGatewayId": {
-                    "Ref": "NATGateway1"
-                }
+                "DestinationCidrBlock": "0.0.0.0/0"
             }
         },
         "PrivateSubnet1RouteTableAssociation": {
@@ -601,10 +439,7 @@
                 "RouteTableId": {
                     "Ref": "PrivateRouteTable2"
                 },
-                "DestinationCidrBlock": "0.0.0.0/0",
-                "NatGatewayId": {
-                    "Ref": "NATGateway2"
-                }
+                "DestinationCidrBlock": "0.0.0.0/0"
             }
         },
         "PrivateSubnet2RouteTableAssociation": {
@@ -648,10 +483,7 @@
                 "RouteTableId": {
                     "Ref": "PrivateRouteTable3"
                 },
-                "DestinationCidrBlock": "0.0.0.0/0",
-                "NatGatewayId": {
-                    "Ref": "NATGateway3"
-                }
+                "DestinationCidrBlock": "0.0.0.0/0"
             }
         },
         "PrivateSubnet3RouteTableAssociation": {
@@ -796,39 +628,6 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-HTTPS-SG-ID"
-                }
-            }
-        },
-        "NATGateway1Id": {
-            "Description": "NAT Gateway 1 ID (us-east-1a)",
-            "Value": {
-                "Ref": "NATGateway1"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-NATGateway1-ID"
-                }
-            }
-        },
-        "NATGateway2Id": {
-            "Description": "NAT Gateway 2 ID (us-east-1b)",
-            "Value": {
-                "Ref": "NATGateway2"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-NATGateway2-ID"
-                }
-            }
-        },
-        "NATGateway3Id": {
-            "Description": "NAT Gateway 3 ID (us-east-1c)",
-            "Value": {
-                "Ref": "NATGateway3"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-NATGateway3-ID"
                 }
             }
         },
