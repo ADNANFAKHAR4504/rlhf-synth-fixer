@@ -622,6 +622,10 @@ Resources:
   
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn:
+      - ALBSecurityGroup
+      - PublicSubnet1
+      - PublicSubnet2
     Properties:
       Name: !Sub '${AWS::StackName}-${EnvironmentSuffix}-alb'
       Type: application
@@ -657,6 +661,9 @@ Resources:
   
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    DependsOn:
+      - ApplicationLoadBalancer
+      - TargetGroup
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
