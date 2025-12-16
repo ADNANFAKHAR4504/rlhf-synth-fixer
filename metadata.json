@@ -1,0 +1,34 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "provider": "localstack",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "trainr269",
+  "team": "5",
+  "startedAt": "2025-08-12T17:28:30+05:30",
+  "subtask": "Network Infrastructure Design",
+  "subject_labels": [
+    "Network Configuration",
+    "General Infrastructure Tooling QA",
+    "IaC Optimization"
+  ],
+  "aws_services": [
+    "cloudformation",
+    "ec2",
+    "s3",
+    "dynamodb",
+    "lambda",
+    "sns",
+    "sqs",
+    "apigateway",
+    "cloudwatch",
+    "iam",
+    "kms",
+    "sts",
+    "secretsmanager",
+    "ssm",
+    "logs",
+    "events"
+  ]
+}
