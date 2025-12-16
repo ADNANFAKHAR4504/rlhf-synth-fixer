@@ -780,10 +780,6 @@
     },
     "MyAppRDSInstance": {
       "Type": "AWS::RDS::DBInstance",
-      "DependsOn": [
-        "DBSubnetGroup",
-        "DatabaseSecurityGroup"
-      ],
       "DeletionPolicy": "Delete",
       "UpdateReplacePolicy": "Retain",
       "Properties": {
@@ -792,7 +788,7 @@
         },
         "DBInstanceClass": "db.t3.medium",
         "Engine": "postgres",
-        "EngineVersion": "16.4",
+        "EngineVersion": "17.2",
         "MasterUsername": {
           "Ref": "DBUsername"
         },

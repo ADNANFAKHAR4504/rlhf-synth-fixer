@@ -456,16 +456,13 @@ Resources:
   # RDS PostgreSQL Instance
   MyAppRDSInstance:
     Type: AWS::RDS::DBInstance
-    DependsOn:
-      - DBSubnetGroup
-      - DatabaseSecurityGroup
     DeletionPolicy: Delete
     UpdateReplacePolicy: Retain
     Properties:
       DBInstanceIdentifier: !Sub 'myapp-postgres-db-${Environment}'
       DBInstanceClass: db.t3.medium
       Engine: postgres
-      EngineVersion: '16.4'
+      EngineVersion: '17.2'
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !GetAtt DBPasswordParameter.Value
       AllocatedStorage: 20
