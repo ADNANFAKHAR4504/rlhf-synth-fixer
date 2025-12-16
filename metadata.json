@@ -1,22 +1,19 @@
 {
-  "platform": "cdk",
-  "language": "ts",
+  "platform": "cfn",
+  "language": "yaml",
   "complexity": "expert",
   "turn_type": "single",
-  "po_id": "101912254",
-  "team": "3",
-  "startedAt": "2025-12-15T14:43:39.289Z",
-  "subtask": "Provisioning of Infrastructure Environments",
+  "po_id": "292057",
+  "team": "synth",
   "provider": "localstack",
+  "startedAt": "2025-12-16T08:00:00.000Z",
+  "subtask": "Application Deployment",
   "subject_labels": [
-    "Cloud Environment Setup"
+    "Serverless Infrastructure (Functions as Code)"
   ],
   "aws_services": [
-    "CloudFormation",
-    "EC2",
+    "KMS",
     "S3",
-    "Lambda",
-    "IAM",
-    "RDS"
+    "IAM"
   ]
 }
