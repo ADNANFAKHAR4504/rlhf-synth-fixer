@@ -146,6 +146,7 @@ describe('TapStack - LocalStack Compatible Infrastructure Unit Tests', () => {
     test('Database parameters are configurable', () => {
       expect(templateYaml).toContain('DBInstanceClass:');
       expect(templateYaml).toContain('DBMasterUsername:');
+      expect(templateYaml).toContain('DBMasterPassword:');
       expect(templateYaml).toContain('AllowedValues:');
       expect(templateYaml).toContain('db.t3.micro');
     });
@@ -158,9 +159,8 @@ describe('TapStack - LocalStack Compatible Infrastructure Unit Tests', () => {
       expect(templateYaml).toContain('t3.micro');
     });
 
-    test('RDS password is managed via Secrets Manager', () => {
-      expect(templateYaml).toContain('GenerateSecretString:');
-      expect(templateYaml).toContain('GenerateStringKey: password');
+    test('DBMasterPassword uses NoEcho for security', () => {
+      expect(templateYaml).toMatch(/DBMasterPassword:[\s\S]*?NoEcho: true/);
     });
   });
 
@@ -336,9 +336,8 @@ describe('TapStack - LocalStack Compatible Infrastructure Unit Tests', () => {
       expect(templateYaml).toContain('StorageType: gp2');
     });
 
-    test('RDS Instance uses Secrets Manager for password', () => {
-      expect(templateYaml).toContain('{{resolve:secretsmanager:');
-      expect(templateYaml).toContain('MasterUserPassword:');
+    test('RDS Instance uses direct password parameter (LocalStack compatible)', () => {
+      expect(templateYaml).toContain('MasterUserPassword: !Ref DBMasterPassword');
     });
 
     test('RDS Instance has encryption enabled', () => {
@@ -387,11 +386,8 @@ describe('TapStack - LocalStack Compatible Infrastructure Unit Tests', () => {
       expect(templateYaml).toContain('Description: RDS master password');
     });
 
-    test('RDS Secret generates credentials', () => {
-      expect(templateYaml).toContain('GenerateSecretString:');
-      expect(templateYaml).toContain('SecretStringTemplate:');
-      expect(templateYaml).toContain('GenerateStringKey: password');
-      expect(templateYaml).toContain('PasswordLength: 16');
+    test('RDS Secret stores credentials', () => {
+      expect(templateYaml).toMatch(/SecretString:.*username.*password/s);
     });
   });
 
@@ -517,9 +513,9 @@ describe('TapStack - LocalStack Compatible Infrastructure Unit Tests', () => {
   });
 
   // ==================
-  // AWS BEST PRACTICES
+  // LOCALSTACK COMPATIBILITY
   // ==================
-  describe('AWS Best Practices Validations', () => {
+  describe('LocalStack Compatibility Validations', () => {
     test('Template uses dynamic account ID reference', () => {
       // Uses AWS::AccountId for portability
       expect(templateYaml).toContain('${AWS::AccountId}');
@@ -541,9 +537,11 @@ describe('TapStack - LocalStack Compatible Infrastructure Unit Tests', () => {
       expect(templateYaml).not.toContain('{{resolve:ssm:');
     });
 
-    test('Template uses Secrets Manager for RDS password', () => {
-      expect(templateYaml).toContain('{{resolve:secretsmanager:');
-      expect(templateYaml).toContain('GenerateSecretString:');
+    test('Template does not use Secrets Manager dynamic resolution (LocalStack compatible)', () => {
+      // LocalStack does not fully support {{resolve:secretsmanager:...}}
+      expect(templateYaml).not.toContain('{{resolve:secretsmanager:');
+      // Uses direct password parameter reference instead
+      expect(templateYaml).toContain('MasterUserPassword: !Ref DBMasterPassword');
     });
   });
 

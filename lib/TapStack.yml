@@ -56,6 +56,13 @@ Parameters:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     ConstraintDescription: Must begin with a letter and contain only alphanumeric characters
 
+  DBMasterPassword:
+    Type: String
+    Default: AdminPassword123!
+    Description: The database admin password
+    NoEcho: true
+    MinLength: 8
+
   EC2InstanceType:
     Type: String
     Default: t2.micro
@@ -352,10 +359,11 @@ Resources:
   # RDS Instance
   RDSInstance:
     Type: AWS::RDS::DBInstance
-    # Explicit DependsOn required for LocalStack compatibility (implicit Ref dependencies not always resolved)
-    DependsOn:
-      - DBSubnetGroup
-      - RDSSecret
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - W1011  # Using parameter for password - required for LocalStack compatibility
     Properties:
       DBInstanceIdentifier: !Sub "${AWS::StackName}-${EnvironmentSuffix}-rds"
       DBInstanceClass: !Ref DBInstanceClass
@@ -366,7 +374,7 @@ Resources:
       Engine: mysql
       EngineVersion: '8.0.39'
       MasterUsername: !Ref DBMasterUsername
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${RDSSecret}:SecretString:password}}'
+      MasterUserPassword: !Ref DBMasterPassword
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
@@ -375,17 +383,13 @@ Resources:
         - Key: Name
           Value: !Sub "${AWS::StackName}-${EnvironmentSuffix}-rds"
 
-  # Secrets Manager Secret
+  # Secrets Manager Secret (stores credentials for application use)
   RDSSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
       Name: !Sub "${AWS::StackName}-${EnvironmentSuffix}-rds-secret"
       Description: RDS master password
-      GenerateSecretString:
-        SecretStringTemplate: !Sub '{"username":"${DBMasterUsername}"}'
-        GenerateStringKey: password
-        PasswordLength: 16
-        ExcludeCharacters: '"@/\'
+      SecretString: !Sub '{"username":"${DBMasterUsername}","password":"${DBMasterPassword}"}'
 
   # Launch Template
   LaunchTemplate:
