@@ -1,0 +1,24 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912085",
+  "team": "3",
+  "startedAt": "2025-12-16T08:33:16.413Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "SQS",
+    "DynamoDB",
+    "EventBridge",
+    "CloudWatch",
+    "SNS",
+    "IAM"
+  ]
+}
