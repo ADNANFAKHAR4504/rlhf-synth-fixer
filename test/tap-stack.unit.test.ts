@@ -572,6 +572,18 @@ describe('TapStack - LocalStack Compatible Infrastructure Unit Tests', () => {
       expect(templateYaml).toMatch(/NatGatewayEIP:[\s\S]*?Condition: CreateNATGateway/);
       expect(templateYaml).toMatch(/NatGateway:[\s\S]*?Condition: CreateNATGateway/);
     });
+
+    test('Template has EnableAutoScaling parameter for LocalStack Community compatibility', () => {
+      // EnableAutoScaling parameter allows disabling Auto Scaling for LocalStack Community
+      expect(templateYaml).toContain('EnableAutoScaling:');
+      expect(templateYaml).toContain('CreateAutoScaling:');
+    });
+
+    test('Auto Scaling resources are conditional (for LocalStack Community compatibility)', () => {
+      // Auto Scaling resources should have Condition: CreateAutoScaling
+      expect(templateYaml).toMatch(/LaunchTemplate:[\s\S]*?Condition: CreateAutoScaling/);
+      expect(templateYaml).toMatch(/AutoScalingGroup:[\s\S]*?Condition: CreateAutoScaling/);
+    });
   });
 
   // ==================

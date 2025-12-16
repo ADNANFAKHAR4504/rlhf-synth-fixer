@@ -10,6 +10,14 @@ Parameters:
       - 'false'
     Description: 'Enable NAT Gateway (may have issues in LocalStack Community). Set to false for LocalStack Community.'
 
+  EnableAutoScaling:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: 'Enable Auto Scaling resources (may have issues in LocalStack Community). Set to false for LocalStack Community.'
+
   EnableRDS:
     Type: String
     Default: 'false'
@@ -105,6 +113,7 @@ Parameters:
 
 Conditions:
   CreateNATGateway: !Equals [!Ref EnableNATGateway, 'true']
+  CreateAutoScaling: !Equals [!Ref EnableAutoScaling, 'true']
   CreateRDSResources: !Equals [!Ref EnableRDS, 'true']
 
 Resources:
@@ -419,9 +428,10 @@ Resources:
       Description: RDS master password
       SecretString: !Sub '{"username":"${DBMasterUsername}","password":"${DBMasterPassword}"}'
 
-  # Launch Template
+  # Launch Template (conditional - may have issues in LocalStack Community)
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
+    Condition: CreateAutoScaling
     Properties:
       LaunchTemplateName: !Sub "${AWS::StackName}-${EnvironmentSuffix}-launch-template"
       LaunchTemplateData:
@@ -437,9 +447,10 @@ Resources:
               - Key: Name
                 Value: !Sub "${AWS::StackName}-${EnvironmentSuffix}-ec2-instance"
 
-  # Auto Scaling Group
+  # Auto Scaling Group (conditional - may have issues in LocalStack Community)
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
+    Condition: CreateAutoScaling
     Properties:
       AutoScalingGroupName: !Sub "${AWS::StackName}-${EnvironmentSuffix}-asg"
       VPCZoneIdentifier:
@@ -601,14 +612,16 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-${EnvironmentSuffix}-EC2InstanceProfileArn"
 
-  # EC2 and Auto Scaling Outputs
+  # EC2 and Auto Scaling Outputs (conditional - only when EnableAutoScaling is true)
   LaunchTemplateId:
+    Condition: CreateAutoScaling
     Description: Launch Template ID
     Value: !Ref LaunchTemplate
     Export:
       Name: !Sub "${AWS::StackName}-${EnvironmentSuffix}-LaunchTemplateId"
 
   AutoScalingGroupName:
+    Condition: CreateAutoScaling
     Description: Auto Scaling Group Name
     Value: !Ref AutoScalingGroup
     Export:
