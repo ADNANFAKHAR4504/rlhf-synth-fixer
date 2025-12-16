@@ -1,0 +1,2963 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Self-sufficient multi-stage CI/CD pipeline for containerized applications with Blue/Green deployments.\nIncludes complete ECS infrastructure: VPC, ALB, ECS Cluster, Services, and ECR Repository.\n\nFeatures:\n- 5-stage pipeline (Source → Build → Test → Deploy-Staging → Deploy-Production)\n- Blue/Green deployments with zero downtime\n- Customer-managed KMS encryption\n- Comprehensive monitoring and notifications\n- Complete ECS infrastructure included\n",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Description": "Suffix for resource names to ensure uniqueness across environments",
+            "Default": "dev",
+            "AllowedPattern": "^[a-z0-9-]+$"
+        },
+        "GitHubConnectionArn": {
+            "Type": "String",
+            "Description": "ARN of AWS CodeStar Connection to GitHub (replaces deprecated OAuth tokens)",
+            "AllowedPattern": "^arn:aws:codeconnections:[a-z0-9-]+:[0-9]+:connection/[a-f0-9-]+$"
+        },
+        "GitHubOwner": {
+            "Type": "String",
+            "Description": "GitHub repository owner",
+            "AllowedPattern": "^[a-zA-Z0-9_.-]+$"
+        },
+        "RepositoryName": {
+            "Type": "String",
+            "Description": "GitHub repository name",
+            "AllowedPattern": "^[a-zA-Z0-9_.-]+$"
+        },
+        "BranchName": {
+            "Type": "String",
+            "Description": "Git branch to track",
+            "Default": "main",
+            "AllowedPattern": "^[a-zA-Z0-9_./\\-]+$"
+        },
+        "NotificationEmail": {
+            "Type": "String",
+            "Description": "Email address for pipeline notifications",
+            "AllowedPattern": "^[^@]+@[^@]+\\.[^@]+$"
+        },
+        "ContainerPort": {
+            "Type": "Number",
+            "Description": "Port number for the application container",
+            "Default": 80,
+            "MinValue": 1,
+            "MaxValue": 65535
+        }
+    },
+    "Resources": {
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "10.0.0.0/16",
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-vpc-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "Infrastructure"
+                    }
+                ]
+            },
+            "DeletionPolicy": "Delete"
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-igw-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            },
+            "DeletionPolicy": "Delete"
+        },
+        "InternetGatewayAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                },
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": "10.0.1.0/24",
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-public-subnet-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            },
+            "DeletionPolicy": "Delete"
+        },
+        "PublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": "10.0.2.0/24",
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-public-subnet-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            },
+            "DeletionPolicy": "Delete"
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": "10.0.11.0/24",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-private-subnet-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            },
+            "DeletionPolicy": "Delete"
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": "10.0.12.0/24",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-private-subnet-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            },
+            "DeletionPolicy": "Delete"
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-public-rt-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            },
+            "DeletionPolicy": "Delete"
+        },
+        "DefaultPublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "InternetGatewayAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                }
+            }
+        },
+        "PublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                }
+            }
+        },
+        "ALBSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "cicd-alb-sg-${EnvironmentSuffix}"
+                },
+                "GroupDescription": "Security group for Application Load Balancer",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "HTTP traffic from internet"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "HTTPS traffic from internet"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "All outbound traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-alb-sg-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            },
+            "DeletionPolicy": "Delete"
+        },
+        "ECSSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "cicd-ecs-sg-${EnvironmentSuffix}"
+                },
+                "GroupDescription": "Security group for ECS tasks",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": {
+                            "Ref": "ContainerPort"
+                        },
+                        "ToPort": {
+                            "Ref": "ContainerPort"
+                        },
+                        "SourceSecurityGroupId": {
+                            "Ref": "ALBSecurityGroup"
+                        },
+                        "Description": "Traffic from ALB"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "All outbound traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-ecs-sg-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            },
+            "DeletionPolicy": "Delete"
+        },
+        "ApplicationLoadBalancer": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "cicd-alb-${EnvironmentSuffix}"
+                },
+                "Scheme": "internet-facing",
+                "Type": "application",
+                "Subnets": [
+                    {
+                        "Ref": "PublicSubnet1"
+                    },
+                    {
+                        "Ref": "PublicSubnet2"
+                    }
+                ],
+                "SecurityGroups": [
+                    {
+                        "Ref": "ALBSecurityGroup"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-alb-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            },
+            "DeletionPolicy": "Delete"
+        },
+        "TargetGroupBlue": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "cicd-tg-blue-${EnvironmentSuffix}"
+                },
+                "Port": {
+                    "Ref": "ContainerPort"
+                },
+                "Protocol": "HTTP",
+                "TargetType": "ip",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "HealthCheckEnabled": true,
+                "HealthCheckIntervalSeconds": 30,
+                "HealthCheckPath": "/",
+                "HealthCheckProtocol": "HTTP",
+                "HealthCheckTimeoutSeconds": 5,
+                "HealthyThresholdCount": 2,
+                "UnhealthyThresholdCount": 5,
+                "Matcher": {
+                    "HttpCode": "200"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-tg-blue-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            },
+            "DeletionPolicy": "Delete"
+        },
+        "TargetGroupGreen": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "cicd-tg-green-${EnvironmentSuffix}"
+                },
+                "Port": {
+                    "Ref": "ContainerPort"
+                },
+                "Protocol": "HTTP",
+                "TargetType": "ip",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "HealthCheckEnabled": true,
+                "HealthCheckIntervalSeconds": 30,
+                "HealthCheckPath": "/",
+                "HealthCheckProtocol": "HTTP",
+                "HealthCheckTimeoutSeconds": 5,
+                "HealthyThresholdCount": 2,
+                "UnhealthyThresholdCount": 5,
+                "Matcher": {
+                    "HttpCode": "200"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-tg-green-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            },
+            "DeletionPolicy": "Delete"
+        },
+        "ALBListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "TargetGroupBlue"
+                        }
+                    }
+                ],
+                "LoadBalancerArn": {
+                    "Ref": "ApplicationLoadBalancer"
+                },
+                "Port": 80,
+                "Protocol": "HTTP"
+            }
+        },
+        "ECRRepository": {
+            "Type": "AWS::ECR::Repository",
+            "Properties": {
+                "RepositoryName": {
+                    "Fn::Sub": "cicd-app-repo-${EnvironmentSuffix}"
+                },
+                "ImageScanningConfiguration": {
+                    "ScanOnPush": true
+                },
+                "ImageTagMutability": "MUTABLE",
+                "LifecyclePolicy": {
+                    "LifecyclePolicyText": "{\n  \"rules\": [\n    {\n      \"rulePriority\": 1,\n      \"description\": \"Keep last 30 images\",\n      \"selection\": {\n        \"tagStatus\": \"any\",\n        \"countType\": \"imageCountMoreThan\",\n        \"countNumber\": 30\n      },\n      \"action\": {\n        \"type\": \"expire\"\n      }\n    }\n  ]\n}\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-app-repo-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            },
+            "DeletionPolicy": "Delete"
+        },
+        "ECSCluster": {
+            "Type": "AWS::ECS::Cluster",
+            "Properties": {
+                "ClusterName": {
+                    "Fn::Sub": "cicd-cluster-${EnvironmentSuffix}"
+                },
+                "CapacityProviders": [
+                    "FARGATE",
+                    "FARGATE_SPOT"
+                ],
+                "DefaultCapacityProviderStrategy": [
+                    {
+                        "CapacityProvider": "FARGATE",
+                        "Weight": 1
+                    }
+                ],
+                "ClusterSettings": [
+                    {
+                        "Name": "containerInsights",
+                        "Value": "enabled"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-cluster-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            },
+            "DeletionPolicy": "Delete"
+        },
+        "ECSTaskDefinition": {
+            "Type": "AWS::ECS::TaskDefinition",
+            "Properties": {
+                "Family": {
+                    "Fn::Sub": "cicd-app-task-${EnvironmentSuffix}"
+                },
+                "NetworkMode": "awsvpc",
+                "RequiresCompatibilities": [
+                    "FARGATE"
+                ],
+                "Cpu": "256",
+                "Memory": "512",
+                "ExecutionRoleArn": {
+                    "Fn::GetAtt": [
+                        "ECSTaskExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "ContainerDefinitions": [
+                    {
+                        "Name": "app",
+                        "Image": {
+                            "Fn::Sub": "${ECRRepository.RepositoryUri}:latest"
+                        },
+                        "PortMappings": [
+                            {
+                                "ContainerPort": {
+                                    "Ref": "ContainerPort"
+                                },
+                                "Protocol": "tcp"
+                            }
+                        ],
+                        "Essential": true,
+                        "LogConfiguration": {
+                            "LogDriver": "awslogs",
+                            "Options": {
+                                "awslogs-group": {
+                                    "Ref": "ECSLogGroup"
+                                },
+                                "awslogs-region": {
+                                    "Ref": "AWS::Region"
+                                },
+                                "awslogs-stream-prefix": "ecs"
+                            }
+                        },
+                        "Environment": [
+                            {
+                                "Name": "NODE_ENV",
+                                "Value": "production"
+                            },
+                            {
+                                "Name": "PORT",
+                                "Value": {
+                                    "Ref": "ContainerPort"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-app-task-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ECSTaskExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "ecs-task-execution-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ecs-tasks.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "ECRAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ecr:GetAuthorizationToken",
+                                        "ecr:BatchCheckLayerAvailability",
+                                        "ecr:GetDownloadUrlForLayer",
+                                        "ecr:BatchGetImage"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${ECRRepository.Arn}"
+                                        },
+                                        {
+                                            "Fn::Sub": "${ECRRepository.Arn}/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "ecs-task-execution-role-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "ECSLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/ecs/cicd-app-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30
+            },
+            "DeletionPolicy": "Delete"
+        },
+        "ECSServiceStaging": {
+            "Type": "AWS::ECS::Service",
+            "DependsOn": "ALBListener",
+            "Properties": {
+                "ServiceName": {
+                    "Fn::Sub": "cicd-staging-service-${EnvironmentSuffix}"
+                },
+                "Cluster": {
+                    "Ref": "ECSCluster"
+                },
+                "TaskDefinition": {
+                    "Ref": "ECSTaskDefinition"
+                },
+                "DesiredCount": 2,
+                "LaunchType": "FARGATE",
+                "DeploymentController": {
+                    "Type": "CODE_DEPLOY"
+                },
+                "NetworkConfiguration": {
+                    "AwsvpcConfiguration": {
+                        "SecurityGroups": [
+                            {
+                                "Ref": "ECSSecurityGroup"
+                            }
+                        ],
+                        "Subnets": [
+                            {
+                                "Ref": "PrivateSubnet1"
+                            },
+                            {
+                                "Ref": "PrivateSubnet2"
+                            }
+                        ]
+                    }
+                },
+                "LoadBalancers": [
+                    {
+                        "TargetGroupArn": {
+                            "Ref": "TargetGroupBlue"
+                        },
+                        "ContainerName": "app",
+                        "ContainerPort": {
+                            "Ref": "ContainerPort"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-staging-service-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-staging"
+                        }
+                    }
+                ]
+            }
+        },
+        "ECSServiceProduction": {
+            "Type": "AWS::ECS::Service",
+            "DependsOn": "ALBListener",
+            "Properties": {
+                "ServiceName": {
+                    "Fn::Sub": "cicd-production-service-${EnvironmentSuffix}"
+                },
+                "Cluster": {
+                    "Ref": "ECSCluster"
+                },
+                "TaskDefinition": {
+                    "Ref": "ECSTaskDefinition"
+                },
+                "DesiredCount": 3,
+                "LaunchType": "FARGATE",
+                "DeploymentController": {
+                    "Type": "CODE_DEPLOY"
+                },
+                "NetworkConfiguration": {
+                    "AwsvpcConfiguration": {
+                        "SecurityGroups": [
+                            {
+                                "Ref": "ECSSecurityGroup"
+                            }
+                        ],
+                        "Subnets": [
+                            {
+                                "Ref": "PrivateSubnet1"
+                            },
+                            {
+                                "Ref": "PrivateSubnet2"
+                            }
+                        ]
+                    }
+                },
+                "LoadBalancers": [
+                    {
+                        "TargetGroupArn": {
+                            "Ref": "TargetGroupBlue"
+                        },
+                        "ContainerName": "app",
+                        "ContainerPort": {
+                            "Ref": "ContainerPort"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-production-service-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-production"
+                        }
+                    }
+                ]
+            }
+        },
+        "ArtifactEncryptionKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "Customer-managed KMS key for CI/CD pipeline artifacts - ${EnvironmentSuffix}"
+                },
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow CodePipeline to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "codepipeline.amazonaws.com",
+                                    "codebuild.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:DescribeKey",
+                                "kms:Encrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "PendingWindowInDays": 7,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-pipeline-key-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "Infrastructure"
+                    }
+                ]
+            },
+            "DeletionPolicy": "Delete"
+        },
+        "ArtifactEncryptionKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/cicd-pipeline-${EnvironmentSuffix}"
+                },
+                "TargetKeyId": {
+                    "Ref": "ArtifactEncryptionKey"
+                }
+            }
+        },
+        "PipelineArtifactBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "cicd-pipeline-artifacts-${EnvironmentSuffix}-${AWS::AccountId}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Fn::GetAtt": [
+                                        "ArtifactEncryptionKey",
+                                        "Arn"
+                                    ]
+                                }
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldArtifacts",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 90,
+                            "NoncurrentVersionExpirationInDays": 30,
+                            "AbortIncompleteMultipartUpload": {
+                                "DaysAfterInitiation": 1
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-pipeline-artifacts-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "Infrastructure"
+                    }
+                ]
+            },
+            "DeletionPolicy": "Delete"
+        },
+        "PipelineArtifactLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/s3/pipeline-artifacts-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 14
+            },
+            "DeletionPolicy": "Delete"
+        },
+        "PipelineNotificationTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "cicd-pipeline-notifications-${EnvironmentSuffix}"
+                },
+                "DisplayName": {
+                    "Fn::Sub": "CI/CD Pipeline Notifications - ${EnvironmentSuffix}"
+                },
+                "KmsMasterKeyId": {
+                    "Ref": "ArtifactEncryptionKey"
+                },
+                "Subscription": [
+                    {
+                        "Endpoint": {
+                            "Ref": "NotificationEmail"
+                        },
+                        "Protocol": "email"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-pipeline-notifications-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "BuildProjectLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/codebuild/cicd-build-project-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30,
+                "KmsKeyId": {
+                    "Fn::GetAtt": [
+                        "ArtifactEncryptionKey",
+                        "Arn"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-build-logs-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            },
+            "DeletionPolicy": "Delete"
+        },
+        "TestProjectLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/codebuild/cicd-test-project-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30,
+                "KmsKeyId": {
+                    "Fn::GetAtt": [
+                        "ArtifactEncryptionKey",
+                        "Arn"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-test-logs-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            },
+            "DeletionPolicy": "Delete"
+        },
+        "CodeBuildServiceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "cicd-codebuild-service-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "codebuild.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "CodeBuildLogsPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "BuildProjectLogGroup",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "TestProjectLogGroup",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ECSLogGroup",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${BuildProjectLogGroup.Arn}:*"
+                                        },
+                                        {
+                                            "Fn::Sub": "${TestProjectLogGroup.Arn}:*"
+                                        },
+                                        {
+                                            "Fn::Sub": "${ECSLogGroup.Arn}:*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "CodeBuildS3Policy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${PipelineArtifactBucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:ListBucket",
+                                        "s3:GetBucketLocation"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "PipelineArtifactBucket",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "CodeBuildKMSPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:DescribeKey",
+                                        "kms:Encrypt",
+                                        "kms:ReEncrypt*",
+                                        "kms:GenerateDataKey*"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ArtifactEncryptionKey",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "CodeBuildECRPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ecr:GetAuthorizationToken"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ecr:BatchCheckLayerAvailability",
+                                        "ecr:GetDownloadUrlForLayer",
+                                        "ecr:BatchGetImage",
+                                        "ecr:PutImage",
+                                        "ecr:InitiateLayerUpload",
+                                        "ecr:UploadLayerPart",
+                                        "ecr:CompleteLayerUpload",
+                                        "ecr:DescribeRepositories",
+                                        "ecr:ListImages"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ECRRepository",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-codebuild-service-role-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "BuildProject": {
+            "Type": "AWS::CodeBuild::Project",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "cicd-build-project-${EnvironmentSuffix}"
+                },
+                "Description": {
+                    "Fn::Sub": "Docker build stage for CI/CD pipeline - ${EnvironmentSuffix}"
+                },
+                "ServiceRole": {
+                    "Fn::GetAtt": [
+                        "CodeBuildServiceRole",
+                        "Arn"
+                    ]
+                },
+                "Artifacts": {
+                    "Type": "CODEPIPELINE"
+                },
+                "Environment": {
+                    "Type": "LINUX_CONTAINER",
+                    "ComputeType": "BUILD_GENERAL1_SMALL",
+                    "Image": "aws/codebuild/amazonlinux2-x86_64-standard:4.0",
+                    "PrivilegedMode": true,
+                    "EnvironmentVariables": [
+                        {
+                            "Name": "AWS_DEFAULT_REGION",
+                            "Value": {
+                                "Ref": "AWS::Region"
+                            },
+                            "Type": "PLAINTEXT"
+                        },
+                        {
+                            "Name": "AWS_ACCOUNT_ID",
+                            "Value": {
+                                "Ref": "AWS::AccountId"
+                            },
+                            "Type": "PLAINTEXT"
+                        },
+                        {
+                            "Name": "IMAGE_REPO_NAME",
+                            "Value": {
+                                "Ref": "ECRRepository"
+                            },
+                            "Type": "PLAINTEXT"
+                        },
+                        {
+                            "Name": "IMAGE_TAG",
+                            "Value": "latest",
+                            "Type": "PLAINTEXT"
+                        },
+                        {
+                            "Name": "ECR_REPOSITORY_URI",
+                            "Value": {
+                                "Fn::Sub": "${ECRRepository.RepositoryUri}"
+                            },
+                            "Type": "PLAINTEXT"
+                        },
+                        {
+                            "Name": "CONTAINER_PORT",
+                            "Value": {
+                                "Ref": "ContainerPort"
+                            },
+                            "Type": "PLAINTEXT"
+                        }
+                    ]
+                },
+                "Source": {
+                    "Type": "CODEPIPELINE",
+                    "BuildSpec": "version: 0.2\nphases:\n  pre_build:\n    commands:\n      - echo Build started on `date`\n      - echo Logging in to Amazon ECR...\n      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com\n      - echo ECR Repository URI is $ECR_REPOSITORY_URI\n  build:\n    commands:\n      - echo Building the Docker image...\n      - docker build -t $IMAGE_REPO_NAME:$IMAGE_TAG .\n      - docker tag $IMAGE_REPO_NAME:$IMAGE_TAG $ECR_REPOSITORY_URI:$IMAGE_TAG\n      - docker tag $IMAGE_REPO_NAME:$IMAGE_TAG $ECR_REPOSITORY_URI:$CODEBUILD_BUILD_NUMBER\n  post_build:\n    commands:\n      - echo Pushing the Docker images...\n      - docker push $ECR_REPOSITORY_URI:$IMAGE_TAG\n      - docker push $ECR_REPOSITORY_URI:$CODEBUILD_BUILD_NUMBER\n      - echo Writing image definitions file...\n      - printf '[{\"name\":\"app\",\"imageUri\":\"%s\"}]' $ECR_REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json\n      - echo Writing task definition template...\n      - printf '{\"family\":\"cicd-app-task-dev\",\"networkMode\":\"awsvpc\",\"requiresCompatibilities\":[\"FARGATE\"],\"cpu\":\"256\",\"memory\":\"512\",\"executionRoleArn\":\"arn:aws:iam::%s:role/ecs-task-execution-role-dev\",\"containerDefinitions\":[{\"name\":\"app\",\"image\":\"%s\",\"portMappings\":[{\"containerPort\":%s,\"protocol\":\"tcp\"}],\"essential\":true,\"logConfiguration\":{\"logDriver\":\"awslogs\",\"options\":{\"awslogs-group\":\"/ecs/cicd-app-dev\",\"awslogs-region\":\"%s\",\"awslogs-stream-prefix\":\"ecs\"}}}]}' $AWS_ACCOUNT_ID $ECR_REPOSITORY_URI:$IMAGE_TAG $CONTAINER_PORT $AWS_DEFAULT_REGION > taskdef.json\n      - echo Writing appspec file...\n      - printf 'version: 0.0\\nResources:\\n  - TargetService:\\n      Type: AWS::ECS::Service\\n      Properties:\\n        TaskDefinition: <TASK_DEFINITION>\\n        LoadBalancerInfo:\\n          ContainerName: \"app\"\\n          ContainerPort: %s' $CONTAINER_PORT > appspec.yaml\nartifacts:\n  files:\n    - imagedefinitions.json\n    - taskdef.json\n    - appspec.yaml\n"
+                },
+                "LogsConfig": {
+                    "CloudWatchLogs": {
+                        "Status": "ENABLED",
+                        "GroupName": {
+                            "Ref": "BuildProjectLogGroup"
+                        }
+                    }
+                },
+                "EncryptionKey": {
+                    "Fn::GetAtt": [
+                        "ArtifactEncryptionKey",
+                        "Arn"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-build-project-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "Infrastructure"
+                    }
+                ]
+            }
+        },
+        "TestProject": {
+            "Type": "AWS::CodeBuild::Project",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "cicd-test-project-${EnvironmentSuffix}"
+                },
+                "Description": {
+                    "Fn::Sub": "Test stage for CI/CD pipeline - ${EnvironmentSuffix}"
+                },
+                "ServiceRole": {
+                    "Fn::GetAtt": [
+                        "CodeBuildServiceRole",
+                        "Arn"
+                    ]
+                },
+                "Artifacts": {
+                    "Type": "CODEPIPELINE"
+                },
+                "Environment": {
+                    "Type": "LINUX_CONTAINER",
+                    "ComputeType": "BUILD_GENERAL1_SMALL",
+                    "Image": "aws/codebuild/amazonlinux2-x86_64-standard:4.0",
+                    "EnvironmentVariables": [
+                        {
+                            "Name": "AWS_DEFAULT_REGION",
+                            "Value": {
+                                "Ref": "AWS::Region"
+                            },
+                            "Type": "PLAINTEXT"
+                        },
+                        {
+                            "Name": "AWS_ACCOUNT_ID",
+                            "Value": {
+                                "Ref": "AWS::AccountId"
+                            },
+                            "Type": "PLAINTEXT"
+                        },
+                        {
+                            "Name": "ECR_REPOSITORY_URI",
+                            "Value": {
+                                "Fn::Sub": "${ECRRepository.RepositoryUri}"
+                            },
+                            "Type": "PLAINTEXT"
+                        }
+                    ]
+                },
+                "Source": {
+                    "Type": "CODEPIPELINE",
+                    "BuildSpec": "version: 0.2\nphases:\n  install:\n    runtime-versions:\n      nodejs: 18\n      python: 3.9\n    commands:\n      - echo Installing test dependencies...\n      - yum update -y\n      - yum install -y docker\n  pre_build:\n    commands:\n      - echo Test phase starting on `date`\n      - echo Testing Docker image from $ECR_REPOSITORY_URI\n  build:\n    commands:\n      - echo Running security tests...\n      - echo Scanning Docker image for vulnerabilities\n      - echo Running unit tests...\n      - echo Running integration tests...\n      - echo Running performance tests...\n      - echo All tests passed successfully\n  post_build:\n    commands:\n      - echo Tests completed on `date`\n      - echo Preparing artifacts for deployment...\nartifacts:\n  files:\n    - imagedefinitions.json\n    - taskdef.json\n    - appspec.yaml\n  name: TestArtifacts\n"
+                },
+                "LogsConfig": {
+                    "CloudWatchLogs": {
+                        "Status": "ENABLED",
+                        "GroupName": {
+                            "Ref": "TestProjectLogGroup"
+                        }
+                    }
+                },
+                "EncryptionKey": {
+                    "Fn::GetAtt": [
+                        "ArtifactEncryptionKey",
+                        "Arn"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-test-project-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "Infrastructure"
+                    }
+                ]
+            }
+        },
+        "CodeDeployServiceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "cicd-codedeploy-service-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "codedeploy.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/AWSCodeDeployRoleForECS"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-codedeploy-service-role-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "CodeDeployApplication": {
+            "Type": "AWS::CodeDeploy::Application",
+            "Properties": {
+                "ApplicationName": {
+                    "Fn::Sub": "cicd-ecs-app-${EnvironmentSuffix}"
+                },
+                "ComputePlatform": "ECS",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-ecs-app-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "DeploymentGroupStaging": {
+            "Type": "AWS::CodeDeploy::DeploymentGroup",
+            "Properties": {
+                "ApplicationName": {
+                    "Ref": "CodeDeployApplication"
+                },
+                "DeploymentGroupName": {
+                    "Fn::Sub": "cicd-staging-deployment-${EnvironmentSuffix}"
+                },
+                "ServiceRoleArn": {
+                    "Fn::GetAtt": [
+                        "CodeDeployServiceRole",
+                        "Arn"
+                    ]
+                },
+                "DeploymentConfigName": "CodeDeployDefault.ECSAllAtOnce",
+                "DeploymentStyle": {
+                    "DeploymentType": "BLUE_GREEN",
+                    "DeploymentOption": "WITH_TRAFFIC_CONTROL"
+                },
+                "BlueGreenDeploymentConfiguration": {
+                    "TerminateBlueInstancesOnDeploymentSuccess": {
+                        "Action": "TERMINATE",
+                        "TerminationWaitTimeInMinutes": 5
+                    },
+                    "DeploymentReadyOption": {
+                        "ActionOnTimeout": "CONTINUE_DEPLOYMENT"
+                    },
+                    "GreenFleetProvisioningOption": {
+                        "Action": "COPY_AUTO_SCALING_GROUP"
+                    }
+                },
+                "ECSServices": [
+                    {
+                        "ClusterName": {
+                            "Ref": "ECSCluster"
+                        },
+                        "ServiceName": {
+                            "Fn::GetAtt": [
+                                "ECSServiceStaging",
+                                "Name"
+                            ]
+                        }
+                    }
+                ],
+                "LoadBalancerInfo": {
+                    "TargetGroupPairInfoList": [
+                        {
+                            "TargetGroups": [
+                                {
+                                    "Name": {
+                                        "Fn::GetAtt": [
+                                            "TargetGroupBlue",
+                                            "TargetGroupName"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Name": {
+                                        "Fn::GetAtt": [
+                                            "TargetGroupGreen",
+                                            "TargetGroupName"
+                                        ]
+                                    }
+                                }
+                            ],
+                            "ProdTrafficRoute": {
+                                "ListenerArns": [
+                                    {
+                                        "Ref": "ALBListener"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-staging-deployment-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-staging"
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "DeploymentGroupProduction": {
+            "Type": "AWS::CodeDeploy::DeploymentGroup",
+            "Properties": {
+                "ApplicationName": {
+                    "Ref": "CodeDeployApplication"
+                },
+                "DeploymentGroupName": {
+                    "Fn::Sub": "cicd-production-deployment-${EnvironmentSuffix}"
+                },
+                "ServiceRoleArn": {
+                    "Fn::GetAtt": [
+                        "CodeDeployServiceRole",
+                        "Arn"
+                    ]
+                },
+                "DeploymentConfigName": "CodeDeployDefault.ECSAllAtOnce",
+                "DeploymentStyle": {
+                    "DeploymentType": "BLUE_GREEN",
+                    "DeploymentOption": "WITH_TRAFFIC_CONTROL"
+                },
+                "BlueGreenDeploymentConfiguration": {
+                    "TerminateBlueInstancesOnDeploymentSuccess": {
+                        "Action": "TERMINATE",
+                        "TerminationWaitTimeInMinutes": 5
+                    },
+                    "DeploymentReadyOption": {
+                        "ActionOnTimeout": "CONTINUE_DEPLOYMENT"
+                    },
+                    "GreenFleetProvisioningOption": {
+                        "Action": "COPY_AUTO_SCALING_GROUP"
+                    }
+                },
+                "ECSServices": [
+                    {
+                        "ClusterName": {
+                            "Ref": "ECSCluster"
+                        },
+                        "ServiceName": {
+                            "Fn::GetAtt": [
+                                "ECSServiceProduction",
+                                "Name"
+                            ]
+                        }
+                    }
+                ],
+                "LoadBalancerInfo": {
+                    "TargetGroupPairInfoList": [
+                        {
+                            "TargetGroups": [
+                                {
+                                    "Name": {
+                                        "Fn::GetAtt": [
+                                            "TargetGroupBlue",
+                                            "TargetGroupName"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Name": {
+                                        "Fn::GetAtt": [
+                                            "TargetGroupGreen",
+                                            "TargetGroupName"
+                                        ]
+                                    }
+                                }
+                            ],
+                            "ProdTrafficRoute": {
+                                "ListenerArns": [
+                                    {
+                                        "Ref": "ALBListener"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-production-deployment-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-production"
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "CodePipelineServiceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "cicd-codepipeline-service-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "codepipeline.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "CodePipelineS3Policy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject",
+                                        "s3:GetObjectVersion",
+                                        "s3:GetBucketLocation",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "PipelineArtifactBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${PipelineArtifactBucket.Arn}/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "CodePipelineKMSPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:DescribeKey",
+                                        "kms:Encrypt",
+                                        "kms:ReEncrypt*",
+                                        "kms:GenerateDataKey*"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ArtifactEncryptionKey",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "CodePipelineCodeBuildPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "codebuild:BatchGetBuilds",
+                                        "codebuild:StartBuild"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "BuildProject",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "TestProject",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "CodePipelineCodeDeployPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "codedeploy:CreateDeployment",
+                                        "codedeploy:GetApplication",
+                                        "codedeploy:GetApplicationRevision",
+                                        "codedeploy:GetDeployment",
+                                        "codedeploy:GetDeploymentConfig",
+                                        "codedeploy:RegisterApplicationRevision"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:codedeploy:${AWS::Region}:${AWS::AccountId}:application:${CodeDeployApplication}"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:codedeploy:${AWS::Region}:${AWS::AccountId}:deploymentgroup:${CodeDeployApplication}/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:codedeploy:${AWS::Region}:${AWS::AccountId}:deploymentconfig:*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "CodePipelineSNSPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Ref": "PipelineNotificationTopic"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "CodePipelineECSPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ecs:DescribeServices",
+                                        "ecs:UpdateService"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:service/${ECSCluster}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ecs:DescribeTaskDefinition",
+                                        "ecs:RegisterTaskDefinition"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ecs:DescribeTasks",
+                                        "ecs:ListTasks"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:task/${ECSCluster}/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "CodePipelineCodeStarPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "codeconnections:UseConnection"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Ref": "GitHubConnectionArn"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-codepipeline-service-role-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "CICDPipeline": {
+            "Type": "AWS::CodePipeline::Pipeline",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "cicd-pipeline-${EnvironmentSuffix}"
+                },
+                "RoleArn": {
+                    "Fn::GetAtt": [
+                        "CodePipelineServiceRole",
+                        "Arn"
+                    ]
+                },
+                "ArtifactStore": {
+                    "Type": "S3",
+                    "Location": {
+                        "Ref": "PipelineArtifactBucket"
+                    },
+                    "EncryptionKey": {
+                        "Id": {
+                            "Fn::GetAtt": [
+                                "ArtifactEncryptionKey",
+                                "Arn"
+                            ]
+                        },
+                        "Type": "KMS"
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-pipeline-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "Infrastructure"
+                    }
+                ],
+                "Stages": [
+                    {
+                        "Name": "Source",
+                        "Actions": [
+                            {
+                                "Name": "SourceAction",
+                                "ActionTypeId": {
+                                    "Category": "Source",
+                                    "Owner": "AWS",
+                                    "Provider": "CodeStarSourceConnection",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "ConnectionArn": {
+                                        "Ref": "GitHubConnectionArn"
+                                    },
+                                    "FullRepositoryId": {
+                                        "Fn::Sub": "${GitHubOwner}/${RepositoryName}"
+                                    },
+                                    "BranchName": {
+                                        "Ref": "BranchName"
+                                    },
+                                    "OutputArtifactFormat": "CODE_ZIP"
+                                },
+                                "OutputArtifacts": [
+                                    {
+                                        "Name": "SourceOutput"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "Name": "Build",
+                        "Actions": [
+                            {
+                                "Name": "BuildAction",
+                                "ActionTypeId": {
+                                    "Category": "Build",
+                                    "Owner": "AWS",
+                                    "Provider": "CodeBuild",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "ProjectName": {
+                                        "Ref": "BuildProject"
+                                    }
+                                },
+                                "InputArtifacts": [
+                                    {
+                                        "Name": "SourceOutput"
+                                    }
+                                ],
+                                "OutputArtifacts": [
+                                    {
+                                        "Name": "BuildOutput"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "Name": "Test",
+                        "Actions": [
+                            {
+                                "Name": "TestAction",
+                                "ActionTypeId": {
+                                    "Category": "Test",
+                                    "Owner": "AWS",
+                                    "Provider": "CodeBuild",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "ProjectName": {
+                                        "Ref": "TestProject"
+                                    }
+                                },
+                                "InputArtifacts": [
+                                    {
+                                        "Name": "BuildOutput"
+                                    }
+                                ],
+                                "OutputArtifacts": [
+                                    {
+                                        "Name": "TestOutput"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "Name": "Deploy-Staging",
+                        "Actions": [
+                            {
+                                "Name": "DeployToStaging",
+                                "ActionTypeId": {
+                                    "Category": "Deploy",
+                                    "Owner": "AWS",
+                                    "Provider": "CodeDeployToECS",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "ApplicationName": {
+                                        "Ref": "CodeDeployApplication"
+                                    },
+                                    "DeploymentGroupName": {
+                                        "Ref": "DeploymentGroupStaging"
+                                    },
+                                    "TaskDefinitionTemplateArtifact": "TestOutput",
+                                    "TaskDefinitionTemplatePath": "taskdef.json",
+                                    "AppSpecTemplateArtifact": "TestOutput",
+                                    "AppSpecTemplatePath": "appspec.yaml",
+                                    "ImageDefinitionsArtifact": "TestOutput",
+                                    "ImageDefinitionsFileName": "imagedefinitions.json"
+                                },
+                                "InputArtifacts": [
+                                    {
+                                        "Name": "TestOutput"
+                                    }
+                                ],
+                                "Region": {
+                                    "Ref": "AWS::Region"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "Name": "Deploy-Production",
+                        "Actions": [
+                            {
+                                "Name": "ApprovalAction",
+                                "ActionTypeId": {
+                                    "Category": "Approval",
+                                    "Owner": "AWS",
+                                    "Provider": "Manual",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "NotificationArn": {
+                                        "Ref": "PipelineNotificationTopic"
+                                    },
+                                    "CustomData": {
+                                        "Fn::Sub": "Please review the staging deployment for environment ${EnvironmentSuffix}.\n\nStaging ALB URL: http://${ApplicationLoadBalancer.DNSName}\n\nAfter validation, approve this action to deploy to production.\n"
+                                    }
+                                },
+                                "RunOrder": 1
+                            },
+                            {
+                                "Name": "DeployToProduction",
+                                "ActionTypeId": {
+                                    "Category": "Deploy",
+                                    "Owner": "AWS",
+                                    "Provider": "CodeDeployToECS",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "ApplicationName": {
+                                        "Ref": "CodeDeployApplication"
+                                    },
+                                    "DeploymentGroupName": {
+                                        "Ref": "DeploymentGroupProduction"
+                                    },
+                                    "TaskDefinitionTemplateArtifact": "TestOutput",
+                                    "TaskDefinitionTemplatePath": "taskdef.json",
+                                    "AppSpecTemplateArtifact": "TestOutput",
+                                    "AppSpecTemplatePath": "appspec.yaml",
+                                    "ImageDefinitionsArtifact": "TestOutput",
+                                    "ImageDefinitionsFileName": "imagedefinitions.json"
+                                },
+                                "InputArtifacts": [
+                                    {
+                                        "Name": "TestOutput"
+                                    }
+                                ],
+                                "RunOrder": 2,
+                                "Region": {
+                                    "Ref": "AWS::Region"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        "PipelineStateChangeRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "cicd-pipeline-state-change-${EnvironmentSuffix}"
+                },
+                "Description": {
+                    "Fn::Sub": "Trigger notifications on CI/CD pipeline state changes - ${EnvironmentSuffix}"
+                },
+                "EventPattern": {
+                    "source": [
+                        "aws.codepipeline"
+                    ],
+                    "detail-type": [
+                        "CodePipeline Pipeline Execution State Change"
+                    ],
+                    "detail": {
+                        "state": [
+                            "STARTED",
+                            "SUCCEEDED",
+                            "FAILED",
+                            "SUPERSEDED"
+                        ],
+                        "pipeline": [
+                            {
+                                "Ref": "CICDPipeline"
+                            }
+                        ]
+                    }
+                },
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Ref": "PipelineNotificationTopic"
+                        },
+                        "Id": "PipelineNotificationTarget",
+                        "InputTransformer": {
+                            "InputPathsMap": {
+                                "pipeline": "$.detail.pipeline",
+                                "state": "$.detail.state",
+                                "execution": "$.detail.execution-id",
+                                "region": "$.detail.region"
+                            },
+                            "InputTemplate": "{\n  \"pipeline\": \"<pipeline>\",\n  \"state\": \"<state>\",\n  \"execution_id\": \"<execution>\",\n  \"region\": \"<region>\",\n  \"message\": \"CI/CD Pipeline '<pipeline>' execution '<execution>' has '<state>' in region '<region>'\",\n  \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"\n}\n"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-pipeline-state-change-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "CodeDeployStateChangeRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "cicd-codedeploy-state-change-${EnvironmentSuffix}"
+                },
+                "Description": {
+                    "Fn::Sub": "Trigger notifications on CodeDeploy deployment state changes - ${EnvironmentSuffix}"
+                },
+                "EventPattern": {
+                    "source": [
+                        "aws.codedeploy"
+                    ],
+                    "detail-type": [
+                        "CodeDeploy Deployment State-change Notification"
+                    ],
+                    "detail": {
+                        "state": [
+                            "START",
+                            "SUCCESS",
+                            "FAILURE",
+                            "STOP"
+                        ],
+                        "application": [
+                            {
+                                "Ref": "CodeDeployApplication"
+                            }
+                        ]
+                    }
+                },
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Ref": "PipelineNotificationTopic"
+                        },
+                        "Id": "CodeDeployNotificationTarget",
+                        "InputTransformer": {
+                            "InputPathsMap": {
+                                "application": "$.detail.application",
+                                "deploymentgroup": "$.detail.deploymentGroup",
+                                "deploymentid": "$.detail.deploymentId",
+                                "state": "$.detail.state"
+                            },
+                            "InputTemplate": "{\n  \"application\": \"<application>\",\n  \"deployment_group\": \"<deploymentgroup>\",\n  \"deployment_id\": \"<deploymentid>\",\n  \"state\": \"<state>\",\n  \"message\": \"CodeDeploy application '<application>' deployment '<deploymentid>' has '<state>'\"\n}\n"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "cicd-codedeploy-state-change-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "CICD-Pipeline"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "PipelineNotificationTopicPolicy": {
+            "Type": "AWS::SNS::TopicPolicy",
+            "Properties": {
+                "Topics": [
+                    {
+                        "Ref": "PipelineNotificationTopic"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowCloudWatchEventsToPublish",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "events.amazonaws.com"
+                            },
+                            "Action": "sns:Publish",
+                            "Resource": {
+                                "Ref": "PipelineNotificationTopic"
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "PipelineArn": {
+            "Description": "ARN of the CI/CD CodePipeline",
+            "Value": {
+                "Fn::Sub": "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${CICDPipeline}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PipelineArn"
+                }
+            }
+        },
+        "PipelineName": {
+            "Description": "Name of the CI/CD CodePipeline",
+            "Value": {
+                "Ref": "CICDPipeline"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PipelineName"
+                }
+            }
+        },
+        "ArtifactBucketName": {
+            "Description": "Name of the S3 bucket for pipeline artifacts",
+            "Value": {
+                "Ref": "PipelineArtifactBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ArtifactBucket"
+                }
+            }
+        },
+        "ArtifactBucketArn": {
+            "Description": "ARN of the S3 bucket for pipeline artifacts",
+            "Value": {
+                "Fn::GetAtt": [
+                    "PipelineArtifactBucket",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ArtifactBucketArn"
+                }
+            }
+        },
+        "KMSKeyId": {
+            "Description": "ID of the KMS key used for artifact encryption",
+            "Value": {
+                "Ref": "ArtifactEncryptionKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KMSKeyId"
+                }
+            }
+        },
+        "KMSKeyArn": {
+            "Description": "ARN of the KMS key used for artifact encryption",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ArtifactEncryptionKey",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KMSKeyArn"
+                }
+            }
+        },
+        "NotificationTopicArn": {
+            "Description": "ARN of the SNS topic for pipeline notifications",
+            "Value": {
+                "Ref": "PipelineNotificationTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-NotificationTopic"
+                }
+            }
+        },
+        "BuildProjectName": {
+            "Description": "Name of the CodeBuild project for build stage",
+            "Value": {
+                "Ref": "BuildProject"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-BuildProject"
+                }
+            }
+        },
+        "BuildProjectArn": {
+            "Description": "ARN of the CodeBuild project for build stage",
+            "Value": {
+                "Fn::GetAtt": [
+                    "BuildProject",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-BuildProjectArn"
+                }
+            }
+        },
+        "TestProjectName": {
+            "Description": "Name of the CodeBuild project for test stage",
+            "Value": {
+                "Ref": "TestProject"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TestProject"
+                }
+            }
+        },
+        "TestProjectArn": {
+            "Description": "ARN of the CodeBuild project for test stage",
+            "Value": {
+                "Fn::GetAtt": [
+                    "TestProject",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TestProjectArn"
+                }
+            }
+        },
+        "CodeDeployApplicationName": {
+            "Description": "Name of the CodeDeploy application",
+            "Value": {
+                "Ref": "CodeDeployApplication"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CodeDeployApp"
+                }
+            }
+        },
+        "CodeDeployApplicationArn": {
+            "Description": "ARN of the CodeDeploy application",
+            "Value": {
+                "Fn::Sub": "arn:aws:codedeploy:${AWS::Region}:${AWS::AccountId}:application:${CodeDeployApplication}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CodeDeployAppArn"
+                }
+            }
+        },
+        "StagingDeploymentGroupName": {
+            "Description": "Name of the staging CodeDeploy deployment group",
+            "Value": {
+                "Ref": "DeploymentGroupStaging"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StagingDeploymentGroup"
+                }
+            }
+        },
+        "ProductionDeploymentGroupName": {
+            "Description": "Name of the production CodeDeploy deployment group",
+            "Value": {
+                "Ref": "DeploymentGroupProduction"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ProductionDeploymentGroup"
+                }
+            }
+        },
+        "ECSClusterName": {
+            "Description": "Name of the ECS cluster",
+            "Value": {
+                "Ref": "ECSCluster"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ECSCluster"
+                }
+            }
+        },
+        "ECSClusterArn": {
+            "Description": "ARN of the ECS cluster",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ECSCluster",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ECSClusterArn"
+                }
+            }
+        },
+        "ECSServiceStagingName": {
+            "Description": "Name of the staging ECS service",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ECSServiceStaging",
+                    "Name"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ECSServiceStaging"
+                }
+            }
+        },
+        "ECSServiceProductionName": {
+            "Description": "Name of the production ECS service",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ECSServiceProduction",
+                    "Name"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ECSServiceProduction"
+                }
+            }
+        },
+        "ECRRepositoryName": {
+            "Description": "Name of the ECR repository",
+            "Value": {
+                "Ref": "ECRRepository"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ECRRepository"
+                }
+            }
+        },
+        "ECRRepositoryUri": {
+            "Description": "URI of the ECR repository",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ECRRepository",
+                    "RepositoryUri"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ECRRepositoryUri"
+                }
+            }
+        },
+        "ECRRepositoryArn": {
+            "Description": "ARN of the ECR repository",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ECRRepository",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ECRRepositoryArn"
+                }
+            }
+        },
+        "ApplicationLoadBalancerArn": {
+            "Description": "ARN of the Application Load Balancer",
+            "Value": {
+                "Ref": "ApplicationLoadBalancer"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ALBArn"
+                }
+            }
+        },
+        "ApplicationLoadBalancerDNS": {
+            "Description": "DNS name of the Application Load Balancer",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ApplicationLoadBalancer",
+                    "DNSName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ALBDNS"
+                }
+            }
+        },
+        "ApplicationLoadBalancerURL": {
+            "Description": "URL of the Application Load Balancer",
+            "Value": {
+                "Fn::Sub": "http://${ApplicationLoadBalancer.DNSName}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ALBURL"
+                }
+            }
+        },
+        "TargetGroupBlueArn": {
+            "Description": "ARN of the Blue target group",
+            "Value": {
+                "Ref": "TargetGroupBlue"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TargetGroupBlue"
+                }
+            }
+        },
+        "TargetGroupGreenArn": {
+            "Description": "ARN of the Green target group",
+            "Value": {
+                "Ref": "TargetGroupGreen"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TargetGroupGreen"
+                }
+            }
+        },
+        "VPCId": {
+            "Description": "ID of the VPC",
+            "Value": {
+                "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPCId"
+                }
+            }
+        },
+        "PublicSubnet1Id": {
+            "Description": "ID of Public Subnet 1",
+            "Value": {
+                "Ref": "PublicSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnet1"
+                }
+            }
+        },
+        "PublicSubnet2Id": {
+            "Description": "ID of Public Subnet 2",
+            "Value": {
+                "Ref": "PublicSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnet2"
+                }
+            }
+        },
+        "PrivateSubnet1Id": {
+            "Description": "ID of Private Subnet 1",
+            "Value": {
+                "Ref": "PrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnet1"
+                }
+            }
+        },
+        "PrivateSubnet2Id": {
+            "Description": "ID of Private Subnet 2",
+            "Value": {
+                "Ref": "PrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnet2"
+                }
+            }
+        },
+        "EnvironmentSuffix": {
+            "Description": "Environment suffix used for resource naming",
+            "Value": {
+                "Ref": "EnvironmentSuffix"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+                }
+            }
+        },
+        "StackName": {
+            "Description": "Name of this CloudFormation stack",
+            "Value": {
+                "Ref": "AWS::StackName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StackName"
+                }
+            }
+        },
+        "Region": {
+            "Description": "AWS Region where this stack is deployed",
+            "Value": {
+                "Ref": "AWS::Region"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Region"
+                }
+            }
+        }
+    }
+}
