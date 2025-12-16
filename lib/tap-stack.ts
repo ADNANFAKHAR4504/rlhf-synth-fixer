@@ -57,6 +57,7 @@ export class TapStack extends cdk.Stack {
         contributorInsightsEnabled: true,
         timeToLiveAttribute: 'expirationTime',
         encryption: dynamodb.TableEncryption.AWS_MANAGED,
+        deletionProtection: true,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
     );
