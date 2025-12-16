@@ -371,11 +371,8 @@ run_pulumi_tests() {
                 # Run pytest from project root
                 pytest tests/ -v --tb=short 2>&1 || {
                     local exit_code=$?
-                    if [ $exit_code -ne 0 ]; then
-                        print_status $YELLOW "⚠️  Some tests failed (exit code: $exit_code)"
-                        # Don't fail the entire CI for test failures in LocalStack
-                        # as some services may not be fully supported
-                    fi
+                    print_status $RED "❌ Pytest tests failed with exit code: $exit_code"
+                    exit $exit_code
                 }
                 ;;
             "go")
