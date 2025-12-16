@@ -18,12 +18,7 @@ echo "🔍 Running comprehensive metadata validation..."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 VALIDATE_SCRIPT=".claude/scripts/validate-metadata.sh"
 if [ -f "$VALIDATE_SCRIPT" ]; then
-  # Normalize subtask value: schema uses "Security, Compliance and Governance"
-  # but validate-metadata.sh expects "Security, Compliance, and Governance"
-  TEMP_METADATA=$(mktemp)
-  sed 's/Security, Compliance and Governance/Security, Compliance, and Governance/g' metadata.json > "$TEMP_METADATA"
-  if ! bash "$VALIDATE_SCRIPT" "$TEMP_METADATA"; then
-    rm -f "$TEMP_METADATA"
+  if ! bash "$VALIDATE_SCRIPT" metadata.json; then
     echo ""
     echo "❌ Comprehensive metadata validation failed!"
     echo "Please fix the issues above before proceeding."
@@ -32,7 +27,6 @@ if [ -f "$VALIDATE_SCRIPT" ]; then
     echo "           .claude/docs/references/metadata-requirements.md"
     exit 1
   fi
-  rm -f "$TEMP_METADATA"
   echo ""
 else
   echo "⚠️ Warning: $VALIDATE_SCRIPT not found, skipping comprehensive validation"
