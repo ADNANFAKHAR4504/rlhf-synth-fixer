@@ -368,6 +368,15 @@ Resources:
   # EKS Cluster
   EKSCluster:
     Type: AWS::EKS::Cluster
+    DependsOn:
+      - EKSClusterRole
+      - ClusterSecurityGroup
+      - PrivateSubnet1
+      - PrivateSubnet2
+      - PublicSubnet1
+      - PublicSubnet2
+      - EKSKMSKey
+      - EKSClusterLogGroup
     Properties:
       Name: !Sub 'eks-cluster-${environmentSuffix}'
       Version: !Ref KubernetesVersion
@@ -405,6 +414,9 @@ Resources:
   # EKS Node Group
   EKSNodeGroup:
     Type: AWS::EKS::Nodegroup
+    DependsOn:
+      - EKSCluster
+      - EKSNodeRole
     Properties:
       NodegroupName: !Sub 'eks-nodegroup-${environmentSuffix}'
       ClusterName: !Ref EKSCluster
