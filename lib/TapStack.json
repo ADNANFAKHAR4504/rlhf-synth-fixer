@@ -57,13 +57,6 @@
             "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
             "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters"
         },
-        "DBMasterPassword": {
-            "Type": "String",
-            "Default": "AdminPassword123!",
-            "Description": "The database admin password",
-            "NoEcho": true,
-            "MinLength": 8
-        },
         "EC2InstanceType": {
             "Type": "String",
             "Default": "t2.micro",
@@ -85,7 +78,7 @@
             "ConstraintDescription": "Must be a valid EC2 instance type"
         },
         "LatestAmiId": {
-            "Type": "String",
+            "Type": "AWS::EC2::Image::Id",
             "Default": "ami-12345678",
             "Description": "AMI ID for EC2 instances (use a valid AMI for LocalStack)"
         }
@@ -139,7 +132,14 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "AvailabilityZone": "us-east-1a",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
                 "CidrBlock": {
                     "Ref": "PublicSubnet1CidrBlock"
                 },
@@ -160,7 +160,14 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "AvailabilityZone": "us-east-1a",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
                 "CidrBlock": {
                     "Ref": "PrivateSubnet1CidrBlock"
                 },
@@ -180,7 +187,14 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "AvailabilityZone": "us-east-1b",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
                 "CidrBlock": {
                     "Ref": "PrivateSubnet2CidrBlock"
                 },
@@ -514,7 +528,7 @@
                             "Effect": "Allow",
                             "Principal": {
                                 "AWS": {
-                                    "Fn::Sub": "arn:aws:iam::000000000000:root"
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
                                 }
                             },
                             "Action": "kms:*",
@@ -584,12 +598,12 @@
                     "Ref": "RDSKMSKey"
                 },
                 "Engine": "mysql",
-                "EngineVersion": "8.0.28",
+                "EngineVersion": "8.0.39",
                 "MasterUsername": {
                     "Ref": "DBMasterUsername"
                 },
                 "MasterUserPassword": {
-                    "Ref": "DBMasterPassword"
+                    "Fn::Sub": "{{resolve:secretsmanager:${RDSSecret}:SecretString:password}}"
                 },
                 "VPCSecurityGroups": [
                     {
@@ -617,8 +631,13 @@
                     "Fn::Sub": "${AWS::StackName}-${EnvironmentSuffix}-rds-secret"
                 },
                 "Description": "RDS master password",
-                "SecretString": {
-                    "Fn::Sub": "{\"username\":\"${DBMasterUsername}\",\"password\":\"${DBMasterPassword}\"}"
+                "GenerateSecretString": {
+                    "SecretStringTemplate": {
+                        "Fn::Sub": "{\"username\":\"${DBMasterUsername}\"}"
+                    },
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 16,
+                    "ExcludeCharacters": "\"@/\\"
                 }
             }
         },
