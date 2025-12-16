@@ -369,13 +369,6 @@ Resources:
   EKSCluster:
     Type: AWS::EKS::Cluster
     DependsOn:
-      - EKSClusterRole
-      - ClusterSecurityGroup
-      - PrivateSubnet1
-      - PrivateSubnet2
-      - PublicSubnet1
-      - PublicSubnet2
-      - EKSKMSKey
       - EKSClusterLogGroup
     Properties:
       Name: !Sub 'eks-cluster-${environmentSuffix}'
@@ -398,13 +391,12 @@ Resources:
             KeyArn: !GetAtt EKSKMSKey.Arn
       Logging:
         ClusterLogging:
-          - Enabled: true
-            Types:
-              - api
-              - audit
-              - authenticator
-              - controllerManager
-              - scheduler
+          EnabledTypes:
+            - Type: api
+            - Type: audit
+            - Type: authenticator
+            - Type: controllerManager
+            - Type: scheduler
       Tags:
         - Key: Name
           Value: !Sub 'eks-cluster-${environmentSuffix}'
@@ -414,9 +406,13 @@ Resources:
   # EKS Node Group
   EKSNodeGroup:
     Type: AWS::EKS::Nodegroup
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - W3005
     DependsOn:
       - EKSCluster
-      - EKSNodeRole
     Properties:
       NodegroupName: !Sub 'eks-nodegroup-${environmentSuffix}'
       ClusterName: !Ref EKSCluster
