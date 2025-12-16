@@ -9,5 +9,12 @@
   "subtask": "Infrastructure QA and Management",
   "subject_labels": [
     "Infrastructure Analysis/Monitoring"
-  ]
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
 }
