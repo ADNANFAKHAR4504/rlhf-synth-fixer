@@ -6,7 +6,7 @@
   "po_id": "349170",
   "team": "3",
   "startedAt": "2025-12-16T10:08:17.908Z",
-  "subtask": "Security, Compliance, and Governance",
+  "subtask": "Security, Compliance and Governance",
   "provider": "localstack",
   "subject_labels": [
     "Security Configuration as Code"
