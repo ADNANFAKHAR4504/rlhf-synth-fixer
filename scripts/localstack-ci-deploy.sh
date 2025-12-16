@@ -433,6 +433,9 @@ deploy_pulumi() {
                 print_status $YELLOW "📦 Installing Python dependencies..."
                 pip install -r requirements.txt
             fi
+            # Set PYTHONPATH to include project root for module imports
+            export PYTHONPATH="$PROJECT_ROOT:${PYTHONPATH:-}"
+            print_status $BLUE "   PYTHONPATH: $PYTHONPATH"
             ;;
         "go")
             if [ -f "go.mod" ]; then
