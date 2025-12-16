@@ -77,8 +77,11 @@ class TapStack(pulumi.ComponentResource):
 
     parent_opts = ResourceOptions(parent=self)
 
-    # ------------------- S3 for request logs (V2 resources) -----------------
-    log_bucket = aws.s3.BucketV2(
+    # Detect if running against LocalStack
+    is_localstack = os.environ.get("AWS_ENDPOINT_URL", "").find("localhost") >= 0
+
+    # ------------------- S3 for request logs -----------------
+    log_bucket = aws.s3.Bucket(
         f"serverless-logs-{self.environment_suffix}",
         bucket=pulumi.Output.concat(project.lower(), "-logs-", self.environment_suffix.lower()),
         tags={**self.tags, "Purpose": "Lambda Logs"},
@@ -86,23 +89,24 @@ class TapStack(pulumi.ComponentResource):
         opts=parent_opts,
     )
 
-    # Lifecycle config to transition/expire logs
-    aws.s3.BucketLifecycleConfigurationV2(
-        f"serverless-logs-lifecycle-{self.environment_suffix}",
-        bucket=log_bucket.id,
-        rules=[
-            aws.s3.BucketLifecycleConfigurationV2RuleArgs(
-                id="log-retention",
-                status="Enabled",
-                expiration=aws.s3.BucketLifecycleConfigurationV2RuleExpirationArgs(days=90),
-                transitions=[
-                    aws.s3.BucketLifecycleConfigurationV2RuleTransitionArgs(days=30, storage_class="STANDARD_IA"),
-                    aws.s3.BucketLifecycleConfigurationV2RuleTransitionArgs(days=60, storage_class="GLACIER"),
-                ],
-            )
-        ],
-        opts=parent_opts,
-    )
+    # Lifecycle config to transition/expire logs (skip on LocalStack - causes timeout)
+    if not is_localstack:
+        aws.s3.BucketLifecycleConfiguration(
+            f"serverless-logs-lifecycle-{self.environment_suffix}",
+            bucket=log_bucket.id,
+            rules=[
+                aws.s3.BucketLifecycleConfigurationRuleArgs(
+                    id="log-retention",
+                    status="Enabled",
+                    expiration=aws.s3.BucketLifecycleConfigurationRuleExpirationArgs(days=90),
+                    transitions=[
+                        aws.s3.BucketLifecycleConfigurationRuleTransitionArgs(days=30, storage_class="STANDARD_IA"),
+                        aws.s3.BucketLifecycleConfigurationRuleTransitionArgs(days=60, storage_class="GLACIER"),
+                    ],
+                )
+            ],
+            opts=parent_opts,
+        )
 
     # Block all public access
     aws.s3.BucketPublicAccessBlock(
@@ -428,7 +432,7 @@ class TapStack(pulumi.ComponentResource):
     )
 
     # ------------------- Public outputs on the component -------------------
-    region = aws.get_region().name
+    region = aws.get_region().region
     caller_identity = aws.get_caller_identity()
     account_id = caller_identity.account_id
 
