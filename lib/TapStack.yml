@@ -342,7 +342,6 @@ Resources:
   # Launch Template for Auto Scaling Group
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
-    DependsOn: EC2SecurityGroup
     Properties:
       LaunchTemplateName: !Sub ${EnvironmentSuffix}-${Name}-launch-template-${Team}
       LaunchTemplateData:
@@ -387,11 +386,6 @@ Resources:
   # Auto Scaling Group
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
-    DependsOn:
-      - LaunchTemplate
-      - EC2SecurityGroupIngressSSH
-      - PublicSubnet1RouteTableAssociation
-      - PublicSubnet2RouteTableAssociation
     Properties:
       AutoScalingGroupName: !Sub ${EnvironmentSuffix}-${Name}-asg-${Team}
       LaunchTemplate:
