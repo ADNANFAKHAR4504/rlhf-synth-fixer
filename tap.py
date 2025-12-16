@@ -63,6 +63,5 @@ stack = TapStack(
 # Export stack outputs
 pulumi.export('api_gateway_endpoint', stack.api_endpoint)
 pulumi.export('api_key_id', stack.api_key.id)
-pulumi.export('dynamodb_table_name', stack.dynamodb_table.name)
 pulumi.export('eventbridge_bus_name', stack.event_bus.name)
 pulumi.export('sns_topic_arn', stack.sns_topic.arn)
