@@ -476,7 +476,7 @@ deploy_pulumi() {
     pulumi config set aws:skipCredentialsValidation true
     pulumi config set aws:skipMetadataApiCheck true
     pulumi config set aws:s3UsePathStyle true
-    pulumi config set aws:endpoints '[{"s3":"'$AWS_ENDPOINT_URL'","dynamodb":"'$AWS_ENDPOINT_URL'","lambda":"'$AWS_ENDPOINT_URL'","apigateway":"'$AWS_ENDPOINT_URL'","iam":"'$AWS_ENDPOINT_URL'","sts":"'$AWS_ENDPOINT_URL'","cloudformation":"'$AWS_ENDPOINT_URL'"}]'
+    pulumi config set aws:endpoints '[{"s3":"'$AWS_ENDPOINT_URL'","dynamodb":"'$AWS_ENDPOINT_URL'","lambda":"'$AWS_ENDPOINT_URL'","apigateway":"'$AWS_ENDPOINT_URL'","iam":"'$AWS_ENDPOINT_URL'","sts":"'$AWS_ENDPOINT_URL'","cloudformation":"'$AWS_ENDPOINT_URL'","sqs":"'$AWS_ENDPOINT_URL'","sns":"'$AWS_ENDPOINT_URL'","cloudwatch":"'$AWS_ENDPOINT_URL'","cloudwatchevents":"'$AWS_ENDPOINT_URL'","cloudwatchlogs":"'$AWS_ENDPOINT_URL'"}]'
 
     # Deploy
     print_status $YELLOW "🚀 Deploying to LocalStack..."
