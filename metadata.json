@@ -8,7 +8,7 @@
   "startedAt": "2025-11-26T18:38:22.669Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Security Configuration as Code"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "VPC",
