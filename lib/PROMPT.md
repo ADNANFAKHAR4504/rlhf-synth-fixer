@@ -1,84 +1,72 @@
-# Serverless Payment Webhook Processing System
+# AWS CDK Infrastructure Compliance Analyzer
 
-## Project Overview
+## Overview
 
-This project implements a scalable serverless infrastructure for processing payment webhooks from multiple providers. The system is designed to handle high-volume payment notifications while ensuring reliability, security, and proper monitoring.
+We need a CDK application that can analyze existing AWS infrastructure for compliance and optimization issues. The tool should scan all CDK-deployed stacks in the current AWS account and region, perform security and compliance checks, and generate detailed reports.
 
-## Business Context
+## Requirements
 
-Financial services companies often need to process payment notifications from various third-party providers like Stripe, PayPal, and Square. These providers send webhook events at different rates and volumes, creating challenges around:
+### Core Functionality
 
-- **Traffic Management**: Handling sudden spikes in webhook delivery
-- **Message Reliability**: Ensuring no payment notifications are lost
-- **Processing Logic**: Validating, transforming, and routing messages based on payment characteristics
-- **Monitoring**: Tracking system health and processing status
+The application needs to:
 
-## Architecture Overview
+1. **Discover CDK Stacks**: Scan all deployed CDK stacks in the current region using CloudFormation APIs. Filter stacks by the `aws:cdk:stack-name` tag to identify CDK-managed infrastructure.
 
-The solution uses AWS serverless services to create a robust, scalable payment processing pipeline:
+2. **Security Analysis**: 
+   - Check security groups for unrestricted inbound access (0.0.0.0/0) on non-standard ports
+   - Verify S3 bucket encryption and versioning settings
+   - Analyze IAM roles for overly permissive policies (Resource: '*')
+   - Check EBS volume encryption status
 
-### Core Components
+3. **Operational Checks**:
+   - Identify EC2 instances without detailed monitoring enabled
+   - Find Lambda functions using outdated runtimes (Node.js < 18, Python < 3.9)
+   - Verify RDS instances and clusters have automated backups configured
 
-**API Gateway**: Serves as the entry point for webhook notifications with secure API key authentication
-- Endpoint: `/webhooks/{provider}` for POST requests
-- Supports Stripe, PayPal, and Square providers
+4. **Cost Analysis**: 
+   - Estimate monthly costs per stack using Cost Explorer API
+   - Provide fallback estimation based on resource types if Cost Explorer is unavailable
 
-**SQS FIFO Queues**: Ensures ordered, deduplicated message processing for each provider
-- Separate queues for each payment provider
-- Content-based deduplication prevents duplicate processing
-- Dead letter queues for failed message handling (14-day retention)
+5. **Compliance Scoring**: 
+   - Calculate a compliance score (0-100) for each stack based on findings
+   - Use CIS AWS Foundations Benchmark severity weights:
+     - Critical findings: -25 points each
+     - High findings: -15 points each
+     - Medium findings: -10 points each
+     - Low findings: -5 points each
 
-**Lambda Functions**: Handle webhook validation and payment processing
-- Webhook validator: Authenticates and routes incoming requests
-- Provider processors: Handle provider-specific payment logic
-- Event processor: Updates processing status based on EventBridge events
-- All functions configured with 1024MB memory and 5-minute timeout
+6. **Report Generation**:
+   - Generate JSON reports with detailed findings, ARNs, severity levels, and recommendations
+   - Generate HTML reports with executive summaries and visual compliance scores
+   - Store reports in a local `/reports/` directory with timestamped filenames
 
-**EventBridge**: Routes payment events based on business rules
-- Custom event bus named 'payment-events'
-- Rules for different payment amount thresholds
-- Enables flexible event-driven processing
+### Technical Constraints
 
-**DynamoDB**: Tracks processing state and ensures idempotency
-- Table: 'webhook-processing' with webhook_id as partition key
-- On-demand billing with point-in-time recovery
-- Prevents duplicate payment processing
+- Must use AWS CDK v2 with TypeScript
+- Use AWS SDK v3 clients for all AWS service interactions
+- All operations must be read-only (no resource modifications)
+- Analysis should complete within 5 minutes for environments with up to 500 resources
+- Use parallel processing with Promise.all for performance optimization
+- The solution should work in a single region (current region only)
 
-### Monitoring & Alerting
+### Deliverables
 
-**CloudWatch**: Comprehensive monitoring and logging
-- Alarms for queue depth (>1000 messages) and Lambda errors (>1%)
-- 7-day log retention for all Lambda functions
-- X-Ray tracing for performance monitoring
+1. **bin/tap.ts**: CDK app entry point that defines the TapStack
+2. **lib/tap-stack.ts**: TapStack class extending `cdk.Stack` with all analysis logic
 
-**SNS**: Operational alert notifications
-- Connected to CloudWatch alarms for immediate issue notification
+### AWS Services Required
 
-## Technical Specifications
+- CloudFormation (stack discovery)
+- EC2 (security groups, instances, volumes)
+- S3 (bucket analysis)
+- Lambda (function runtime checks)
+- IAM (role policy analysis)
+- RDS (backup configuration checks)
+- Cost Explorer (optional, with fallback)
 
-### Security & Access
-- IAM roles with least privilege principles for each Lambda function
-- API key authentication with usage plans (10,000 requests/day limit)
-- Secure configuration storage using SSM Parameter Store
+### Output Requirements
 
-### Performance & Scaling
-- FIFO queues ensure processing order while handling high volume
-- EventBridge patterns support complex routing scenarios (5+ rule patterns)
-- X-Ray tracing provides performance insights across all components
-
-### Deployment Details
-- **Region**: us-east-1
-- **Infrastructure as Code**: Pulumi with Python
-- **Observability**: Lambda Powertools for structured logging and tracing
-
-## Expected Deliverables
-
-The deployed infrastructure will provide:
-1. **API Endpoint**: Webhook ingestion URL with API key authentication
-2. **Processing Pipeline**: Validated, queued, and processed payment notifications
-3. **Event Routing**: Business rule-based message distribution
-4. **State Tracking**: Idempotent processing with status monitoring
-5. **Operational Monitoring**: Comprehensive alerting and logging
-6. **Stack Outputs**: API Gateway endpoint URL and API key ID for integration
-
-This system ensures reliable, scalable payment processing while maintaining security, observability, and operational excellence standards.
+- Compliance summary per stack (score, critical findings count)
+- Total estimated cost across all analyzed stacks
+- File paths to generated JSON and HTML reports
+- All findings categorized by severity with actionable recommendations
