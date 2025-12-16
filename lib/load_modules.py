@@ -22,22 +22,22 @@ MODULES_LIST = [
 
 
 def download_file(file_name, target_dir):
-  url = f"{S3_PUBLIC_BASE_URL}{file_name}"
-  response = requests.get(url, stream=True)
-  response.raise_for_status()
-  local_path = os.path.join(target_dir, file_name)
-  os.makedirs(os.path.dirname(local_path), exist_ok=True)
-  with open(local_path, "wb") as f:
-    for chunk in response.iter_content(chunk_size=8192):
-      f.write(chunk)
+    url = f"{S3_PUBLIC_BASE_URL}{file_name}"
+    response = requests.get(url, stream=True, timeout=30)
+    response.raise_for_status()
+    local_path = os.path.join(target_dir, file_name)
+    os.makedirs(os.path.dirname(local_path), exist_ok=True)
+    with open(local_path, "wb") as f:
+        for chunk in response.iter_content(chunk_size=8192):
+            f.write(chunk)
 
 # Download full modules directory
 
 
 def download_modules():
-  if os.path.exists(TARGET_MODULES_PATH):
-    shutil.rmtree(TARGET_MODULES_PATH)  # Overwrite existing modules folder
-  os.makedirs(TARGET_MODULES_PATH, exist_ok=True)
-  for item in MODULES_LIST:
-    print(f"📥 Downloading {item}...")
-    download_file(item, TARGET_MODULES_PATH)
+    if os.path.exists(TARGET_MODULES_PATH):
+        shutil.rmtree(TARGET_MODULES_PATH)  # Overwrite existing modules folder
+    os.makedirs(TARGET_MODULES_PATH, exist_ok=True)
+    for item in MODULES_LIST:
+        print(f"📥 Downloading {item}...")
+        download_file(item, TARGET_MODULES_PATH)
