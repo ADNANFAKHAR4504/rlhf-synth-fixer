@@ -106,6 +106,11 @@ with open('$source_path/metadata.json', 'r') as f:
 # Add provider property
 source_metadata['provider'] = 'localstack'
 
+# Remove unwanted fields
+fields_to_remove = ['training quality', 'coverage', 'author', 'dockers3location']
+for field in fields_to_remove:
+    source_metadata.pop(field, None)
+
 # Write to root metadata.json
 with open('./metadata.json', 'w') as f:
     json.dump(source_metadata, f, indent=2)
@@ -124,6 +129,11 @@ with open('$source_path/metadata.json', 'r') as f:
 
 # Add provider property
 metadata['provider'] = 'localstack'
+
+# Remove unwanted fields
+fields_to_remove = ['training quality', 'coverage', 'author', 'dockers3location']
+for field in fields_to_remove:
+    metadata.pop(field, None)
 
 # Write to root
 with open('./metadata.json', 'w') as f:
