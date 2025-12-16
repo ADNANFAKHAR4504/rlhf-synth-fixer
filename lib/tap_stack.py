@@ -86,37 +86,26 @@ class TapStack(pulumi.ComponentResource):
 
     def _create_dynamodb_table(self):
         """Create DynamoDB table for webhook idempotency tracking."""
-        # Detect LocalStack environment - completely omit PITR as it's unsupported
-        is_localstack = os.getenv('AWS_ENDPOINT_URL') is not None
-        
-        # Build table args - omit PITR for LocalStack
-        table_args = {
-            "name": f"webhook-processing-{self.environment_suffix}",
-            "hash_key": "webhook_id",
-            "billing_mode": "PAY_PER_REQUEST",
-            "attributes": [
+        self.dynamodb_table = aws.dynamodb.Table(
+            f"webhook-processing-{self.environment_suffix}",
+            name=f"webhook-processing-{self.environment_suffix}",
+            hash_key="webhook_id",
+            billing_mode="PAY_PER_REQUEST",
+            point_in_time_recovery=aws.dynamodb.TablePointInTimeRecoveryArgs(
+                enabled=True
+            ),
+            attributes=[
                 aws.dynamodb.TableAttributeArgs(
                     name="webhook_id",
                     type="S"
                 )
             ],
-            "tags": {
+            tags={
                 **self.tags,
                 "Name": f"webhook-processing-{self.environment_suffix}",
                 "Component": "DynamoDB"
             },
-            "opts": ResourceOptions(parent=self)
-        }
-        
-        # Only add PITR for real AWS deployments
-        if not is_localstack:
-            table_args["point_in_time_recovery"] = aws.dynamodb.TablePointInTimeRecoveryArgs(
-                enabled=True
-            )
-        
-        self.dynamodb_table = aws.dynamodb.Table(
-            f"webhook-processing-{self.environment_suffix}",
-            **table_args
+            opts=ResourceOptions(parent=self)
         )
 
     def _create_sqs_queues(self):

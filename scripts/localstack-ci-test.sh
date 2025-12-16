@@ -331,29 +331,40 @@ run_pulumi_tests() {
         else
             local output_count=$(echo "$outputs_content" | jq 'keys | length' 2>/dev/null || echo "0")
             print_status $GREEN "✅ Found $output_count deployment outputs"
-            
-            # Display outputs
-            print_status $CYAN "📤 Deployment Outputs:"
-            echo "$outputs_content" | jq -r 'to_entries[] | "   \(.key): \(.value)"' 2>/dev/null
-            echo ""
         fi
     else
         print_status $YELLOW "⚠️  Deployment outputs file not found: $outputs_file"
         print_status $YELLOW "⚠️  Continuing with tests anyway..."
     fi
+    
+    echo ""
 
-    # Run tests if they exist
-    if [ -d "$PROJECT_ROOT/tests" ]; then
+    # Determine test directory based on language
+    # TypeScript/JavaScript typically uses "test/", Python uses "tests/"
+    local test_dir=""
+    if [ "$language" == "ts" ] || [ "$language" == "js" ]; then
+        if [ -d "$PROJECT_ROOT/test" ]; then
+            test_dir="$PROJECT_ROOT/test"
+        elif [ -d "$PROJECT_ROOT/tests" ]; then
+            test_dir="$PROJECT_ROOT/tests"
+        fi
+    else
+        if [ -d "$PROJECT_ROOT/tests" ]; then
+            test_dir="$PROJECT_ROOT/tests"
+        elif [ -d "$PROJECT_ROOT/test" ]; then
+            test_dir="$PROJECT_ROOT/test"
+        fi
+    fi
+
+    # Run tests if directory exists
+    if [ -n "$test_dir" ]; then
         cd "$PROJECT_ROOT"
-        
-        # Set PYTHONPATH for Python imports
-        export PYTHONPATH="$PROJECT_ROOT:${PYTHONPATH:-}"
 
         case "$language" in
             "ts"|"js")
                 if [ -f "package.json" ]; then
                     print_status $YELLOW "📦 Installing test dependencies..."
-                    npm install
+                    npm install --silent
                     print_status $YELLOW "🧪 Running tests..."
                     npm test || {
                         local exit_code=$?
@@ -364,20 +375,22 @@ run_pulumi_tests() {
                 ;;
             "py"|"python")
                 print_status $YELLOW "🧪 Running Python tests..."
+                # Set PYTHONPATH for Python imports
+                export PYTHONPATH="$PROJECT_ROOT:${PYTHONPATH:-}"
                 # Install test dependencies if requirements exist
-                if [ -f "$PROJECT_ROOT/tests/requirements.txt" ]; then
-                    pip install -r "$PROJECT_ROOT/tests/requirements.txt" --quiet
+                if [ -f "$test_dir/requirements.txt" ]; then
+                    pip install -r "$test_dir/requirements.txt" --quiet
                 fi
                 # Run pytest from project root
-                pytest tests/ -v --tb=short 2>&1 || {
+                pytest "$test_dir" -v --tb=short 2>&1 || {
                     local exit_code=$?
                     print_status $RED "❌ Pytest tests failed with exit code: $exit_code"
                     exit $exit_code
                 }
                 ;;
             "go")
-                if [ -f "$PROJECT_ROOT/tests/go.mod" ]; then
-                    cd "$PROJECT_ROOT/tests"
+                if [ -f "$test_dir/go.mod" ]; then
+                    cd "$test_dir"
                     print_status $YELLOW "📦 Installing test dependencies..."
                     go mod download
                     print_status $YELLOW "🧪 Running tests..."
@@ -390,7 +403,7 @@ run_pulumi_tests() {
                 ;;
         esac
     else
-        print_status $YELLOW "⚠️  No tests directory found"
+        print_status $YELLOW "⚠️  No test directory found (checked test/ and tests/)"
     fi
 
     # Only show success if we got here without errors
