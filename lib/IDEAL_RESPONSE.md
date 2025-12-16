@@ -40,13 +40,19 @@ The infrastructure creates a complete VPC environment with the following compone
 Complete implementation of the migration infrastructure:
 
 ```typescript
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 // Get configuration
 const config = new pulumi.Config();
 const environmentSuffix = config.require('environmentSuffix');
 const region = aws.config.region || 'us-east-1';
+
+// Detect LocalStack mode - RDS is not supported in LocalStack Community Edition
+const isLocalStack =
+  environmentSuffix === 'localstack' ||
+  !!process.env.AWS_ENDPOINT_URL ||
+  !!process.env.LOCALSTACK_HOSTNAME;
 
 // Get current date for tagging
 const migrationDate = new Date().toISOString().split('T')[0];
@@ -307,41 +313,52 @@ const rdsSecurityGroup = new aws.ec2.SecurityGroup(
   }
 );
 
-// DB Subnet Group
-const dbSubnetGroup = new aws.rds.SubnetGroup(
-  `db-subnet-group-${environmentSuffix}`,
-  {
-    name: `db-subnet-group-${environmentSuffix}`,
-    subnetIds: [privateSubnet1.id, privateSubnet2.id],
+// RDS resources - only create when NOT running on LocalStack
+// LocalStack Community Edition does not support RDS
+let dbSubnetGroup: aws.rds.SubnetGroup | undefined;
+let rdsInstance: aws.rds.Instance | undefined;
+
+if (!isLocalStack) {
+  // DB Subnet Group
+  dbSubnetGroup = new aws.rds.SubnetGroup(
+    `db-subnet-group-${environmentSuffix}`,
+    {
+      name: `db-subnet-group-${environmentSuffix}`,
+      subnetIds: [privateSubnet1.id, privateSubnet2.id],
+      tags: {
+        ...commonTags,
+        Name: `db-subnet-group-${environmentSuffix}`,
+      },
+    }
+  );
+
+  // RDS MySQL Instance
+  rdsInstance = new aws.rds.Instance(`migration-db-${environmentSuffix}`, {
+    identifier: `migration-db-${environmentSuffix}`,
+    engine: 'mysql',
+    engineVersion: '8.0',
+    instanceClass: 'db.t3.micro',
+    allocatedStorage: 20,
+    storageType: 'gp2',
+    storageEncrypted: true,
+    dbSubnetGroupName: dbSubnetGroup.name,
+    vpcSecurityGroupIds: [rdsSecurityGroup.id],
+    dbName: 'migrationdb',
+    username: 'admin',
+    password: config.requireSecret('dbPassword'),
+    backupRetentionPeriod: 7,
+    skipFinalSnapshot: true,
+    publiclyAccessible: false,
     tags: {
       ...commonTags,
-      Name: `db-subnet-group-${environmentSuffix}`,
+      Name: `migration-db-${environmentSuffix}`,
     },
-  }
-);
-
-// RDS MySQL Instance
-const rdsInstance = new aws.rds.Instance(`migration-db-${environmentSuffix}`, {
-  identifier: `migration-db-${environmentSuffix}`,
-  engine: 'mysql',
-  engineVersion: '8.0',
-  instanceClass: 'db.t3.micro',
-  allocatedStorage: 20,
-  storageType: 'gp2',
-  storageEncrypted: true,
-  dbSubnetGroupName: dbSubnetGroup.name,
-  vpcSecurityGroupIds: [rdsSecurityGroup.id],
-  dbName: 'migrationdb',
-  username: 'admin',
-  password: config.requireSecret('dbPassword'),
-  backupRetentionPeriod: 7,
-  skipFinalSnapshot: true,
-  publiclyAccessible: false,
-  tags: {
-    ...commonTags,
-    Name: `migration-db-${environmentSuffix}`,
-  },
-});
+  });
+} else {
+  pulumi.log.info(
+    'Skipping RDS resources - LocalStack Community Edition does not support RDS'
+  );
+}
 
 // IAM Role for EC2 Instances
 const ec2Role = new aws.iam.Role(`ec2-role-${environmentSuffix}`, {
@@ -528,8 +545,10 @@ const _replicationPolicy = new aws.iam.RolePolicy(
 export const vpcId = vpc.id;
 export const publicSubnetIds = [publicSubnet1.id, publicSubnet2.id];
 export const privateSubnetIds = [privateSubnet1.id, privateSubnet2.id];
-export const rdsEndpoint = rdsInstance.endpoint;
-export const rdsAddress = rdsInstance.address;
+export const rdsEndpoint =
+  rdsInstance?.endpoint ?? pulumi.output('localstack-mock-endpoint');
+export const rdsAddress =
+  rdsInstance?.address ?? pulumi.output('localstack-mock-address');
 export const ec2Instance1PrivateIp = ec2Instance1.privateIp;
 export const ec2Instance2PrivateIp = ec2Instance2.privateIp;
 export const s3BucketName = migrationBucket.bucket;
@@ -695,10 +714,15 @@ The stack exports the following outputs:
 7. **Destroyability**:
    - `skipFinalSnapshot: true` for RDS
    - No retention policies blocking deletion
+8. **LocalStack Compatibility**:
+   - Automatic detection of LocalStack environment
+   - RDS resources conditionally skipped (not supported in LocalStack Community Edition)
+   - Mock endpoints provided for RDS outputs when running on LocalStack
 
 ## Resource Naming
 
 All resources include the `environmentSuffix` parameter in their names:
+
 - Pattern: `{resource-type}-{environmentSuffix}`
 - Example: `migration-vpc-dev`, `app-instance-1-dev`
 - This enables parallel deployments without conflicts
@@ -706,6 +730,7 @@ All resources include the `environmentSuffix` parameter in their names:
 ## Tagging Strategy
 
 All resources are tagged with:
+
 - `Environment`: "dev"
 - `MigrationDate`: Current date (YYYY-MM-DD format)
 - `Name`: Resource name with environment suffix
@@ -733,6 +758,42 @@ To set up cross-account replication:
      --bucket source-bucket \
      --replication-configuration file://replication.json
    ```
+
+## LocalStack Deployment
+
+The infrastructure supports deployment to LocalStack for local testing:
+
+### LocalStack Detection
+
+The code automatically detects LocalStack mode using:
+
+- `environmentSuffix === 'localstack'`
+- `AWS_ENDPOINT_URL` environment variable
+- `LOCALSTACK_HOSTNAME` environment variable
+
+### LocalStack Limitations
+
+LocalStack Community Edition does not support RDS. When running on LocalStack:
+
+- RDS Subnet Group and RDS Instance are skipped
+- Mock endpoints are provided for RDS outputs
+- All other resources (VPC, EC2, S3, IAM) are created normally
+
+### LocalStack Stack Configuration
+
+Create `Pulumi.localstack.yaml`:
+
+```yaml
+config:
+  TapStack:environmentSuffix: localstack
+  TapStack:dbPassword: TestPassword123!
+  aws:region: us-east-1
+  aws:accessKey: test
+  aws:secretKey: test
+  aws:skipCredentialsValidation: 'true'
+  aws:skipMetadataApiCheck: 'true'
+  aws:s3UsePathStyle: 'true'
+```
 
 ## Cleanup
 
