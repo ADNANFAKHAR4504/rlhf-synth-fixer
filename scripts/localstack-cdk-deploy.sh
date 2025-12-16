@@ -13,6 +13,12 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
+# Source LocalStack environment file if it exists
+if [ -f "$(dirname "$0")/../.localstackenv" ]; then
+    echo -e "${BLUE}📋 Loading LocalStack environment from .localstackenv...${NC}"
+    source "$(dirname "$0")/../.localstackenv"
+fi
+
 echo -e "${GREEN}🚀 Starting CDK Deploy to LocalStack...${NC}"
 
 # Check if LocalStack is running
