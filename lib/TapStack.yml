@@ -87,10 +87,8 @@ Parameters:
     Description: SSM parameter for the latest Amazon Linux 2023 AMI (x86_64) (AWS mode).
 
   LocalstackAmiId:
-    Type: String
+    Type: AWS::EC2::Image::Id
     Default: ami-00000000000000000
-    AllowedPattern: '^ami-[a-zA-Z0-9]{8,}$'
-    Description: Dummy AMI ID for LocalStack mode (LaunchTemplate requires an ImageId).
 
   AlbHealthCheckPath:
     Type: String
@@ -182,7 +180,7 @@ Conditions:
 Resources:
 
   # -------------------------
-  # KMS (works in both if supported by your LocalStack build; you already had success)
+  # KMS
   # -------------------------
   LogsKmsKey:
     Type: AWS::KMS::Key
@@ -271,7 +269,7 @@ Resources:
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-data-kms'
 
   # -------------------------
-  # S3 (works in LocalStack; keep maximum)
+  # S3
   # -------------------------
   ArtifactBucket:
     Type: AWS::S3::Bucket
@@ -301,7 +299,6 @@ Resources:
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-artifacts'
 
   CloudTrailBucket:
-    Condition: IsAws
     Type: AWS::S3::Bucket
     Properties:
       VersioningConfiguration:
@@ -357,7 +354,7 @@ Resources:
                 s3:x-amz-acl: bucket-owner-full-control
 
   # -------------------------
-  # VPC core (keep in LocalStack for max creation)
+  # VPC core
   # -------------------------
   VPC:
     Type: AWS::EC2::VPC
@@ -466,7 +463,6 @@ Resources:
       RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref PublicSubnetB
 
-  # NAT/EIP are common LocalStack blockers; skip them in LocalStack to keep stack green.
   EipForNatA:
     Condition: IsAws
     Type: AWS::EC2::EIP
@@ -532,7 +528,7 @@ Resources:
       SubnetId: !Ref PrivateSubnetB
 
   # -------------------------
-  # Security groups (works in both)
+  # Security groups
   # -------------------------
   AlbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -577,15 +573,9 @@ Resources:
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort:
-            Fn::If:
-              - IsPostgres
-              - 5432
-              - 3306
+            Fn::If: [IsPostgres, 5432, 3306]
           ToPort:
-            Fn::If:
-              - IsPostgres
-              - 5432
-              - 3306
+            Fn::If: [IsPostgres, 5432, 3306]
           SourceSecurityGroupId: !Ref AppSecurityGroup
       SecurityGroupEgress:
         - IpProtocol: -1
@@ -595,7 +585,7 @@ Resources:
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-sg'
 
   # -------------------------
-  # VPC Flow Logs (skip in LocalStack)
+  # VPC Flow Logs (AWS only)
   # -------------------------
   FlowLogsRole:
     Condition: IsAws
@@ -647,17 +637,14 @@ Resources:
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-flowlogs'
 
   # -------------------------
-  # ALB + TargetGroup + Listener (you already successfully created in LocalStack)
+  # ALB + TargetGroup + Listener
   # -------------------------
   AppLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Scheme: internet-facing
-      Subnets:
-        - !Ref PublicSubnetA
-        - !Ref PublicSubnetB
-      SecurityGroups:
-        - !Ref AlbSecurityGroup
+      Subnets: [!Ref PublicSubnetA, !Ref PublicSubnetB]
+      SecurityGroups: [!Ref AlbSecurityGroup]
       Type: application
       Tags:
         - Key: Name
@@ -679,9 +666,6 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-tg'
 
-
-
-
   AppListener:
     Condition: IsAws
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -693,19 +677,15 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref AppTargetGroup
 
-
   # -------------------------
-  # LaunchTemplate + ASG (LocalStack safe with fixed Version)
+  # LaunchTemplate (AWS only)  ✅ kept for AWS, removed from LocalStack path
   # -------------------------
   AppLaunchTemplate:
+    Condition: IsAws
     Type: AWS::EC2::LaunchTemplate
     Properties:
       LaunchTemplateData:
-        ImageId:
-          Fn::If:
-            - IsLocalStack
-            - !Ref LocalstackAmiId
-            - !Ref LatestAmiId
+        ImageId: !Ref LatestAmiId
         InstanceType: !Ref InstanceType
         SecurityGroupIds:
           - !Ref AppSecurityGroup
@@ -727,13 +707,37 @@ Resources:
               (command -v systemctl >/dev/null 2>&1 && systemctl enable nginx) || true
               (command -v systemctl >/dev/null 2>&1 && systemctl start nginx) || true
 
+  # -------------------------
+  # LaunchConfiguration (LocalStack only) ✅ replacement for LocalStack (fix)
+  # -------------------------
+  AppLaunchConfigurationLocal:
+    Condition: IsLocalStack
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !Ref LocalstackAmiId
+      InstanceType: !Ref InstanceType
+      SecurityGroups:
+        - !Ref AppSecurityGroup
+      UserData:
+        Fn::Base64:
+          Fn::Sub: |
+            #!/bin/bash
+            set -euo pipefail
+            (command -v dnf >/dev/null 2>&1 && dnf -y update) || true
+            (command -v dnf >/dev/null 2>&1 && dnf -y install nginx) || true
+            mkdir -p /usr/share/nginx/html || true
+            cat > /usr/share/nginx/html/index.html <<'EOF'
+            <!doctype html><html><head><title>TapStack</title></head>
+            <body><h1>TapStack ${EnvironmentSuffix}</h1><p>Status: OK</p></body></html>
+            EOF
+            (command -v systemctl >/dev/null 2>&1 && systemctl enable nginx) || true
+            (command -v systemctl >/dev/null 2>&1 && systemctl start nginx) || true
+
   AppAutoScalingGroupAws:
     Condition: IsAws
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      VPCZoneIdentifier:
-        - !Ref PrivateSubnetA
-        - !Ref PrivateSubnetB
+      VPCZoneIdentifier: [!Ref PrivateSubnetA, !Ref PrivateSubnetB]
       DesiredCapacity: !Ref DesiredCapacity
       MinSize: !Ref MinSize
       MaxSize: !Ref MaxSize
@@ -748,39 +752,20 @@ Resources:
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-asg'
           PropagateAtLaunch: true
 
-
-
-
   AppAutoScalingGroupLocal:
-    Metadata:
-      cfn-lint:
-        config:
-          ignore_checks:
-            - W3005
     Condition: IsLocalStack
     Type: AWS::AutoScaling::AutoScalingGroup
-    DependsOn:
-      - AppLaunchTemplate
     Properties:
-      VPCZoneIdentifier:
-        - !Ref PrivateSubnetA
-        - !Ref PrivateSubnetB
+      VPCZoneIdentifier: [!Ref PrivateSubnetA, !Ref PrivateSubnetB]
       DesiredCapacity: !Ref DesiredCapacity
       MinSize: !Ref MinSize
       MaxSize: !Ref MaxSize
       HealthCheckType: EC2
-      LaunchTemplate:
-        LaunchTemplateId: !Ref AppLaunchTemplate
-        Version: "1"
+      LaunchConfigurationName: !Ref AppLaunchConfigurationLocal
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-asg'
           PropagateAtLaunch: true
-
-
-
-
-
 
   # -------------------------
   # RDS (AWS only)
@@ -790,9 +775,7 @@ Resources:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupDescription: !Sub '${ProjectName}-${EnvironmentSuffix} RDS subnet group'
-      SubnetIds:
-        - !Ref PrivateSubnetA
-        - !Ref PrivateSubnetB
+      SubnetIds: [!Ref PrivateSubnetA, !Ref PrivateSubnetB]
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-subnetgrp'
@@ -812,13 +795,9 @@ Resources:
       AllocatedStorage: !Ref RdsAllocatedStorage
       MaxAllocatedStorage: !Ref RdsMaxAllocatedStorage
       DBSubnetGroupName: !Ref RdsSubnetGroup
-      VPCSecurityGroups:
-        - !Ref RdsSecurityGroup
+      VPCSecurityGroups: [!Ref RdsSecurityGroup]
       MultiAZ:
-        Fn::If:
-          - IsMultiAzTrue
-          - true
-          - false
+        Fn::If: [IsMultiAzTrue, true, false]
       StorageEncrypted: true
       KmsKeyId: !Ref DataKmsKey
       PubliclyAccessible: false
@@ -896,7 +875,7 @@ Resources:
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-trail'
 
   # -------------------------
-  # Lambda (works in both)
+  # Lambda
   # -------------------------
   ExampleLambdaRole:
     Type: AWS::IAM::Role
@@ -942,7 +921,7 @@ Resources:
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-lambda'
 
   # -------------------------
-  # SNS (works in both; email subscription is AWS-focused)
+  # SNS
   # -------------------------
   NotificationsTopic:
     Type: AWS::SNS::Topic
@@ -961,7 +940,7 @@ Resources:
       Endpoint: !Ref NotificationEmail
 
   # -------------------------
-  # Alarms (create in both; metrics may be empty in LocalStack but resource creation should proceed)
+  # Alarms
   # -------------------------
   Alb5xxAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -983,10 +962,8 @@ Resources:
       Threshold: 5
       ComparisonOperator: GreaterThanThreshold
       TreatMissingData: notBreaching
-      AlarmActions:
-        - !Ref NotificationsTopic
-      OKActions:
-        - !Ref NotificationsTopic
+      AlarmActions: [!Ref NotificationsTopic]
+      OKActions: [!Ref NotificationsTopic]
 
   TgUnhealthyHostsAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -1014,11 +991,8 @@ Resources:
       Threshold: 0
       ComparisonOperator: GreaterThanThreshold
       TreatMissingData: notBreaching
-      AlarmActions:
-        - !Ref NotificationsTopic
-      OKActions:
-        - !Ref NotificationsTopic
-
+      AlarmActions: [!Ref NotificationsTopic]
+      OKActions: [!Ref NotificationsTopic]
 
   RdsCpuAlarm:
     Condition: IsAws
@@ -1037,13 +1011,11 @@ Resources:
       Threshold: 80
       ComparisonOperator: GreaterThanThreshold
       TreatMissingData: notBreaching
-      AlarmActions:
-        - !Ref NotificationsTopic
-      OKActions:
-        - !Ref NotificationsTopic
+      AlarmActions: [!Ref NotificationsTopic]
+      OKActions: [!Ref NotificationsTopic]
 
   # -------------------------
-  # Custom verifier (AWS only; LocalStack often can't callback to ResponseURL)
+  # Custom verifier (AWS only)
   # -------------------------
   ManagerLambdaRole:
     Condition: IsAws
@@ -1090,7 +1062,7 @@ Resources:
           REGION: !Ref AWS::Region
       Code:
         ZipFile: |
-          import json, os, urllib.request, logging, boto3
+          import json, urllib.request, logging
           log = logging.getLogger()
           log.setLevel(logging.INFO)
 
@@ -1113,7 +1085,6 @@ Resources:
                   log.info("CFN response sent: %s", getattr(resp, "status", "ok"))
 
           def handler(event, context):
-              # Minimal safe implementation for AWS
               send_cfn_response(event, context, 'SUCCESS', data={'ok': True})
 
   PostDeployVerifier:
@@ -1129,10 +1100,8 @@ Resources:
       - RdsInstance
       - AppListener
 
-
-
   # -------------------------
-  # LocalStack "max resources" extras (safe additions)
+  # LocalStack extras
   # -------------------------
   TurnAroundPromptTable:
     Condition: IsLocalStack
@@ -1189,8 +1158,6 @@ Outputs:
         - Fn::Sub: 'arn:${AWS::Partition}:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:loadbalancer/app/${ProjectName}-${EnvironmentSuffix}-alb/*'
         - !Ref AppLoadBalancer
 
-
-
   AlbDNSName:
     Description: ALB DNS name
     Value: !GetAtt AppLoadBalancer.DNSName
@@ -1206,7 +1173,6 @@ Outputs:
         - IsLocalStack
         - !Ref AppAutoScalingGroupLocal
         - !Ref AppAutoScalingGroupAws
-
 
   ArtifactBucketName:
     Description: Artifact bucket
@@ -1229,12 +1195,10 @@ Outputs:
     Description: Example Lambda function name
     Value: !Ref ExampleLambda
 
-
   LambdaFunctionArn:
     Condition: IsAws
     Description: Example Lambda function ARN
     Value: !GetAtt ExampleLambda.Arn
-
 
   TurnAroundPromptTableArn:
     Condition: IsLocalStack
@@ -1263,7 +1227,6 @@ Outputs:
 
   CloudTrailBucketName:
     Condition: IsAws
-    Description: CloudTrail logs bucket (AWS only)
     Value: !Ref CloudTrailBucket
 
   CloudTrailName:
