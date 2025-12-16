@@ -1,0 +1,21 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "229136",
+  "team": "synth",
+  "provider": "localstack",
+  "startedAt": "2025-12-16T09:00:00.000Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Route Tables"
+  ]
+}
