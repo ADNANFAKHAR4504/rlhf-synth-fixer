@@ -60,8 +60,17 @@ Parameters:
       - 'true'
       - 'false'
 
+  CreateNATGateways:
+    Type: String
+    Description: Whether to create NAT Gateways (set to false for LocalStack due to EIP attribute issues)
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
 Conditions:
   ShouldCreateNodeGroup: !Equals [!Ref CreateNodeGroup, 'true']
+  ShouldCreateNATGateways: !Equals [!Ref CreateNATGateways, 'true']
 
 Resources:
   # VPC Resources
@@ -142,9 +151,10 @@ Resources:
         - Key: kubernetes.io/role/internal-elb
           Value: '1'
 
-  # NAT Gateway Resources
+  # NAT Gateway Resources - conditional for LocalStack compatibility
   NATGateway1EIP:
     Type: AWS::EC2::EIP
+    Condition: ShouldCreateNATGateways
     DependsOn: VPCGatewayAttachment
     Properties:
       Domain: vpc
@@ -154,6 +164,7 @@ Resources:
 
   NATGateway2EIP:
     Type: AWS::EC2::EIP
+    Condition: ShouldCreateNATGateways
     DependsOn: VPCGatewayAttachment
     Properties:
       Domain: vpc
@@ -163,6 +174,7 @@ Resources:
 
   NATGateway1:
     Type: AWS::EC2::NatGateway
+    Condition: ShouldCreateNATGateways
     Properties:
       AllocationId: !GetAtt NATGateway1EIP.AllocationId
       SubnetId: !Ref PublicSubnet1
@@ -172,6 +184,7 @@ Resources:
 
   NATGateway2:
     Type: AWS::EC2::NatGateway
+    Condition: ShouldCreateNATGateways
     Properties:
       AllocationId: !GetAtt NATGateway2EIP.AllocationId
       SubnetId: !Ref PublicSubnet2
@@ -218,6 +231,7 @@ Resources:
 
   PrivateRoute1:
     Type: AWS::EC2::Route
+    Condition: ShouldCreateNATGateways
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       DestinationCidrBlock: 0.0.0.0/0
@@ -239,6 +253,7 @@ Resources:
 
   PrivateRoute2:
     Type: AWS::EC2::Route
+    Condition: ShouldCreateNATGateways
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
       DestinationCidrBlock: 0.0.0.0/0

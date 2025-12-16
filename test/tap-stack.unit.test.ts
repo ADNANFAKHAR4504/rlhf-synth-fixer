@@ -75,12 +75,25 @@ describe('EKS CloudFormation Template Unit Tests', () => {
       expect(template.Parameters.CreateNodeGroup.AllowedValues).toContain('true');
       expect(template.Parameters.CreateNodeGroup.AllowedValues).toContain('false');
     });
+
+    test('should have CreateNATGateways parameter for LocalStack compatibility', () => {
+      expect(template.Parameters.CreateNATGateways).toBeDefined();
+      expect(template.Parameters.CreateNATGateways.Type).toBe('String');
+      expect(template.Parameters.CreateNATGateways.Default).toBe('false');
+      expect(template.Parameters.CreateNATGateways.AllowedValues).toContain('true');
+      expect(template.Parameters.CreateNATGateways.AllowedValues).toContain('false');
+    });
   });
 
   describe('Conditions', () => {
     test('should have ShouldCreateNodeGroup condition', () => {
       expect(template.Conditions).toBeDefined();
       expect(template.Conditions.ShouldCreateNodeGroup).toBeDefined();
+    });
+
+    test('should have ShouldCreateNATGateways condition', () => {
+      expect(template.Conditions).toBeDefined();
+      expect(template.Conditions.ShouldCreateNATGateways).toBeDefined();
     });
   });
 
@@ -121,7 +134,7 @@ describe('EKS CloudFormation Template Unit Tests', () => {
       expect(privateSubnet2.Type).toBe('AWS::EC2::Subnet');
     });
 
-    test('should create NAT Gateways with EIPs', () => {
+    test('should create NAT Gateways with EIPs (conditional)', () => {
       const nat1 = template.Resources.NATGateway1;
       const nat2 = template.Resources.NATGateway2;
       const eip1 = template.Resources.NATGateway1EIP;
@@ -134,6 +147,11 @@ describe('EKS CloudFormation Template Unit Tests', () => {
       expect(nat1.Type).toBe('AWS::EC2::NatGateway');
       expect(nat2.Type).toBe('AWS::EC2::NatGateway');
       expect(eip1.Type).toBe('AWS::EC2::EIP');
+      // NAT Gateways should be conditional for LocalStack compatibility
+      expect(nat1.Condition).toBe('ShouldCreateNATGateways');
+      expect(nat2.Condition).toBe('ShouldCreateNATGateways');
+      expect(eip1.Condition).toBe('ShouldCreateNATGateways');
+      expect(eip2.Condition).toBe('ShouldCreateNATGateways');
       expect(eip2.Type).toBe('AWS::EC2::EIP');
     });
 
