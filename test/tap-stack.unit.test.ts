@@ -288,7 +288,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(rds.DeletionPolicy).toBe('Delete');
       expect(rds.UpdateReplacePolicy).toBe('Retain');
       expect(rds.Properties.Engine).toBe('postgres');
-      expect(rds.Properties.EngineVersion).toBe('13.15');
+      expect(rds.Properties.EngineVersion).toBe('17.2');
       expect(rds.Properties.DBInstanceClass).toBe('db.t3.medium');
       expect(rds.Properties.StorageEncrypted).toBe(true);
       expect(rds.Properties.MultiAZ).toBe(true);
@@ -298,7 +298,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should use SSM parameter for database password', () => {
       const rds = template.Resources.MyAppRDSInstance;
       expect(rds.Properties.MasterUserPassword).toEqual({
-        'Fn::Sub': '{{resolve:ssm-secure:${DBPassword}}}'
+        'Fn::GetAtt': ['DBPasswordParameter', 'Value']
       });
     });
   });
@@ -324,9 +324,14 @@ describe('TapStack CloudFormation Template', () => {
       const resources = Object.values(template.Resources);
       resources.forEach((resource: any) => {
         if (resource.Properties && resource.Properties.Tags) {
-          const envTag = resource.Properties.Tags.find((tag: any) => tag.Key === 'Environment');
-          if (envTag) {
-            expect(envTag.Value).toEqual({ Ref: 'Environment' });
+          // Tags can be either an array or an object (SSM Parameters use object format)
+          if (Array.isArray(resource.Properties.Tags)) {
+            const envTag = resource.Properties.Tags.find((tag: any) => tag.Key === 'Environment');
+            if (envTag) {
+              expect(envTag.Value).toEqual({ Ref: 'Environment' });
+            }
+          } else if (typeof resource.Properties.Tags === 'object' && resource.Properties.Tags.Environment) {
+            expect(resource.Properties.Tags.Environment).toEqual({ Ref: 'Environment' });
           }
         }
       });
@@ -339,8 +344,11 @@ describe('TapStack CloudFormation Template', () => {
         'PrimaryS3BucketName',
         'AccessLogsS3BucketName',
         'RDSInstanceEndpoint',
+        'RDSInstanceId',
         'VPCId',
         'LambdaFunctionArn',
+        'LambdaFunctionName',
+        'LambdaRoleName',
         'DatabasePasswordParameterName'
       ];
 
@@ -483,7 +491,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have expected number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(6); // PrimaryS3BucketName, AccessLogsS3BucketName, RDSInstanceEndpoint, VPCId, LambdaFunctionArn, DatabasePasswordParameterName
+      expect(outputCount).toBe(9); // PrimaryS3BucketName, AccessLogsS3BucketName, RDSInstanceEndpoint, RDSInstanceId, VPCId, LambdaFunctionArn, LambdaFunctionName, LambdaRoleName, DatabasePasswordParameterName
     });
   });
 });
