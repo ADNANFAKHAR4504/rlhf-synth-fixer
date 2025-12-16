@@ -287,7 +287,7 @@ Resources:
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NATGateway1
+      # NatGatewayId: !Ref NATGateway1
 
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -312,7 +312,7 @@ Resources:
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
       DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NATGateway2
+      # NatGatewayId: !Ref NATGateway2
 
   PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -337,7 +337,7 @@ Resources:
     Properties:
       RouteTableId: !Ref PrivateRouteTable3
       DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NATGateway3
+      # NatGatewayId: !Ref NATGateway3
 
   PrivateSubnet3RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -419,23 +419,23 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-HTTPS-SG-ID'
 
-  NATGateway1Id:
-    Description: 'NAT Gateway 1 ID (us-east-1a)'
-    Value: !Ref NATGateway1
-    Export:
-      Name: !Sub '${AWS::StackName}-NATGateway1-ID'
+  # NATGateway1Id:
+  #   Description: 'NAT Gateway 1 ID (us-east-1a)'
+  #   Value: !Ref NATGateway1
+  #   Export:
+  #     Name: !Sub '${AWS::StackName}-NATGateway1-ID'
 
-  NATGateway2Id:
-    Description: 'NAT Gateway 2 ID (us-east-1b)'
-    Value: !Ref NATGateway2
-    Export:
-      Name: !Sub '${AWS::StackName}-NATGateway2-ID'
+  # NATGateway2Id:
+  #   Description: 'NAT Gateway 2 ID (us-east-1b)'
+  #   Value: !Ref NATGateway2
+  #   Export:
+  #     Name: !Sub '${AWS::StackName}-NATGateway2-ID'
 
-  NATGateway3Id:
-    Description: 'NAT Gateway 3 ID (us-east-1c)'
-    Value: !Ref NATGateway3
-    Export:
-      Name: !Sub '${AWS::StackName}-NATGateway3-ID'
+  # NATGateway3Id:
+  #   Description: 'NAT Gateway 3 ID (us-east-1c)'
+  #   Value: !Ref NATGateway3
+  #   Export:
+  #     Name: !Sub '${AWS::StackName}-NATGateway3-ID'
 
   VPCCidr:
     Description: 'VPC CIDR Block'
