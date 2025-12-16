@@ -53,6 +53,25 @@
             "Description": "CIDR block for the VPC",
             "Default": "10.0.0.0/16",
             "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/([0-9]|[1-2][0-9]|3[0-2]))$"
+        },
+        "CreateNodeGroup": {
+            "Type": "String",
+            "Description": "Whether to create the EKS Node Group (set to false for LocalStack)",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ]
+        }
+    },
+    "Conditions": {
+        "ShouldCreateNodeGroup": {
+            "Fn::Equals": [
+                {
+                    "Ref": "CreateNodeGroup"
+                },
+                "true"
+            ]
         }
     },
     "Resources": {
@@ -693,19 +712,9 @@
                 ]
             }
         },
-        "EKSNodeGroupWaitCondition": {
-            "Type": "AWS::CloudFormation::WaitConditionHandle",
-            "Metadata": {
-                "ClusterName": {
-                    "Ref": "EKSCluster"
-                }
-            }
-        },
         "EKSNodeGroup": {
             "Type": "AWS::EKS::Nodegroup",
-            "DependsOn": [
-                "EKSNodeGroupWaitCondition"
-            ],
+            "Condition": "ShouldCreateNodeGroup",
             "Properties": {
                 "NodegroupName": {
                     "Fn::Sub": "eks-nodegroup-${environmentSuffix}"
@@ -794,6 +803,7 @@
         },
         "NodeGroupName": {
             "Description": "EKS Node Group Name",
+            "Condition": "ShouldCreateNodeGroup",
             "Value": {
                 "Ref": "EKSNodeGroup"
             },

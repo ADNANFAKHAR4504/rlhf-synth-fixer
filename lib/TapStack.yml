@@ -52,6 +52,17 @@ Parameters:
     Default: 10.0.0.0/16
     AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$
 
+  CreateNodeGroup:
+    Type: String
+    Description: Whether to create the EKS Node Group (set to false for LocalStack)
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+Conditions:
+  ShouldCreateNodeGroup: !Equals [!Ref CreateNodeGroup, 'true']
+
 Resources:
   # VPC Resources
   EKSVpc:
@@ -395,17 +406,10 @@ Resources:
         - Key: Environment
           Value: !Ref environmentSuffix
 
-  # EKS Node Group
-  # Using WaitConditionHandle with Ref forces CloudFormation to wait for cluster creation
-  EKSNodeGroupWaitCondition:
-    Type: AWS::CloudFormation::WaitConditionHandle
-    Metadata:
-      ClusterName: !Ref EKSCluster
-
+  # EKS Node Group - conditional to support LocalStack which has EKS timing issues
   EKSNodeGroup:
     Type: AWS::EKS::Nodegroup
-    DependsOn:
-      - EKSNodeGroupWaitCondition
+    Condition: ShouldCreateNodeGroup
     Properties:
       NodegroupName: !Sub 'eks-nodegroup-${environmentSuffix}'
       ClusterName: !Ref EKSCluster
@@ -445,6 +449,7 @@ Outputs:
 
   NodeGroupName:
     Description: EKS Node Group Name
+    Condition: ShouldCreateNodeGroup
     Value: !Ref EKSNodeGroup
     Export:
       Name: !Sub '${AWS::StackName}-NodeGroupName'

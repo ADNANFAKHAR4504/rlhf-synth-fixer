@@ -67,6 +67,21 @@ describe('EKS CloudFormation Template Unit Tests', () => {
       expect(template.Parameters.VpcCIDR).toBeDefined();
       expect(template.Parameters.VpcCIDR.Default).toBe('10.0.0.0/16');
     });
+
+    test('should have CreateNodeGroup parameter for LocalStack compatibility', () => {
+      expect(template.Parameters.CreateNodeGroup).toBeDefined();
+      expect(template.Parameters.CreateNodeGroup.Type).toBe('String');
+      expect(template.Parameters.CreateNodeGroup.Default).toBe('false');
+      expect(template.Parameters.CreateNodeGroup.AllowedValues).toContain('true');
+      expect(template.Parameters.CreateNodeGroup.AllowedValues).toContain('false');
+    });
+  });
+
+  describe('Conditions', () => {
+    test('should have ShouldCreateNodeGroup condition', () => {
+      expect(template.Conditions).toBeDefined();
+      expect(template.Conditions.ShouldCreateNodeGroup).toBeDefined();
+    });
   });
 
   describe('VPC Resources', () => {
@@ -290,10 +305,11 @@ describe('EKS CloudFormation Template Unit Tests', () => {
   });
 
   describe('EKS Node Group', () => {
-    test('should create EKS node group', () => {
+    test('should create EKS node group with condition', () => {
       const nodeGroup = template.Resources.EKSNodeGroup;
       expect(nodeGroup).toBeDefined();
       expect(nodeGroup.Type).toBe('AWS::EKS::Nodegroup');
+      expect(nodeGroup.Condition).toBe('ShouldCreateNodeGroup');
     });
 
     test('node group should depend on EKS cluster', () => {
@@ -397,6 +413,12 @@ describe('EKS CloudFormation Template Unit Tests', () => {
         expect(output.Export).toBeDefined();
         expect(output.Export.Name).toBeDefined();
       });
+    });
+
+    test('NodeGroupName output should be conditional', () => {
+      const output = template.Outputs.NodeGroupName;
+      expect(output).toBeDefined();
+      expect(output.Condition).toBe('ShouldCreateNodeGroup');
     });
   });
 
