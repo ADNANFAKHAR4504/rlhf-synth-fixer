@@ -406,11 +406,6 @@ Resources:
   # EKS Node Group
   EKSNodeGroup:
     Type: AWS::EKS::Nodegroup
-    Metadata:
-      cfn-lint:
-        config:
-          ignore_checks:
-            - W3005
     DependsOn:
       - EKSCluster
     Properties:
