@@ -155,7 +155,34 @@ echo -e "${YELLOW}🚀 Starting integration tests...${NC}"
 # Detect test command based on CDK language
 TEST_COMMAND=""
 
-if [ -f "package.json" ]; then
+# First, check metadata.json for language to prioritize correctly
+METADATA_LANGUAGE=""
+if [ -f "metadata.json" ]; then
+    METADATA_LANGUAGE=$(python3 -c "import json; print(json.load(open('metadata.json')).get('language', ''))" 2>/dev/null || echo "")
+fi
+
+if [ -f "lib/metadata.json" ]; then
+    METADATA_LANGUAGE=$(python3 -c "import json; print(json.load(open('lib/metadata.json')).get('language', ''))" 2>/dev/null || echo "")
+fi
+
+# Python CDK project - prioritize if language is py/python OR requirements.txt exists with tests/ folder
+if [[ "$METADATA_LANGUAGE" == "py" ]] || [[ "$METADATA_LANGUAGE" == "python" ]] || { [ -f "requirements.txt" ] && [ -d "tests" ]; }; then
+    # Python CDK project
+    if [ -d ".venv" ]; then
+        source .venv/bin/activate 2>/dev/null || source .venv/Scripts/activate 2>/dev/null || true
+    fi
+    
+    if [ -d "tests/integration" ]; then
+        echo -e "${BLUE}📋 Running Python integration tests with pytest...${NC}"
+        TEST_COMMAND="python -m pytest tests/integration/ -v --tb=short --no-cov"
+    elif [ -d "tests" ]; then
+        echo -e "${BLUE}📋 Running Python tests with pytest...${NC}"
+        TEST_COMMAND="python -m pytest tests/ -v --tb=short --no-cov"
+    elif [ -d "test" ]; then
+        echo -e "${BLUE}📋 Running Python tests with pytest...${NC}"
+        TEST_COMMAND="python -m pytest test/ -v --tb=short --no-cov"
+    fi
+elif [ -f "package.json" ]; then
     # TypeScript or JavaScript CDK project
     if grep -q '"test:integration"' package.json 2>/dev/null; then
         echo -e "${BLUE}📋 Running test:integration script...${NC}"
@@ -172,13 +199,6 @@ if [ -f "package.json" ]; then
     elif [ -d "test" ] && ls test/*.test.ts test/*.test.js 2>/dev/null; then
         echo -e "${BLUE}📋 Running all tests with Jest...${NC}"
         TEST_COMMAND="npx jest --passWithNoTests"
-    fi
-elif [ -f "requirements.txt" ]; then
-    # Python CDK project
-    source .venv/bin/activate 2>/dev/null || source .venv/Scripts/activate 2>/dev/null || true
-    if [ -d "tests" ] || [ -d "test" ]; then
-        echo -e "${BLUE}📋 Running Python integration tests with pytest...${NC}"
-        TEST_COMMAND="python -m pytest tests/ -v --tb=short -k 'integration or int' || python -m pytest test/ -v --tb=short -k 'integration or int' || python -m pytest -v --tb=short"
     fi
 elif [ -f "pom.xml" ]; then
     # Java CDK project
