@@ -533,7 +533,6 @@ describe('TapStack - LocalStack Compatible Infrastructure Unit Tests', () => {
     });
 
     test('Template uses simplified S3 bucket naming', () => {
-      // Should not use AWS::AccountId in bucket name
       expect(templateYaml).not.toMatch(/BucketName:.*AccountId/);
       expect(templateYaml).toContain('localstack-');
     });
