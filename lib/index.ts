@@ -2,13 +2,17 @@ import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import * as path from 'path';
 
-// Get configuration values
+// Get configuration values from environment variables and Pulumi config
 const config = new pulumi.Config();
+
+// Required values from environment variables
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX;
 if (!environmentSuffix) {
   throw new Error('ENVIRONMENT_SUFFIX environment variable is required');
 }
-const environment = config.get('environment') || 'dev';
+const environment = process.env.ENVIRONMENT || 'dev';
+
+// Optional deployment parameters from Pulumi config
 const imageQuality = config.get('imageQuality') || '80';
 const maxFileSize = config.get('maxFileSize') || '10485760';
 const lambdaMemory = config.getNumber('lambdaMemory') || 512;

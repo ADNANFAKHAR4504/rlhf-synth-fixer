@@ -44,19 +44,18 @@ pulumi.runtime.setMocks({
   },
 });
 
-// Set required environment variable before importing index
+// Set required environment variables before importing index
 process.env.ENVIRONMENT_SUFFIX = 'test123';
+process.env.ENVIRONMENT = 'dev';
 
-// Set required config before importing index
-// Note: Use "project:" prefix for global config values
-pulumi.runtime.setConfig('project:environmentSuffix', 'test123');
+// Set optional config values for testing
+// Note: Use "TapStack:" prefix for config values (matching project name in Pulumi.yaml)
 // Intentionally NOT setting some optional config values to test default branches
-// pulumi.runtime.setConfig('project:environment', 'dev');
-// pulumi.runtime.setConfig('project:imageQuality', '80');
-// pulumi.runtime.setConfig('project:maxFileSize', '10485760');
-// pulumi.runtime.setConfig('project:lambdaMemory', '512');
-// pulumi.runtime.setConfig('project:logRetention', '7');
-pulumi.runtime.setConfig('project:reservedConcurrency', '5');
+// pulumi.runtime.setConfig('TapStack:imageQuality', '80');
+// pulumi.runtime.setConfig('TapStack:maxFileSize', '10485760');
+// pulumi.runtime.setConfig('TapStack:lambdaMemory', '512');
+// pulumi.runtime.setConfig('TapStack:logRetention', '7');
+pulumi.runtime.setConfig('TapStack:reservedConcurrency', '5');
 
 describe('Image Processor Infrastructure Tests', () => {
   let module: any;
@@ -132,8 +131,8 @@ describe('Image Processor Infrastructure Tests', () => {
       // This is tested by checking the logic paths exist
       const config = new pulumi.Config();
 
-      // Test environment default
-      const envWithDefault = config.get('environment') || 'dev';
+      // Test environment default (from ENV var, not config)
+      const envWithDefault = process.env.ENVIRONMENT || 'dev';
       expect(envWithDefault).toBeDefined();
 
       // Test imageQuality default
@@ -160,8 +159,8 @@ describe('Image Processor Infrastructure Tests', () => {
       // the code should use the default values from the || operators
       const config = new pulumi.Config();
 
-      // Test that when config is not set, defaults are used
-      const environment = config.get('environment') || 'dev';
+      // Test that when ENV var is set, it's used (we set it to 'dev')
+      const environment = process.env.ENVIRONMENT || 'dev';
       expect(environment).toBe('dev');
 
       const imageQuality = config.get('imageQuality') || '80';
@@ -181,7 +180,7 @@ describe('Image Processor Infrastructure Tests', () => {
       const config = new pulumi.Config();
 
       // Verify that these config values are not set (undefined)
-      expect(config.get('environment')).toBeUndefined();
+      // Note: environment is now from ENV var, not config
       expect(config.get('imageQuality')).toBeUndefined();
       expect(config.get('maxFileSize')).toBeUndefined();
       expect(config.getNumber('lambdaMemory')).toBeUndefined();

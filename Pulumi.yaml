@@ -3,13 +3,6 @@ runtime: nodejs
 description: Optimized Lambda-based image processing system with environment-specific configurations
 main: lib/index.ts
 config:
-  environmentSuffix:
-    type: string
-    description: Unique suffix for resource naming (e.g., dev, prod, test)
-  environment:
-    type: string
-    default: dev
-    description: Environment type (dev or prod) for configuration
   imageQuality:
     type: string
     default: "80"
