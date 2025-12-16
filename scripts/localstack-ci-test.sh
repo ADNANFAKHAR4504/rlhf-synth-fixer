@@ -151,10 +151,6 @@ run_cdk_tests() {
     
     local output_count=$(echo "$outputs_content" | jq 'keys | length' 2>/dev/null || echo "0")
     print_status $GREEN "✅ Found $output_count deployment outputs"
-    
-    # Display outputs
-    print_status $CYAN "📤 Deployment Outputs:"
-    echo "$outputs_content" | jq -r 'to_entries[] | "   \(.key): \(.value)"' 2>/dev/null
     echo ""
 
     # Run Jest integration tests if they exist
@@ -223,11 +219,6 @@ run_cfn_tests() {
     
     local output_count=$(echo "$outputs_content" | jq 'keys | length' 2>/dev/null || echo "0")
     print_status $GREEN "✅ Found $output_count deployment outputs"
-    
-    # Display outputs
-    print_status $CYAN "📤 Deployment Outputs:"
-    echo "$outputs_content" | jq -r 'to_entries[] | "   \(.key): \(.value)"' 2>/dev/null
-    echo ""
     
     # Verify critical outputs exist
     print_status $YELLOW "🔍 Verifying critical outputs..."
