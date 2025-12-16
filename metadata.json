@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350224",
+  "team": "4",
+  "startedAt": "2025-11-06T14:39:10.197Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "AutoScaling",
+    "CloudWatch",
+    "EC2",
+    "ElasticLoadBalancingV2",
+    "IAM",
+    "Logs",
+    "RDS",
+    "S3",
+    "SecretsManager"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": "",
+  "provider": "localstack"
+}
