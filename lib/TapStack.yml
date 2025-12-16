@@ -396,11 +396,11 @@ Resources:
           Value: !Ref environmentSuffix
 
   # EKS Node Group
-  # Using WaitConditionHandle with GetAtt forces CloudFormation to wait for cluster creation
+  # Using WaitConditionHandle with Ref forces CloudFormation to wait for cluster creation
   EKSNodeGroupWaitCondition:
     Type: AWS::CloudFormation::WaitConditionHandle
     Metadata:
-      ClusterArn: !GetAtt EKSCluster.Arn
+      ClusterName: !Ref EKSCluster
 
   EKSNodeGroup:
     Type: AWS::EKS::Nodegroup

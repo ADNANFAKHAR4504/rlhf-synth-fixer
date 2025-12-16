@@ -696,11 +696,8 @@
         "EKSNodeGroupWaitCondition": {
             "Type": "AWS::CloudFormation::WaitConditionHandle",
             "Metadata": {
-                "ClusterArn": {
-                    "Fn::GetAtt": [
-                        "EKSCluster",
-                        "Arn"
-                    ]
+                "ClusterName": {
+                    "Ref": "EKSCluster"
                 }
             }
         },
