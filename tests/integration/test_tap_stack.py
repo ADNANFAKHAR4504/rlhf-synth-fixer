@@ -14,6 +14,7 @@ Supports both AWS and LocalStack environments.
 """
 
 import unittest
+from unittest.case import SkipTest
 import json
 import os
 import urllib.request
@@ -441,6 +442,8 @@ class TestAWSResourceConnectivity(unittest.TestCase):
                 self.skipTest(f"SQS queues not accessible in LocalStack (expected for partial support). Skipping.")
             else:
                 self.fail(f"Failed to list SQS queues: {e}")
+        except SkipTest:
+            raise  # Re-raise SkipTest so it's handled properly by unittest
         except Exception as e:
             self.fail(f"Failed to list SQS queues: {e}")
 
