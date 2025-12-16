@@ -1,5 +1,4 @@
 {
-  "task_id": "101912513",
   "po_id": "101912513",
   "platform": "cfn",
   "language": "yaml",
@@ -10,11 +9,7 @@
   "startedAt": "2025-11-17T12:59:11+00:00",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "aws",
-    "infrastructure",
-    "kubernetes",
-    "eks",
-    "container-orchestration"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "EKS",
@@ -23,14 +18,5 @@
     "IAM",
     "KMS",
     "CloudWatch"
-  ],
-  "region": "us-east-1",
-  "author": "iamarpit-turing",
-  "reviewer": "chriscrsov",
-  "training_quality": 10,
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "dockerS3Location": ""
+  ]
 }
