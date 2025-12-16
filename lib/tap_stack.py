@@ -86,27 +86,52 @@ class TapStack(pulumi.ComponentResource):
 
     def _create_dynamodb_table(self):
         """Create DynamoDB table for webhook idempotency tracking."""
-        self.dynamodb_table = aws.dynamodb.Table(
-            f"webhook-processing-{self.environment_suffix}",
-            name=f"webhook-processing-{self.environment_suffix}",
-            hash_key="webhook_id",
-            billing_mode="PAY_PER_REQUEST",
-            point_in_time_recovery=aws.dynamodb.TablePointInTimeRecoveryArgs(
-                enabled=True
-            ),
-            attributes=[
-                aws.dynamodb.TableAttributeArgs(
-                    name="webhook_id",
-                    type="S"
-                )
-            ],
-            tags={
-                **self.tags,
-                "Name": f"webhook-processing-{self.environment_suffix}",
-                "Component": "DynamoDB"
-            },
-            opts=ResourceOptions(parent=self)
-        )
+        # Detect LocalStack - completely omit PITR as it causes waiter issues
+        is_localstack = os.getenv('AWS_ENDPOINT_URL') is not None
+        
+        if is_localstack:
+            # LocalStack: Create table without PITR (causes Pulumi provider waiter to fail)
+            self.dynamodb_table = aws.dynamodb.Table(
+                f"webhook-processing-{self.environment_suffix}",
+                name=f"webhook-processing-{self.environment_suffix}",
+                hash_key="webhook_id",
+                billing_mode="PAY_PER_REQUEST",
+                attributes=[
+                    aws.dynamodb.TableAttributeArgs(
+                        name="webhook_id",
+                        type="S"
+                    )
+                ],
+                tags={
+                    **self.tags,
+                    "Name": f"webhook-processing-{self.environment_suffix}",
+                    "Component": "DynamoDB"
+                },
+                opts=ResourceOptions(parent=self)
+            )
+        else:
+            # Real AWS: Create table with PITR enabled
+            self.dynamodb_table = aws.dynamodb.Table(
+                f"webhook-processing-{self.environment_suffix}",
+                name=f"webhook-processing-{self.environment_suffix}",
+                hash_key="webhook_id",
+                billing_mode="PAY_PER_REQUEST",
+                point_in_time_recovery=aws.dynamodb.TablePointInTimeRecoveryArgs(
+                    enabled=True
+                ),
+                attributes=[
+                    aws.dynamodb.TableAttributeArgs(
+                        name="webhook_id",
+                        type="S"
+                    )
+                ],
+                tags={
+                    **self.tags,
+                    "Name": f"webhook-processing-{self.environment_suffix}",
+                    "Component": "DynamoDB"
+                },
+                opts=ResourceOptions(parent=self)
+            )
 
     def _create_sqs_queues(self):
         """Create SQS FIFO queues for each payment provider."""
