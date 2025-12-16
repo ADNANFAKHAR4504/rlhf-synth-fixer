@@ -57,16 +57,6 @@ Parameters:
     Default: 10.20.11.0/24
     Description: Private subnet B CIDR.
 
-  AlbHealthCheckPath:
-    Type: String
-    Default: /health
-    Description: ALB target group health check path.
-
-  AlbHealthCheckPort:
-    Type: String
-    Default: traffic-port
-    Description: ALB target group health check port.
-
   NotificationEmail:
     Type: String
     Default: alerts@example.com
@@ -351,46 +341,6 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-app-sg'
 
-  # -------------------------
-  # ALB + TargetGroup + Listener (Keep)
-  # -------------------------
-  AppLoadBalancer:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Scheme: internet-facing
-      Subnets: [!Ref PublicSubnetA, !Ref PublicSubnetB]
-      SecurityGroups: [!Ref AlbSecurityGroup]
-      Type: application
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-alb'
-
-  AppTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-tg'
-      Port: 80
-      Protocol: HTTP
-      VpcId: !Ref VPC
-      HealthCheckPath: !Ref AlbHealthCheckPath
-      HealthCheckPort: !Ref AlbHealthCheckPort
-      TargetType: instance
-      Matcher:
-        HttpCode: '200-399'
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-tg'
-
-  AppListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      LoadBalancerArn: !Ref AppLoadBalancer
-      Port: 80
-      Protocol: HTTP
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref AppTargetGroup
-
 
   # -------------------------
   # IAM + Lambda (Keep; safe)
@@ -430,61 +380,6 @@ Resources:
       TopicArn: !Ref NotificationsTopic
       Protocol: email
       Endpoint: !Ref NotificationEmail
-
-  # -------------------------
-  # Alarms (Keep; safe placeholders for LocalStack)
-  # -------------------------
-  Alb5xxAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmDescription: ALB 5xx spike
-      Namespace: AWS/ApplicationELB
-      MetricName: HTTPCode_ELB_5XX_Count
-      Dimensions:
-        - Name: LoadBalancer
-          Value:
-            Fn::If:
-              - IsLocalStack
-              - !Sub 'localstack/${AWS::StackName}/alb'
-              - !GetAtt AppLoadBalancer.LoadBalancerFullName
-      Statistic: Sum
-      Period: 60
-      EvaluationPeriods: 3
-      DatapointsToAlarm: 2
-      Threshold: 5
-      ComparisonOperator: GreaterThanThreshold
-      TreatMissingData: notBreaching
-      AlarmActions: [!Ref NotificationsTopic]
-      OKActions: [!Ref NotificationsTopic]
-
-  TgUnhealthyHostsAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmDescription: Target group unhealthy host count > 0
-      Namespace: AWS/ApplicationELB
-      MetricName: UnHealthyHostCount
-      Dimensions:
-        - Name: TargetGroup
-          Value:
-            Fn::If:
-              - IsLocalStack
-              - !Sub 'localstack/${AWS::StackName}/tg'
-              - !GetAtt AppTargetGroup.TargetGroupFullName
-        - Name: LoadBalancer
-          Value:
-            Fn::If:
-              - IsLocalStack
-              - !Sub 'localstack/${AWS::StackName}/alb'
-              - !GetAtt AppLoadBalancer.LoadBalancerFullName
-      Statistic: Maximum
-      Period: 60
-      EvaluationPeriods: 5
-      DatapointsToAlarm: 3
-      Threshold: 0
-      ComparisonOperator: GreaterThanThreshold
-      TreatMissingData: notBreaching
-      AlarmActions: [!Ref NotificationsTopic]
-      OKActions: [!Ref NotificationsTopic]
 
   # -------------------------
   # LocalStack extras (Keep)
@@ -528,13 +423,6 @@ Outputs:
     Description: Private subnet IDs
     Value: !Join [',', [!Ref PrivateSubnetA, !Ref PrivateSubnetB]]
 
-  AlbDNSName:
-    Description: ALB DNS name
-    Value: !GetAtt AppLoadBalancer.DNSName
-
-  TargetGroupArn:
-    Description: Target group ARN
-    Value: !Ref AppTargetGroup
 
   ArtifactBucketName:
     Description: Artifact bucket name
