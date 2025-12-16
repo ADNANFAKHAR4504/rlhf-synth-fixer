@@ -278,34 +278,89 @@ deploy_cloudformation() {
 
     print_status $YELLOW "📄 Using template: $template"
 
-    # Deploy using AWS CLI with LocalStack endpoint
+    # Deploy using create-stack instead of deploy (deploy uses change sets which have issues in LocalStack)
     local stack_name="localstack-stack-${ENVIRONMENT_SUFFIX:-dev}"
     print_status $YELLOW "🚀 Deploying stack: $stack_name..."
 
-    # Deploy and fail on any error
-    if ! aws cloudformation deploy \
-        --template-file "$template" \
+    # Check if stack exists and delete it first
+    if awslocal cloudformation describe-stacks --stack-name "$stack_name" > /dev/null 2>&1; then
+        print_status $YELLOW "🗑️  Existing stack found, deleting..."
+        awslocal cloudformation delete-stack --stack-name "$stack_name"
+
+        # Wait for deletion to complete
+        print_status $YELLOW "⏳ Waiting for stack deletion..."
+        local delete_timeout=120
+        local delete_elapsed=0
+        while [ $delete_elapsed -lt $delete_timeout ]; do
+            local delete_status=$(awslocal cloudformation describe-stacks --stack-name "$stack_name" \
+                --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DELETE_COMPLETE")
+
+            if [[ "$delete_status" == "DELETE_COMPLETE" ]] || [[ "$delete_status" == "" ]]; then
+                print_status $GREEN "✅ Stack deleted"
+                break
+            elif [[ "$delete_status" == "DELETE_FAILED" ]]; then
+                print_status $RED "❌ Stack deletion failed"
+                exit 1
+            fi
+
+            sleep 3
+            delete_elapsed=$((delete_elapsed + 3))
+        done
+    fi
+
+    # Create stack using create-stack (more reliable with LocalStack than deploy)
+    print_status $YELLOW "📦 Creating CloudFormation stack..."
+
+    if ! awslocal cloudformation create-stack \
         --stack-name "$stack_name" \
+        --template-body "file://$template" \
         --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
-        --endpoint-url "$AWS_ENDPOINT_URL" \
-        --region "$AWS_DEFAULT_REGION" \
-        --no-fail-on-empty-changeset 2>&1; then
-        
-        print_status $YELLOW "⚠️ Deployment encountered issues, checking stack events..."
-        
-        # Show stack events to help debug
-        aws cloudformation describe-stack-events \
-            --stack-name "$stack_name" \
-            --endpoint-url "$AWS_ENDPOINT_URL" \
-            --region "$AWS_DEFAULT_REGION" \
-            --query 'StackEvents[?ResourceStatus==`CREATE_FAILED` || ResourceStatus==`UPDATE_FAILED`].[LogicalResourceId,ResourceStatusReason]' \
-            --output table 2>/dev/null || true
-        
-        print_status $RED "❌ Stack deployment failed!"
+        --output json > /dev/null 2>&1; then
+
+        print_status $RED "❌ Failed to initiate stack creation"
         exit 1
     fi
 
-    print_status $GREEN "✅ CloudFormation deployment completed!"
+    print_status $GREEN "✅ Stack creation initiated"
+
+    # Wait for stack creation to complete
+    print_status $YELLOW "⏳ Waiting for stack creation to complete..."
+    local timeout=600
+    local elapsed=0
+
+    while [ $elapsed -lt $timeout ]; do
+        local stack_status=$(awslocal cloudformation describe-stacks --stack-name "$stack_name" \
+            --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "UNKNOWN")
+
+        if [[ "$stack_status" == "CREATE_COMPLETE" ]]; then
+            print_status $GREEN "✅ CloudFormation deployment completed!"
+            break
+        elif [[ "$stack_status" =~ ^(CREATE_FAILED|ROLLBACK_COMPLETE|ROLLBACK_FAILED|ROLLBACK_IN_PROGRESS)$ ]]; then
+            print_status $RED "❌ Stack deployment failed with status: $stack_status"
+
+            # Show stack events to help debug
+            print_status $YELLOW "📋 Failed resources:"
+            awslocal cloudformation describe-stack-events \
+                --stack-name "$stack_name" \
+                --query 'StackEvents[?ResourceStatus==`CREATE_FAILED`].[LogicalResourceId,ResourceStatusReason]' \
+                --output table 2>/dev/null || true
+
+            exit 1
+        elif [[ "$stack_status" == "CREATE_IN_PROGRESS" ]]; then
+            # Show progress
+            local resource_count=$(awslocal cloudformation list-stack-resources --stack-name "$stack_name" \
+                --query 'length(StackResourceSummaries[?ResourceStatus==`CREATE_COMPLETE`])' --output text 2>/dev/null || echo "0")
+            print_status $BLUE "📈 Progress: $resource_count resources created..."
+        fi
+
+        sleep 5
+        elapsed=$((elapsed + 5))
+    done
+
+    if [ $elapsed -ge $timeout ]; then
+        print_status $RED "❌ Stack creation timed out after ${timeout}s"
+        exit 1
+    fi
 
     # Collect outputs
     print_status $YELLOW "📊 Collecting deployment outputs..."
