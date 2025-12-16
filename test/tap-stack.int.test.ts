@@ -395,7 +395,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
 
       const dbInstance = response.DBInstances![0];
       expect(dbInstance.Engine).toBe('postgres');
-      expect(dbInstance.EngineVersion).toBe('13.15');
+      expect(dbInstance.EngineVersion).toBe('16.4');
       expect(dbInstance.DBInstanceClass).toBe('db.t3.medium');
       expect(dbInstance.StorageEncrypted).toBe(true);
       expect(dbInstance.MultiAZ).toBe(true);

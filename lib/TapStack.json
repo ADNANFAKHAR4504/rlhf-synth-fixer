@@ -44,6 +44,22 @@
     }
   },
   "Resources": {
+    "DBPasswordParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Ref": "DBPassword"
+        },
+        "Description": "Database master password for MyApp RDS instance",
+        "Type": "String",
+        "Value": "LocalStackTestPassword123!",
+        "Tags": {
+          "Environment": {
+            "Ref": "Environment"
+          }
+        }
+      }
+    },
     "MyAppVPC": {
       "Type": "AWS::EC2::VPC",
       "Properties": {
@@ -772,12 +788,12 @@
         },
         "DBInstanceClass": "db.t3.medium",
         "Engine": "postgres",
-        "EngineVersion": "13.15",
+        "EngineVersion": "16.4",
         "MasterUsername": {
           "Ref": "DBUsername"
         },
         "MasterUserPassword": {
-          "Fn::Sub": "{{resolve:ssm-secure:${DBPassword}}}"
+          "Fn::GetAtt": ["DBPasswordParameter", "Value"]
         },
         "AllocatedStorage": 20,
         "StorageType": "gp2",
