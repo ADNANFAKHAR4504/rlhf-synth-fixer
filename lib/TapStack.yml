@@ -396,10 +396,16 @@ Resources:
           Value: !Ref environmentSuffix
 
   # EKS Node Group
+  # Using Fn::If with GetAtt forces CloudFormation to wait for cluster creation
+  EKSNodeGroupWaitCondition:
+    Type: AWS::CloudFormation::WaitConditionHandle
+    Metadata:
+      ClusterEndpoint: !GetAtt EKSCluster.Endpoint
+
   EKSNodeGroup:
     Type: AWS::EKS::Nodegroup
     DependsOn:
-      - EKSCluster
+      - EKSNodeGroupWaitCondition
     Properties:
       NodegroupName: !Sub 'eks-nodegroup-${environmentSuffix}'
       ClusterName: !Ref EKSCluster
