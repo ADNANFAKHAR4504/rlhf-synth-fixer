@@ -15,7 +15,7 @@
     "subject_labels",
     "aws_services"
   ],
-  "additionalProperties": false,
+  "additionalProperties": true,
   "properties": {
     "platform": {
       "type": "string",
