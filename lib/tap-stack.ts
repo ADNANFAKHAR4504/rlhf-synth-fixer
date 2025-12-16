@@ -85,7 +85,6 @@ export class TapStack extends cdk.Stack {
       eventBridgeEnabled: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
     });
 
     const processedDataBucket = new s3.Bucket(this, 'ProcessedDataBucket', {
@@ -105,7 +104,6 @@ export class TapStack extends cdk.Stack {
       ],
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
     });
 
     const fraudReportsBucket = new s3.Bucket(this, 'FraudReportsBucket', {
@@ -125,7 +123,6 @@ export class TapStack extends cdk.Stack {
       ],
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
     });
 
     // 🔹 DynamoDB Table
