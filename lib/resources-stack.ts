@@ -9,8 +9,6 @@ import {
   InstanceType,
   IVpc,
   MachineImage,
-  Peer,
-  Port,
   SecurityGroup,
   SubnetType,
   Vpc,
@@ -92,7 +90,7 @@ export class ResourcesStack extends cdk.Stack {
 
     // LocalStack compatibility: Create separate ingress rule instead of inline
     // addIngressRule creates inline rules which LocalStack doesn't apply properly
-    const sshIngressRule = new cdk.aws_ec2.CfnSecurityGroupIngress(
+    new cdk.aws_ec2.CfnSecurityGroupIngress(
       this,
       `${environmentSuffix}-SSHIngressRule`,
       {
