@@ -433,6 +433,9 @@ deploy_pulumi() {
                 print_status $YELLOW "📦 Installing Python dependencies..."
                 pip install -r requirements.txt
             fi
+            # Set PYTHONPATH to include project root for module imports
+            export PYTHONPATH="$PROJECT_ROOT:${PYTHONPATH:-}"
+            print_status $BLUE "   PYTHONPATH: $PYTHONPATH"
             ;;
         "go")
             if [ -f "go.mod" ]; then
@@ -445,6 +448,12 @@ deploy_pulumi() {
     # Set Pulumi passphrase
     export PULUMI_CONFIG_PASSPHRASE=${PULUMI_CONFIG_PASSPHRASE:-localstack}
 
+    # Ensure local backend is used (unset any S3 backend URL)
+    unset PULUMI_BACKEND_URL
+    
+    # Clear any old workspace state that might point to S3 backend
+    rm -rf ~/.pulumi/workspaces 2>/dev/null || true
+
     # Login to local backend
     print_status $YELLOW "🔐 Setting up Pulumi backend..."
     pulumi login --local
@@ -452,7 +461,12 @@ deploy_pulumi() {
     # Select or create stack
     local stack_name=${PULUMI_STACK_NAME:-localstack}
     print_status $YELLOW "📚 Selecting stack: $stack_name..."
-    pulumi stack select $stack_name 2>/dev/null || pulumi stack init $stack_name
+    
+    # First try to select, if fails then init new stack
+    if ! pulumi stack select $stack_name 2>/dev/null; then
+        print_status $YELLOW "📝 Creating new stack: $stack_name..."
+        pulumi stack init $stack_name
+    fi
 
     # Configure AWS for LocalStack
     print_status $YELLOW "🔧 Configuring Pulumi for LocalStack..."
