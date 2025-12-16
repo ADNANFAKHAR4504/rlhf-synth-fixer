@@ -5,7 +5,7 @@ This module defines the TapStack class, the main Pulumi ComponentResource for
 the serverless webhook processing system.
 
 It orchestrates the creation of API Gateway, Lambda functions, SQS queues,
-EventBridge, DynamoDB, and monitoring components for processing payment webhooks
+EventBridge, and monitoring components for processing payment webhooks
 from multiple providers (Stripe, PayPal, Square).
 """
 
@@ -43,7 +43,6 @@ class TapStack(pulumi.ComponentResource):
     - SQS FIFO queues for each payment provider
     - Lambda functions for webhook validation and processing
     - EventBridge custom event bus for event routing
-    - DynamoDB table for idempotency tracking
     - CloudWatch monitoring and SNS alerting
 
     Args:
@@ -67,7 +66,6 @@ class TapStack(pulumi.ComponentResource):
         self.providers = ["stripe", "paypal", "square"]
         
         # Create base components
-        self._create_dynamodb_table()
         self._create_sqs_queues()
         self._create_eventbridge_bus()
         self._create_sns_topic()
@@ -79,59 +77,9 @@ class TapStack(pulumi.ComponentResource):
         self.register_outputs({
             'api_gateway_endpoint': self.api_endpoint,
             'api_key_id': self.api_key.id,
-            'dynamodb_table_name': self.dynamodb_table.name,
             'eventbridge_bus_name': self.event_bus.name,
             'sns_topic_arn': self.sns_topic.arn
         })
-
-    def _create_dynamodb_table(self):
-        """Create DynamoDB table for webhook idempotency tracking."""
-        # Detect LocalStack - completely omit PITR as it causes waiter issues
-        is_localstack = os.getenv('AWS_ENDPOINT_URL') is not None
-        
-        if is_localstack:
-            # LocalStack: Create table without PITR (causes Pulumi provider waiter to fail)
-            self.dynamodb_table = aws.dynamodb.Table(
-                f"webhook-processing-{self.environment_suffix}",
-                name=f"webhook-processing-{self.environment_suffix}",
-                hash_key="webhook_id",
-                billing_mode="PAY_PER_REQUEST",
-                attributes=[
-                    aws.dynamodb.TableAttributeArgs(
-                        name="webhook_id",
-                        type="S"
-                    )
-                ],
-                tags={
-                    **self.tags,
-                    "Name": f"webhook-processing-{self.environment_suffix}",
-                    "Component": "DynamoDB"
-                },
-                opts=ResourceOptions(parent=self)
-            )
-        else:
-            # Real AWS: Create table with PITR enabled
-            self.dynamodb_table = aws.dynamodb.Table(
-                f"webhook-processing-{self.environment_suffix}",
-                name=f"webhook-processing-{self.environment_suffix}",
-                hash_key="webhook_id",
-                billing_mode="PAY_PER_REQUEST",
-                point_in_time_recovery=aws.dynamodb.TablePointInTimeRecoveryArgs(
-                    enabled=True
-                ),
-                attributes=[
-                    aws.dynamodb.TableAttributeArgs(
-                        name="webhook_id",
-                        type="S"
-                    )
-                ],
-                tags={
-                    **self.tags,
-                    "Name": f"webhook-processing-{self.environment_suffix}",
-                    "Component": "DynamoDB"
-                },
-                opts=ResourceOptions(parent=self)
-            )
 
     def _create_sqs_queues(self):
         """Create SQS FIFO queues for each payment provider."""
@@ -258,8 +206,7 @@ class TapStack(pulumi.ComponentResource):
                 variables={
                     "STRIPE_QUEUE_URL": self.sqs_queues["stripe"].url,
                     "PAYPAL_QUEUE_URL": self.sqs_queues["paypal"].url,
-                    "SQUARE_QUEUE_URL": self.sqs_queues["square"].url,
-                    "DYNAMODB_TABLE": self.dynamodb_table.name
+                    "SQUARE_QUEUE_URL": self.sqs_queues["square"].url
                 }
             ),
             tracing_config=aws.lambda_.FunctionTracingConfigArgs(mode="Active"),
@@ -286,7 +233,6 @@ class TapStack(pulumi.ComponentResource):
                 environment=aws.lambda_.FunctionEnvironmentArgs(
                     variables={
                         "PROVIDER": provider,
-                        "DYNAMODB_TABLE": self.dynamodb_table.name,
                         "EVENT_BUS_NAME": self.event_bus.name
                     }
                 ),
@@ -321,9 +267,7 @@ class TapStack(pulumi.ComponentResource):
             code=pulumi.FileArchive("lib/lambda"),
             role=self.lambda_role.arn,
             environment=aws.lambda_.FunctionEnvironmentArgs(
-                variables={
-                    "DYNAMODB_TABLE": self.dynamodb_table.name
-                }
+                variables={}
             ),
             tracing_config=aws.lambda_.FunctionTracingConfigArgs(mode="Active"),
             tags={
@@ -398,12 +342,11 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self.lambda_role)
         )
         
-        # Create custom policy for SQS, DynamoDB, and EventBridge access
+        # Create custom policy for SQS and EventBridge access
         custom_policy = aws.iam.Policy(
             f"webhook-lambda-policy-{self.environment_suffix}",
             name=f"webhook-lambda-policy-{self.environment_suffix}",
             policy=pulumi.Output.all(
-                self.dynamodb_table.arn,
                 *[queue.arn for queue in self.sqs_queues.values()],
                 self.event_bus.arn
             ).apply(lambda args: json.dumps({
@@ -412,28 +355,19 @@ class TapStack(pulumi.ComponentResource):
                     {
                         "Effect": "Allow",
                         "Action": [
-                            "dynamodb:GetItem",
-                            "dynamodb:PutItem",
-                            "dynamodb:UpdateItem"
-                        ],
-                        "Resource": args[0]
-                    },
-                    {
-                        "Effect": "Allow",
-                        "Action": [
                             "sqs:SendMessage",
                             "sqs:ReceiveMessage",
                             "sqs:DeleteMessage",
                             "sqs:GetQueueAttributes"
                         ],
-                        "Resource": args[1:4]  # SQS queue ARNs
+                        "Resource": args[0:3]  # SQS queue ARNs
                     },
                     {
                         "Effect": "Allow",
                         "Action": [
                             "events:PutEvents"
                         ],
-                        "Resource": args[4]  # EventBridge ARN
+                        "Resource": args[3]  # EventBridge ARN
                     },
                     {
                         "Effect": "Allow",

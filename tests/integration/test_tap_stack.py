@@ -76,7 +76,6 @@ class TestDeploymentOutputs(unittest.TestCase):
         required_outputs = [
             'api_gateway_endpoint',
             'api_key_id', 
-            'dynamodb_table_name',
             'eventbridge_bus_name',
             'sns_topic_arn'
         ]
@@ -103,9 +102,9 @@ class TestDeploymentOutputs(unittest.TestCase):
         self.assertIn('execute-api', api_endpoint,
                      "API endpoint should be API Gateway endpoint")
         
-        # Extract environment suffix from DynamoDB table name to validate stage
-        table_name = self.outputs.get('dynamodb_table_name', '')
-        environment_suffix = table_name.replace('webhook-processing-', '')
+        # Extract environment suffix from EventBridge bus name to validate stage
+        bus_name = self.outputs.get('eventbridge_bus_name', '')
+        environment_suffix = bus_name.replace('payment-events-', '')
         expected_stage = f'/{environment_suffix}'
         self.assertTrue(api_endpoint.endswith(expected_stage),
                        f"API endpoint should have {expected_stage} stage")
@@ -114,11 +113,6 @@ class TestDeploymentOutputs(unittest.TestCase):
         api_key_id = self.outputs.get('api_key_id', '')
         self.assertTrue(len(api_key_id) > 5,
                        "API key ID should be a meaningful string")
-
-        # Test DynamoDB table name format
-        table_name = self.outputs.get('dynamodb_table_name', '')
-        self.assertTrue(table_name.startswith('webhook-processing-'),
-                       "Table name should start with 'webhook-processing-'")
 
         # Test EventBridge bus name format
         bus_name = self.outputs.get('eventbridge_bus_name', '')
@@ -134,9 +128,9 @@ class TestDeploymentOutputs(unittest.TestCase):
 
     def test_environment_suffix_consistency(self):
         """Test that all resources use the same environment suffix."""
-        # Extract suffix from table name
-        table_name = self.outputs.get('dynamodb_table_name', '')
-        suffix = table_name.replace('webhook-processing-', '')
+        # Extract suffix from EventBridge bus name
+        bus_name = self.outputs.get('eventbridge_bus_name', '')
+        suffix = bus_name.replace('payment-events-', '')
 
         self.assertTrue(len(suffix) > 0, "Environment suffix should not be empty")
 
@@ -311,34 +305,10 @@ class TestAWSResourceConnectivity(unittest.TestCase):
         cls.is_localstack = is_localstack()
         boto_config = get_boto3_config()
         
-        cls.dynamodb = boto3.resource('dynamodb', region_name=region, **boto_config)
         cls.sqs = boto3.client('sqs', region_name=region, **boto_config)
         cls.events = boto3.client('events', region_name=region, **boto_config)
         cls.sns = boto3.client('sns', region_name=region, **boto_config)
         cls.lambda_client = boto3.client('lambda', region_name=region, **boto_config)
-
-    def test_dynamodb_table_exists(self):
-        """Test that DynamoDB table exists and is accessible."""
-        table_name = self.outputs.get('dynamodb_table_name', '')
-        
-        print(f"\nTesting DynamoDB Table: {table_name}")
-
-        try:
-            table = self.dynamodb.Table(table_name)
-            table.load()
-            
-            self.assertEqual(table.table_status, 'ACTIVE',
-                           "DynamoDB table should be in ACTIVE state")
-            
-            # Check table has required attributes
-            key_schema = table.key_schema
-            self.assertTrue(len(key_schema) > 0,
-                          "DynamoDB table should have key schema")
-            
-            print(f"DynamoDB table '{table_name}' is active")
-            
-        except Exception as e:
-            self.fail(f"Failed to access DynamoDB table '{table_name}': {e}")
 
     def test_eventbridge_bus_exists(self):
         """Test that EventBridge custom bus exists."""
@@ -413,9 +383,9 @@ class TestAWSResourceConnectivity(unittest.TestCase):
             response = self.sqs.list_queues()
             queue_urls = response.get('QueueUrls', [])
             
-            # Extract environment suffix from DynamoDB table name
-            table_name = self.outputs.get('dynamodb_table_name', '')
-            suffix = table_name.replace('webhook-processing-', '')
+            # Extract environment suffix from EventBridge bus name
+            bus_name = self.outputs.get('eventbridge_bus_name', '')
+            suffix = bus_name.replace('payment-events-', '')
             
             # Look for provider queues
             providers = ['stripe', 'paypal', 'square']
@@ -449,9 +419,9 @@ class TestAWSResourceConnectivity(unittest.TestCase):
 
     def test_lambda_functions_exist(self):
         """Test that Lambda functions exist and are configured."""
-        # Extract environment suffix
-        table_name = self.outputs.get('dynamodb_table_name', '')
-        suffix = table_name.replace('webhook-processing-', '')
+        # Extract environment suffix from EventBridge bus name
+        bus_name = self.outputs.get('eventbridge_bus_name', '')
+        suffix = bus_name.replace('payment-events-', '')
         
         # Expected Lambda functions
         expected_functions = [
@@ -505,12 +475,11 @@ class TestSystemHealthChecks(unittest.TestCase):
 
     def test_resource_naming_conventions(self):
         """Test that all resources follow consistent naming conventions."""
-        # Extract suffix from table name
-        table_name = self.outputs.get('dynamodb_table_name', '')
-        suffix = table_name.replace('webhook-processing-', '')
+        # Extract suffix from EventBridge bus name
+        bus_name = self.outputs.get('eventbridge_bus_name', '')
+        suffix = bus_name.replace('payment-events-', '')
 
         naming_patterns = {
-            'dynamodb_table_name': 'webhook-processing-',
             'eventbridge_bus_name': 'payment-events-',
             'sns_topic_arn': 'webhook-alerts-'
         }

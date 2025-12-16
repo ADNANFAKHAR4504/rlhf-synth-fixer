@@ -38,12 +38,7 @@ class PulumiMocks(pulumi.runtime.Mocks):
         region = os.getenv('AWS_REGION', 'us-east-1')
         account_id = '123456789012'
 
-        if 'aws:dynamodb/table:Table' in resource_type:
-            table_name = args.inputs.get('name', f"table-{resource_id}")
-            outputs['id'] = table_name
-            outputs['arn'] = f"arn:aws:dynamodb:{region}:{account_id}:table/{table_name}"
-            outputs['name'] = table_name
-        elif 'aws:sqs/queue:Queue' in resource_type:
+        if 'aws:sqs/queue:Queue' in resource_type:
             queue_name = args.inputs.get('name', f"queue-{resource_id}")
             outputs['id'] = f"queue-{resource_id}"
             outputs['arn'] = f"arn:aws:sqs:{region}:{account_id}:{queue_name}"
@@ -200,34 +195,6 @@ class TestTapStackCreation(unittest.TestCase):
 
         expected_providers = ["stripe", "paypal", "square"]
         self.assertEqual(stack.providers, expected_providers)
-
-
-class TestDynamoDBTableCreation(unittest.TestCase):
-    """Test cases for DynamoDB table creation."""
-
-    @pulumi.runtime.test
-    def test_dynamodb_table_creation(self):
-        """Test DynamoDB table is created with correct configuration."""
-        args = TapStackArgs(environment_suffix='test')
-        stack = TapStack('test-stack', args)
-
-        self.assertIsNotNone(stack.dynamodb_table)
-
-    @pulumi.runtime.test
-    def test_dynamodb_table_naming(self):
-        """Test DynamoDB table naming convention."""
-        test_environments = ['dev', 'staging', 'prod', 'test']
-        
-        for env in test_environments:
-            with self.subTest(environment=env):
-                args = TapStackArgs(environment_suffix=env)
-                stack = TapStack(f'test-stack-{env}', args)
-                
-                # Table name should include environment suffix
-                expected_name = f"webhook-processing-{env}"
-                # We cannot directly test the name due to Pulumi's async nature,
-                # but we can verify the table was created
-                self.assertIsNotNone(stack.dynamodb_table)
 
 
 class TestSQSQueuesCreation(unittest.TestCase):
@@ -467,7 +434,6 @@ class TestStackOutputs(unittest.TestCase):
         # Verify stack has required attributes for outputs
         self.assertTrue(hasattr(stack, 'api_endpoint'))
         self.assertTrue(hasattr(stack, 'api_key'))
-        self.assertTrue(hasattr(stack, 'dynamodb_table'))
         self.assertTrue(hasattr(stack, 'event_bus'))
         self.assertTrue(hasattr(stack, 'sns_topic'))
 

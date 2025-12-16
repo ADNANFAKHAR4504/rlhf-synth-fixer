@@ -60,7 +60,6 @@ def aws_clients(aws_region):
     """Provide AWS service clients for tests."""
     boto_config = _get_boto3_config()
     return {
-        'dynamodb': boto3.resource('dynamodb', region_name=aws_region, **boto_config),
         'sqs': boto3.client('sqs', region_name=aws_region, **boto_config),
         'lambda': boto3.client('lambda', region_name=aws_region, **boto_config),
         'events': boto3.client('events', region_name=aws_region, **boto_config),
@@ -79,7 +78,6 @@ def mock_pulumi_outputs():
     return {
         'api_gateway_endpoint': f'https://api123.execute-api.{region}.amazonaws.com/prod',
         'api_key_id': 'test-api-key-id',
-        'dynamodb_table_name': f'webhook-processing-{environment_suffix}',
         'eventbridge_bus_name': f'payment-events-{environment_suffix}',
         'sns_topic_arn': f'arn:aws:sns:{region}:123456789012:webhook-alerts-{environment_suffix}'
     }
@@ -127,7 +125,6 @@ class MockPulumiResource:
         account_id = '123456789012'
         
         arn_mappings = {
-            'dynamodb': f'arn:aws:dynamodb:{region}:{account_id}:table/{self.name}',
             'sqs': f'arn:aws:sqs:{region}:{account_id}:{self.name}',
             'lambda': f'arn:aws:lambda:{region}:{account_id}:function:{self.name}',
             'sns': f'arn:aws:sns:{region}:{account_id}:{self.name}',
