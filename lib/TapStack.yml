@@ -352,6 +352,10 @@ Resources:
   # RDS Instance
   RDSInstance:
     Type: AWS::RDS::DBInstance
+    # Explicit DependsOn required for LocalStack compatibility (implicit Ref dependencies not always resolved)
+    DependsOn:
+      - DBSubnetGroup
+      - RDSSecret
     Properties:
       DBInstanceIdentifier: !Sub "${AWS::StackName}-${EnvironmentSuffix}-rds"
       DBInstanceClass: !Ref DBInstanceClass
