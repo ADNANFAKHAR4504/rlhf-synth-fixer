@@ -10,7 +10,6 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "training_quality": 9,
   "aws_services": [
     "AWS::EC2::VPC",
     "AWS::EC2::Subnet",
