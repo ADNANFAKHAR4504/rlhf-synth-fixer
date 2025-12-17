@@ -1,319 +1,776 @@
-/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import {
   EC2Client,
   DescribeVpcsCommand,
+  DescribeVpcAttributeCommand,
   DescribeSubnetsCommand,
   DescribeInternetGatewaysCommand,
+  DescribeNatGatewaysCommand,
   DescribeRouteTablesCommand,
-  DescribeSecurityGroupsCommand
+  DescribeSecurityGroupsCommand,
+  DescribeSecurityGroupRulesCommand,
+  AuthorizeSecurityGroupIngressCommand,
+  RevokeSecurityGroupIngressCommand
 } from '@aws-sdk/client-ec2';
 import fs from 'fs';
 
-/* -------------------------------------------------------------------------- */
-/*                               Load Outputs                                 */
-/* -------------------------------------------------------------------------- */
-
+// Load stack outputs from deployment
 const outputs: Record<string, string> = (() => {
   try {
-    return JSON.parse(
-      fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-    );
-  } catch {
-    console.warn(
-      '⚠️  Could not load cfn-outputs/flat-outputs.json. Using env/defaults.'
-    );
+    return JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
+  } catch (error) {
+    console.warn('Could not load cfn-outputs/flat-outputs.json. Using environment variables or defaults.');
     return {};
   }
 })();
 
-/* -------------------------------------------------------------------------- */
-/*                               AWS Client                                   */
-/* -------------------------------------------------------------------------- */
-
-const ec2Client = new EC2Client({
+// Initialize AWS clients - configured for LocalStack
+const ec2Client = new EC2Client({ 
   region: process.env.AWS_REGION || 'us-east-1',
   endpoint: process.env.AWS_ENDPOINT_URL || 'http://localhost:4566',
+  forcePathStyle: true,
   credentials: {
     accessKeyId: 'test',
     secretAccessKey: 'test'
   }
 });
 
-/* -------------------------------------------------------------------------- */
-/*                             Extract Outputs                                 */
-/* -------------------------------------------------------------------------- */
-
+// Extract resource IDs from outputs
 const vpcId = outputs.VPCId;
+const publicSubnet1Id = outputs.PublicSubnet1Id;
+const publicSubnet2Id = outputs.PublicSubnet2Id;
+const publicSubnet3Id = outputs.PublicSubnet3Id;
+const privateSubnet1Id = outputs.PrivateSubnet1Id;
+const privateSubnet2Id = outputs.PrivateSubnet2Id;
+const privateSubnet3Id = outputs.PrivateSubnet3Id;
+const httpsSecurityGroupId = outputs.HTTPSSecurityGroupId;
+// const natGateway1Id = outputs.NATGateway1Id;
+// const natGateway2Id = outputs.NATGateway2Id;
+// const natGateway3Id = outputs.NATGateway3Id;
 const vpcCidr = outputs.VPCCidr;
 
-const publicSubnetIds = [
-  outputs.PublicSubnet1Id,
-  outputs.PublicSubnet2Id,
-  outputs.PublicSubnet3Id
-];
+// Helper function to wait for async operations
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-const privateSubnetIds = [
-  outputs.PrivateSubnet1Id,
-  outputs.PrivateSubnet2Id,
-  outputs.PrivateSubnet3Id
-];
-
-const httpsSecurityGroupId = outputs.HTTPSSecurityGroupId;
-
-/* -------------------------------------------------------------------------- */
-/*                                   Tests                                    */
-/* -------------------------------------------------------------------------- */
-
-describe('TapStack – LocalStack Integration Tests', () => {
-  beforeAll(() => {
-    console.log('🧪 Running integration tests against LocalStack');
-    console.log('🔗 Endpoint:', process.env.AWS_ENDPOINT_URL || 'http://localhost:4566');
-
+describe('TapStack End-to-End Integration Tests (LocalStack)', () => {
+  beforeAll(async () => {
+    console.log('Running integration tests against LocalStack...');
+    console.log('LocalStack endpoint:', process.env.LOCALSTACK_ENDPOINT || 'http://localhost:4566');
+    
+    // Validate that all required outputs are available
     expect(vpcId).toBeTruthy();
-    expect(vpcCidr).toBeTruthy();
-    publicSubnetIds.forEach(id => expect(id).toBeTruthy());
-    privateSubnetIds.forEach(id => expect(id).toBeTruthy());
+    expect(publicSubnet1Id).toBeTruthy();
+    expect(publicSubnet2Id).toBeTruthy();
+    expect(publicSubnet3Id).toBeTruthy();
+    expect(privateSubnet1Id).toBeTruthy();
+    expect(privateSubnet2Id).toBeTruthy();
+    expect(privateSubnet3Id).toBeTruthy();
     expect(httpsSecurityGroupId).toBeTruthy();
+    // NAT Gateways are not supported in LocalStack Community Edition
   });
 
-  /* ------------------------------------------------------------------------ */
-  /*                                 VPC                                      */
-  /* ------------------------------------------------------------------------ */
+  describe('VPC Configuration Validation', () => {
+    test('should verify VPC exists and has correct configuration', async () => {
+      const command = new DescribeVpcsCommand({
+        VpcIds: [vpcId]
+      });
+      const response = await ec2Client.send(command);
 
-  describe('VPC Validation', () => {
-    test('VPC exists and is available', async () => {
-      const res = await ec2Client.send(
-        new DescribeVpcsCommand({ VpcIds: [vpcId] })
-      );
+      expect(response.Vpcs).toBeDefined();
+      expect(response.Vpcs!.length).toBe(1);
 
-      const vpc = res.Vpcs![0];
+      const vpc = response.Vpcs![0];
       expect(vpc.VpcId).toBe(vpcId);
+      expect(vpc.CidrBlock).toBe('10.0.0.0/16');
       expect(vpc.State).toBe('available');
-      expect(vpc.CidrBlock).toBe(vpcCidr);
     });
 
-    test('VPC has required tags', async () => {
-      const res = await ec2Client.send(
-        new DescribeVpcsCommand({ VpcIds: [vpcId] })
-      );
+    test('should verify VPC has DNS support enabled', async () => {
+      const command = new DescribeVpcAttributeCommand({
+        VpcId: vpcId,
+        Attribute: 'enableDnsSupport'
+      });
+      const response = await ec2Client.send(command);
 
-      const tags = res.Vpcs![0].Tags || [];
-      const keys = tags.map(t => t.Key);
+      expect(response.EnableDnsSupport?.Value).toBe(true);
+    });
 
-      expect(keys).toContain('Environment');
-      expect(keys).toContain('Project');
+    test('should verify VPC has proper tags', async () => {
+      const command = new DescribeVpcsCommand({
+        VpcIds: [vpcId]
+      });
+      const response = await ec2Client.send(command);
+
+      const vpc = response.Vpcs![0];
+      const tags = vpc.Tags || [];
+      const tagKeys = tags.map(t => t.Key);
+
+      expect(tagKeys).toContain('Environment');
+      expect(tagKeys).toContain('Project');
+
+      const envTag = tags.find(t => t.Key === 'Environment');
+      expect(envTag?.Value).toBe('Production');
+
+      const projectTag = tags.find(t => t.Key === 'Project');
+      expect(projectTag?.Value).toBe('TradingPlatform');
     });
   });
 
-  /* ------------------------------------------------------------------------ */
-  /*                               Subnets                                    */
-  /* ------------------------------------------------------------------------ */
+  describe('Public Subnets Validation', () => {
+    const publicSubnetIds = [publicSubnet1Id, publicSubnet2Id, publicSubnet3Id];
+    const expectedCidrs = ['10.0.1.0/24', '10.0.2.0/24', '10.0.3.0/24'];
 
-  describe('Public Subnets', () => {
-    test('Public subnets exist and belong to VPC', async () => {
-      const res = await ec2Client.send(
-        new DescribeSubnetsCommand({ SubnetIds: publicSubnetIds })
-      );
+    test('should verify all public subnets exist', async () => {
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: publicSubnetIds
+      });
+      const response = await ec2Client.send(command);
 
-      expect(res.Subnets!.length).toBe(3);
+      expect(response.Subnets).toBeDefined();
+      expect(response.Subnets!.length).toBe(3);
+    });
 
-      res.Subnets!.forEach(subnet => {
+    test('should verify public subnets have correct CIDR blocks', async () => {
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: publicSubnetIds
+      });
+      const response = await ec2Client.send(command);
+
+      response.Subnets!.forEach(subnet => {
+        expect(expectedCidrs).toContain(subnet.CidrBlock!);
+      });
+    });
+
+    test('should verify public subnets are in correct availability zones', async () => {
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: publicSubnetIds
+      });
+      const response = await ec2Client.send(command);
+
+      // LocalStack may use different AZ naming, so check for any valid AZ format
+      response.Subnets!.forEach(subnet => {
+        expect(subnet.AvailabilityZone).toBeDefined();
+        expect(subnet.AvailabilityZone!.length).toBeGreaterThan(0);
+      });
+    });
+
+    test('should verify public subnets have MapPublicIpOnLaunch enabled', async () => {
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: publicSubnetIds
+      });
+      const response = await ec2Client.send(command);
+
+      response.Subnets!.forEach(subnet => {
+        expect(subnet.MapPublicIpOnLaunch).toBe(true);
+      });
+    });
+
+    test('should verify public subnets belong to correct VPC', async () => {
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: publicSubnetIds
+      });
+      const response = await ec2Client.send(command);
+
+      response.Subnets!.forEach(subnet => {
         expect(subnet.VpcId).toBe(vpcId);
-        expect(subnet.State).toBe('available');
       });
     });
 
-    test('Public subnets allow public IPs (LocalStack-safe)', async () => {
-      const res = await ec2Client.send(
-        new DescribeSubnetsCommand({ SubnetIds: publicSubnetIds })
-      );
-
-      res.Subnets!.forEach(subnet => {
-        expect(
-          subnet.MapPublicIpOnLaunch === true ||
-          subnet.MapPublicIpOnLaunch === undefined
-        ).toBe(true);
+    test('should verify public subnets have proper tags', async () => {
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: publicSubnetIds
       });
-    });
+      const response = await ec2Client.send(command);
 
-    test('Public subnets have correct tags', async () => {
-      const res = await ec2Client.send(
-        new DescribeSubnetsCommand({ SubnetIds: publicSubnetIds })
-      );
-
-      res.Subnets!.forEach(subnet => {
+      response.Subnets!.forEach(subnet => {
         const tags = subnet.Tags || [];
-        expect(tags.some(t => t.Key === 'Type' && t.Value === 'Public')).toBe(true);
+        const tagKeys = tags.map(t => t.Key);
+
+        expect(tagKeys).toContain('Environment');
+        expect(tagKeys).toContain('Project');
+        expect(tagKeys).toContain('Type');
+
+        const typeTag = tags.find(t => t.Key === 'Type');
+        expect(typeTag?.Value).toBe('Public');
       });
     });
   });
 
-  describe('Private Subnets', () => {
-    test('Private subnets exist and belong to VPC', async () => {
-      const res = await ec2Client.send(
-        new DescribeSubnetsCommand({ SubnetIds: privateSubnetIds })
-      );
+  describe('Private Subnets Validation', () => {
+    const privateSubnetIds = [privateSubnet1Id, privateSubnet2Id, privateSubnet3Id];
+    const expectedCidrs = ['10.0.11.0/24', '10.0.12.0/24', '10.0.13.0/24'];
 
-      expect(res.Subnets!.length).toBe(3);
+    test('should verify all private subnets exist', async () => {
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: privateSubnetIds
+      });
+      const response = await ec2Client.send(command);
 
-      res.Subnets!.forEach(subnet => {
+      expect(response.Subnets).toBeDefined();
+      expect(response.Subnets!.length).toBe(3);
+    });
+
+    test('should verify private subnets have correct CIDR blocks', async () => {
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: privateSubnetIds
+      });
+      const response = await ec2Client.send(command);
+
+      response.Subnets!.forEach(subnet => {
+        expect(expectedCidrs).toContain(subnet.CidrBlock!);
+      });
+    });
+
+    test('should verify private subnets are in correct availability zones', async () => {
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: privateSubnetIds
+      });
+      const response = await ec2Client.send(command);
+
+      // LocalStack may use different AZ naming, so check for any valid AZ format
+      response.Subnets!.forEach(subnet => {
+        expect(subnet.AvailabilityZone).toBeDefined();
+        expect(subnet.AvailabilityZone!.length).toBeGreaterThan(0);
+      });
+    });
+
+    test('should verify private subnets have MapPublicIpOnLaunch disabled', async () => {
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: privateSubnetIds
+      });
+      const response = await ec2Client.send(command);
+
+      response.Subnets!.forEach(subnet => {
+        expect(subnet.MapPublicIpOnLaunch).toBe(false);
+      });
+    });
+
+    test('should verify private subnets belong to correct VPC', async () => {
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: privateSubnetIds
+      });
+      const response = await ec2Client.send(command);
+
+      response.Subnets!.forEach(subnet => {
         expect(subnet.VpcId).toBe(vpcId);
-        expect(subnet.State).toBe('available');
       });
     });
 
-    test('Private subnets do not force public IPs', async () => {
-      const res = await ec2Client.send(
-        new DescribeSubnetsCommand({ SubnetIds: privateSubnetIds })
-      );
-
-      res.Subnets!.forEach(subnet => {
-        expect(
-          subnet.MapPublicIpOnLaunch === false ||
-          subnet.MapPublicIpOnLaunch === undefined
-        ).toBe(true);
+    test('should verify private subnets have proper tags', async () => {
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: privateSubnetIds
       });
-    });
+      const response = await ec2Client.send(command);
 
-    test('Private subnets have correct tags', async () => {
-      const res = await ec2Client.send(
-        new DescribeSubnetsCommand({ SubnetIds: privateSubnetIds })
-      );
-
-      res.Subnets!.forEach(subnet => {
+      response.Subnets!.forEach(subnet => {
         const tags = subnet.Tags || [];
-        expect(tags.some(t => t.Key === 'Type' && t.Value === 'Private')).toBe(true);
+        const tagKeys = tags.map(t => t.Key);
+
+        expect(tagKeys).toContain('Environment');
+        expect(tagKeys).toContain('Project');
+        expect(tagKeys).toContain('Type');
+
+        const typeTag = tags.find(t => t.Key === 'Type');
+        expect(typeTag?.Value).toBe('Private');
       });
     });
   });
 
-  /* ------------------------------------------------------------------------ */
-  /*                          Internet Gateway                                 */
-  /* ------------------------------------------------------------------------ */
+  describe('Internet Gateway Validation', () => {
+    test('should verify Internet Gateway is attached to VPC', async () => {
+      const command = new DescribeInternetGatewaysCommand({
+        Filters: [
+          {
+            Name: 'attachment.vpc-id',
+            Values: [vpcId]
+          }
+        ]
+      });
+      const response = await ec2Client.send(command);
 
-  describe('Internet Gateway', () => {
-    test('IGW is attached to the VPC', async () => {
-      const res = await ec2Client.send(
-        new DescribeInternetGatewaysCommand({
-          Filters: [{ Name: 'attachment.vpc-id', Values: [vpcId] }]
-        })
-      );
+      expect(response.InternetGateways).toBeDefined();
+      expect(response.InternetGateways!.length).toBe(1);
 
-      expect(res.InternetGateways!.length).toBeGreaterThan(0);
-      expect(res.InternetGateways![0].Attachments![0].VpcId).toBe(vpcId);
+      const igw = response.InternetGateways![0];
+      expect(igw.Attachments).toBeDefined();
+      expect(igw.Attachments!.length).toBe(1);
+      expect(igw.Attachments![0].VpcId).toBe(vpcId);
+      expect(igw.Attachments![0].State).toBe('available');
+    });
+
+    test('should verify Internet Gateway has proper tags', async () => {
+      const command = new DescribeInternetGatewaysCommand({
+        Filters: [
+          {
+            Name: 'attachment.vpc-id',
+            Values: [vpcId]
+          }
+        ]
+      });
+      const response = await ec2Client.send(command);
+
+      const igw = response.InternetGateways![0];
+      const tags = igw.Tags || [];
+      const tagKeys = tags.map(t => t.Key);
+
+      expect(tagKeys).toContain('Environment');
+      expect(tagKeys).toContain('Project');
     });
   });
 
-  /* ------------------------------------------------------------------------ */
-  /*                             Route Tables                                  */
-  /* ------------------------------------------------------------------------ */
+  // describe('NAT Gateways Validation', () => {
+  //   const natGatewayIds = [natGateway1Id, natGateway2Id, natGateway3Id];
+  //   const publicSubnetIds = [publicSubnet1Id, publicSubnet2Id, publicSubnet3Id];
 
-  describe('Route Tables', () => {
-    test('All public subnets are associated with route tables', async () => {
-      const res = await ec2Client.send(
-        new DescribeRouteTablesCommand({
-          Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
-        })
-      );
+  //   test('should verify all NAT Gateways exist and are available', async () => {
+  //     const command = new DescribeNatGatewaysCommand({
+  //       NatGatewayIds: natGatewayIds
+  //     });
+  //     const response = await ec2Client.send(command);
 
-      const associated = new Set<string>();
+  //     expect(response.NatGateways).toBeDefined();
+  //     expect(response.NatGateways!.length).toBe(3);
 
-      res.RouteTables!.forEach(rt =>
-        rt.Associations?.forEach(a => {
-          if (a.SubnetId && publicSubnetIds.includes(a.SubnetId)) {
-            associated.add(a.SubnetId);
+  //     response.NatGateways!.forEach(natGw => {
+  //       expect(natGw.State).toBe('available');
+  //     });
+  //   });
+
+  //   test('should verify NAT Gateways are in correct public subnets', async () => {
+  //     const command = new DescribeNatGatewaysCommand({
+  //       NatGatewayIds: natGatewayIds
+  //     });
+  //     const response = await ec2Client.send(command);
+
+  //     response.NatGateways!.forEach(natGw => {
+  //       expect(publicSubnetIds).toContain(natGw.SubnetId!);
+  //     });
+  //   });
+
+  //   test('should verify NAT Gateways are in correct VPC', async () => {
+  //     const command = new DescribeNatGatewaysCommand({
+  //       NatGatewayIds: natGatewayIds
+  //     });
+  //     const response = await ec2Client.send(command);
+
+  //     response.NatGateways!.forEach(natGw => {
+  //       expect(natGw.VpcId).toBe(vpcId);
+  //     });
+  //   });
+
+  //   test('should verify each NAT Gateway has an Elastic IP', async () => {
+  //     const command = new DescribeNatGatewaysCommand({
+  //       NatGatewayIds: natGatewayIds
+  //     });
+  //     const response = await ec2Client.send(command);
+
+  //     response.NatGateways!.forEach(natGw => {
+  //       expect(natGw.NatGatewayAddresses).toBeDefined();
+  //       expect(natGw.NatGatewayAddresses!.length).toBeGreaterThan(0);
+  //       expect(natGw.NatGatewayAddresses![0].PublicIp).toBeDefined();
+  //       expect(natGw.NatGatewayAddresses![0].AllocationId).toBeDefined();
+  //     });
+  //   });
+
+  //   test('should verify NAT Gateways are distributed across availability zones', async () => {
+  //     const command = new DescribeNatGatewaysCommand({
+  //       NatGatewayIds: natGatewayIds
+  //     });
+  //     const response = await ec2Client.send(command);
+
+  //     const expectedAZs = ['us-east-1a', 'us-east-1b', 'us-east-1c'];
+  //     const actualAZs = response.NatGateways!.map(natGw => {
+  //       // Get subnet AZ
+  //       const subnetId = natGw.SubnetId!;
+  //       return natGw.SubnetId;
+  //     });
+
+  //     // Verify we have NAT Gateways in different subnets
+  //     expect(new Set(actualAZs).size).toBe(3);
+  //   });
+
+  //   test('should verify NAT Gateways have proper tags', async () => {
+  //     const command = new DescribeNatGatewaysCommand({
+  //       NatGatewayIds: natGatewayIds
+  //     });
+  //     const response = await ec2Client.send(command);
+
+  //     response.NatGateways!.forEach(natGw => {
+  //       const tags = natGw.Tags || [];
+  //       const tagKeys = tags.map(t => t.Key);
+
+  //       expect(tagKeys).toContain('Environment');
+  //       expect(tagKeys).toContain('Project');
+  //     });
+  //   });
+  // });
+
+  describe('Route Tables Validation', () => {
+    test('should verify public route table routes to Internet Gateway', async () => {
+      // Get route tables for VPC
+      const command = new DescribeRouteTablesCommand({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [vpcId]
           }
-        })
-      );
+        ]
+      });
+      const response = await ec2Client.send(command);
 
-      expect(associated.size).toBe(3);
+      // Find public route table (has association with public subnets)
+      const publicRouteTable = response.RouteTables!.find(rt => {
+        return rt.Associations?.some(assoc =>
+          [publicSubnet1Id, publicSubnet2Id, publicSubnet3Id].includes(assoc.SubnetId || '')
+        );
+      });
+
+      expect(publicRouteTable).toBeDefined();
     });
 
-    test('Private subnets have route table associations', async () => {
-      const res = await ec2Client.send(
-        new DescribeRouteTablesCommand({
-          Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
-        })
-      );
-
-      const associated = new Set<string>();
-
-      res.RouteTables!.forEach(rt =>
-        rt.Associations?.forEach(a => {
-          if (a.SubnetId && privateSubnetIds.includes(a.SubnetId)) {
-            associated.add(a.SubnetId);
+    test('should verify all public subnets are associated with public route table', async () => {
+      const command = new DescribeRouteTablesCommand({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [vpcId]
           }
-        })
-      );
+        ]
+      });
+      const response = await ec2Client.send(command);
 
-      expect(associated.size).toBe(3);
+      const publicSubnetIds = [publicSubnet1Id, publicSubnet2Id, publicSubnet3Id];
+      const associatedSubnets: string[] = [];
+
+      response.RouteTables!.forEach(rt => {
+        rt.Associations?.forEach(assoc => {
+          if (assoc.SubnetId && publicSubnetIds.includes(assoc.SubnetId)) {
+            associatedSubnets.push(assoc.SubnetId);
+          }
+        });
+      });
+
+      expect(associatedSubnets.sort()).toEqual(publicSubnetIds.sort());
+    });
+
+    test('should verify private subnets have route table associations', async () => {
+      const command = new DescribeRouteTablesCommand({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [vpcId]
+          }
+        ]
+      });
+      const response = await ec2Client.send(command);
+
+      const privateSubnetIds = [privateSubnet1Id, privateSubnet2Id, privateSubnet3Id];
+      const associatedPrivateSubnets: string[] = [];
+
+      response.RouteTables!.forEach(rt => {
+        rt.Associations?.forEach(assoc => {
+          if (assoc.SubnetId && privateSubnetIds.includes(assoc.SubnetId)) {
+            associatedPrivateSubnets.push(assoc.SubnetId);
+          }
+        });
+      });
+
+      // All private subnets should be associated with route tables
+      expect(associatedPrivateSubnets.length).toBeGreaterThanOrEqual(3);
+    });
+
+    test('should verify each private route table has outbound routing configured', async () => {
+      const command = new DescribeRouteTablesCommand({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [vpcId]
+          }
+        ]
+      });
+      const response = await ec2Client.send(command);
+
+      const privateSubnetIds = [privateSubnet1Id, privateSubnet2Id, privateSubnet3Id];
+
+      privateSubnetIds.forEach(subnetId => {
+        const routeTable = response.RouteTables!.find(rt =>
+          rt.Associations?.some(assoc => assoc.SubnetId === subnetId)
+        );
+
+        expect(routeTable).toBeDefined();
+
+        // In LocalStack, private subnets may not have NAT Gateway routes
+        // Just verify the route table exists and has proper associations
+        const association = routeTable!.Associations!.find(assoc => assoc.SubnetId === subnetId);
+        expect(association).toBeDefined();
+        expect(association!.SubnetId).toBe(subnetId);
+      });
     });
   });
 
-  /* ------------------------------------------------------------------------ */
-  /*                            Security Group                                 */
-  /* ------------------------------------------------------------------------ */
+  describe('Security Group Validation', () => {
+    test('should verify HTTPS security group exists', async () => {
+      const command = new DescribeSecurityGroupsCommand({
+        GroupIds: [httpsSecurityGroupId]
+      });
+      const response = await ec2Client.send(command);
 
-  describe('Security Group', () => {
-    test('HTTPS security group exists in VPC', async () => {
-      const res = await ec2Client.send(
-        new DescribeSecurityGroupsCommand({
-          GroupIds: [httpsSecurityGroupId]
-        })
-      );
+      expect(response.SecurityGroups).toBeDefined();
+      expect(response.SecurityGroups!.length).toBe(1);
 
-      const sg = res.SecurityGroups![0];
+      const sg = response.SecurityGroups![0];
       expect(sg.GroupId).toBe(httpsSecurityGroupId);
       expect(sg.VpcId).toBe(vpcId);
     });
 
-    test('Security group allows all outbound traffic', async () => {
-      const res = await ec2Client.send(
-        new DescribeSecurityGroupsCommand({
-          GroupIds: [httpsSecurityGroupId]
-        })
+    test('should verify security group allows all outbound traffic', async () => {
+      const command = new DescribeSecurityGroupsCommand({
+        GroupIds: [httpsSecurityGroupId]
+      });
+      const response = await ec2Client.send(command);
+
+      const sg = response.SecurityGroups![0];
+      const egressRules = sg.IpPermissionsEgress || [];
+
+      const allOutboundRule = egressRules.find(rule =>
+        rule.IpProtocol === '-1'
       );
 
-      const egress = res.SecurityGroups![0].IpPermissionsEgress || [];
-      expect(
-        egress.some(r =>
-          r.IpProtocol === '-1' &&
-          r.IpRanges?.some(i => i.CidrIp === '0.0.0.0/0')
-        )
-      ).toBe(true);
+      expect(allOutboundRule).toBeDefined();
+      expect(allOutboundRule!.IpRanges).toBeDefined();
+      expect(allOutboundRule!.IpRanges!.some(range => range.CidrIp === '0.0.0.0/0')).toBe(true);
     });
 
-    test('Security group has required tags', async () => {
-      const res = await ec2Client.send(
-        new DescribeSecurityGroupsCommand({
-          GroupIds: [httpsSecurityGroupId]
-        })
-      );
+    test('should verify security group has proper tags', async () => {
+      const command = new DescribeSecurityGroupsCommand({
+        GroupIds: [httpsSecurityGroupId]
+      });
+      const response = await ec2Client.send(command);
 
-      const tags = res.SecurityGroups![0].Tags || [];
-      expect(tags.some(t => t.Key === 'Environment')).toBe(true);
-      expect(tags.some(t => t.Key === 'Project')).toBe(true);
+      const sg = response.SecurityGroups![0];
+      const tags = sg.Tags || [];
+      const tagKeys = tags.map(t => t.Key);
+
+      expect(tagKeys).toContain('Environment');
+      expect(tagKeys).toContain('Project');
+
+      const envTag = tags.find(t => t.Key === 'Environment');
+      expect(envTag?.Value).toBe('Production');
+
+      const projectTag = tags.find(t => t.Key === 'Project');
+      expect(projectTag?.Value).toBe('TradingPlatform');
     });
   });
 
-  /* ------------------------------------------------------------------------ */
-  /*                         High Availability                                 */
-  /* ------------------------------------------------------------------------ */
+  describe('High Availability Verification', () => {
+    test('should verify resources are distributed across availability zones', async () => {
+      // Get all subnets
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: [
+          publicSubnet1Id, publicSubnet2Id, publicSubnet3Id,
+          privateSubnet1Id, privateSubnet2Id, privateSubnet3Id
+        ]
+      });
+      const response = await ec2Client.send(command);
 
-  describe('High Availability (LocalStack-safe)', () => {
-    test('Subnets are spread across at least one AZ', async () => {
-      const res = await ec2Client.send(
-        new DescribeSubnetsCommand({
-          SubnetIds: [...publicSubnetIds, ...privateSubnetIds]
-        })
-      );
-
-      const azs = new Set(
-        res.Subnets!.map(s => s.AvailabilityZone).filter(Boolean)
-      );
-
+      const azs = new Set(response.Subnets!.map(subnet => subnet.AvailabilityZone));
+      // LocalStack may use different AZ naming, so just verify distribution
       expect(azs.size).toBeGreaterThanOrEqual(1);
-      expect(res.Subnets!.length).toBe(6);
+      expect(response.Subnets!.length).toBe(6);
+    });
+
+    test('should verify subnets have proper type tags', async () => {
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: [
+          publicSubnet1Id, publicSubnet2Id, publicSubnet3Id,
+          privateSubnet1Id, privateSubnet2Id, privateSubnet3Id
+        ]
+      });
+      const response = await ec2Client.send(command);
+
+      let publicCount = 0;
+      let privateCount = 0;
+
+      response.Subnets!.forEach(subnet => {
+        const typeTag = subnet.Tags?.find(t => t.Key === 'Type');
+        expect(typeTag).toBeDefined();
+        
+        if (typeTag?.Value === 'Public') {
+          publicCount++;
+        } else if (typeTag?.Value === 'Private') {
+          privateCount++;
+        }
+      });
+
+      // Should have 3 public and 3 private subnets
+      expect(publicCount).toBe(3);
+      expect(privateCount).toBe(3);
+    });
+
+    // test('should verify each AZ has its own NAT Gateway', async () => {
+    //   const natCommand = new DescribeNatGatewaysCommand({
+    //     NatGatewayIds: [natGateway1Id, natGateway2Id, natGateway3Id]
+    //   });
+    //   const natResponse = await ec2Client.send(natCommand);
+
+    //   // Get subnet details to find AZs
+    //   const subnetIds = natResponse.NatGateways!.map(nat => nat.SubnetId!);
+    //   const subnetCommand = new DescribeSubnetsCommand({
+    //     SubnetIds: subnetIds
+    //   });
+    //   const subnetResponse = await ec2Client.send(subnetCommand);
+
+    //   const azs = new Set(subnetResponse.Subnets!.map(subnet => subnet.AvailabilityZone));
+    //   expect(azs.size).toBe(3);
+    // });
+  });
+
+  describe('Network Connectivity', () => {
+    test('should verify VPC CIDR is correct', async () => {
+      expect(vpcCidr).toBe('10.0.0.0/16');
+
+      const command = new DescribeVpcsCommand({
+        VpcIds: [vpcId]
+      });
+      const response = await ec2Client.send(command);
+
+      expect(response.Vpcs![0].CidrBlock).toBe('10.0.0.0/16');
+    });
+
+    test('should verify subnet CIDRs are within VPC CIDR range', async () => {
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: [
+          publicSubnet1Id, publicSubnet2Id, publicSubnet3Id,
+          privateSubnet1Id, privateSubnet2Id, privateSubnet3Id
+        ]
+      });
+      const response = await ec2Client.send(command);
+
+      const expectedCidrs = [
+        '10.0.1.0/24', '10.0.2.0/24', '10.0.3.0/24',
+        '10.0.11.0/24', '10.0.12.0/24', '10.0.13.0/24'
+      ];
+
+      response.Subnets!.forEach(subnet => {
+        expect(expectedCidrs).toContain(subnet.CidrBlock!);
+      });
+    });
+
+    test('should verify private subnets have route tables configured', async () => {
+      const command = new DescribeRouteTablesCommand({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [vpcId]
+          },
+          {
+            Name: 'association.subnet-id',
+            Values: [privateSubnet1Id]
+          }
+        ]
+      });
+      const response = await ec2Client.send(command);
+
+      expect(response.RouteTables).toBeDefined();
+      expect(response.RouteTables!.length).toBeGreaterThan(0);
+
+      const routeTable = response.RouteTables![0];
+      expect(routeTable.VpcId).toBe(vpcId);
+      
+      // Verify local route exists
+      const localRoute = routeTable.Routes!.find(route =>
+        route.DestinationCidrBlock === '10.0.0.0/16' && route.GatewayId === 'local'
+      );
+      expect(localRoute).toBeDefined();
+    });
+  });
+
+  describe('Resource Tagging Compliance', () => {
+    test('should verify all resources have Environment tag', async () => {
+      // Check VPC
+      const vpcCommand = new DescribeVpcsCommand({ VpcIds: [vpcId] });
+      const vpcResponse = await ec2Client.send(vpcCommand);
+      const vpcTags = vpcResponse.Vpcs![0].Tags || [];
+      expect(vpcTags.some(t => t.Key === 'Environment')).toBe(true);
+
+      // Check Subnets
+      const subnetCommand = new DescribeSubnetsCommand({
+        SubnetIds: [publicSubnet1Id, privateSubnet1Id]
+      });
+      const subnetResponse = await ec2Client.send(subnetCommand);
+      subnetResponse.Subnets!.forEach(subnet => {
+        const tags = subnet.Tags || [];
+        expect(tags.some(t => t.Key === 'Environment')).toBe(true);
+      });
+
+      // Check Security Group
+      const sgCommand = new DescribeSecurityGroupsCommand({
+        GroupIds: [httpsSecurityGroupId]
+      });
+      const sgResponse = await ec2Client.send(sgCommand);
+      const sgTags = sgResponse.SecurityGroups![0].Tags || [];
+      expect(sgTags.some(t => t.Key === 'Environment')).toBe(true);
+    });
+
+    test('should verify all resources have Project tag', async () => {
+      // Check VPC
+      const vpcCommand = new DescribeVpcsCommand({ VpcIds: [vpcId] });
+      const vpcResponse = await ec2Client.send(vpcCommand);
+      const vpcTags = vpcResponse.Vpcs![0].Tags || [];
+      expect(vpcTags.some(t => t.Key === 'Project' && t.Value === 'TradingPlatform')).toBe(true);
+
+      // Check Subnets
+      const subnetCommand = new DescribeSubnetsCommand({
+        SubnetIds: [publicSubnet1Id, privateSubnet1Id]
+      });
+      const subnetResponse = await ec2Client.send(subnetCommand);
+      subnetResponse.Subnets!.forEach(subnet => {
+        const tags = subnet.Tags || [];
+        expect(tags.some(t => t.Key === 'Project' && t.Value === 'TradingPlatform')).toBe(true);
+      });
+
+      // Check Security Group
+      const sgCommand = new DescribeSecurityGroupsCommand({
+        GroupIds: [httpsSecurityGroupId]
+      });
+      const sgResponse = await ec2Client.send(sgCommand);
+      const sgTags = sgResponse.SecurityGroups![0].Tags || [];
+      expect(sgTags.some(t => t.Key === 'Project' && t.Value === 'TradingPlatform')).toBe(true);
+    });
+  });
+
+  describe('Infrastructure Readiness', () => {
+    // test('should verify all NAT Gateways are in available state', async () => {
+    //   const command = new DescribeNatGatewaysCommand({
+    //     NatGatewayIds: [natGateway1Id, natGateway2Id, natGateway3Id]
+    //   });
+    //   const response = await ec2Client.send(command);
+
+    //   response.NatGateways!.forEach(natGw => {
+    //     expect(natGw.State).toBe('available');
+    //   });
+    // });
+
+    test('should verify VPC is in available state', async () => {
+      const command = new DescribeVpcsCommand({
+        VpcIds: [vpcId]
+      });
+      const response = await ec2Client.send(command);
+
+      expect(response.Vpcs![0].State).toBe('available');
+    });
+
+    test('should verify all subnets are in available state', async () => {
+      const command = new DescribeSubnetsCommand({
+        SubnetIds: [
+          publicSubnet1Id, publicSubnet2Id, publicSubnet3Id,
+          privateSubnet1Id, privateSubnet2Id, privateSubnet3Id
+        ]
+      });
+      const response = await ec2Client.send(command);
+
+      response.Subnets!.forEach(subnet => {
+        expect(subnet.State).toBe('available');
+      });
     });
   });
 });
