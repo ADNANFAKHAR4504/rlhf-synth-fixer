@@ -733,7 +733,7 @@ NEW_PR_URL=""
 NEW_PR_NUMBER=""
 
 if [ "$FIX_SUCCESS" = "true" ]; then
-  
+
   # Check if gh CLI is available
   if ! command -v gh &> /dev/null; then
     echo "❌ GitHub CLI (gh) is not installed!"
@@ -753,48 +753,68 @@ if [ "$FIX_SUCCESS" = "true" ]; then
       MIGRATION_REASON="GitHub CLI not authenticated"
     else
       echo "✅ GitHub CLI authenticated"
+
+      # Generate new PR ID with ls- prefix
+      ORIGINAL_PR_ID="$PR_ID"
+      LS_PR_ID="ls-${PR_ID}"
       
-      # Generate unique branch name
-      TIMESTAMP=$(date +%Y%m%d%H%M%S)
-      RANDOM_SUFFIX=$(cat /dev/urandom | LC_ALL=C tr -dc 'a-z0-9' | fold -w 6 | head -n 1)
-      NEW_BRANCH="localstack-migrate-${PR_ID}-${RANDOM_SUFFIX}"
-      
+      # Generate branch name: ls-synth-{original_pr_id}
+      NEW_BRANCH="ls-synth-${PR_ID}"
+
       echo ""
+      echo "📋 Original PR ID: $ORIGINAL_PR_ID"
+      echo "📋 New PR ID: $LS_PR_ID"
       echo "🌿 Creating new branch: $NEW_BRANCH"
-      
+
       # Ensure we're on main and up to date
       git checkout main 2>/dev/null || true
       git pull origin main 2>/dev/null || true
-      
+
+      # Check if branch already exists and delete it
+      if git show-ref --verify --quiet "refs/heads/$NEW_BRANCH"; then
+        echo "⚠️  Branch $NEW_BRANCH already exists locally, deleting..."
+        git branch -D "$NEW_BRANCH" 2>/dev/null || true
+      fi
+
       # Create and checkout new branch
       git checkout -b "$NEW_BRANCH"
-      
+
       if [ $? -ne 0 ]; then
         echo "❌ Failed to create branch: $NEW_BRANCH"
         MIGRATION_REASON="Failed to create git branch"
       else
         echo "✅ Branch created: $NEW_BRANCH"
-        
-        # Determine destination path based on platform
-        DEST_DIR="${PLATFORM}-${LANGUAGE}/${PR_ID}"
-        
+
+        # Determine destination path based on platform with new PR ID
+        DEST_DIR="${PLATFORM}-${LANGUAGE}/${LS_PR_ID}"
+
         echo ""
         echo "📁 Copying migrated files to: $DEST_DIR"
         mkdir -p "$DEST_DIR"
-        
+
         # Copy all files from work directory (excluding node_modules, .pulumi, etc.)
         rsync -av --exclude='node_modules' --exclude='.pulumi' --exclude='__pycache__' \
               --exclude='.terraform' --exclude='cdk.out' --exclude='cdktf.out' \
               --exclude='.venv' --exclude='venv' \
               "$WORK_DIR"/ "$DEST_DIR/"
-        
+
+        # Update metadata.json with new PR ID if it exists
+        if [ -f "$DEST_DIR/metadata.json" ]; then
+          echo "📝 Updating metadata.json with new PR ID: $LS_PR_ID"
+          jq --arg new_id "$LS_PR_ID" --arg orig_id "$ORIGINAL_PR_ID" \
+            '. + {"pr_id": $new_id, "original_pr_id": $orig_id, "localstack_migration": true}' \
+            "$DEST_DIR/metadata.json" > "$DEST_DIR/metadata.json.tmp"
+          mv "$DEST_DIR/metadata.json.tmp" "$DEST_DIR/metadata.json"
+        fi
+
         # Ensure execution-output.md exists with migration details
         cat > "$DEST_DIR/execution-output.md" << EOF
 # LocalStack Migration Output
 
 **Migrated:** $(date)
 **Source:** $TASK_PATH
-**Original PR:** ${PR_ID}
+**Original PR ID:** ${ORIGINAL_PR_ID}
+**New PR ID:** ${LS_PR_ID}
 **Platform:** $PLATFORM
 **Language:** $LANGUAGE
 **LocalStack Version:** $LOCALSTACK_VERSION
@@ -823,23 +843,25 @@ This task was migrated from the archive to be LocalStack-compatible.
 \`\`\`
 
 EOF
-        
+
         # Ensure cfn-outputs directory exists
         mkdir -p "$DEST_DIR/cfn-outputs"
         if [ ! -f "$DEST_DIR/cfn-outputs/flat-outputs.json" ]; then
           echo "{}" > "$DEST_DIR/cfn-outputs/flat-outputs.json"
         fi
-        
+
         echo "✅ Files copied to $DEST_DIR"
-        
+
         # Stage all changes
         echo ""
         echo "📝 Staging changes..."
         git add "$DEST_DIR"
-        
-        # Create commit
-        COMMIT_MSG="feat(localstack): migrate ${PR_ID} for LocalStack compatibility
 
+        # Create commit
+        COMMIT_MSG="feat(localstack): migrate ${LS_PR_ID} for LocalStack compatibility
+
+- New PR ID: ${LS_PR_ID}
+- Original PR ID: ${ORIGINAL_PR_ID}
 - Platform: ${PLATFORM}
 - Language: ${LANGUAGE}
 - AWS Services: ${AWS_SERVICES}
@@ -852,40 +874,41 @@ This task has been tested and verified to deploy successfully on LocalStack."
 
         echo "📝 Creating commit..."
         git commit -m "$COMMIT_MSG"
-        
+
         if [ $? -ne 0 ]; then
           echo "❌ Failed to create commit"
           MIGRATION_REASON="Failed to create git commit"
         else
           echo "✅ Commit created"
-          
-          # Push branch to origin
+
+          # Push branch to origin (force push in case branch exists remotely)
           echo ""
           echo "🚀 Pushing branch to origin..."
-          git push -u origin "$NEW_BRANCH"
-          
+          git push -u origin "$NEW_BRANCH" --force
+
           if [ $? -ne 0 ]; then
             echo "❌ Failed to push branch"
             MIGRATION_REASON="Failed to push branch to origin"
           else
             echo "✅ Branch pushed to origin"
-            
+
             # Create Pull Request
             echo ""
             echo "📋 Creating Pull Request..."
-            
-            PR_TITLE="[LocalStack] Migrate ${PR_ID} - ${PLATFORM}/${LANGUAGE}"
+
+            PR_TITLE="[LocalStack] ${LS_PR_ID} - ${PLATFORM}/${LANGUAGE}"
             PR_BODY="## LocalStack Migration
 
 ### Task Details
-- **Original PR:** ${PR_ID}
+- **New PR ID:** ${LS_PR_ID}
+- **Original PR ID:** ${ORIGINAL_PR_ID}
 - **Platform:** ${PLATFORM}
 - **Language:** ${LANGUAGE}
 - **AWS Services:** ${AWS_SERVICES}
 - **Complexity:** ${COMPLEXITY}
 
 ### Migration Summary
-This PR contains a LocalStack-compatible version of task ${PR_ID}.
+This PR contains a LocalStack-compatible version of task ${ORIGINAL_PR_ID}, migrated as ${LS_PR_ID}.
 
 The task has been:
 - ✅ Tested for LocalStack deployment
@@ -923,12 +946,12 @@ The task has been:
               --base main \
               --head "$NEW_BRANCH" \
               2>&1)
-            
+
             if [ $? -eq 0 ]; then
               NEW_PR_URL="$PR_RESULT"
               NEW_PR_NUMBER=$(echo "$NEW_PR_URL" | grep -oE '[0-9]+$')
               MIGRATION_STATUS="success"
-              
+
               echo ""
               echo "✅ Pull Request created successfully!"
               echo "   URL: $NEW_PR_URL"
@@ -940,7 +963,7 @@ The task has been:
             fi
           fi
         fi
-        
+
         # Switch back to main branch
         git checkout main 2>/dev/null || true
       fi
@@ -964,7 +987,8 @@ MIGRATION_ENTRY=$(cat <<EOF
   "branch": "${NEW_BRANCH:-null}",
   "platform": "$PLATFORM",
   "language": "$LANGUAGE",
-  "pr_id": "$PR_ID",
+  "ls_pr_id": "${LS_PR_ID:-null}",
+  "original_pr_id": "${ORIGINAL_PR_ID:-$PR_ID}",
   "aws_services": $(echo "$METADATA" | jq '.aws_services // []'),
   "status": "$MIGRATION_STATUS",
   "reason": $([ -n "$MIGRATION_REASON" ] && echo "\"$MIGRATION_REASON\"" || echo "null"),
@@ -999,10 +1023,12 @@ if [ "$MIGRATION_STATUS" = "success" ]; then
   echo "✅ MIGRATION SUCCESSFUL - PR CREATED!"
   echo "═══════════════════════════════════════════════════"
   echo ""
-  echo "   Source:      $TASK_PATH"
-  echo "   Destination: $DEST_DIR"
-  echo "   Platform:    $PLATFORM"
-  echo "   Language:    $LANGUAGE"
+  echo "   Original PR ID: ${ORIGINAL_PR_ID:-$PR_ID}"
+  echo "   New PR ID:      ${LS_PR_ID:-N/A}"
+  echo "   Source:         $TASK_PATH"
+  echo "   Destination:    $DEST_DIR"
+  echo "   Platform:       $PLATFORM"
+  echo "   Language:       $LANGUAGE"
   echo ""
   echo "🔗 Pull Request:"
   echo "   URL:    $NEW_PR_URL"
@@ -1055,13 +1081,14 @@ fi
   "migrations": [
     {
       "task_path": "archive/cdk-ts/Pr7179",
-      "destination": "cdk-ts/Pr7179",
+      "destination": "cdk-ts/ls-Pr7179",
       "new_pr_url": "https://github.com/TuringGpt/iac-test-automations/pull/1234",
       "new_pr_number": "1234",
-      "branch": "localstack-migrate-Pr7179-abc123",
+      "branch": "ls-synth-Pr7179",
       "platform": "cdk",
       "language": "ts",
-      "pr_id": "Pr7179",
+      "ls_pr_id": "ls-Pr7179",
+      "original_pr_id": "Pr7179",
       "aws_services": ["S3", "Lambda"],
       "status": "success",
       "reason": null,

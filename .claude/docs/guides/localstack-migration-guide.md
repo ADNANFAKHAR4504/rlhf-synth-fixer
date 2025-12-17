@@ -190,24 +190,35 @@ Smart selection considers:
 
 On successful migration, the command automatically:
 
-1. **Creates a new branch**: `localstack-migrate-{PR_ID}-{random}`
-2. **Copies migrated files** to `{platform}-{language}/{PR_ID}/`
-3. **Creates a commit** with migration details
-4. **Pushes the branch** to origin
-5. **Creates a Pull Request** with:
-   - Title: `[LocalStack] Migrate {PR_ID} - {platform}/{language}`
+1. **Generates new PR ID**: `ls-{original_pr_id}` (e.g., `ls-Pr7179`)
+2. **Creates a new branch**: `ls-synth-{original_pr_id}` (e.g., `ls-synth-Pr7179`)
+3. **Copies migrated files** to `{platform}-{language}/ls-{PR_ID}/`
+4. **Updates metadata.json** with new PR ID and original reference
+5. **Creates a commit** with migration details
+6. **Pushes the branch** to origin
+7. **Creates a Pull Request** with:
+   - Title: `[LocalStack] ls-{PR_ID} - {platform}/{language}`
    - Body: Task details, migration summary, deployment instructions
    - Base: `main`
+
+### Naming Convention
+
+| Item | Format | Example |
+|------|--------|---------|
+| New PR ID | `ls-{original_pr_id}` | `ls-Pr7179` |
+| Branch | `ls-synth-{original_pr_id}` | `ls-synth-Pr7179` |
+| Destination | `{platform}-{language}/ls-{pr_id}` | `cdk-ts/ls-Pr7179` |
 
 ### Example PR Created
 
 ```
-[LocalStack] Migrate Pr7179 - cdk/ts
+[LocalStack] ls-Pr7179 - cdk/ts
 
 ## LocalStack Migration
 
 ### Task Details
-- Original PR: Pr7179
+- New PR ID: ls-Pr7179
+- Original PR ID: Pr7179
 - Platform: cdk
 - Language: ts
 - AWS Services: S3, Lambda, DynamoDB
@@ -216,7 +227,7 @@ On successful migration, the command automatically:
 This task was migrated to be LocalStack-compatible.
 
 ### Deployment Instructions
-./scripts/localstack-cdk-deploy.sh cdk-ts/Pr7179
+./scripts/localstack-cdk-deploy.sh cdk-ts/ls-Pr7179
 ```
 
 ## Migration Log
@@ -229,13 +240,14 @@ All migrations are tracked in `.claude/reports/localstack-migrations.json`:
   "migrations": [
     {
       "task_path": "archive/cdk-ts/Pr7179",
-      "destination": "cdk-ts/Pr7179",
+      "destination": "cdk-ts/ls-Pr7179",
       "new_pr_url": "https://github.com/TuringGpt/iac-test-automations/pull/1234",
       "new_pr_number": "1234",
-      "branch": "localstack-migrate-Pr7179-abc123",
+      "branch": "ls-synth-Pr7179",
       "platform": "cdk",
       "language": "ts",
-      "pr_id": "Pr7179",
+      "ls_pr_id": "ls-Pr7179",
+      "original_pr_id": "Pr7179",
       "aws_services": ["S3", "Lambda", "DynamoDB"],
       "status": "success",
       "reason": null,
@@ -303,25 +315,37 @@ The `localstack-fixer` agent automatically applies these fixes:
 After migration, a new PR is created with these files:
 
 ```
-{platform}-{language}/{PR_ID}/
+{platform}-{language}/ls-{PR_ID}/
 ├── cfn-outputs/
 │   └── flat-outputs.json      # Stack outputs
 ├── execution-output.md        # Migration log with deployment details
 ├── int-test-output.md         # Test results
 ├── lib/                       # Infrastructure code
 ├── test/                      # Integration tests
-└── metadata.json              # Task metadata
+└── metadata.json              # Task metadata (updated with ls_pr_id)
 ```
 
 Example for a CDK TypeScript task:
+
 ```
-cdk-ts/Pr7179/
+cdk-ts/ls-Pr7179/
 ├── cfn-outputs/
 │   └── flat-outputs.json
 ├── execution-output.md
 ├── lib/
 ├── test/
 └── metadata.json
+```
+
+The `metadata.json` is updated with:
+
+```json
+{
+  "pr_id": "ls-Pr7179",
+  "original_pr_id": "Pr7179",
+  "localstack_migration": true,
+  ...
+}
 ```
 
 ## Troubleshooting
@@ -392,17 +416,18 @@ If the PR doesn't contain a valid task structure:
 If automatic migration fails, you can migrate manually:
 
 ```bash
-# 1. Create a new branch
-git checkout -b localstack-migrate-Pr7179-manual
+# 1. Create a new branch (use ls-synth-{original_pr_id} format)
+git checkout -b ls-synth-Pr7179
 
-# 2. Create destination directory
-mkdir -p cdk-ts/Pr7179
+# 2. Create destination directory (use ls-{original_pr_id} format)
+mkdir -p cdk-ts/ls-Pr7179
 
 # 3. Copy task files
-cp -r archive/cdk-ts/Pr7179/* cdk-ts/Pr7179/
+cp -r archive/cdk-ts/Pr7179/* cdk-ts/ls-Pr7179/
 
-# 4. Navigate to the task
-cd cdk-ts/Pr7179/
+# 4. Update metadata.json with new PR ID
+cd cdk-ts/ls-Pr7179/
+jq '. + {"pr_id": "ls-Pr7179", "original_pr_id": "Pr7179", "localstack_migration": true}' metadata.json > tmp.json && mv tmp.json metadata.json
 
 # 5. Make LocalStack compatibility changes manually
 
@@ -414,11 +439,11 @@ cd cdk-ts/Pr7179/
 
 # 8. Commit and push
 git add .
-git commit -m "feat(localstack): migrate Pr7179 for LocalStack compatibility"
-git push -u origin localstack-migrate-Pr7179-manual
+git commit -m "feat(localstack): migrate ls-Pr7179 for LocalStack compatibility"
+git push -u origin ls-synth-Pr7179
 
 # 9. Create PR
-gh pr create --title "[LocalStack] Migrate Pr7179 - cdk/ts" --body "LocalStack migration"
+gh pr create --title "[LocalStack] ls-Pr7179 - cdk/ts" --body "LocalStack migration from Pr7179"
 ```
 
 ## Related Files
