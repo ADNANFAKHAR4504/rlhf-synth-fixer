@@ -25,15 +25,6 @@ Metadata:
           - CreatePublicSubnets
           - EnableNatGateway
       - Label:
-          default: "RDS Configuration"
-        Parameters:
-          - RdsInstanceClass
-          - RdsAllocatedStorage
-          - RdsMultiAZ
-          - RdsDeletionProtection
-          - RdsMasterUsername
-          - RdsMasterPassword
-      - Label:
           default: "Security and Logging"
         Parameters:
           - AllowedEgressCidr
@@ -57,18 +48,6 @@ Metadata:
         default: "Create public subnets"
       EnableNatGateway:
         default: "Enable NAT gateway for private subnets"
-      RdsInstanceClass:
-        default: "RDS instance class"
-      RdsAllocatedStorage:
-        default: "RDS allocated storage (GiB)"
-      RdsMultiAZ:
-        default: "Enable Multi-AZ for RDS"
-      RdsDeletionProtection:
-        default: "Enable deletion protection for RDS"
-      RdsMasterUsername:
-        default: "RDS master username"
-      RdsMasterPassword:
-        default: "RDS master password"
       AllowedEgressCidr:
         default: "Default egress CIDR for security groups"
       CloudTrailToCloudWatch:
@@ -136,51 +115,6 @@ Parameters:
     AllowedValues: ['true', 'false']
     Description: "Controls NAT gateway for private subnet egress. Ignored if no public subnets."
 
-  RdsInstanceClass:
-    Type: String
-    Default: db.t3.micro
-    AllowedPattern: '^db\.[a-z0-9]+\.[a-z0-9]+$'
-    ConstraintDescription: "Must be a valid RDS instance class, e.g. db.t3.micro."
-    Description: "RDS instance class for the primary database."
-
-  RdsAllocatedStorage:
-    Type: Number
-    Default: 20
-    MinValue: 20
-    MaxValue: 6144
-    Description: "Allocated storage in GiB for the RDS instance."
-
-  RdsMultiAZ:
-    Type: String
-    Default: 'true'
-    AllowedValues: ['true', 'false']
-    Description: "Enables Multi-AZ deployment for RDS."
-
-  RdsDeletionProtection:
-    Type: String
-    Default: 'true'
-    AllowedValues: ['true', 'false']
-    Description: "Protects the RDS instance from accidental deletion."
-
-  RdsMasterUsername:
-    Type: String
-    Default: tapstackadmin
-    MinLength: 1
-    MaxLength: 16
-    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9_]*$'
-    ConstraintDescription: "Must start with a letter, contain only letters, digits, or underscore, and be 1–16 characters."
-    Description: "RDS master username."
-
-  RdsMasterPassword:
-    Type: String
-    NoEcho: true
-    Default: dummyPassword123
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '^[a-zA-Z0-9!@#$%^&*()_+-=]{8,41}$'
-    ConstraintDescription: "8–41 printable ASCII characters except /, \", or @."
-    Description: "RDS master password (dummy default for LocalStack CI; override for production with a secure value)."
-
   AllowedEgressCidr:
     Type: String
     Default: 0.0.0.0/0
@@ -194,13 +128,7 @@ Parameters:
     AllowedValues: ['true', 'false']
     Description: "If 'true', sends CloudTrail events to CloudWatch Logs in addition to S3."
 
-  EnableRds:
-    Type: String
-    Default: 'true'
-    AllowedValues: ['true', 'false']
-    Description: "Controls creation of RDS resources. Set to 'false' for LocalStack CI stability."
-
-
+    
 Rules:
   RegionRule:
     Assertions:
@@ -219,10 +147,7 @@ Conditions:
   CreateNatGatewayCondition: !And
     - !Equals [!Ref EnableNatGateway, 'true']
     - !Condition CreatePublicSubnetsCondition
-  UseMultiAzRds: !Equals [!Ref RdsMultiAZ, 'true']
-  UseRdsDeletionProtection: !Equals [!Ref RdsDeletionProtection, 'true']
   UseCloudWatchForTrail: !Equals [!Ref CloudTrailToCloudWatch, 'true']
-  CreateRdsCondition: !Equals [!Ref EnableRds, 'true']
 
 Resources:
 
@@ -832,90 +757,6 @@ Resources:
         - Key: EnvironmentSuffix
           Value: !Ref EnvironmentSuffix
 
-  RdsSubnetGroup:
-    Condition: CreateRdsCondition
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: !Sub "corp-${ProjectName}-${EnvironmentSuffix} RDS subnet group"
-      SubnetIds:
-        - !Ref PrivateSubnetA
-        - !Ref PrivateSubnetB
-      Tags:
-        - Key: Name
-          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-rds-subnets"
-        - Key: ProjectName
-          Value: !Ref ProjectName
-        - Key: EnvironmentSuffix
-          Value: !Ref EnvironmentSuffix
-
-  RdsParameterGroup:
-    Condition: CreateRdsCondition
-    Type: AWS::RDS::DBParameterGroup
-    Properties:
-      Description: !Sub "corp-${ProjectName}-${EnvironmentSuffix} RDS parameter group"
-      Family: postgres17
-      Parameters:
-        max_connections: '100'
-      Tags:
-        - Key: Name
-          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-rds-params"
-        - Key: ProjectName
-          Value: !Ref ProjectName
-        - Key: EnvironmentSuffix
-          Value: !Ref EnvironmentSuffix
-
-  RdsInstanceSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Condition: CreateRdsCondition
-    Properties:
-      GroupDescription: "RDS SG (no inbound by default)."
-      VpcId: !Ref Vpc
-      SecurityGroupIngress: []
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: !Ref AllowedEgressCidr
-      Tags:
-        - Key: Name
-          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-sg-rds"
-        - Key: ProjectName
-          Value: !Ref ProjectName
-        - Key: EnvironmentSuffix
-          Value: !Ref EnvironmentSuffix
-
-  RdsInstance:
-    Metadata:
-      cfn-lint:
-        config:
-          ignore_checks:
-            - W3005
-            - W1011
-
-    Type: AWS::RDS::DBInstance
-    Condition: CreateRdsCondition
-    DependsOn:
-      - RdsSubnetGroup
-      - RdsParameterGroup
-      - RdsInstanceSecurityGroup
-      - KmsKey
-    Properties:
-      Engine: postgres
-      DBSubnetGroupName: !Ref RdsSubnetGroup
-      DBParameterGroupName: !Ref RdsParameterGroup
-      VPCSecurityGroups:
-        - !Ref RdsInstanceSecurityGroup
-      AllocatedStorage: !Ref RdsAllocatedStorage
-      DBInstanceClass: !Ref RdsInstanceClass
-      MasterUsername: !Ref RdsMasterUsername
-      MasterUserPassword: !Ref RdsMasterPassword
-      MultiAZ: !If [UseMultiAzRds, true, false]
-      AutoMinorVersionUpgrade: true
-      StorageEncrypted: true
-      KmsKeyId: !GetAtt KmsKey.Arn
-      DeletionProtection: !If [UseRdsDeletionProtection, true, false]
-      PubliclyAccessible: false
-      BackupRetentionPeriod: 7
-      CopyTagsToSnapshot: true
-
   ConfigServiceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -1000,20 +841,6 @@ Resources:
         ComplianceResourceTypes:
           - "AWS::EC2::Instance"
 
-  ConfigRuleRdsStorageEncrypted:
-    Condition: CreateRdsCondition
-    Type: AWS::Config::ConfigRule
-    DependsOn:
-      - ConfigRecorder
-      - ConfigDeliveryChannel
-    Properties:
-      ConfigRuleName: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-rds-encrypted"
-      Source:
-        Owner: AWS
-        SourceIdentifier: RDS_STORAGE_ENCRYPTED
-      Scope:
-        ComplianceResourceTypes:
-          - "AWS::RDS::DBInstance"
 
   GuardDutyDetector:
     Type: AWS::GuardDuty::Detector
@@ -1065,11 +892,6 @@ Outputs:
   LoggingBucketName:
     Description: "Centralized logging bucket used by CloudTrail and Config."
     Value: !Ref LoggingBucket
-
-  RdsEndpointAddress:
-    Condition: CreateRdsCondition
-    Description: "RDS instance endpoint address."
-    Value: !GetAtt RdsInstance.Endpoint.Address
 
 
   CloudTrailArn:
