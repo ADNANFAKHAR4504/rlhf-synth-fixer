@@ -9,6 +9,24 @@ model: sonnet
 
 Fixes IaC tasks to make them deployable to LocalStack with minimal, focused changes.
 
+## Configuration
+
+This agent uses settings from `.claude/config/localstack.yaml`. Key configurable options:
+
+```yaml
+# From .claude/config/localstack.yaml
+iteration:
+  max_fix_iterations: 3          # Configurable max iterations
+  use_batch_fix: true            # Enable/disable batch fix approach
+
+batch_fix:
+  enabled: true
+  apply_preventive_fixes: true
+  fix_priority: [...]            # Order of fix application
+  preventive_fixes: [...]        # Fixes to apply proactively
+  conditional_fixes: [...]       # Fixes based on error patterns
+```
+
 ## Input Parameters
 
 - `WORK_DIR` - Working directory containing task files
@@ -16,6 +34,7 @@ Fixes IaC tasks to make them deployable to LocalStack with minimal, focused chan
 - `LANGUAGE` - Programming language
 - `DEPLOY_ERRORS` - Array of deployment errors
 - `TEST_ERRORS` - Array of test errors
+- `CONFIG_FILE` - Optional: Path to localstack.yaml (default: `.claude/config/localstack.yaml`)
 
 ## Core Principles
 
@@ -32,6 +51,7 @@ Fixes IaC tasks to make them deployable to LocalStack with minimal, focused chan
 **Key principle**: Apply ALL known fixes in ONE iteration before re-deploying, instead of fixing one issue at a time.
 
 This dramatically reduces deployment cycles:
+
 - Old: 5 fixes = 5 deploys (~5 minutes)
 - New: 5 fixes = 1-2 deploys (~1-2 minutes)
 
@@ -79,7 +99,7 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
   echo "🔧 Applying ${#FIXES_TO_APPLY[@]} fixes in batch..."
   echo "" >> execution-output.md
   echo "### Batch Fixes Applied:" >> execution-output.md
-  
+
   for fix in "${FIXES_TO_APPLY[@]}"; do
     apply_fix "$fix"
     FIXES_APPLIED+=("$fix")
@@ -199,15 +219,15 @@ identify_all_fixes() {
 
 Apply these fixes proactively (even if no specific error):
 
-| Fix | When to Apply | Priority |
-|-----|---------------|----------|
+| Fix                           | When to Apply           | Priority    |
+| ----------------------------- | ----------------------- | ----------- |
 | LocalStack endpoint detection | Always (if not present) | 🔴 Critical |
-| S3 path-style access | If using S3/buckets | 🔴 Critical |
-| RemovalPolicy.DESTROY | Always (if not present) | 🟡 High |
-| Test endpoint config | If test/ exists | 🟡 High |
-| IAM simplification | If IAM errors | 🟡 Medium |
-| Resource naming | If naming errors | 🟡 Medium |
-| Unsupported services | If service errors | 🟡 Medium |
+| S3 path-style access          | If using S3/buckets     | 🔴 Critical |
+| RemovalPolicy.DESTROY         | Always (if not present) | 🟡 High     |
+| Test endpoint config          | If test/ exists         | 🟡 High     |
+| IAM simplification            | If IAM errors           | 🟡 Medium   |
+| Resource naming               | If naming errors        | 🟡 Medium   |
+| Unsupported services          | If service errors       | 🟡 Medium   |
 
 ## Common Fixes by Error Type
 
@@ -636,13 +656,14 @@ fi
 
 With batch fix approach:
 
-| Scenario | Old (One-at-a-time) | New (Batch) | Time Saved |
-|----------|---------------------|-------------|------------|
-| 5 fixes needed | 5 deploys (~5 min) | 1-2 deploys (~1-2 min) | **60-80%** |
-| 3 fixes needed | 3 deploys (~3 min) | 1 deploy (~1 min) | **66%** |
-| Complex task | Up to 5 iterations | Max 3 iterations | **40%** |
+| Scenario       | Old (One-at-a-time) | New (Batch)            | Time Saved |
+| -------------- | ------------------- | ---------------------- | ---------- |
+| 5 fixes needed | 5 deploys (~5 min)  | 1-2 deploys (~1-2 min) | **60-80%** |
+| 3 fixes needed | 3 deploys (~3 min)  | 1 deploy (~1 min)      | **66%**    |
+| Complex task   | Up to 5 iterations  | Max 3 iterations       | **40%**    |
 
 The batch approach significantly speeds up migrations by:
+
 1. Applying ALL known fixes before first re-deploy
 2. Including preventive fixes (not just reactive)
 3. Reducing maximum iterations from 5 to 3

@@ -491,8 +491,46 @@ When running multiple agents in parallel, **always use the `--no-reset` flag**. 
 
 Each migration automatically uses a unique stack name (`tap-stack-{PR_ID}`) to prevent CloudFormation stack conflicts.
 
+## Configuration
+
+All LocalStack migration settings are centralized in `.claude/config/localstack.yaml`.
+
+### Key Configuration Sections
+
+| Section | Description |
+|---------|-------------|
+| `iteration` | Max iterations, batch fix settings |
+| `timeouts` | Deployment, test, install timeouts |
+| `localstack` | Endpoint, region, credentials |
+| `batch_fix` | Fix priority, preventive fixes |
+| `service_compatibility` | High/Medium/Low/Pro-only services |
+| `smart_selection` | Scoring for task selection |
+| `parallel` | Parallel execution settings |
+| `platforms` | CDK, CFN, TF, Pulumi specific settings |
+
+### Example Configuration Changes
+
+```yaml
+# Increase max iterations
+iteration:
+  max_fix_iterations: 5
+
+# Disable batch fix (revert to one-at-a-time)
+batch_fix:
+  enabled: false
+
+# Change LocalStack endpoint
+localstack:
+  endpoint: "http://localstack:4566"
+
+# Adjust parallel execution
+parallel:
+  max_concurrent_agents: 5
+```
+
 ## Related Files
 
+- `.claude/config/localstack.yaml` - **Central configuration file**
 - `.claude/commands/localstack-migrate.md` - Main command
 - `.claude/agents/localstack-task-selector.md` - Task selection agent
 - `.claude/agents/localstack-deploy-tester.md` - Deployment testing agent

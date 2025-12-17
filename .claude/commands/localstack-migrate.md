@@ -9,6 +9,21 @@ model: sonnet
 
 Picks a task from the archive folder (or fetches from GitHub PR if not found locally) and ensures it's deployable to LocalStack, fixing issues iteratively until successful.
 
+## Configuration
+
+This command uses settings from `.claude/config/localstack.yaml`. Key configurable options:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `iteration.max_fix_iterations` | 3 | Maximum fix iterations |
+| `iteration.use_batch_fix` | true | Enable batch fix approach |
+| `localstack.reset_state_before_deploy` | false | Reset LocalStack before deploy |
+| `parallel.enabled` | true | Enable parallel execution |
+| `parallel.max_concurrent_agents` | 10 | Max parallel agents |
+| `smart_selection.enabled` | true | Enable smart task selection |
+
+See `.claude/config/localstack.yaml` for full configuration options.
+
 ## Usage
 
 ```bash
