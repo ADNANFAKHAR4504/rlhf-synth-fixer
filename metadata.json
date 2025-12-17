@@ -6,23 +6,14 @@
   "po_id": "291418_ls",
   "team": "4",
   "startedAt": "2025-08-07T10:12:36.648Z",
-  "subtask": "Security and Compliance Implementation",
+  "subtask": "Security, Compliance, and Governance",
   "provider": "localstack",
   "subject_labels": [
-    "Security Configuration",
-    "Network Configuration",
-    "Access Control",
+    "Security Configuration as Code",
     "General Infrastructure Tooling QA"
   ],
-  "training_quality": 8,
   "aws_services": [
     "EC2",
     "VPC"
-  ],
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "isaackumi-turing",
-  "dockerS3Location": ""
+  ]
 }
