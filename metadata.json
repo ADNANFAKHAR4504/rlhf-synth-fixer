@@ -8,8 +8,7 @@
   "startedAt": "2025-08-29T11:24:54.612Z",
   "subtask": "Application Deployment",
   "subject_labels": [
-    "Serverless Infrastructure (Functions as Code)",
-    "Security Configuration as Code"
+    "Serverless Infrastructure (Functions as Code)"
   ],
   "aws_services": [
     "API Gateway",
