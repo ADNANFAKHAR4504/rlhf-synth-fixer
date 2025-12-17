@@ -855,8 +855,7 @@
             "DB_HOST": {
               "Fn::GetAtt": [
                 "DatabaseInstance",
-                "Endpoint",
-                "Address"
+                "Endpoint.Address"
               ]
             },
             "LOG_LEVEL": "INFO"
