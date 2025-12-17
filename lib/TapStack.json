@@ -304,7 +304,7 @@
                 "FunctionName": {
                     "Fn::Sub": "quiz-generation-${EnvironmentSuffix}"
                 },
-                "Runtime": "python3.13",
+                "Runtime": "python3.12",
                 "Handler": "index.handler",
                 "Role": {
                     "Fn::GetAtt": [
@@ -419,7 +419,7 @@
                 "FunctionName": {
                     "Fn::Sub": "quiz-scoring-${EnvironmentSuffix}"
                 },
-                "Runtime": "python3.13",
+                "Runtime": "python3.12",
                 "Handler": "index.handler",
                 "Role": {
                     "Fn::GetAtt": [

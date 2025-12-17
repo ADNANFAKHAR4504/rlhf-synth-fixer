@@ -151,7 +151,7 @@ describe('TapStack CloudFormation Template - Quiz Platform Infrastructure', () =
 
     test('QuizGenerationFunction should have correct configuration', () => {
       const lambda = template.Resources.QuizGenerationFunction;
-      expect(lambda.Properties.Runtime).toBe('python3.13');
+      expect(lambda.Properties.Runtime).toBe('python3.12');
       expect(lambda.Properties.Timeout).toBe(300); // 5 minutes
       expect(lambda.Properties.MemorySize).toBe(1024);
       expect(lambda.Properties.Handler).toBe('index.handler');
@@ -168,7 +168,7 @@ describe('TapStack CloudFormation Template - Quiz Platform Infrastructure', () =
 
     test('QuizScoringFunction should have correct configuration', () => {
       const lambda = template.Resources.QuizScoringFunction;
-      expect(lambda.Properties.Runtime).toBe('python3.13');
+      expect(lambda.Properties.Runtime).toBe('python3.12');
       expect(lambda.Properties.Timeout).toBe(60);
       expect(lambda.Properties.MemorySize).toBe(512);
     });
