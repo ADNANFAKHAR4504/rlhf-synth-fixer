@@ -1,296 +1,219 @@
-import * as cdk from 'aws-cdk-lib';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as kms from 'aws-cdk-lib/aws-kms';
-import * as logs from 'aws-cdk-lib/aws-logs';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import { Construct } from 'constructs';
+import * as pulumi from '@pulumi/pulumi';
+import * as aws from '@pulumi/aws';
 
-interface TapStackProps extends cdk.StackProps {
+export interface TapStackArgs {
   environmentSuffix?: string;
+  tags?: pulumi.Input<{ [key: string]: string }>;
 }
 
-export class TapStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: TapStackProps) {
-    super(scope, id, props);
+export class TapStack extends pulumi.ComponentResource {
+  public readonly tableArn: pulumi.Output<string>;
+  public readonly streamArn: pulumi.Output<string>;
+  public readonly lambdaRoleArn: pulumi.Output<string>;
 
-    // Get environment suffix from props, context, or use 'dev' as default
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const environmentSuffix =
-      props?.environmentSuffix ||
-      this.node.tryGetContext('environmentSuffix') ||
-      'dev';
+  constructor(
+    name: string,
+    args: TapStackArgs,
+    opts?: pulumi.ComponentResourceOptions
+  ) {
+    super('tap:stack:TapStack', name, args, opts);
 
-    // ? Add your stack instantiations here
-    // ! Do NOT create resources directly in this stack.
-    // ! Instead, create separate stacks for each resource type.
+    const environmentSuffix = args.environmentSuffix || 'dev';
+    const defaultTags = pulumi.output(args.tags || {}).apply(t => ({
+      ...t,
+      Environment: environmentSuffix,
+      Team: 'Platform',
+      CostCenter: 'Engineering',
+    }));
 
-    // Common tags for all resources
-    const commonTags = {
-      Department: 'Engineering',
-      Project: 'CompleteEnvironment',
-      Environment: 'Production',
-      Owner: 'DevOps',
-      CostCenter: 'IT-001',
-    };
+    // DynamoDB Table with on-demand billing and optimizations
+    const table = new aws.dynamodb.Table(
+      `optimized-table-${environmentSuffix}`,
+      {
+        name: `optimized-table-${environmentSuffix}`,
+        billingMode: 'PAY_PER_REQUEST', // On-demand billing for unpredictable workloads
+        hashKey: 'id',
+        rangeKey: 'timestamp',
 
-    // Apply tags to the stack
-    cdk.Tags.of(this).add('Department', commonTags.Department);
-    cdk.Tags.of(this).add('Project', commonTags.Project);
-    cdk.Tags.of(this).add('Environment', commonTags.Environment);
-    cdk.Tags.of(this).add('Owner', commonTags.Owner);
-    cdk.Tags.of(this).add('CostCenter', commonTags.CostCenter);
+        attributes: [
+          { name: 'id', type: 'S' },
+          { name: 'timestamp', type: 'N' },
+          { name: 'category', type: 'S' },
+          { name: 'status', type: 'S' },
+        ],
 
-    // 1. KMS Key for S3 encryption
-    const s3KmsKey = new kms.Key(this, 'S3KmsKey', {
-      description: 'KMS key for S3 bucket encryption',
-      enableKeyRotation: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // For demo purposes
-    });
+        // Global Secondary Index with attribute projection
+        globalSecondaryIndexes: [
+          {
+            name: 'CategoryStatusIndex',
+            hashKey: 'category',
+            rangeKey: 'status',
+            projectionType: 'INCLUDE', // Project specific attributes only
+            nonKeyAttributes: ['id', 'timestamp'],
+          },
+        ],
 
-    // 2. S3 Logging Bucket
-    const loggingBucket = new s3.Bucket(this, 'LoggingBucket', {
-      bucketName: `complete-env-logs-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      versioned: true,
-      lifecycleRules: [
-        {
-          id: 'DeleteOldLogs',
-          expiration: cdk.Duration.days(90),
-          noncurrentVersionExpiration: cdk.Duration.days(30),
+        // Point-in-time recovery for data protection
+        pointInTimeRecovery: {
+          enabled: true,
         },
-      ],
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // For demo purposes
-      autoDeleteObjects: true, // For demo purposes
-    });
 
-    // 3. Main S3 Bucket with KMS encryption and logging
-    const mainBucket = new s3.Bucket(this, 'MainBucket', {
-      bucketName: `complete-env-main-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
-      encryption: s3.BucketEncryption.KMS,
-      encryptionKey: s3KmsKey,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      versioned: true,
-      serverAccessLogsBucket: loggingBucket,
-      serverAccessLogsPrefix: 'access-logs/',
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // For demo purposes
-      autoDeleteObjects: true, // For demo purposes
-    });
-
-    // 4. VPC with public and private subnets across 2 AZs
-    const vpc = new ec2.Vpc(this, 'CompleteEnvironmentVpc', {
-      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
-      maxAzs: 2,
-      natGateways: 1, // One NAT Gateway for cost optimization
-      subnetConfiguration: [
-        {
-          cidrMask: 24,
-          name: 'Public',
-          subnetType: ec2.SubnetType.PUBLIC,
+        // Server-side encryption with AWS managed keys
+        serverSideEncryption: {
+          enabled: true,
+          kmsKeyArn: undefined, // Use AWS managed key
         },
-        {
-          cidrMask: 24,
-          name: 'Private',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        },
-        {
-          cidrMask: 24,
-          name: 'Database',
-          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-        },
-      ],
-      enableDnsHostnames: true,
-      enableDnsSupport: true,
-    });
 
-    // 5. Security Group for EC2 instance
-    const ec2SecurityGroup = new ec2.SecurityGroup(this, 'EC2SecurityGroup', {
-      vpc,
-      description: 'Security group for EC2 instance',
-      allowAllOutbound: true,
-    });
+        // DynamoDB Streams with NEW_AND_OLD_IMAGES
+        streamEnabled: true,
+        streamViewType: 'NEW_AND_OLD_IMAGES',
 
-    // Allow SSH access from specific IP addresses (replace with your IPs)
-    const allowedIPs = [
-      '203.0.113.0/32', // Example IP - replace with your actual IP
-      '198.51.100.0/32', // Example IP - replace with your actual IP
-    ];
+        // Enable contributor insights for access pattern analysis
+        tags: defaultTags.apply(t => ({
+          ...t,
+          ContributorInsightsEnabled: 'true',
+        })),
 
-    allowedIPs.forEach((ip, index) => {
-      ec2SecurityGroup.addIngressRule(
-        ec2.Peer.ipv4(ip),
-        ec2.Port.tcp(22),
-        `SSH access from IP ${index + 1}`
-      );
-    });
-
-    // 6. IAM Role for EC2 instance with S3 access
-    const ec2Role = new iam.Role(this, 'EC2Role', {
-      assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
-      description: 'IAM role for EC2 instance with S3 access',
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'AmazonSSMManagedInstanceCore'
-        ),
-      ],
-    });
-
-    // Grant read/write access to the main S3 bucket
-    mainBucket.grantReadWrite(ec2Role);
-    s3KmsKey.grantEncryptDecrypt(ec2Role);
-
-    // 7. EC2 Instance in private subnet
-    const ec2Instance = new ec2.Instance(this, 'EC2Instance', {
-      vpc,
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
-      ),
-      machineImage: ec2.MachineImage.latestAmazonLinux2023(),
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        // Ensure destroyable for CI/CD
+        deletionProtectionEnabled: false,
       },
-      securityGroup: ec2SecurityGroup,
-      role: ec2Role,
-      detailedMonitoring: true, // Enable detailed monitoring
-      userData: ec2.UserData.custom(`#!/bin/bash
-yum update -y
-yum install -y aws-cli
-echo "EC2 instance setup complete" > /var/log/setup.log
-`),
-    });
-
-    // 8. Security Group for RDS
-    const rdsSecurityGroup = new ec2.SecurityGroup(this, 'RDSSecurityGroup', {
-      vpc,
-      description: 'Security group for RDS instance',
-      allowAllOutbound: false, // Restrict outbound traffic
-    });
-
-    // Allow inbound MySQL/Aurora access from EC2 security group
-    rdsSecurityGroup.addIngressRule(
-      ec2SecurityGroup,
-      ec2.Port.tcp(3306),
-      'MySQL access from EC2'
+      { parent: this }
     );
 
-    // Restrict outbound traffic - only allow necessary ports
-    rdsSecurityGroup.addEgressRule(
-      ec2.Peer.ipv4(vpc.vpcCidrBlock),
-      ec2.Port.tcp(443),
-      'HTTPS for AWS services'
+    // Enable Contributor Insights
+    const _contributorInsights = new aws.dynamodb.ContributorInsights(
+      `table-insights-${environmentSuffix}`,
+      {
+        tableName: table.name,
+      },
+      { parent: this }
     );
 
-    // 9. RDS Subnet Group
-    const dbSubnetGroup = new rds.SubnetGroup(this, 'DBSubnetGroup', {
-      vpc,
-      description: 'Subnet group for RDS instance',
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-      },
-    });
-
-    // 10. RDS Instance
-    const rdsInstance = new rds.DatabaseInstance(this, 'RDSInstance', {
-      engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_4_5,
-      }),
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
-      ),
-      vpc,
-      subnetGroup: dbSubnetGroup,
-      securityGroups: [rdsSecurityGroup],
-      databaseName: 'completeenvdb',
-      credentials: rds.Credentials.fromGeneratedSecret('admin', {
-        secretName: 'rds-credentials',
-      }),
-      backupRetention: cdk.Duration.days(7), // 7 days backup retention
-      deleteAutomatedBackups: false,
-      deletionProtection: false, // Set to true for production
-      monitoringInterval: cdk.Duration.seconds(60), // Enhanced monitoring
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // For demo purposes
-    });
-
-    // 11. CloudWatch Log Group for application logs
-    new logs.LogGroup(this, 'ApplicationLogGroup', {
-      logGroupName: '/aws/ec2/complete-environment',
-      retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
-
-    // 12. CloudWatch Alarms for monitoring
-    // EC2 CPU Utilization Alarm
-    new cloudwatch.Alarm(this, 'EC2HighCPUAlarm', {
-      metric: new cloudwatch.Metric({
-        namespace: 'AWS/EC2',
-        metricName: 'CPUUtilization',
-        dimensionsMap: {
-          InstanceId: ec2Instance.instanceId,
+    // CloudWatch Alarm for Read Capacity
+    const _readAlarm = new aws.cloudwatch.MetricAlarm(
+      `table-read-alarm-${environmentSuffix}`,
+      {
+        name: `table-read-alarm-${environmentSuffix}`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 2,
+        metricName: 'ConsumedReadCapacityUnits',
+        namespace: 'AWS/DynamoDB',
+        period: 300, // 5 minutes
+        statistic: 'Sum',
+        threshold: 80,
+        dimensions: {
+          TableName: table.name,
         },
-        period: cdk.Duration.minutes(5),
-      }),
-      threshold: 80,
-      evaluationPeriods: 2,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: 'EC2 instance high CPU utilization',
-    });
+        alarmDescription: 'Alarm when read capacity exceeds threshold',
+        tags: defaultTags,
+      },
+      { parent: this }
+    );
 
-    // RDS CPU Utilization Alarm
-    new cloudwatch.Alarm(this, 'RDSHighCPUAlarm', {
-      metric: rdsInstance.metricCPUUtilization({
-        period: cdk.Duration.minutes(5),
-      }),
-      threshold: 80,
-      evaluationPeriods: 2,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: 'RDS instance high CPU utilization',
-    });
+    // CloudWatch Alarm for Write Capacity
+    const _writeAlarm = new aws.cloudwatch.MetricAlarm(
+      `table-write-alarm-${environmentSuffix}`,
+      {
+        name: `table-write-alarm-${environmentSuffix}`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 2,
+        metricName: 'ConsumedWriteCapacityUnits',
+        namespace: 'AWS/DynamoDB',
+        period: 300, // 5 minutes
+        statistic: 'Sum',
+        threshold: 80,
+        dimensions: {
+          TableName: table.name,
+        },
+        alarmDescription: 'Alarm when write capacity exceeds threshold',
+        tags: defaultTags,
+      },
+      { parent: this }
+    );
 
-    // RDS Database Connections Alarm
-    new cloudwatch.Alarm(this, 'RDSHighConnectionsAlarm', {
-      metric: rdsInstance.metricDatabaseConnections({
-        period: cdk.Duration.minutes(5),
-      }),
-      threshold: 50,
-      evaluationPeriods: 2,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: 'RDS instance high connection count',
-    });
+    // IAM Role for Lambda with least-privilege read access
+    const lambdaRole = new aws.iam.Role(
+      `lambda-dynamodb-reader-${environmentSuffix}`,
+      {
+        name: `lambda-dynamodb-reader-${environmentSuffix}`,
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'lambda.amazonaws.com',
+              },
+            },
+          ],
+        }),
+        tags: defaultTags,
+      },
+      { parent: this }
+    );
 
-    // 13. Outputs
-    new cdk.CfnOutput(this, 'VpcId', {
-      value: vpc.vpcId,
-      description: 'VPC ID',
-    });
+    // IAM Policy for DynamoDB read access
+    const _dynamoReadPolicy = new aws.iam.RolePolicy(
+      `lambda-dynamodb-read-policy-${environmentSuffix}`,
+      {
+        name: `lambda-dynamodb-read-policy-${environmentSuffix}`,
+        role: lambdaRole.id,
+        policy: pulumi
+          .all([table.arn, table.streamArn])
+          .apply(([tableArn, streamArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'dynamodb:GetItem',
+                    'dynamodb:BatchGetItem',
+                    'dynamodb:Query',
+                    'dynamodb:Scan',
+                    'dynamodb:DescribeTable',
+                  ],
+                  Resource: [tableArn, `${tableArn}/index/*`],
+                },
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'dynamodb:GetRecords',
+                    'dynamodb:GetShardIterator',
+                    'dynamodb:DescribeStream',
+                    'dynamodb:ListStreams',
+                  ],
+                  Resource: streamArn,
+                },
+              ],
+            })
+          ),
+      },
+      { parent: this }
+    );
 
-    new cdk.CfnOutput(this, 'EC2InstanceId', {
-      value: ec2Instance.instanceId,
-      description: 'EC2 Instance ID',
-    });
+    // Attach basic Lambda execution policy
+    const _lambdaBasicPolicy = new aws.iam.RolePolicyAttachment(
+      `lambda-basic-execution-${environmentSuffix}`,
+      {
+        role: lambdaRole.name,
+        policyArn:
+          'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+      },
+      { parent: this }
+    );
 
-    new cdk.CfnOutput(this, 'RDSEndpoint', {
-      value: rdsInstance.instanceEndpoint.hostname,
-      description: 'RDS Instance Endpoint',
-    });
+    // Export outputs
+    this.tableArn = table.arn;
+    this.streamArn = table.streamArn;
+    this.lambdaRoleArn = lambdaRole.arn;
 
-    new cdk.CfnOutput(this, 'MainBucketName', {
-      value: mainBucket.bucketName,
-      description: 'Main S3 Bucket Name',
-    });
-
-    new cdk.CfnOutput(this, 'LoggingBucketName', {
-      value: loggingBucket.bucketName,
-      description: 'Logging S3 Bucket Name',
-    });
-
-    new cdk.CfnOutput(this, 'KMSKeyId', {
-      value: s3KmsKey.keyId,
-      description: 'KMS Key ID for S3 encryption',
+    this.registerOutputs({
+      tableArn: this.tableArn,
+      streamArn: this.streamArn,
+      lambdaRoleArn: this.lambdaRoleArn,
+      tableName: table.name,
     });
   }
 }
