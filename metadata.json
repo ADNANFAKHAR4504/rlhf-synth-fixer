@@ -1,0 +1,25 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "53364950",
+  "team": "3",
+  "provider": "localstack",
+  "startedAt": "2025-10-03T17:22:44.158Z",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": [
+    "DynamoDB",
+    "S3",
+    "Lambda",
+    "IAM",
+    "API Gateway",
+    "EventBridge",
+    "CloudWatch",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 8
+}
