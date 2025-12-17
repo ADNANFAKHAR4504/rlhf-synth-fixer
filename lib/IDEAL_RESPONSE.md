@@ -72,7 +72,7 @@ export class TapStack extends cdk.Stack {
     // Naming prefix: {environment}-{service}-{component}
     const namingPrefix = `prod-transaction-${environmentSuffix}`;
 
-    // 🔹 VPC and VPC Endpoints for cost optimization
+    //  VPC and VPC Endpoints for cost optimization
     const vpc = new ec2.Vpc(this, 'OptimizedVpc', {
       vpcName: `${namingPrefix}-vpc`,
       maxAzs: 2,
@@ -101,7 +101,7 @@ export class TapStack extends cdk.Stack {
       service: ec2.GatewayVpcEndpointAwsService.S3,
     });
 
-    // 🔹 SNS Topic for alerting
+    //  SNS Topic for alerting
     const alertTopic = new sns.Topic(this, 'AlertTopic', {
       topicName: `${namingPrefix}-alerts`,
       displayName: 'Transaction System Alerts',
@@ -111,7 +111,7 @@ export class TapStack extends cdk.Stack {
       new sns_subscriptions.EmailSubscription('prakhar.j@turing.com')
     );
 
-    // 🔹 S3 Bucket with lifecycle policies
+    //  S3 Bucket with lifecycle policies
     const transactionLogsBucket = new s3.Bucket(this, 'TransactionLogs', {
       bucketName: `${namingPrefix}-logs-${this.account}-${this.region}`,
       encryption: s3.BucketEncryption.S3_MANAGED,
@@ -139,7 +139,7 @@ export class TapStack extends cdk.Stack {
       autoDeleteObjects: true,
     });
 
-    // 🔹 DynamoDB Tables with optimized configuration
+    //  DynamoDB Tables with optimized configuration
     const transactionTable = new dynamodb.Table(this, 'TransactionTable', {
       tableName: `${namingPrefix}-transactions`,
       partitionKey: {
@@ -197,7 +197,7 @@ export class TapStack extends cdk.Stack {
       writeCapacity: 5,
     });
 
-    // 🔹 SQS Queues for batch processing
+    //  SQS Queues for batch processing
     const dlq = new sqs.Queue(this, 'TransactionDLQ', {
       queueName: `${namingPrefix}-dlq`,
       retentionPeriod: cdk.Duration.days(14),
@@ -217,7 +217,7 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // 🔹 Lambda Layer for shared dependencies (optional - only if directory exists)
+    //  Lambda Layer for shared dependencies (optional - only if directory exists)
     const lambdaLayerPath = path.join(__dirname, '..', 'lambda-layer');
     let sharedLayer: lambda.ILayerVersion | undefined;
 
@@ -232,7 +232,7 @@ export class TapStack extends cdk.Stack {
       });
     }
 
-    // 🔹 Real-time processing Lambda (optimized)
+    //  Real-time processing Lambda (optimized)
     const realtimeLambda = new lambda.Function(this, 'RealtimeProcessor', {
       functionName: `${namingPrefix}-realtime`,
       runtime: lambda.Runtime.NODEJS_18_X,
@@ -283,7 +283,7 @@ export class TapStack extends cdk.Stack {
       logRetention: logs.RetentionDays.ONE_MONTH,
     });
 
-    // 🔹 Batch processing Lambda (optimized)
+    //  Batch processing Lambda (optimized)
     const batchLambda = new lambda.Function(this, 'BatchProcessor', {
       functionName: `${namingPrefix}-batch`,
       runtime: lambda.Runtime.NODEJS_18_X,
@@ -352,14 +352,14 @@ export class TapStack extends cdk.Stack {
       })
     );
 
-    // 🔹 IAM Permissions (least privilege)
+    //  IAM Permissions (least privilege)
     transactionTable.grantReadWriteData(realtimeLambda);
     transactionTable.grantReadWriteData(batchLambda);
     batchQueue.grantSendMessages(realtimeLambda);
     batchQueue.grantConsumeMessages(batchLambda);
     transactionLogsBucket.grantWrite(batchLambda);
 
-    // 🔹 CloudWatch Logs role for API Gateway (required for logging)
+    //  CloudWatch Logs role for API Gateway (required for logging)
     const apiGatewayCloudWatchRole = new iam.Role(this, 'ApiGatewayCloudWatchRole', {
       assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
       managedPolicies: [
@@ -374,7 +374,7 @@ export class TapStack extends cdk.Stack {
       cloudWatchRoleArn: apiGatewayCloudWatchRole.roleArn,
     });
 
-    // 🔹 API Gateway
+    //  API Gateway
     const api = new apigateway.RestApi(this, 'TransactionAPI', {
       restApiName: `${namingPrefix}-api`,
       description: 'Transaction processing API',
@@ -409,7 +409,7 @@ export class TapStack extends cdk.Stack {
       })
     );
 
-    // 🔹 CloudWatch Alarms
+    //  CloudWatch Alarms
     new cloudwatch.Alarm(this, 'LambdaDurationAlarm', {
       alarmName: `${namingPrefix}-lambda-duration`,
       metric: realtimeLambda.metricDuration({
@@ -449,7 +449,7 @@ export class TapStack extends cdk.Stack {
       evaluationPeriods: 1,
     }).addAlarmAction(new cloudwatch_actions.SnsAction(alertTopic));
 
-    // 🔹 Cost Budget and Alarm
+    //  Cost Budget and Alarm
     new budgets.CfnBudget(this, 'MonthlyCostBudget', {
       budget: {
         budgetName: `${namingPrefix}-monthly-budget`,
@@ -478,7 +478,7 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    // 🔹 CloudWatch Dashboard
+    //  CloudWatch Dashboard
     const dashboard = new cloudwatch.Dashboard(this, 'OptimizationDashboard', {
       dashboardName: `${namingPrefix}-performance`,
       defaultInterval: cdk.Duration.hours(1),
@@ -539,7 +539,7 @@ export class TapStack extends cdk.Stack {
       })
     );
 
-    // 🔹 Custom Metrics for before/after comparison
+    //  Custom Metrics for before/after comparison
     const metricNamespace = `${namingPrefix}/Performance`;
 
     new logs.MetricFilter(this, 'TransactionLatencyMetric', {
@@ -552,7 +552,7 @@ export class TapStack extends cdk.Stack {
       metricValue: '$latency_ms',
     });
 
-    // 🔹 Stack Outputs
+    //  Stack Outputs
     new cdk.CfnOutput(this, 'APIEndpoint', {
       value: api.url,
       description: 'API Gateway endpoint URL',
@@ -570,7 +570,7 @@ export class TapStack extends cdk.Stack {
       description: 'CloudWatch Dashboard URL',
     });
 
-    // 🔹 Resource tagging for cost allocation
+    //  Resource tagging for cost allocation
     cdk.Tags.of(this).add('Component', 'optimization-stack');
     cdk.Tags.of(this).add('Environment', environmentSuffix);
     cdk.Tags.of(transactionTable).add('Component', 'database');

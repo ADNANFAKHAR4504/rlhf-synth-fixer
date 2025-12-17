@@ -143,7 +143,7 @@ export class TapStack extends cdk.Stack {
     this.service = props.service;
     this.namingPrefix = `${this.environment}-${this.service}`;
 
-    // 🔹 VPC and VPC Endpoints for cost optimization
+    //  VPC and VPC Endpoints for cost optimization
     const vpc = new ec2.Vpc(this, 'OptimizedVpc', {
       vpcName: `${this.namingPrefix}-vpc`,
       maxAzs: 2,
@@ -171,7 +171,7 @@ export class TapStack extends cdk.Stack {
       service: ec2.GatewayVpcEndpointAwsService.S3,
     });
 
-    // 🔹 SNS Topic for alerting
+    //  SNS Topic for alerting
     const alertTopic = new sns.Topic(this, 'AlertTopic', {
       topicName: `${this.namingPrefix}-alerts`,
       displayName: 'Transaction System Alerts',
@@ -181,7 +181,7 @@ export class TapStack extends cdk.Stack {
       new sns_subscriptions.EmailSubscription('alerts@example.com')
     );
 
-    // 🔹 S3 Bucket with lifecycle policies
+    //  S3 Bucket with lifecycle policies
     const transactionLogsBucket = new s3.Bucket(this, 'TransactionLogs', {
       bucketName: `${this.namingPrefix}-logs-${this.account}-${this.region}`,
       encryption: s3.BucketEncryption.S3_MANAGED,
@@ -208,7 +208,7 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
-    // 🔹 DynamoDB Tables with optimized configuration
+    //  DynamoDB Tables with optimized configuration
     const transactionTable = new dynamodb.Table(this, 'TransactionTable', {
       tableName: `${this.namingPrefix}-transactions`,
       partitionKey: { name: 'transactionId', type: dynamodb.AttributeType.STRING },
@@ -263,7 +263,7 @@ export class TapStack extends cdk.Stack {
       writeCapacity: 5,
     });
 
-    // 🔹 SQS Queues for batch processing
+    //  SQS Queues for batch processing
     const dlq = new sqs.Queue(this, 'TransactionDLQ', {
       queueName: `${this.namingPrefix}-dlq`,
       retentionPeriod: cdk.Duration.days(14),
@@ -281,7 +281,7 @@ export class TapStack extends cdk.Stack {
       encryption: sqs.QueueEncryption.KMS_MANAGED,
     });
 
-    // 🔹 Lambda Layer for shared dependencies
+    //  Lambda Layer for shared dependencies
     const sharedLayer = new lambda.LayerVersion(this, 'SharedDependencies', {
       layerVersionName: `${this.namingPrefix}-shared`,
       code: lambda.Code.fromAsset('lambda-layer'),
@@ -290,7 +290,7 @@ export class TapStack extends cdk.Stack {
       description: 'Shared dependencies for transaction processing',
     });
 
-    // 🔹 Real-time processing Lambda (optimized)
+    //  Real-time processing Lambda (optimized)
     const realtimeLambda = new lambda.Function(this, 'RealtimeProcessor', {
       functionName: `${this.namingPrefix}-realtime`,
       runtime: lambda.Runtime.NODEJS_18_X,
@@ -342,7 +342,7 @@ export class TapStack extends cdk.Stack {
       logRetention: logs.RetentionDays.ONE_MONTH,
     });
 
-    // 🔹 Batch processing Lambda (optimized)
+    //  Batch processing Lambda (optimized)
     const batchLambda = new lambda.Function(this, 'BatchProcessor', {
       functionName: `${this.namingPrefix}-batch`,
       runtime: lambda.Runtime.NODEJS_18_X,
@@ -413,14 +413,14 @@ export class TapStack extends cdk.Stack {
       })
     );
 
-    // 🔹 IAM Permissions (least privilege)
+    //  IAM Permissions (least privilege)
     transactionTable.grantReadWriteData(realtimeLambda);
     transactionTable.grantReadWriteData(batchLambda);
     batchQueue.grantSendMessages(realtimeLambda);
     batchQueue.grantConsumeMessages(batchLambda);
     transactionLogsBucket.grantWrite(batchLambda);
 
-    // 🔹 API Gateway (existing endpoints preserved)
+    //  API Gateway (existing endpoints preserved)
     const api = new apigateway.RestApi(this, 'TransactionAPI', {
       restApiName: `${this.namingPrefix}-api`,
       description: 'Transaction processing API',
@@ -455,7 +455,7 @@ export class TapStack extends cdk.Stack {
       })
     );
 
-    // 🔹 CloudWatch Alarms
+    //  CloudWatch Alarms
     new cloudwatch.Alarm(this, 'LambdaDurationAlarm', {
       alarmName: `${this.namingPrefix}-lambda-duration`,
       metric: realtimeLambda.metricDuration({
@@ -495,7 +495,7 @@ export class TapStack extends cdk.Stack {
       evaluationPeriods: 1,
     }).addAlarmAction(new cloudwatch_actions.SnsAction(alertTopic));
 
-    // 🔹 Cost Budget and Alarm
+    //  Cost Budget and Alarm
     new budgets.CfnBudget(this, 'MonthlyCostBudget', {
       budget: {
         budgetName: `${this.namingPrefix}-monthly-budget`,
@@ -524,7 +524,7 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    // 🔹 CloudWatch Dashboard
+    //  CloudWatch Dashboard
     const dashboard = new cloudwatch.Dashboard(this, 'OptimizationDashboard', {
       dashboardName: `${this.namingPrefix}-performance`,
       defaultInterval: cdk.Duration.hours(1),
@@ -582,7 +582,7 @@ export class TapStack extends cdk.Stack {
       })
     );
 
-    // 🔹 Custom Metrics for before/after comparison
+    //  Custom Metrics for before/after comparison
     const metricNamespace = `${this.namingPrefix}/Performance`;
     
     new logs.MetricFilter(this, 'TransactionLatencyMetric', {
@@ -593,7 +593,7 @@ export class TapStack extends cdk.Stack {
       metricValue: '$latency_ms',
     });
 
-    // 🔹 Stack Outputs
+    //  Stack Outputs
     new cdk.CfnOutput(this, 'APIEndpoint', {
       value: api.url,
       description: 'API Gateway endpoint URL',
@@ -611,7 +611,7 @@ export class TapStack extends cdk.Stack {
       description: 'CloudWatch Dashboard URL',
     });
 
-    // 🔹 Resource tagging for cost allocation
+    //  Resource tagging for cost allocation
     cdk.Tags.of(this).add('Component', 'optimization-stack');
     cdk.Tags.of(transactionTable).add('Component', 'database');
     cdk.Tags.of(realtimeLambda).add('Component', 'compute-realtime');
@@ -619,7 +619,7 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(batchQueue).add('Component', 'messaging');
     cdk.Tags.of(transactionLogsBucket).add('Component', 'storage');
 
-    // 🔹 Rollback configuration metadata
+    //  Rollback configuration metadata
     this.templateOptions.description = `Optimized transaction processing stack - Deployed at ${new Date().toISOString()}`;
     this.templateOptions.metadata = {
       OptimizationVersion: '2.0.0',
