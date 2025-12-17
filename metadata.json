@@ -1,0 +1,23 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "229158",
+  "team": "synth",
+  "startedAt": "2025-08-27T09:11:47.632Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Security Configuration as Code",
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "Elastic Load Balancing",
+    "IAM",
+    "CloudFormation"
+  ]
+}
