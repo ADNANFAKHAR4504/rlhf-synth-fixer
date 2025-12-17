@@ -1,13 +1,16 @@
 ---
 name: localstack-fixer
-description: Fixes failed CI/CD jobs for a specific PR, applying batch fixes for all errors until production-ready.
+description: Fixes IaC tasks for LocalStack compatibility - works with local errors (from localstack-migrate) or PR failures (from GitHub Actions).
 color: orange
 model: sonnet
 ---
 
 # LocalStack Fixer Agent
 
-Fixes failed CI/CD jobs for a specific PR, analyzing errors and applying batch fixes until the PR is production-ready.
+Fixes IaC tasks to make them deployable to LocalStack. Supports TWO modes:
+
+1. **Local Mode** (from `localstack-migrate`): Fix local deployment errors in a working directory
+2. **PR Mode** (standalone): Fix failed CI/CD jobs for a specific GitHub PR
 
 ## Configuration
 
@@ -29,13 +32,35 @@ batch_fix:
 
 ## Input Parameters
 
+### Local Mode (from localstack-migrate)
+- `WORK_DIR` - Working directory containing task files (required)
+- `PLATFORM` - IaC platform (cdk, cfn, tf, pulumi)
+- `LANGUAGE` - Programming language (ts, py, go, etc.)
+- `DEPLOY_ERRORS` - Array of deployment errors
+- `TEST_ERRORS` - Array of test errors
+
+### PR Mode (standalone)
 - `PR_NUMBER` - The GitHub PR number to fix (e.g., 7179, Pr7179, or #7179)
-- `WORK_DIR` - Optional: Working directory for local fixes (auto-detected from PR)
-- `CONFIG_FILE` - Optional: Path to localstack.yaml (default: `.claude/config/localstack.yaml`)
 
 ## Usage
 
 ```bash
+# ═══════════════════════════════════════════════════════
+# LOCAL MODE (called by localstack-migrate)
+# ═══════════════════════════════════════════════════════
+
+# Fix errors in a local working directory
+# (This is how localstack-migrate invokes the fixer)
+WORK_DIR="worktree/localstack-Pr7179"
+PLATFORM="cdk"
+LANGUAGE="ts"
+DEPLOY_ERRORS="UnrecognizedClientException: connection refused"
+TEST_ERRORS="test failed: assertion error"
+
+# ═══════════════════════════════════════════════════════
+# PR MODE (standalone usage)
+# ═══════════════════════════════════════════════════════
+
 # Fix a specific PR by number
 /localstack-fixer Pr7179
 /localstack-fixer 7179
@@ -51,103 +76,158 @@ batch_fix:
 /localstack-fixer --retry-all 7179
 ```
 
-## 🔴 CRITICAL: Workflow Overview
+## 🔴 CRITICAL: Dual Mode Workflow
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    LOCALSTACK FIXER AGENT                       │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  1. INPUT: PR Number (e.g., 7179)                              │
-│     ↓                                                          │
-│  2. FETCH: Get failed job logs from GitHub Actions             │
-│     ↓                                                          │
-│  3. ANALYZE: Parse ALL error messages from ALL failed jobs     │
-│     ↓                                                          │
-│  4. IDENTIFY: Map errors to known fixes (batch approach)       │
-│     ↓                                                          │
-│  5. CHECKOUT: Get PR branch locally                            │
-│     ↓                                                          │
-│  6. FIX: Apply ALL fixes in ONE batch                          │
-│     ↓                                                          │
-│  7. COMMIT: Push fixes to PR branch                            │
-│     ↓                                                          │
-│  8. VERIFY: Wait for CI/CD to re-run, check results            │
-│     ↓                                                          │
-│  9. REPEAT: If still failing, iterate (max 3 times)            │
-│     ↓                                                          │
-│  10. REPORT: Document all fixes and final status               │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ MODE DETECTION                                          │   │
+│  │                                                         │   │
+│  │  WORK_DIR provided? ──YES──► LOCAL MODE                │   │
+│  │         │                         │                     │   │
+│  │        NO                         ▼                     │   │
+│  │         │               Use DEPLOY_ERRORS/TEST_ERRORS   │   │
+│  │         ▼                         │                     │   │
+│  │    PR_NUMBER provided? ──YES──► PR MODE                │   │
+│  │                                   │                     │   │
+│  │                                   ▼                     │   │
+│  │                          Fetch errors from GitHub       │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                              │                                  │
+│                              ▼                                  │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ COMMON FIX PIPELINE                                     │   │
+│  │                                                         │   │
+│  │  1. ANALYZE: Parse ALL error messages                  │   │
+│  │  2. IDENTIFY: Map errors to known fixes (batch)        │   │
+│  │  3. FIX: Apply ALL fixes in ONE batch                  │   │
+│  │  4. TEST: Re-deploy to verify                          │   │
+│  │  5. ITERATE: If still failing (max 3 times)            │   │
+│  │  6. REPORT: Document all fixes and status              │   │
+│  └─────────────────────────────────────────────────────────┘   │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ## Step-by-Step Execution
 
-### Step 1: Parse PR Number and Initialize
+### Step 1: Detect Mode and Initialize
 
 ```bash
 #!/bin/bash
 set -e
 
-echo ""
-echo "═══════════════════════════════════════════════════"
-echo "🔧 LOCALSTACK FIXER - PR FIX MODE"
-echo "═══════════════════════════════════════════════════"
-echo ""
-
 PROJECT_ROOT="$(git rev-parse --show-toplevel)"
 cd "$PROJECT_ROOT"
 
-# Parse PR number from input (handles: 7179, Pr7179, #7179, --pr 7179)
-INPUT="$1"
-PR_NUMBER=""
-STATUS_ONLY=false
-RETRY_ALL=false
+# ═══════════════════════════════════════════════════════════════
+# MODE DETECTION
+# If WORK_DIR is set → LOCAL MODE (from localstack-migrate)
+# If PR_NUMBER is set → PR MODE (standalone)
+# ═══════════════════════════════════════════════════════════════
 
-# Parse arguments
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --pr)
-      PR_NUMBER="${2#Pr}"
-      PR_NUMBER="${PR_NUMBER#\#}"
-      shift 2
-      ;;
-    --status)
-      STATUS_ONLY=true
-      PR_NUMBER="${2#Pr}"
-      PR_NUMBER="${PR_NUMBER#\#}"
-      shift 2
-      ;;
-    --retry-all)
-      RETRY_ALL=true
-      PR_NUMBER="${2#Pr}"
-      PR_NUMBER="${PR_NUMBER#\#}"
-      shift 2
-      ;;
-    *)
-      if [[ -z "$PR_NUMBER" ]]; then
-        PR_NUMBER="${1#Pr}"
+# Check for LOCAL MODE first (WORK_DIR takes precedence)
+if [[ -n "$WORK_DIR" ]] && [[ -d "$WORK_DIR" ]]; then
+  MODE="local"
+  echo ""
+  echo "═══════════════════════════════════════════════════"
+  echo "🔧 LOCALSTACK FIXER - LOCAL MODE"
+  echo "═══════════════════════════════════════════════════"
+  echo ""
+  echo "📁 Working Directory: $WORK_DIR"
+  echo "📋 Platform: ${PLATFORM:-auto-detect}"
+  echo "📋 Language: ${LANGUAGE:-auto-detect}"
+  echo ""
+  
+  # Use provided errors or empty
+  UNIQUE_ERRORS="${DEPLOY_ERRORS:-}
+${TEST_ERRORS:-}"
+  
+  # Change to work directory
+  cd "$WORK_DIR"
+  
+  # Auto-detect platform/language from metadata.json if not provided
+  if [[ -f "metadata.json" ]]; then
+    [[ -z "$PLATFORM" ]] && PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
+    [[ -z "$LANGUAGE" ]] && LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
+    echo "📋 Detected Platform: $PLATFORM"
+    echo "📋 Detected Language: $LANGUAGE"
+  fi
+  echo ""
+  
+else
+  # PR MODE - parse PR number from arguments
+  MODE="pr"
+  
+  echo ""
+  echo "═══════════════════════════════════════════════════"
+  echo "🔧 LOCALSTACK FIXER - PR MODE"
+  echo "═══════════════════════════════════════════════════"
+  echo ""
+  
+  # Parse PR number from input (handles: 7179, Pr7179, #7179, --pr 7179)
+  INPUT="$1"
+  PR_NUMBER=""
+  STATUS_ONLY=false
+  RETRY_ALL=false
+  
+  # Parse arguments
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --pr)
+        PR_NUMBER="${2#Pr}"
         PR_NUMBER="${PR_NUMBER#\#}"
-      fi
-      shift
-      ;;
-  esac
-done
-
-if [[ -z "$PR_NUMBER" ]]; then
-  echo "❌ Error: PR number is required"
+        shift 2
+        ;;
+      --status)
+        STATUS_ONLY=true
+        PR_NUMBER="${2#Pr}"
+        PR_NUMBER="${PR_NUMBER#\#}"
+        shift 2
+        ;;
+      --retry-all)
+        RETRY_ALL=true
+        PR_NUMBER="${2#Pr}"
+        PR_NUMBER="${PR_NUMBER#\#}"
+        shift 2
+        ;;
+      --work-dir)
+        WORK_DIR="$2"
+        MODE="local"
+        shift 2
+        ;;
+      *)
+        if [[ -z "$PR_NUMBER" ]]; then
+          PR_NUMBER="${1#Pr}"
+          PR_NUMBER="${PR_NUMBER#\#}"
+        fi
+        shift
+        ;;
+    esac
+  done
+  
+  if [[ -z "$PR_NUMBER" ]]; then
+    echo "❌ Error: PR number or WORK_DIR is required"
+    echo ""
+    echo "Usage:"
+    echo "  PR Mode:    /localstack-fixer <PR_NUMBER>"
+    echo "              /localstack-fixer --pr 7179"
+    echo "              /localstack-fixer --status 7179"
+    echo ""
+    echo "  Local Mode: Set WORK_DIR environment variable"
+    echo "              WORK_DIR=worktree/localstack-Pr7179 /localstack-fixer"
+    echo ""
+    exit 1
+  fi
+  
+  echo "📋 Target PR: #${PR_NUMBER}"
   echo ""
-  echo "Usage: /localstack-fixer <PR_NUMBER>"
-  echo "       /localstack-fixer --pr 7179"
-  echo "       /localstack-fixer --status 7179"
-  echo ""
-  exit 1
 fi
 
-echo "📋 Target PR: #${PR_NUMBER}"
-echo ""
-
-# Initialize variables
+# Initialize common variables
 GITHUB_REPO="TuringGpt/iac-test-automations"
 MAX_ITERATIONS=3
 ITERATION=0
@@ -156,47 +236,72 @@ FIXES_APPLIED=()
 ERRORS_FOUND=()
 ```
 
-### Step 2: Check GitHub CLI and Authentication
+### Step 2: Mode-Specific Setup
 
 ```bash
-# Check GitHub CLI
-if ! command -v gh &> /dev/null; then
-  echo "❌ GitHub CLI (gh) is not installed!"
+# ═══════════════════════════════════════════════════════════════
+# LOCAL MODE: Skip GitHub checks, use provided errors
+# ═══════════════════════════════════════════════════════════════
+if [[ "$MODE" == "local" ]]; then
+  echo "📋 Using local errors from deployment/tests..."
+  
+  if [[ -z "$UNIQUE_ERRORS" ]] || [[ "$UNIQUE_ERRORS" == $'\n' ]]; then
+    echo "⚠️ No errors provided. Reading from execution-output.md..."
+    if [[ -f "execution-output.md" ]]; then
+      UNIQUE_ERRORS=$(grep -iE "error:|Error:|ERROR|failed|Failed|FAILED|exception|Exception" execution-output.md 2>/dev/null || echo "")
+    fi
+  fi
+  
+  ERROR_COUNT=$(echo "$UNIQUE_ERRORS" | grep -v '^$' | wc -l | tr -d ' ')
+  echo "📊 Found $ERROR_COUNT error patterns to analyze"
   echo ""
-  echo "💡 Install GitHub CLI:"
-  echo "   macOS: brew install gh"
-  echo "   Linux: sudo apt install gh"
-  exit 1
-fi
-
-# Check authentication
-if ! gh auth status &> /dev/null; then
-  echo "❌ GitHub CLI is not authenticated!"
+  
+  # Skip to fix identification (Step 6)
+  
+# ═══════════════════════════════════════════════════════════════
+# PR MODE: Fetch errors from GitHub Actions
+# ═══════════════════════════════════════════════════════════════
+else
+  # Check GitHub CLI
+  if ! command -v gh &> /dev/null; then
+    echo "❌ GitHub CLI (gh) is not installed!"
+    echo ""
+    echo "💡 Install GitHub CLI:"
+    echo "   macOS: brew install gh"
+    echo "   Linux: sudo apt install gh"
+    exit 1
+  fi
+  
+  # Check authentication
+  if ! gh auth status &> /dev/null; then
+    echo "❌ GitHub CLI is not authenticated!"
+    echo ""
+    echo "💡 Authenticate with:"
+    echo "   gh auth login"
+    exit 1
+  fi
+  
+  echo "✅ GitHub CLI authenticated"
   echo ""
-  echo "💡 Authenticate with:"
-  echo "   gh auth login"
-  exit 1
 fi
-
-echo "✅ GitHub CLI authenticated"
-echo ""
 ```
 
-### Step 3: Fetch PR Details and CI/CD Status
+### Step 3: Fetch PR Details and CI/CD Status (PR MODE ONLY)
 
 ```bash
-echo "═══════════════════════════════════════════════════"
-echo "📋 FETCHING PR DETAILS"
-echo "═══════════════════════════════════════════════════"
-echo ""
-
-# Fetch PR information
-PR_INFO=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPO" --json title,headRefName,state,statusCheckRollup,number 2>/dev/null)
-
-if [[ -z "$PR_INFO" ]] || [[ "$PR_INFO" == "null" ]]; then
-  echo "❌ PR #${PR_NUMBER} not found in ${GITHUB_REPO}"
-  exit 1
-fi
+if [[ "$MODE" == "pr" ]]; then
+  echo "═══════════════════════════════════════════════════"
+  echo "📋 FETCHING PR DETAILS"
+  echo "═══════════════════════════════════════════════════"
+  echo ""
+  
+  # Fetch PR information
+  PR_INFO=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPO" --json title,headRefName,state,statusCheckRollup,number 2>/dev/null)
+  
+  if [[ -z "$PR_INFO" ]] || [[ "$PR_INFO" == "null" ]]; then
+    echo "❌ PR #${PR_NUMBER} not found in ${GITHUB_REPO}"
+    exit 1
+  fi
 
 PR_TITLE=$(echo "$PR_INFO" | jq -r '.title // "Unknown"')
 PR_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // "unknown"')
@@ -457,40 +562,53 @@ done
 echo ""
 ```
 
-### Step 7: Checkout PR Branch
+### Step 7: Checkout PR Branch (PR MODE ONLY)
 
 ```bash
-echo "═══════════════════════════════════════════════════"
-echo "📥 CHECKING OUT PR BRANCH"
-echo "═══════════════════════════════════════════════════"
-echo ""
+# ═══════════════════════════════════════════════════════════════
+# LOCAL MODE: Skip checkout - already in WORK_DIR
+# PR MODE: Checkout the PR branch to a worktree
+# ═══════════════════════════════════════════════════════════════
 
-# Use git worktree for parallel safety
-WORK_DIR="worktree/fixer-pr${PR_NUMBER}"
-
-# Clean up existing worktree
-if [[ -d "$WORK_DIR" ]]; then
-  echo "🧹 Cleaning existing worktree..."
-  git worktree remove "$WORK_DIR" --force 2>/dev/null || rm -rf "$WORK_DIR"
+if [[ "$MODE" == "local" ]]; then
+  echo "📁 Working in: $(pwd)"
+  echo "   (Local mode - no checkout needed)"
+  echo ""
+  
+else
+  # PR MODE: Checkout PR branch
+  echo "═══════════════════════════════════════════════════"
+  echo "📥 CHECKING OUT PR BRANCH"
+  echo "═══════════════════════════════════════════════════"
+  echo ""
+  
+  # Use git worktree for parallel safety
+  WORK_DIR="worktree/fixer-pr${PR_NUMBER}"
+  
+  # Clean up existing worktree
+  if [[ -d "$WORK_DIR" ]]; then
+    echo "🧹 Cleaning existing worktree..."
+    git worktree remove "$WORK_DIR" --force 2>/dev/null || rm -rf "$WORK_DIR"
+  fi
+  
+  # Fetch the PR branch
+  echo "📥 Fetching PR branch: $PR_BRANCH..."
+  git fetch origin "$PR_BRANCH:$PR_BRANCH" 2>/dev/null || git fetch origin "pull/${PR_NUMBER}/head:pr-${PR_NUMBER}" 2>/dev/null
+  
+  # Create worktree
+  echo "📁 Creating worktree..."
+  git worktree add "$WORK_DIR" "$PR_BRANCH" 2>/dev/null || git worktree add "$WORK_DIR" "pr-${PR_NUMBER}" 2>/dev/null
+  
+  if [[ ! -d "$WORK_DIR" ]]; then
+    echo "❌ Failed to checkout PR branch"
+    exit 1
+  fi
+  
+  echo "✅ Checked out to: $WORK_DIR"
+  cd "$WORK_DIR"
 fi
 
-# Fetch the PR branch
-echo "📥 Fetching PR branch: $PR_BRANCH..."
-git fetch origin "$PR_BRANCH:$PR_BRANCH" 2>/dev/null || git fetch origin "pull/${PR_NUMBER}/head:pr-${PR_NUMBER}" 2>/dev/null
-
-# Create worktree
-echo "📁 Creating worktree..."
-git worktree add "$WORK_DIR" "$PR_BRANCH" 2>/dev/null || git worktree add "$WORK_DIR" "pr-${PR_NUMBER}" 2>/dev/null
-
-if [[ ! -d "$WORK_DIR" ]]; then
-  echo "❌ Failed to checkout PR branch"
-  exit 1
-fi
-
-echo "✅ Checked out to: $WORK_DIR"
-cd "$WORK_DIR"
-
-# Read metadata if exists
+# Read metadata if exists (both modes)
 if [[ -f "metadata.json" ]]; then
   PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
   LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
@@ -828,26 +946,52 @@ const endpoint = process.env.AWS_ENDPOINT_URL || "http://localhost:4566";\
 done
 ```
 
-### Step 9: Commit and Push Fixes
+### Step 9: Commit and Push Fixes (PR MODE ONLY)
 
 ```bash
-echo "═══════════════════════════════════════════════════"
-echo "📤 COMMITTING AND PUSHING FIXES"
-echo "═══════════════════════════════════════════════════"
-echo ""
+# ═══════════════════════════════════════════════════════════════
+# LOCAL MODE: Skip commit/push - localstack-migrate handles this
+# PR MODE: Commit and push fixes to the PR branch
+# ═══════════════════════════════════════════════════════════════
 
-# Check if there are changes
-if git diff --quiet && git diff --cached --quiet; then
-  echo "ℹ️ No changes to commit"
+if [[ "$MODE" == "local" ]]; then
+  echo ""
+  echo "═══════════════════════════════════════════════════"
+  echo "✅ FIXES APPLIED (LOCAL MODE)"
+  echo "═══════════════════════════════════════════════════"
+  echo ""
+  echo "📋 Fixes applied to: $WORK_DIR"
+  echo "   localstack-migrate will handle commit/push"
+  echo ""
+  
+  # Document fixes in execution-output.md
+  echo "" >> execution-output.md
+  echo "## Fixes Applied by localstack-fixer" >> execution-output.md
+  echo "" >> execution-output.md
+  for fix in "${APPLIED_FIXES[@]}"; do
+    echo "- ✅ $fix" >> execution-output.md
+  done
+  echo "" >> execution-output.md
+
 else
-  # Stage all changes
-  git add -A
-
-  # Create commit message
-  FIXES_LIST=$(printf '%s, ' "${APPLIED_FIXES[@]}")
-  FIXES_LIST=${FIXES_LIST%, }  # Remove trailing comma
-
-  COMMIT_MSG="fix(localstack): batch fixes for PR #${PR_NUMBER}
+  # PR MODE: Commit and push
+  echo "═══════════════════════════════════════════════════"
+  echo "📤 COMMITTING AND PUSHING FIXES"
+  echo "═══════════════════════════════════════════════════"
+  echo ""
+  
+  # Check if there are changes
+  if git diff --quiet && git diff --cached --quiet; then
+    echo "ℹ️ No changes to commit"
+  else
+    # Stage all changes
+    git add -A
+  
+    # Create commit message
+    FIXES_LIST=$(printf '%s, ' "${APPLIED_FIXES[@]}")
+    FIXES_LIST=${FIXES_LIST%, }  # Remove trailing comma
+  
+    COMMIT_MSG="fix(localstack): batch fixes for PR #${PR_NUMBER}
 
 Applied fixes: ${FIXES_LIST}
 
@@ -855,65 +999,91 @@ This commit applies automated fixes to resolve CI/CD failures:
 $(for fix in "${APPLIED_FIXES[@]}"; do echo "- $fix"; done)
 
 Automated by localstack-fixer agent."
-
-  git commit -m "$COMMIT_MSG"
-
-  echo "📤 Pushing to branch: $PR_BRANCH..."
-  git push origin "$PR_BRANCH"
-
-  echo ""
-  echo "✅ Fixes committed and pushed!"
+  
+    git commit -m "$COMMIT_MSG"
+  
+    echo "📤 Pushing to branch: $PR_BRANCH..."
+    git push origin "$PR_BRANCH"
+  
+    echo ""
+    echo "✅ Fixes committed and pushed!"
+  fi
 fi
 ```
 
-### Step 10: Trigger CI/CD Re-run and Monitor
+### Step 10: Trigger CI/CD Re-run and Monitor (PR MODE ONLY)
 
 ```bash
-echo ""
-echo "═══════════════════════════════════════════════════"
-echo "🔄 TRIGGERING CI/CD RE-RUN"
-echo "═══════════════════════════════════════════════════"
-echo ""
+# ═══════════════════════════════════════════════════════════════
+# LOCAL MODE: Skip - localstack-migrate will re-deploy
+# PR MODE: Optionally trigger CI/CD re-run
+# ═══════════════════════════════════════════════════════════════
 
-if [[ "$RETRY_ALL" == "true" ]]; then
-  echo "🔄 Re-running all failed jobs..."
-  gh run rerun "$RUN_ID" --repo "$GITHUB_REPO" --failed 2>/dev/null || true
+if [[ "$MODE" == "pr" ]]; then
+  echo ""
+  echo "═══════════════════════════════════════════════════"
+  echo "🔄 TRIGGERING CI/CD RE-RUN"
+  echo "═══════════════════════════════════════════════════"
+  echo ""
+  
+  if [[ "$RETRY_ALL" == "true" ]]; then
+    echo "🔄 Re-running all failed jobs..."
+    gh run rerun "$RUN_ID" --repo "$GITHUB_REPO" --failed 2>/dev/null || true
+  fi
+  
+  echo "📋 Next Steps:"
+  echo "   1. CI/CD will automatically trigger on the new commit"
+  echo "   2. Monitor the workflow: gh run watch --repo $GITHUB_REPO"
+  echo "   3. View PR: https://github.com/$GITHUB_REPO/pull/$PR_NUMBER"
+  echo ""
+  echo "💡 To check status again:"
+  echo "   /localstack-fixer --status $PR_NUMBER"
+  echo ""
 fi
-
-echo "📋 Next Steps:"
-echo "   1. CI/CD will automatically trigger on the new commit"
-echo "   2. Monitor the workflow: gh run watch --repo $GITHUB_REPO"
-echo "   3. View PR: https://github.com/$GITHUB_REPO/pull/$PR_NUMBER"
-echo ""
-echo "💡 To check status again:"
-echo "   /localstack-fixer --status $PR_NUMBER"
-echo ""
 ```
 
 ### Step 11: Cleanup and Summary
 
 ```bash
-# Return to project root
-cd "$PROJECT_ROOT"
+# ═══════════════════════════════════════════════════════════════
+# LOCAL MODE: Don't cleanup - localstack-migrate manages worktree
+# PR MODE: Cleanup worktree and return to project root
+# ═══════════════════════════════════════════════════════════════
 
-# Cleanup worktree
-if [[ -d "$WORK_DIR" ]]; then
-  echo "🧹 Cleaning up worktree..."
-  git worktree remove "$WORK_DIR" --force 2>/dev/null || rm -rf "$WORK_DIR"
+if [[ "$MODE" == "pr" ]]; then
+  # Return to project root
+  cd "$PROJECT_ROOT"
+  
+  # Cleanup worktree (only in PR mode)
+  if [[ -d "$WORK_DIR" ]] && [[ "$WORK_DIR" == worktree/fixer-* ]]; then
+    echo "🧹 Cleaning up worktree..."
+    git worktree remove "$WORK_DIR" --force 2>/dev/null || rm -rf "$WORK_DIR"
+  fi
+  
+  # Prune orphaned worktrees
+  git worktree prune 2>/dev/null || true
 fi
-
-# Prune orphaned worktrees
-git worktree prune 2>/dev/null || true
 
 echo ""
 echo "═══════════════════════════════════════════════════"
 echo "📊 FIX SUMMARY"
 echo "═══════════════════════════════════════════════════"
 echo ""
-echo "   PR:              #${PR_NUMBER}"
-echo "   Branch:          ${PR_BRANCH}"
-echo "   Failed Jobs:     ${FAILED_COUNT}"
-echo "   Errors Found:    ${ERROR_COUNT}"
+echo "   Mode:            ${MODE^^}"
+
+if [[ "$MODE" == "pr" ]]; then
+  echo "   PR:              #${PR_NUMBER}"
+  echo "   Branch:          ${PR_BRANCH:-N/A}"
+  echo "   Failed Jobs:     ${FAILED_COUNT:-0}"
+fi
+
+if [[ "$MODE" == "local" ]]; then
+  echo "   Work Dir:        ${WORK_DIR}"
+  echo "   Platform:        ${PLATFORM:-unknown}"
+  echo "   Language:        ${LANGUAGE:-unknown}"
+fi
+
+echo "   Errors Found:    ${ERROR_COUNT:-0}"
 echo "   Fixes Applied:   ${#APPLIED_FIXES[@]}"
 echo ""
 echo "   Applied Fixes:"
@@ -921,6 +1091,14 @@ for fix in "${APPLIED_FIXES[@]}"; do
   echo "   ✅ $fix"
 done
 echo ""
+
+# Set output variables for localstack-migrate to use
+if [[ "$MODE" == "local" ]]; then
+  export FIX_SUCCESS=true
+  export FIXES_APPLIED="${APPLIED_FIXES[*]}"
+  export ITERATIONS_USED=1
+fi
+
 echo "═══════════════════════════════════════════════════"
 ```
 
