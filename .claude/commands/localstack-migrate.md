@@ -13,14 +13,14 @@ Picks a task from the archive folder (or fetches from GitHub PR if not found loc
 
 This command uses settings from `.claude/config/localstack.yaml`. Key configurable options:
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `iteration.max_fix_iterations` | 3 | Maximum fix iterations |
-| `iteration.use_batch_fix` | true | Enable batch fix approach |
-| `localstack.reset_state_before_deploy` | false | Reset LocalStack before deploy |
-| `parallel.enabled` | true | Enable parallel execution |
-| `parallel.max_concurrent_agents` | 10 | Max parallel agents |
-| `smart_selection.enabled` | true | Enable smart task selection |
+| Setting                                | Default | Description                    |
+| -------------------------------------- | ------- | ------------------------------ |
+| `iteration.max_fix_iterations`         | 3       | Maximum fix iterations         |
+| `iteration.use_batch_fix`              | true    | Enable batch fix approach      |
+| `localstack.reset_state_before_deploy` | false   | Reset LocalStack before deploy |
+| `parallel.enabled`                     | true    | Enable parallel execution      |
+| `parallel.max_concurrent_agents`       | 10      | Max parallel agents            |
+| `smart_selection.enabled`              | true    | Enable smart task selection    |
 
 See `.claude/config/localstack.yaml` for full configuration options.
 
@@ -751,6 +751,7 @@ Test Errors: ${TEST_ERRORS:-"None"}
 **Batch Fix Strategy** (CRITICAL - do NOT fix one at a time):
 
 Before EACH re-deployment, apply ALL of these if applicable:
+
 1. LocalStack endpoint configuration (almost always needed)
 2. S3 path-style access (if using S3/buckets)
 3. RemovalPolicy.DESTROY (always for LocalStack)

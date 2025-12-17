@@ -16,15 +16,15 @@ This agent uses settings from `.claude/config/localstack.yaml`. Key configurable
 ```yaml
 # From .claude/config/localstack.yaml
 iteration:
-  max_fix_iterations: 3          # Configurable max iterations
-  use_batch_fix: true            # Enable/disable batch fix approach
+  max_fix_iterations: 3 # Configurable max iterations
+  use_batch_fix: true # Enable/disable batch fix approach
 
 batch_fix:
   enabled: true
   apply_preventive_fixes: true
-  fix_priority: [...]            # Order of fix application
-  preventive_fixes: [...]        # Fixes to apply proactively
-  conditional_fixes: [...]       # Fixes based on error patterns
+  fix_priority: [...] # Order of fix application
+  preventive_fixes: [...] # Fixes to apply proactively
+  conditional_fixes: [...] # Fixes based on error patterns
 ```
 
 ## Input Parameters
