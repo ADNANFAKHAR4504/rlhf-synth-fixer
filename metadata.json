@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "292015",
+  "team": "synth",
+  "startedAt": "2025-08-19T16:00:29.709Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Cloud Environment Setup",
+    "General Infrastructure Tooling QA",
+    "Security Configuration as Code",
+    "IaC Optimization"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "CloudWatch",
+    "IAM",
+    "Secrets Manager",
+    "Key Pairs"
+  ]
+}
