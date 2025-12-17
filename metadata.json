@@ -10,6 +10,7 @@
   "provider": "localstack",
   "subject_labels": [
     "Multi-Environment Consistency and Replication"
+  ],
   "aws_services": [
     "VPC",
     "InternetGateway",
