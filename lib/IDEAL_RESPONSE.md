@@ -9,6 +9,18 @@ This CDK implementation provides a comprehensive, secure AWS infrastructure solu
 
 ## Architecture Components
 
+### Core Dependencies
+
+```typescript
+import * as cdk from 'aws-cdk-lib';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as kms from 'aws-cdk-lib/aws-kms';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
+```
+
 ### 1. KMS Key Management
 
 **Implementation:**
