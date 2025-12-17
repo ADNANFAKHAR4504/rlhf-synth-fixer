@@ -22,8 +22,8 @@ Tags.of(app).add('Author', commitAuthor);
 new TapStack(app, stackName, {
   stackName: stackName, // This ensures CloudFormation stack name includes the suffix
   environment: environmentSuffix, // Pass the environment suffix as environment
-  // Skip RDS for LocalStack due to subnet group dependency issues
-  skipRds: isLocalStack,
+  // Enable LocalStack compatibility mode (skips RDS, NAT Gateways)
+  isLocalStack,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION,

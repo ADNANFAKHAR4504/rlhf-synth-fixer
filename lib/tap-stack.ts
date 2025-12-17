@@ -16,15 +16,15 @@ import { Construct } from 'constructs';
 export interface TapStackProps extends cdk.StackProps {
   environment: string;
   allowedSshIps?: string[];
-  /** Skip RDS for LocalStack compatibility (LocalStack has issues with RDS subnet groups) */
-  skipRds?: boolean;
+  /** Enable LocalStack compatibility mode (skips RDS, NAT Gateways due to LocalStack limitations) */
+  isLocalStack?: boolean;
 }
 
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
 
-    const { environment, allowedSshIps = [], skipRds = false } = props;
+    const { environment, allowedSshIps = [], isLocalStack = false } = props;
     const resourcePrefix = `${environment}`;
 
     // 1. KMS Key for encryption (Requirements 2, 7)
@@ -114,7 +114,8 @@ export class TapStack extends cdk.Stack {
     const vpc = new ec2.Vpc(this, `${resourcePrefix}-vpc`, {
       vpcName: `${resourcePrefix}-vpc`,
       maxAzs: 2,
-      natGateways: 1,
+      // Skip NAT Gateways for LocalStack (EIP AllocationId resolution issues)
+      natGateways: isLocalStack ? 0 : 1,
       // Disable default security group restriction for LocalStack compatibility
       // LocalStack doesn't support nodejs22.x runtime used by the custom resource
       restrictDefaultSecurityGroup: false,
@@ -127,7 +128,10 @@ export class TapStack extends cdk.Stack {
         {
           cidrMask: 24,
           name: 'private',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          // Use PRIVATE_ISOLATED for LocalStack (no NAT), PRIVATE_WITH_EGRESS for AWS
+          subnetType: isLocalStack
+            ? ec2.SubnetType.PRIVATE_ISOLATED
+            : ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
       ],
     });
@@ -178,7 +182,7 @@ export class TapStack extends cdk.Stack {
     );
 
     // Security Group for RDS (only created when RDS is enabled)
-    const rdsSecurityGroup = skipRds
+    const rdsSecurityGroup = isLocalStack
       ? undefined
       : new ec2.SecurityGroup(this, `${resourcePrefix}-rds-sg`, {
           vpc,
@@ -266,7 +270,7 @@ export class TapStack extends cdk.Stack {
 
     // 5. RDS Instance with KMS encryption (Requirement 2)
     // Skip RDS for LocalStack due to subnet group dependency issues
-    const rdsInstance = skipRds
+    const rdsInstance = isLocalStack
       ? undefined
       : new rds.DatabaseInstance(this, `${resourcePrefix}-database`, {
           instanceIdentifier: `${resourcePrefix}-database`,
