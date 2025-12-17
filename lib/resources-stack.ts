@@ -61,9 +61,10 @@ export class ResourcesStack extends cdk.Stack {
 
     this.bucket.grantReadWrite(this.instanceRole);
 
-    // Use default VPC
-    this.vpc = Vpc.fromLookup(this, 'DefaultVpc', {
-      isDefault: true,
+    // Create VPC for LocalStack
+    this.vpc = new Vpc(this, 'LocalStackVpc', {
+      maxAzs: 2,
+      natGateways: 0, 
     });
 
     // Security Group
