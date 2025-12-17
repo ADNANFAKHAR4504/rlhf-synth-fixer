@@ -6,7 +6,7 @@ Create CloudFormation infrastructure code in YAML for a serverless quiz generati
 
 The system needs:
 - API Gateway REST API to receive quiz generation requests
-- Lambda function (Python 3.13) for quiz generation with 5-minute timeout
+- Lambda function (Python 3.12) for quiz generation with 5-minute timeout
 - DynamoDB table for storing quiz questions and results with 365-day TTL
 - Lambda function for quiz scoring logic
 - S3 bucket for exporting quiz results

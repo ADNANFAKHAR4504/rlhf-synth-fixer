@@ -181,7 +181,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub 'quiz-generation-${Environment}'
-      Runtime: python3.13
+      Runtime: python3.12
       Handler: index.handler
       Role: !GetAtt QuizGenerationLambdaRole.Arn
       Timeout: 300
@@ -337,7 +337,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub 'quiz-scoring-${Environment}'
-      Runtime: python3.13
+      Runtime: python3.12
       Handler: index.handler
       Role: !GetAtt QuizScoringLambdaRole.Arn
       Timeout: 60

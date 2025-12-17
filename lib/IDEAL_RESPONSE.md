@@ -223,7 +223,7 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       FunctionName: !Sub 'quiz-generation-${EnvironmentSuffix}'
-      Runtime: python3.13
+      Runtime: python3.12
       Handler: index.handler
       Role: !GetAtt QuizGenerationLambdaRole.Arn
       Timeout: 300
@@ -320,7 +320,7 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       FunctionName: !Sub 'quiz-scoring-${EnvironmentSuffix}'
-      Runtime: python3.13
+      Runtime: python3.12
       Handler: index.handler
       Role: !GetAtt QuizScoringLambdaRole.Arn
       Timeout: 60
