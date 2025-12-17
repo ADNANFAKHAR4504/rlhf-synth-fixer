@@ -7,9 +7,9 @@
   "team": "3",
   "provider": "localstack",
   "startedAt": "2025-10-03T17:22:44.158Z",
-  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subtask": "Application Deployment",
   "subject_labels": [
-    "Application Deployment"
+    "Serverless Infrastructure (Functions as Code)"
   ],
   "aws_services": [
     "DynamoDB",
@@ -20,6 +20,5 @@
     "EventBridge",
     "CloudWatch",
     "CloudWatch Logs"
-  ],
-  "training_quality": 8
+  ]
 }
