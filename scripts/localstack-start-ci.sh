@@ -87,10 +87,7 @@ DOCKER_CMD="docker run -d \
   -e DEBUG=1 \
   -e DATA_DIR=/tmp/localstack/data \
   -e S3_SKIP_SIGNATURE_VALIDATION=1 \
-  -e ENFORCE_IAM=0 \
-  -e LOCALSTACK_HOST=localhost.localstack.cloud:4566 \
-  -e GATEWAY_LISTEN=0.0.0.0:4566 \
-  -e LAMBDA_DOCKER_NETWORK=bridge"
+  -e ENFORCE_IAM=0"
 
 # Add SERVICES only if explicitly set
 if [ -n "$SERVICES" ]; then
@@ -106,7 +103,7 @@ fi
 
 DOCKER_CMD="$DOCKER_CMD \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  localstack/localstack-pro:latest"
+  localstack/localstack-pro:stable"
 
 # Execute the docker command
 eval $DOCKER_CMD
