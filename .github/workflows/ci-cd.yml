@@ -176,7 +176,7 @@ jobs:
           upload-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
-        
+
       - name: Validate Stack Naming
         run: |
           echo "🔍 Validating stack naming conventions..."
@@ -736,7 +736,7 @@ jobs:
             export AWS_ACCESS_KEY_ID=test
             export AWS_SECRET_ACCESS_KEY=test
             export LOCALSTACK_API_KEY="${{ secrets.LOCALSTACK_API_KEY }}"
-            ./scripts/localstack-ci-test.sh
+            ./scripts/localstack-ci-deploy.sh && ./scripts/localstack-ci-test.sh
           else
             echo "Running integration tests against AWS..."
             ./scripts/integration-tests.sh
