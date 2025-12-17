@@ -511,66 +511,54 @@ export class TapStack extends cdk.Stack {
 
 ## Key Security Features Implemented:
 
-### 1. **IAM Roles with Trust Policies** ✅
-- EC2 role with explicit trust policy for EC2 service
+### 1. **IAM Roles with Trust Policies**- EC2 role with explicit trust policy for EC2 service
 - Key rotation role with Lambda service trust policy
 - All roles follow principle of least privilege
 
-### 2. **KMS Encryption** ✅
-- Centralized KMS key with automatic rotation
+### 2. **KMS Encryption**- Centralized KMS key with automatic rotation
 - Encrypts EBS volumes, RDS instances, S3 buckets, and CloudTrail logs
 - Proper key policies for service access
 
-### 3. **S3 Security** ✅
-- Bucket policy denying public PUT actions
+### 3. **S3 Security**- Bucket policy denying public PUT actions
 - KMS encryption enabled
 - Block public access settings
 - Versioning and lifecycle rules
 
-### 4. **MFA and Access Key Management** ✅
-- IAM policy enforcing MFA for all actions
+### 4. **MFA and Access Key Management**- IAM policy enforcing MFA for all actions
 - Framework for 90-day key rotation (Lambda role created)
 - Comprehensive MFA management permissions
 
-### 5. **WAF Protection** ✅
-- AWS managed rule sets for common threats
+### 5. **WAF Protection**- AWS managed rule sets for common threats
 - SQL injection protection
 - Known bad inputs filtering
 - Associated with Application Load Balancer
 
-### 6. **EC2 Instance Profile** ✅
-- Read-only S3 permissions
+### 6. **EC2 Instance Profile**- Read-only S3 permissions
 - SSM access for secure management
 - No unnecessary permissions
 
-### 7. **CloudTrail Security** ✅
-- KMS encrypted logs
+### 7. **CloudTrail Security**- KMS encrypted logs
 - Multi-region trail
 - File validation enabled
 - CloudWatch integration
 
-### 8. **SNS Access Control** ✅
-- Restricted to authorized AWS services only
+### 8. **SNS Access Control**- Restricted to authorized AWS services only
 - KMS encryption
 - Explicit deny for unauthorized principals
 
-### 9. **Security Groups** ✅
-- SSH access only from specified IP addresses
+### 9. **Security Groups**- SSH access only from specified IP addresses
 - Minimal ingress rules
 - Separate security groups for different tiers
 
-### 10. **GuardDuty** ✅
-- Enabled with comprehensive data sources
+### 10. **GuardDuty**- Enabled with comprehensive data sources
 - S3, Kubernetes, and malware protection
 - 15-minute finding frequency
 
-### 11. **Network Security** ✅
-- Private subnets for databases
+### 11. **Network Security**- Private subnets for databases
 - Public subnets only for load balancers
 - Proper security group relationships
 
-### 12. **Environment-based Naming** ✅
-- Consistent naming pattern: `{environment}-{resource-name}`
+### 12. **Environment-based Naming**- Consistent naming pattern: `{environment}-{resource-name}`
 - Supports both prod and dev environments
 - Region-agnostic deployment
 
