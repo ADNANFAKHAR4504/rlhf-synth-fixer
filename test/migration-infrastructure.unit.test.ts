@@ -304,7 +304,9 @@ describe('Migration Infrastructure Unit Tests', () => {
   describe('Configuration Management', () => {
     it('should use Pulumi config for environmentSuffix', () => {
       expect(indexCode).toContain('new pulumi.Config()');
-      expect(indexCode).toContain('config.require(\'environmentSuffix\')');
+      // environmentSuffix now uses env var with config fallback
+      expect(indexCode).toContain('process.env.ENVIRONMENT_SUFFIX');
+      expect(indexCode).toContain("config.get('environmentSuffix')");
     });
 
     it('should use region configuration', () => {
