@@ -1,5 +1,8 @@
 # Secure AWS Infrastructure with CDK - Production-Ready Implementation
 
+**Platform:** cdk
+**Language:** ts
+
 ## Overview
 
 This CDK implementation provides a comprehensive, secure AWS infrastructure solution that addresses all requirements from the prompt while following enterprise-grade security best practices and AWS Well-Architected Framework principles.
