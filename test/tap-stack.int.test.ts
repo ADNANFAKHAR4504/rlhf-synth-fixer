@@ -164,23 +164,30 @@ async function invokeLambda(
 describe('XYZ Corp SaaS Infrastructure Integration Tests', () => {
   // Setup: Retrieve CloudFormation stack outputs
   beforeAll(async () => {
-    const response = await cfnClient.send(
-      new DescribeStacksCommand({ StackName: stackName })
-    );
-
-    const stack = response.Stacks?.[0];
-    if (!stack || !stack.Outputs) {
-      throw new Error(
-        `Stack ${stackName} not found or has no outputs`
+    // Read outputs directly from cfn-outputs file (created during deployment)
+    const cfnOutputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
+    if (fs.existsSync(cfnOutputsPath)) {
+      stackOutputs = JSON.parse(fs.readFileSync(cfnOutputsPath, 'utf8'));
+    } else {
+      // Fallback to CloudFormation API if outputs file doesn't exist
+      const response = await cfnClient.send(
+        new DescribeStacksCommand({ StackName: stackName })
       );
-    }
 
-    // Convert outputs array to key-value map
-    stack.Outputs.forEach((output) => {
-      if (output.OutputKey && output.OutputValue) {
-        stackOutputs[output.OutputKey] = output.OutputValue;
+      const stack = response.Stacks?.[0];
+      if (!stack || !stack.Outputs) {
+        throw new Error(
+          `Stack ${stackName} not found or has no outputs`
+        );
       }
-    });
+
+      // Convert outputs array to key-value map
+      stack.Outputs.forEach((output) => {
+        if (output.OutputKey && output.OutputValue) {
+          stackOutputs[output.OutputKey] = output.OutputValue;
+        }
+      });
+    }
 
     // Extract resource identifiers from outputs
     lambdaFunctionName = stackOutputs.LambdaFunctionName;
