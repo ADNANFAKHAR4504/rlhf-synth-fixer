@@ -137,7 +137,7 @@ cdk.CfnOutput(self, "SecurityGroupId", value=self.security_group.security_group_
 
 ## Common Model Response Patterns
 
-### ❌ **Typical Model Response Issues**:
+### **Typical Model Response Issues**:
 
 1. **Basic Security Group Only**:
 
@@ -179,7 +179,7 @@ vpc = ec2.Vpc.from_lookup(self, "VPC", vpc_id="vpc-12345")
 # Missing: cdk.CfnOutput for VPC and Security Group IDs
 ```
 
-### ✅ **Actual Implementation Approach**:
+### **Actual Implementation Approach**:
 
 1. **Complete Stack Structure**:
 
