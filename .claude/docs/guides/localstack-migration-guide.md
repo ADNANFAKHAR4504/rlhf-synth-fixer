@@ -445,6 +445,39 @@ gh pr create --title "[LocalStack] ls-Pr7179 - cdk/ts" --body "LocalStack migrat
 
 **Note:** The PR pipeline will automatically deploy and test. No manual deployment needed.
 
+## Parallel Execution (Multiple Agents)
+
+The migration command supports running multiple instances in parallel for different PRs. This is useful for migrating many tasks quickly using multiple Claude agents.
+
+### Running 5 Agents in Parallel
+
+```bash
+# Reset LocalStack once before starting (optional)
+curl -X POST http://localhost:4566/_localstack/state/reset
+
+# Then in 5 separate terminals/agents, run with --no-reset:
+# Agent 1: /localstack-migrate --no-reset Pr7179
+# Agent 2: /localstack-migrate --no-reset Pr7180
+# Agent 3: /localstack-migrate --no-reset Pr7181
+# Agent 4: /localstack-migrate --no-reset Pr7182
+# Agent 5: /localstack-migrate --no-reset Pr7183
+```
+
+### Parallel Execution Features
+
+| Challenge                        | Solution                                      |
+| -------------------------------- | --------------------------------------------- |
+| LocalStack state reset conflicts | `--no-reset` flag + unique stack names per PR |
+| Git branch conflicts             | **Git worktrees** for isolated operations     |
+| Migration log race conditions    | **File locking** mechanism                    |
+| Working directory conflicts      | Separate directories per PR                   |
+
+### Important: Always Use `--no-reset`
+
+When running multiple agents in parallel, **always use the `--no-reset` flag**. This prevents one agent from resetting LocalStack and destroying another agent's deployed resources.
+
+Each migration automatically uses a unique stack name (`tap-stack-{PR_ID}`) to prevent CloudFormation stack conflicts.
+
 ## Related Files
 
 - `.claude/commands/localstack-migrate.md` - Main command

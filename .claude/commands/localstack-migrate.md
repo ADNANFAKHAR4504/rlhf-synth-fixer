@@ -35,6 +35,14 @@ Picks a task from the archive folder (or fetches from GitHub PR if not found loc
 
 # Show migration statistics
 /localstack-migrate --stats
+
+# PARALLEL EXECUTION: Skip LocalStack reset (for running multiple agents)
+/localstack-migrate --no-reset Pr7179
+
+# PARALLEL EXECUTION: Multiple agents on different PRs
+# Terminal 1: /localstack-migrate --no-reset Pr7179
+# Terminal 2: /localstack-migrate --no-reset Pr7180
+# Terminal 3: /localstack-migrate --no-reset Pr7181
 ```
 
 ## Workflow
@@ -59,35 +67,52 @@ PICK_NEXT=false
 SMART_SELECT=false
 SHOW_STATS=false
 FORCE_GITHUB=false
+SKIP_RESET=false
 GITHUB_REPO="TuringGpt/iac-test-automations"
 
-# Parse flags
-case "$TASK_PATH" in
-  --platform)
-    PLATFORM_FILTER="${2:-}"
-    TASK_PATH=""
-    ;;
-  --service)
-    SERVICE_FILTER="${2:-}"
-    TASK_PATH=""
-    ;;
-  --next)
-    PICK_NEXT=true
-    TASK_PATH=""
-    ;;
-  --smart)
-    SMART_SELECT=true
-    TASK_PATH=""
-    ;;
-  --stats)
-    SHOW_STATS=true
-    TASK_PATH=""
-    ;;
-  --github)
-    FORCE_GITHUB=true
-    TASK_PATH="${2:-}"
-    ;;
-esac
+# Parse flags (support combining --no-reset with other options)
+ARGS=("$@")
+for ((i=0; i<${#ARGS[@]}; i++)); do
+  case "${ARGS[i]}" in
+    --no-reset)
+      SKIP_RESET=true
+      echo "🔄 Parallel mode: LocalStack state reset will be skipped"
+      ;;
+    --platform)
+      PLATFORM_FILTER="${ARGS[i+1]:-}"
+      TASK_PATH=""
+      ((i++))
+      ;;
+    --service)
+      SERVICE_FILTER="${ARGS[i+1]:-}"
+      TASK_PATH=""
+      ((i++))
+      ;;
+    --next)
+      PICK_NEXT=true
+      TASK_PATH=""
+      ;;
+    --smart)
+      SMART_SELECT=true
+      TASK_PATH=""
+      ;;
+    --stats)
+      SHOW_STATS=true
+      TASK_PATH=""
+      ;;
+    --github)
+      FORCE_GITHUB=true
+      TASK_PATH="${ARGS[i+1]:-}"
+      ((i++))
+      ;;
+    *)
+      # If not a flag and TASK_PATH is empty, treat as task path
+      if [[ ! "${ARGS[i]}" =~ ^-- ]] && [ -z "$TASK_PATH" ]; then
+        TASK_PATH="${ARGS[i]}"
+      fi
+      ;;
+  esac
+done
 
 # Check LocalStack is running
 echo "🔍 Checking LocalStack status..."
@@ -558,11 +583,24 @@ echo "✅ Working directory ready"
 echo ""
 ```
 
-### Step 7: Reset LocalStack State
+### Step 7: Reset LocalStack State (Skipped in Parallel Mode)
 
 ```bash
-echo "🧹 Resetting LocalStack state..."
-curl -X POST http://localhost:4566/_localstack/state/reset 2>/dev/null && echo "✅ LocalStack state reset" || echo "⚠️  State reset not available (continuing anyway)"
+if [ "$SKIP_RESET" = true ]; then
+  echo "⏭️  Skipping LocalStack state reset (parallel mode / --no-reset flag)"
+  echo "   ℹ️  Using unique stack name: tap-stack-${PR_ID}"
+  echo ""
+else
+  echo "🧹 Resetting LocalStack state..."
+  curl -X POST http://localhost:4566/_localstack/state/reset 2>/dev/null && echo "✅ LocalStack state reset" || echo "⚠️  State reset not available (continuing anyway)"
+  echo ""
+fi
+
+# For parallel execution, use unique stack names based on PR_ID
+# This ensures different migrations don't conflict with each other
+STACK_NAME="tap-stack-${PR_ID}"
+export STACK_NAME
+echo "📋 Using stack name: $STACK_NAME"
 echo ""
 ```
 
@@ -606,12 +644,14 @@ export CDK_DEFAULT_REGION=us-east-1
 ```
 ````
 
-**Deployment Commands by Platform**:
+**Deployment Commands by Platform** (use unique stack name `${STACK_NAME}` for parallel safety):
 
-- CDK: Bootstrap with `cdklocal bootstrap`, then `cdklocal deploy --all --require-approval never`
-- CloudFormation: `awslocal cloudformation create-stack --stack-name tap-stack --template-body file://lib/TapStack.yml --capabilities CAPABILITY_IAM`
-- Terraform: `tflocal init && tflocal apply -auto-approve`
-- Pulumi: Configure local backend, then `pulumi up --yes`
+- CDK: Bootstrap with `cdklocal bootstrap`, then `cdklocal deploy --all --require-approval never` (stack names auto-prefixed)
+- CloudFormation: `awslocal cloudformation create-stack --stack-name ${STACK_NAME} --template-body file://lib/TapStack.yml --capabilities CAPABILITY_IAM`
+- Terraform: `tflocal init && tflocal apply -auto-approve` (use workspace or prefix resources with PR_ID)
+- Pulumi: Configure local backend, then `pulumi up --yes --stack ${STACK_NAME}`
+
+**Important for Parallel Execution**: The `STACK_NAME` environment variable is set to `tap-stack-${PR_ID}` to ensure each migration uses a unique stack name and doesn't conflict with other parallel migrations.
 
 **Output Required**:
 Create `execution-output.md` with:
@@ -718,12 +758,12 @@ Set variables:
 Exit code 0 if fixed, 1 if unable to fix, 2 if unsupported services.
 ```
 
-### Step 10: Create Pull Request for Migrated Task
+### Step 10: Create Pull Request for Migrated Task (Parallel-Safe with Git Worktrees)
 
 ```bash
 echo ""
 echo "═══════════════════════════════════════════════════"
-echo "📦 CREATING PULL REQUEST"
+echo "📦 CREATING PULL REQUEST (Parallel-Safe)"
 echo "═══════════════════════════════════════════════════"
 echo ""
 
@@ -731,6 +771,7 @@ MIGRATION_STATUS="failed"
 MIGRATION_REASON=""
 NEW_PR_URL=""
 NEW_PR_NUMBER=""
+GIT_WORKTREE_DIR=""
 
 if [ "$FIX_SUCCESS" = "true" ]; then
 
@@ -769,24 +810,47 @@ if [ "$FIX_SUCCESS" = "true" ]; then
       # Navigate to project root
       cd "$PROJECT_ROOT"
 
-      # Ensure we're on main and up to date
-      git checkout main 2>/dev/null || true
-      git pull origin main 2>/dev/null || true
+      # ═══════════════════════════════════════════════════════════════
+      # PARALLEL-SAFE: Use git worktree for isolated branch operations
+      # This allows multiple agents to work simultaneously without conflicts
+      # ═══════════════════════════════════════════════════════════════
 
-      # Check if branch already exists and delete it
+      GIT_WORKTREE_DIR="worktree/git-${PR_ID}"
+
+      echo ""
+      echo "🔀 Using git worktree for parallel-safe operations..."
+      echo "   Worktree directory: $GIT_WORKTREE_DIR"
+
+      # Clean up any existing worktree for this PR
+      if [ -d "$GIT_WORKTREE_DIR" ]; then
+        echo "   🧹 Cleaning existing worktree..."
+        git worktree remove "$GIT_WORKTREE_DIR" --force 2>/dev/null || rm -rf "$GIT_WORKTREE_DIR"
+      fi
+
+      # Delete the branch if it exists locally (from previous runs)
       if git show-ref --verify --quiet "refs/heads/$NEW_BRANCH"; then
-        echo "⚠️  Branch $NEW_BRANCH already exists locally, deleting..."
+        echo "   ⚠️  Branch $NEW_BRANCH exists locally, deleting..."
         git branch -D "$NEW_BRANCH" 2>/dev/null || true
       fi
 
-      # Create and checkout new branch
-      git checkout -b "$NEW_BRANCH"
+      # Fetch latest main without switching branches
+      echo "   📥 Fetching latest main..."
+      git fetch origin main:main 2>/dev/null || git fetch origin main 2>/dev/null || true
+
+      # Create a new worktree with the new branch based on origin/main
+      echo "   📁 Creating isolated worktree with new branch..."
+      git worktree add -b "$NEW_BRANCH" "$GIT_WORKTREE_DIR" origin/main 2>/dev/null
 
       if [ $? -ne 0 ]; then
-        echo "❌ Failed to create branch: $NEW_BRANCH"
-        MIGRATION_REASON="Failed to create git branch"
+        # Try alternative: create worktree from main
+        git worktree add -b "$NEW_BRANCH" "$GIT_WORKTREE_DIR" main 2>/dev/null
+      fi
+
+      if [ ! -d "$GIT_WORKTREE_DIR" ]; then
+        echo "❌ Failed to create git worktree"
+        MIGRATION_REASON="Failed to create git worktree"
       else
-        echo "✅ Branch created: $NEW_BRANCH"
+        echo "   ✅ Worktree created: $GIT_WORKTREE_DIR"
 
         # Update metadata.json in work directory with new PR ID
         if [ -f "$WORK_DIR/metadata.json" ]; then
@@ -797,45 +861,47 @@ if [ "$FIX_SUCCESS" = "true" ]; then
           mv "$WORK_DIR/metadata.json.tmp" "$WORK_DIR/metadata.json"
         fi
 
-        # Copy work directory contents to project root (standard PR structure)
-        # This overwrites the root-level files with the LocalStack-compatible versions
+        # Copy work directory contents to the isolated worktree (not project root!)
         echo ""
-        echo "📁 Preparing PR files at project root..."
-        
+        echo "📁 Preparing PR files in isolated worktree..."
+
         # Copy lib/ directory
         if [ -d "$WORK_DIR/lib" ]; then
-          rm -rf lib/
-          cp -r "$WORK_DIR/lib" ./
+          rm -rf "$GIT_WORKTREE_DIR/lib/"
+          cp -r "$WORK_DIR/lib" "$GIT_WORKTREE_DIR/"
           echo "   ✅ Copied lib/"
         fi
-        
+
         # Copy test/ directory
         if [ -d "$WORK_DIR/test" ]; then
-          rm -rf test/
-          cp -r "$WORK_DIR/test" ./
+          rm -rf "$GIT_WORKTREE_DIR/test/"
+          cp -r "$WORK_DIR/test" "$GIT_WORKTREE_DIR/"
           echo "   ✅ Copied test/"
         fi
-        
+
         # Copy metadata.json
         if [ -f "$WORK_DIR/metadata.json" ]; then
-          cp "$WORK_DIR/metadata.json" ./
+          cp "$WORK_DIR/metadata.json" "$GIT_WORKTREE_DIR/"
           echo "   ✅ Copied metadata.json"
         fi
-        
+
         # Copy any other essential files
         for file in Pipfile Pipfile.lock requirements.txt cdk.json cdktf.json Pulumi.yaml main.tf; do
           if [ -f "$WORK_DIR/$file" ]; then
-            cp "$WORK_DIR/$file" ./
+            cp "$WORK_DIR/$file" "$GIT_WORKTREE_DIR/"
             echo "   ✅ Copied $file"
           fi
         done
 
         echo ""
-        echo "✅ PR files prepared"
+        echo "✅ PR files prepared in worktree"
+
+        # Change to worktree directory for git operations
+        cd "$GIT_WORKTREE_DIR"
 
         # Stage all changes
         echo ""
-        echo "📝 Staging changes..."
+        echo "📝 Staging changes in worktree..."
         git add lib/ test/ metadata.json 2>/dev/null || true
         git add Pipfile Pipfile.lock requirements.txt cdk.json cdktf.json Pulumi.yaml main.tf 2>/dev/null || true
         git add -A  # Stage any other changes
@@ -939,8 +1005,14 @@ This PR will be processed by the CI/CD pipeline which will:
           fi
         fi
 
-        # Switch back to main branch
-        git checkout main 2>/dev/null || true
+        # Return to project root
+        cd "$PROJECT_ROOT"
+
+        # Clean up the git worktree
+        echo ""
+        echo "🧹 Cleaning up git worktree..."
+        git worktree remove "$GIT_WORKTREE_DIR" --force 2>/dev/null || rm -rf "$GIT_WORKTREE_DIR"
+        echo "✅ Worktree cleaned up"
       fi
     fi
   fi
@@ -949,9 +1021,13 @@ else
   echo "❌ Migration failed: $MIGRATION_REASON"
 fi
 
-# Update migration log
+# ═══════════════════════════════════════════════════════════════
+# PARALLEL-SAFE: Update migration log with file locking
+# Uses flock to prevent race conditions when multiple agents run
+# ═══════════════════════════════════════════════════════════════
+
 echo ""
-echo "📋 Updating migration log..."
+echo "📋 Updating migration log (with file locking for parallel safety)..."
 
 MIGRATION_ENTRY=$(cat <<EOF
 {
@@ -972,13 +1048,72 @@ MIGRATION_ENTRY=$(cat <<EOF
 EOF
 )
 
-# Add to migrations array and update summary
-jq --argjson entry "$MIGRATION_ENTRY" --arg status "$MIGRATION_STATUS" '
-  .migrations += [$entry] |
-  .summary.total_attempted += 1 |
-  if $status == "success" then .summary.successful += 1 else .summary.failed += 1 end
-' "$MIGRATION_LOG" > "${MIGRATION_LOG}.tmp"
-mv "${MIGRATION_LOG}.tmp" "$MIGRATION_LOG"
+# Create lock file directory
+LOCK_FILE="${PROJECT_ROOT}/.claude/reports/.migration-log.lock"
+mkdir -p "$(dirname "$LOCK_FILE")"
+
+# Use flock for atomic update (with timeout to prevent deadlock)
+# If flock is not available (e.g., macOS), use a simple retry mechanism
+if command -v flock &> /dev/null; then
+  # Linux: use flock
+  (
+    flock -w 30 200 || { echo "⚠️  Could not acquire lock, updating anyway..."; }
+
+    jq --argjson entry "$MIGRATION_ENTRY" --arg status "$MIGRATION_STATUS" '
+      .migrations += [$entry] |
+      .summary.total_attempted += 1 |
+      if $status == "success" then .summary.successful += 1 else .summary.failed += 1 end
+    ' "$MIGRATION_LOG" > "${MIGRATION_LOG}.tmp.$$"
+    mv "${MIGRATION_LOG}.tmp.$$" "$MIGRATION_LOG"
+
+  ) 200>"$LOCK_FILE"
+else
+  # macOS: use a simple lock file mechanism with retries
+  MAX_RETRIES=10
+  RETRY_COUNT=0
+  LOCK_ACQUIRED=false
+
+  while [ "$RETRY_COUNT" -lt "$MAX_RETRIES" ]; do
+    # Try to create lock file atomically
+    if (set -o noclobber; echo "$$" > "$LOCK_FILE") 2>/dev/null; then
+      LOCK_ACQUIRED=true
+      trap 'rm -f "$LOCK_FILE"' EXIT
+      break
+    fi
+
+    # Check if lock is stale (older than 60 seconds)
+    if [ -f "$LOCK_FILE" ]; then
+      LOCK_AGE=$(($(date +%s) - $(stat -f %m "$LOCK_FILE" 2>/dev/null || echo 0)))
+      if [ "$LOCK_AGE" -gt 60 ]; then
+        echo "   ⚠️  Stale lock detected, removing..."
+        rm -f "$LOCK_FILE"
+        continue
+      fi
+    fi
+
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    echo "   ⏳ Waiting for migration log lock (attempt $RETRY_COUNT/$MAX_RETRIES)..."
+    sleep 1
+  done
+
+  if [ "$LOCK_ACQUIRED" = true ]; then
+    jq --argjson entry "$MIGRATION_ENTRY" --arg status "$MIGRATION_STATUS" '
+      .migrations += [$entry] |
+      .summary.total_attempted += 1 |
+      if $status == "success" then .summary.successful += 1 else .summary.failed += 1 end
+    ' "$MIGRATION_LOG" > "${MIGRATION_LOG}.tmp.$$"
+    mv "${MIGRATION_LOG}.tmp.$$" "$MIGRATION_LOG"
+    rm -f "$LOCK_FILE"
+  else
+    echo "   ⚠️  Could not acquire lock after $MAX_RETRIES attempts, updating anyway..."
+    jq --argjson entry "$MIGRATION_ENTRY" --arg status "$MIGRATION_STATUS" '
+      .migrations += [$entry] |
+      .summary.total_attempted += 1 |
+      if $status == "success" then .summary.successful += 1 else .summary.failed += 1 end
+    ' "$MIGRATION_LOG" > "${MIGRATION_LOG}.tmp.$$"
+    mv "${MIGRATION_LOG}.tmp.$$" "$MIGRATION_LOG"
+  fi
+fi
 
 echo "✅ Migration log updated"
 ```
@@ -987,8 +1122,24 @@ echo "✅ Migration log updated"
 
 ```bash
 echo ""
-echo "🧹 Cleaning up work directory..."
-rm -rf "$WORK_DIR"
+echo "🧹 Cleaning up..."
+
+# Clean up work directory
+if [ -d "$WORK_DIR" ]; then
+  rm -rf "$WORK_DIR"
+  echo "   ✅ Work directory cleaned: $WORK_DIR"
+fi
+
+# Clean up git worktree if it still exists (parallel-safe cleanup)
+if [ -n "$GIT_WORKTREE_DIR" ] && [ -d "$GIT_WORKTREE_DIR" ]; then
+  cd "$PROJECT_ROOT"
+  git worktree remove "$GIT_WORKTREE_DIR" --force 2>/dev/null || rm -rf "$GIT_WORKTREE_DIR"
+  echo "   ✅ Git worktree cleaned: $GIT_WORKTREE_DIR"
+fi
+
+# Prune any orphaned worktrees
+git worktree prune 2>/dev/null || true
+
 echo "✅ Cleanup complete"
 
 echo ""
@@ -1076,6 +1227,76 @@ fi
   }
 }
 ```
+
+## Parallel Execution
+
+This command supports running multiple instances in parallel for different PRs. This is useful when you want to migrate multiple tasks simultaneously using multiple Claude agents.
+
+### How to Run in Parallel
+
+```bash
+# Terminal/Agent 1
+/localstack-migrate --no-reset Pr7179
+
+# Terminal/Agent 2
+/localstack-migrate --no-reset Pr7180
+
+# Terminal/Agent 3
+/localstack-migrate --no-reset Pr7181
+
+# Terminal/Agent 4
+/localstack-migrate --no-reset Pr7182
+
+# Terminal/Agent 5
+/localstack-migrate --no-reset Pr7183
+```
+
+### Key Features for Parallel Execution
+
+| Feature             | How It's Handled                                                                                |
+| ------------------- | ----------------------------------------------------------------------------------------------- |
+| LocalStack State    | `--no-reset` flag skips state reset; unique stack names (`tap-stack-{PR_ID}`) prevent conflicts |
+| Git Operations      | Uses **git worktrees** (`worktree/git-{PR_ID}`) for isolated branch operations                  |
+| Working Directories | Each migration uses its own directory (`worktree/localstack-{PR_ID}`)                           |
+| Migration Log       | **File locking** prevents race conditions when updating the shared log                          |
+| GitHub PRs          | Each agent creates its own PR with unique branch name (`ls-synth-{PR_ID}`)                      |
+
+### Important Notes
+
+1. **Always use `--no-reset`**: When running multiple agents, use the `--no-reset` flag to prevent one agent from clearing another's deployed resources.
+
+2. **Unique Stack Names**: Each migration automatically uses a unique CloudFormation/CDK stack name based on the PR ID to prevent resource conflicts.
+
+3. **Git Worktrees**: The command uses git worktrees instead of switching branches in the main repository. This allows multiple agents to work on different branches simultaneously without conflicts.
+
+4. **File Locking**: The migration log (`.claude/reports/localstack-migrations.json`) is updated using file locking to prevent corruption when multiple agents finish at the same time.
+
+5. **Resource Cleanup**: Each agent cleans up its own worktree and work directory after completion.
+
+### Pre-Parallel Execution Setup
+
+Before running multiple agents in parallel, optionally reset LocalStack once:
+
+```bash
+# Reset LocalStack state once before starting parallel migrations
+curl -X POST http://localhost:4566/_localstack/state/reset
+
+# Then start your parallel agents with --no-reset
+```
+
+### Troubleshooting Parallel Execution
+
+**Issue: Stack name conflicts**
+
+- Solution: Each migration uses `tap-stack-{PR_ID}` automatically. If you see conflicts, ensure different PRs are being migrated.
+
+**Issue: Git worktree errors**
+
+- Solution: Clean up stale worktrees: `git worktree prune`
+
+**Issue: Migration log corruption**
+
+- Solution: The file locking mechanism should prevent this. If it occurs, manually merge entries.
 
 ## Related Agents
 
