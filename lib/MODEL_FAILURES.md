@@ -23,7 +23,7 @@ This document records where a baseline LLM/model response typically **fails** to
    - No explicit `KmsKeyId` reference to the project KMS key
 
 5. **Security group ingress too wide**
-   - ❌ Uses `0.0.0.0/0` for SSH instead of a parameter‑driven /32 CIDR
+   - Uses `0.0.0.0/0` for SSH instead of a parameter‑driven /32 CIDR
 
 6. **Logging not centralized**
    - S3 access logs sent to the same bucket or disabled entirely
