@@ -195,9 +195,21 @@ describe_pulumi_failure() {
     print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     
-    # Show stack export for diagnostics
-    print_status $YELLOW "🔍 Failed Resource Details:"
-    pulumi stack export 2>/dev/null | jq -r '.deployment.resources[] | select(.custom == true) | select(.type | startswith("pulumi:providers") | not) | select(.id == null) | { type, urn }' || echo "   Unable to export stack"
+    # Show resources that failed to create (no ID means creation failed)
+    print_status $YELLOW "🔍 Resources That Failed to Create:"
+    local failed_resources
+    failed_resources=$(pulumi stack export 2>/dev/null | jq -r '.deployment.resources[] | select(.custom == true) | select(.type | startswith("pulumi:providers") | not) | select(.id == null or .id == "") | "   Type: \(.type)\n   URN: \(.urn)\n"' 2>/dev/null)
+    
+    if [ -n "$failed_resources" ]; then
+        echo "$failed_resources"
+    else
+        print_status $BLUE "   No resources found in failed state (check error output above)"
+    fi
+    echo ""
+    
+    # Show stack summary
+    print_status $YELLOW "🔍 Stack Summary:"
+    pulumi stack --show-urns 2>/dev/null | head -20 || echo "   Unable to show stack summary"
     echo ""
     
     print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
