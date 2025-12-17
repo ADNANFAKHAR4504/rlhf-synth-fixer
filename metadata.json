@@ -11,7 +11,7 @@
   "subject_labels": [
     "Cloud Environment Setup",
     "Environment Migration",
-    "Multi-Environment Consistency"
+    "Multi-Environment Consistency and Replication"
   ],
   "aws_services": [
     "EC2",
