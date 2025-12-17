@@ -906,8 +906,7 @@
       "Value": {
         "Fn::GetAtt": [
           "DatabaseInstance",
-          "Endpoint",
-          "Address"
+          "Endpoint.Address"
         ]
       },
       "Export": {
