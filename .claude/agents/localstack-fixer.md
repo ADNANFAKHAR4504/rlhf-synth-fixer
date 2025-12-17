@@ -122,24 +122,24 @@ When migrating old tasks with invalid subtask values:
 
 ### Common Subject Label Mappings
 
-| Invalid Label                | Map To                                           |
-| ---------------------------- | ------------------------------------------------ |
-| "Security Configuration"     | "Security Configuration as Code"                 |
-| "Database Management"        | "General Infrastructure Tooling QA"              |
-| "Network Configuration"      | "Cloud Environment Setup"                        |
-| "Access Control"             | "Security Configuration as Code"                 |
-| "Monitoring Setup"           | "Infrastructure Analysis/Monitoring"             |
-| "Performance Optimization"   | "IaC Optimization"                               |
-| "Cost Management"            | "IaC Optimization"                               |
-| "Resource Management"        | "General Infrastructure Tooling QA"              |
-| "Backup Configuration"       | "Failure Recovery Automation"                    |
-| "Logging Setup"              | "Infrastructure Analysis/Monitoring"             |
-| "Container Orchestration"    | "Web Application Deployment"                     |
-| "API Management"             | "Web Application Deployment"                     |
-| "Data Pipeline"              | "General Infrastructure Tooling QA"              |
-| "Storage Configuration"      | "Cloud Environment Setup"                        |
-| "Compute Provisioning"       | "Cloud Environment Setup"                        |
-| (any other invalid value)    | "General Infrastructure Tooling QA"              |
+| Invalid Label              | Map To                               |
+| -------------------------- | ------------------------------------ |
+| "Security Configuration"   | "Security Configuration as Code"     |
+| "Database Management"      | "General Infrastructure Tooling QA"  |
+| "Network Configuration"    | "Cloud Environment Setup"            |
+| "Access Control"           | "Security Configuration as Code"     |
+| "Monitoring Setup"         | "Infrastructure Analysis/Monitoring" |
+| "Performance Optimization" | "IaC Optimization"                   |
+| "Cost Management"          | "IaC Optimization"                   |
+| "Resource Management"      | "General Infrastructure Tooling QA"  |
+| "Backup Configuration"     | "Failure Recovery Automation"        |
+| "Logging Setup"            | "Infrastructure Analysis/Monitoring" |
+| "Container Orchestration"  | "Web Application Deployment"         |
+| "API Management"           | "Web Application Deployment"         |
+| "Data Pipeline"            | "General Infrastructure Tooling QA"  |
+| "Storage Configuration"    | "Cloud Environment Setup"            |
+| "Compute Provisioning"     | "Cloud Environment Setup"            |
+| (any other invalid value)  | "General Infrastructure Tooling QA"  |
 
 ## 🔴 CRITICAL: Metadata Fix (MUST BE APPLIED FIRST)
 
@@ -154,25 +154,25 @@ Apply this fix to sanitize metadata.json for schema compliance:
 ```bash
 fix_metadata() {
   local metadata_file="$1"
-  
+
   if [ ! -f "$metadata_file" ]; then
     echo "❌ metadata.json not found"
     return 1
   fi
-  
+
   echo "🔧 Sanitizing metadata.json for schema compliance..."
-  
+
   # Valid enum values from schema
   VALID_SUBTASKS='["Provisioning of Infrastructure Environments","Application Deployment","CI/CD Pipeline Integration","Failure Recovery and High Availability","Security, Compliance, and Governance","IaC Program Optimization","Infrastructure QA and Management"]'
-  
+
   VALID_LABELS='["Environment Migration","Cloud Environment Setup","Multi-Environment Consistency","Web Application Deployment","Serverless Infrastructure (Functions as Code)","CI/CD Pipeline","Failure Recovery Automation","Security Configuration as Code","IaC Diagnosis/Edits","IaC Optimization","Infrastructure Analysis/Monitoring","General Infrastructure Tooling QA"]'
-  
+
   VALID_PLATFORMS='["cdk","cdktf","cfn","tf","pulumi","analysis","cicd"]'
   VALID_LANGUAGES='["ts","js","py","java","go","hcl","yaml","json","sh","yml"]'
   VALID_COMPLEXITIES='["medium","hard","expert"]'
   VALID_TURN_TYPES='["single","multi"]'
   VALID_TEAMS='["2","3","4","5","6","synth","synth-1","synth-2","stf"]'
-  
+
   # Create sanitized metadata.json
   jq --argjson valid_subtasks "$VALID_SUBTASKS" \
      --argjson valid_labels "$VALID_LABELS" \
@@ -181,7 +181,7 @@ fix_metadata() {
      --argjson valid_complexities "$VALID_COMPLEXITIES" \
      --argjson valid_turn_types "$VALID_TURN_TYPES" \
      --argjson valid_teams "$VALID_TEAMS" '
-    
+
     # Map invalid subtask to valid ones
     def map_subtask:
       if . == null then "Infrastructure QA and Management"
@@ -200,7 +200,7 @@ fix_metadata() {
       elif ($valid_subtasks | index(.)) then .
       else "Infrastructure QA and Management"
       end;
-    
+
     # Map invalid subject_label to valid one
     def map_label:
       if . == "Security Configuration" then "Security Configuration as Code"
@@ -220,33 +220,33 @@ fix_metadata() {
       elif . == "Compute Provisioning" then "Cloud Environment Setup"
       else .
       end;
-    
+
     # Ensure platform is valid
     def validate_platform:
       if ($valid_platforms | index(.)) then . else "cfn" end;
-    
+
     # Ensure language is valid
     def validate_language:
       if ($valid_languages | index(.)) then . else "yaml" end;
-    
+
     # Ensure complexity is valid
     def validate_complexity:
       if ($valid_complexities | index(.)) then . else "medium" end;
-    
+
     # Ensure turn_type is valid
     def validate_turn_type:
       if ($valid_turn_types | index(.)) then . else "single" end;
-    
+
     # Ensure team is valid
     def validate_team:
       if ($valid_teams | index(.)) then . else "synth" end;
-    
+
     # Ensure startedAt is valid ISO 8601
     def validate_started_at:
       if . == null or . == "" then (now | todate)
       else .
       end;
-    
+
     # Build the sanitized metadata object with ONLY allowed fields
     {
       platform: (.platform | validate_platform),
@@ -259,19 +259,19 @@ fix_metadata() {
       subtask: (.subtask | map_subtask),
       provider: "localstack",
       subject_labels: (
-        [.subject_labels[]? | map_label] 
-        | unique 
-        | map(select(. as $l | $valid_labels | index($l))) 
+        [.subject_labels[]? | map_label]
+        | unique
+        | map(select(. as $l | $valid_labels | index($l)))
         | if length == 0 then ["General Infrastructure Tooling QA"] else . end
       ),
       aws_services: (.aws_services // [])
     }
   ' "$metadata_file" > "${metadata_file}.tmp"
-  
+
   if [ $? -eq 0 ]; then
     mv "${metadata_file}.tmp" "$metadata_file"
     echo "✅ metadata.json sanitized successfully"
-    
+
     # Validate result
     echo "📋 Sanitized metadata:"
     jq -c '{platform, language, subtask, provider, subject_labels_count: (.subject_labels | length)}' "$metadata_file"
@@ -292,35 +292,35 @@ After fixing, validate the metadata.json:
 validate_metadata() {
   local metadata_file="$1"
   local schema_file="config/schemas/metadata.schema.json"
-  
+
   echo "🔍 Validating metadata.json against schema..."
-  
+
   # Check required fields exist
   REQUIRED_FIELDS=("platform" "language" "complexity" "turn_type" "po_id" "team" "startedAt" "subtask" "provider" "subject_labels" "aws_services")
-  
+
   for field in "${REQUIRED_FIELDS[@]}"; do
     if ! jq -e ".$field" "$metadata_file" > /dev/null 2>&1; then
       echo "❌ Missing required field: $field"
       return 1
     fi
   done
-  
+
   # Check no additional fields (schema has additionalProperties: false)
   EXTRA_FIELDS=$(jq -r 'keys[]' "$metadata_file" | grep -v -E "^(platform|language|complexity|turn_type|po_id|team|startedAt|subtask|provider|subject_labels|aws_services)$")
-  
+
   if [ -n "$EXTRA_FIELDS" ]; then
     echo "❌ Extra fields not allowed by schema:"
     echo "$EXTRA_FIELDS"
     return 1
   fi
-  
+
   # Check subject_labels has at least 1 item
   LABELS_COUNT=$(jq '.subject_labels | length' "$metadata_file")
   if [ "$LABELS_COUNT" -lt 1 ]; then
     echo "❌ subject_labels must have at least 1 item"
     return 1
   fi
-  
+
   echo "✅ metadata.json validation passed"
   return 0
 }
