@@ -1,0 +1,43 @@
+{
+  "task_id": "trainr960",
+  "po_id": "trainr960",
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Database Management",
+    "Network Configuration",
+    "Access Control",
+    "Monitoring Setup",
+    "Performance Optimization"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "IAM",
+    "S3",
+    "VPC",
+    "EC2",
+    "RDS",
+    "Lambda",
+    "CloudWatch",
+    "CloudFormation",
+    "Config",
+    "ElasticLoadBalancingV2"
+  ],
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-08-22T10:00:00Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": "",
+  "pr_id": "ls-Pr2077",
+  "original_pr_id": "Pr2077",
+  "localstack_migration": true,
+  "provider": "localstack"
+}
