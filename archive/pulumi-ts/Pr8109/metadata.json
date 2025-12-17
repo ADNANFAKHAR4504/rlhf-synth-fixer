@@ -1,0 +1,34 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "medium",
+  "team": "synth",
+  "startedAt": "2025-10-30T09:46:26+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration",
+    "Cloud Environment Setup"
+  ],
+  "po_id": "1gtk5t",
+  "aws_services": [
+    "vpc",
+    "ec2",
+    "rds",
+    "s3",
+    "iam",
+    "nat-gateway",
+    "internet-gateway",
+    "vpc-endpoint",
+    "security-groups",
+    "route-tables"
+  ],
+  "turn_type": "single",
+  "provider": "localstack",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mohammadn1-turing",
+  "dockerS3Location": ""
+}
