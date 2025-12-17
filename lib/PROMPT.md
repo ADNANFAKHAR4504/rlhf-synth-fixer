@@ -41,7 +41,7 @@ Global e-commerce platform requires consistent, high-availability infrastructure
 # Technical directives (YAML only)
 
 * Deliver a **single file named `TapStack.yml`** written in **valid CloudFormation YAML** (no JSON), ready for `aws cloudformation deploy`.
-* Use **intrinsic functions** (`!Ref`, `!Sub`, `!GetAtt`, `!FindInMap`, `!If`, `!Select`, `!Split`, etc.) appropriately.
+* Use **intrinsic functions** (`!Ref`, `!Sub`, `!GetAtt`, `!FindInMap`, `!If`, `!Select`, `!Split` etc.) appropriately.
 * Include **Mappings** where beneficial (e.g., per-region AMI lookups via SSM Parameter paths if you choose), and **Conditions** for optional features.
 * Provide **sane defaults** for parameters so a default deploy succeeds without overrides.
 * For **memory alarms**, configure the CloudWatch Agent via user data (write config to `/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json` and start the service).
