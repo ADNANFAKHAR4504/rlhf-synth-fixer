@@ -20,11 +20,5 @@
     "RDS",
     "ECS",
     "IAM"
-  ],
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "siddhantr-sudo",
-  "dockerS3Location": ""
+  ]
 }
