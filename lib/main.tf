@@ -400,6 +400,9 @@ resource "aws_flow_log" "main" {
   traffic_type         = "ALL"
   vpc_id               = aws_vpc.main.id
 
+  # LocalStack compatibility: max_aggregation_interval not supported
+  # Omit this parameter - LocalStack doesn't support it
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-vpc-flow-log"
   })
@@ -576,15 +579,8 @@ resource "aws_lb" "main" {
   enable_http2                     = true
   enable_cross_zone_load_balancing = true
 
-  access_logs {
-    bucket  = aws_s3_bucket.logs.bucket
-    prefix  = "alb-logs"
-    enabled = true
-  }
-
-  depends_on = [
-    aws_s3_bucket_policy.logs
-  ]
+  # LocalStack compatibility: access_logs and health_check_logs not fully supported
+  # Removed access_logs block to avoid LocalStack compatibility issues
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-alb"

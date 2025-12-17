@@ -204,11 +204,6 @@ describe_terraform_failure() {
         echo ""
     fi
     
-    # Show resource details for debugging
-    print_status $YELLOW "🔍 Resource State Summary:"
-    tflocal show -no-color 2>/dev/null | grep -E "^# |^  id |^  arn |Error:" | head -30 | sed 's/^/   /' || echo "   Unable to show state details"
-    echo ""
-    
     print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 }
 
