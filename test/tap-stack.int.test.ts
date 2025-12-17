@@ -26,7 +26,7 @@ const outputs: Record<string, string> = (() => {
 // Initialize AWS clients - configured for LocalStack
 const ec2Client = new EC2Client({ 
   region: process.env.AWS_REGION || 'us-east-1',
-  endpoint: process.env.LOCALSTACK_ENDPOINT || 'http://localhost:4566',
+  endpoint: process.env.AWS_ENDPOINT_URL || 'http://localhost:4566',
   forcePathStyle: true,
   credentials: {
     accessKeyId: 'test',
