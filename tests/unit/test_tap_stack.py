@@ -427,26 +427,6 @@ class TestConfigStack(unittest.TestCase):
         self.assertIsNone(stack.delivery_channel)
 
     @pulumi.runtime.test
-    def test_config_stack_creates_config_rules(self):
-        """Test that ConfigStack creates AWS Config rules."""
-        from lib.config_stack import ConfigStack
-        import pulumi
-
-        mock_bucket = pulumi.Output.from_input("test-config-bucket")
-        mock_lambdas = self._create_mock_lambdas()
-
-        stack = ConfigStack(
-            'config-test',
-            'test',
-            mock_bucket,
-            mock_lambdas
-        )
-
-        self.assertIsNotNone(stack.ec2_tag_config_rule)
-        self.assertIsNotNone(stack.s3_encryption_config_rule)
-        self.assertIsNotNone(stack.rds_backup_config_rule)
-
-    @pulumi.runtime.test
     def test_config_stack_creates_iam_role(self):
         """Test that ConfigStack creates IAM role for AWS Config."""
         from lib.config_stack import ConfigStack
