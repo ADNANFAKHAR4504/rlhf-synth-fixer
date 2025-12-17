@@ -147,7 +147,7 @@ Smart selection considers:
 │                  /localstack-migrate                     │
 ├─────────────────────────────────────────────────────────┤
 │                                                         │
-│  1. Select Task (manual or auto)                        │
+│  1. Select Task (manual, auto, or from GitHub PR)       │
 │          ↓                                              │
 │  2. Copy to worktree/localstack-{PR}/                   │
 │          ↓                                              │
@@ -173,13 +173,50 @@ Smart selection considers:
 │     │    │         │                                    │
 │     └────┼─────────┘                                    │
 │          ↓                                              │
-│  5. Update migration log                                │
+│  5. Create new branch                                   │
 │          ↓                                              │
-│  6. Move to archive-localstack/ (if successful)         │
+│  6. Commit migrated files                               │
 │          ↓                                              │
-│  7. Cleanup worktree                                    │
+│  7. Push branch & create Pull Request                   │
+│          ↓                                              │
+│  8. Update migration log                                │
+│          ↓                                              │
+│  9. Cleanup worktree                                    │
 │                                                         │
 └─────────────────────────────────────────────────────────┘
+```
+
+## Pull Request Creation
+
+On successful migration, the command automatically:
+
+1. **Creates a new branch**: `localstack-migrate-{PR_ID}-{random}`
+2. **Copies migrated files** to `{platform}-{language}/{PR_ID}/`
+3. **Creates a commit** with migration details
+4. **Pushes the branch** to origin
+5. **Creates a Pull Request** with:
+   - Title: `[LocalStack] Migrate {PR_ID} - {platform}/{language}`
+   - Body: Task details, migration summary, deployment instructions
+   - Base: `main`
+
+### Example PR Created
+
+```
+[LocalStack] Migrate Pr7179 - cdk/ts
+
+## LocalStack Migration
+
+### Task Details
+- Original PR: Pr7179
+- Platform: cdk
+- Language: ts
+- AWS Services: S3, Lambda, DynamoDB
+
+### Migration Summary
+This task was migrated to be LocalStack-compatible.
+
+### Deployment Instructions
+./scripts/localstack-cdk-deploy.sh cdk-ts/Pr7179
 ```
 
 ## Migration Log
@@ -192,7 +229,10 @@ All migrations are tracked in `.claude/reports/localstack-migrations.json`:
   "migrations": [
     {
       "task_path": "archive/cdk-ts/Pr7179",
-      "destination": "archive-localstack/Pr7179-cdk-ts",
+      "destination": "cdk-ts/Pr7179",
+      "new_pr_url": "https://github.com/TuringGpt/iac-test-automations/pull/1234",
+      "new_pr_number": "1234",
+      "branch": "localstack-migrate-Pr7179-abc123",
       "platform": "cdk",
       "language": "ts",
       "pr_id": "Pr7179",
@@ -260,17 +300,28 @@ The `localstack-fixer` agent automatically applies these fixes:
 
 ## Output Files
 
-After migration, these files are created:
+After migration, a new PR is created with these files:
 
 ```
-archive-localstack/Pr7179-cdk-ts/
+{platform}-{language}/{PR_ID}/
 ├── cfn-outputs/
 │   └── flat-outputs.json      # Stack outputs
-├── execution-output.md        # Deployment log
+├── execution-output.md        # Migration log with deployment details
 ├── int-test-output.md         # Test results
 ├── lib/                       # Infrastructure code
 ├── test/                      # Integration tests
 └── metadata.json              # Task metadata
+```
+
+Example for a CDK TypeScript task:
+```
+cdk-ts/Pr7179/
+├── cfn-outputs/
+│   └── flat-outputs.json
+├── execution-output.md
+├── lib/
+├── test/
+└── metadata.json
 ```
 
 ## Troubleshooting
@@ -341,19 +392,33 @@ If the PR doesn't contain a valid task structure:
 If automatic migration fails, you can migrate manually:
 
 ```bash
-# 1. Copy task to archive-localstack
-cp -r archive/cdk-ts/Pr7179 archive-localstack/Pr7179-cdk-ts/
+# 1. Create a new branch
+git checkout -b localstack-migrate-Pr7179-manual
 
-# 2. Navigate to the task
-cd archive-localstack/Pr7179-cdk-ts/
+# 2. Create destination directory
+mkdir -p cdk-ts/Pr7179
 
-# 3. Make LocalStack compatibility changes manually
+# 3. Copy task files
+cp -r archive/cdk-ts/Pr7179/* cdk-ts/Pr7179/
 
-# 4. Deploy
+# 4. Navigate to the task
+cd cdk-ts/Pr7179/
+
+# 5. Make LocalStack compatibility changes manually
+
+# 6. Test deployment
 ../../scripts/localstack-cdk-deploy.sh
 
-# 5. Test
+# 7. Test
 ../../scripts/localstack-cdk-test.sh
+
+# 8. Commit and push
+git add .
+git commit -m "feat(localstack): migrate Pr7179 for LocalStack compatibility"
+git push -u origin localstack-migrate-Pr7179-manual
+
+# 9. Create PR
+gh pr create --title "[LocalStack] Migrate Pr7179 - cdk/ts" --body "LocalStack migration"
 ```
 
 ## Related Files

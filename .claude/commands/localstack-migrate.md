@@ -718,46 +718,234 @@ Set variables:
 Exit code 0 if fixed, 1 if unable to fix, 2 if unsupported services.
 ```
 
-### Step 10: Finalize Migration
+### Step 10: Create Pull Request for Migrated Task
 
 ```bash
 echo ""
 echo "═══════════════════════════════════════════════════"
-echo "📦 FINALIZING MIGRATION"
+echo "📦 CREATING PULL REQUEST"
 echo "═══════════════════════════════════════════════════"
 echo ""
 
 MIGRATION_STATUS="failed"
 MIGRATION_REASON=""
+NEW_PR_URL=""
+NEW_PR_NUMBER=""
 
 if [ "$FIX_SUCCESS" = "true" ]; then
-  MIGRATION_STATUS="success"
+  
+  # Check if gh CLI is available
+  if ! command -v gh &> /dev/null; then
+    echo "❌ GitHub CLI (gh) is not installed!"
+    echo ""
+    echo "💡 Install GitHub CLI:"
+    echo "   macOS: brew install gh"
+    echo "   Linux: sudo apt install gh"
+    echo ""
+    MIGRATION_REASON="GitHub CLI not installed"
+  else
+    # Check if authenticated
+    if ! gh auth status &> /dev/null; then
+      echo "❌ GitHub CLI is not authenticated!"
+      echo ""
+      echo "💡 Authenticate with:"
+      echo "   gh auth login"
+      MIGRATION_REASON="GitHub CLI not authenticated"
+    else
+      echo "✅ GitHub CLI authenticated"
+      
+      # Generate unique branch name
+      TIMESTAMP=$(date +%Y%m%d%H%M%S)
+      RANDOM_SUFFIX=$(cat /dev/urandom | LC_ALL=C tr -dc 'a-z0-9' | fold -w 6 | head -n 1)
+      NEW_BRANCH="localstack-migrate-${PR_ID}-${RANDOM_SUFFIX}"
+      
+      echo ""
+      echo "🌿 Creating new branch: $NEW_BRANCH"
+      
+      # Ensure we're on main and up to date
+      git checkout main 2>/dev/null || true
+      git pull origin main 2>/dev/null || true
+      
+      # Create and checkout new branch
+      git checkout -b "$NEW_BRANCH"
+      
+      if [ $? -ne 0 ]; then
+        echo "❌ Failed to create branch: $NEW_BRANCH"
+        MIGRATION_REASON="Failed to create git branch"
+      else
+        echo "✅ Branch created: $NEW_BRANCH"
+        
+        # Determine destination path based on platform
+        DEST_DIR="${PLATFORM}-${LANGUAGE}/${PR_ID}"
+        
+        echo ""
+        echo "📁 Copying migrated files to: $DEST_DIR"
+        mkdir -p "$DEST_DIR"
+        
+        # Copy all files from work directory (excluding node_modules, .pulumi, etc.)
+        rsync -av --exclude='node_modules' --exclude='.pulumi' --exclude='__pycache__' \
+              --exclude='.terraform' --exclude='cdk.out' --exclude='cdktf.out' \
+              --exclude='.venv' --exclude='venv' \
+              "$WORK_DIR"/ "$DEST_DIR/"
+        
+        # Ensure execution-output.md exists with migration details
+        cat > "$DEST_DIR/execution-output.md" << EOF
+# LocalStack Migration Output
 
-  # Create destination directory
-  DEST_DIR="archive-localstack/${PR_ID}-${PLATFORM}-${LANGUAGE}"
+**Migrated:** $(date)
+**Source:** $TASK_PATH
+**Original PR:** ${PR_ID}
+**Platform:** $PLATFORM
+**Language:** $LANGUAGE
+**LocalStack Version:** $LOCALSTACK_VERSION
 
-  echo "📁 Moving to: $DEST_DIR"
-  mkdir -p "$DEST_DIR"
+---
 
-  # Copy all files from work directory
-  cp -r "$WORK_DIR"/* "$DEST_DIR/"
+## Migration Summary
 
-  # Ensure output files exist
-  if [ ! -f "$DEST_DIR/execution-output.md" ]; then
-    echo "# LocalStack Migration Output" > "$DEST_DIR/execution-output.md"
-    echo "" >> "$DEST_DIR/execution-output.md"
-    echo "**Migrated:** $(date)" >> "$DEST_DIR/execution-output.md"
-    echo "**Source:** $TASK_PATH" >> "$DEST_DIR/execution-output.md"
+This task was migrated from the archive to be LocalStack-compatible.
+
+### Changes Applied
+- LocalStack endpoint configuration added
+- S3 path-style access enabled
+- IAM policies simplified for LocalStack
+- Resource removal policies set to DESTROY
+- Integration tests updated for LocalStack endpoints
+
+### Deployment Command
+\`\`\`bash
+./scripts/localstack-${PLATFORM}-deploy.sh $DEST_DIR
+\`\`\`
+
+### Test Command
+\`\`\`bash
+./scripts/localstack-${PLATFORM}-test.sh $DEST_DIR
+\`\`\`
+
+EOF
+        
+        # Ensure cfn-outputs directory exists
+        mkdir -p "$DEST_DIR/cfn-outputs"
+        if [ ! -f "$DEST_DIR/cfn-outputs/flat-outputs.json" ]; then
+          echo "{}" > "$DEST_DIR/cfn-outputs/flat-outputs.json"
+        fi
+        
+        echo "✅ Files copied to $DEST_DIR"
+        
+        # Stage all changes
+        echo ""
+        echo "📝 Staging changes..."
+        git add "$DEST_DIR"
+        
+        # Create commit
+        COMMIT_MSG="feat(localstack): migrate ${PR_ID} for LocalStack compatibility
+
+- Platform: ${PLATFORM}
+- Language: ${LANGUAGE}
+- AWS Services: ${AWS_SERVICES}
+- LocalStack Version: ${LOCALSTACK_VERSION}
+
+Migrated from: ${TASK_PATH}
+Iterations used: ${ITERATIONS_USED:-1}
+
+This task has been tested and verified to deploy successfully on LocalStack."
+
+        echo "📝 Creating commit..."
+        git commit -m "$COMMIT_MSG"
+        
+        if [ $? -ne 0 ]; then
+          echo "❌ Failed to create commit"
+          MIGRATION_REASON="Failed to create git commit"
+        else
+          echo "✅ Commit created"
+          
+          # Push branch to origin
+          echo ""
+          echo "🚀 Pushing branch to origin..."
+          git push -u origin "$NEW_BRANCH"
+          
+          if [ $? -ne 0 ]; then
+            echo "❌ Failed to push branch"
+            MIGRATION_REASON="Failed to push branch to origin"
+          else
+            echo "✅ Branch pushed to origin"
+            
+            # Create Pull Request
+            echo ""
+            echo "📋 Creating Pull Request..."
+            
+            PR_TITLE="[LocalStack] Migrate ${PR_ID} - ${PLATFORM}/${LANGUAGE}"
+            PR_BODY="## LocalStack Migration
+
+### Task Details
+- **Original PR:** ${PR_ID}
+- **Platform:** ${PLATFORM}
+- **Language:** ${LANGUAGE}
+- **AWS Services:** ${AWS_SERVICES}
+- **Complexity:** ${COMPLEXITY}
+
+### Migration Summary
+This PR contains a LocalStack-compatible version of task ${PR_ID}.
+
+The task has been:
+- ✅ Tested for LocalStack deployment
+- ✅ Verified with integration tests
+- ✅ Updated with LocalStack-specific configurations
+
+### Source
+- Original Path: \`${TASK_PATH}\`
+- Migrated Path: \`${DEST_DIR}\`
+
+### Deployment Instructions
+\`\`\`bash
+# Start LocalStack
+./scripts/localstack-start.sh
+
+# Deploy
+./scripts/localstack-${PLATFORM}-deploy.sh ${DEST_DIR}
+
+# Run tests
+./scripts/localstack-${PLATFORM}-test.sh ${DEST_DIR}
+\`\`\`
+
+### LocalStack Compatibility
+- LocalStack Version: ${LOCALSTACK_VERSION}
+- Iterations to fix: ${ITERATIONS_USED:-1}
+
+---
+*This PR was automatically created by the \`/localstack-migrate\` command.*"
+
+            # Create the PR
+            PR_RESULT=$(gh pr create \
+              --repo "$GITHUB_REPO" \
+              --title "$PR_TITLE" \
+              --body "$PR_BODY" \
+              --base main \
+              --head "$NEW_BRANCH" \
+              2>&1)
+            
+            if [ $? -eq 0 ]; then
+              NEW_PR_URL="$PR_RESULT"
+              NEW_PR_NUMBER=$(echo "$NEW_PR_URL" | grep -oE '[0-9]+$')
+              MIGRATION_STATUS="success"
+              
+              echo ""
+              echo "✅ Pull Request created successfully!"
+              echo "   URL: $NEW_PR_URL"
+              echo "   PR #: $NEW_PR_NUMBER"
+            else
+              echo "❌ Failed to create Pull Request"
+              echo "   Error: $PR_RESULT"
+              MIGRATION_REASON="Failed to create PR: $PR_RESULT"
+            fi
+          fi
+        fi
+        
+        # Switch back to main branch
+        git checkout main 2>/dev/null || true
+      fi
+    fi
   fi
-
-  # Generate cfn-outputs if not exists
-  if [ ! -d "$DEST_DIR/cfn-outputs" ]; then
-    mkdir -p "$DEST_DIR/cfn-outputs"
-    echo "{}" > "$DEST_DIR/cfn-outputs/flat-outputs.json"
-  fi
-
-  echo "✅ Files copied to $DEST_DIR"
-
 else
   MIGRATION_REASON="${FIX_FAILURE_REASON:-Unknown error}"
   echo "❌ Migration failed: $MIGRATION_REASON"
@@ -771,6 +959,9 @@ MIGRATION_ENTRY=$(cat <<EOF
 {
   "task_path": "$TASK_PATH",
   "destination": "${DEST_DIR:-null}",
+  "new_pr_url": $([ -n "$NEW_PR_URL" ] && echo "\"$NEW_PR_URL\"" || echo "null"),
+  "new_pr_number": $([ -n "$NEW_PR_NUMBER" ] && echo "\"$NEW_PR_NUMBER\"" || echo "null"),
+  "branch": "${NEW_BRANCH:-null}",
   "platform": "$PLATFORM",
   "language": "$LANGUAGE",
   "pr_id": "$PR_ID",
@@ -805,7 +996,7 @@ echo "✅ Cleanup complete"
 echo ""
 echo "═══════════════════════════════════════════════════"
 if [ "$MIGRATION_STATUS" = "success" ]; then
-  echo "✅ MIGRATION SUCCESSFUL!"
+  echo "✅ MIGRATION SUCCESSFUL - PR CREATED!"
   echo "═══════════════════════════════════════════════════"
   echo ""
   echo "   Source:      $TASK_PATH"
@@ -813,11 +1004,14 @@ if [ "$MIGRATION_STATUS" = "success" ]; then
   echo "   Platform:    $PLATFORM"
   echo "   Language:    $LANGUAGE"
   echo ""
-  echo "📁 View migrated task:"
-  echo "   ls -la $DEST_DIR"
+  echo "🔗 Pull Request:"
+  echo "   URL:    $NEW_PR_URL"
+  echo "   Number: #$NEW_PR_NUMBER"
+  echo "   Branch: $NEW_BRANCH"
   echo ""
-  echo "🧪 Test deployment:"
-  echo "   ./scripts/localstack-deploy.sh $DEST_DIR"
+  echo "📋 Next Steps:"
+  echo "   1. Review the PR: $NEW_PR_URL"
+  echo "   2. Merge when ready"
   echo ""
 else
   echo "❌ MIGRATION FAILED"
@@ -861,7 +1055,10 @@ fi
   "migrations": [
     {
       "task_path": "archive/cdk-ts/Pr7179",
-      "destination": "archive-localstack/Pr7179-cdk-ts",
+      "destination": "cdk-ts/Pr7179",
+      "new_pr_url": "https://github.com/TuringGpt/iac-test-automations/pull/1234",
+      "new_pr_number": "1234",
+      "branch": "localstack-migrate-Pr7179-abc123",
       "platform": "cdk",
       "language": "ts",
       "pr_id": "Pr7179",
