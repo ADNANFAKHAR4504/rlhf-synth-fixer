@@ -173,14 +173,40 @@ describe_terraform_failure() {
     print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     
-    # Show state list
-    print_status $YELLOW "🔍 Terraform State (resources created so far):"
-    tflocal state list 2>/dev/null || echo "   No state found"
+    # Show resources that were successfully created
+    print_status $YELLOW "🔍 Resources Successfully Created:"
+    local state_list
+    state_list=$(tflocal state list 2>/dev/null)
+    if [ -n "$state_list" ]; then
+        echo "$state_list" | sed 's/^/   ✅ /'
+    else
+        print_status $BLUE "   No resources in state (deployment failed before creating any resources)"
+    fi
     echo ""
     
-    # Show any tainted resources
-    print_status $YELLOW "🔍 Resource Details:"
-    tflocal show -no-color 2>/dev/null | head -50 || echo "   Unable to show state"
+    # Show tainted resources (resources that need to be recreated)
+    print_status $YELLOW "🔍 Tainted Resources (need recreation):"
+    local tainted
+    tainted=$(tflocal state list -state=terraform.tfstate 2>/dev/null | grep -E '\[tainted\]' || tflocal state list 2>/dev/null | while read resource; do
+        tflocal state show "$resource" 2>/dev/null | grep -q "tainted" && echo "$resource"
+    done)
+    if [ -n "$tained" ]; then
+        echo "$tained" | sed 's/^/   ⚠️  /'
+    else
+        print_status $BLUE "   No tainted resources"
+    fi
+    echo ""
+    
+    # Show plan file if it exists (shows what was attempted)
+    if [ -f "tfplan" ]; then
+        print_status $YELLOW "🔍 Planned Changes (from tfplan):"
+        tflocal show tfplan -no-color 2>/dev/null | grep -E "(will be created|will be destroyed|must be replaced|Error)" | head -20 | sed 's/^/   /' || echo "   Unable to read plan file"
+        echo ""
+    fi
+    
+    # Show resource details for debugging
+    print_status $YELLOW "🔍 Resource State Summary:"
+    tflocal show -no-color 2>/dev/null | grep -E "^# |^  id |^  arn |Error:" | head -30 | sed 's/^/   /' || echo "   Unable to show state details"
     echo ""
     
     print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -222,25 +248,57 @@ describe_cdktf_failure() {
     print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     
-    # Check cdktf.out directory for synthesized stacks
+    # Check if synthesis succeeded
+    if [ ! -d "cdktf.out/stacks" ]; then
+        print_status $YELLOW "🔍 Synthesis Status:"
+        print_status $RED "   ❌ Synthesis failed - cdktf.out/stacks directory not found"
+        echo ""
+        print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        return
+    fi
+    
+    # Show synthesized stacks
     print_status $YELLOW "🔍 Synthesized Stacks:"
-    if [ -d "cdktf.out/stacks" ]; then
-        ls -la cdktf.out/stacks/ 2>/dev/null || echo "   No stacks found"
-    else
-        echo "   cdktf.out/stacks directory not found"
+    local stack_count=0
+    for stack_dir in cdktf.out/stacks/*/; do
+        if [ -d "$stack_dir" ]; then
+            stack_count=$((stack_count + 1))
+            print_status $BLUE "   Stack $stack_count: $(basename $stack_dir)"
+        fi
+    done
+    if [ $stack_count -eq 0 ]; then
+        echo "   No stacks found"
     fi
     echo ""
     
-    # Show terraform state if available
-    print_status $YELLOW "🔍 Terraform State (from CDKTF):"
+    # Show terraform state and errors for each stack
+    print_status $YELLOW "🔍 Stack Deployment Status:"
     for stack_dir in cdktf.out/stacks/*/; do
         if [ -d "$stack_dir" ]; then
-            print_status $BLUE "   Stack: $(basename $stack_dir)"
-            cd "$stack_dir" 2>/dev/null && terraform state list 2>/dev/null || echo "   No state"
+            local stack_name=$(basename "$stack_dir")
+            print_status $BLUE "   ── Stack: $stack_name ──"
+            
+            cd "$stack_dir" 2>/dev/null || continue
+            
+            # Check if terraform was initialized
+            if [ -f ".terraform/terraform.tfstate" ] || [ -f "terraform.tfstate" ]; then
+                # Show resources in state
+                print_status $CYAN "   Resources in state:"
+                terraform state list 2>/dev/null | sed 's/^/      /' || echo "      No resources in state"
+                
+                # Check for failed resources (those with errors)
+                print_status $CYAN "   Failed resources:"
+                terraform state list 2>/dev/null | while read resource; do
+                    terraform state show "$resource" 2>/dev/null | grep -q "Error:" && echo "      ❌ $resource" || true
+                done || echo "      (Unable to check for errors)"
+            else
+                print_status $YELLOW "      ⚠️  Terraform not initialized or no state found"
+            fi
+            
             cd - > /dev/null 2>&1
+            echo ""
         fi
     done
-    echo ""
     
     print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 }
