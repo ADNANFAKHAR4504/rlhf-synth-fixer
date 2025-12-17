@@ -291,11 +291,14 @@ export class TapStack extends cdk.Stack {
       apiKeySourceType: apigateway.ApiKeySourceType.HEADER,
     });
 
-    // Associate WAF with API Gateway
-    new wafv2.CfnWebACLAssociation(this, 'WebAclAssociation', {
-      resourceArn: `arn:aws:apigateway:${this.region}::/restapis/${api.restApiId}/stages/prod`,
-      webAclArn: webAcl.attrArn,
-    });
+    // Associate WAF with API Gateway (skip for LocalStack as it doesn't support WAF ARN attribute)
+    const isLocalStack = this.account === '000000000000' || process.env.AWS_ENDPOINT_URL?.includes('localhost');
+    if (!isLocalStack) {
+      new wafv2.CfnWebACLAssociation(this, 'WebAclAssociation', {
+        resourceArn: `arn:aws:apigateway:${this.region}::/restapis/${api.restApiId}/stages/prod`,
+        webAclArn: webAcl.attrArn,
+      });
+    }
 
     Object.entries(commonTags).forEach(([key, value]) => {
       cdk.Tags.of(api).add(key, value);
@@ -363,10 +366,13 @@ export class TapStack extends cdk.Stack {
       description: 'API Key ID - retrieve value from AWS Console',
     });
 
-    new cdk.CfnOutput(this, 'WAFWebAclArn', {
-      value: webAcl.attrArn,
-      description: 'WAF Web ACL ARN',
-    });
+    // Only output WAF ARN if not LocalStack
+    if (!isLocalStack) {
+      new cdk.CfnOutput(this, 'WAFWebAclArn', {
+        value: webAcl.attrArn,
+        description: 'WAF Web ACL ARN',
+      });
+    }
 
     new cdk.CfnOutput(this, 'LambdaFunctionName', {
       value: apiFunction.functionName,
