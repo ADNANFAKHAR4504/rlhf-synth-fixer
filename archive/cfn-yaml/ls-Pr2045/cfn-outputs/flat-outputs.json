@@ -1,0 +1,11 @@
+{
+  "InternetGatewayId": "igw-5d7855fb94aaeaf45",
+  "PublicRouteTableId": "rtb-555bca04200d2251d",
+  "PublicSubnet1Id": "subnet-93ac08922cefb8572",
+  "PublicSubnet2Id": "subnet-650d40b8fd6bdf274",
+  "SecurityGroupId": "sg-3aa7f1d8dffa95b41",
+  "VPCId": "vpc-6c2eae54b82fe2a10",
+  "WebServerInstanceId": "i-120e017ee090742e9",
+  "WebServerPublicIP": "unknown",
+  "WebServerURL": "http://unknown"
+}
