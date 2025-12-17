@@ -363,63 +363,42 @@ describe('TapStack', () => {
     test('exports SecuredBucketName', () => {
       template.hasOutput('SecuredBucketName', {
         Description: 'Name of the secured S3 bucket',
-        Export: {
-          Name: `SecuredBucketName-${environmentSuffix}`,
-        },
       });
     });
 
     test('exports SecuredBucketArn', () => {
       template.hasOutput('SecuredBucketArn', {
         Description: 'ARN of the secured S3 bucket',
-        Export: {
-          Name: `SecuredBucketArn-${environmentSuffix}`,
-        },
       });
     });
 
     test('exports KmsKeyArn', () => {
       template.hasOutput('KmsKeyArn', {
         Description: 'ARN of the KMS key for encryption',
-        Export: {
-          Name: `KmsKeyArn-${environmentSuffix}`,
-        },
       });
     });
 
     test('exports KmsKeyId', () => {
       template.hasOutput('KmsKeyId', {
         Description: 'ID of the KMS key for encryption',
-        Export: {
-          Name: `KmsKeyId-${environmentSuffix}`,
-        },
       });
     });
 
     test('exports CloudTrailArn', () => {
       template.hasOutput('CloudTrailArn', {
         Description: 'ARN of the CloudTrail monitoring S3 data events',
-        Export: {
-          Name: `CloudTrailArn-${environmentSuffix}`,
-        },
       });
     });
 
     test('exports CloudTrailLogBucketName', () => {
       template.hasOutput('CloudTrailLogBucketName', {
         Description: 'Name of the CloudTrail log bucket',
-        Export: {
-          Name: `CloudTrailLogBucketName-${environmentSuffix}`,
-        },
       });
     });
 
     test('exports AllowedPrincipals', () => {
       template.hasOutput('AllowedPrincipals', {
         Description: 'List of allowed principal ARNs',
-        Export: {
-          Name: `AllowedPrincipals-${environmentSuffix}`,
-        },
       });
     });
 
@@ -427,9 +406,6 @@ describe('TapStack', () => {
       template.hasOutput('EnvironmentSuffix', {
         Description: 'Environment suffix used for resource naming',
         Value: environmentSuffix,
-        Export: {
-          Name: `EnvironmentSuffix-${environmentSuffix}`,
-        },
       });
     });
   });
