@@ -78,7 +78,8 @@ fi
 # Start LocalStack container
 echo -e "${YELLOW}🔧 Starting LocalStack container...${NC}"
 
-# Build docker run command with optional API key
+# Build docker run command
+# Using LocalStack Pro image with latest version for full AWS service parity
 DOCKER_CMD="docker run -d \
   --name localstack \
   -p 4566:4566 \
@@ -94,7 +95,7 @@ if [ -n "$SERVICES" ]; then
   -e SERVICES=\"${SERVICES}\""
 fi
 
-# Add API key if available
+# Add API key if available (required for Pro features)
 if [ -n "$LOCALSTACK_API_KEY" ]; then
     DOCKER_CMD="$DOCKER_CMD \
   -e LOCALSTACK_API_KEY=\"${LOCALSTACK_API_KEY}\""
@@ -102,7 +103,7 @@ fi
 
 DOCKER_CMD="$DOCKER_CMD \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  localstack/localstack-pro:4.12.0"
+  localstack/localstack-pro:latest"
 
 # Execute the docker command
 eval $DOCKER_CMD
