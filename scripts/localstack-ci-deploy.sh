@@ -197,7 +197,7 @@ describe_pulumi_failure() {
     
     # Show stack export for diagnostics
     print_status $YELLOW "🔍 Failed Resource Details:"
-    pulumi stack export 2>/dev/null | jq '.deployment.resources[] | select(.custom == true) | {type: .type, urn: .urn}' 2>/dev/null | head -30 || echo "   Unable to export stack"
+    pulumi stack export 2>/dev/null | jq -r '.deployment.resources[] | select(.custom == true) | select(.type | startswith("pulumi:providers") | not) | select(.id == null) | { type, urn }' || echo "   Unable to export stack"
     echo ""
     
     print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
