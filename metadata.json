@@ -5,9 +5,7 @@
   "complexity": "hard",
   "subtask": "Security, Compliance, and Governance",
   "subject_labels": [
-    "General Infrastructure Tooling QA",
-    "Security Configuration as Code",
-    "Infrastructure Analysis/Monitoring"
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "IAM",
