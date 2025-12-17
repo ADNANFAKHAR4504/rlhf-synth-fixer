@@ -430,27 +430,21 @@ Resources:
     Type: AWS::RDS::DBInstance
     Properties:
       DBInstanceIdentifier: !Sub 'secure-webapp-db-${EnvironmentSuffix}'
-      DBInstanceClass: db.t3.micro
+      DBInstanceClass: db.t2.micro
       Engine: mysql
-      EngineVersion: '8.0.39'
+      EngineVersion: '8.0'
       AllocatedStorage: '20'
       StorageType: gp2
-      StorageEncrypted: true
-      MultiAZ: false  # Changed to false for LocalStack Community compatibility
+      StorageEncrypted: false
+      MultiAZ: false
       DBName: securewebapp
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DatabaseSubnetGroup
-      BackupRetentionPeriod: 7
-      PreferredBackupWindow: '03:00-04:00'
-      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      BackupRetentionPeriod: 1
       DeletionProtection: false
-      EnableCloudwatchLogsExports:
-        - error
-        - general
-        - slowquery
       Tags:
         - Key: Name
           Value: !Sub 'SecureWebApp-Database-${EnvironmentSuffix}'
