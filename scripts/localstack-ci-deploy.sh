@@ -195,16 +195,6 @@ describe_pulumi_failure() {
     print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     
-    # Show stack history
-    print_status $YELLOW "🔍 Stack History (recent operations):"
-    pulumi stack history --show-secrets=false 2>/dev/null | head -20 || echo "   No history found"
-    echo ""
-    
-    # Show current stack resources
-    print_status $YELLOW "🔍 Stack Resources:"
-    pulumi stack --show-urns 2>/dev/null | head -30 || echo "   No resources found"
-    echo ""
-    
     # Show stack export for diagnostics
     print_status $YELLOW "🔍 Failed Resource Details:"
     pulumi stack export 2>/dev/null | jq '.deployment.resources[] | select(.custom == true) | {type: .type, urn: .urn}' 2>/dev/null | head -30 || echo "   Unable to export stack"
