@@ -19,8 +19,5 @@
     "CloudWatch",
     "IAM",
     "X-Ray"
-  ],
-  "training_quality": 10,
-  "author": "iamarpit-turing",
-  "reviewer": "emmanuel-turing"
+  ]
 }
