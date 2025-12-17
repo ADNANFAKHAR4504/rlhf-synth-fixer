@@ -2,4 +2,5 @@ name: TapStack
 runtime:
   name: nodejs
 description: Environment migration infrastructure with VPC, RDS, EC2, and S3
+main: index.ts
 
