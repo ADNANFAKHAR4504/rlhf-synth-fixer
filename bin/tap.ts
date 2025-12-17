@@ -20,9 +20,9 @@ if (typeof rawSuffix === 'string' && rawSuffix.includes('${')) {
 const environmentSuffix = String(rawSuffix).replace(/[^A-Za-z0-9-]/g, '-');
 
 // Build a safe, readable stack id/name (no hyphen to match LocalStack scripts)
-const stackId = `TapStack${environmentSuffix}`;
+const stackId = `TapStackRoot${environmentSuffix}`;
 
 new TapStack(app, stackId, {
-  stackName: stackId, // optional; keeps CloudFormation stack name aligned
+  stackName: stackId, // Root stack name - nested PaymentMonitoringStack uses TapStack${env}
   environmentSuffix,
 });

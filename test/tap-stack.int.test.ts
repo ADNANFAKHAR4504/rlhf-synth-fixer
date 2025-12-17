@@ -858,7 +858,7 @@ describe('TapStack Integration Tests', () => {
           // The normalized project name 'payment-other-project' becomes 'other-project' after removing 'payment-' prefix
           expect(stack.stackName).toContain(
             // eslint-disable-line @typescript-eslint/no-non-null-assertion
-            'tapstackstack-normalization-test'
+            'TapStacknormalization-test'
           );
         }
       }
@@ -1064,7 +1064,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('tap stack uses consistent naming convention', () => {
-      // Test that stack names are always tapstackstack-{environmentSuffix} regardless of project name
+      // Test that stack names are always TapStack{environmentSuffix} regardless of project name
 
       // Test with different project names
       const { templates: templates1 } = build(undefined, {
@@ -1075,7 +1075,7 @@ describe('TapStack Integration Tests', () => {
       const stack1 = templates1.find(t =>
         t.id.startsWith('PaymentMonitoringStack')
       )?.stack;
-      expect(stack1?.stackName).toBe('tapstackstack-consistent-test');
+      expect(stack1?.stackName).toBe('TapStackconsistent-test');
 
       const { templates: templates2 } = build(undefined, {
         environmentSuffix: 'consistent-test2',
@@ -1085,7 +1085,7 @@ describe('TapStack Integration Tests', () => {
       const stack2 = templates2.find(t =>
         t.id.startsWith('PaymentMonitoringStack')
       )?.stack;
-      expect(stack2?.stackName).toBe('tapstackstack-consistent-test2');
+      expect(stack2?.stackName).toBe('TapStackconsistent-test2');
     });
 
     test('alarm construct metric variations', () => {
@@ -1648,7 +1648,7 @@ describe('Additional Coverage Tests', () => {
         s.node.id.startsWith('PaymentMonitoringStack')
       );
       expect(paymentStack).toBeDefined();
-      expect(paymentStack?.stackName).toContain('tapstackstack');
+      expect(paymentStack?.stackName).toContain('TapStack');
     });
 
     test('verify all child stacks have unique names', () => {

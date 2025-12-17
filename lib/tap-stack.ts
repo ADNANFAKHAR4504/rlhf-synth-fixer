@@ -64,7 +64,7 @@ export class TapStack extends cdk.Stack {
       this,
       `PaymentMonitoringStack-${environmentSuffix}`,
       {
-        stackName: `tapstackstack-${environmentSuffix}`,
+        stackName: `TapStack${environmentSuffix}`,
         description: `Payment monitoring infrastructure for ${projectName} (${environmentSuffix}).`,
       }
     );

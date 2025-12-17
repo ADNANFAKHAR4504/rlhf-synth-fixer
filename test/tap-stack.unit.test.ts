@@ -60,7 +60,7 @@ describe('TapStack Unit Tests', () => {
         environmentSuffix: 'test',
         projectName: 'payment',
       });
-      expect(payment.stackName).toBe('tapstackstack-test');
+      expect(payment.stackName).toBe('TapStacktest');
       const desc = paymentTemplate.toJSON().Description as string | undefined;
       expect(desc).toBeDefined();
       expect(desc!).toContain(
@@ -102,14 +102,14 @@ describe('TapStack Unit Tests', () => {
       const { payment } = buildAppAndStacks(undefined, {
         environmentSuffix: 'staging',
       });
-      expect(payment.stackName).toBe('tapstackstack-staging');
+      expect(payment.stackName).toBe('TapStackstaging');
     });
 
     test('should use projectName from props', () => {
       const { payment } = buildAppAndStacks(undefined, {
         projectName: 'custom-payment',
       });
-      expect(payment.stackName).toBe('tapstackstack-dev');
+      expect(payment.stackName).toBe('TapStackdev');
     });
 
     test('should fall back to context values', () => {
@@ -117,12 +117,12 @@ describe('TapStack Unit Tests', () => {
         { environmentSuffix: 'context-env', projectName: 'context-project' },
         undefined
       );
-      expect(payment.stackName).toBe('tapstackstack-context-env');
+      expect(payment.stackName).toBe('TapStackcontext-env');
     });
 
     test('should use default values when no props or context provided', () => {
       const { payment } = buildAppAndStacks();
-      expect(payment.stackName).toBe('tapstackstack-dev');
+      expect(payment.stackName).toBe('TapStackdev');
     });
 
     // 🔹 Additional mixed cases to hit optional chaining + nullish coalescing branches:
@@ -132,7 +132,7 @@ describe('TapStack Unit Tests', () => {
         environmentSuffix: 'qa',
         projectName: undefined,
       });
-      expect(payment.stackName).toBe('tapstackstack-qa');
+      expect(payment.stackName).toBe('TapStackqa');
     });
 
     test('props provided with projectName from props and env undefined -> default env', () => {
@@ -140,7 +140,7 @@ describe('TapStack Unit Tests', () => {
         projectName: 'alpha',
         environmentSuffix: undefined,
       });
-      expect(payment.stackName).toBe('tapstackstack-dev');
+      expect(payment.stackName).toBe('TapStackdev');
     });
 
     test('props present but undefined, fallback to context for env while project from props', () => {
@@ -148,7 +148,7 @@ describe('TapStack Unit Tests', () => {
         { environmentSuffix: 'ctx', projectName: 'ignored' },
         { environmentSuffix: undefined, projectName: 'beta' }
       );
-      expect(payment.stackName).toBe('tapstackstack-ctx');
+      expect(payment.stackName).toBe('TapStackctx');
     });
 
     test('stack naming uses consistent format regardless of project name', () => {
@@ -156,7 +156,7 @@ describe('TapStack Unit Tests', () => {
         projectName: 'payment-custom',
         environmentSuffix: 'test',
       });
-      expect(payment.stackName).toBe('tapstackstack-test');
+      expect(payment.stackName).toBe('TapStacktest');
     });
 
     test('stack naming is consistent across different project names', () => {
@@ -164,7 +164,7 @@ describe('TapStack Unit Tests', () => {
         projectName: 'payment',
         environmentSuffix: 'test',
       });
-      expect(payment.stackName).toBe('tapstackstack-test');
+      expect(payment.stackName).toBe('TapStacktest');
     });
 
     test('stack naming follows uniform pattern for all inputs', () => {
@@ -172,7 +172,7 @@ describe('TapStack Unit Tests', () => {
         projectName: 'custom',
         environmentSuffix: 'test',
       });
-      expect(payment.stackName).toBe('tapstackstack-test');
+      expect(payment.stackName).toBe('TapStacktest');
     });
   });
 
