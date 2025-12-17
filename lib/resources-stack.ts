@@ -61,10 +61,25 @@ export class ResourcesStack extends cdk.Stack {
 
     this.bucket.grantReadWrite(this.instanceRole);
 
-    // Create VPC for LocalStack
-    this.vpc = new Vpc(this, 'LocalStackVpc', {
+    // Create new VPC
+    this.vpc = new Vpc(this, `${environmentSuffix}-TapStackVpc`, {
+      ipAddresses: cdk.aws_ec2.IpAddresses.cidr('10.0.0.0/16'),
       maxAzs: 2,
-      natGateways: 0, 
+      natGateways: 1,
+      subnetConfiguration: [
+        {
+          name: 'Public',
+          subnetType: SubnetType.PUBLIC,
+          cidrMask: 24,
+        },
+        {
+          name: 'Private',
+          subnetType: SubnetType.PRIVATE_WITH_EGRESS,
+          cidrMask: 24,
+        },
+      ],
+      enableDnsHostnames: true,
+      enableDnsSupport: true,
     });
 
     // Security Group

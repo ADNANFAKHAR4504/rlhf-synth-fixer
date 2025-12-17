@@ -11,7 +11,7 @@ As a cloud engineer, your task is to set up a basic cloud environment using AWS 
 2. **EC2 Instance Setup**
    - Deploy a 't2.micro' EC2 instance in the 'us-east-1' region
    - Use the latest Amazon Linux 2 AMI for the EC2 instance
-   - Since a custom VPC is not requested, deploy the EC2 instance into the default VPC for simplicity
+   - Deploy the EC2 instance into the a VPC.
 
 3. **Elastic IP Association**
    - Create an Elastic IP and associate it with the EC2 instance

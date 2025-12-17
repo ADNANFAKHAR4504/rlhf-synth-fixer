@@ -220,19 +220,9 @@ describe('TapStack Unit Tests', () => {
 
   describe('Security Group Configuration', () => {
     test('creates security group with SSH access rule', () => {
+      // Security group without inline rules (for LocalStack compatibility)
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
         GroupDescription: 'Security group for TapStack EC2 instance',
-        SecurityGroupIngress: [
-          {
-            CidrIp: {
-              Ref: `${environmentSuffix}AllowedSshIp`,
-            },
-            Description: 'SSH access from specified IP range',
-            FromPort: 22,
-            IpProtocol: 'tcp',
-            ToPort: 22,
-          },
-        ],
         SecurityGroupEgress: [
           {
             CidrIp: '0.0.0.0/0',
@@ -240,6 +230,17 @@ describe('TapStack Unit Tests', () => {
             IpProtocol: '-1',
           },
         ],
+      });
+
+      // Separate SecurityGroupIngress resource (LocalStack compatibility)
+      template.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
+        IpProtocol: 'tcp',
+        FromPort: 22,
+        ToPort: 22,
+        CidrIp: {
+          Ref: `${environmentSuffix}AllowedSshIp`,
+        },
+        Description: 'SSH access from specified IP range',
       });
     });
   });
@@ -375,7 +376,8 @@ describe('TapStack Unit Tests', () => {
       template.resourceCountIs('AWS::IAM::InstanceProfile', 1);
       template.resourceCountIs('AWS::EC2::SecurityGroup', 1);
       template.resourceCountIs('AWS::EC2::Instance', 1);
-      template.resourceCountIs('AWS::EC2::EIP', 1);
+      // 2 EIPs: 1 for EC2 instance, 1 for NAT Gateway
+      template.resourceCountIs('AWS::EC2::EIP', 2);
       template.resourceCountIs('AWS::EC2::EIPAssociation', 1);
       // AutoDeleteObjects creates additional Lambda resources
       template.resourceCountIs('AWS::Lambda::Function', 1);
