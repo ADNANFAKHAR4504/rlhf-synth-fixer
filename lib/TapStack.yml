@@ -30,15 +30,19 @@ Parameters:
     AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/([0-9]|[1-2][0-9]|3[0-2])$'
     Description: Primary VPC CIDR block.
 
+  # ✅ FIX: make these String to avoid LocalStack delete-time list coercion bugs
+  # IMPORTANT: keep them comma-separated with NO SPACES (same as your defaults)
   PublicSubnetCidrs:
-    Type: CommaDelimitedList
+    Type: String
     Default: 10.0.0.0/20,10.0.16.0/20
-    Description: Two non-overlapping public subnet CIDRs (A,B).
+    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/([0-9]|[1-2][0-9]|3[0-2]),([0-9]{1,3}\.){3}[0-9]{1,3}/([0-9]|[1-2][0-9]|3[0-2])$'
+    Description: Two non-overlapping public subnet CIDRs (A,B), comma-separated (no spaces).
 
   PrivateSubnetCidrs:
-    Type: CommaDelimitedList
+    Type: String
     Default: 10.0.32.0/20,10.0.48.0/20
-    Description: Two non-overlapping private subnet CIDRs (A,B).
+    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/([0-9]|[1-2][0-9]|3[0-2]),([0-9]{1,3}\.){3}[0-9]{1,3}/([0-9]|[1-2][0-9]|3[0-2])$'
+    Description: Two non-overlapping private subnet CIDRs (A,B), comma-separated (no spaces).
 
   InstanceType:
     Type: String
@@ -88,7 +92,6 @@ Parameters:
     Description: >
       AMI ID to use for EC2 instances.
       Required for LocalStack. Optional for AWS (can be auto-resolved via SSM externally).
-
 
   RdsEngine:
     Type: String
@@ -158,9 +161,7 @@ Conditions:
   EngineIsPg: !Equals [!Ref RdsEngine, 'postgres']
   RetainDbSnapshot: !Equals [!Ref RetainDbSnapshotOnDelete, 'true']
 
-  #HasAmiOverride: !Not [!Equals [!Ref AmiIdOverride, '']]
   HasAmiId: !Not [!Equals [!Ref AmiId, '']]
-
 
 Resources:
 
@@ -209,12 +210,12 @@ Resources:
       GatewayId: !Ref InternetGateway
     DependsOn: VPCGatewayAttachment
 
+  # ✅ FIX: Select from Split(String) (lint-safe + LocalStack-safe)
   PublicSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Select [0, !Ref PublicSubnetCidrs]
-      #AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Select [0, !Split [",", !Ref PublicSubnetCidrs]]
       MapPublicIpOnLaunch: true
       Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-subnet-public-a' }]
 
@@ -222,8 +223,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Select [1, !Ref PublicSubnetCidrs]
-      #AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Select [1, !Split [",", !Ref PublicSubnetCidrs]]
       MapPublicIpOnLaunch: true
       Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-subnet-public-b' }]
 
@@ -231,8 +231,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Select [0, !Ref PrivateSubnetCidrs]
-      #AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Select [0, !Split [",", !Ref PrivateSubnetCidrs]]
       MapPublicIpOnLaunch: false
       Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-subnet-private-a' }]
 
@@ -240,8 +239,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Select [1, !Ref PrivateSubnetCidrs]
-      #AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Select [1, !Split [",", !Ref PrivateSubnetCidrs]]
       MapPublicIpOnLaunch: false
       Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-subnet-private-b' }]
 
@@ -390,7 +388,6 @@ Resources:
           - HasAmiId
           - !Ref AmiId
           - ami-1234567890abcdef0
-
         InstanceType: !Ref InstanceType
         KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
         SecurityGroupIds: [!Ref SecurityGroupEc2]
@@ -495,7 +492,6 @@ Resources:
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-ec2'
           PropagateAtLaunch: true
 
-
   SNSTopicAlarms:
     Type: AWS::SNS::Topic
     Condition: EnableSns
@@ -519,8 +515,6 @@ Resources:
       Dimensions:
         - Name: AutoScalingGroupName
           Value: !Ref AutoScalingGroup
-
-
       Statistic: Average
       Period: !FindInMap [CW, Defaults, PeriodSecs]
       EvaluationPeriods: !FindInMap [CW, Defaults, EvalPeriods]
@@ -544,7 +538,6 @@ Resources:
       TreatMissingData: notBreaching
       AlarmActions: !If [EnableSns, [!Ref SNSTopicAlarms], []]
 
-  # AWS-only DB resources (LocalStack-safe skip)
   DbSecret:
     Type: AWS::SecretsManager::Secret
     Condition: IsAws
@@ -614,8 +607,6 @@ Resources:
       MasterUsername: masteruser
       MasterUserPassword: !Ref AWS::NoValue
 
-
-
   AlarmRdsCpuHigh:
     Type: AWS::CloudWatch::Alarm
     Condition: IsAws
@@ -633,7 +624,6 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       TreatMissingData: notBreaching
       AlarmActions: !If [EnableSns, [!Ref SNSTopicAlarms], []]
-
 
 Outputs:
   VpcId:
@@ -684,9 +674,6 @@ Outputs:
     Condition: IsAws
     Description: RDS endpoint address
     Value: !GetAtt RDSInstanceAws.Endpoint.Address
-
-
-
 
   DbSecretArn:
     Condition: IsAws
