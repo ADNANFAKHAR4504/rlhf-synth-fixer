@@ -129,6 +129,7 @@ install_dependencies() {
 }
 
 # Function to save deployment outputs
+# Fails if no outputs are saved (output_count = 0)
 save_outputs() {
     local output_json=$1
     
@@ -136,6 +137,13 @@ save_outputs() {
     echo "$output_json" > "$PROJECT_ROOT/cfn-outputs/flat-outputs.json"
     
     local output_count=$(echo "$output_json" | jq 'keys | length' 2>/dev/null || echo "0")
+    
+    if [ "$output_count" -eq 0 ]; then
+        print_status $RED "❌ No deployment outputs found!"
+        print_status $RED "❌ Deployment must produce at least one output"
+        exit 1
+    fi
+    
     print_status $GREEN "✅ Saved $output_count outputs to cfn-outputs/flat-outputs.json"
 }
 
