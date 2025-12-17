@@ -11,6 +11,9 @@ const stackName = `TapStack${environmentSuffix}`;
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
+// Detect if running on LocalStack (AWS_ENDPOINT_URL is set for LocalStack)
+const isLocalStack = !!process.env.AWS_ENDPOINT_URL?.includes('localhost');
+
 // Apply tags to all stacks in this app (optional - you can do this at stack level instead)
 Tags.of(app).add('Environment', environmentSuffix);
 Tags.of(app).add('Repository', repositoryName);
@@ -19,6 +22,8 @@ Tags.of(app).add('Author', commitAuthor);
 new TapStack(app, stackName, {
   stackName: stackName, // This ensures CloudFormation stack name includes the suffix
   environment: environmentSuffix, // Pass the environment suffix as environment
+  // Skip RDS for LocalStack due to subnet group dependency issues
+  skipRds: isLocalStack,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION,

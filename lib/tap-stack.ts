@@ -16,13 +16,15 @@ import { Construct } from 'constructs';
 export interface TapStackProps extends cdk.StackProps {
   environment: string;
   allowedSshIps?: string[];
+  /** Skip RDS for LocalStack compatibility (LocalStack has issues with RDS subnet groups) */
+  skipRds?: boolean;
 }
 
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
 
-    const { environment, allowedSshIps = [] } = props;
+    const { environment, allowedSshIps = [], skipRds = false } = props;
     const resourcePrefix = `${environment}`;
 
     // 1. KMS Key for encryption (Requirements 2, 7)
@@ -175,23 +177,23 @@ export class TapStack extends cdk.Stack {
       'HTTPS traffic'
     );
 
-    // Security Group for RDS
-    const rdsSecurityGroup = new ec2.SecurityGroup(
-      this,
-      `${resourcePrefix}-rds-sg`,
-      {
-        vpc,
-        securityGroupName: `${resourcePrefix}-rds-sg`,
-        description: 'Security group for RDS instances',
-        allowAllOutbound: false,
-      }
-    );
+    // Security Group for RDS (only created when RDS is enabled)
+    const rdsSecurityGroup = skipRds
+      ? undefined
+      : new ec2.SecurityGroup(this, `${resourcePrefix}-rds-sg`, {
+          vpc,
+          securityGroupName: `${resourcePrefix}-rds-sg`,
+          description: 'Security group for RDS instances',
+          allowAllOutbound: false,
+        });
 
-    rdsSecurityGroup.addIngressRule(
-      ec2SecurityGroup,
-      ec2.Port.tcp(3306),
-      'MySQL access from EC2'
-    );
+    if (rdsSecurityGroup) {
+      rdsSecurityGroup.addIngressRule(
+        ec2SecurityGroup,
+        ec2.Port.tcp(3306),
+        'MySQL access from EC2'
+      );
+    }
 
     // 3. IAM Roles with Trust Policies (Requirement 1, 6)
     const ec2Role = new iam.Role(this, `${resourcePrefix}-ec2-role`, {
@@ -263,32 +265,30 @@ export class TapStack extends cdk.Stack {
     );
 
     // 5. RDS Instance with KMS encryption (Requirement 2)
-    // Using vpcSubnets instead of explicit subnetGroup for LocalStack compatibility
-    const rdsInstance = new rds.DatabaseInstance(
-      this,
-      `${resourcePrefix}-database`,
-      {
-        instanceIdentifier: `${resourcePrefix}-database`,
-        engine: rds.DatabaseInstanceEngine.mysql({
-          version: rds.MysqlEngineVersion.VER_8_0,
-        }),
-        instanceType: ec2.InstanceType.of(
-          ec2.InstanceClass.T3,
-          ec2.InstanceSize.MICRO
-        ),
-        vpc,
-        vpcSubnets: {
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        },
-        securityGroups: [rdsSecurityGroup],
-        storageEncrypted: true,
-        storageEncryptionKey: kmsKey,
-        backupRetention: cdk.Duration.days(7),
-        deletionProtection: environment === 'prod',
-        multiAz: environment === 'prod',
-        autoMinorVersionUpgrade: true,
-      }
-    );
+    // Skip RDS for LocalStack due to subnet group dependency issues
+    const rdsInstance = skipRds
+      ? undefined
+      : new rds.DatabaseInstance(this, `${resourcePrefix}-database`, {
+          instanceIdentifier: `${resourcePrefix}-database`,
+          engine: rds.DatabaseInstanceEngine.mysql({
+            version: rds.MysqlEngineVersion.VER_8_0,
+          }),
+          instanceType: ec2.InstanceType.of(
+            ec2.InstanceClass.T3,
+            ec2.InstanceSize.MICRO
+          ),
+          vpc,
+          vpcSubnets: {
+            subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          },
+          securityGroups: rdsSecurityGroup ? [rdsSecurityGroup] : [],
+          storageEncrypted: true,
+          storageEncryptionKey: kmsKey,
+          backupRetention: cdk.Duration.days(7),
+          deletionProtection: environment === 'prod',
+          multiAz: environment === 'prod',
+          autoMinorVersionUpgrade: true,
+        });
 
     // 6. Application Load Balancer
     const alb = new elbv2.ApplicationLoadBalancer(
@@ -579,10 +579,12 @@ export class TapStack extends cdk.Stack {
       description: 'Secure S3 Bucket Name',
     });
 
-    new cdk.CfnOutput(this, 'RdsEndpoint', {
-      value: rdsInstance.instanceEndpoint.hostname,
-      description: 'RDS Instance Endpoint',
-    });
+    if (rdsInstance) {
+      new cdk.CfnOutput(this, 'RdsEndpoint', {
+        value: rdsInstance.instanceEndpoint.hostname,
+        description: 'RDS Instance Endpoint',
+      });
+    }
 
     new cdk.CfnOutput(this, 'LoadBalancerDns', {
       value: alb.loadBalancerDnsName,
