@@ -1,20 +1,16 @@
-# provider.tf
+# terraform.tfvars
+# Variable values for LocalStack deployment
 
-terraform {
-  required_version = ">= 1.4.0"
+aws_region   = "us-east-1"
+project_name = "nova"
+environment  = "dev"
+vpc_cidr     = "10.0.0.0/16"
 
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = ">= 5.0"
-    }
-  }
+# LocalStack doesn't need real vault address
+vault_address = ""
 
-  # Partial backend config: values are injected at `terraform init` time
-  backend "s3" {}
-}
+# Allow all for LocalStack testing
+allowed_ingress_cidrs = ["0.0.0.0/0"]
 
-# Primary AWS provider for general resources
-provider "aws" {
-  region = var.aws_region
-}
+# Test password for LocalStack
+db_master_password = "TestPassword123!"
