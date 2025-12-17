@@ -62,19 +62,23 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
     test('should have properly formatted resource identifiers', () => {
       // VPC ID format validation
       expect(outputs.VPCId).toMatch(/^vpc-[a-f0-9]+$/);
-      
+
       // EC2 Instance ID format validation
       expect(outputs.EC2InstanceId).toMatch(/^i-[a-f0-9]+$/);
-      
+
       // CloudTrail ARN format validation
-      expect(outputs.CloudTrailArn).toMatch(/^arn:aws:cloudtrail:us-east-1:\d+:trail\/SecureCloudTrail$/);
-      
+      expect(outputs.CloudTrailArn).toMatch(
+        /^arn:aws:cloudtrail:us-east-1:\d+:trail\/SecureCloudTrail$/
+      );
+
       // Lambda Function ARN format validation
-      expect(outputs.LambdaFunctionArn).toMatch(/^arn:aws:lambda:us-east-1:\d+:function:.+$/);
-      
+      expect(outputs.LambdaFunctionArn).toMatch(
+        /^arn:aws:lambda:us-east-1:\d+:function:.+$/
+      );
+
       // KMS Key ID format validation
       expect(outputs.KMSKeyId).toMatch(/^[a-f0-9-]+$/);
-      
+
       // Security Group ID format validation
       expect(outputs.LambdaSecurityGroupId).toMatch(/^sg-[a-f0-9]+$/);
       expect(outputs.EC2SecurityGroupId).toMatch(/^sg-[a-f0-9]+$/);
@@ -111,7 +115,9 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
 
         expect(mockRotationStatus.KeyRotationEnabled).toBe(true);
       } catch (error) {
-        console.log('KMS rotation validation running in mock mode for CI environment');
+        console.log(
+          'KMS rotation validation running in mock mode for CI environment'
+        );
         expect(outputs.KMSKeyId).toBeDefined();
       }
     });
@@ -131,10 +137,20 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
         ];
 
         expect(mockAliases.length).toBeGreaterThanOrEqual(2);
-        expect(mockAliases.some(alias => alias.AliasName.includes('secure-infra-s3-key'))).toBe(true);
-        expect(mockAliases.some(alias => alias.AliasName.includes('secure-s3-encryption-key'))).toBe(true);
+        expect(
+          mockAliases.some(alias =>
+            alias.AliasName.includes('secure-infra-s3-key')
+          )
+        ).toBe(true);
+        expect(
+          mockAliases.some(alias =>
+            alias.AliasName.includes('secure-s3-encryption-key')
+          )
+        ).toBe(true);
       } catch (error) {
-        console.log('KMS aliases validation running in mock mode for CI environment');
+        console.log(
+          'KMS aliases validation running in mock mode for CI environment'
+        );
         expect(outputs.KMSKeyId).toBeDefined();
       }
     });
@@ -157,10 +173,18 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
           },
         };
 
-        expect(mockEncryption.ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
-        expect(mockEncryption.ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault.KMSMasterKeyID).toBeDefined();
+        expect(
+          mockEncryption.ServerSideEncryptionConfiguration.Rules[0]
+            .ApplyServerSideEncryptionByDefault.SSEAlgorithm
+        ).toBe('aws:kms');
+        expect(
+          mockEncryption.ServerSideEncryptionConfiguration.Rules[0]
+            .ApplyServerSideEncryptionByDefault.KMSMasterKeyID
+        ).toBeDefined();
       } catch (error) {
-        console.log('S3 encryption validation running in mock mode for CI environment');
+        console.log(
+          'S3 encryption validation running in mock mode for CI environment'
+        );
         expect(outputs.S3BucketName).toBeDefined();
       }
     });
@@ -177,12 +201,23 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
           },
         };
 
-        expect(mockPublicAccessBlock.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
-        expect(mockPublicAccessBlock.PublicAccessBlockConfiguration.IgnorePublicAcls).toBe(true);
-        expect(mockPublicAccessBlock.PublicAccessBlockConfiguration.BlockPublicPolicy).toBe(true);
-        expect(mockPublicAccessBlock.PublicAccessBlockConfiguration.RestrictPublicBuckets).toBe(true);
+        expect(
+          mockPublicAccessBlock.PublicAccessBlockConfiguration.BlockPublicAcls
+        ).toBe(true);
+        expect(
+          mockPublicAccessBlock.PublicAccessBlockConfiguration.IgnorePublicAcls
+        ).toBe(true);
+        expect(
+          mockPublicAccessBlock.PublicAccessBlockConfiguration.BlockPublicPolicy
+        ).toBe(true);
+        expect(
+          mockPublicAccessBlock.PublicAccessBlockConfiguration
+            .RestrictPublicBuckets
+        ).toBe(true);
       } catch (error) {
-        console.log('S3 public access validation running in mock mode for CI environment');
+        console.log(
+          'S3 public access validation running in mock mode for CI environment'
+        );
         expect(outputs.S3BucketName).toBeDefined();
       }
     });
@@ -196,7 +231,9 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
 
         expect(mockVersioning.Status).toBe('Enabled');
       } catch (error) {
-        console.log('S3 versioning validation running in mock mode for CI environment');
+        console.log(
+          'S3 versioning validation running in mock mode for CI environment'
+        );
         expect(outputs.S3BucketName).toBeDefined();
       }
     });
@@ -222,9 +259,13 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
         expect(mockLifecycle.Rules).toHaveLength(1);
         expect(mockLifecycle.Rules[0].Status).toBe('Enabled');
         expect(mockLifecycle.Rules[0].Expiration.Days).toBe(90);
-        expect(mockLifecycle.Rules[0].NoncurrentVersionExpiration.NoncurrentDays).toBe(30);
+        expect(
+          mockLifecycle.Rules[0].NoncurrentVersionExpiration.NoncurrentDays
+        ).toBe(30);
       } catch (error) {
-        console.log('S3 lifecycle validation running in mock mode for CI environment');
+        console.log(
+          'S3 lifecycle validation running in mock mode for CI environment'
+        );
         expect(outputs.S3BucketName).toBeDefined();
       }
     });
@@ -263,10 +304,20 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
 
         const policy = JSON.parse(mockPolicy.Policy);
         expect(policy.Statement).toBeInstanceOf(Array);
-        expect(policy.Statement.some((stmt: any) => stmt.Sid === 'AWSCloudTrailAclCheck')).toBe(true);
-        expect(policy.Statement.some((stmt: any) => stmt.Sid === 'AWSCloudTrailWrite')).toBe(true);
+        expect(
+          policy.Statement.some(
+            (stmt: any) => stmt.Sid === 'AWSCloudTrailAclCheck'
+          )
+        ).toBe(true);
+        expect(
+          policy.Statement.some(
+            (stmt: any) => stmt.Sid === 'AWSCloudTrailWrite'
+          )
+        ).toBe(true);
       } catch (error) {
-        console.log('S3 bucket policy validation running in mock mode for CI environment');
+        console.log(
+          'S3 bucket policy validation running in mock mode for CI environment'
+        );
         expect(outputs.S3BucketName).toBeDefined();
       }
     });
@@ -307,7 +358,8 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
             {
               GroupId: outputs.EC2SecurityGroupId,
               GroupName: 'EC2SecurityGroup',
-              Description: 'Security group for EC2 instances with restricted access',
+              Description:
+                'Security group for EC2 instances with restricted access',
               VpcId: outputs.VPCId,
               IpPermissions: [
                 {
@@ -347,22 +399,32 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
         };
 
         // Validate EC2 Security Group
-        const ec2Sg = mockSecurityGroups.SecurityGroups.find(sg => sg.GroupId === outputs.EC2SecurityGroupId);
+        const ec2Sg = mockSecurityGroups.SecurityGroups.find(
+          sg => sg.GroupId === outputs.EC2SecurityGroupId
+        );
         expect(ec2Sg).toBeDefined();
         if (ec2Sg) {
           expect(ec2Sg.IpPermissions).toHaveLength(3); // SSH, HTTP, HTTPS
-          expect(ec2Sg.IpPermissions.every(rule => rule.IpRanges[0].CidrIp === '203.0.113.0/24')).toBe(true);
+          expect(
+            ec2Sg.IpPermissions.every(
+              rule => rule.IpRanges[0].CidrIp === '203.0.113.0/24'
+            )
+          ).toBe(true);
         }
 
         // Validate Lambda Security Group
-        const lambdaSg = mockSecurityGroups.SecurityGroups.find(sg => sg.GroupId === outputs.LambdaSecurityGroupId);
+        const lambdaSg = mockSecurityGroups.SecurityGroups.find(
+          sg => sg.GroupId === outputs.LambdaSecurityGroupId
+        );
         expect(lambdaSg).toBeDefined();
         if (lambdaSg) {
           expect(lambdaSg.IpPermissions).toHaveLength(0); // No inbound rules
           expect(lambdaSg.IpPermissionsEgress).toHaveLength(1); // All outbound allowed
         }
       } catch (error) {
-        console.log('Security groups validation running in mock mode for CI environment');
+        console.log(
+          'Security groups validation running in mock mode for CI environment'
+        );
         expect(outputs.EC2SecurityGroupId).toBeDefined();
         expect(outputs.LambdaSecurityGroupId).toBeDefined();
       }
@@ -402,11 +464,15 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
         const instance = mockInstance.Reservations[0].Instances[0];
         expect(instance.InstanceType).toBe('t3.micro');
         expect(instance.VpcId).toBe(outputs.VPCId);
-        expect(instance.SecurityGroups[0].GroupId).toBe(outputs.EC2SecurityGroupId);
+        expect(instance.SecurityGroups[0].GroupId).toBe(
+          outputs.EC2SecurityGroupId
+        );
         expect(instance.IamInstanceProfile).toBeDefined();
         expect(instance.SubnetId).toMatch(/subnet-/); // Should be in a subnet
       } catch (error) {
-        console.log('EC2 instance validation running in mock mode for CI environment');
+        console.log(
+          'EC2 instance validation running in mock mode for CI environment'
+        );
         expect(outputs.EC2InstanceId).toBeDefined();
       }
     });
@@ -438,10 +504,16 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
         expect(mockLambda.Configuration.Timeout).toBe(30);
         expect(mockLambda.Configuration.MemorySize).toBe(128);
         expect(mockLambda.Configuration.VpcConfig.VpcId).toBe(outputs.VPCId);
-        expect(mockLambda.Configuration.VpcConfig.SecurityGroupIds).toContain(outputs.LambdaSecurityGroupId);
-        expect(mockLambda.Configuration.VpcConfig.SubnetIds.length).toBeGreaterThan(0);
+        expect(mockLambda.Configuration.VpcConfig.SecurityGroupIds).toContain(
+          outputs.LambdaSecurityGroupId
+        );
+        expect(
+          mockLambda.Configuration.VpcConfig.SubnetIds.length
+        ).toBeGreaterThan(0);
       } catch (error) {
-        console.log('Lambda function validation running in mock mode for CI environment');
+        console.log(
+          'Lambda function validation running in mock mode for CI environment'
+        );
         expect(outputs.LambdaFunctionArn).toBeDefined();
       }
     });
@@ -458,14 +530,18 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
         expect(mockVpcConfig.VpcId).toBe(outputs.VPCId);
         expect(mockVpcConfig.SubnetIds).toBeInstanceOf(Array);
         expect(mockVpcConfig.SubnetIds.length).toBeGreaterThan(0);
-        expect(mockVpcConfig.SecurityGroupIds).toContain(outputs.LambdaSecurityGroupId);
-        
+        expect(mockVpcConfig.SecurityGroupIds).toContain(
+          outputs.LambdaSecurityGroupId
+        );
+
         // Validate subnets are private (mock check)
         mockVpcConfig.SubnetIds.forEach(subnetId => {
           expect(subnetId).toMatch(/subnet-private/);
         });
       } catch (error) {
-        console.log('Lambda VPC validation running in mock mode for CI environment');
+        console.log(
+          'Lambda VPC validation running in mock mode for CI environment'
+        );
         expect(outputs.LambdaFunctionArn).toBeDefined();
       }
     });
@@ -496,7 +572,9 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
         expect(trail.EnableLogFileValidation).toBe(true);
         expect(trail.KMSKeyId).toBe(outputs.KMSKeyId);
       } catch (error) {
-        console.log('CloudTrail validation running in mock mode for CI environment');
+        console.log(
+          'CloudTrail validation running in mock mode for CI environment'
+        );
         expect(outputs.CloudTrailArn).toBeDefined();
       }
     });
@@ -510,7 +588,9 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
 
         expect(mockStatus.IsLogging).toBe(true);
       } catch (error) {
-        console.log('CloudTrail status validation running in mock mode for CI environment');
+        console.log(
+          'CloudTrail status validation running in mock mode for CI environment'
+        );
         expect(outputs.CloudTrailArn).toBeDefined();
       }
     });
@@ -540,14 +620,16 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
       };
 
       // Validate CloudTrail -> S3 connection
-      expect(securityChain.cloudtrail.s3BucketName).toBe(securityChain.s3.bucketName);
-      
+      expect(securityChain.cloudtrail.s3BucketName).toBe(
+        securityChain.s3.bucketName
+      );
+
       // Validate CloudTrail -> KMS connection
       expect(securityChain.cloudtrail.kmsKeyId).toBe(securityChain.kms.keyId);
-      
+
       // Validate S3 -> KMS connection
       expect(securityChain.s3.kmsKeyId).toBe(securityChain.kms.keyId);
-      
+
       // Validate security settings
       expect(securityChain.cloudtrail.isLogging).toBe(true);
       expect(securityChain.s3.encryption).toBe('aws:kms');
@@ -584,7 +666,11 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
       // Validate EC2 security
       expect(vpcSecurity.ec2.subnetType).toBe('private');
       expect(vpcSecurity.ec2.inboundRules).toHaveLength(3);
-      expect(vpcSecurity.ec2.inboundRules.every(rule => rule.cidr === '203.0.113.0/24')).toBe(true);
+      expect(
+        vpcSecurity.ec2.inboundRules.every(
+          rule => rule.cidr === '203.0.113.0/24'
+        )
+      ).toBe(true);
 
       // Validate Lambda security
       expect(vpcSecurity.lambda.subnetType).toBe('private');
@@ -606,8 +692,10 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
 
     test('should validate resource naming follows conventions', () => {
       // Validate S3 bucket follows naming convention (with environment suffix)
-      expect(outputs.S3BucketName).toMatch(/^secure-cloudtrail-logs-.+-\d+-us-east-1$/);
-      
+      expect(outputs.S3BucketName).toMatch(
+        /^secure-cloudtrail-logs-.+-\d+-us-east-1$/
+      );
+
       // Validate CloudTrail name
       expect(outputs.CloudTrailArn).toContain('SecureCloudTrail');
     });

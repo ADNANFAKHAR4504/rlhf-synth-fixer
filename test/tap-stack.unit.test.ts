@@ -21,7 +21,9 @@ describe('TapStack', () => {
   describe('KMS Key Configuration', () => {
     test('creates KMS key with correct properties', () => {
       template.hasResourceProperties('AWS::KMS::Key', {
-        Description: Match.stringLikeRegexp(`KMS key for S3 bucket encryption and CloudTrail logs - ${environmentSuffix}`),
+        Description: Match.stringLikeRegexp(
+          `KMS key for S3 bucket encryption and CloudTrail logs - ${environmentSuffix}`
+        ),
         EnableKeyRotation: true,
       });
     });
@@ -51,7 +53,7 @@ describe('TapStack', () => {
       template.hasResourceProperties('AWS::KMS::Alias', {
         AliasName: `alias/secure-infra-s3-key-${environmentSuffix}`,
       });
-      
+
       template.hasResourceProperties('AWS::KMS::Alias', {
         AliasName: 'alias/secure-s3-encryption-key',
       });
@@ -181,7 +183,8 @@ describe('TapStack', () => {
   describe('Security Group Configuration', () => {
     test('creates EC2 security group with restricted inbound access', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for EC2 instances with restricted access',
+        GroupDescription:
+          'Security group for EC2 instances with restricted access',
         SecurityGroupIngress: [
           {
             CidrIp: '203.0.113.0/24',
@@ -236,7 +239,8 @@ describe('TapStack', () => {
             },
           ],
         },
-        Description: 'IAM role for EC2 instances with minimal required permissions',
+        Description:
+          'IAM role for EC2 instances with minimal required permissions',
       });
     });
 
@@ -253,7 +257,8 @@ describe('TapStack', () => {
             },
           ],
         },
-        Description: 'IAM role for Lambda functions with VPC execution permissions',
+        Description:
+          'IAM role for Lambda functions with VPC execution permissions',
       });
     });
 
@@ -365,28 +370,28 @@ describe('TapStack', () => {
       // KMS resources
       template.resourceCountIs('AWS::KMS::Key', 1);
       template.resourceCountIs('AWS::KMS::Alias', 2);
-      
+
       // S3 resources
       template.resourceCountIs('AWS::S3::Bucket', 1);
       template.resourceCountIs('AWS::S3::BucketPolicy', 1);
-      
+
       // VPC resources
       template.resourceCountIs('AWS::EC2::VPC', 1);
       template.resourceCountIs('AWS::EC2::SecurityGroup', 2);
       template.resourceCountIs('AWS::EC2::NatGateway', 1);
       template.resourceCountIs('AWS::EC2::InternetGateway', 1);
-      
+
       // Compute resources
       template.resourceCountIs('AWS::EC2::Instance', 1);
       // Note: CDK creates additional Lambda functions for custom resources (S3 auto-delete, VPC default SG restriction)
       const lambdaFunctions = template.findResources('AWS::Lambda::Function');
       expect(Object.keys(lambdaFunctions).length).toBeGreaterThanOrEqual(1);
-      
+
       // IAM resources - Additional roles are created for CDK custom resources
       const iamRoles = template.findResources('AWS::IAM::Role');
       expect(Object.keys(iamRoles).length).toBeGreaterThanOrEqual(2); // At least EC2 and Lambda roles
       template.resourceCountIs('AWS::IAM::InstanceProfile', 2);
-      
+
       // CloudTrail
       template.resourceCountIs('AWS::CloudTrail::Trail', 1);
     });
