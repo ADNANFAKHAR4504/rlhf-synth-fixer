@@ -105,7 +105,7 @@ fi
 
 DOCKER_CMD="$DOCKER_CMD \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  localstack/localstack:3.7.2"
+  localstack/localstack-pro:3.7.2"
 
 # Execute the docker command
 eval $DOCKER_CMD
