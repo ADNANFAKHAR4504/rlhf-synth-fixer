@@ -1,0 +1,22 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101000343",
+  "team": "3",
+  "startedAt": "2025-12-17T11:03:41.248Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "Lambda",
+    "SQS",
+    "DynamoDB",
+    "SNS",
+    "IAM",
+    "VPC"
+  ]
+}
