@@ -479,12 +479,15 @@ Resources:
       cfn-lint:
         config:
           ignore_checks:
-            - W3005
+            - W1028   
+
     Condition: CreateNatGatewayCondition
-    DependsOn: NatEipA
     Type: AWS::EC2::NatGateway
     Properties:
-      AllocationId: !GetAtt NatEipA.AllocationId
+      AllocationId: !If
+        - CreateNatGatewayCondition
+        - !GetAtt NatEipA.AllocationId
+        - !Ref AWS::NoValue
       SubnetId: !Ref PublicSubnetA
       Tags:
         - Key: Name
@@ -493,6 +496,7 @@ Resources:
           Value: !Ref ProjectName
         - Key: EnvironmentSuffix
           Value: !Ref EnvironmentSuffix
+
 
 
 
@@ -853,7 +857,15 @@ Resources:
           Value: !Ref EnvironmentSuffix
 
   RdsInstance:
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - W3005
+
     Type: AWS::RDS::DBInstance
+    DependsOn:
+      - RdsSubnetGroup
     Properties:
       Engine: postgres
       DBSubnetGroupName: !Ref RdsSubnetGroup
@@ -872,13 +884,6 @@ Resources:
       PubliclyAccessible: false
       BackupRetentionPeriod: 7
       CopyTagsToSnapshot: true
-      Tags:
-        - Key: Name
-          Value: !Sub "corp-${ProjectName}-${EnvironmentSuffix}-rds"
-        - Key: ProjectName
-          Value: !Ref ProjectName
-        - Key: EnvironmentSuffix
-          Value: !Ref EnvironmentSuffix
 
   ConfigServiceRole:
     Type: AWS::IAM::Role

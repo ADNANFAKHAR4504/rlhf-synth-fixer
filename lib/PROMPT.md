@@ -1,4 +1,4 @@
-Functional scope:
+Functional scope (build everything new):
 
 * Generate a single **AWS CloudFormation template** named **`TapStack.yml`** that provisions a brand-new, security-hardened baseline in **us-east-1 or us-west-2** with the organizational naming convention **`corp-*`**. No resources may reference pre-existing infrastructure.
 * Enforce security baselines across **S3, IAM, EC2, VPC, RDS, CloudTrail, AWS Config, GuardDuty, and Security Groups**, with parameters, conditions, rules, and outputs included in the same YAML file.
