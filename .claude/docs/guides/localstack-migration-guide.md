@@ -202,14 +202,15 @@ On successful migration, the command automatically:
 
 ### Naming Convention
 
-| Item        | Format                      | Example           |
-| ----------- | --------------------------- | ----------------- |
-| New PR ID   | `ls-{original_pr_id}`       | `ls-Pr7179`       |
-| Branch      | `ls-synth-{original_pr_id}` | `ls-synth-Pr7179` |
+| Item      | Format                      | Example           |
+| --------- | --------------------------- | ----------------- |
+| New PR ID | `ls-{original_pr_id}`       | `ls-Pr7179`       |
+| Branch    | `ls-synth-{original_pr_id}` | `ls-synth-Pr7179` |
 
 ### Pipeline Automation
 
 The PR pipeline will automatically:
+
 1. Run linting and validation
 2. Deploy to LocalStack
 3. Run integration tests
@@ -347,6 +348,7 @@ The `metadata.json` is updated with:
 ```
 
 The PR pipeline handles:
+
 - Deployment to LocalStack
 - Integration testing
 - Output file generation (cfn-outputs/, execution-output.md, etc.)
