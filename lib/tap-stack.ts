@@ -270,6 +270,7 @@ export class TapStack extends cdk.Stack {
       vpcName: `security-baseline-vpc-${environmentSuffix}`,
       maxAzs: 2,
       natGateways: 0,
+      restrictDefaultSecurityGroup: false, // Disabled for LocalStack compatibility
       subnetConfiguration: [
         {
           name: 'Isolated',
