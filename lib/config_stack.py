@@ -46,6 +46,11 @@ class ConfigStack(pulumi.ComponentResource):
         config = pulumi.Config()
         create_config_recorder = config.get_bool("create_config_recorder") or False
 
+        # Check if running on LocalStack (skip Config rules - not fully supported)
+        import os
+        is_localstack = os.environ.get('AWS_ENDPOINT_URL', '').find('localhost') != -1 or \
+                        os.environ.get('LOCALSTACK', 'false').lower() == 'true'
+
         # Create IAM role for AWS Config
         self.config_role = aws.iam.Role(
             f"config-role-{environment_suffix}",
@@ -144,72 +149,8 @@ class ConfigStack(pulumi.ComponentResource):
             self.delivery_channel = None
             self.recorder_status = None
 
-        # Create AWS Config custom rules
         # Build depends_on list - only include recorder_status if it was created
-        rule_depends_on = [self.recorder_status] if self.recorder_status else []
-
-        # EC2 Tag Compliance Rule
-        self.ec2_tag_config_rule = aws.cfg.Rule(
-            f"ec2-tag-compliance-{environment_suffix}",
-            source=aws.cfg.RuleSourceArgs(
-                owner="CUSTOM_LAMBDA",
-                source_identifier=compliance_rules['ec2_tags'].arn,
-                source_details=[
-                    aws.cfg.RuleSourceSourceDetailArgs(
-                        event_source="aws.config",
-                        message_type="ConfigurationItemChangeNotification",
-                    ),
-                    aws.cfg.RuleSourceSourceDetailArgs(
-                        event_source="aws.config",
-                        message_type="OversizedConfigurationItemChangeNotification",
-                    ),
-                ]
-            ),
-            tags=tags,
-            opts=ResourceOptions(parent=self, depends_on=rule_depends_on)
-        )
-
-        # S3 Encryption Compliance Rule
-        self.s3_encryption_config_rule = aws.cfg.Rule(
-            f"s3-encryption-compliance-{environment_suffix}",
-            source=aws.cfg.RuleSourceArgs(
-                owner="CUSTOM_LAMBDA",
-                source_identifier=compliance_rules['s3_encryption'].arn,
-                source_details=[
-                    aws.cfg.RuleSourceSourceDetailArgs(
-                        event_source="aws.config",
-                        message_type="ConfigurationItemChangeNotification",
-                    ),
-                    aws.cfg.RuleSourceSourceDetailArgs(
-                        event_source="aws.config",
-                        message_type="OversizedConfigurationItemChangeNotification",
-                    ),
-                ]
-            ),
-            tags=tags,
-            opts=ResourceOptions(parent=self, depends_on=rule_depends_on)
-        )
-
-        # RDS Backup Compliance Rule
-        self.rds_backup_config_rule = aws.cfg.Rule(
-            f"rds-backup-compliance-{environment_suffix}",
-            source=aws.cfg.RuleSourceArgs(
-                owner="CUSTOM_LAMBDA",
-                source_identifier=compliance_rules['rds_backups'].arn,
-                source_details=[
-                    aws.cfg.RuleSourceSourceDetailArgs(
-                        event_source="aws.config",
-                        message_type="ConfigurationItemChangeNotification",
-                    ),
-                    aws.cfg.RuleSourceSourceDetailArgs(
-                        event_source="aws.config",
-                        message_type="OversizedConfigurationItemChangeNotification",
-                    ),
-                ]
-            ),
-            tags=tags,
-            opts=ResourceOptions(parent=self, depends_on=rule_depends_on)
-        )
+        base_depends_on = [self.recorder_status] if self.recorder_status else []
 
         # Add permissions for Config to invoke Lambda functions
         self.ec2_config_permission = aws.lambda_.Permission(
@@ -235,5 +176,85 @@ class ConfigStack(pulumi.ComponentResource):
             principal="config.amazonaws.com",
             opts=ResourceOptions(parent=self)
         )
+
+        # Create AWS Config custom rules
+        # Skip on LocalStack - Config rules with custom Lambda don't work reliably
+        if is_localstack:
+            pulumi.log.warn("Skipping AWS Config rules - LocalStack does not fully support custom Lambda Config rules")
+            self.ec2_tag_config_rule = None
+            self.s3_encryption_config_rule = None
+            self.rds_backup_config_rule = None
+        else:
+            # EC2 Tag Compliance Rule
+            self.ec2_tag_config_rule = aws.cfg.Rule(
+                f"ec2-tag-compliance-{environment_suffix}",
+                source=aws.cfg.RuleSourceArgs(
+                    owner="CUSTOM_LAMBDA",
+                    source_identifier=compliance_rules['ec2_tags'].arn,
+                    source_details=[
+                        aws.cfg.RuleSourceSourceDetailArgs(
+                            event_source="aws.config",
+                            message_type="ConfigurationItemChangeNotification",
+                        ),
+                        aws.cfg.RuleSourceSourceDetailArgs(
+                            event_source="aws.config",
+                            message_type="OversizedConfigurationItemChangeNotification",
+                        ),
+                    ]
+                ),
+                tags=tags,
+                opts=ResourceOptions(
+                    parent=self,
+                    depends_on=base_depends_on + [self.ec2_config_permission]
+                )
+            )
+
+            # S3 Encryption Compliance Rule
+            self.s3_encryption_config_rule = aws.cfg.Rule(
+                f"s3-encryption-compliance-{environment_suffix}",
+                source=aws.cfg.RuleSourceArgs(
+                    owner="CUSTOM_LAMBDA",
+                    source_identifier=compliance_rules['s3_encryption'].arn,
+                    source_details=[
+                        aws.cfg.RuleSourceSourceDetailArgs(
+                            event_source="aws.config",
+                            message_type="ConfigurationItemChangeNotification",
+                        ),
+                        aws.cfg.RuleSourceSourceDetailArgs(
+                            event_source="aws.config",
+                            message_type="OversizedConfigurationItemChangeNotification",
+                        ),
+                    ]
+                ),
+                tags=tags,
+                opts=ResourceOptions(
+                    parent=self,
+                    depends_on=base_depends_on + [self.s3_config_permission]
+                )
+            )
+
+            # RDS Backup Compliance Rule
+            self.rds_backup_config_rule = aws.cfg.Rule(
+                f"rds-backup-compliance-{environment_suffix}",
+                source=aws.cfg.RuleSourceArgs(
+                    owner="CUSTOM_LAMBDA",
+                    source_identifier=compliance_rules['rds_backups'].arn,
+                    source_details=[
+                        aws.cfg.RuleSourceSourceDetailArgs(
+                            event_source="aws.config",
+                            message_type="ConfigurationItemChangeNotification",
+                        ),
+                        aws.cfg.RuleSourceSourceDetailArgs(
+                            event_source="aws.config",
+                            message_type="OversizedConfigurationItemChangeNotification",
+                        ),
+                    ]
+                ),
+                tags=tags,
+                opts=ResourceOptions(
+                    parent=self,
+                    depends_on=base_depends_on + [self.rds_config_permission]
+                )
+            )
 
         self.register_outputs({})
