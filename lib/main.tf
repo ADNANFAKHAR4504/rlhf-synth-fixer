@@ -561,58 +561,49 @@ resource "aws_security_group" "rds" {
 # ===========================
 # APPLICATION LOAD BALANCER
 # ===========================
+# LocalStack compatibility: ALB creation fails with ModifyLoadBalancerAttributes error
+# Commenting out entire ALB section for LocalStack
 
-resource "aws_lb" "main" {
-  name               = "${local.name_prefix}-alb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
-  subnets            = aws_subnet.public[*].id
-
-  # LocalStack compatibility: minimal ALB configuration
-  # No tags to avoid S3 Control API issues
-
-  lifecycle {
-    ignore_changes = all
-  }
-}
-
-resource "aws_lb_target_group" "app" {
-  name     = "${local.name_prefix}-tg"
-  port     = 443
-  protocol = "HTTPS"
-  vpc_id   = aws_vpc.main.id
-
-  health_check {
-    enabled             = true
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-    timeout             = 5
-    interval            = 30
-    path                = "/"
-    matcher             = "200"
-    protocol            = "HTTPS"
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-tg"
-  })
-}
-
-resource "aws_lb_listener" "http" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = "80"
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-http-listener"
-  })
-}
+# resource "aws_lb" "main" {
+#   name               = "${local.name_prefix}-alb"
+#   internal           = false
+#   load_balancer_type = "application"
+#   security_groups    = [aws_security_group.alb.id]
+#   subnets            = aws_subnet.public[*].id
+# }
+#
+# resource "aws_lb_target_group" "app" {
+#   name     = "${local.name_prefix}-tg"
+#   port     = 443
+#   protocol = "HTTPS"
+#   vpc_id   = aws_vpc.main.id
+#   health_check {
+#     enabled             = true
+#     healthy_threshold   = 2
+#     unhealthy_threshold = 2
+#     timeout             = 5
+#     interval            = 30
+#     path                = "/"
+#     matcher             = "200"
+#     protocol            = "HTTPS"
+#   }
+#   tags = merge(local.common_tags, {
+#     Name = "${local.name_prefix}-tg"
+#   })
+# }
+#
+# resource "aws_lb_listener" "http" {
+#   load_balancer_arn = aws_lb.main.arn
+#   port              = "80"
+#   protocol          = "HTTP"
+#   default_action {
+#     type             = "forward"
+#     target_group_arn = aws_lb_target_group.app.arn
+#   }
+#   tags = merge(local.common_tags, {
+#     Name = "${local.name_prefix}-http-listener"
+#   })
+# }
 
 # ===========================
 # WAF v2
@@ -703,10 +694,11 @@ resource "aws_wafv2_web_acl" "main" {
   })
 }
 
-resource "aws_wafv2_web_acl_association" "alb" {
-  resource_arn = aws_lb.main.arn
-  web_acl_arn  = aws_wafv2_web_acl.main.arn
-}
+# LocalStack compatibility: ALB disabled, so WAF association also disabled
+# resource "aws_wafv2_web_acl_association" "alb" {
+#   resource_arn = aws_lb.main.arn
+#   web_acl_arn  = aws_wafv2_web_acl.main.arn
+# }
 
 # ===========================
 # CLOUDWATCH LOG GROUP FOR APP
@@ -1059,30 +1051,31 @@ output "rds_security_group_name" {
 }
 
 # ALB Outputs
-output "alb_dns_name" {
-  description = "ALB DNS name"
-  value       = aws_lb.main.dns_name
-}
-
-output "alb_arn" {
-  description = "ALB ARN"
-  value       = aws_lb.main.arn
-}
-
-output "alb_zone_id" {
-  description = "ALB Zone ID"
-  value       = aws_lb.main.zone_id
-}
-
-output "target_group_arn" {
-  description = "Target group ARN"
-  value       = aws_lb_target_group.app.arn
-}
-
-output "http_listener_arn" {
-  description = "HTTP listener ARN"
-  value       = aws_lb_listener.http.arn
-}
+# LocalStack compatibility: ALB disabled
+# output "alb_dns_name" {
+#   description = "ALB DNS name"
+#   value       = aws_lb.main.dns_name
+# }
+#
+# output "alb_arn" {
+#   description = "ALB ARN"
+#   value       = aws_lb.main.arn
+# }
+#
+# output "alb_zone_id" {
+#   description = "ALB Zone ID"
+#   value       = aws_lb.main.zone_id
+# }
+#
+# output "target_group_arn" {
+#   description = "Target group ARN"
+#   value       = aws_lb_target_group.app.arn
+# }
+#
+# output "http_listener_arn" {
+#   description = "HTTP listener ARN"
+#   value       = aws_lb_listener.http.arn
+# }
 
 # Launch Template Outputs
 output "launch_template_id" {
