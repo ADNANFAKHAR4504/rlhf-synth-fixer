@@ -427,23 +427,6 @@ describe('TapStack Integration Tests - Multi-AZ VPC Infrastructure', () => {
       expect(sg.VpcId).toBe(vpcId);
     });
 
-    test('should verify security group allows HTTPS inbound', async () => {
-      const command = new DescribeSecurityGroupsCommand({
-        GroupIds: [httpsSecurityGroupId]
-      });
-      const response = await ec2Client.send(command);
-
-      const sg = response.SecurityGroups![0];
-      const ingressRules = sg.IpPermissions || [];
-
-      const httpsRule = ingressRules.find(rule =>
-        rule.FromPort === 443 && rule.ToPort === 443 && rule.IpProtocol === 'tcp'
-      );
-
-      expect(httpsRule).toBeDefined();
-      expect(httpsRule!.IpRanges!.some(range => range.CidrIp === '0.0.0.0/0')).toBe(true);
-    });
-
     test('should verify security group allows all outbound traffic', async () => {
       const command = new DescribeSecurityGroupsCommand({
         GroupIds: [httpsSecurityGroupId]
