@@ -6,11 +6,10 @@
   "po_id": "291418_ls",
   "team": "4",
   "startedAt": "2025-08-07T10:12:36.648Z",
-  "subtask": "Security, Compliance, and Governance",
+  "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
-    "Security Configuration as Code",
-    "General Infrastructure Tooling QA"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "EC2",
