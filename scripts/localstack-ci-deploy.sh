@@ -156,25 +156,11 @@ describe_cfn_failure() {
     print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     
-    # Get stack status
-    print_status $YELLOW "🔍 Stack Status:"
-    awslocal cloudformation describe-stacks --stack-name "$stack_name" \
-        --query 'Stacks[0].[StackName,StackStatus,StackStatusReason]' \
-        --output table 2>/dev/null || echo "   Stack not found or inaccessible"
-    echo ""
-    
     # Get failed events
     print_status $YELLOW "🔍 Failed Resources:"
     awslocal cloudformation describe-stack-events --stack-name "$stack_name" \
         --query 'StackEvents[?ResourceStatus==`CREATE_FAILED` || ResourceStatus==`UPDATE_FAILED` || ResourceStatus==`DELETE_FAILED`].[Timestamp,LogicalResourceId,ResourceType,ResourceStatus,ResourceStatusReason]' \
         --output table 2>/dev/null || echo "   No failed events found"
-    echo ""
-    
-    # Get recent events
-    print_status $YELLOW "🔍 Recent Stack Events (last 10):"
-    awslocal cloudformation describe-stack-events --stack-name "$stack_name" \
-        --query 'StackEvents[:10].[Timestamp,LogicalResourceId,ResourceStatus,ResourceStatusReason]' \
-        --output table 2>/dev/null || echo "   No events found"
     echo ""
     
     print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
