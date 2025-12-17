@@ -1,0 +1,26 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "267506",
+  "team": "synth",
+  "startedAt": "2025-07-26T11:52:43.000Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "S3",
+    "KMS",
+    "IAM",
+    "CloudTrail",
+    "Lambda",
+    "CloudWatch",
+    "SNS",
+    "Secrets Manager",
+    "EventBridge"
+  ]
+}
