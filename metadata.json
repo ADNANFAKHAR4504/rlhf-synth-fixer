@@ -6,13 +6,10 @@
   "po_id": "348839",
   "team": "4",
   "startedAt": "2025-08-29T11:24:54.612Z",
-  "subtask": "Security, Compliance and Governance",
+  "subtask": "Application Deployment",
   "subject_labels": [
-    "Security Configuration as Code",
     "Serverless Infrastructure (Functions as Code)",
-    "General Infrastructure Tooling QA",
-    "Infrastructure Analysis/Monitoring",
-    "IaC Optimization"
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "API Gateway",
