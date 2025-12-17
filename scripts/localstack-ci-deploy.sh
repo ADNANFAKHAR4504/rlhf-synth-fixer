@@ -628,23 +628,46 @@ deploy_terraform() {
     fi
 
     # Initialize Terraform
-    # Use local backend for LocalStack to avoid S3 backend issues
     print_status $YELLOW "🔧 Initializing Terraform..."
     
-    # Check if backend is configured - if S3 backend, provide LocalStack config
+    # Check if backend is configured - if S3 backend, create bucket first and configure for LocalStack
     if grep -q 'backend "s3"' *.tf 2>/dev/null; then
+        local state_bucket="terraform-state-${ENVIRONMENT_SUFFIX:-dev}"
         print_status $YELLOW "   📦 Detected S3 backend, configuring for LocalStack..."
+        
+        # Create the bucket FIRST before init
+        print_status $BLUE "   Creating S3 state bucket: $state_bucket"
+        awslocal s3 mb "s3://$state_bucket" 2>/dev/null || {
+            # Bucket might already exist, check if it's accessible
+            if ! awslocal s3 ls "s3://$state_bucket" > /dev/null 2>&1; then
+                print_status $YELLOW "   ⚠️  Bucket may already exist, continuing..."
+            fi
+        }
+        
+        # Wait a moment for bucket to be fully available
+        sleep 2
+        
+        # Initialize with LocalStack S3 backend configuration
+        # Use endpoints.s3 instead of deprecated endpoint parameter
         tflocal init -input=false -reconfigure \
-            -backend-config="bucket=terraform-state-${ENVIRONMENT_SUFFIX:-dev}" \
+            -backend-config="bucket=$state_bucket" \
             -backend-config="key=terraform.tfstate" \
             -backend-config="region=${AWS_DEFAULT_REGION}" \
-            -backend-config="endpoint=${AWS_ENDPOINT_URL}" \
+            -backend-config="endpoints.s3=${AWS_ENDPOINT_URL}" \
             -backend-config="skip_credentials_validation=true" \
             -backend-config="skip_metadata_api_check=true" \
-            -backend-config="force_path_style=true" 2>&1
-        
-        # Create the bucket if it doesn't exist
-        awslocal s3 mb "s3://terraform-state-${ENVIRONMENT_SUFFIX:-dev}" 2>/dev/null || true
+            -backend-config="force_path_style=true" 2>&1 || {
+            print_status $YELLOW "   ⚠️  Initial init failed, retrying after bucket creation..."
+            sleep 2
+            tflocal init -input=false -reconfigure \
+                -backend-config="bucket=$state_bucket" \
+                -backend-config="key=terraform.tfstate" \
+                -backend-config="region=${AWS_DEFAULT_REGION}" \
+                -backend-config="endpoints.s3=${AWS_ENDPOINT_URL}" \
+                -backend-config="skip_credentials_validation=true" \
+                -backend-config="skip_metadata_api_check=true" \
+                -backend-config="force_path_style=true" 2>&1
+        }
     else
         tflocal init -input=false -reconfigure 2>&1
     fi
