@@ -179,6 +179,13 @@ Parameters:
     AllowedValues: ['true', 'false']
     Description: "If 'true', sends CloudTrail events to CloudWatch Logs in addition to S3."
 
+  EnableRds:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: "Controls creation of RDS resources. Set to 'false' for LocalStack CI stability."
+
+
 Rules:
   RegionRule:
     Assertions:
@@ -200,6 +207,7 @@ Conditions:
   UseMultiAzRds: !Equals [!Ref RdsMultiAZ, 'true']
   UseRdsDeletionProtection: !Equals [!Ref RdsDeletionProtection, 'true']
   UseCloudWatchForTrail: !Equals [!Ref CloudTrailToCloudWatch, 'true']
+  CreateRdsCondition: !Equals [!Ref EnableRds, 'true']
 
 Resources:
 
@@ -810,6 +818,7 @@ Resources:
           Value: !Ref EnvironmentSuffix
 
   RdsSubnetGroup:
+    Condition: CreateRdsCondition
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupDescription: !Sub "corp-${ProjectName}-${EnvironmentSuffix} RDS subnet group"
@@ -825,6 +834,7 @@ Resources:
           Value: !Ref EnvironmentSuffix
 
   RdsParameterGroup:
+    Condition: CreateRdsCondition
     Type: AWS::RDS::DBParameterGroup
     Properties:
       Description: !Sub "corp-${ProjectName}-${EnvironmentSuffix} RDS parameter group"
@@ -841,6 +851,7 @@ Resources:
 
   RdsInstanceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    Condition: CreateRdsCondition
     Properties:
       GroupDescription: "RDS SG (no inbound by default)."
       VpcId: !Ref Vpc
@@ -864,8 +875,7 @@ Resources:
             - W3005
 
     Type: AWS::RDS::DBInstance
-    DependsOn:
-      - RdsSubnetGroup
+    Condition: CreateRdsCondition
     Properties:
       Engine: postgres
       DBSubnetGroupName: !Ref RdsSubnetGroup
@@ -970,6 +980,7 @@ Resources:
           - "AWS::EC2::Instance"
 
   ConfigRuleRdsStorageEncrypted:
+    Condition: CreateRdsCondition
     Type: AWS::Config::ConfigRule
     DependsOn:
       - ConfigRecorder
@@ -1035,8 +1046,10 @@ Outputs:
     Value: !Ref LoggingBucket
 
   RdsEndpointAddress:
+    Condition: CreateRdsCondition
     Description: "RDS instance endpoint address."
     Value: !GetAtt RdsInstance.Endpoint.Address
+
 
   CloudTrailArn:
     Description: "ARN of the multi-region CloudTrail."
