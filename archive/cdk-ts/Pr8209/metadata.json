@@ -1,0 +1,28 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "274790_ls",
+  "startedAt": "2025-07-29T15:55:09.688Z",
+  "team": "2",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "IAM",
+    "S3",
+    "Lambda"
+  ],
+  "provider": "localstack",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}

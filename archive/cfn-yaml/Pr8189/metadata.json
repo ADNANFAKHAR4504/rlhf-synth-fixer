@@ -1,0 +1,31 @@
+{
+  "po_id": "101000928",
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "team": "synth",
+  "provider": "localstack",
+  "turn_type": "single",
+  "startedAt": "2025-12-01T23:48:52.754418Z",
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Route Table",
+    "Security Group",
+    "VPC Gateway Attachment"
+  ],
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sanket-turing",
+  "dockerS3Location": ""
+}

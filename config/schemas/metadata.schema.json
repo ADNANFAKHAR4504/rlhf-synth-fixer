@@ -87,11 +87,10 @@
       "type": "string",
       "enum": [
         "Provisioning of Infrastructure Environments",
-        "IaC-Multi-Environment-Management",
         "Application Deployment",
-        "CI/CD Pipeline",
+        "CI/CD Pipeline Integration",
         "Failure Recovery and High Availability",
-        "Security, Compliance and Governance",
+        "Security, Compliance, and Governance",
         "IaC Program Optimization",
         "Infrastructure QA and Management"
       ]
