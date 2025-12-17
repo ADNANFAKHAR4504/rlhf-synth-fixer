@@ -78,9 +78,8 @@ fi
 # Start LocalStack container
 echo -e "${YELLOW}🔧 Starting LocalStack container...${NC}"
 
-# Build docker run command with optional API key
-# Using LocalStack 3.7.2 - last stable version before 4.0 removed legacy S3 provider
-# This version has better CDK compatibility and fewer S3 XML parsing issues
+# Build docker run command
+# Using LocalStack Pro image with latest version for full AWS service parity
 DOCKER_CMD="docker run -d \
   --name localstack \
   -p 4566:4566 \
@@ -88,8 +87,7 @@ DOCKER_CMD="docker run -d \
   -e DATA_DIR=/tmp/localstack/data \
   -e DOCKER_HOST=unix:///var/run/docker.sock \
   -e S3_SKIP_SIGNATURE_VALIDATION=1 \
-  -e ENFORCE_IAM=0 \
-  -e PROVIDER_OVERRIDE_S3=legacy_v2"
+  -e ENFORCE_IAM=0"
 
 # Add SERVICES only if explicitly set
 if [ -n "$SERVICES" ]; then
@@ -97,7 +95,7 @@ if [ -n "$SERVICES" ]; then
   -e SERVICES=\"${SERVICES}\""
 fi
 
-# Add API key if available
+# Add API key if available (required for Pro features)
 if [ -n "$LOCALSTACK_API_KEY" ]; then
     DOCKER_CMD="$DOCKER_CMD \
   -e LOCALSTACK_API_KEY=\"${LOCALSTACK_API_KEY}\""
@@ -105,7 +103,7 @@ fi
 
 DOCKER_CMD="$DOCKER_CMD \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  localstack/localstack:3.7.2"
+  localstack/localstack-pro:latest"
 
 # Execute the docker command
 eval $DOCKER_CMD
@@ -125,9 +123,9 @@ if ! command -v curl &> /dev/null; then
     sudo apt-get update && sudo apt-get install -y curl || true
 fi
 
-# Give LocalStack a few seconds to start before checking
-echo -e "${BLUE}⏱️  Waiting 5 seconds for LocalStack to initialize...${NC}"
-sleep 5
+# Give LocalStack more time to start before checking (Pro image needs more initialization time)
+echo -e "${BLUE}⏱️  Waiting 10 seconds for LocalStack to initialize...${NC}"
+sleep 60
 
 while [ $attempt -lt $max_attempts ]; do
     # Check container is still running
@@ -142,6 +140,12 @@ while [ $attempt -lt $max_attempts ]; do
     if [ $attempt -lt 3 ]; then
         echo -e "${BLUE}🔍 Testing connectivity to localhost:4566 (attempt $((attempt + 1)))...${NC}"
         curl -v --connect-timeout 5 --max-time 10 http://localhost:4566/_localstack/health 2>&1 | head -30 || echo "Connection failed, will retry..."
+    fi
+    
+    # Show container logs every 10 attempts to help debug startup issues
+    if [ $((attempt % 10)) -eq 0 ] && [ $attempt -gt 0 ]; then
+        echo -e "${BLUE}📋 Container logs (last 20 lines):${NC}"
+        docker logs localstack 2>&1 | tail -20
     fi
 
     # Regular health check (suppress output for cleaner logs)
