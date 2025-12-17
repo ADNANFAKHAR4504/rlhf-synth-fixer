@@ -9,8 +9,9 @@
   "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
+    "Environment Migration",
     "Cloud Environment Setup",
-    "Security Configuration as Code"
+    "Multi-Environment Consistency and Replication"
   ],
   "aws_services": [
     "VPC",
