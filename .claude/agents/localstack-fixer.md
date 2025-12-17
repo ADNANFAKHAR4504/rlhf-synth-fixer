@@ -45,6 +45,7 @@ batch_fix:
 The schema has `additionalProperties: false`, meaning ONLY these fields are allowed:
 
 **Required Fields:**
+
 - `platform` - enum: cdk, cdktf, cfn, tf, pulumi, analysis, cicd
 - `language` - enum: ts, js, py, java, go, hcl, yaml, json, sh, yml
 - `complexity` - enum: medium, hard, expert
@@ -89,6 +90,7 @@ The schema has `additionalProperties: false`, meaning ONLY these fields are allo
 ### Fields NOT Allowed (must be removed)
 
 These fields exist in some old tasks but are NOT allowed by the schema:
+
 - `task_id` - remove (use `po_id` instead)
 - `training_quality` - remove
 - `coverage` - remove
@@ -102,15 +104,227 @@ These fields exist in some old tasks but are NOT allowed by the schema:
 
 When migrating old tasks with invalid subtask values:
 
-| Invalid Value | Map To |
-|--------------|--------|
-| "Security and Compliance Implementation" | "Security, Compliance, and Governance" |
-| "Security Configuration" | "Security, Compliance, and Governance" |
-| "Database Management" | "Provisioning of Infrastructure Environments" |
-| "Network Configuration" | "Provisioning of Infrastructure Environments" |
-| "Monitoring Setup" | "Infrastructure QA and Management" |
-| "Performance Optimization" | "IaC Program Optimization" |
-| "Access Control" | "Security, Compliance, and Governance" |
+| Invalid Value                            | Map To                                        |
+| ---------------------------------------- | --------------------------------------------- |
+| "Security and Compliance Implementation" | "Security, Compliance, and Governance"        |
+| "Security Configuration"                 | "Security, Compliance, and Governance"        |
+| "Database Management"                    | "Provisioning of Infrastructure Environments" |
+| "Network Configuration"                  | "Provisioning of Infrastructure Environments" |
+| "Monitoring Setup"                       | "Infrastructure QA and Management"            |
+| "Performance Optimization"               | "IaC Program Optimization"                    |
+| "Access Control"                         | "Security, Compliance, and Governance"        |
+| "Infrastructure Monitoring"              | "Infrastructure QA and Management"            |
+| "Cost Optimization"                      | "IaC Program Optimization"                    |
+| "Resource Provisioning"                  | "Provisioning of Infrastructure Environments" |
+| "Deployment Automation"                  | "Application Deployment"                      |
+| "Disaster Recovery"                      | "Failure Recovery and High Availability"      |
+| (any other invalid value)                | "Infrastructure QA and Management"            |
+
+### Common Subject Label Mappings
+
+| Invalid Label                | Map To                                           |
+| ---------------------------- | ------------------------------------------------ |
+| "Security Configuration"     | "Security Configuration as Code"                 |
+| "Database Management"        | "General Infrastructure Tooling QA"              |
+| "Network Configuration"      | "Cloud Environment Setup"                        |
+| "Access Control"             | "Security Configuration as Code"                 |
+| "Monitoring Setup"           | "Infrastructure Analysis/Monitoring"             |
+| "Performance Optimization"   | "IaC Optimization"                               |
+| "Cost Management"            | "IaC Optimization"                               |
+| "Resource Management"        | "General Infrastructure Tooling QA"              |
+| "Backup Configuration"       | "Failure Recovery Automation"                    |
+| "Logging Setup"              | "Infrastructure Analysis/Monitoring"             |
+| "Container Orchestration"    | "Web Application Deployment"                     |
+| "API Management"             | "Web Application Deployment"                     |
+| "Data Pipeline"              | "General Infrastructure Tooling QA"              |
+| "Storage Configuration"      | "Cloud Environment Setup"                        |
+| "Compute Provisioning"       | "Cloud Environment Setup"                        |
+| (any other invalid value)    | "General Infrastructure Tooling QA"              |
+
+## 🔴 CRITICAL: Metadata Fix (MUST BE APPLIED FIRST)
+
+**The metadata.json fix is the MOST IMPORTANT fix and MUST be applied BEFORE any other fixes.**
+
+The CI/CD pipeline will FAIL at the "Detect Project Files" step if metadata.json is invalid.
+
+### Metadata Fix Script
+
+Apply this fix to sanitize metadata.json for schema compliance:
+
+```bash
+fix_metadata() {
+  local metadata_file="$1"
+  
+  if [ ! -f "$metadata_file" ]; then
+    echo "❌ metadata.json not found"
+    return 1
+  fi
+  
+  echo "🔧 Sanitizing metadata.json for schema compliance..."
+  
+  # Valid enum values from schema
+  VALID_SUBTASKS='["Provisioning of Infrastructure Environments","Application Deployment","CI/CD Pipeline Integration","Failure Recovery and High Availability","Security, Compliance, and Governance","IaC Program Optimization","Infrastructure QA and Management"]'
+  
+  VALID_LABELS='["Environment Migration","Cloud Environment Setup","Multi-Environment Consistency","Web Application Deployment","Serverless Infrastructure (Functions as Code)","CI/CD Pipeline","Failure Recovery Automation","Security Configuration as Code","IaC Diagnosis/Edits","IaC Optimization","Infrastructure Analysis/Monitoring","General Infrastructure Tooling QA"]'
+  
+  VALID_PLATFORMS='["cdk","cdktf","cfn","tf","pulumi","analysis","cicd"]'
+  VALID_LANGUAGES='["ts","js","py","java","go","hcl","yaml","json","sh","yml"]'
+  VALID_COMPLEXITIES='["medium","hard","expert"]'
+  VALID_TURN_TYPES='["single","multi"]'
+  VALID_TEAMS='["2","3","4","5","6","synth","synth-1","synth-2","stf"]'
+  
+  # Create sanitized metadata.json
+  jq --argjson valid_subtasks "$VALID_SUBTASKS" \
+     --argjson valid_labels "$VALID_LABELS" \
+     --argjson valid_platforms "$VALID_PLATFORMS" \
+     --argjson valid_languages "$VALID_LANGUAGES" \
+     --argjson valid_complexities "$VALID_COMPLEXITIES" \
+     --argjson valid_turn_types "$VALID_TURN_TYPES" \
+     --argjson valid_teams "$VALID_TEAMS" '
+    
+    # Map invalid subtask to valid ones
+    def map_subtask:
+      if . == null then "Infrastructure QA and Management"
+      elif . == "Security and Compliance Implementation" then "Security, Compliance, and Governance"
+      elif . == "Security Configuration" then "Security, Compliance, and Governance"
+      elif . == "Database Management" then "Provisioning of Infrastructure Environments"
+      elif . == "Network Configuration" then "Provisioning of Infrastructure Environments"
+      elif . == "Monitoring Setup" then "Infrastructure QA and Management"
+      elif . == "Performance Optimization" then "IaC Program Optimization"
+      elif . == "Access Control" then "Security, Compliance, and Governance"
+      elif . == "Infrastructure Monitoring" then "Infrastructure QA and Management"
+      elif . == "Cost Optimization" then "IaC Program Optimization"
+      elif . == "Resource Provisioning" then "Provisioning of Infrastructure Environments"
+      elif . == "Deployment Automation" then "Application Deployment"
+      elif . == "Disaster Recovery" then "Failure Recovery and High Availability"
+      elif ($valid_subtasks | index(.)) then .
+      else "Infrastructure QA and Management"
+      end;
+    
+    # Map invalid subject_label to valid one
+    def map_label:
+      if . == "Security Configuration" then "Security Configuration as Code"
+      elif . == "Database Management" then "General Infrastructure Tooling QA"
+      elif . == "Network Configuration" then "Cloud Environment Setup"
+      elif . == "Access Control" then "Security Configuration as Code"
+      elif . == "Monitoring Setup" then "Infrastructure Analysis/Monitoring"
+      elif . == "Performance Optimization" then "IaC Optimization"
+      elif . == "Cost Management" then "IaC Optimization"
+      elif . == "Resource Management" then "General Infrastructure Tooling QA"
+      elif . == "Backup Configuration" then "Failure Recovery Automation"
+      elif . == "Logging Setup" then "Infrastructure Analysis/Monitoring"
+      elif . == "Container Orchestration" then "Web Application Deployment"
+      elif . == "API Management" then "Web Application Deployment"
+      elif . == "Data Pipeline" then "General Infrastructure Tooling QA"
+      elif . == "Storage Configuration" then "Cloud Environment Setup"
+      elif . == "Compute Provisioning" then "Cloud Environment Setup"
+      else .
+      end;
+    
+    # Ensure platform is valid
+    def validate_platform:
+      if ($valid_platforms | index(.)) then . else "cfn" end;
+    
+    # Ensure language is valid
+    def validate_language:
+      if ($valid_languages | index(.)) then . else "yaml" end;
+    
+    # Ensure complexity is valid
+    def validate_complexity:
+      if ($valid_complexities | index(.)) then . else "medium" end;
+    
+    # Ensure turn_type is valid
+    def validate_turn_type:
+      if ($valid_turn_types | index(.)) then . else "single" end;
+    
+    # Ensure team is valid
+    def validate_team:
+      if ($valid_teams | index(.)) then . else "synth" end;
+    
+    # Ensure startedAt is valid ISO 8601
+    def validate_started_at:
+      if . == null or . == "" then (now | todate)
+      else .
+      end;
+    
+    # Build the sanitized metadata object with ONLY allowed fields
+    {
+      platform: (.platform | validate_platform),
+      language: (.language | validate_language),
+      complexity: (.complexity | validate_complexity),
+      turn_type: (.turn_type | validate_turn_type),
+      po_id: (.po_id // .task_id // "unknown"),
+      team: (.team | validate_team),
+      startedAt: (.startedAt | validate_started_at),
+      subtask: (.subtask | map_subtask),
+      provider: "localstack",
+      subject_labels: (
+        [.subject_labels[]? | map_label] 
+        | unique 
+        | map(select(. as $l | $valid_labels | index($l))) 
+        | if length == 0 then ["General Infrastructure Tooling QA"] else . end
+      ),
+      aws_services: (.aws_services // [])
+    }
+  ' "$metadata_file" > "${metadata_file}.tmp"
+  
+  if [ $? -eq 0 ]; then
+    mv "${metadata_file}.tmp" "$metadata_file"
+    echo "✅ metadata.json sanitized successfully"
+    
+    # Validate result
+    echo "📋 Sanitized metadata:"
+    jq -c '{platform, language, subtask, provider, subject_labels_count: (.subject_labels | length)}' "$metadata_file"
+    return 0
+  else
+    echo "❌ Failed to sanitize metadata.json"
+    rm -f "${metadata_file}.tmp"
+    return 1
+  fi
+}
+```
+
+### Metadata Validation Check
+
+After fixing, validate the metadata.json:
+
+```bash
+validate_metadata() {
+  local metadata_file="$1"
+  local schema_file="config/schemas/metadata.schema.json"
+  
+  echo "🔍 Validating metadata.json against schema..."
+  
+  # Check required fields exist
+  REQUIRED_FIELDS=("platform" "language" "complexity" "turn_type" "po_id" "team" "startedAt" "subtask" "provider" "subject_labels" "aws_services")
+  
+  for field in "${REQUIRED_FIELDS[@]}"; do
+    if ! jq -e ".$field" "$metadata_file" > /dev/null 2>&1; then
+      echo "❌ Missing required field: $field"
+      return 1
+    fi
+  done
+  
+  # Check no additional fields (schema has additionalProperties: false)
+  EXTRA_FIELDS=$(jq -r 'keys[]' "$metadata_file" | grep -v -E "^(platform|language|complexity|turn_type|po_id|team|startedAt|subtask|provider|subject_labels|aws_services)$")
+  
+  if [ -n "$EXTRA_FIELDS" ]; then
+    echo "❌ Extra fields not allowed by schema:"
+    echo "$EXTRA_FIELDS"
+    return 1
+  fi
+  
+  # Check subject_labels has at least 1 item
+  LABELS_COUNT=$(jq '.subject_labels | length' "$metadata_file")
+  if [ "$LABELS_COUNT" -lt 1 ]; then
+    echo "❌ subject_labels must have at least 1 item"
+    return 1
+  fi
+  
+  echo "✅ metadata.json validation passed"
+  return 0
+}
+```
 
 ## Core Principles
 
@@ -219,7 +433,15 @@ identify_all_fixes() {
   FIXES_TO_APPLY=()
 
   # ═══════════════════════════════════════════════════════════════
-  # 1. ENDPOINT CONFIGURATION (almost always needed - apply first)
+  # 0. METADATA FIX (CRITICAL - MUST BE FIRST)
+  # The CI/CD pipeline validates metadata.json BEFORE anything else
+  # If metadata.json is invalid, ALL other jobs will be SKIPPED
+  # ═══════════════════════════════════════════════════════════════
+  echo "   🔴 CRITICAL: Checking metadata.json schema compliance..."
+  FIXES_TO_APPLY+=("metadata_fix")  # ALWAYS apply to ensure compliance
+
+  # ═══════════════════════════════════════════════════════════════
+  # 1. ENDPOINT CONFIGURATION (almost always needed)
   # ═══════════════════════════════════════════════════════════════
   if ! grep -rq "AWS_ENDPOINT_URL\|localhost:4566\|isLocalStack" lib/ 2>/dev/null; then
     echo "   ➕ Will add: LocalStack endpoint configuration"
@@ -295,15 +517,18 @@ identify_all_fixes() {
 
 Apply these fixes proactively (even if no specific error):
 
-| Fix                           | When to Apply           | Priority    |
-| ----------------------------- | ----------------------- | ----------- |
-| LocalStack endpoint detection | Always (if not present) | 🔴 Critical |
-| S3 path-style access          | If using S3/buckets     | 🔴 Critical |
-| RemovalPolicy.DESTROY         | Always (if not present) | 🟡 High     |
-| Test endpoint config          | If test/ exists         | 🟡 High     |
-| IAM simplification            | If IAM errors           | 🟡 Medium   |
-| Resource naming               | If naming errors        | 🟡 Medium   |
-| Unsupported services          | If service errors       | 🟡 Medium   |
+| Fix                           | When to Apply           | Priority        |
+| ----------------------------- | ----------------------- | --------------- |
+| **Metadata sanitization**     | **ALWAYS (first)**      | 🔴 **CRITICAL** |
+| LocalStack endpoint detection | Always (if not present) | 🔴 Critical     |
+| S3 path-style access          | If using S3/buckets     | 🔴 Critical     |
+| RemovalPolicy.DESTROY         | Always (if not present) | 🟡 High         |
+| Test endpoint config          | If test/ exists         | 🟡 High         |
+| IAM simplification            | If IAM errors           | 🟡 Medium       |
+| Resource naming               | If naming errors        | 🟡 Medium       |
+| Unsupported services          | If service errors       | 🟡 Medium       |
+
+**⚠️ WARNING**: If metadata.json is not fixed, the CI/CD pipeline will fail at "Detect Project Files" and ALL subsequent jobs will be SKIPPED.
 
 ## Common Fixes by Error Type
 

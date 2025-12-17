@@ -41,7 +41,9 @@ batch_fix:
   apply_preventive_fixes: true # Apply fixes even without specific errors
 
   # Fix priority order (applied in this sequence)
+  # IMPORTANT: metadata_fix MUST be first - CI/CD validates metadata.json before anything else
   fix_priority:
+    - metadata_fix # 🔴 CRITICAL - MUST BE FIRST - Schema compliance for CI/CD
     - endpoint_config # 🔴 Critical - LocalStack endpoint detection
     - s3_path_style # 🔴 Critical - S3 path-style access
     - removal_policy # 🟡 High - RemovalPolicy.DESTROY
@@ -52,7 +54,9 @@ batch_fix:
     - default_parameters # 🟢 Low - Default parameter values
 
   # Preventive fixes (apply even if no error detected)
+  # IMPORTANT: metadata_fix is ALWAYS applied first
   preventive_fixes:
+    - metadata_fix # ALWAYS - Required for CI/CD to pass
     - endpoint_config # Almost always needed
     - s3_path_style # If using S3/buckets
     - removal_policy # Always for LocalStack
@@ -326,4 +330,3 @@ metadata:
   # Default values if mapping fails
   default_subtask: 'Infrastructure QA and Management'
   default_subject_label: 'General Infrastructure Tooling QA'
-
