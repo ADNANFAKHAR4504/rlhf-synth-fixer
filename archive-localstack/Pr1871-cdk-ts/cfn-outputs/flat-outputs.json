@@ -1,0 +1,11 @@
+{
+  "EC2InstanceId": "i-7d793aa9554910401",
+  "EC2SecurityGroupId": "sg-e1b3d521d4224c80a",
+  "KMSKeyId": "419c112e-9f63-412f-b45d-51136f55ac46",
+  "LambdaFunctionArn": "arn:aws:lambda:us-east-1:000000000000:function:TapStacklocal-SecureLambdaFunctionD307-daddde5e",
+  "LambdaSecurityGroupId": "sg-eb7b48fceecf472b4",
+  "S3BucketName": "secure-cloudtrail-logs-local-000000000000-us-east-1",
+  "VPCId": "vpc-b29e5c42a02a9d3ba",
+  "StackName": "TapStacklocal",
+  "StackArn": "arn:aws:cloudformation:us-east-1:000000000000:stack/TapStacklocal/2c66f10d-088a-4409-b8df-5d10eaa07504"
+}
