@@ -282,5 +282,79 @@ describe('TapStack Module Tests', () => {
 
       template.Resources = originalResources;
     });
+
+    test('should detect invalid CloudFormation template version', () => {
+      const template = tapStack.getTemplate();
+      const originalVersion = template.AWSTemplateFormatVersion;
+
+      template.AWSTemplateFormatVersion = '2008-01-01';
+      const errors = tapStack.validateTemplate();
+      expect(errors).toContain('Invalid CloudFormation template version');
+
+      template.AWSTemplateFormatVersion = originalVersion;
+    });
+
+    test('should detect missing UpdateReplacePolicy on deletable resources', () => {
+      const template = tapStack.getTemplate();
+      const bucketResource = template.Resources['QuizResultsBucket'];
+      const originalUpdatePolicy = bucketResource.UpdateReplacePolicy;
+
+      delete bucketResource.UpdateReplacePolicy;
+      const errors = tapStack.validateTemplate();
+      expect(errors.some(e => e.includes('UpdateReplacePolicy'))).toBe(true);
+
+      bucketResource.UpdateReplacePolicy = originalUpdatePolicy;
+    });
+
+    test('should detect resources missing EnvironmentSuffix in name', () => {
+      const template = tapStack.getTemplate();
+      
+      // Temporarily modify an existing resource to test validation
+      const bucketResource = template.Resources['QuizResultsBucket'];
+      const originalBucketName = bucketResource.Properties.BucketName;
+      
+      // Set bucket name to a simple string (missing EnvironmentSuffix)
+      bucketResource.Properties.BucketName = 'static-bucket-name';
+
+      const errors = tapStack.validateTemplate();
+      expect(errors.some(e => e.includes('should use EnvironmentSuffix'))).toBe(true);
+
+      // Restore original
+      bucketResource.Properties.BucketName = originalBucketName;
+    });
+
+    test('should handle DependsOn as single string', () => {
+      const template = tapStack.getTemplate();
+      
+      // Temporarily change DependsOn from array to single string
+      const apiDeployment = template.Resources['APIDeployment'];
+      const originalDependsOn = apiDeployment.DependsOn;
+      
+      // Change array to single string
+      apiDeployment.DependsOn = 'GenerateMethod';
+
+      const dependencies = tapStack.getDependencyGraph();
+      expect(dependencies.get('APIDeployment')).toContain('GenerateMethod');
+
+      // Restore original array
+      apiDeployment.DependsOn = originalDependsOn;
+    });
+
+    test('should handle name properties that are not objects with Fn::Sub', () => {
+      const template = tapStack.getTemplate();
+      
+      // Temporarily modify a Lambda function to have a plain string name
+      const lambdaResource = template.Resources['QuizGenerationFunction'];
+      const originalFunctionName = lambdaResource.Properties.FunctionName;
+      
+      // Set function name to a plain string (not an object with Fn::Sub)
+      lambdaResource.Properties.FunctionName = 'plain-string-function-name';
+
+      const errors = tapStack.validateTemplate();
+      expect(errors.some(e => e.includes('QuizGenerationFunction') && e.includes('EnvironmentSuffix'))).toBe(true);
+
+      // Restore original
+      lambdaResource.Properties.FunctionName = originalFunctionName;
+    });
   });
 });
