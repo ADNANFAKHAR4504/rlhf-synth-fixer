@@ -258,3 +258,72 @@ github:
   api_timeout: 30 # GitHub API timeout
   clone_depth: 1 # Shallow clone depth
 
+# ═══════════════════════════════════════════════════════════════
+# METADATA SCHEMA COMPLIANCE
+# The schema at config/schemas/metadata.schema.json has
+# additionalProperties: false, so we MUST sanitize metadata.json
+# ═══════════════════════════════════════════════════════════════
+metadata:
+  schema_path: 'config/schemas/metadata.schema.json'
+  sanitize_on_migrate: true # Remove fields not in schema
+  validate_before_commit: true # Validate against schema before creating PR
+
+  # Fields that MUST be removed (not allowed by schema)
+  fields_to_remove:
+    - task_id # Use po_id instead
+    - training_quality
+    - coverage
+    - author
+    - dockerS3Location
+    - pr_id
+    - original_pr_id
+    - localstack_migration
+
+  # Valid subtask values (from schema enum)
+  valid_subtasks:
+    - 'Provisioning of Infrastructure Environments'
+    - 'Application Deployment'
+    - 'CI/CD Pipeline Integration'
+    - 'Failure Recovery and High Availability'
+    - 'Security, Compliance, and Governance'
+    - 'IaC Program Optimization'
+    - 'Infrastructure QA and Management'
+
+  # Subtask mapping (old invalid values to valid values)
+  subtask_mapping:
+    'Security and Compliance Implementation': 'Security, Compliance, and Governance'
+    'Security Configuration': 'Security, Compliance, and Governance'
+    'Database Management': 'Provisioning of Infrastructure Environments'
+    'Network Configuration': 'Provisioning of Infrastructure Environments'
+    'Monitoring Setup': 'Infrastructure QA and Management'
+    'Performance Optimization': 'IaC Program Optimization'
+    'Access Control': 'Security, Compliance, and Governance'
+
+  # Valid subject_labels (from schema enum)
+  valid_subject_labels:
+    - 'Environment Migration'
+    - 'Cloud Environment Setup'
+    - 'Multi-Environment Consistency'
+    - 'Web Application Deployment'
+    - 'Serverless Infrastructure (Functions as Code)'
+    - 'CI/CD Pipeline'
+    - 'Failure Recovery Automation'
+    - 'Security Configuration as Code'
+    - 'IaC Diagnosis/Edits'
+    - 'IaC Optimization'
+    - 'Infrastructure Analysis/Monitoring'
+    - 'General Infrastructure Tooling QA'
+
+  # Subject label mapping (old invalid values to valid values)
+  subject_label_mapping:
+    'Security Configuration': 'Security Configuration as Code'
+    'Database Management': 'General Infrastructure Tooling QA'
+    'Network Configuration': 'Cloud Environment Setup'
+    'Access Control': 'Security Configuration as Code'
+    'Monitoring Setup': 'Infrastructure Analysis/Monitoring'
+    'Performance Optimization': 'IaC Optimization'
+
+  # Default values if mapping fails
+  default_subtask: 'Infrastructure QA and Management'
+  default_subject_label: 'General Infrastructure Tooling QA'
+

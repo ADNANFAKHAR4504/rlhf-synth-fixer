@@ -876,13 +876,77 @@ if [ "$FIX_SUCCESS" = "true" ]; then
       else
         echo "   ✅ Worktree created: $GIT_WORKTREE_DIR"
 
-        # Update metadata.json in work directory with new PR ID
+        # ═══════════════════════════════════════════════════════════════
+        # CRITICAL: Sanitize metadata.json to comply with schema
+        # The schema has additionalProperties: false, so we MUST remove
+        # fields not in the schema and fix invalid enum values
+        # ═══════════════════════════════════════════════════════════════
         if [ -f "$WORK_DIR/metadata.json" ]; then
-          echo "📝 Updating metadata.json with new PR ID: $LS_PR_ID"
-          jq --arg new_id "$LS_PR_ID" --arg orig_id "$ORIGINAL_PR_ID" \
-            '. + {"pr_id": $new_id, "original_pr_id": $orig_id, "localstack_migration": true, "provider": "localstack"}' \
-            "$WORK_DIR/metadata.json" > "$WORK_DIR/metadata.json.tmp"
+          echo "📝 Sanitizing metadata.json to comply with schema..."
+          
+          # Define allowed fields per schema (additionalProperties: false)
+          # Required: platform, language, complexity, turn_type, po_id, team, startedAt, subtask, provider, subject_labels, aws_services
+          # The schema does NOT allow: task_id, training_quality, coverage, author, dockerS3Location, pr_id, original_pr_id, localstack_migration
+          
+          # Valid subtask values
+          VALID_SUBTASKS='["Provisioning of Infrastructure Environments","Application Deployment","CI/CD Pipeline Integration","Failure Recovery and High Availability","Security, Compliance, and Governance","IaC Program Optimization","Infrastructure QA and Management"]'
+          
+          # Valid subject_labels values
+          VALID_LABELS='["Environment Migration","Cloud Environment Setup","Multi-Environment Consistency","Web Application Deployment","Serverless Infrastructure (Functions as Code)","CI/CD Pipeline","Failure Recovery Automation","Security Configuration as Code","IaC Diagnosis/Edits","IaC Optimization","Infrastructure Analysis/Monitoring","General Infrastructure Tooling QA"]'
+          
+          # Sanitize metadata.json:
+          # 1. Keep only allowed fields
+          # 2. Set provider to "localstack"
+          # 3. Map invalid subtask to closest valid value
+          # 4. Filter subject_labels to only valid values
+          jq --argjson valid_subtasks "$VALID_SUBTASKS" --argjson valid_labels "$VALID_LABELS" '
+            # Map invalid subtask to valid ones
+            def map_subtask:
+              if . == null then "Infrastructure QA and Management"
+              elif . == "Security and Compliance Implementation" then "Security, Compliance, and Governance"
+              elif . == "Security Configuration" then "Security, Compliance, and Governance"
+              elif . == "Database Management" then "Provisioning of Infrastructure Environments"
+              elif . == "Network Configuration" then "Provisioning of Infrastructure Environments"
+              elif . == "Monitoring Setup" then "Infrastructure QA and Management"
+              elif . == "Performance Optimization" then "IaC Program Optimization"
+              elif . == "Access Control" then "Security, Compliance, and Governance"
+              elif ($valid_subtasks | index(.)) then .
+              else "Infrastructure QA and Management"
+              end;
+            
+            # Filter subject_labels to only valid values, map common invalid ones
+            def map_label:
+              if . == "Security Configuration" then "Security Configuration as Code"
+              elif . == "Database Management" then "General Infrastructure Tooling QA"
+              elif . == "Network Configuration" then "Cloud Environment Setup"
+              elif . == "Access Control" then "Security Configuration as Code"
+              elif . == "Monitoring Setup" then "Infrastructure Analysis/Monitoring"
+              elif . == "Performance Optimization" then "IaC Optimization"
+              else .
+              end;
+            
+            # Keep only schema-allowed fields and sanitize values
+            {
+              platform: .platform,
+              language: .language,
+              complexity: .complexity,
+              turn_type: .turn_type,
+              po_id: (.po_id // .task_id // "unknown"),
+              team: .team,
+              startedAt: .startedAt,
+              subtask: (.subtask | map_subtask),
+              provider: "localstack",
+              subject_labels: ([.subject_labels[] | map_label] | unique | map(select(. as $l | $valid_labels | index($l))) | if length == 0 then ["General Infrastructure Tooling QA"] else . end),
+              aws_services: .aws_services
+            }
+          ' "$WORK_DIR/metadata.json" > "$WORK_DIR/metadata.json.tmp"
+          
           mv "$WORK_DIR/metadata.json.tmp" "$WORK_DIR/metadata.json"
+          echo "   ✅ metadata.json sanitized for schema compliance"
+          
+          # Validate the result
+          echo "   📋 Sanitized metadata:"
+          jq -c '{platform, language, subtask, provider, subject_labels: (.subject_labels | length)}' "$WORK_DIR/metadata.json"
         fi
 
         # Copy work directory contents to the isolated worktree (not project root!)

@@ -36,6 +36,82 @@ batch_fix:
 - `TEST_ERRORS` - Array of test errors
 - `CONFIG_FILE` - Optional: Path to localstack.yaml (default: `.claude/config/localstack.yaml`)
 
+## Metadata Validation
+
+**CRITICAL**: Before creating a PR, the metadata.json MUST be validated against the schema at `config/schemas/metadata.schema.json`.
+
+### Schema Requirements
+
+The schema has `additionalProperties: false`, meaning ONLY these fields are allowed:
+
+**Required Fields:**
+- `platform` - enum: cdk, cdktf, cfn, tf, pulumi, analysis, cicd
+- `language` - enum: ts, js, py, java, go, hcl, yaml, json, sh, yml
+- `complexity` - enum: medium, hard, expert
+- `turn_type` - enum: single, multi
+- `po_id` - string (min 1 char)
+- `team` - enum: 2, 3, 4, 5, 6, synth, synth-1, synth-2, stf
+- `startedAt` - ISO 8601 datetime
+- `subtask` - enum (see below)
+- `provider` - enum: aws, localstack
+- `subject_labels` - array of enums (see below)
+- `aws_services` - array of strings
+
+### Valid `subtask` Values
+
+```
+- "Provisioning of Infrastructure Environments"
+- "Application Deployment"
+- "CI/CD Pipeline Integration"
+- "Failure Recovery and High Availability"
+- "Security, Compliance, and Governance"
+- "IaC Program Optimization"
+- "Infrastructure QA and Management"
+```
+
+### Valid `subject_labels` Values
+
+```
+- "Environment Migration"
+- "Cloud Environment Setup"
+- "Multi-Environment Consistency"
+- "Web Application Deployment"
+- "Serverless Infrastructure (Functions as Code)"
+- "CI/CD Pipeline"
+- "Failure Recovery Automation"
+- "Security Configuration as Code"
+- "IaC Diagnosis/Edits"
+- "IaC Optimization"
+- "Infrastructure Analysis/Monitoring"
+- "General Infrastructure Tooling QA"
+```
+
+### Fields NOT Allowed (must be removed)
+
+These fields exist in some old tasks but are NOT allowed by the schema:
+- `task_id` - remove (use `po_id` instead)
+- `training_quality` - remove
+- `coverage` - remove
+- `author` - remove
+- `dockerS3Location` - remove
+- `pr_id` - remove
+- `original_pr_id` - remove
+- `localstack_migration` - remove
+
+### Common Subtask Mappings
+
+When migrating old tasks with invalid subtask values:
+
+| Invalid Value | Map To |
+|--------------|--------|
+| "Security and Compliance Implementation" | "Security, Compliance, and Governance" |
+| "Security Configuration" | "Security, Compliance, and Governance" |
+| "Database Management" | "Provisioning of Infrastructure Environments" |
+| "Network Configuration" | "Provisioning of Infrastructure Environments" |
+| "Monitoring Setup" | "Infrastructure QA and Management" |
+| "Performance Optimization" | "IaC Program Optimization" |
+| "Access Control" | "Security, Compliance, and Governance" |
+
 ## Core Principles
 
 1. **Minimal Changes**: Only modify what's necessary for LocalStack compatibility
