@@ -1,3 +1,4 @@
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure multi-service AWS infrastructure with KMS encryption, private networking, and compliance monitoring'
 
@@ -6,18 +7,18 @@ Parameters:
     Type: String
     Default: 'production'
     Description: 'Environment name for tagging'
-
+  
   Owner:
     Type: String
     Default: 'infrastructure-team'
     Description: 'Owner for tagging'
-
+  
   AllowedSshCidr:
     Type: String
     Default: '10.0.0.0/8'
     Description: 'CIDR block allowed for SSH access'
     AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$'
-
+  
   DBEngineVersion:
     Type: String
     Default: '8.0.43'
@@ -39,42 +40,31 @@ Parameters:
       - '8.4.5'
       - '8.4.6'
     Description: 'MySQL engine version for RDS'
-
+  
   DbUsername:
     Type: String
     Default: 'admin'
     Description: 'Database master username'
-
+  
   S3BucketName:
     Type: String
     Default: 'secure-app-data-bucket'
     Description: 'Name for the main S3 bucket'
-
+  
   TrailBucketName:
     Type: String
     Default: 'cloudtrail-logs-bucket'
     Description: 'Name for CloudTrail S3 bucket'
-
+  
   NotificationEmail:
     Type: String
     Default: 'alerts@company.com'
     Description: 'Email for CloudWatch alarm notifications'
 
   LatestAmiId:
-    Type: AWS::EC2::Image::Id
-    Default: 'ami-0c55b159cbfafe1f0'
-    Description: 'Amazon Linux 2 AMI ID (hardcoded for LocalStack compatibility)'
-
-  EnableConfig:
-    Type: String
-    Default: 'false'
-    AllowedValues:
-      - 'true'
-      - 'false'
-    Description: 'Whether to create AWS Config resources (recorder, delivery channel, bucket, and rule). Set to true only if no existing AWS Config setup exists in the account/region.'
-
-Conditions:
-  CreateConfig: !Equals [!Ref EnableConfig, 'true']
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+    Description: 'Latest Amazon Linux 2 AMI ID via SSM'
 
 Resources:
   # Database Secret
@@ -309,7 +299,7 @@ Resources:
             Effect: Deny
             Principal: '*'
             Action: 's3:PutObject'
-            Resource: !Sub 'arn:aws:s3:::${S3Bucket}/*'
+            Resource: !Sub '${S3Bucket}/*'
             Condition:
               StringNotEquals:
                 's3:x-amz-server-side-encryption': 'aws:kms'
@@ -317,7 +307,7 @@ Resources:
             Effect: Deny
             Principal: '*'
             Action: 's3:PutObject'
-            Resource: !Sub 'arn:aws:s3:::${S3Bucket}/*'
+            Resource: !Sub '${S3Bucket}/*'
             Condition:
               StringNotEquals:
                 's3:x-amz-server-side-encryption-aws-kms-key-id': !GetAtt S3KMSKey.Arn
@@ -360,7 +350,7 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: 's3:PutObject'
-            Resource: !Sub 'arn:aws:s3:::${CloudTrailBucket}/*'
+            Resource: !Sub '${CloudTrailBucket}/*'
             Condition:
               StringEquals:
                 's3:x-amz-acl': 'bucket-owner-full-control'
@@ -369,6 +359,7 @@ Resources:
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub '${Environment}-ec2-role'
       AssumeRolePolicyDocument:
         Statement:
           - Effect: Allow
@@ -384,7 +375,7 @@ Resources:
                   - 's3:GetObject'
                   - 's3:PutObject'
                   - 's3:DeleteObject'
-                Resource: !Sub 'arn:aws:s3:::${S3Bucket}/*'
+                Resource: !Sub '${S3Bucket}/*'
               - Effect: Allow
                 Action:
                   - 's3:ListBucket'
@@ -403,12 +394,14 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
+      InstanceProfileName: !Sub '${Environment}-ec2-profile'
       Roles:
         - !Ref EC2Role
 
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub '${Environment}-lambda-role'
       AssumeRolePolicyDocument:
         Statement:
           - Effect: Allow
@@ -423,7 +416,7 @@ Resources:
                 Action:
                   - 'logs:CreateLogStream'
                   - 'logs:PutLogEvents'
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${Environment}-function:*'
+                Resource: !Sub 'arn:aws:logs:us-east-1:${AWS::AccountId}:log-group:/aws/lambda/${Environment}-function:*'
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -432,8 +425,8 @@ Resources:
 
   ConfigRole:
     Type: AWS::IAM::Role
-    Condition: CreateConfig
     Properties:
+      RoleName: !Sub '${Environment}-config-role'
       AssumeRolePolicyDocument:
         Statement:
           - Effect: Allow
@@ -441,7 +434,7 @@ Resources:
               Service: config.amazonaws.com
             Action: 'sts:AssumeRole'
       ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/service-role/AWSConfigRole'
+        - 'arn:aws:iam::aws:policy/service-role/ConfigRole'
       Policies:
         - PolicyName: ConfigDeliveryPermissions
           PolicyDocument:
@@ -454,7 +447,8 @@ Resources:
               - Effect: Allow
                 Action:
                   - 's3:PutObject'
-                Resource: !Sub 'arn:aws:s3:::${S3Bucket}/config/*'
+                  - 's3:GetBucketAcl'
+                Resource: !Sub '${S3Bucket}/config/*'
                 Condition:
                   StringEquals:
                     's3:x-amz-acl': 'bucket-owner-full-control'
@@ -467,6 +461,7 @@ Resources:
   CloudTrailRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub '${Environment}-cloudtrail-logs-role'
       AssumeRolePolicyDocument:
         Statement:
           - Effect: Allow
@@ -482,7 +477,7 @@ Resources:
                   - 'logs:PutLogEvents'
                   - 'logs:CreateLogGroup'
                   - 'logs:CreateLogStream'
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${Environment}-cloudtrail-log-group:*'
+                Resource: !Sub 'arn:aws:logs:us-east-1:${AWS::AccountId}:log-group:${Environment}-cloudtrail-log-group:*'
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -508,7 +503,21 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
 
-  # RDS (simplified for LocalStack - no DBSubnetGroup)
+  # RDS
+  RDSSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub '${Environment}-rds-subnet-group'
+      DBSubnetGroupDescription: 'Subnet group for RDS in private subnets'
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
   RDSInstance:
     Type: AWS::RDS::DBInstance
     Properties:
@@ -524,6 +533,7 @@ Resources:
       KmsKeyId: !Ref RDSKMSKey
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
+      DBSubnetGroupName: !Ref RDSSubnetGroup
       BackupRetentionPeriod: 7
       MultiAZ: false
       PubliclyAccessible: false
@@ -590,7 +600,7 @@ Resources:
       IsLogging: true
       EnableLogFileValidation: true
       KMSKeyId: !Ref S3KMSKey
-      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
+      CloudWatchLogsLogGroupArn: !Sub '${CloudTrailLogGroup.Arn}:*'
       CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
       Tags:
         - Key: Environment
@@ -646,7 +656,6 @@ Resources:
   # AWS Config
   ConfigBucket:
     Type: AWS::S3::Bucket
-    Condition: CreateConfig
     Properties:
       BucketName: !Sub 'aws-config-${AWS::AccountId}-${Environment}'
       BucketEncryption:
@@ -667,7 +676,6 @@ Resources:
 
   ConfigBucketPolicy:
     Type: AWS::S3::BucketPolicy
-    Condition: CreateConfig
     Properties:
       Bucket: !Ref ConfigBucket
       PolicyDocument:
@@ -695,7 +703,7 @@ Resources:
             Principal:
               Service: config.amazonaws.com
             Action: 's3:PutObject'
-            Resource: !Sub 'arn:aws:s3:::${ConfigBucket}/*'
+            Resource: !Sub '${ConfigBucket}/*'
             Condition:
               StringEquals:
                 's3:x-amz-acl': 'bucket-owner-full-control'
@@ -703,7 +711,6 @@ Resources:
 
   ConfigurationRecorder:
     Type: AWS::Config::ConfigurationRecorder
-    Condition: CreateConfig
     Properties:
       Name: !Sub '${Environment}-config-recorder'
       RoleARN: !GetAtt ConfigRole.Arn
@@ -713,15 +720,13 @@ Resources:
 
   DeliveryChannel:
     Type: AWS::Config::DeliveryChannel
-    Condition: CreateConfig
     Properties:
       Name: !Sub '${Environment}-config-delivery-channel'
       S3BucketName: !Ref ConfigBucket
 
   SecurityGroupConfigRule:
     Type: AWS::Config::ConfigRule
-    Condition: CreateConfig
-    DependsOn:
+    DependsOn: 
       - ConfigurationRecorder
       - DeliveryChannel
     Properties:
@@ -779,3 +784,4 @@ Outputs:
     Value: !GetAtt RDSInstance.Endpoint.Address
     Export:
       Name: !Sub '${Environment}-rds-endpoint'
+```

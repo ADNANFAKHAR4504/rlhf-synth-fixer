@@ -2,14 +2,21 @@
   "platform": "cfn",
   "language": "yaml",
   "complexity": "expert",
-  "turn_type": "single",
+  "turn_type": "multi",
   "po_id": "291865",
-  "team": "synth",
+  "team": "1",
   "startedAt": "2025-08-22T09:01:30.709Z",
-  "subtask": "Security, Compliance, and Governance",
+  "subtask": "Infrastructure QA and Management",
   "subject_labels": [
-    "Security Configuration as Code"
+    "Security and Compliance Implementation",
+    "General Infrastructure Tooling QA",
+    "Database Management",
+    "Network Configuration",
+    "Monitoring Setup",
+    "Access Control",
+    "Performance Optimization"
   ],
+  "training_quality": 8,
   "aws_services": [
     "AWS::SecretsManager::Secret",
     "AWS::KMS::Key",
@@ -23,6 +30,7 @@
     "AWS::S3::BucketPolicy",
     "AWS::IAM::Role",
     "AWS::IAM::InstanceProfile",
+    "AWS::RDS::DBSubnetGroup",
     "AWS::RDS::DBInstance",
     "AWS::Lambda::Function",
     "AWS::Logs::LogGroup",
@@ -34,5 +42,11 @@
     "AWS::Config::DeliveryChannel",
     "AWS::Config::ConfigRule"
   ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulladumor",
+  "dockerS3Location": "",
   "provider": "localstack"
 }

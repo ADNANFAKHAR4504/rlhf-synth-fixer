@@ -205,13 +205,13 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(dbEngineVersionParam.AllowedValues).toContain('8.0.43');
     });
 
-    test('RDS should use Secrets Manager for password', () => {
+    test('RDS should use Secrets Manager for password, not DBPassword parameter', () => {
       const rdsInstance = template.Resources.RDSInstance;
       const mup = rdsInstance.Properties.MasterUserPassword;
-      // Using Secrets Manager dynamic reference with static SecretString for LocalStack compatibility
-      const mupString = mup && mup['Fn::Sub'];
+      const mupString = typeof mup === 'string' ? mup : (mup && mup['Fn::Sub']);
       expect(typeof mupString).toBe('string');
       expect(mupString).toMatch(/{{resolve:secretsmanager/);
+      expect(template.Parameters.DBPassword).toBeUndefined();
     });
   });
 

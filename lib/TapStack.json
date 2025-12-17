@@ -94,8 +94,13 @@
                     "Fn::Sub": "${Environment}-db-secret"
                 },
                 "Description": "Database credentials",
-                "SecretString": {
-                    "Fn::Sub": "{\"username\": \"${DbUsername}\", \"password\": \"SecurePassword123!\"}"
+                "GenerateSecretString": {
+                    "SecretStringTemplate": {
+                        "Fn::Sub": "{\"username\": \"${DbUsername}\"}"
+                    },
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\"
                 },
                 "Tags": [
                     {
@@ -947,7 +952,6 @@
         },
         "RDSInstance": {
             "Type": "AWS::RDS::DBInstance",
-            "DependsOn": "DbSecret",
             "Properties": {
                 "DBInstanceIdentifier": {
                     "Fn::Sub": "${Environment}-rds-instance"
@@ -961,7 +965,7 @@
                     "Ref": "DbUsername"
                 },
                 "MasterUserPassword": {
-                    "Fn::Sub": "{{resolve:secretsmanager:${Environment}-db-secret:SecretString:password}}"
+                    "Fn::Sub": "{{resolve:secretsmanager:${DbSecret}::password}}"
                 },
                 "AllocatedStorage": 20,
                 "StorageType": "gp2",
