@@ -45,7 +45,9 @@ import * as pulumi from '@pulumi/pulumi';
 
 // Get configuration
 const config = new pulumi.Config();
-const environmentSuffix = config.require('environmentSuffix');
+// Use environment variable, then Pulumi config, then default to 'dev'
+const environmentSuffix =
+  process.env.ENVIRONMENT_SUFFIX || config.get('environmentSuffix') || 'dev';
 const region = aws.config.region || 'us-east-1';
 
 // Detect LocalStack mode - RDS is not supported in LocalStack Community Edition
@@ -557,112 +559,43 @@ export const natGatewayPublicIp = natEip.publicIp;
 export const s3VpcEndpointId = s3VpcEndpoint.id;
 ```
 
-## File: lib/tap-stack.ts
+## File: bin/tap.ts
 
-Skeleton component resource for organizing infrastructure:
+Entry point that imports and re-exports the infrastructure:
 
 ```typescript
 /**
- * tap-stack.ts
+ * Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
  *
- * This module defines the TapStack class, the main Pulumi ComponentResource for
- * the TAP (Test Automation Platform) project.
- *
- * It orchestrates the instantiation of other resource-specific components
- * and manages environment-specific configurations.
+ * This module imports and re-exports all infrastructure resources from lib/index.ts.
+ * The actual infrastructure (VPC, EC2, RDS, S3, IAM) is defined in lib/index.ts.
  */
-import * as pulumi from '@pulumi/pulumi';
-import { ResourceOptions } from '@pulumi/pulumi';
-// import * as aws from '@pulumi/aws'; // Removed as it's only used in example code
 
-// Import your nested stacks here. For example:
-// import { DynamoDBStack } from "./dynamodb-stack";
-
-/**
- * TapStackArgs defines the input arguments for the TapStack Pulumi component.
- */
-export interface TapStackArgs {
-  /**
-   * An optional suffix for identifying the deployment environment (e.g., 'dev', 'prod').
-   * Defaults to 'dev' if not provided.
-   */
-  environmentSuffix?: string;
-
-  /**
-   * Optional default tags to apply to resources.
-   */
-  tags?: pulumi.Input<{ [key: string]: string }>;
-}
-
-/**
- * Represents the main Pulumi component resource for the TAP project.
- *
- * This component orchestrates the instantiation of other resource-specific components
- * and manages the environment suffix used for naming and configuration.
- *
- * Note:
- * - DO NOT create resources directly here unless they are truly global.
- * - Use other components (e.g., DynamoDBStack) for AWS resource definitions.
- */
-export class TapStack extends pulumi.ComponentResource {
-  // Example of a public property for a nested resource's output.
-  // public readonly table: pulumi.Output<string>;
-
-  /**
-   * Creates a new TapStack component.
-   * @param name The logical name of this Pulumi component.
-   * @param args Configuration arguments including environment suffix and tags.
-   * @param opts Pulumi options.
-   */
-  constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
-    super('tap:stack:TapStack', name, args, opts);
-
-    // The following variables are commented out as they are only used in example code.
-    // To use them, uncomment the lines below and the corresponding example code.
-    // const environmentSuffix = args.environmentSuffix || 'dev';
-    // const tags = args.tags || {};
-
-    // --- Instantiate Nested Components Here ---
-    // This is where you would create instances of your other component resources,
-    // passing them the necessary configuration.
-
-    // Example of instantiating a DynamoDBStack component:
-    // const dynamoDBStack = new DynamoDBStack("tap-dynamodb", {
-    //   environmentSuffix: environmentSuffix,
-    //   tags: tags,
-    // }, { parent: this });
-
-    // Example of creating a resource directly (for truly global resources only):
-    // const bucket = new aws.s3.Bucket(`tap-global-bucket-${environmentSuffix}`, {
-    //   tags: tags,
-    // }, { parent: this });
-
-    // --- Expose Outputs from Nested Components ---
-    // Make outputs from your nested components available as outputs of this main stack.
-    // this.table = dynamoDBStack.table;
-
-    // Register the outputs of this component.
-    this.registerOutputs({
-      // table: this.table,
-    });
-  }
-}
+// Import and re-export all infrastructure resources and outputs from lib/index.ts
+export * from '../lib/index';
 ```
 
 ## Configuration
 
-Set the required configuration values:
+Set the configuration values:
 
 ```bash
-# Set the environment suffix (required)
+# Set the environment suffix (optional - can also use ENVIRONMENT_SUFFIX env var)
+# Defaults to 'dev' if not set
 pulumi config set environmentSuffix <your-suffix>
 
-# Set the database password (required, encrypted)
+# Set the database password (required for AWS, not needed for LocalStack)
 pulumi config set --secret dbPassword <your-secure-password>
 
 # Set the AWS region (optional, defaults to us-east-1)
 pulumi config set aws:region us-east-1
 ```
+
+The `environmentSuffix` can be provided via:
+
+1. `ENVIRONMENT_SUFFIX` environment variable (highest priority)
+2. Pulumi config `environmentSuffix`
+3. Default value `'dev'`
 
 ## Deployment
 
@@ -779,21 +712,14 @@ LocalStack Community Edition does not support RDS. When running on LocalStack:
 - Mock endpoints are provided for RDS outputs
 - All other resources (VPC, EC2, S3, IAM) are created normally
 
-### LocalStack Stack Configuration
+### LocalStack Configuration
 
-Create `Pulumi.localstack.yaml`:
+For LocalStack deployments, configuration is handled automatically:
 
-```yaml
-config:
-  TapStack:environmentSuffix: localstack
-  TapStack:dbPassword: TestPassword123!
-  aws:region: us-east-1
-  aws:accessKey: test
-  aws:secretKey: test
-  aws:skipCredentialsValidation: 'true'
-  aws:skipMetadataApiCheck: 'true'
-  aws:s3UsePathStyle: 'true'
-```
+- `AWS_ENDPOINT_URL` environment variable triggers LocalStack mode
+- `ENVIRONMENT_SUFFIX` environment variable sets the resource naming suffix
+- AWS credentials (`test`/`test`) are set by the CI/CD pipeline
+- RDS resources are automatically skipped (not supported in LocalStack Community Edition)
 
 ## Cleanup
 

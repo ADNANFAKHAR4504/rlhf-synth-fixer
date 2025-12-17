@@ -3,7 +3,9 @@ import * as pulumi from '@pulumi/pulumi';
 
 // Get configuration
 const config = new pulumi.Config();
-const environmentSuffix = config.require('environmentSuffix');
+// Use environment variable, then Pulumi config, then default to 'dev'
+const environmentSuffix =
+  process.env.ENVIRONMENT_SUFFIX || config.get('environmentSuffix') || 'dev';
 const region = aws.config.region || 'us-east-1';
 
 // Detect LocalStack mode - RDS is not supported in LocalStack Community Edition
