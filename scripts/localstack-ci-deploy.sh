@@ -147,6 +147,116 @@ save_outputs() {
     print_status $GREEN "✅ Saved $output_count outputs to cfn-outputs/flat-outputs.json"
 }
 
+# Function to describe CDK/CloudFormation deployment failure
+describe_cfn_failure() {
+    local stack_name=$1
+    
+    print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_status $RED "📋 DEPLOYMENT FAILURE DETAILS"
+    print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
+    # Get stack status
+    print_status $YELLOW "🔍 Stack Status:"
+    awslocal cloudformation describe-stacks --stack-name "$stack_name" \
+        --query 'Stacks[0].[StackName,StackStatus,StackStatusReason]' \
+        --output table 2>/dev/null || echo "   Stack not found or inaccessible"
+    echo ""
+    
+    # Get failed events
+    print_status $YELLOW "🔍 Failed Resources:"
+    awslocal cloudformation describe-stack-events --stack-name "$stack_name" \
+        --query 'StackEvents[?ResourceStatus==`CREATE_FAILED` || ResourceStatus==`UPDATE_FAILED` || ResourceStatus==`DELETE_FAILED`].[Timestamp,LogicalResourceId,ResourceType,ResourceStatus,ResourceStatusReason]' \
+        --output table 2>/dev/null || echo "   No failed events found"
+    echo ""
+    
+    # Get recent events
+    print_status $YELLOW "🔍 Recent Stack Events (last 10):"
+    awslocal cloudformation describe-stack-events --stack-name "$stack_name" \
+        --query 'StackEvents[:10].[Timestamp,LogicalResourceId,ResourceStatus,ResourceStatusReason]' \
+        --output table 2>/dev/null || echo "   No events found"
+    echo ""
+    
+    print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+}
+
+# Function to describe Terraform deployment failure
+describe_terraform_failure() {
+    print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_status $RED "📋 DEPLOYMENT FAILURE DETAILS"
+    print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
+    # Show state list
+    print_status $YELLOW "🔍 Terraform State (resources created so far):"
+    tflocal state list 2>/dev/null || echo "   No state found"
+    echo ""
+    
+    # Show any tainted resources
+    print_status $YELLOW "🔍 Resource Details:"
+    tflocal show -no-color 2>/dev/null | head -50 || echo "   Unable to show state"
+    echo ""
+    
+    print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+}
+
+# Function to describe Pulumi deployment failure
+describe_pulumi_failure() {
+    local stack_name=$1
+    
+    print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_status $RED "📋 DEPLOYMENT FAILURE DETAILS"
+    print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
+    # Show stack history
+    print_status $YELLOW "🔍 Stack History (recent operations):"
+    pulumi stack history --show-secrets=false 2>/dev/null | head -20 || echo "   No history found"
+    echo ""
+    
+    # Show current stack resources
+    print_status $YELLOW "🔍 Stack Resources:"
+    pulumi stack --show-urns 2>/dev/null | head -30 || echo "   No resources found"
+    echo ""
+    
+    # Show stack export for diagnostics
+    print_status $YELLOW "🔍 Failed Resource Details:"
+    pulumi stack export 2>/dev/null | jq '.deployment.resources[] | select(.custom == true) | {type: .type, urn: .urn}' 2>/dev/null | head -30 || echo "   Unable to export stack"
+    echo ""
+    
+    print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+}
+
+# Function to describe CDKTF deployment failure  
+describe_cdktf_failure() {
+    print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_status $RED "📋 DEPLOYMENT FAILURE DETAILS"
+    print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
+    # Check cdktf.out directory for synthesized stacks
+    print_status $YELLOW "🔍 Synthesized Stacks:"
+    if [ -d "cdktf.out/stacks" ]; then
+        ls -la cdktf.out/stacks/ 2>/dev/null || echo "   No stacks found"
+    else
+        echo "   cdktf.out/stacks directory not found"
+    fi
+    echo ""
+    
+    # Show terraform state if available
+    print_status $YELLOW "🔍 Terraform State (from CDKTF):"
+    for stack_dir in cdktf.out/stacks/*/; do
+        if [ -d "$stack_dir" ]; then
+            print_status $BLUE "   Stack: $(basename $stack_dir)"
+            cd "$stack_dir" 2>/dev/null && terraform state list 2>/dev/null || echo "   No state"
+            cd - > /dev/null 2>&1
+        fi
+    done
+    echo ""
+    
+    print_status $RED "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+}
+
 # Function to deploy based on platform
 deploy_platform() {
     local platform=$1
@@ -262,6 +372,8 @@ deploy_cdk() {
         local exit_code=$?
         if [ $exit_code -ne 0 ]; then
             print_status $RED "❌ CDK deployment failed with exit code: $exit_code"
+            echo ""
+            describe_cfn_failure "TapStack${env_suffix}"
             exit $exit_code
         fi
     fi
@@ -337,6 +449,8 @@ deploy_cdktf() {
     
     if [ $exit_code -ne 0 ]; then
         print_status $RED "❌ CDKTF deployment failed with exit code: $exit_code"
+        echo ""
+        describe_cdktf_failure
         exit $exit_code
     fi
 
@@ -419,14 +533,9 @@ deploy_cloudformation() {
     local exit_code=$?
     
     if [ $exit_code -ne 0 ]; then
-        print_status $YELLOW "⚠️ Deployment encountered issues, checking stack events..."
-        aws cloudformation describe-stack-events \
-            --stack-name "$stack_name" \
-            --endpoint-url "$AWS_ENDPOINT_URL" \
-            --region "$AWS_DEFAULT_REGION" \
-            --query 'StackEvents[?ResourceStatus==`CREATE_FAILED` || ResourceStatus==`UPDATE_FAILED`].[LogicalResourceId,ResourceStatusReason]' \
-            --output table 2>/dev/null || true
         print_status $RED "❌ CloudFormation deployment failed with exit code: $exit_code"
+        echo ""
+        describe_cfn_failure "$stack_name"
         exit $exit_code
     fi
 
@@ -487,6 +596,8 @@ deploy_terraform() {
     
     if [ $exit_code -ne 0 ]; then
         print_status $RED "❌ Terraform deployment failed with exit code: $exit_code"
+        echo ""
+        describe_terraform_failure
         exit $exit_code
     fi
 
@@ -593,6 +704,8 @@ deploy_pulumi() {
 
     if [ $exit_code -ne 0 ]; then
         print_status $RED "❌ Pulumi deployment failed with exit code: $exit_code"
+        echo ""
+        describe_pulumi_failure "$stack_name"
         exit $exit_code
     fi
 
