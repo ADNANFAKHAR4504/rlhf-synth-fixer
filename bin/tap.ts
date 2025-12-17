@@ -1,26 +1,58 @@
 #!/usr/bin/env node
-import * as cdk from 'aws-cdk-lib';
-import { Tags } from 'aws-cdk-lib';
+/**
+ * Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
+ *
+ * This module defines the core Pulumi stack and instantiates the TapStack with appropriate
+ * configuration based on the deployment environment. It handles environment-specific settings,
+ * tagging, and deployment configuration for AWS resources.
+ *
+ * The stack created by this module uses environment suffixes to distinguish between
+ * different deployment environments (development, staging, production, etc.).
+ */
+import * as aws from '@pulumi/aws';
 import { TapStack } from '../lib/tap-stack';
 
-const app = new cdk.App();
+// Get the environment suffix from environment variables, defaulting to 'dev'.
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-// Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
-const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
-const stackName = `TapStack${environmentSuffix}`;
-const repositoryName = process.env.REPOSITORY || 'unknown';
+// Get metadata from environment variables for tagging purposes.
+// These are often injected by CI/CD systems.
+const repository = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
+const prNumber = process.env.PR_NUMBER || 'unknown';
+const team = process.env.TEAM || 'unknown';
+const createdAt = new Date().toISOString();
 
-// Apply tags to all stacks in this app (optional - you can do this at stack level instead)
-Tags.of(app).add('Environment', environmentSuffix);
-Tags.of(app).add('Repository', repositoryName);
-Tags.of(app).add('Author', commitAuthor);
+// Define a set of default tags to apply to all resources.
+const defaultTags = {
+  Environment: environmentSuffix,
+  Repository: repository,
+  Author: commitAuthor,
+  PRNumber: prNumber,
+  Team: team,
+  CreatedAt: createdAt,
+};
 
-new TapStack(app, stackName, {
-  stackName: stackName, // This ensures CloudFormation stack name includes the suffix
-  environmentSuffix: environmentSuffix, // Pass the suffix to the stack
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION,
+// Configure AWS provider with default tags
+const provider = new aws.Provider('aws', {
+  region: process.env.AWS_REGION || 'us-east-1',
+  defaultTags: {
+    tags: defaultTags,
   },
 });
+
+// Instantiate the main stack component for the infrastructure.
+// This encapsulates all the resources for the platform.
+const stack = new TapStack(
+  'pulumi-infra',
+  {
+    environmentSuffix: environmentSuffix,
+    tags: defaultTags,
+  },
+  { provider }
+);
+
+// Export the stack outputs for verification
+export const tableArn = stack.tableArn;
+export const streamArn = stack.streamArn;
+export const lambdaRoleArn = stack.lambdaRoleArn;
