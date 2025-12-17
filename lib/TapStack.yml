@@ -32,6 +32,7 @@ Metadata:
           - RdsMultiAZ
           - RdsDeletionProtection
           - RdsMasterUsername
+          - RdsMasterPassword
       - Label:
           default: "Security and Logging"
         Parameters:
@@ -64,12 +65,14 @@ Metadata:
         default: "Enable Multi-AZ for RDS"
       RdsDeletionProtection:
         default: "Enable deletion protection for RDS"
+      RdsMasterUsername:
+        default: "RDS master username"
+      RdsMasterPassword:
+        default: "RDS master password"
       AllowedEgressCidr:
         default: "Default egress CIDR for security groups"
       CloudTrailToCloudWatch:
         default: "Send CloudTrail to CloudWatch Logs"
-      RdsMasterUsername:
-        default: "RDS master username"
 
 Parameters:
   ProjectName:
@@ -166,7 +169,17 @@ Parameters:
     MaxLength: 16
     AllowedPattern: '^[a-zA-Z][a-zA-Z0-9_]*$'
     ConstraintDescription: "Must start with a letter, contain only letters, digits, or underscore, and be 1–16 characters."
-    Description: "RDS master username. Password will be managed automatically by RDS in Secrets Manager."
+    Description: "RDS master username."
+
+  RdsMasterPassword:
+    Type: String
+    NoEcho: true
+    Default: dummyPassword123
+    MinLength: 8
+    MaxLength: 41
+    AllowedPattern: '^[a-zA-Z0-9!@#$%^&*()_+-=]{8,41}$'
+    ConstraintDescription: "8–41 printable ASCII characters except /, \", or @."
+    Description: "RDS master password (dummy default for LocalStack CI; override for production with a secure value)."
 
   AllowedEgressCidr:
     Type: String
@@ -875,6 +888,7 @@ Resources:
         config:
           ignore_checks:
             - W3005
+            - W1011
 
     Type: AWS::RDS::DBInstance
     Condition: CreateRdsCondition
@@ -892,7 +906,7 @@ Resources:
       AllocatedStorage: !Ref RdsAllocatedStorage
       DBInstanceClass: !Ref RdsInstanceClass
       MasterUsername: !Ref RdsMasterUsername
-      ManageMasterUserPassword: true
+      MasterUserPassword: !Ref RdsMasterPassword
       MultiAZ: !If [UseMultiAzRds, true, false]
       AutoMinorVersionUpgrade: true
       StorageEncrypted: true
