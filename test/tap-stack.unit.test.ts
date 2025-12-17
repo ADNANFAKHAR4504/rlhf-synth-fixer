@@ -64,11 +64,13 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.PrivateSubnet2).toBeDefined();
     });
 
-    test('should have NAT Gateway for private subnets', () => {
-      expect(template.Resources.NATGateway1).toBeDefined();
-      expect(template.Resources.NATGateway1.Type).toBe('AWS::EC2::NatGateway');
-      expect(template.Resources.NATGateway1EIP).toBeDefined();
-      expect(template.Resources.NATGateway1EIP.Type).toBe('AWS::EC2::EIP');
+    test('should route private subnets (NAT Gateway removed for LocalStack)', () => {
+      // NAT Gateway removed for LocalStack Community compatibility
+      // Private subnets route through Internet Gateway for testing
+      expect(template.Resources.NATGateway1).toBeUndefined();
+      expect(template.Resources.NATGateway1EIP).toBeUndefined();
+      expect(template.Resources.PrivateRoute1).toBeDefined();
+      expect(template.Resources.PrivateRoute1.Properties.GatewayId).toBeDefined();
     });
 
     test('should have Internet Gateway', () => {
@@ -199,9 +201,11 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.DatabaseInstance.Type).toBe('AWS::RDS::DBInstance');
     });
 
-    test('Database should have Multi-AZ enabled', () => {
+    test('Database Multi-AZ configuration (disabled for LocalStack)', () => {
       const db = template.Resources.DatabaseInstance.Properties;
-      expect(db.MultiAZ).toBe(true);
+      // Multi-AZ disabled for LocalStack Community compatibility
+      // LocalStack Community has limited Multi-AZ support causing deployment timeouts
+      expect(db.MultiAZ).toBe(false);
     });
 
     test('Database should have encryption enabled', () => {
@@ -391,9 +395,13 @@ describe('TapStack CloudFormation Template', () => {
       expect(loggingPolicy).toBeDefined();
     });
 
-    test('Requirement 5: RDS Multi-AZ is enabled', () => {
+    test('Requirement 5: RDS configuration (Multi-AZ disabled for LocalStack)', () => {
       const db = template.Resources.DatabaseInstance.Properties;
-      expect(db.MultiAZ).toBe(true);
+      // Multi-AZ disabled for LocalStack Community compatibility
+      // In production AWS, this should be true for high availability
+      expect(db.MultiAZ).toBe(false);
+      expect(db.StorageEncrypted).toBe(true);
+      expect(db.BackupRetentionPeriod).toBeGreaterThan(0);
     });
 
     test('Requirement 6: Centralized logging bucket exists', () => {

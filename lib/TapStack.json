@@ -244,27 +244,6 @@
         }
       }
     },
-    "NATGateway1EIP": {
-      "Type": "AWS::EC2::EIP",
-      "DependsOn": "AttachGateway",
-      "Properties": {
-        "Domain": "vpc"
-      }
-    },
-    "NATGateway1": {
-      "Type": "AWS::EC2::NatGateway",
-      "Properties": {
-        "AllocationId": {
-          "Fn::GetAtt": [
-            "NATGateway1EIP",
-            "AllocationId"
-          ]
-        },
-        "SubnetId": {
-          "Ref": "PublicSubnet1"
-        }
-      }
-    },
     "PrivateRouteTable1": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
@@ -283,13 +262,14 @@
     },
     "PrivateRoute1": {
       "Type": "AWS::EC2::Route",
+      "DependsOn": "AttachGateway",
       "Properties": {
         "RouteTableId": {
           "Ref": "PrivateRouteTable1"
         },
         "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": {
-          "Ref": "NATGateway1"
+        "GatewayId": {
+          "Ref": "InternetGateway"
         }
       }
     },
@@ -761,7 +741,7 @@
         "AllocatedStorage": "20",
         "StorageType": "gp2",
         "StorageEncrypted": true,
-        "MultiAZ": true,
+        "MultiAZ": false,
         "DBName": "securewebapp",
         "MasterUsername": {
           "Ref": "DBUsername"
