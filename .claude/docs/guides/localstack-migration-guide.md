@@ -173,15 +173,17 @@ Smart selection considers:
 │     │    │         │                                    │
 │     └────┼─────────┘                                    │
 │          ↓                                              │
-│  5. Create new branch                                   │
+│  5. Create branch: ls-synth-{PR_ID}                     │
 │          ↓                                              │
-│  6. Commit migrated files                               │
+│  6. Update metadata.json with ls-{PR_ID}                │
 │          ↓                                              │
-│  7. Push branch & create Pull Request                   │
+│  7. Commit files to project root                        │
 │          ↓                                              │
-│  8. Update migration log                                │
+│  8. Push branch & create Pull Request                   │
 │          ↓                                              │
-│  9. Cleanup worktree                                    │
+│  9. PR Pipeline handles deployment & testing            │
+│          ↓                                              │
+│  10. Cleanup worktree                                   │
 │                                                         │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -192,22 +194,28 @@ On successful migration, the command automatically:
 
 1. **Generates new PR ID**: `ls-{original_pr_id}` (e.g., `ls-Pr7179`)
 2. **Creates a new branch**: `ls-synth-{original_pr_id}` (e.g., `ls-synth-Pr7179`)
-3. **Copies migrated files** to `{platform}-{language}/ls-{PR_ID}/`
-4. **Updates metadata.json** with new PR ID and original reference
+3. **Updates metadata.json** with new PR ID, original reference, and `localstack_migration: true`
+4. **Copies migrated files** to project root (standard PR structure)
 5. **Creates a commit** with migration details
 6. **Pushes the branch** to origin
-7. **Creates a Pull Request** with:
-   - Title: `[LocalStack] ls-{PR_ID} - {platform}/{language}`
-   - Body: Task details, migration summary, deployment instructions
-   - Base: `main`
+7. **Creates a Pull Request** - the PR pipeline handles deployment and testing
 
 ### Naming Convention
 
-| Item | Format | Example |
-|------|--------|---------|
-| New PR ID | `ls-{original_pr_id}` | `ls-Pr7179` |
-| Branch | `ls-synth-{original_pr_id}` | `ls-synth-Pr7179` |
-| Destination | `{platform}-{language}/ls-{pr_id}` | `cdk-ts/ls-Pr7179` |
+| Item        | Format                      | Example           |
+| ----------- | --------------------------- | ----------------- |
+| New PR ID   | `ls-{original_pr_id}`       | `ls-Pr7179`       |
+| Branch      | `ls-synth-{original_pr_id}` | `ls-synth-Pr7179` |
+
+### Pipeline Automation
+
+The PR pipeline will automatically:
+1. Run linting and validation
+2. Deploy to LocalStack
+3. Run integration tests
+4. Report results
+
+**No manual deployment needed** - the pipeline handles everything.
 
 ### Example PR Created
 
@@ -226,8 +234,12 @@ On successful migration, the command automatically:
 ### Migration Summary
 This task was migrated to be LocalStack-compatible.
 
-### Deployment Instructions
-./scripts/localstack-cdk-deploy.sh cdk-ts/ls-Pr7179
+### Pipeline
+This PR will be processed by the CI/CD pipeline which will:
+1. Run linting and validation
+2. Deploy to LocalStack
+3. Run integration tests
+4. Report results
 ```
 
 ## Migration Log
@@ -240,7 +252,6 @@ All migrations are tracked in `.claude/reports/localstack-migrations.json`:
   "migrations": [
     {
       "task_path": "archive/cdk-ts/Pr7179",
-      "destination": "cdk-ts/ls-Pr7179",
       "new_pr_url": "https://github.com/TuringGpt/iac-test-automations/pull/1234",
       "new_pr_number": "1234",
       "branch": "ls-synth-Pr7179",
@@ -310,31 +321,17 @@ The `localstack-fixer` agent automatically applies these fixes:
 5. **Resource Naming** - Simplifies complex resource names
 6. **Test Configuration** - Updates integration tests for LocalStack
 
-## Output Files
+## PR Structure
 
-After migration, a new PR is created with these files:
-
-```
-{platform}-{language}/ls-{PR_ID}/
-├── cfn-outputs/
-│   └── flat-outputs.json      # Stack outputs
-├── execution-output.md        # Migration log with deployment details
-├── int-test-output.md         # Test results
-├── lib/                       # Infrastructure code
-├── test/                      # Integration tests
-└── metadata.json              # Task metadata (updated with ls_pr_id)
-```
-
-Example for a CDK TypeScript task:
+The PR is created with standard project structure at the root level:
 
 ```
-cdk-ts/ls-Pr7179/
-├── cfn-outputs/
-│   └── flat-outputs.json
-├── execution-output.md
-├── lib/
-├── test/
-└── metadata.json
+/
+├── lib/                       # Infrastructure code (LocalStack-compatible)
+├── test/                      # Integration tests (updated for LocalStack)
+├── metadata.json              # Task metadata (updated with ls_pr_id)
+├── Pipfile or package.json    # Dependencies (if applicable)
+└── cdk.json / Pulumi.yaml     # Platform config (if applicable)
 ```
 
 The `metadata.json` is updated with:
@@ -344,9 +341,15 @@ The `metadata.json` is updated with:
   "pr_id": "ls-Pr7179",
   "original_pr_id": "Pr7179",
   "localstack_migration": true,
+  "provider": "localstack",
   ...
 }
 ```
+
+The PR pipeline handles:
+- Deployment to LocalStack
+- Integration testing
+- Output file generation (cfn-outputs/, execution-output.md, etc.)
 
 ## Troubleshooting
 
@@ -419,32 +422,26 @@ If automatic migration fails, you can migrate manually:
 # 1. Create a new branch (use ls-synth-{original_pr_id} format)
 git checkout -b ls-synth-Pr7179
 
-# 2. Create destination directory (use ls-{original_pr_id} format)
-mkdir -p cdk-ts/ls-Pr7179
+# 2. Copy task files to project root
+cp -r archive/cdk-ts/Pr7179/lib ./
+cp -r archive/cdk-ts/Pr7179/test ./
+cp archive/cdk-ts/Pr7179/metadata.json ./
 
-# 3. Copy task files
-cp -r archive/cdk-ts/Pr7179/* cdk-ts/ls-Pr7179/
+# 3. Update metadata.json with new PR ID
+jq '. + {"pr_id": "ls-Pr7179", "original_pr_id": "Pr7179", "localstack_migration": true, "provider": "localstack"}' metadata.json > tmp.json && mv tmp.json metadata.json
 
-# 4. Update metadata.json with new PR ID
-cd cdk-ts/ls-Pr7179/
-jq '. + {"pr_id": "ls-Pr7179", "original_pr_id": "Pr7179", "localstack_migration": true}' metadata.json > tmp.json && mv tmp.json metadata.json
+# 4. Make LocalStack compatibility changes manually
 
-# 5. Make LocalStack compatibility changes manually
-
-# 6. Test deployment
-../../scripts/localstack-cdk-deploy.sh
-
-# 7. Test
-../../scripts/localstack-cdk-test.sh
-
-# 8. Commit and push
-git add .
-git commit -m "feat(localstack): migrate ls-Pr7179 for LocalStack compatibility"
+# 5. Commit and push
+git add lib/ test/ metadata.json
+git commit -m "feat(localstack): ls-Pr7179 - LocalStack compatible task"
 git push -u origin ls-synth-Pr7179
 
-# 9. Create PR
+# 6. Create PR - pipeline will handle deployment and testing
 gh pr create --title "[LocalStack] ls-Pr7179 - cdk/ts" --body "LocalStack migration from Pr7179"
 ```
+
+**Note:** The PR pipeline will automatically deploy and test. No manual deployment needed.
 
 ## Related Files
 

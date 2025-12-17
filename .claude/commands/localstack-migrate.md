@@ -757,7 +757,7 @@ if [ "$FIX_SUCCESS" = "true" ]; then
       # Generate new PR ID with ls- prefix
       ORIGINAL_PR_ID="$PR_ID"
       LS_PR_ID="ls-${PR_ID}"
-      
+
       # Generate branch name: ls-synth-{original_pr_id}
       NEW_BRANCH="ls-synth-${PR_ID}"
 
@@ -765,6 +765,9 @@ if [ "$FIX_SUCCESS" = "true" ]; then
       echo "📋 Original PR ID: $ORIGINAL_PR_ID"
       echo "📋 New PR ID: $LS_PR_ID"
       echo "🌿 Creating new branch: $NEW_BRANCH"
+
+      # Navigate to project root
+      cd "$PROJECT_ROOT"
 
       # Ensure we're on main and up to date
       git checkout main 2>/dev/null || true
@@ -785,92 +788,69 @@ if [ "$FIX_SUCCESS" = "true" ]; then
       else
         echo "✅ Branch created: $NEW_BRANCH"
 
-        # Determine destination path based on platform with new PR ID
-        DEST_DIR="${PLATFORM}-${LANGUAGE}/${LS_PR_ID}"
-
-        echo ""
-        echo "📁 Copying migrated files to: $DEST_DIR"
-        mkdir -p "$DEST_DIR"
-
-        # Copy all files from work directory (excluding node_modules, .pulumi, etc.)
-        rsync -av --exclude='node_modules' --exclude='.pulumi' --exclude='__pycache__' \
-              --exclude='.terraform' --exclude='cdk.out' --exclude='cdktf.out' \
-              --exclude='.venv' --exclude='venv' \
-              "$WORK_DIR"/ "$DEST_DIR/"
-
-        # Update metadata.json with new PR ID if it exists
-        if [ -f "$DEST_DIR/metadata.json" ]; then
+        # Update metadata.json in work directory with new PR ID
+        if [ -f "$WORK_DIR/metadata.json" ]; then
           echo "📝 Updating metadata.json with new PR ID: $LS_PR_ID"
           jq --arg new_id "$LS_PR_ID" --arg orig_id "$ORIGINAL_PR_ID" \
-            '. + {"pr_id": $new_id, "original_pr_id": $orig_id, "localstack_migration": true}' \
-            "$DEST_DIR/metadata.json" > "$DEST_DIR/metadata.json.tmp"
-          mv "$DEST_DIR/metadata.json.tmp" "$DEST_DIR/metadata.json"
+            '. + {"pr_id": $new_id, "original_pr_id": $orig_id, "localstack_migration": true, "provider": "localstack"}' \
+            "$WORK_DIR/metadata.json" > "$WORK_DIR/metadata.json.tmp"
+          mv "$WORK_DIR/metadata.json.tmp" "$WORK_DIR/metadata.json"
         fi
 
-        # Ensure execution-output.md exists with migration details
-        cat > "$DEST_DIR/execution-output.md" << EOF
-# LocalStack Migration Output
-
-**Migrated:** $(date)
-**Source:** $TASK_PATH
-**Original PR ID:** ${ORIGINAL_PR_ID}
-**New PR ID:** ${LS_PR_ID}
-**Platform:** $PLATFORM
-**Language:** $LANGUAGE
-**LocalStack Version:** $LOCALSTACK_VERSION
-
----
-
-## Migration Summary
-
-This task was migrated from the archive to be LocalStack-compatible.
-
-### Changes Applied
-- LocalStack endpoint configuration added
-- S3 path-style access enabled
-- IAM policies simplified for LocalStack
-- Resource removal policies set to DESTROY
-- Integration tests updated for LocalStack endpoints
-
-### Deployment Command
-\`\`\`bash
-./scripts/localstack-${PLATFORM}-deploy.sh $DEST_DIR
-\`\`\`
-
-### Test Command
-\`\`\`bash
-./scripts/localstack-${PLATFORM}-test.sh $DEST_DIR
-\`\`\`
-
-EOF
-
-        # Ensure cfn-outputs directory exists
-        mkdir -p "$DEST_DIR/cfn-outputs"
-        if [ ! -f "$DEST_DIR/cfn-outputs/flat-outputs.json" ]; then
-          echo "{}" > "$DEST_DIR/cfn-outputs/flat-outputs.json"
+        # Copy work directory contents to project root (standard PR structure)
+        # This overwrites the root-level files with the LocalStack-compatible versions
+        echo ""
+        echo "📁 Preparing PR files at project root..."
+        
+        # Copy lib/ directory
+        if [ -d "$WORK_DIR/lib" ]; then
+          rm -rf lib/
+          cp -r "$WORK_DIR/lib" ./
+          echo "   ✅ Copied lib/"
         fi
+        
+        # Copy test/ directory
+        if [ -d "$WORK_DIR/test" ]; then
+          rm -rf test/
+          cp -r "$WORK_DIR/test" ./
+          echo "   ✅ Copied test/"
+        fi
+        
+        # Copy metadata.json
+        if [ -f "$WORK_DIR/metadata.json" ]; then
+          cp "$WORK_DIR/metadata.json" ./
+          echo "   ✅ Copied metadata.json"
+        fi
+        
+        # Copy any other essential files
+        for file in Pipfile Pipfile.lock requirements.txt cdk.json cdktf.json Pulumi.yaml main.tf; do
+          if [ -f "$WORK_DIR/$file" ]; then
+            cp "$WORK_DIR/$file" ./
+            echo "   ✅ Copied $file"
+          fi
+        done
 
-        echo "✅ Files copied to $DEST_DIR"
+        echo ""
+        echo "✅ PR files prepared"
 
         # Stage all changes
         echo ""
         echo "📝 Staging changes..."
-        git add "$DEST_DIR"
+        git add lib/ test/ metadata.json 2>/dev/null || true
+        git add Pipfile Pipfile.lock requirements.txt cdk.json cdktf.json Pulumi.yaml main.tf 2>/dev/null || true
+        git add -A  # Stage any other changes
 
         # Create commit
-        COMMIT_MSG="feat(localstack): migrate ${LS_PR_ID} for LocalStack compatibility
+        COMMIT_MSG="feat(localstack): ${LS_PR_ID} - LocalStack compatible task
 
-- New PR ID: ${LS_PR_ID}
-- Original PR ID: ${ORIGINAL_PR_ID}
-- Platform: ${PLATFORM}
-- Language: ${LANGUAGE}
-- AWS Services: ${AWS_SERVICES}
-- LocalStack Version: ${LOCALSTACK_VERSION}
+PR ID: ${LS_PR_ID}
+Original PR ID: ${ORIGINAL_PR_ID}
+Platform: ${PLATFORM}
+Language: ${LANGUAGE}
+AWS Services: ${AWS_SERVICES}
 
-Migrated from: ${TASK_PATH}
-Iterations used: ${ITERATIONS_USED:-1}
-
-This task has been tested and verified to deploy successfully on LocalStack."
+This task has been migrated and tested for LocalStack compatibility.
+The PR pipeline will handle deployment and validation."
 
         echo "📝 Creating commit..."
         git commit -m "$COMMIT_MSG"
@@ -916,27 +896,22 @@ The task has been:
 - ✅ Updated with LocalStack-specific configurations
 
 ### Source
-- Original Path: \`${TASK_PATH}\`
-- Migrated Path: \`${DEST_DIR}\`
+- Original Task: \`${TASK_PATH}\`
 
-### Deployment Instructions
-\`\`\`bash
-# Start LocalStack
-./scripts/localstack-start.sh
-
-# Deploy
-./scripts/localstack-${PLATFORM}-deploy.sh ${DEST_DIR}
-
-# Run tests
-./scripts/localstack-${PLATFORM}-test.sh ${DEST_DIR}
-\`\`\`
+### Pipeline
+This PR will be processed by the CI/CD pipeline which will:
+1. Run linting and validation
+2. Deploy to LocalStack
+3. Run integration tests
+4. Report results
 
 ### LocalStack Compatibility
 - LocalStack Version: ${LOCALSTACK_VERSION}
 - Iterations to fix: ${ITERATIONS_USED:-1}
 
 ---
-*This PR was automatically created by the \`/localstack-migrate\` command.*"
+*This PR was automatically created by the \`/localstack-migrate\` command.*
+*The PR pipeline will handle deployment and testing.*"
 
             # Create the PR
             PR_RESULT=$(gh pr create \
@@ -981,7 +956,6 @@ echo "📋 Updating migration log..."
 MIGRATION_ENTRY=$(cat <<EOF
 {
   "task_path": "$TASK_PATH",
-  "destination": "${DEST_DIR:-null}",
   "new_pr_url": $([ -n "$NEW_PR_URL" ] && echo "\"$NEW_PR_URL\"" || echo "null"),
   "new_pr_number": $([ -n "$NEW_PR_NUMBER" ] && echo "\"$NEW_PR_NUMBER\"" || echo "null"),
   "branch": "${NEW_BRANCH:-null}",
@@ -1026,7 +1000,6 @@ if [ "$MIGRATION_STATUS" = "success" ]; then
   echo "   Original PR ID: ${ORIGINAL_PR_ID:-$PR_ID}"
   echo "   New PR ID:      ${LS_PR_ID:-N/A}"
   echo "   Source:         $TASK_PATH"
-  echo "   Destination:    $DEST_DIR"
   echo "   Platform:       $PLATFORM"
   echo "   Language:       $LANGUAGE"
   echo ""
@@ -1036,8 +1009,9 @@ if [ "$MIGRATION_STATUS" = "success" ]; then
   echo "   Branch: $NEW_BRANCH"
   echo ""
   echo "📋 Next Steps:"
-  echo "   1. Review the PR: $NEW_PR_URL"
-  echo "   2. Merge when ready"
+  echo "   1. The PR pipeline will automatically deploy and test"
+  echo "   2. Review the PR: $NEW_PR_URL"
+  echo "   3. Merge when pipeline passes"
   echo ""
 else
   echo "❌ MIGRATION FAILED"
@@ -1081,7 +1055,6 @@ fi
   "migrations": [
     {
       "task_path": "archive/cdk-ts/Pr7179",
-      "destination": "cdk-ts/ls-Pr7179",
       "new_pr_url": "https://github.com/TuringGpt/iac-test-automations/pull/1234",
       "new_pr_number": "1234",
       "branch": "ls-synth-Pr7179",
