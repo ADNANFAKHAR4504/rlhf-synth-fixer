@@ -263,19 +263,7 @@ export class TapStack extends cdk.Stack {
     );
 
     // 5. RDS Instance with KMS encryption (Requirement 2)
-    const rdsSubnetGroup = new rds.SubnetGroup(
-      this,
-      `${resourcePrefix}-rds-subnet-group`,
-      {
-        subnetGroupName: `${resourcePrefix}-rds-subnet-group`,
-        description: 'Subnet group for RDS instances',
-        vpc,
-        vpcSubnets: {
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        },
-      }
-    );
-
+    // Using vpcSubnets instead of explicit subnetGroup for LocalStack compatibility
     const rdsInstance = new rds.DatabaseInstance(
       this,
       `${resourcePrefix}-database`,
@@ -289,7 +277,9 @@ export class TapStack extends cdk.Stack {
           ec2.InstanceSize.MICRO
         ),
         vpc,
-        subnetGroup: rdsSubnetGroup,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
         securityGroups: [rdsSecurityGroup],
         storageEncrypted: true,
         storageEncryptionKey: kmsKey,
