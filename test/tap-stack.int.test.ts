@@ -59,7 +59,16 @@ const awsRegion = fs.readFileSync(
 const metadata = JSON.parse(
   fs.readFileSync(path.join(__dirname, '../metadata.json'), 'utf8')
 );
-const stackName = metadata.stack_name;
+
+// Get stack name from metadata, or fallback to cfn-outputs (CI compatibility)
+let stackName = metadata.stack_name;
+if (!stackName) {
+  const cfnOutputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
+  if (fs.existsSync(cfnOutputsPath)) {
+    const cfnOutputs = JSON.parse(fs.readFileSync(cfnOutputsPath, 'utf8'));
+    stackName = cfnOutputs.StackName;
+  }
+}
 
 // Configure AWS SDK clients for LocalStack
 const endpoint = process.env.AWS_ENDPOINT_URL;
