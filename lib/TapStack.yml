@@ -62,7 +62,7 @@ Parameters:
 
   LatestAmiId:
     Type: AWS::EC2::Image::Id
-    Default: 'ami-0c55b159cbfafe1f0'
+    Default: 'ami-03cf127a'
     Description: 'Amazon Linux 2 AMI ID (hardcoded for LocalStack compatibility)'
 
   EnableConfig:
