@@ -60,6 +60,23 @@
         ]
       }
     },
+    "DatabaseSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "SecureWebApp-DB-Secret-${EnvironmentSuffix}"
+        },
+        "Description": "Database credentials for SecureWebApp",
+        "GenerateSecretString": {
+          "SecretStringTemplate": {
+            "Fn::Sub": "{\"username\": \"${DBUsername}\"}"
+          },
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
+        }
+      }
+    },
     "InternetGateway": {
       "Type": "AWS::EC2::InternetGateway",
       "Properties": {
@@ -760,7 +777,7 @@
           "Ref": "DBUsername"
         },
         "MasterUserPassword": {
-          "Ref": "DBPassword"
+          "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}"
         },
         "VPCSecurityGroups": [
           {
