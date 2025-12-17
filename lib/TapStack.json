@@ -10,8 +10,7 @@
           },
           "Parameters": [
             "EnvironmentSuffix",
-            "DBUsername",
-            "DBPassword"
+            "DBUsername"
           ]
         }
       ]
@@ -32,15 +31,6 @@
       "MinLength": "1",
       "MaxLength": "16",
       "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
-    },
-    "DBPassword": {
-      "Type": "String",
-      "NoEcho": true,
-      "Default": "Password123456",
-      "Description": "Database administrator password",
-      "MinLength": "8",
-      "MaxLength": "41",
-      "AllowedPattern": "[a-zA-Z0-9]*"
     }
   },
   "Resources": {
