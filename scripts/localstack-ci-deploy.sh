@@ -648,22 +648,21 @@ deploy_terraform() {
         sleep 2
         
         # Initialize with LocalStack S3 backend configuration
-        # Use endpoints.s3 instead of deprecated endpoint parameter
         tflocal init -input=false -reconfigure \
             -backend-config="bucket=$state_bucket" \
             -backend-config="key=terraform.tfstate" \
             -backend-config="region=${AWS_DEFAULT_REGION}" \
-            -backend-config="endpoints.s3=${AWS_ENDPOINT_URL}" \
+            -backend-config="endpoint=${AWS_ENDPOINT_URL}" \
             -backend-config="skip_credentials_validation=true" \
             -backend-config="skip_metadata_api_check=true" \
             -backend-config="force_path_style=true" 2>&1 || {
-            print_status $YELLOW "   ⚠️  Initial init failed, retrying after bucket creation..."
+            print_status $YELLOW "   ⚠️  Initial init failed, retrying..."
             sleep 2
             tflocal init -input=false -reconfigure \
                 -backend-config="bucket=$state_bucket" \
                 -backend-config="key=terraform.tfstate" \
                 -backend-config="region=${AWS_DEFAULT_REGION}" \
-                -backend-config="endpoints.s3=${AWS_ENDPOINT_URL}" \
+                -backend-config="endpoint=${AWS_ENDPOINT_URL}" \
                 -backend-config="skip_credentials_validation=true" \
                 -backend-config="skip_metadata_api_check=true" \
                 -backend-config="force_path_style=true" 2>&1
