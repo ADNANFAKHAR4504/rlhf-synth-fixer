@@ -1,6 +1,6 @@
 # IaC Program Optimization
 
-> **⚠️ CRITICAL REQUIREMENT: This task MUST be implemented using Pulumi with TypeScript**
+> **CRITICAL REQUIREMENT: This task MUST be implemented using Pulumi with TypeScript**
 >
 > Platform: **pulumi**
 > Language: **ts**
@@ -81,22 +81,22 @@ Create a Pulumi TypeScript program to optimize an existing DynamoDB table deploy
 
 #### AWS Config
 - **CRITICAL**: If creating AWS Config roles, use correct managed policy:
-  - ✅ CORRECT: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
-  - ❌ WRONG: `arn:aws:iam::aws:policy/service-role/ConfigRole`
-  - ❌ WRONG: `arn:aws:iam::aws:policy/AWS_ConfigRole`
+  - CORRECT: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
+  - WRONG: `arn:aws:iam::aws:policy/service-role/ConfigRole`
+  - WRONG: `arn:aws:iam::aws:policy/AWS_ConfigRole`
 - **Alternative**: Use service-linked role `AWSServiceRoleForConfig` (auto-created)
 
 #### Lambda Functions
 - **Node.js 18.x+**: Do NOT use `require('aws-sdk')` - AWS SDK v2 not available
-  - ✅ Use AWS SDK v3: `import { S3Client } from '@aws-sdk/client-s3'`
-  - ✅ Or extract data from event object directly
+  - Use AWS SDK v3: `import { S3Client } from '@aws-sdk/client-s3'`
+  - Or extract data from event object directly
 - **Reserved Concurrency**: Avoid setting `reservedConcurrentExecutions` unless required
   - If required, use low values (1-5) to avoid account limit issues
 
 #### CloudWatch Synthetics
 - **CRITICAL**: Use current runtime version
-  - ✅ CORRECT: `synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0`
-  - ❌ WRONG: `SYNTHETICS_NODEJS_PUPPETEER_5_1` (deprecated)
+  - CORRECT: `synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0`
+  - WRONG: `SYNTHETICS_NODEJS_PUPPETEER_5_1` (deprecated)
 
 #### RDS Databases
 - **Prefer**: Aurora Serverless v2 (faster provisioning, auto-scaling)
@@ -125,11 +125,11 @@ Create a Pulumi TypeScript program to optimize an existing DynamoDB table deploy
 ### Correct Resource Naming (Pulumi TypeScript)
 ```typescript
 const table = new aws.dynamodb.Table("DataTable", {
-    name: `data-table-${environmentSuffix}`,  // ✅ CORRECT
+    name: `data-table-${environmentSuffix}`,  // CORRECT
     // ...
 });
 
-// ❌ WRONG:
+// WRONG:
 // name: 'data-table-prod'  // Hardcoded, will fail
 ```
 
@@ -140,12 +140,12 @@ const table = new aws.dynamodb.Table("DataTable", {
 
 // For RDS:
 const db = new aws.rds.Instance("db", {
-    skipFinalSnapshot: true,  // ✅ CORRECT
-    deletionProtection: false,  // ✅ CORRECT
+    skipFinalSnapshot: true,  // CORRECT
+    deletionProtection: false,  // CORRECT
     // ...
 });
 
-// ❌ WRONG:
+// WRONG:
 // skipFinalSnapshot: false  // Will require manual cleanup
 // deletionProtection: true  // Will block cleanup
 ```

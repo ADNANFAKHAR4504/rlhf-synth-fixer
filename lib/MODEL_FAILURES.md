@@ -17,7 +17,7 @@ name: TapStack
 runtime:
   name: nodejs
 description: Pulumi infrastructure for TAP
-main: bin/tap.ts  # ❌ This path doesn't exist
+main: bin/tap.ts  # This path doesn't exist
 ```
 
 **IDEAL_RESPONSE Fix**:
@@ -27,7 +27,7 @@ name: TapStack
 runtime:
   name: nodejs
 description: Pulumi infrastructure for TAP
-main: index.ts  # ✅ Correct path to existing file
+main: index.ts  # Correct path to existing file
 ```
 
 **Root Cause**: The model confused CDK project structure (which typically uses `bin/`) with Pulumi project structure. Pulumi projects commonly use `index.ts` at the root or use the project structure defined in package.json.
@@ -49,7 +49,7 @@ The ESLint configuration only included `argsIgnorePattern: '^_'` but was missing
 // MODEL_RESPONSE - INCOMPLETE
 '@typescript-eslint/no-unused-vars': [
   'error',
-  { argsIgnorePattern: '^_' },  // ❌ Missing varsIgnorePattern
+  { argsIgnorePattern: '^_' },  // Missing varsIgnorePattern
 ],
 ```
 
@@ -60,8 +60,8 @@ The ESLint configuration only included `argsIgnorePattern: '^_'` but was missing
   'error',
   {
     argsIgnorePattern: '^_',
-    varsIgnorePattern: '^_',           // ✅ Added
-    caughtErrorsIgnorePattern: '^_',  // ✅ Added
+    varsIgnorePattern: '^_',           // Added
+    caughtErrorsIgnorePattern: '^_',  // Added
   },
 ],
 ```
@@ -86,7 +86,7 @@ The MODEL_RESPONSE included placeholder test files (`test/tap-stack.int.test.ts`
 describe('Turn Around Prompt API Integration Tests', () => {
   describe('Write Integration TESTS', () => {
     test('Dont forget!', async () => {
-      expect(false).toBe(true);  // ❌ Intentionally failing test
+      expect(false).toBe(true);  // Intentionally failing test
     });
   });
 });
@@ -98,9 +98,9 @@ describe('TapStack Structure', () => {
   let stack: TapStack;
   beforeAll(() => {
     stack = new TapStack('TestTapStackWithProps', {
-      stateBucket: 'custom-state-bucket',  // ❌ Property doesn't exist
-      stateBucketRegion: 'us-west-2',     // ❌ Property doesn't exist
-      awsRegion: 'us-west-2',             // ❌ Property doesn't exist
+      stateBucket: 'custom-state-bucket',  // Property doesn't exist
+      stateBucketRegion: 'us-west-2',     // Property doesn't exist
+      awsRegion: 'us-west-2',             // Property doesn't exist
     });
   });
   // ...
@@ -135,7 +135,7 @@ it('should have DynamoDB read policy attached', async () => {
   const roleArn = outputs.lambdaRoleArn;
   const roleName = roleArn.split('/').pop();
 
-  const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';  // ❌ Hardcoded fallback
+  const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';  // Hardcoded fallback
   const policyName = `lambda-dynamodb-read-policy-${envSuffix}`;
   // ...
 });
@@ -149,7 +149,7 @@ it('should have DynamoDB read policy attached', async () => {
   const roleName = roleArn.split('/').pop();
 
   // Extract env suffix from role name instead of using env var
-  const envSuffix = roleName.replace('lambda-dynamodb-reader-', '');  // ✅ Dynamic
+  const envSuffix = roleName.replace('lambda-dynamodb-reader-', '');  // Dynamic
   const policyName = `lambda-dynamodb-read-policy-${envSuffix}`;
   // ...
 });

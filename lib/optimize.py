@@ -43,7 +43,7 @@ class InfrastructureOptimizer:
         - Reduce maxCapacity from 4 to 1 ACU
         - Reduce backup retention from 14 to 1 day
         """
-        print("\n🔧 Optimizing Aurora Database...")
+        print("\nOptimizing Aurora Database...")
 
         try:
             # Find the database cluster - must match stack naming pattern
@@ -68,7 +68,7 @@ class InfrastructureOptimizer:
                         break
 
             if not cluster_id:
-                print(f"❌ Aurora cluster not found for environment: {self.environment_suffix}")
+                print(f"ERROR: Aurora cluster not found for environment: {self.environment_suffix}")
                 print(f"Available clusters: {[c['DBClusterIdentifier'] for c in clusters['DBClusters']]}")
                 return False
 
@@ -84,7 +84,7 @@ class InfrastructureOptimizer:
                 ApplyImmediately=True
             )
 
-            print("✅ Aurora optimization complete:")
+            print("Aurora optimization complete:")
             print("   - Min capacity: 2 ACU → 0.5 ACU")
             print("   - Max capacity: 4 ACU → 1 ACU")
             print("   - Backup retention: 14 days → 1 day")
@@ -100,7 +100,7 @@ class InfrastructureOptimizer:
             return True
 
         except ClientError as e:
-            print(f"❌ Error optimizing Aurora: {e}")
+            print(f"ERROR: Error optimizing Aurora: {e}")
             return False
 
     def optimize_elasticache_redis(self) -> bool:
@@ -108,7 +108,7 @@ class InfrastructureOptimizer:
         Optimize ElastiCache Redis cluster.
         - Reduce numCacheClusters from 3 to 2 nodes
         """
-        print("\n🔧 Optimizing ElastiCache Redis...")
+        print("\nOptimizing ElastiCache Redis...")
 
         try:
             # Find the Redis replication group using exact naming pattern
@@ -138,14 +138,14 @@ class InfrastructureOptimizer:
                         break
 
             if not replication_group_id or not current_group:
-                print(f"❌ Redis replication group not found. Expected: {expected_group_id}")
+                print(f"ERROR: Redis replication group not found. Expected: {expected_group_id}")
                 print(f"Available groups: {[g['ReplicationGroupId'] for g in replication_groups['ReplicationGroups']]}")
                 return False
 
             print(f"Current node count: {current_node_count}")
 
             if current_node_count <= 2:
-                print("✅ Already optimized (2 or fewer nodes)")
+                print("Already optimized (2 or fewer nodes)")
                 return True
 
             # Get the current member clusters from the CORRECT group
@@ -171,7 +171,7 @@ class InfrastructureOptimizer:
                 ApplyImmediately=True
             )
 
-            print("✅ ElastiCache optimization initiated:")
+            print("ElastiCache optimization initiated:")
             print(f"   - Node count: {len(member_clusters)} → 2")
             print("   - ElastiCache will handle Multi-AZ distribution")
 
@@ -186,7 +186,7 @@ class InfrastructureOptimizer:
                 )
                 status = response['ReplicationGroups'][0]['Status']
                 if status == 'available':
-                    print("✅ Redis cluster modification complete")
+                    print("Redis cluster modification complete")
                     break
                 print(f"Status: {status}. Waiting... ({attempt + 1}/{max_attempts})")
                 time.sleep(30)
@@ -194,7 +194,7 @@ class InfrastructureOptimizer:
             return True
 
         except ClientError as e:
-            print(f"❌ Error optimizing ElastiCache: {e}")
+            print(f"ERROR: Error optimizing ElastiCache: {e}")
             return False
 
     def optimize_ecs_fargate(self) -> bool:
@@ -202,7 +202,7 @@ class InfrastructureOptimizer:
         Optimize ECS Fargate service.
         - Reduce desiredCount from 3 to 2 tasks
         """
-        print("\n🔧 Optimizing ECS Fargate...")
+        print("\nOptimizing ECS Fargate...")
 
         try:
             # Find the ECS cluster using exact naming pattern: streamflix-cluster-{environmentSuffix}
@@ -228,7 +228,7 @@ class InfrastructureOptimizer:
                         break
 
             if not cluster_arn:
-                print(f"❌ ECS cluster not found. Expected: {expected_cluster_name}")
+                print(f"ERROR: ECS cluster not found. Expected: {expected_cluster_name}")
                 print(f"Available clusters: {[c.split('/')[-1] for c in clusters['clusterArns']]}")
                 return False
 
@@ -260,7 +260,7 @@ class InfrastructureOptimizer:
                 print(f"Using only available service: {service_arn.split('/')[-1]}")
 
             if not service_arn:
-                print(f"❌ ECS service not found. Expected: {expected_service_name}")
+                print(f"ERROR: ECS service not found. Expected: {expected_service_name}")
                 print(f"Available services: {[s.split('/')[-1] for s in services['serviceArns']]}")
                 return False
 
@@ -276,7 +276,7 @@ class InfrastructureOptimizer:
             print(f"Current desired count: {current_desired_count}")
 
             if current_desired_count <= 2:
-                print("✅ Already optimized (2 or fewer tasks)")
+                print("Already optimized (2 or fewer tasks)")
                 return True
 
             # Update service
@@ -287,7 +287,7 @@ class InfrastructureOptimizer:
                 desiredCount=2
             )
 
-            print("✅ ECS optimization complete:")
+            print("ECS optimization complete:")
             print(f"   - Task count: {current_desired_count} → 2")
 
             # Wait for service to stabilize
@@ -302,7 +302,7 @@ class InfrastructureOptimizer:
             return True
 
         except ClientError as e:
-            print(f"❌ Error optimizing ECS: {e}")
+            print(f"ERROR: Error optimizing ECS: {e}")
             return False
 
     def get_cost_savings_estimate(self) -> Dict[str, Any]:
@@ -346,7 +346,7 @@ class InfrastructureOptimizer:
 
     def run_optimization(self) -> None:
         """Run all optimization tasks."""
-        print("\n🚀 Starting infrastructure optimization...")
+        print("\nStarting infrastructure optimization...")
         print("=" * 50)
 
         results = {
@@ -356,14 +356,14 @@ class InfrastructureOptimizer:
         }
 
         print("\n" + "=" * 50)
-        print("📊 Optimization Summary:")
+        print("Optimization Summary:")
         print("-" * 50)
 
         success_count = sum(results.values())
         total_count = len(results)
 
         for service, success in results.items():
-            status = "✅ Success" if success else "❌ Failed"
+            status = "Success" if success else "Failed"
             print(f"{service.capitalize()}: {status}")
 
         print(f"\nTotal: {success_count}/{total_count} optimizations successful")
@@ -376,9 +376,9 @@ class InfrastructureOptimizer:
             print(f"ElastiCache Redis: ${savings['elasticache_monthly_savings']}")
             print(f"ECS Fargate: ${savings['ecs_monthly_savings']}")
             print(f"Total: ${savings['total_monthly_savings']}/month")
-            print("\n✨ All optimizations completed successfully!")
+            print("\nAll optimizations completed successfully!")
         else:
-            print("\n⚠️  Some optimizations failed. Please check the logs above.")
+            print("\nWARNING: Some optimizations failed. Please check the logs above.")
 
 
 def main():
@@ -412,7 +412,7 @@ def main():
     aws_region = args.region or os.getenv('AWS_REGION') or 'us-east-1'
 
     if args.dry_run:
-        print("🔍 DRY RUN MODE - No changes will be made")
+        print("DRY RUN MODE - No changes will be made")
         print("\nPlanned optimizations:")
         print("- Aurora: Reduce min capacity 2→0.5 ACU, max capacity 4→1 ACU, backup 14→1 days")
         print("- ElastiCache: Reduce nodes from 3→2")
@@ -424,17 +424,17 @@ def main():
         return
 
     # Proceed with optimization
-    print(f"🚀 Starting optimization in {aws_region}")
+    print(f"Starting optimization in {aws_region}")
     print(f"Environment suffix: {environment_suffix}")
 
     try:
         optimizer = InfrastructureOptimizer(environment_suffix, aws_region)
         optimizer.run_optimization()
     except KeyboardInterrupt:
-        print("\n\n⚠️  Optimization interrupted by user")
+        print("\n\nWARNING: Optimization interrupted by user")
         sys.exit(1)
     except Exception as e:
-        print(f"\n❌ Unexpected error: {e}")
+        print(f"\nERROR: Unexpected error: {e}")
         sys.exit(1)
 
 
