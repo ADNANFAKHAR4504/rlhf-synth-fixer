@@ -1,5 +1,21 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Secure Global eBook Delivery System with S3, CloudFront, and KMS encryption'
+# CloudFormation Template - LocalStack Compatible eBook Storage System
+
+```yaml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Secure eBook Storage System with S3 and KMS encryption - LocalStack Compatible"
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Environment Configuration"
+        Parameters:
+          - Environment
+      - Label:
+          default: "Security Configuration"
+        Parameters:
+          - KmsKeyAlias
+          - EnableLogging
 
 Parameters:
   Environment:
@@ -9,59 +25,41 @@ Parameters:
       - dev
       - test
       - prod
-    Description: Environment name
-
-  DomainName:
-    Type: String
-    Description: Custom domain name for eBook delivery (e.g., ebooks.publisher.com)
-
-  HostedZoneId:
-    Type: AWS::Route53::HostedZone::Id
-    Description: Route 53 Hosted Zone ID for the domain
+    Description: Environment name for resource naming and configuration
 
   KmsKeyAlias:
     Type: String
-    Default: ''
+    Default: ""
     Description: Existing KMS key alias (leave empty to create a new one)
 
   EnableLogging:
     Type: String
-    Default: 'true'
+    Default: "true"
     AllowedValues:
-      - 'true'
-      - 'false'
-    Description: Enable CloudFront and S3 access logging
+      - "true"
+      - "false"
+    Description: Enable S3 access logging
 
 Conditions:
-  CreateKmsKey: !Equals [ !Ref KmsKeyAlias, '' ]
-  EnableLoggingCondition: !Equals [ !Ref EnableLogging, 'true' ]
+  CreateKmsKey: !Equals [!Ref KmsKeyAlias, ""]
+  EnableLoggingCondition: !Equals [!Ref EnableLogging, "true"]
 
 Resources:
   # S3 Bucket for eBook Storage
   EbooksS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'ebooks-storage-${Environment}-${AWS::AccountId}'
+      BucketName: !Sub "ebooks-storage-${Environment}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: 'aws:kms'
+              SSEAlgorithm: "aws:kms"
               KMSMasterKeyID: !If
                 - CreateKmsKey
-                - !Ref EbooksKmsKey
-                - !Sub 'alias/${KmsKeyAlias}'
+                - !GetAtt EbooksKmsKey.Arn
+                - !Sub "alias/${KmsKeyAlias}"
       VersioningConfiguration:
         Status: Enabled
-      LifecycleConfiguration:
-        Rules:
-          - Id: TransitionOldVersions
-            Status: Enabled
-            NoncurrentVersionExpirationInDays: 90
-            NoncurrentVersionTransitions:
-              - TransitionInDays: 30
-                StorageClass: STANDARD_IA
-              - TransitionInDays: 60
-                StorageClass: GLACIER
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -70,25 +68,22 @@ Resources:
       LoggingConfiguration: !If
         - EnableLoggingCondition
         - DestinationBucketName: !Ref LoggingBucket
-          LogFilePrefix: 's3-access-logs/'
+          LogFilePrefix: "s3-access-logs/"
         - !Ref AWS::NoValue
       Tags:
         - Key: Environment
           Value: !Ref Environment
         - Key: Purpose
           Value: eBook-storage
+        - Key: iac-rlhf-amazon
+          Value: "true"
 
   # S3 Bucket for Logging
   LoggingBucket:
     Type: AWS::S3::Bucket
     Condition: EnableLoggingCondition
     Properties:
-      BucketName: !Sub 'ebooks-logs-${Environment}-${AWS::AccountId}'
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldLogs
-            Status: Enabled
-            ExpirationInDays: 90
+      BucketName: !Sub "ebooks-logs-${Environment}"
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -98,7 +93,13 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
-      AccessControl: LogDeliveryWrite
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: Access-logs
+        - Key: iac-rlhf-amazon
+          Value: "true"
 
   # KMS Key for Encryption
   EbooksKmsKey:
@@ -107,42 +108,36 @@ Resources:
     Properties:
       Description: KMS key for eBook encryption
       KeyPolicy:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Sid: Enable IAM User Permissions
             Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 'kms:*'
-            Resource: '*'
-          - Sid: Allow CloudFront to decrypt
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: Allow S3 to use the key
             Effect: Allow
             Principal:
-              Service: cloudfront.amazonaws.com
+              Service: s3.amazonaws.com
             Action:
-              - 'kms:Decrypt'
-              - 'kms:GenerateDataKey'
-            Resource: '*'
-            Condition:
-              StringEquals:
-                'aws:SourceAccount': !Ref AWS::AccountId
+              - "kms:Decrypt"
+              - "kms:GenerateDataKey"
+            Resource: "*"
       Tags:
         - Key: Environment
           Value: !Ref Environment
+        - Key: Purpose
+          Value: eBook-encryption
+        - Key: iac-rlhf-amazon
+          Value: "true"
 
   EbooksKmsKeyAlias:
     Type: AWS::KMS::Alias
     Condition: CreateKmsKey
     Properties:
-      AliasName: !Sub 'alias/ebooks-kms-${Environment}'
+      AliasName: !Sub "alias/ebooks-kms-${Environment}"
       TargetKeyId: !Ref EbooksKmsKey
-
-  # CloudFront Origin Access Identity
-  CloudFrontOAI:
-    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
-    Properties:
-      CloudFrontOriginAccessIdentityConfig:
-        Comment: !Sub 'OAI for eBook delivery ${Environment}'
 
   # S3 Bucket Policy
   EbooksS3BucketPolicy:
@@ -150,349 +145,352 @@ Resources:
     Properties:
       Bucket: !Ref EbooksS3Bucket
       PolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
-          - Sid: AllowCloudFrontOAI
+          - Sid: AllowGetObject
             Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOAI}'
+              AWS: !GetAtt S3AccessRole.Arn
             Action:
-              - 's3:GetObject'
-              - 's3:GetObjectVersion'
-            Resource: !Sub '${EbooksS3Bucket.Arn}/*'
-          - Sid: DenyDirectAccess
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub '${EbooksS3Bucket.Arn}/*'
-              - !GetAtt EbooksS3Bucket.Arn
-            Condition:
-              StringNotEquals:
-                'AWS:SourceArn': !Sub 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOAI}'
+              - "s3:GetObject"
+              - "s3:GetObjectVersion"
+            Resource: !Sub "${EbooksS3Bucket.Arn}/*"
+          - Sid: AllowListBucket
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt S3AccessRole.Arn
+            Action:
+              - "s3:ListBucket"
+            Resource: !GetAtt EbooksS3Bucket.Arn
 
-  # CloudFront Distribution
-  EbooksCloudFrontDistribution:
-    Type: AWS::CloudFront::Distribution
+  # IAM Role for S3 Access
+  S3AccessRole:
+    Type: AWS::IAM::Role
     Properties:
-      DistributionConfig:
-        Enabled: true
-        Comment: !Sub 'eBook delivery distribution - ${Environment}'
-        PriceClass: PriceClass_All
-        HttpVersion: http2
-        IPV6Enabled: true
-        
-        Origins:
-          - Id: S3-ebooks
-            DomainName: !GetAtt EbooksS3Bucket.RegionalDomainName
-            S3OriginConfig:
-              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${CloudFrontOAI}'
-        
-        DefaultCacheBehavior:
-          TargetOriginId: S3-ebooks
-          ViewerProtocolPolicy: redirect-to-https
-          AllowedMethods:
-            - GET
-            - HEAD
-            - OPTIONS
-          CachedMethods:
-            - GET
-            - HEAD
-          Compress: true
-          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6  # Managed-CachingOptimized
-          OriginRequestPolicyId: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf  # Managed-CORS-S3Origin
-          ResponseHeadersPolicyId: 5cc3b908-e619-4b99-88e5-2cf7f45965bd  # Managed-CORS-With-Preflight
-          
-        CustomErrorResponses:
-          - ErrorCode: 403
-            ResponseCode: 403
-            ResponsePagePath: /error-403.html
-            ErrorCachingMinTTL: 300
-          - ErrorCode: 404
-            ResponseCode: 404
-            ResponsePagePath: /error-404.html
-            ErrorCachingMinTTL: 300
-            
-        Aliases:
-          - !Ref DomainName
-          
-        ViewerCertificate:
-          AcmCertificateArn: !Ref SSLCertificate
-          SslSupportMethod: sni-only
-          MinimumProtocolVersion: TLSv1.2_2021
-          
-        Logging: !If
-          - EnableLoggingCondition
-          - Bucket: !GetAtt LoggingBucket.DomainName
-            Prefix: 'cloudfront-logs/'
-            IncludeCookies: false
-          - !Ref AWS::NoValue
-            
-        WebACLId: !If
-          - IsProd
-          - !Ref CloudFrontWebACL
-          - !Ref AWS::NoValue
-          
+      RoleName: !Sub "eBook-S3Access-Role-${Environment}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 
+                - lambda.amazonaws.com
+                - s3.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: S3AccessPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt EbooksS3Bucket.Arn
+                  - !Sub "${EbooksS3Bucket.Arn}/*"
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
       Tags:
         - Key: Environment
           Value: !Ref Environment
-
-  # SSL Certificate
-  SSLCertificate:
-    Type: AWS::CertificateManager::Certificate
-    Properties:
-      DomainName: !Ref DomainName
-      DomainValidationOptions:
-        - DomainName: !Ref DomainName
-          HostedZoneId: !Ref HostedZoneId
-      ValidationMethod: DNS
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-
-  # Route 53 Record
-  Route53Record:
-    Type: AWS::Route53::RecordSetGroup
-    Properties:
-      HostedZoneId: !Ref HostedZoneId
-      RecordSets:
-        - Name: !Ref DomainName
-          Type: A
-          AliasTarget:
-            HostedZoneId: Z2FDTNDATAQYW2  # CloudFront Hosted Zone ID
-            DNSName: !GetAtt EbooksCloudFrontDistribution.DomainName
-            EvaluateTargetHealth: false
-        - Name: !Ref DomainName
-          Type: AAAA
-          AliasTarget:
-            HostedZoneId: Z2FDTNDATAQYW2
-            DNSName: !GetAtt EbooksCloudFrontDistribution.DomainName
-            EvaluateTargetHealth: false
-
-  # CloudWatch Dashboard
-  CloudWatchDashboard:
-    Type: AWS::CloudWatch::Dashboard
-    Properties:
-      DashboardName: !Sub 'eBook-Delivery-${Environment}'
-      DashboardBody: !Sub |
-        {
-          "widgets": [
-            {
-              "type": "metric",
-              "properties": {
-                "metrics": [
-                  [ "AWS/CloudFront", "Requests", { "stat": "Sum", "period": 300 } ],
-                  [ ".", "BytesDownloaded", { "stat": "Sum", "period": 300 } ]
-                ],
-                "period": 300,
-                "stat": "Average",
-                "region": "us-east-1",
-                "title": "CloudFront Requests & Data Transfer",
-                "dimensions": {
-                  "DistributionId": "${EbooksCloudFrontDistribution}"
-                }
-              }
-            },
-            {
-              "type": "metric",
-              "properties": {
-                "metrics": [
-                  [ "AWS/CloudFront", "CacheHitRate", { "stat": "Average", "period": 300 } ]
-                ],
-                "period": 300,
-                "stat": "Average",
-                "region": "us-east-1",
-                "title": "Cache Hit Rate",
-                "dimensions": {
-                  "DistributionId": "${EbooksCloudFrontDistribution}"
-                }
-              }
-            },
-            {
-              "type": "metric",
-              "properties": {
-                "metrics": [
-                  [ "AWS/CloudFront", "4xxErrorRate", { "stat": "Average", "period": 300 } ],
-                  [ ".", "5xxErrorRate", { "stat": "Average", "period": 300 } ]
-                ],
-                "period": 300,
-                "stat": "Average",
-                "region": "us-east-1",
-                "title": "Error Rates",
-                "dimensions": {
-                  "DistributionId": "${EbooksCloudFrontDistribution}"
-                }
-              }
-            },
-            {
-              "type": "metric",
-              "properties": {
-                "metrics": [
-                  [ "AWS/CloudFront", "OriginLatency", { "stat": "Average", "period": 300 } ]
-                ],
-                "period": 300,
-                "stat": "Average",
-                "region": "us-east-1",
-                "title": "Origin Latency",
-                "dimensions": {
-                  "DistributionId": "${EbooksCloudFrontDistribution}"
-                }
-              }
-            }
-          ]
-        }
-
-  # CloudWatch Alarms
-  HighErrorRateAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub 'eBook-HighErrorRate-${Environment}'
-      AlarmDescription: Alert when 4xx/5xx error rate is high
-      MetricName: 4xxErrorRate
-      Namespace: AWS/CloudFront
-      Statistic: Average
-      Period: 300
-      EvaluationPeriods: 2
-      Threshold: 5
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: DistributionId
-          Value: !Ref EbooksCloudFrontDistribution
-      TreatMissingData: notBreaching
-      AlarmActions:
-        - !Ref SNSAlertTopic
-
-  LowCacheHitRateAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub 'eBook-LowCacheHitRate-${Environment}'
-      AlarmDescription: Alert when cache hit rate is low
-      MetricName: CacheHitRate
-      Namespace: AWS/CloudFront
-      Statistic: Average
-      Period: 300
-      EvaluationPeriods: 3
-      Threshold: 70
-      ComparisonOperator: LessThanThreshold
-      Dimensions:
-        - Name: DistributionId
-          Value: !Ref EbooksCloudFrontDistribution
-      TreatMissingData: notBreaching
-      AlarmActions:
-        - !Ref SNSAlertTopic
+        - Key: Purpose
+          Value: S3-access-role
+        - Key: iac-rlhf-amazon
+          Value: "true"
 
   # SNS Topic for Alerts
   SNSAlertTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub 'eBook-Alerts-${Environment}'
-      DisplayName: eBook Delivery System Alerts
+      TopicName: !Sub "eBook-Alerts-${Environment}"
+      DisplayName: eBook Storage System Alerts
       Tags:
         - Key: Environment
           Value: !Ref Environment
+        - Key: Purpose
+          Value: Alert-notifications
+        - Key: iac-rlhf-amazon
+          Value: "true"
 
-  # WAF Web ACL (Production only)
-  CloudFrontWebACL:
-    Type: AWS::WAFv2::WebACL
-    Condition: IsProd
+  # Lambda Function for Storage Monitoring
+  StorageMonitoringFunction:
+    Type: AWS::Lambda::Function
     Properties:
-      Name: !Sub 'eBook-WAF-${Environment}'
-      Scope: CLOUDFRONT
-      DefaultAction:
-        Allow: {}
-      Rules:
-        - Name: RateLimitRule
-          Priority: 1
-          Statement:
-            RateBasedStatement:
-              Limit: 2000
-              AggregateKeyType: IP
-          Action:
-            Block: {}
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: RateLimitRule
-        - Name: GeoBlockRule
-          Priority: 2
-          Statement:
-            NotStatement:
-              Statement:
-                GeoMatchStatement:
-                  CountryCodes:
-                    - US
-                    - CA
-                    - GB
-                    - AU
-                    - DE
-                    - FR
-                    - JP
-          Action:
-            Block: {}
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: GeoBlockRule
-      VisibilityConfig:
-        SampledRequestsEnabled: true
-        CloudWatchMetricsEnabled: true
-        MetricName: !Sub 'eBook-WAF-${Environment}'
+      FunctionName: !Sub "eBook-StorageMonitoring-${Environment}"
+      Runtime: python3.11
+      Handler: index.handler
+      Role: !GetAtt StorageMonitoringRole.Arn
+      Timeout: 60
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref EbooksS3Bucket
+          SNS_TOPIC_ARN: !Ref SNSAlertTopic
+          ENVIRONMENT: !Ref Environment
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime
+
+          def handler(event, context):
+              s3 = boto3.client('s3')
+              sns = boto3.client('sns')
+              
+              bucket_name = os.environ['S3_BUCKET']
+              sns_topic_arn = os.environ['SNS_TOPIC_ARN']
+              environment = os.environ['ENVIRONMENT']
+              
+              try:
+                  # Get bucket information
+                  response = s3.list_objects_v2(Bucket=bucket_name)
+                  
+                  total_size = 0
+                  object_count = 0
+                  
+                  if 'Contents' in response:
+                      for obj in response['Contents']:
+                          total_size += obj['Size']
+                          object_count += 1
+                  
+                  total_size_mb = round(total_size / (1024 * 1024), 2)
+                  total_size_gb = round(total_size / (1024 * 1024 * 1024), 2)
+                  
+                  # Prepare monitoring report
+                  message = {
+                      'timestamp': datetime.utcnow().isoformat(),
+                      'environment': environment,
+                      'bucket_name': bucket_name,
+                      'object_count': object_count,
+                      'total_size_bytes': total_size,
+                      'total_size_mb': total_size_mb,
+                      'total_size_gb': total_size_gb,
+                      'status': 'healthy'
+                  }
+                  
+                  # Send notification
+                  sns.publish(
+                      TopicArn=sns_topic_arn,
+                      Message=json.dumps(message, indent=2),
+                      Subject=f'eBook Storage Report - {environment}'
+                  )
+                  
+                  print(f"Successfully processed bucket monitoring for {bucket_name}")
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps(message)
+                  }
+                  
+              except Exception as e:
+                  error_msg = f"Error monitoring storage: {str(e)}"
+                  print(error_msg)
+                  
+                  sns.publish(
+                      TopicArn=sns_topic_arn,
+                      Message=error_msg,
+                      Subject=f'eBook Storage Monitoring Error - {environment}'
+                  )
+                  
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': str(e)})
+                  }
       Tags:
         - Key: Environment
           Value: !Ref Environment
+        - Key: Purpose
+          Value: Storage-monitoring
+        - Key: iac-rlhf-amazon
+          Value: "true"
 
-Conditions:
-  IsProd: !Equals [ !Ref Environment, 'prod' ]
+  # IAM Role for Storage Monitoring Lambda
+  StorageMonitoringRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "eBook-StorageMonitoring-Role-${Environment}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StorageMonitoringPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetObject
+                  - s3:GetBucketLocation
+                  - s3:GetBucketVersioning
+                Resource:
+                  - !GetAtt EbooksS3Bucket.Arn
+                  - !Sub "${EbooksS3Bucket.Arn}/*"
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref SNSAlertTopic
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:DescribeKey
+                Resource: !If
+                  - CreateKmsKey
+                  - !GetAtt EbooksKmsKey.Arn
+                  - !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/${KmsKeyAlias}"
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: Lambda-execution-role
+        - Key: iac-rlhf-amazon
+          Value: "true"
+
+  # EventBridge Rule for Daily Storage Monitoring
+  StorageMonitoringSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "eBook-StorageMonitoring-Schedule-${Environment}"
+      Description: Daily storage monitoring for eBook system
+      ScheduleExpression: "rate(1 day)"
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt StorageMonitoringFunction.Arn
+          Id: StorageMonitoringTarget
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: eBook-Storage
+        - Key: Component
+          Value: Monitoring
+        - Key: iac-rlhf-amazon
+          Value: "true"
+
+  # Lambda Permission for EventBridge
+  StorageMonitoringPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref StorageMonitoringFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt StorageMonitoringSchedule.Arn
 
 Outputs:
   S3BucketName:
     Description: Name of the S3 bucket storing eBooks
     Value: !Ref EbooksS3Bucket
     Export:
-      Name: !Sub '${AWS::StackName}-S3BucketName'
+      Name: !Sub "${AWS::StackName}-S3BucketName"
 
-  CloudFrontDistributionDomain:
-    Description: CloudFront distribution domain name
-    Value: !GetAtt EbooksCloudFrontDistribution.DomainName
+  S3BucketArn:
+    Description: ARN of the S3 bucket storing eBooks
+    Value: !GetAtt EbooksS3Bucket.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-CloudFrontDomain'
+      Name: !Sub "${AWS::StackName}-S3BucketArn"
 
-  CloudFrontDistributionId:
-    Description: CloudFront distribution ID
-    Value: !Ref EbooksCloudFrontDistribution
+  S3BucketDomainName:
+    Description: Domain name of the S3 bucket
+    Value: !GetAtt EbooksS3Bucket.DomainName
     Export:
-      Name: !Sub '${AWS::StackName}-CloudFrontId'
+      Name: !Sub "${AWS::StackName}-S3BucketDomainName"
 
-  Route53RecordName:
-    Description: Route 53 record for custom domain
-    Value: !Ref DomainName
+  S3AccessRoleArn:
+    Description: ARN of the S3 access role
+    Value: !GetAtt S3AccessRole.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-CustomDomain'
-
-  CloudFrontOAIId:
-    Description: CloudFront Origin Access Identity ID
-    Value: !Ref CloudFrontOAI
-    Export:
-      Name: !Sub '${AWS::StackName}-OAI-Id'
+      Name: !Sub "${AWS::StackName}-S3AccessRoleArn"
 
   KmsKeyId:
     Description: KMS Key ID for encryption
     Value: !If
       - CreateKmsKey
       - !Ref EbooksKmsKey
-      - !Sub 'alias/${KmsKeyAlias}'
+      - !Sub "alias/${KmsKeyAlias}"
     Export:
-      Name: !Sub '${AWS::StackName}-KmsKeyId'
+      Name: !Sub "${AWS::StackName}-KmsKeyId"
+
+  KmsKeyArn:
+    Condition: CreateKmsKey
+    Description: ARN of the KMS key for encryption
+    Value: !GetAtt EbooksKmsKey.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-KmsKeyArn"
 
   LoggingBucketName:
     Condition: EnableLoggingCondition
     Description: Name of the logging bucket
     Value: !Ref LoggingBucket
     Export:
-      Name: !Sub '${AWS::StackName}-LoggingBucket'
+      Name: !Sub "${AWS::StackName}-LoggingBucket"
 
   SNSTopicArn:
     Description: SNS Topic ARN for alerts
     Value: !Ref SNSAlertTopic
     Export:
-      Name: !Sub '${AWS::StackName}-AlertTopic'
+      Name: !Sub "${AWS::StackName}-AlertTopic"
+
+  StorageMonitoringFunctionArn:
+    Description: ARN of the storage monitoring Lambda function
+    Value: !GetAtt StorageMonitoringFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-StorageMonitoringFunction"
+
+  StorageMonitoringFunctionName:
+    Description: Name of the storage monitoring Lambda function
+    Value: !Ref StorageMonitoringFunction
+    Export:
+      Name: !Sub "${AWS::StackName}-StorageMonitoringFunctionName"
+
+  Environment:
+    Description: Environment name used for this deployment
+    Value: !Ref Environment
+    Export:
+      Name: !Sub "${AWS::StackName}-Environment"
+```
+
+## Implementation Notes
+
+### LocalStack Compatibility
+
+This template is optimized for LocalStack Pro deployment with the following considerations:
+
+1. **No CloudFront/Route53**: Removed to ensure LocalStack compatibility
+2. **Inline IAM Policies**: Uses inline policies instead of AWS-managed policies
+3. **Simplified Bucket Naming**: Avoids AWS::AccountId in bucket names for LocalStack
+4. **Core Services Only**: S3, KMS, IAM, Lambda, SNS, EventBridge
+
+### Key Features
+
+1. **Secure Storage**: KMS encryption for eBooks at rest
+2. **Access Control**: IAM roles with least-privilege permissions
+3. **Monitoring**: Lambda-based storage monitoring with SNS alerts
+4. **Logging**: Optional S3 access logging
+5. **Automation**: EventBridge scheduled monitoring
+
+### Security Best Practices
+
+- All S3 buckets block public access
+- KMS encryption enabled for sensitive data
+- IAM roles follow least-privilege principle
+- Bucket policies restrict access to authorized roles only
+- Versioning enabled for data protection
+
+### Resource Tagging
+
+All resources include the required `iac-rlhf-amazon` tag for compliance and cost tracking.
