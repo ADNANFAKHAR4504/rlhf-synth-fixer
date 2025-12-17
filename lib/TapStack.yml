@@ -77,17 +77,13 @@ Conditions:
   CreateConfig: !Equals [!Ref EnableConfig, 'true']
 
 Resources:
-  # Database Secret
+  # Database Secret (using static SecretString for LocalStack compatibility)
   DbSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
       Name: !Sub '${Environment}-db-secret'
       Description: 'Database credentials'
-      GenerateSecretString:
-        SecretStringTemplate: !Sub '{"username": "${DbUsername}"}'
-        GenerateStringKey: 'password'
-        PasswordLength: 32
-        ExcludeCharacters: '"@/\'
+      SecretString: !Sub '{"username": "${DbUsername}", "password": "SecurePassword123!"}'
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -511,13 +507,14 @@ Resources:
   # RDS (simplified for LocalStack - no DBSubnetGroup)
   RDSInstance:
     Type: AWS::RDS::DBInstance
+    DependsOn: DbSecret
     Properties:
       DBInstanceIdentifier: !Sub '${Environment}-rds-instance'
       DBInstanceClass: 'db.t3.micro'
       Engine: 'mysql'
       EngineVersion: !Ref DBEngineVersion
       MasterUsername: !Ref DbUsername
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DbSecret}::password}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${Environment}-db-secret:SecretString:password}}'
       AllocatedStorage: 20
       StorageType: 'gp2'
       StorageEncrypted: true
