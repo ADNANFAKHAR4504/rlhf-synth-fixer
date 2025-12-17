@@ -7,11 +7,10 @@
   "team": "5",
   "provider": "localstack",
   "startedAt": "2025-10-03T22:55:16+05:30",
-  "subtask": "Cloud Environment Setup",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Provisioning of Infrastructure Environments"
+    "Cloud Environment Setup"
   ],
-  "training_quality": 9,
   "aws_services": [
     "S3",
     "DynamoDB",
