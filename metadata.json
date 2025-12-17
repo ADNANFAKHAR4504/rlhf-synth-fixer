@@ -16,6 +16,5 @@
     "kms",
     "cloudtrail",
     "iam"
-  ],
-  "training_quality": 9
+  ]
 }
