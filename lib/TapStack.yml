@@ -350,6 +350,7 @@ Resources:
   RDSInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub '${Environment}-webapp-db'
       DBInstanceClass: !Ref DBInstanceType
