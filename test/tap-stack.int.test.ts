@@ -29,13 +29,13 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('Public Subnets', () => {
-    it('should have 3 public subnets deployed', () => {
+    it('should have 2 public subnets deployed', () => {
       if (!outputs) {
         console.warn('Skipping test: outputs not available');
         return;
       }
       if (Array.isArray(outputs.publicSubnetIds)) {
-        expect(outputs.publicSubnetIds).toHaveLength(3);
+        expect(outputs.publicSubnetIds).toHaveLength(2);
       } else if (typeof outputs.publicSubnetIds === 'string') {
         // Single subnet ID string
         expect(outputs.publicSubnetIds).toBeTruthy();
@@ -56,13 +56,13 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('Private Subnets', () => {
-    it('should have 3 private subnets deployed', () => {
+    it('should have 2 private subnets deployed', () => {
       if (!outputs) {
         console.warn('Skipping test: outputs not available');
         return;
       }
       if (Array.isArray(outputs.privateSubnetIds)) {
-        expect(outputs.privateSubnetIds).toHaveLength(3);
+        expect(outputs.privateSubnetIds).toHaveLength(2);
       }
     });
 

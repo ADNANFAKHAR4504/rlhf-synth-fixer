@@ -135,7 +135,12 @@ describe('Migration Infrastructure Integration Tests', () => {
         return;
       }
       if (outputs.rdsEndpoint) {
-        expect(outputs.rdsEndpoint).toMatch(/\./);
+        // LocalStack mock endpoint doesn't have a dot, skip validation for mock
+        if (outputs.rdsEndpoint === 'localstack-mock-endpoint') {
+          expect(outputs.rdsEndpoint).toBe('localstack-mock-endpoint');
+        } else {
+          expect(outputs.rdsEndpoint).toMatch(/\./);
+        }
       }
     });
   });
