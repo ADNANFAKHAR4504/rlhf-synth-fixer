@@ -10,9 +10,10 @@ export interface TapStackProps extends cdk.StackProps {
 }
 
 // Detect LocalStack environment
-const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                     process.env.AWS_ENDPOINT_URL?.includes('4566') ||
-                     process.env.LOCALSTACK === 'true';
+const isLocalStack =
+  process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+  process.env.AWS_ENDPOINT_URL?.includes('4566') ||
+  process.env.LOCALSTACK === 'true';
 
 export class TapStack extends cdk.Stack {
   public readonly securedBucket: s3.IBucket;
@@ -43,7 +44,9 @@ export class TapStack extends cdk.Stack {
     this.securedBucket = new s3.Bucket(this, 'SecuredBucket', {
       bucketName,
       // Use S3-managed encryption for LocalStack, KMS for AWS
-      encryption: isLocalStack ? s3.BucketEncryption.S3_MANAGED : s3.BucketEncryption.KMS,
+      encryption: isLocalStack
+        ? s3.BucketEncryption.S3_MANAGED
+        : s3.BucketEncryption.KMS,
       encryptionKey: isLocalStack ? undefined : this.kmsKey,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       versioned: true,

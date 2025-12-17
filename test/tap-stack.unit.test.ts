@@ -144,8 +144,12 @@ describe('TapStack', () => {
               Condition: {
                 StringNotLike: {
                   'aws:PrincipalArn': Match.arrayWith([
-                    Match.stringLikeRegexp('arn:aws:iam::.*:role/allowed-role-1-.*'),
-                    Match.stringLikeRegexp('arn:aws:iam::.*:role/allowed-role-2-.*'),
+                    Match.stringLikeRegexp(
+                      'arn:aws:iam::.*:role/allowed-role-1-.*'
+                    ),
+                    Match.stringLikeRegexp(
+                      'arn:aws:iam::.*:role/allowed-role-2-.*'
+                    ),
                     Match.stringLikeRegexp('arn:aws:iam::.*:root'),
                     'arn:aws:iam::*:role/aws-service-role/cloudtrail.amazonaws.com/*',
                     'arn:aws:*:*:s3:*',
@@ -187,7 +191,8 @@ describe('TapStack', () => {
               Action: 's3:PutObject',
               Condition: {
                 StringNotEquals: {
-                  's3:x-amz-server-side-encryption-aws-kms-key-id': Match.anyValue(),
+                  's3:x-amz-server-side-encryption-aws-kms-key-id':
+                    Match.anyValue(),
                 },
                 StringEquals: {
                   's3:x-amz-server-side-encryption': 'aws:kms',
@@ -261,11 +266,10 @@ describe('TapStack', () => {
     test('enables versioning', () => {
       // Find CloudTrail log bucket by looking for lifecycle rules with DeleteOldLogs ID
       const buckets = template.findResources('AWS::S3::Bucket');
-      const logBucket = Object.values(buckets).find(
-        (bucket) =>
-          bucket.Properties?.LifecycleConfiguration?.Rules?.some(
-            (rule: any) => rule.Id === 'DeleteOldLogs'
-          )
+      const logBucket = Object.values(buckets).find(bucket =>
+        bucket.Properties?.LifecycleConfiguration?.Rules?.some(
+          (rule: any) => rule.Id === 'DeleteOldLogs'
+        )
       );
       expect(logBucket?.Properties?.VersioningConfiguration).toEqual({
         Status: 'Enabled',
@@ -275,11 +279,10 @@ describe('TapStack', () => {
     test('configures lifecycle rules', () => {
       // Find CloudTrail log bucket by looking for lifecycle rules
       const buckets = template.findResources('AWS::S3::Bucket');
-      const logBucket = Object.values(buckets).find(
-        (bucket) =>
-          bucket.Properties?.LifecycleConfiguration?.Rules?.some(
-            (rule: any) => rule.Id === 'DeleteOldLogs'
-          )
+      const logBucket = Object.values(buckets).find(bucket =>
+        bucket.Properties?.LifecycleConfiguration?.Rules?.some(
+          (rule: any) => rule.Id === 'DeleteOldLogs'
+        )
       );
       expect(logBucket?.Properties?.LifecycleConfiguration).toEqual({
         Rules: [
@@ -295,11 +298,10 @@ describe('TapStack', () => {
     test('blocks public access', () => {
       // Find CloudTrail log bucket by looking for lifecycle rules
       const buckets = template.findResources('AWS::S3::Bucket');
-      const logBucket = Object.values(buckets).find(
-        (bucket) =>
-          bucket.Properties?.LifecycleConfiguration?.Rules?.some(
-            (rule: any) => rule.Id === 'DeleteOldLogs'
-          )
+      const logBucket = Object.values(buckets).find(bucket =>
+        bucket.Properties?.LifecycleConfiguration?.Rules?.some(
+          (rule: any) => rule.Id === 'DeleteOldLogs'
+        )
       );
       expect(logBucket?.Properties?.PublicAccessBlockConfiguration).toEqual({
         BlockPublicAcls: true,
@@ -312,11 +314,10 @@ describe('TapStack', () => {
     test('has S3-managed encryption', () => {
       // Find CloudTrail log bucket by looking for lifecycle rules
       const buckets = template.findResources('AWS::S3::Bucket');
-      const logBucket = Object.values(buckets).find(
-        (bucket) =>
-          bucket.Properties?.LifecycleConfiguration?.Rules?.some(
-            (rule: any) => rule.Id === 'DeleteOldLogs'
-          )
+      const logBucket = Object.values(buckets).find(bucket =>
+        bucket.Properties?.LifecycleConfiguration?.Rules?.some(
+          (rule: any) => rule.Id === 'DeleteOldLogs'
+        )
       );
       expect(logBucket?.Properties?.BucketEncryption).toEqual({
         ServerSideEncryptionConfiguration: [
@@ -436,7 +437,7 @@ describe('TapStack', () => {
   describe('Resource Tagging', () => {
     test('all S3 buckets have tags', () => {
       const resources = template.findResources('AWS::S3::Bucket');
-      Object.values(resources).forEach((resource) => {
+      Object.values(resources).forEach(resource => {
         // Just verify tags exist, as some may have different tags
         expect(resource.Properties?.Tags).toBeDefined();
         expect(Array.isArray(resource.Properties?.Tags)).toBeTruthy();
@@ -454,10 +455,11 @@ describe('TapStack', () => {
 
     test('all S3 buckets enforce SSL', () => {
       const policies = template.findResources('AWS::S3::BucketPolicy');
-      Object.values(policies).forEach((policy) => {
-        const statements = policy.Properties?.PolicyDocument?.Statement as any[];
+      Object.values(policies).forEach(policy => {
+        const statements = policy.Properties?.PolicyDocument
+          ?.Statement as any[];
         const sslDenyStatement = statements?.find(
-          (s) =>
+          s =>
             s.Effect === 'Deny' &&
             s.Condition?.Bool?.['aws:SecureTransport'] === 'false'
         );
@@ -550,6 +552,75 @@ describe('TapStack', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
         Timeout: 900, // 15 minutes for cleanup operations
       });
+    });
+  });
+
+  describe('LocalStack Environment', () => {
+    test('creates simplified policy for LocalStack when LOCALSTACK env is true', () => {
+      // Save original env
+      const originalLocalStack = process.env.LOCALSTACK;
+      const originalEndpoint = process.env.AWS_ENDPOINT_URL;
+
+      // Set LocalStack environment
+      process.env.LOCALSTACK = 'true';
+      delete process.env.AWS_ENDPOINT_URL;
+
+      try {
+        // Clear module cache to reload with new env vars
+        jest.resetModules();
+        const { TapStack: LocalStackTapStack } = require('../lib/tap-stack');
+
+        const localApp = new cdk.App();
+        const localStack = new LocalStackTapStack(
+          localApp,
+          'LocalStackTapStack',
+          {
+            environmentSuffix: 'local',
+            env: {
+              account: '000000000000',
+              region: 'us-east-1',
+            },
+          }
+        );
+        const localTemplate = Template.fromStack(localStack);
+
+        // Verify LocalStack-specific bucket policy exists
+        const bucketPolicies = localTemplate.findResources(
+          'AWS::S3::BucketPolicy'
+        );
+        const hasSimplifedPolicy = Object.values(bucketPolicies).some(
+          (policy: any) => {
+            const statements = policy.Properties?.PolicyDocument?.Statement;
+            return statements?.some(
+              (stmt: any) => stmt.Sid === 'AllowAuthorizedAccess'
+            );
+          }
+        );
+        expect(hasSimplifedPolicy).toBe(true);
+
+        // Verify KMS key is not created for LocalStack
+        localTemplate.resourceCountIs('AWS::KMS::Key', 0);
+
+        // Verify CloudTrail is not created for LocalStack
+        localTemplate.resourceCountIs('AWS::CloudTrail::Trail', 0);
+
+        // Verify IsLocalStack output
+        localTemplate.hasOutput('IsLocalStack', {
+          Value: 'true',
+        });
+      } finally {
+        // Restore original environment
+        if (originalLocalStack !== undefined) {
+          process.env.LOCALSTACK = originalLocalStack;
+        } else {
+          delete process.env.LOCALSTACK;
+        }
+        if (originalEndpoint !== undefined) {
+          process.env.AWS_ENDPOINT_URL = originalEndpoint;
+        }
+        // Reset modules again to restore normal behavior
+        jest.resetModules();
+      }
     });
   });
 });

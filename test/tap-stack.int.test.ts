@@ -25,9 +25,10 @@ import fs from 'fs';
 import path from 'path';
 
 // Detect LocalStack environment
-const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                     process.env.AWS_ENDPOINT_URL?.includes('4566') ||
-                     process.env.LOCALSTACK === 'true';
+const isLocalStack =
+  process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+  process.env.AWS_ENDPOINT_URL?.includes('4566') ||
+  process.env.LOCALSTACK === 'true';
 
 // Load outputs from deployment
 const getOutputs = () => {
@@ -39,7 +40,8 @@ const getOutputs = () => {
       SecuredBucketArn: 'arn:aws:s3:::mock-secure-bucket-test',
       KmsKeyArn: 'arn:aws:kms:us-west-2:123456789012:key/mock-key-id',
       KmsKeyId: 'mock-key-id',
-      CloudTrailArn: 'arn:aws:cloudtrail:us-west-2:123456789012:trail/mock-trail',
+      CloudTrailArn:
+        'arn:aws:cloudtrail:us-west-2:123456789012:trail/mock-trail',
       CloudTrailLogBucketName: 'mock-cloudtrail-logs-test',
       AllowedPrincipals:
         'arn:aws:iam::123456789012:role/allowed-role-1-test,arn:aws:iam::123456789012:role/allowed-role-2-test',
@@ -106,11 +108,17 @@ describe('S3 Security Policies Stack Integration Tests', () => {
 
         if (isLocalStack) {
           // LocalStack uses S3-managed encryption
-          expect(rule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
+          expect(rule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe(
+            'AES256'
+          );
         } else {
           // AWS uses KMS encryption
-          expect(rule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
-          expect(rule?.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID).toBeDefined();
+          expect(rule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe(
+            'aws:kms'
+          );
+          expect(
+            rule?.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID
+          ).toBeDefined();
         }
       } catch (error) {
         console.log('Skipping test - AWS connection not available');
@@ -128,12 +136,18 @@ describe('S3 Security Policies Stack Integration Tests', () => {
           Bucket: outputs.SecuredBucketName,
         });
         const response = await s3Client.send(command);
-        expect(response.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
-        expect(response.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
-        expect(response.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
-        expect(response.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(
+        expect(response.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(
           true
         );
+        expect(response.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(
+          true
+        );
+        expect(response.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(
+          true
+        );
+        expect(
+          response.PublicAccessBlockConfiguration?.RestrictPublicBuckets
+        ).toBe(true);
       } catch (error) {
         console.log('Skipping test - AWS connection not available');
       }
@@ -175,7 +189,9 @@ describe('S3 Security Policies Stack Integration Tests', () => {
           const denyUnencrypted = statements.find(
             (s: any) => s.Sid === 'DenyUnencryptedUploads'
           );
-          const denyWrongKey = statements.find((s: any) => s.Sid === 'DenyWrongKMSKey');
+          const denyWrongKey = statements.find(
+            (s: any) => s.Sid === 'DenyWrongKMSKey'
+          );
 
           expect(denyUnauthorized).toBeDefined();
           expect(denyUnauthorized?.Effect).toBe('Deny');
@@ -193,7 +209,9 @@ describe('S3 Security Policies Stack Integration Tests', () => {
   describe('KMS Key Configuration', () => {
     test('KMS key exists and has rotation enabled (AWS only)', async () => {
       if (isLocalStack) {
-        console.log('Skipping KMS test - not supported in LocalStack Community');
+        console.log(
+          'Skipping KMS test - not supported in LocalStack Community'
+        );
         return;
       }
 
@@ -216,7 +234,9 @@ describe('S3 Security Policies Stack Integration Tests', () => {
 
     test('KMS key has correct description (AWS only)', async () => {
       if (isLocalStack) {
-        console.log('Skipping KMS test - not supported in LocalStack Community');
+        console.log(
+          'Skipping KMS test - not supported in LocalStack Community'
+        );
         return;
       }
 
@@ -231,7 +251,9 @@ describe('S3 Security Policies Stack Integration Tests', () => {
           KeyId: keyId,
         });
         const response = await kmsClient.send(command);
-        expect(response.KeyMetadata?.Description).toContain('S3 bucket encryption');
+        expect(response.KeyMetadata?.Description).toContain(
+          'S3 bucket encryption'
+        );
         expect(response.KeyMetadata?.KeyUsage).toBe('ENCRYPT_DECRYPT');
       } catch (error) {
         console.log('Skipping test - AWS connection not available');
@@ -242,7 +264,9 @@ describe('S3 Security Policies Stack Integration Tests', () => {
   describe('CloudTrail Configuration', () => {
     test('CloudTrail exists and is logging (AWS only)', async () => {
       if (isLocalStack) {
-        console.log('Skipping CloudTrail test - not supported in LocalStack Community');
+        console.log(
+          'Skipping CloudTrail test - not supported in LocalStack Community'
+        );
         return;
       }
 
@@ -266,7 +290,9 @@ describe('S3 Security Policies Stack Integration Tests', () => {
 
     test('CloudTrail monitors S3 data events (AWS only)', async () => {
       if (isLocalStack) {
-        console.log('Skipping CloudTrail test - not supported in LocalStack Community');
+        console.log(
+          'Skipping CloudTrail test - not supported in LocalStack Community'
+        );
         return;
       }
 
@@ -282,9 +308,10 @@ describe('S3 Security Policies Stack Integration Tests', () => {
         });
         const response = await cloudTrailClient.send(command);
         const eventSelectors = response.EventSelectors || [];
-        const s3DataEvents = eventSelectors.find(
-          (selector) =>
-            selector.DataResources?.some((resource) => resource.Type === 'AWS::S3::Object')
+        const s3DataEvents = eventSelectors.find(selector =>
+          selector.DataResources?.some(
+            resource => resource.Type === 'AWS::S3::Object'
+          )
         );
         expect(s3DataEvents).toBeDefined();
         expect(s3DataEvents?.ReadWriteType).toBe('All');
@@ -298,7 +325,9 @@ describe('S3 Security Policies Stack Integration Tests', () => {
   describe('End-to-End Security Validation', () => {
     test('upload without encryption should fail (AWS only)', async () => {
       if (isLocalStack) {
-        console.log('Skipping encryption test - simplified policies in LocalStack');
+        console.log(
+          'Skipping encryption test - simplified policies in LocalStack'
+        );
         return;
       }
 
@@ -323,7 +352,9 @@ describe('S3 Security Policies Stack Integration Tests', () => {
 
     test('upload with wrong KMS key should fail (AWS only)', async () => {
       if (isLocalStack) {
-        console.log('Skipping KMS test - not supported in LocalStack Community');
+        console.log(
+          'Skipping KMS test - not supported in LocalStack Community'
+        );
         return;
       }
 
@@ -414,7 +445,9 @@ describe('S3 Security Policies Stack Integration Tests', () => {
   describe('CloudTrail Log Bucket', () => {
     test('CloudTrail log bucket exists with correct configuration (AWS only)', async () => {
       if (isLocalStack) {
-        console.log('Skipping CloudTrail test - not supported in LocalStack Community');
+        console.log(
+          'Skipping CloudTrail test - not supported in LocalStack Community'
+        );
         return;
       }
 
@@ -434,9 +467,9 @@ describe('S3 Security Policies Stack Integration Tests', () => {
           Bucket: outputs.CloudTrailLogBucketName,
         });
         const publicAccessResponse = await s3Client.send(publicAccessCommand);
-        expect(publicAccessResponse.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(
-          true
-        );
+        expect(
+          publicAccessResponse.PublicAccessBlockConfiguration?.BlockPublicAcls
+        ).toBe(true);
       } catch (error) {
         console.log('Skipping test - AWS connection not available');
       }
