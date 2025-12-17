@@ -113,6 +113,9 @@ export class TapStack extends cdk.Stack {
       vpcName: `${resourcePrefix}-vpc`,
       maxAzs: 2,
       natGateways: 1,
+      // Disable default security group restriction for LocalStack compatibility
+      // LocalStack doesn't support nodejs22.x runtime used by the custom resource
+      restrictDefaultSecurityGroup: false,
       subnetConfiguration: [
         {
           cidrMask: 24,
