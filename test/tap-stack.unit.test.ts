@@ -667,4 +667,59 @@ describe('TapStack', () => {
       template.resourceCountIs('AWS::IAM::InstanceProfile', 1);
     });
   });
+
+  describe('LocalStack Compatibility Mode', () => {
+    let localStackApp: cdk.App;
+    let localStackTemplate: Template;
+
+    beforeEach(() => {
+      localStackApp = new cdk.App();
+      const localStackStack = new TapStack(localStackApp, 'LocalStackTestStack', {
+        environment: environmentSuffix,
+        isLocalStack: true,
+      });
+      localStackTemplate = Template.fromStack(localStackStack);
+    });
+
+    test('should skip NAT Gateways for LocalStack', () => {
+      localStackTemplate.resourceCountIs('AWS::EC2::NatGateway', 0);
+      localStackTemplate.resourceCountIs('AWS::EC2::EIP', 0);
+    });
+
+    test('should skip RDS for LocalStack', () => {
+      localStackTemplate.resourceCountIs('AWS::RDS::DBInstance', 0);
+      localStackTemplate.resourceCountIs('AWS::RDS::DBSubnetGroup', 0);
+    });
+
+    test('should skip RDS security group for LocalStack', () => {
+      // Only EC2 and ALB security groups should exist (no RDS SG)
+      localStackTemplate.resourceCountIs('AWS::EC2::SecurityGroup', 2);
+    });
+
+    test('should skip WAF-ALB association for LocalStack', () => {
+      localStackTemplate.resourceCountIs('AWS::WAFv2::WebACLAssociation', 0);
+    });
+
+    test('should still create WAF Web ACL for LocalStack', () => {
+      localStackTemplate.resourceCountIs('AWS::WAFv2::WebACL', 1);
+    });
+
+    test('should still create ALB for LocalStack', () => {
+      localStackTemplate.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 1);
+    });
+
+    test('should create VPC with isolated private subnets for LocalStack', () => {
+      // VPC should still be created
+      localStackTemplate.resourceCountIs('AWS::EC2::VPC', 1);
+      // 4 subnets: 2 public + 2 private (isolated)
+      localStackTemplate.resourceCountIs('AWS::EC2::Subnet', 4);
+    });
+
+    test('should still create core security resources for LocalStack', () => {
+      localStackTemplate.resourceCountIs('AWS::KMS::Key', 1);
+      localStackTemplate.resourceCountIs('AWS::CloudTrail::Trail', 1);
+      localStackTemplate.resourceCountIs('AWS::GuardDuty::Detector', 1);
+      localStackTemplate.resourceCountIs('AWS::SNS::Topic', 1);
+    });
+  });
 });

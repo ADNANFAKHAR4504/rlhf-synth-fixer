@@ -368,15 +368,17 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    // Associate WAF with ALB
-    new wafv2.CfnWebACLAssociation(
-      this,
-      `${resourcePrefix}-web-acl-association`,
-      {
-        resourceArn: alb.loadBalancerArn,
-        webAclArn: webAcl.attrArn,
-      }
-    );
+    // Associate WAF with ALB (skip for LocalStack - ALB Ref resolution issues)
+    if (!isLocalStack) {
+      new wafv2.CfnWebACLAssociation(
+        this,
+        `${resourcePrefix}-web-acl-association`,
+        {
+          resourceArn: alb.loadBalancerArn,
+          webAclArn: webAcl.attrArn,
+        }
+      );
+    }
 
     // 8. CloudTrail with encrypted logs (Requirement 7)
     const cloudTrailLogGroup = new logs.LogGroup(
