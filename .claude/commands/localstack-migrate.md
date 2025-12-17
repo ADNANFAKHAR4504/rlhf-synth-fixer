@@ -1,13 +1,13 @@
 ---
 name: localstack-migrate
-description: Migrates tasks from archive folder to LocalStack, testing deployment and fixing issues until successful.
+description: Migrates tasks from archive folder or GitHub PR to LocalStack, testing deployment and fixing issues until successful.
 color: green
 model: sonnet
 ---
 
 # LocalStack Migration Command
 
-Picks a task from the archive folder and ensures it's deployable to LocalStack, fixing issues iteratively until successful.
+Picks a task from the archive folder (or fetches from GitHub PR if not found locally) and ensures it's deployable to LocalStack, fixing issues iteratively until successful.
 
 ## Usage
 
@@ -15,8 +15,11 @@ Picks a task from the archive folder and ensures it's deployable to LocalStack, 
 # Migrate a specific task by path
 /localstack-migrate ./archive/cdk-ts/Pr7179
 
-# Migrate by PR number (auto-detects platform)
+# Migrate by PR number (auto-detects platform, fetches from GitHub if not in archive)
 /localstack-migrate Pr7179
+
+# Migrate by PR number with explicit GitHub fetch
+/localstack-migrate --github Pr2077
 
 # Migrate next unprocessed task from a specific platform
 /localstack-migrate --platform cdk-ts
@@ -55,6 +58,8 @@ SERVICE_FILTER=""
 PICK_NEXT=false
 SMART_SELECT=false
 SHOW_STATS=false
+FORCE_GITHUB=false
+GITHUB_REPO="TuringGpt/iac-test-automations"
 
 # Parse flags
 case "$TASK_PATH" in
@@ -77,6 +82,10 @@ case "$TASK_PATH" in
   --stats)
     SHOW_STATS=true
     TASK_PATH=""
+    ;;
+  --github)
+    FORCE_GITHUB=true
+    TASK_PATH="${2:-}"
     ;;
 esac
 
@@ -191,20 +200,188 @@ if [ "$SHOW_STATS" = true ]; then
 fi
 ```
 
-### Step 4: Select Task to Migrate
+### Step 4: Select Task to Migrate (with GitHub Fetch Support)
 
 ```bash
+FETCHED_FROM_GITHUB=false
+
 if [ -n "$TASK_PATH" ]; then
   # Manual path provided
-  if [[ "$TASK_PATH" =~ ^Pr[0-9]+$ ]]; then
-    # Find task by PR number
-    FOUND_PATH=$(find archive -maxdepth 3 -type d -name "$TASK_PATH" 2>/dev/null | head -1)
-    if [ -z "$FOUND_PATH" ]; then
-      echo "❌ Task not found: $TASK_PATH"
-      echo "💡 Try: find archive -name '$TASK_PATH'"
-      exit 1
+  if [[ "$TASK_PATH" =~ ^Pr[0-9]+$ ]] || [[ "$TASK_PATH" =~ ^[0-9]+$ ]]; then
+    # Normalize PR number format
+    PR_NUMBER="${TASK_PATH#Pr}"
+    PR_ID="Pr${PR_NUMBER}"
+
+    # Find task by PR number in archive
+    FOUND_PATH=$(find archive -maxdepth 3 -type d -name "$PR_ID" 2>/dev/null | head -1)
+
+    if [ -z "$FOUND_PATH" ] || [ "$FORCE_GITHUB" = true ]; then
+      echo ""
+      echo "═══════════════════════════════════════════════════"
+      echo "🔍 FETCHING FROM GITHUB"
+      echo "═══════════════════════════════════════════════════"
+      echo ""
+
+      if [ -z "$FOUND_PATH" ]; then
+        echo "📋 Task $PR_ID not found in archive directory"
+      else
+        echo "📋 Force GitHub fetch requested for $PR_ID"
+      fi
+      echo "🌐 Fetching from GitHub PR #${PR_NUMBER}..."
+      echo ""
+
+      # Check if gh CLI is available
+      if ! command -v gh &> /dev/null; then
+        echo "❌ GitHub CLI (gh) is not installed!"
+        echo ""
+        echo "💡 Install GitHub CLI:"
+        echo "   macOS: brew install gh"
+        echo "   Linux: sudo apt install gh"
+        echo ""
+        echo "💡 Then authenticate:"
+        echo "   gh auth login"
+        exit 1
+      fi
+
+      # Check if authenticated
+      if ! gh auth status &> /dev/null; then
+        echo "❌ GitHub CLI is not authenticated!"
+        echo ""
+        echo "💡 Authenticate with:"
+        echo "   gh auth login"
+        exit 1
+      fi
+
+      echo "✅ GitHub CLI authenticated"
+
+      # Fetch PR details
+      echo "📥 Fetching PR #${PR_NUMBER} details from ${GITHUB_REPO}..."
+
+      PR_INFO=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPO" --json title,headRefName,files,state 2>/dev/null)
+
+      if [ -z "$PR_INFO" ] || [ "$PR_INFO" = "null" ]; then
+        echo "❌ PR #${PR_NUMBER} not found in ${GITHUB_REPO}"
+        echo ""
+        echo "💡 Verify the PR exists:"
+        echo "   gh pr view $PR_NUMBER --repo $GITHUB_REPO"
+        exit 1
+      fi
+
+      PR_TITLE=$(echo "$PR_INFO" | jq -r '.title // "Unknown"')
+      PR_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // "unknown"')
+      PR_STATE=$(echo "$PR_INFO" | jq -r '.state // "unknown"')
+
+      echo ""
+      echo "   Title:  $PR_TITLE"
+      echo "   Branch: $PR_BRANCH"
+      echo "   State:  $PR_STATE"
+      echo ""
+
+      # Create temporary directory for PR files
+      GITHUB_WORK_DIR="worktree/github-${PR_ID}"
+      rm -rf "$GITHUB_WORK_DIR"
+      mkdir -p "$GITHUB_WORK_DIR"
+
+      echo "📁 Created temp directory: $GITHUB_WORK_DIR"
+
+      # Fetch the PR diff and extract changed files
+      echo "📥 Downloading PR files..."
+
+      # Get the list of files changed in the PR
+      PR_FILES=$(gh pr diff "$PR_NUMBER" --repo "$GITHUB_REPO" --name-only 2>/dev/null)
+
+      if [ -z "$PR_FILES" ]; then
+        echo "⚠️  No files found in PR diff, trying to checkout branch..."
+
+        # Alternative: checkout the PR branch
+        git fetch origin "pull/${PR_NUMBER}/head:pr-${PR_NUMBER}" 2>/dev/null || true
+
+        if git rev-parse "pr-${PR_NUMBER}" &>/dev/null; then
+          # Get files from the PR branch
+          git show "pr-${PR_NUMBER}:." --name-only 2>/dev/null | while read -r file; do
+            if [ -n "$file" ]; then
+              mkdir -p "$GITHUB_WORK_DIR/$(dirname "$file")"
+              git show "pr-${PR_NUMBER}:$file" > "$GITHUB_WORK_DIR/$file" 2>/dev/null || true
+            fi
+          done
+
+          # Clean up the temporary branch
+          git branch -D "pr-${PR_NUMBER}" 2>/dev/null || true
+        fi
+      else
+        # Download each file from the PR
+        echo "$PR_FILES" | while read -r file; do
+          if [ -n "$file" ]; then
+            echo "   📄 $file"
+            mkdir -p "$GITHUB_WORK_DIR/$(dirname "$file")"
+            gh api "repos/${GITHUB_REPO}/contents/${file}?ref=${PR_BRANCH}" --jq '.content' 2>/dev/null | base64 -d > "$GITHUB_WORK_DIR/$file" 2>/dev/null || true
+          fi
+        done
+      fi
+
+      # Check if we got the essential files
+      if [ ! -f "$GITHUB_WORK_DIR/metadata.json" ] && [ ! -f "$GITHUB_WORK_DIR/lib/index.ts" ] && [ ! -f "$GITHUB_WORK_DIR/lib/__main__.py" ]; then
+        echo ""
+        echo "⚠️  Could not find task files in PR. Trying full branch checkout..."
+
+        # Try checking out the full branch content
+        TEMP_CLONE_DIR=$(mktemp -d)
+        git clone --depth 1 --branch "$PR_BRANCH" "https://github.com/${GITHUB_REPO}.git" "$TEMP_CLONE_DIR" 2>/dev/null || {
+          echo "❌ Failed to clone PR branch"
+          rm -rf "$TEMP_CLONE_DIR"
+          exit 1
+        }
+
+        # Copy relevant files
+        if [ -d "$TEMP_CLONE_DIR/lib" ]; then
+          cp -r "$TEMP_CLONE_DIR/lib" "$GITHUB_WORK_DIR/"
+        fi
+        if [ -d "$TEMP_CLONE_DIR/test" ]; then
+          cp -r "$TEMP_CLONE_DIR/test" "$GITHUB_WORK_DIR/"
+        fi
+        if [ -f "$TEMP_CLONE_DIR/metadata.json" ]; then
+          cp "$TEMP_CLONE_DIR/metadata.json" "$GITHUB_WORK_DIR/"
+        fi
+        if [ -f "$TEMP_CLONE_DIR/package.json" ]; then
+          cp "$TEMP_CLONE_DIR/package.json" "$GITHUB_WORK_DIR/"
+        fi
+        if [ -f "$TEMP_CLONE_DIR/tsconfig.json" ]; then
+          cp "$TEMP_CLONE_DIR/tsconfig.json" "$GITHUB_WORK_DIR/"
+        fi
+        if [ -f "$TEMP_CLONE_DIR/Pipfile" ]; then
+          cp "$TEMP_CLONE_DIR/Pipfile" "$GITHUB_WORK_DIR/"
+        fi
+
+        rm -rf "$TEMP_CLONE_DIR"
+      fi
+
+      # Verify we have essential files
+      if [ ! -f "$GITHUB_WORK_DIR/metadata.json" ]; then
+        echo ""
+        echo "❌ metadata.json not found in PR #${PR_NUMBER}"
+        echo ""
+        echo "💡 The PR may not contain a valid IaC task structure."
+        echo "   Expected files: metadata.json, lib/ directory"
+        rm -rf "$GITHUB_WORK_DIR"
+        exit 1
+      fi
+
+      echo ""
+      echo "✅ PR files downloaded successfully"
+
+      # Set task path to the GitHub work directory
+      TASK_PATH="$GITHUB_WORK_DIR"
+      FETCHED_FROM_GITHUB=true
+
+      # Log the source
+      echo ""
+      echo "📋 Task Source: GitHub PR #${PR_NUMBER}"
+      echo "   Repository: ${GITHUB_REPO}"
+      echo "   Branch: ${PR_BRANCH}"
+      echo ""
+    else
+      TASK_PATH="$FOUND_PATH"
     fi
-    TASK_PATH="$FOUND_PATH"
   fi
 
   if [ ! -d "$TASK_PATH" ]; then
@@ -212,7 +389,11 @@ if [ -n "$TASK_PATH" ]; then
     exit 1
   fi
 
-  echo "📁 Using specified task: $TASK_PATH"
+  if [ "$FETCHED_FROM_GITHUB" = true ]; then
+    echo "📁 Using task fetched from GitHub: $TASK_PATH"
+  else
+    echo "📁 Using specified task: $TASK_PATH"
+  fi
 
 else
   # Auto-select task
@@ -537,46 +718,232 @@ Set variables:
 Exit code 0 if fixed, 1 if unable to fix, 2 if unsupported services.
 ```
 
-### Step 10: Finalize Migration
+### Step 10: Create Pull Request for Migrated Task
 
 ```bash
 echo ""
 echo "═══════════════════════════════════════════════════"
-echo "📦 FINALIZING MIGRATION"
+echo "📦 CREATING PULL REQUEST"
 echo "═══════════════════════════════════════════════════"
 echo ""
 
 MIGRATION_STATUS="failed"
 MIGRATION_REASON=""
+NEW_PR_URL=""
+NEW_PR_NUMBER=""
 
 if [ "$FIX_SUCCESS" = "true" ]; then
-  MIGRATION_STATUS="success"
 
-  # Create destination directory
-  DEST_DIR="archive-localstack/${PR_ID}-${PLATFORM}-${LANGUAGE}"
+  # Check if gh CLI is available
+  if ! command -v gh &> /dev/null; then
+    echo "❌ GitHub CLI (gh) is not installed!"
+    echo ""
+    echo "💡 Install GitHub CLI:"
+    echo "   macOS: brew install gh"
+    echo "   Linux: sudo apt install gh"
+    echo ""
+    MIGRATION_REASON="GitHub CLI not installed"
+  else
+    # Check if authenticated
+    if ! gh auth status &> /dev/null; then
+      echo "❌ GitHub CLI is not authenticated!"
+      echo ""
+      echo "💡 Authenticate with:"
+      echo "   gh auth login"
+      MIGRATION_REASON="GitHub CLI not authenticated"
+    else
+      echo "✅ GitHub CLI authenticated"
 
-  echo "📁 Moving to: $DEST_DIR"
-  mkdir -p "$DEST_DIR"
+      # Generate new PR ID with ls- prefix
+      ORIGINAL_PR_ID="$PR_ID"
+      LS_PR_ID="ls-${PR_ID}"
 
-  # Copy all files from work directory
-  cp -r "$WORK_DIR"/* "$DEST_DIR/"
+      # Generate branch name: ls-synth-{original_pr_id}
+      NEW_BRANCH="ls-synth-${PR_ID}"
 
-  # Ensure output files exist
-  if [ ! -f "$DEST_DIR/execution-output.md" ]; then
-    echo "# LocalStack Migration Output" > "$DEST_DIR/execution-output.md"
-    echo "" >> "$DEST_DIR/execution-output.md"
-    echo "**Migrated:** $(date)" >> "$DEST_DIR/execution-output.md"
-    echo "**Source:** $TASK_PATH" >> "$DEST_DIR/execution-output.md"
+      echo ""
+      echo "📋 Original PR ID: $ORIGINAL_PR_ID"
+      echo "📋 New PR ID: $LS_PR_ID"
+      echo "🌿 Creating new branch: $NEW_BRANCH"
+
+      # Navigate to project root
+      cd "$PROJECT_ROOT"
+
+      # Ensure we're on main and up to date
+      git checkout main 2>/dev/null || true
+      git pull origin main 2>/dev/null || true
+
+      # Check if branch already exists and delete it
+      if git show-ref --verify --quiet "refs/heads/$NEW_BRANCH"; then
+        echo "⚠️  Branch $NEW_BRANCH already exists locally, deleting..."
+        git branch -D "$NEW_BRANCH" 2>/dev/null || true
+      fi
+
+      # Create and checkout new branch
+      git checkout -b "$NEW_BRANCH"
+
+      if [ $? -ne 0 ]; then
+        echo "❌ Failed to create branch: $NEW_BRANCH"
+        MIGRATION_REASON="Failed to create git branch"
+      else
+        echo "✅ Branch created: $NEW_BRANCH"
+
+        # Update metadata.json in work directory with new PR ID
+        if [ -f "$WORK_DIR/metadata.json" ]; then
+          echo "📝 Updating metadata.json with new PR ID: $LS_PR_ID"
+          jq --arg new_id "$LS_PR_ID" --arg orig_id "$ORIGINAL_PR_ID" \
+            '. + {"pr_id": $new_id, "original_pr_id": $orig_id, "localstack_migration": true, "provider": "localstack"}' \
+            "$WORK_DIR/metadata.json" > "$WORK_DIR/metadata.json.tmp"
+          mv "$WORK_DIR/metadata.json.tmp" "$WORK_DIR/metadata.json"
+        fi
+
+        # Copy work directory contents to project root (standard PR structure)
+        # This overwrites the root-level files with the LocalStack-compatible versions
+        echo ""
+        echo "📁 Preparing PR files at project root..."
+        
+        # Copy lib/ directory
+        if [ -d "$WORK_DIR/lib" ]; then
+          rm -rf lib/
+          cp -r "$WORK_DIR/lib" ./
+          echo "   ✅ Copied lib/"
+        fi
+        
+        # Copy test/ directory
+        if [ -d "$WORK_DIR/test" ]; then
+          rm -rf test/
+          cp -r "$WORK_DIR/test" ./
+          echo "   ✅ Copied test/"
+        fi
+        
+        # Copy metadata.json
+        if [ -f "$WORK_DIR/metadata.json" ]; then
+          cp "$WORK_DIR/metadata.json" ./
+          echo "   ✅ Copied metadata.json"
+        fi
+        
+        # Copy any other essential files
+        for file in Pipfile Pipfile.lock requirements.txt cdk.json cdktf.json Pulumi.yaml main.tf; do
+          if [ -f "$WORK_DIR/$file" ]; then
+            cp "$WORK_DIR/$file" ./
+            echo "   ✅ Copied $file"
+          fi
+        done
+
+        echo ""
+        echo "✅ PR files prepared"
+
+        # Stage all changes
+        echo ""
+        echo "📝 Staging changes..."
+        git add lib/ test/ metadata.json 2>/dev/null || true
+        git add Pipfile Pipfile.lock requirements.txt cdk.json cdktf.json Pulumi.yaml main.tf 2>/dev/null || true
+        git add -A  # Stage any other changes
+
+        # Create commit
+        COMMIT_MSG="feat(localstack): ${LS_PR_ID} - LocalStack compatible task
+
+PR ID: ${LS_PR_ID}
+Original PR ID: ${ORIGINAL_PR_ID}
+Platform: ${PLATFORM}
+Language: ${LANGUAGE}
+AWS Services: ${AWS_SERVICES}
+
+This task has been migrated and tested for LocalStack compatibility.
+The PR pipeline will handle deployment and validation."
+
+        echo "📝 Creating commit..."
+        git commit -m "$COMMIT_MSG"
+
+        if [ $? -ne 0 ]; then
+          echo "❌ Failed to create commit"
+          MIGRATION_REASON="Failed to create git commit"
+        else
+          echo "✅ Commit created"
+
+          # Push branch to origin (force push in case branch exists remotely)
+          echo ""
+          echo "🚀 Pushing branch to origin..."
+          git push -u origin "$NEW_BRANCH" --force
+
+          if [ $? -ne 0 ]; then
+            echo "❌ Failed to push branch"
+            MIGRATION_REASON="Failed to push branch to origin"
+          else
+            echo "✅ Branch pushed to origin"
+
+            # Create Pull Request
+            echo ""
+            echo "📋 Creating Pull Request..."
+
+            PR_TITLE="[LocalStack] ${LS_PR_ID} - ${PLATFORM}/${LANGUAGE}"
+            PR_BODY="## LocalStack Migration
+
+### Task Details
+- **New PR ID:** ${LS_PR_ID}
+- **Original PR ID:** ${ORIGINAL_PR_ID}
+- **Platform:** ${PLATFORM}
+- **Language:** ${LANGUAGE}
+- **AWS Services:** ${AWS_SERVICES}
+- **Complexity:** ${COMPLEXITY}
+
+### Migration Summary
+This PR contains a LocalStack-compatible version of task ${ORIGINAL_PR_ID}, migrated as ${LS_PR_ID}.
+
+The task has been:
+- ✅ Tested for LocalStack deployment
+- ✅ Verified with integration tests
+- ✅ Updated with LocalStack-specific configurations
+
+### Source
+- Original Task: \`${TASK_PATH}\`
+
+### Pipeline
+This PR will be processed by the CI/CD pipeline which will:
+1. Run linting and validation
+2. Deploy to LocalStack
+3. Run integration tests
+4. Report results
+
+### LocalStack Compatibility
+- LocalStack Version: ${LOCALSTACK_VERSION}
+- Iterations to fix: ${ITERATIONS_USED:-1}
+
+---
+*This PR was automatically created by the \`/localstack-migrate\` command.*
+*The PR pipeline will handle deployment and testing.*"
+
+            # Create the PR
+            PR_RESULT=$(gh pr create \
+              --repo "$GITHUB_REPO" \
+              --title "$PR_TITLE" \
+              --body "$PR_BODY" \
+              --base main \
+              --head "$NEW_BRANCH" \
+              2>&1)
+
+            if [ $? -eq 0 ]; then
+              NEW_PR_URL="$PR_RESULT"
+              NEW_PR_NUMBER=$(echo "$NEW_PR_URL" | grep -oE '[0-9]+$')
+              MIGRATION_STATUS="success"
+
+              echo ""
+              echo "✅ Pull Request created successfully!"
+              echo "   URL: $NEW_PR_URL"
+              echo "   PR #: $NEW_PR_NUMBER"
+            else
+              echo "❌ Failed to create Pull Request"
+              echo "   Error: $PR_RESULT"
+              MIGRATION_REASON="Failed to create PR: $PR_RESULT"
+            fi
+          fi
+        fi
+
+        # Switch back to main branch
+        git checkout main 2>/dev/null || true
+      fi
+    fi
   fi
-
-  # Generate cfn-outputs if not exists
-  if [ ! -d "$DEST_DIR/cfn-outputs" ]; then
-    mkdir -p "$DEST_DIR/cfn-outputs"
-    echo "{}" > "$DEST_DIR/cfn-outputs/flat-outputs.json"
-  fi
-
-  echo "✅ Files copied to $DEST_DIR"
-
 else
   MIGRATION_REASON="${FIX_FAILURE_REASON:-Unknown error}"
   echo "❌ Migration failed: $MIGRATION_REASON"
@@ -589,10 +956,13 @@ echo "📋 Updating migration log..."
 MIGRATION_ENTRY=$(cat <<EOF
 {
   "task_path": "$TASK_PATH",
-  "destination": "${DEST_DIR:-null}",
+  "new_pr_url": $([ -n "$NEW_PR_URL" ] && echo "\"$NEW_PR_URL\"" || echo "null"),
+  "new_pr_number": $([ -n "$NEW_PR_NUMBER" ] && echo "\"$NEW_PR_NUMBER\"" || echo "null"),
+  "branch": "${NEW_BRANCH:-null}",
   "platform": "$PLATFORM",
   "language": "$LANGUAGE",
-  "pr_id": "$PR_ID",
+  "ls_pr_id": "${LS_PR_ID:-null}",
+  "original_pr_id": "${ORIGINAL_PR_ID:-$PR_ID}",
   "aws_services": $(echo "$METADATA" | jq '.aws_services // []'),
   "status": "$MIGRATION_STATUS",
   "reason": $([ -n "$MIGRATION_REASON" ] && echo "\"$MIGRATION_REASON\"" || echo "null"),
@@ -624,19 +994,24 @@ echo "✅ Cleanup complete"
 echo ""
 echo "═══════════════════════════════════════════════════"
 if [ "$MIGRATION_STATUS" = "success" ]; then
-  echo "✅ MIGRATION SUCCESSFUL!"
+  echo "✅ MIGRATION SUCCESSFUL - PR CREATED!"
   echo "═══════════════════════════════════════════════════"
   echo ""
-  echo "   Source:      $TASK_PATH"
-  echo "   Destination: $DEST_DIR"
-  echo "   Platform:    $PLATFORM"
-  echo "   Language:    $LANGUAGE"
+  echo "   Original PR ID: ${ORIGINAL_PR_ID:-$PR_ID}"
+  echo "   New PR ID:      ${LS_PR_ID:-N/A}"
+  echo "   Source:         $TASK_PATH"
+  echo "   Platform:       $PLATFORM"
+  echo "   Language:       $LANGUAGE"
   echo ""
-  echo "📁 View migrated task:"
-  echo "   ls -la $DEST_DIR"
+  echo "🔗 Pull Request:"
+  echo "   URL:    $NEW_PR_URL"
+  echo "   Number: #$NEW_PR_NUMBER"
+  echo "   Branch: $NEW_BRANCH"
   echo ""
-  echo "🧪 Test deployment:"
-  echo "   ./scripts/localstack-deploy.sh $DEST_DIR"
+  echo "📋 Next Steps:"
+  echo "   1. The PR pipeline will automatically deploy and test"
+  echo "   2. Review the PR: $NEW_PR_URL"
+  echo "   3. Merge when pipeline passes"
   echo ""
 else
   echo "❌ MIGRATION FAILED"
@@ -680,10 +1055,13 @@ fi
   "migrations": [
     {
       "task_path": "archive/cdk-ts/Pr7179",
-      "destination": "archive-localstack/Pr7179-cdk-ts",
+      "new_pr_url": "https://github.com/TuringGpt/iac-test-automations/pull/1234",
+      "new_pr_number": "1234",
+      "branch": "ls-synth-Pr7179",
       "platform": "cdk",
       "language": "ts",
-      "pr_id": "Pr7179",
+      "ls_pr_id": "ls-Pr7179",
+      "original_pr_id": "Pr7179",
       "aws_services": ["S3", "Lambda"],
       "status": "success",
       "reason": null,
