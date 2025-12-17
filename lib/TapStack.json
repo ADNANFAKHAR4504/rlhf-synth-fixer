@@ -1,0 +1,741 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Secure eBook Storage System with S3 and KMS encryption - LocalStack Compatible",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "Environment"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Security Configuration"
+                    },
+                    "Parameters": [
+                        "KmsKeyAlias",
+                        "EnableLogging"
+                    ]
+                }
+            ]
+        }
+    },
+    "Parameters": {
+        "Environment": {
+            "Type": "String",
+            "Default": "dev",
+            "AllowedValues": [
+                "dev",
+                "test",
+                "prod"
+            ],
+            "Description": "Environment name for resource naming and configuration"
+        },
+        "KmsKeyAlias": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Existing KMS key alias (leave empty to create a new one)"
+        },
+        "EnableLogging": {
+            "Type": "String",
+            "Default": "true",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Enable S3 access logging"
+        }
+    },
+    "Conditions": {
+        "CreateKmsKey": {
+            "Fn::Equals": [
+                {
+                    "Ref": "KmsKeyAlias"
+                },
+                ""
+            ]
+        },
+        "EnableLoggingCondition": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableLogging"
+                },
+                "true"
+            ]
+        }
+    },
+    "Resources": {
+        "EbooksS3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "ebooks-storage-${Environment}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Fn::If": [
+                                        "CreateKmsKey",
+                                        {
+                                            "Fn::GetAtt": [
+                                                "EbooksKmsKey",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "alias/${KmsKeyAlias}"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LoggingConfiguration": {
+                    "Fn::If": [
+                        "EnableLoggingCondition",
+                        {
+                            "DestinationBucketName": {
+                                "Ref": "LoggingBucket"
+                            },
+                            "LogFilePrefix": "s3-access-logs/"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "eBook-storage"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "LoggingBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Condition": "EnableLoggingCondition",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "ebooks-logs-${Environment}"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "Access-logs"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "EbooksKmsKey": {
+            "Type": "AWS::KMS::Key",
+            "Condition": "CreateKmsKey",
+            "Properties": {
+                "Description": "KMS key for eBook encryption",
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow S3 to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "s3.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "eBook-encryption"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "EbooksKmsKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Condition": "CreateKmsKey",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/ebooks-kms-${Environment}"
+                },
+                "TargetKeyId": {
+                    "Ref": "EbooksKmsKey"
+                }
+            }
+        },
+        "EbooksS3BucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "EbooksS3Bucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowGetObject",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::GetAtt": [
+                                        "S3AccessRole",
+                                        "Arn"
+                                    ]
+                                }
+                            },
+                            "Action": [
+                                "s3:GetObject",
+                                "s3:GetObjectVersion"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "${EbooksS3Bucket.Arn}/*"
+                            }
+                        },
+                        {
+                            "Sid": "AllowListBucket",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::GetAtt": [
+                                        "S3AccessRole",
+                                        "Arn"
+                                    ]
+                                }
+                            },
+                            "Action": [
+                                "s3:ListBucket"
+                            ],
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "EbooksS3Bucket",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "S3AccessRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "eBook-S3Access-Role-${Environment}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "lambda.amazonaws.com",
+                                    "s3.amazonaws.com"
+                                ]
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "S3AccessPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:GetObjectVersion",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "EbooksS3Bucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${EbooksS3Bucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "S3-access-role"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "SNSAlertTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "eBook-Alerts-${Environment}"
+                },
+                "DisplayName": "eBook Storage System Alerts",
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "Alert-notifications"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "StorageMonitoringFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "eBook-StorageMonitoring-${Environment}"
+                },
+                "Runtime": "python3.11",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "StorageMonitoringRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 60,
+                "Environment": {
+                    "Variables": {
+                        "S3_BUCKET": {
+                            "Ref": "EbooksS3Bucket"
+                        },
+                        "SNS_TOPIC_ARN": {
+                            "Ref": "SNSAlertTopic"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\n\ndef handler(event, context):\n    s3 = boto3.client('s3')\n    sns = boto3.client('sns')\n    \n    bucket_name = os.environ['S3_BUCKET']\n    sns_topic_arn = os.environ['SNS_TOPIC_ARN']\n    environment = os.environ['ENVIRONMENT']\n    \n    try:\n        # Get bucket information\n        response = s3.list_objects_v2(Bucket=bucket_name)\n        \n        total_size = 0\n        object_count = 0\n        \n        if 'Contents' in response:\n            for obj in response['Contents']:\n                total_size += obj['Size']\n                object_count += 1\n        \n        total_size_mb = round(total_size / (1024 * 1024), 2)\n        total_size_gb = round(total_size / (1024 * 1024 * 1024), 2)\n        \n        # Prepare monitoring report\n        message = {\n            'timestamp': datetime.utcnow().isoformat(),\n            'environment': environment,\n            'bucket_name': bucket_name,\n            'object_count': object_count,\n            'total_size_bytes': total_size,\n            'total_size_mb': total_size_mb,\n            'total_size_gb': total_size_gb,\n            'status': 'healthy'\n        }\n        \n        # Send notification\n        sns.publish(\n            TopicArn=sns_topic_arn,\n            Message=json.dumps(message, indent=2),\n            Subject=f'eBook Storage Report - {environment}'\n        )\n        \n        print(f\"Successfully processed bucket monitoring for {bucket_name}\")\n        return {\n            'statusCode': 200,\n            'body': json.dumps(message)\n        }\n        \n    except Exception as e:\n        error_msg = f\"Error monitoring storage: {str(e)}\"\n        print(error_msg)\n        \n        sns.publish(\n            TopicArn=sns_topic_arn,\n            Message=error_msg,\n            Subject=f'eBook Storage Monitoring Error - {environment}'\n        )\n        \n        return {\n            'statusCode': 500,\n            'body': json.dumps({'error': str(e)})\n        }\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "Storage-monitoring"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "StorageMonitoringRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "eBook-StorageMonitoring-Role-${Environment}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "StorageMonitoringPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:ListBucket",
+                                        "s3:GetObject",
+                                        "s3:GetBucketLocation",
+                                        "s3:GetBucketVersioning"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "EbooksS3Bucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${EbooksS3Bucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "SNSAlertTopic"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:DescribeKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::If": [
+                                            "CreateKmsKey",
+                                            {
+                                                "Fn::GetAtt": [
+                                                    "EbooksKmsKey",
+                                                    "Arn"
+                                                ]
+                                            },
+                                            {
+                                                "Fn::Sub": "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/${KmsKeyAlias}"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "Lambda-execution-role"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "StorageMonitoringSchedule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "eBook-StorageMonitoring-Schedule-${Environment}"
+                },
+                "Description": "Daily storage monitoring for eBook system",
+                "ScheduleExpression": "rate(1 day)",
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "StorageMonitoringFunction",
+                                "Arn"
+                            ]
+                        },
+                        "Id": "StorageMonitoringTarget"
+                    }
+                ]
+            }
+        },
+        "StorageMonitoringPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "StorageMonitoringFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "StorageMonitoringSchedule",
+                        "Arn"
+                    ]
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "S3BucketName": {
+            "Description": "Name of the S3 bucket storing eBooks",
+            "Value": {
+                "Ref": "EbooksS3Bucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3BucketName"
+                }
+            }
+        },
+        "S3BucketArn": {
+            "Description": "ARN of the S3 bucket storing eBooks",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EbooksS3Bucket",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3BucketArn"
+                }
+            }
+        },
+        "S3BucketDomainName": {
+            "Description": "Domain name of the S3 bucket",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EbooksS3Bucket",
+                    "DomainName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3BucketDomainName"
+                }
+            }
+        },
+        "S3AccessRoleArn": {
+            "Description": "ARN of the S3 access role",
+            "Value": {
+                "Fn::GetAtt": [
+                    "S3AccessRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3AccessRoleArn"
+                }
+            }
+        },
+        "KmsKeyId": {
+            "Description": "KMS Key ID for encryption",
+            "Value": {
+                "Fn::If": [
+                    "CreateKmsKey",
+                    {
+                        "Ref": "EbooksKmsKey"
+                    },
+                    {
+                        "Fn::Sub": "alias/${KmsKeyAlias}"
+                    }
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KmsKeyId"
+                }
+            }
+        },
+        "KmsKeyArn": {
+            "Condition": "CreateKmsKey",
+            "Description": "ARN of the KMS key for encryption",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EbooksKmsKey",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KmsKeyArn"
+                }
+            }
+        },
+        "LoggingBucketName": {
+            "Condition": "EnableLoggingCondition",
+            "Description": "Name of the logging bucket",
+            "Value": {
+                "Ref": "LoggingBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LoggingBucket"
+                }
+            }
+        },
+        "SNSTopicArn": {
+            "Description": "SNS Topic ARN for alerts",
+            "Value": {
+                "Ref": "SNSAlertTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AlertTopic"
+                }
+            }
+        },
+        "StorageMonitoringFunctionArn": {
+            "Description": "ARN of the storage monitoring Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "StorageMonitoringFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StorageMonitoringFunction"
+                }
+            }
+        },
+        "StorageMonitoringFunctionName": {
+            "Description": "Name of the storage monitoring Lambda function",
+            "Value": {
+                "Ref": "StorageMonitoringFunction"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StorageMonitoringFunctionName"
+                }
+            }
+        },
+        "Environment": {
+            "Description": "Environment name used for this deployment",
+            "Value": {
+                "Ref": "Environment"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Environment"
+                }
+            }
+        }
+    }
+}
