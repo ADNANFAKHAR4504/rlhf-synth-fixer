@@ -8,7 +8,7 @@
   "startedAt": "2025-08-16T16:20:00.928Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Web Application Deployment"
+    "Cloud Environment Setup"
   ],
   "provider": "localstack",
   "aws_services": [
