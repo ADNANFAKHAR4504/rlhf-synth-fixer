@@ -264,9 +264,9 @@ describe('Serverless API Integration Tests', () => {
     test('should have working API endpoint', async () => {
       const apiUrl = stackOutputs.ApiInvokeUrl;
       expect(apiUrl).toBeDefined();
-      // Match both standard AWS and LocalStack URL formats (with optional port)
+      // Match both standard AWS and LocalStack URL formats (with optional port and region)
       expect(apiUrl).toMatch(
-        /^https:\/\/.*\.execute-api\..*\.amazonaws\.com(:\d+)?\/.*\/items$/
+        /^https:\/\/.*\.execute-api\.(.*\.)?amazonaws\.com(:\d+)?\/.*\/items$/
       );
 
       // Test API endpoint with fetch
