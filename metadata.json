@@ -6,13 +6,9 @@
   "po_id": "291825",
   "team": "4",
   "startedAt": "2025-08-05T01:31:35.634Z",
-  "subtask": "Security and Compliance Implementation",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "General Infrastructure Tooling QA",
-    "Security Configuration",
-    "Access Control",
-    "Performance Optimization",
-    "Monitoring Setup"
+    "Cloud Environment Setup"
   ],
   "training_quality": 9,
   "aws_services": [
@@ -29,10 +25,5 @@
     "AWS::S3::BucketPolicy",
     "AWS::KMS::Key"
   ],
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "sudhakar01",
-  "dockerS3Location": ""
+  "provider": "localstack"
 }

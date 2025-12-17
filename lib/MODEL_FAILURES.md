@@ -7,35 +7,35 @@ This document records where a baseline LLM/model response typically **fails** to
 ## Summary of Common Failures
 
 1. **S3 privacy not fully enforced**
-   - ❌ Missing `PublicAccessBlockConfiguration` or incomplete bucket policies (e.g., no explicit deny for `aws:SecureTransport = false`)
-   - ❌ No server-side encryption by default or wrong algorithm (AES256 instead of KMS when KMS is required)
+   - Missing `PublicAccessBlockConfiguration` or incomplete bucket policies (e.g., no explicit deny for `aws:SecureTransport = false`)
+   - No server-side encryption by default or wrong algorithm (AES256 instead of KMS when KMS is required)
 
 2. **KMS key policy too permissive**
-   - ❌ Over-broad `"Resource": "*"`, principals like `*`, or missing key usage constraints
-   - ❌ Lacks separation of administrative vs. usage permissions
+   - Over-broad `"Resource": "*"`, principals like `*`, or missing key usage constraints
+   - Lacks separation of administrative vs. usage permissions
 
 3. **IAM least privilege violations**
-   - ❌ Policies use `"Action": "*"`, `"Resource": "*"`
-   - ❌ Inline policies grant write/list on all buckets (not restricted to project buckets)
+   - Policies use `"Action": "*"`, `"Resource": "*"`
+   - Inline policies grant write/list on all buckets (not restricted to project buckets)
 
 4. **EC2 root volume encryption gaps**
-   - ❌ `BlockDeviceMappings.Ebs.Encrypted` omitted
-   - ❌ No explicit `KmsKeyId` reference to the project KMS key
+   - `BlockDeviceMappings.Ebs.Encrypted` omitted
+   - No explicit `KmsKeyId` reference to the project KMS key
 
 5. **Security group ingress too wide**
    - ❌ Uses `0.0.0.0/0` for SSH instead of a parameter‑driven /32 CIDR
 
 6. **Logging not centralized**
-   - ❌ S3 access logs sent to the same bucket or disabled entirely
-   - ❌ No dedicated logs bucket with KMS encryption
+   - S3 access logs sent to the same bucket or disabled entirely
+   - No dedicated logs bucket with KMS encryption
 
 7. **Hard‑coding / fragile substitutions**
-   - ❌ Static ARNs and names instead of `Fn::Sub` + parameters for environment, uniqueness, and portability
-   - ❌ Hard‑coded AMI IDs vs SSM public parameter resolution
+   - Static ARNs and names instead of `Fn::Sub` + parameters for environment, uniqueness, and portability
+   - Hard‑coded AMI IDs vs SSM public parameter resolution
 
 8. **Missing required Outputs/Tags**
-   - ❌ No exports for stack outputs needed by tests/integration
-   - ❌ No `Environment`, `Owner`, `Project` tags
+   - No exports for stack outputs needed by tests/integration
+   - No `Environment`, `Owner`, `Project` tags
 
 ## Concrete Examples (from typical model output)
 
