@@ -9,6 +9,38 @@ model: sonnet
 
 Picks a task from the archive folder (or fetches from GitHub PR if not found locally) and ensures it's deployable to LocalStack, fixing issues iteratively until successful.
 
+## Configuration
+
+This command uses settings from `.claude/config/localstack.yaml`. Key configurable options:
+
+| Setting                                | Default                        | Description                    |
+| -------------------------------------- | ------------------------------ | ------------------------------ |
+| `github.repo`                          | TuringGpt/iac-test-automations | GitHub repository              |
+| `iteration.max_fix_iterations`         | 3                              | Maximum fix iterations         |
+| `iteration.use_batch_fix`              | true                           | Enable batch fix approach      |
+| `localstack.reset_state_before_deploy` | false                          | Reset LocalStack before deploy |
+| `parallel.enabled`                     | true                           | Enable parallel execution      |
+| `parallel.max_concurrent_agents`       | 10                             | Max parallel agents            |
+| `smart_selection.enabled`              | true                           | Enable smart task selection    |
+
+See `.claude/config/localstack.yaml` for full configuration options.
+
+## Modular Scripts
+
+This command uses modular shell scripts in `.claude/scripts/` for better maintainability:
+
+| Script                            | Description                                      |
+| --------------------------------- | ------------------------------------------------ |
+| `localstack-common.sh`            | Common functions, config loading, error handling |
+| `localstack-init.sh`              | Environment validation and initialization        |
+| `localstack-select-task.sh`       | Task selection logic                             |
+| `localstack-fetch-github.sh`      | Fetch tasks from GitHub PRs                      |
+| `localstack-sanitize-metadata.sh` | Sanitize metadata.json for schema compliance     |
+| `localstack-create-pr.sh`         | Create GitHub PR with migrated code              |
+| `localstack-update-log.sh`        | Update migration log with file locking           |
+
+All scripts use `set -euo pipefail` for strict error handling and trap handlers for cleanup.
+
 ## Usage
 
 ```bash
@@ -35,6 +67,14 @@ Picks a task from the archive folder (or fetches from GitHub PR if not found loc
 
 # Show migration statistics
 /localstack-migrate --stats
+
+# PARALLEL EXECUTION: Skip LocalStack reset (for running multiple agents)
+/localstack-migrate --no-reset Pr7179
+
+# PARALLEL EXECUTION: Multiple agents on different PRs
+# Terminal 1: /localstack-migrate --no-reset Pr7179
+# Terminal 2: /localstack-migrate --no-reset Pr7180
+# Terminal 3: /localstack-migrate --no-reset Pr7181
 ```
 
 ## Workflow
@@ -42,13 +82,26 @@ Picks a task from the archive folder (or fetches from GitHub PR if not found loc
 ### Step 1: Initialize and Validate Environment
 
 ```bash
-echo ""
-echo "═══════════════════════════════════════════════════"
-echo "🚀 LOCALSTACK MIGRATION"
-echo "═══════════════════════════════════════════════════"
-echo ""
+#!/bin/bash
+# ═══════════════════════════════════════════════════════════════════════════
+# LocalStack Migration - Main Workflow
+# ═══════════════════════════════════════════════════════════════════════════
+# Uses modular scripts from .claude/scripts/ for maintainability
+# All scripts use set -euo pipefail and trap handlers for error handling
+# ═══════════════════════════════════════════════════════════════════════════
 
+set -euo pipefail
+
+# Source common functions (loads config, sets up error handling)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(git rev-parse --show-toplevel)"
+source "$PROJECT_ROOT/.claude/scripts/localstack-common.sh"
+
+# Setup error handling with trap
+setup_error_handling
+
+log_header "🚀 LOCALSTACK MIGRATION"
+
 cd "$PROJECT_ROOT"
 
 # Parse arguments
@@ -59,92 +112,72 @@ PICK_NEXT=false
 SMART_SELECT=false
 SHOW_STATS=false
 FORCE_GITHUB=false
-GITHUB_REPO="TuringGpt/iac-test-automations"
+SKIP_RESET=false
 
-# Parse flags
-case "$TASK_PATH" in
-  --platform)
-    PLATFORM_FILTER="${2:-}"
-    TASK_PATH=""
-    ;;
-  --service)
-    SERVICE_FILTER="${2:-}"
-    TASK_PATH=""
-    ;;
-  --next)
-    PICK_NEXT=true
-    TASK_PATH=""
-    ;;
-  --smart)
-    SMART_SELECT=true
-    TASK_PATH=""
-    ;;
-  --stats)
-    SHOW_STATS=true
-    TASK_PATH=""
-    ;;
-  --github)
-    FORCE_GITHUB=true
-    TASK_PATH="${2:-}"
-    ;;
-esac
+# Note: GITHUB_REPO is loaded from config via localstack-common.sh
+# Default: TuringGpt/iac-test-automations (from .claude/config/localstack.yaml)
 
-# Check LocalStack is running
-echo "🔍 Checking LocalStack status..."
-if ! curl -s http://localhost:4566/_localstack/health > /dev/null 2>&1; then
-  echo "❌ LocalStack is not running!"
-  echo ""
-  echo "💡 Start LocalStack first:"
-  echo "   ./scripts/localstack-start.sh"
-  echo ""
-  exit 1
-fi
-
-LOCALSTACK_VERSION=$(curl -s http://localhost:4566/_localstack/health | jq -r '.version // "unknown"')
-echo "✅ LocalStack is running (version: $LOCALSTACK_VERSION)"
-echo ""
-
-# Check required tools
-MISSING_TOOLS=()
-for tool in awslocal jq curl; do
-  if ! command -v $tool &> /dev/null; then
-    MISSING_TOOLS+=("$tool")
-  fi
+# Parse flags (support combining --no-reset with other options)
+ARGS=("$@")
+for ((i=0; i<${#ARGS[@]}; i++)); do
+  case "${ARGS[i]}" in
+    --no-reset)
+      SKIP_RESET=true
+      log_info "Parallel mode: LocalStack state reset will be skipped"
+      ;;
+    --platform)
+      PLATFORM_FILTER="${ARGS[i+1]:-}"
+      TASK_PATH=""
+      ((i++))
+      ;;
+    --service)
+      SERVICE_FILTER="${ARGS[i+1]:-}"
+      TASK_PATH=""
+      ((i++))
+      ;;
+    --next)
+      PICK_NEXT=true
+      TASK_PATH=""
+      ;;
+    --smart)
+      SMART_SELECT=true
+      TASK_PATH=""
+      ;;
+    --stats)
+      SHOW_STATS=true
+      TASK_PATH=""
+      ;;
+    --github)
+      FORCE_GITHUB=true
+      TASK_PATH="${ARGS[i+1]:-}"
+      ((i++))
+      ;;
+    *)
+      # If not a flag and TASK_PATH is empty, treat as task path
+      if [[ ! "${ARGS[i]}" =~ ^-- ]] && [ -z "$TASK_PATH" ]; then
+        TASK_PATH="${ARGS[i]}"
+      fi
+      ;;
+  esac
 done
 
-if [ ${#MISSING_TOOLS[@]} -gt 0 ]; then
-  echo "❌ Missing required tools: ${MISSING_TOOLS[*]}"
-  echo "💡 Install with: pip install awscli-local (for awslocal)"
-  exit 1
+# Run initialization script (validates environment, checks prerequisites)
+if [ "$SKIP_RESET" = true ]; then
+  source "$PROJECT_ROOT/.claude/scripts/localstack-init.sh" --skip-reset
+else
+  source "$PROJECT_ROOT/.claude/scripts/localstack-init.sh"
 fi
-echo "✅ Required tools available"
-echo ""
 ```
 
 ### Step 2: Initialize Migration Log
 
-```bash
-MIGRATION_LOG=".claude/reports/localstack-migrations.json"
-mkdir -p .claude/reports
+> **Note**: Migration log initialization is handled by `localstack-init.sh` sourced in Step 1.
+> The log path is loaded from config: `migration_log.path` (default: `.claude/reports/localstack-migrations.json`)
 
-# Initialize migration log if not exists
-if [ ! -f "$MIGRATION_LOG" ]; then
-  cat > "$MIGRATION_LOG" << 'EOF'
-{
-  "created_at": "$(date -Iseconds)",
-  "migrations": [],
-  "summary": {
-    "total_attempted": 0,
-    "successful": 0,
-    "failed": 0
-  }
-}
-EOF
-  # Fix the date
-  jq --arg ts "$(date -Iseconds)" '.created_at = $ts' "$MIGRATION_LOG" > "${MIGRATION_LOG}.tmp"
-  mv "${MIGRATION_LOG}.tmp" "$MIGRATION_LOG"
-  echo "📋 Created migration log: $MIGRATION_LOG"
-fi
+```bash
+# Migration log is already initialized by localstack-init.sh
+# MIGRATION_LOG variable is exported from localstack-common.sh
+log_info "Migration log: $MIGRATION_LOG"
 ```
 
 ### Step 3: Show Statistics (if requested)
@@ -202,6 +235,13 @@ fi
 
 ### Step 4: Select Task to Migrate (with GitHub Fetch Support)
 
+> **Note**: GitHub fetch uses `localstack-fetch-github.sh` which handles:
+>
+> - GitHub CLI authentication checks
+> - PR file downloading via API or branch clone
+> - Task structure validation
+> - Error handling with cleanup
+
 ```bash
 FETCHED_FROM_GITHUB=false
 
@@ -209,275 +249,61 @@ if [ -n "$TASK_PATH" ]; then
   # Manual path provided
   if [[ "$TASK_PATH" =~ ^Pr[0-9]+$ ]] || [[ "$TASK_PATH" =~ ^[0-9]+$ ]]; then
     # Normalize PR number format
-    PR_NUMBER="${TASK_PATH#Pr}"
-    PR_ID="Pr${PR_NUMBER}"
+    PR_NUMBER=$(normalize_pr_number "$TASK_PATH")
+    PR_ID=$(get_pr_id "$PR_NUMBER")
 
     # Find task by PR number in archive
     FOUND_PATH=$(find archive -maxdepth 3 -type d -name "$PR_ID" 2>/dev/null | head -1)
 
     if [ -z "$FOUND_PATH" ] || [ "$FORCE_GITHUB" = true ]; then
-      echo ""
-      echo "═══════════════════════════════════════════════════"
-      echo "🔍 FETCHING FROM GITHUB"
-      echo "═══════════════════════════════════════════════════"
-      echo ""
+      # Use modular GitHub fetch script
+      GITHUB_WORK_DIR=$("$PROJECT_ROOT/.claude/scripts/localstack-fetch-github.sh" "$PR_NUMBER" 2>&1 | tail -1)
 
-      if [ -z "$FOUND_PATH" ]; then
-        echo "📋 Task $PR_ID not found in archive directory"
+      if [ -d "$GITHUB_WORK_DIR" ] && [ -f "$GITHUB_WORK_DIR/metadata.json" ]; then
+        TASK_PATH="$GITHUB_WORK_DIR"
+        FETCHED_FROM_GITHUB=true
+        log_success "Task fetched from GitHub: $TASK_PATH"
       else
-        echo "📋 Force GitHub fetch requested for $PR_ID"
-      fi
-      echo "🌐 Fetching from GitHub PR #${PR_NUMBER}..."
-      echo ""
-
-      # Check if gh CLI is available
-      if ! command -v gh &> /dev/null; then
-        echo "❌ GitHub CLI (gh) is not installed!"
-        echo ""
-        echo "💡 Install GitHub CLI:"
-        echo "   macOS: brew install gh"
-        echo "   Linux: sudo apt install gh"
-        echo ""
-        echo "💡 Then authenticate:"
-        echo "   gh auth login"
+        log_error "Failed to fetch task from GitHub PR #$PR_NUMBER"
         exit 1
       fi
-
-      # Check if authenticated
-      if ! gh auth status &> /dev/null; then
-        echo "❌ GitHub CLI is not authenticated!"
-        echo ""
-        echo "💡 Authenticate with:"
-        echo "   gh auth login"
-        exit 1
-      fi
-
-      echo "✅ GitHub CLI authenticated"
-
-      # Fetch PR details
-      echo "📥 Fetching PR #${PR_NUMBER} details from ${GITHUB_REPO}..."
-
-      PR_INFO=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPO" --json title,headRefName,files,state 2>/dev/null)
-
-      if [ -z "$PR_INFO" ] || [ "$PR_INFO" = "null" ]; then
-        echo "❌ PR #${PR_NUMBER} not found in ${GITHUB_REPO}"
-        echo ""
-        echo "💡 Verify the PR exists:"
-        echo "   gh pr view $PR_NUMBER --repo $GITHUB_REPO"
-        exit 1
-      fi
-
-      PR_TITLE=$(echo "$PR_INFO" | jq -r '.title // "Unknown"')
-      PR_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // "unknown"')
-      PR_STATE=$(echo "$PR_INFO" | jq -r '.state // "unknown"')
-
-      echo ""
-      echo "   Title:  $PR_TITLE"
-      echo "   Branch: $PR_BRANCH"
-      echo "   State:  $PR_STATE"
-      echo ""
-
-      # Create temporary directory for PR files
-      GITHUB_WORK_DIR="worktree/github-${PR_ID}"
-      rm -rf "$GITHUB_WORK_DIR"
-      mkdir -p "$GITHUB_WORK_DIR"
-
-      echo "📁 Created temp directory: $GITHUB_WORK_DIR"
-
-      # Fetch the PR diff and extract changed files
-      echo "📥 Downloading PR files..."
-
-      # Get the list of files changed in the PR
-      PR_FILES=$(gh pr diff "$PR_NUMBER" --repo "$GITHUB_REPO" --name-only 2>/dev/null)
-
-      if [ -z "$PR_FILES" ]; then
-        echo "⚠️  No files found in PR diff, trying to checkout branch..."
-
-        # Alternative: checkout the PR branch
-        git fetch origin "pull/${PR_NUMBER}/head:pr-${PR_NUMBER}" 2>/dev/null || true
-
-        if git rev-parse "pr-${PR_NUMBER}" &>/dev/null; then
-          # Get files from the PR branch
-          git show "pr-${PR_NUMBER}:." --name-only 2>/dev/null | while read -r file; do
-            if [ -n "$file" ]; then
-              mkdir -p "$GITHUB_WORK_DIR/$(dirname "$file")"
-              git show "pr-${PR_NUMBER}:$file" > "$GITHUB_WORK_DIR/$file" 2>/dev/null || true
-            fi
-          done
-
-          # Clean up the temporary branch
-          git branch -D "pr-${PR_NUMBER}" 2>/dev/null || true
-        fi
-      else
-        # Download each file from the PR
-        echo "$PR_FILES" | while read -r file; do
-          if [ -n "$file" ]; then
-            echo "   📄 $file"
-            mkdir -p "$GITHUB_WORK_DIR/$(dirname "$file")"
-            gh api "repos/${GITHUB_REPO}/contents/${file}?ref=${PR_BRANCH}" --jq '.content' 2>/dev/null | base64 -d > "$GITHUB_WORK_DIR/$file" 2>/dev/null || true
-          fi
-        done
-      fi
-
-      # Check if we got the essential files
-      if [ ! -f "$GITHUB_WORK_DIR/metadata.json" ] && [ ! -f "$GITHUB_WORK_DIR/lib/index.ts" ] && [ ! -f "$GITHUB_WORK_DIR/lib/__main__.py" ]; then
-        echo ""
-        echo "⚠️  Could not find task files in PR. Trying full branch checkout..."
-
-        # Try checking out the full branch content
-        TEMP_CLONE_DIR=$(mktemp -d)
-        git clone --depth 1 --branch "$PR_BRANCH" "https://github.com/${GITHUB_REPO}.git" "$TEMP_CLONE_DIR" 2>/dev/null || {
-          echo "❌ Failed to clone PR branch"
-          rm -rf "$TEMP_CLONE_DIR"
-          exit 1
-        }
-
-        # Copy relevant files
-        if [ -d "$TEMP_CLONE_DIR/lib" ]; then
-          cp -r "$TEMP_CLONE_DIR/lib" "$GITHUB_WORK_DIR/"
-        fi
-        if [ -d "$TEMP_CLONE_DIR/test" ]; then
-          cp -r "$TEMP_CLONE_DIR/test" "$GITHUB_WORK_DIR/"
-        fi
-        if [ -f "$TEMP_CLONE_DIR/metadata.json" ]; then
-          cp "$TEMP_CLONE_DIR/metadata.json" "$GITHUB_WORK_DIR/"
-        fi
-        if [ -f "$TEMP_CLONE_DIR/package.json" ]; then
-          cp "$TEMP_CLONE_DIR/package.json" "$GITHUB_WORK_DIR/"
-        fi
-        if [ -f "$TEMP_CLONE_DIR/tsconfig.json" ]; then
-          cp "$TEMP_CLONE_DIR/tsconfig.json" "$GITHUB_WORK_DIR/"
-        fi
-        if [ -f "$TEMP_CLONE_DIR/Pipfile" ]; then
-          cp "$TEMP_CLONE_DIR/Pipfile" "$GITHUB_WORK_DIR/"
-        fi
-
-        rm -rf "$TEMP_CLONE_DIR"
-      fi
-
-      # Verify we have essential files
-      if [ ! -f "$GITHUB_WORK_DIR/metadata.json" ]; then
-        echo ""
-        echo "❌ metadata.json not found in PR #${PR_NUMBER}"
-        echo ""
-        echo "💡 The PR may not contain a valid IaC task structure."
-        echo "   Expected files: metadata.json, lib/ directory"
-        rm -rf "$GITHUB_WORK_DIR"
-        exit 1
-      fi
-
-      echo ""
-      echo "✅ PR files downloaded successfully"
-
-      # Set task path to the GitHub work directory
-      TASK_PATH="$GITHUB_WORK_DIR"
-      FETCHED_FROM_GITHUB=true
-
-      # Log the source
-      echo ""
-      echo "📋 Task Source: GitHub PR #${PR_NUMBER}"
-      echo "   Repository: ${GITHUB_REPO}"
-      echo "   Branch: ${PR_BRANCH}"
-      echo ""
     else
       TASK_PATH="$FOUND_PATH"
     fi
   fi
 
   if [ ! -d "$TASK_PATH" ]; then
-    echo "❌ Directory not found: $TASK_PATH"
+    log_error "Directory not found: $TASK_PATH"
     exit 1
   fi
 
   if [ "$FETCHED_FROM_GITHUB" = true ]; then
-    echo "📁 Using task fetched from GitHub: $TASK_PATH"
+    log_info "Using task fetched from GitHub: $TASK_PATH"
   else
-    echo "📁 Using specified task: $TASK_PATH"
+    log_info "Using specified task: $TASK_PATH"
   fi
 
 else
-  # Auto-select task
-  echo "🔍 Selecting task to migrate..."
+  # Auto-select task using the selection script
+  log_info "Selecting task to migrate..."
 
-  # Get already migrated/attempted tasks
-  ATTEMPTED=$(jq -r '.migrations[].task_path' "$MIGRATION_LOG" 2>/dev/null | sort -u)
-
-  # Build search path
-  SEARCH_DIR="archive"
-  if [ -n "$PLATFORM_FILTER" ]; then
-    SEARCH_DIR="archive/$PLATFORM_FILTER"
-    echo "   Platform filter: $PLATFORM_FILTER"
+  if [ "$SMART_SELECT" = true ]; then
+    TASK_PATH=$("$PROJECT_ROOT/.claude/scripts/localstack-select-task.sh" smart 2>&1 | head -1)
+  elif [ -n "$PLATFORM_FILTER" ]; then
+    TASK_PATH=$("$PROJECT_ROOT/.claude/scripts/localstack-select-task.sh" platform "$PLATFORM_FILTER" 2>&1 | head -1)
+  elif [ -n "$SERVICE_FILTER" ]; then
+    TASK_PATH=$("$PROJECT_ROOT/.claude/scripts/localstack-select-task.sh" service "$SERVICE_FILTER" 2>&1 | head -1)
+  else
+    TASK_PATH=$("$PROJECT_ROOT/.claude/scripts/localstack-select-task.sh" next 2>&1 | head -1)
   fi
 
-  # Define service compatibility for smart selection
-  HIGH_COMPAT_SERVICES="s3 dynamodb sqs sns iam kms cloudwatch logs secretsmanager ssm"
-  MED_COMPAT_SERVICES="lambda apigateway stepfunctions events"
-  LOW_COMPAT_SERVICES="ecs rds ec2 eks fargate alb appsync"
-
-  # Find candidate tasks
-  TASK_PATH=""
-  BEST_SCORE=0
-
-  for dir in $(find "$SEARCH_DIR" -maxdepth 3 -type d -name "Pr*" 2>/dev/null | sort); do
-    if [ ! -f "$dir/metadata.json" ]; then
-      continue
-    fi
-
-    # Skip already attempted
-    if echo "$ATTEMPTED" | grep -q "^$dir$"; then
-      continue
-    fi
-
-    # Service filter
-    if [ -n "$SERVICE_FILTER" ]; then
-      if ! jq -e --arg svc "$SERVICE_FILTER" '.aws_services | map(ascii_downcase) | any(. | contains($svc | ascii_downcase))' "$dir/metadata.json" >/dev/null 2>&1; then
-        continue
-      fi
-    fi
-
-    # Smart selection scoring
-    if [ "$SMART_SELECT" = true ]; then
-      SCORE=100
-      SERVICES=$(jq -r '.aws_services[]?' "$dir/metadata.json" 2>/dev/null | tr '[:upper:]' '[:lower:]')
-
-      for svc in $SERVICES; do
-        svc_lower=$(echo "$svc" | tr '[:upper:]' '[:lower:]' | tr -d ' ')
-        if echo "$LOW_COMPAT_SERVICES" | grep -qi "$svc_lower"; then
-          SCORE=$((SCORE - 25))
-        elif echo "$MED_COMPAT_SERVICES" | grep -qi "$svc_lower"; then
-          SCORE=$((SCORE - 10))
-        fi
-      done
-
-      # Prefer simpler platforms
-      PLATFORM=$(jq -r '.platform' "$dir/metadata.json")
-      case "$PLATFORM" in
-        cfn) SCORE=$((SCORE + 10)) ;;
-        cdk) SCORE=$((SCORE + 5)) ;;
-      esac
-
-      if [ "$SCORE" -gt "$BEST_SCORE" ]; then
-        BEST_SCORE=$SCORE
-        TASK_PATH="$dir"
-      fi
-    else
-      # Simple sequential selection
-      TASK_PATH="$dir"
-      break
-    fi
-  done
-
   if [ -z "$TASK_PATH" ]; then
-    echo "✅ All tasks in $SEARCH_DIR have been processed!"
+    log_success "All tasks have been processed!"
     echo ""
     echo "💡 Options:"
     echo "   - Try a different platform: /localstack-migrate --platform <platform>"
     echo "   - View stats: /localstack-migrate --stats"
     exit 0
-  fi
-
-  if [ "$SMART_SELECT" = true ]; then
-    echo "   Smart selection score: $BEST_SCORE"
   fi
 fi
 
@@ -558,12 +384,17 @@ echo "✅ Working directory ready"
 echo ""
 ```
 
-### Step 7: Reset LocalStack State
+### Step 7: Reset LocalStack State (Skipped in Parallel Mode)
+
+> **Note**: LocalStack state management is handled by `localstack-init.sh` sourced in Step 1.
+> The `--skip-reset` / `--no-reset` flag is respected automatically.
 
 ```bash
-echo "🧹 Resetting LocalStack state..."
-curl -X POST http://localhost:4566/_localstack/state/reset 2>/dev/null && echo "✅ LocalStack state reset" || echo "⚠️  State reset not available (continuing anyway)"
-echo ""
+# LocalStack reset was already handled by localstack-init.sh
+# For parallel execution, use unique stack names based on PR_ID
+STACK_NAME="tap-stack-${PR_ID}"
+export STACK_NAME
+log_info "Using stack name: $STACK_NAME"
 ```
 
 ### Step 8: Invoke LocalStack Deploy Tester Agent
@@ -606,12 +437,14 @@ export CDK_DEFAULT_REGION=us-east-1
 ```
 ````
 
-**Deployment Commands by Platform**:
+**Deployment Commands by Platform** (use unique stack name `${STACK_NAME}` for parallel safety):
 
-- CDK: Bootstrap with `cdklocal bootstrap`, then `cdklocal deploy --all --require-approval never`
-- CloudFormation: `awslocal cloudformation create-stack --stack-name tap-stack --template-body file://lib/TapStack.yml --capabilities CAPABILITY_IAM`
-- Terraform: `tflocal init && tflocal apply -auto-approve`
-- Pulumi: Configure local backend, then `pulumi up --yes`
+- CDK: Bootstrap with `cdklocal bootstrap`, then `cdklocal deploy --all --require-approval never` (stack names auto-prefixed)
+- CloudFormation: `awslocal cloudformation create-stack --stack-name ${STACK_NAME} --template-body file://lib/TapStack.yml --capabilities CAPABILITY_IAM`
+- Terraform: `tflocal init && tflocal apply -auto-approve` (use workspace or prefix resources with PR_ID)
+- Pulumi: Configure local backend, then `pulumi up --yes --stack ${STACK_NAME}`
+
+**Important for Parallel Execution**: The `STACK_NAME` environment variable is set to `tap-stack-${PR_ID}` to ensure each migration uses a unique stack name and doesn't conflict with other parallel migrations.
 
 **Output Required**:
 Create `execution-output.md` with:
@@ -684,26 +517,32 @@ You are fixing task at `${WORK_DIR}` to make it LocalStack-compatible.
 Deployment Errors: ${DEPLOY_ERRORS:-"None"}
 Test Errors: ${TEST_ERRORS:-"None"}
 
-**Your Mission**:
+**Your Mission** (BATCH FIX APPROACH - apply ALL fixes before re-deploying):
 
-1. Analyze the errors in `${WORK_DIR}/execution-output.md`
-2. Apply targeted fixes to make the stack LocalStack-compatible
-3. Re-attempt deployment after each fix
-4. Maximum 5 iterations
-5. Document all changes in `execution-output.md`
+1. Analyze ALL errors in `${WORK_DIR}/execution-output.md`
+2. Identify ALL applicable fixes (including preventive fixes)
+3. Apply ALL fixes in ONE batch before re-deploying
+4. Re-attempt deployment only after ALL fixes are applied
+5. Maximum 3 iterations (reduced due to batch approach)
+6. Document all changes in `execution-output.md`
 
-**Common Fixes**:
+**Batch Fix Strategy** (CRITICAL - do NOT fix one at a time):
 
-1. Add LocalStack endpoint configuration
-2. Fix S3 path-style access issues
-3. Remove/mock unsupported AWS features
-4. Simplify IAM policies for LocalStack
-5. Fix resource naming issues
-6. Update integration tests for LocalStack
+Before EACH re-deployment, apply ALL of these if applicable:
+
+1. LocalStack endpoint configuration (almost always needed)
+2. S3 path-style access (if using S3/buckets)
+3. RemovalPolicy.DESTROY (always for LocalStack)
+4. IAM policy simplification (if IAM errors)
+5. Resource naming simplification (if naming errors)
+6. Test endpoint configuration (if test/ exists)
+7. Unsupported service conditionals (if service errors)
+8. Default parameter values (if parameter errors)
 
 **Constraints**:
 
-- Maximum 5 fix iterations
+- Maximum 3 fix iterations (batch mode)
+- Apply ALL known fixes per iteration, NOT one at a time
 - Do NOT change core business logic
 - Keep changes minimal and focused
 - Document every change made
@@ -713,290 +552,118 @@ Set variables:
 
 - FIX_SUCCESS=true/false
 - FIX_FAILURE_REASON="reason if failed"
-- ITERATIONS_USED=N
+- ITERATIONS_USED=N (max 3 with batch approach)
+- FIXES_APPLIED="list of all fixes applied"
 
 Exit code 0 if fixed, 1 if unable to fix, 2 if unsupported services.
+
+**Performance Note**: With batch fix approach, expect 1-2 iterations instead of 5. Each iteration applies ALL applicable fixes before re-deploying.
 ```
 
-### Step 10: Create Pull Request for Migrated Task
+### Step 10: Create Pull Request for Migrated Task (Parallel-Safe with Git Worktrees)
+
+> **Note**: This step uses modular scripts for better maintainability:
+>
+> - `localstack-sanitize-metadata.sh` - Sanitizes metadata.json for schema compliance
+> - `localstack-create-pr.sh` - Creates PR with git worktrees for parallel safety
+> - `localstack-update-log.sh` - Updates migration log with file locking
 
 ```bash
-echo ""
-echo "═══════════════════════════════════════════════════"
-echo "📦 CREATING PULL REQUEST"
-echo "═══════════════════════════════════════════════════"
-echo ""
+log_header "📦 CREATING PULL REQUEST (Parallel-Safe)"
 
 MIGRATION_STATUS="failed"
 MIGRATION_REASON=""
 NEW_PR_URL=""
 NEW_PR_NUMBER=""
+NEW_BRANCH=""
+LS_PR_ID=""
+ORIGINAL_PR_ID="$PR_ID"
 
 if [ "$FIX_SUCCESS" = "true" ]; then
+  # Use modular PR creation script
+  # This handles: metadata sanitization, git worktree, commit, push, PR creation
 
-  # Check if gh CLI is available
-  if ! command -v gh &> /dev/null; then
-    echo "❌ GitHub CLI (gh) is not installed!"
-    echo ""
-    echo "💡 Install GitHub CLI:"
-    echo "   macOS: brew install gh"
-    echo "   Linux: sudo apt install gh"
-    echo ""
-    MIGRATION_REASON="GitHub CLI not installed"
-  else
-    # Check if authenticated
-    if ! gh auth status &> /dev/null; then
-      echo "❌ GitHub CLI is not authenticated!"
-      echo ""
-      echo "💡 Authenticate with:"
-      echo "   gh auth login"
-      MIGRATION_REASON="GitHub CLI not authenticated"
-    else
-      echo "✅ GitHub CLI authenticated"
+  PR_OUTPUT=$("$PROJECT_ROOT/.claude/scripts/localstack-create-pr.sh" \
+    "$WORK_DIR" \
+    "$PR_ID" \
+    --platform "$PLATFORM" \
+    --language "$LANGUAGE" \
+    --services "$AWS_SERVICES" \
+    --iterations "${ITERATIONS_USED:-1}" \
+    --complexity "${COMPLEXITY:-medium}" \
+    2>&1) || {
+    MIGRATION_REASON="PR creation script failed"
+    log_error "Failed to create PR"
+  }
 
-      # Generate new PR ID with ls- prefix
-      ORIGINAL_PR_ID="$PR_ID"
-      LS_PR_ID="ls-${PR_ID}"
+  # Parse output from create-pr script
+  if echo "$PR_OUTPUT" | grep -q "NEW_PR_URL="; then
+    NEW_PR_URL=$(echo "$PR_OUTPUT" | grep "NEW_PR_URL=" | cut -d= -f2)
+    NEW_PR_NUMBER=$(echo "$PR_OUTPUT" | grep "NEW_PR_NUMBER=" | cut -d= -f2)
+    NEW_BRANCH=$(echo "$PR_OUTPUT" | grep "NEW_BRANCH=" | cut -d= -f2)
+    LS_PR_ID=$(echo "$PR_OUTPUT" | grep "LS_PR_ID=" | cut -d= -f2)
+    MIGRATION_STATUS="success"
 
-      # Generate branch name: ls-synth-{original_pr_id}
-      NEW_BRANCH="ls-synth-${PR_ID}"
-
-      echo ""
-      echo "📋 Original PR ID: $ORIGINAL_PR_ID"
-      echo "📋 New PR ID: $LS_PR_ID"
-      echo "🌿 Creating new branch: $NEW_BRANCH"
-
-      # Navigate to project root
-      cd "$PROJECT_ROOT"
-
-      # Ensure we're on main and up to date
-      git checkout main 2>/dev/null || true
-      git pull origin main 2>/dev/null || true
-
-      # Check if branch already exists and delete it
-      if git show-ref --verify --quiet "refs/heads/$NEW_BRANCH"; then
-        echo "⚠️  Branch $NEW_BRANCH already exists locally, deleting..."
-        git branch -D "$NEW_BRANCH" 2>/dev/null || true
-      fi
-
-      # Create and checkout new branch
-      git checkout -b "$NEW_BRANCH"
-
-      if [ $? -ne 0 ]; then
-        echo "❌ Failed to create branch: $NEW_BRANCH"
-        MIGRATION_REASON="Failed to create git branch"
-      else
-        echo "✅ Branch created: $NEW_BRANCH"
-
-        # Update metadata.json in work directory with new PR ID
-        if [ -f "$WORK_DIR/metadata.json" ]; then
-          echo "📝 Updating metadata.json with new PR ID: $LS_PR_ID"
-          jq --arg new_id "$LS_PR_ID" --arg orig_id "$ORIGINAL_PR_ID" \
-            '. + {"pr_id": $new_id, "original_pr_id": $orig_id, "localstack_migration": true, "provider": "localstack"}' \
-            "$WORK_DIR/metadata.json" > "$WORK_DIR/metadata.json.tmp"
-          mv "$WORK_DIR/metadata.json.tmp" "$WORK_DIR/metadata.json"
-        fi
-
-        # Copy work directory contents to project root (standard PR structure)
-        # This overwrites the root-level files with the LocalStack-compatible versions
-        echo ""
-        echo "📁 Preparing PR files at project root..."
-        
-        # Copy lib/ directory
-        if [ -d "$WORK_DIR/lib" ]; then
-          rm -rf lib/
-          cp -r "$WORK_DIR/lib" ./
-          echo "   ✅ Copied lib/"
-        fi
-        
-        # Copy test/ directory
-        if [ -d "$WORK_DIR/test" ]; then
-          rm -rf test/
-          cp -r "$WORK_DIR/test" ./
-          echo "   ✅ Copied test/"
-        fi
-        
-        # Copy metadata.json
-        if [ -f "$WORK_DIR/metadata.json" ]; then
-          cp "$WORK_DIR/metadata.json" ./
-          echo "   ✅ Copied metadata.json"
-        fi
-        
-        # Copy any other essential files
-        for file in Pipfile Pipfile.lock requirements.txt cdk.json cdktf.json Pulumi.yaml main.tf; do
-          if [ -f "$WORK_DIR/$file" ]; then
-            cp "$WORK_DIR/$file" ./
-            echo "   ✅ Copied $file"
-          fi
-        done
-
-        echo ""
-        echo "✅ PR files prepared"
-
-        # Stage all changes
-        echo ""
-        echo "📝 Staging changes..."
-        git add lib/ test/ metadata.json 2>/dev/null || true
-        git add Pipfile Pipfile.lock requirements.txt cdk.json cdktf.json Pulumi.yaml main.tf 2>/dev/null || true
-        git add -A  # Stage any other changes
-
-        # Create commit
-        COMMIT_MSG="feat(localstack): ${LS_PR_ID} - LocalStack compatible task
-
-PR ID: ${LS_PR_ID}
-Original PR ID: ${ORIGINAL_PR_ID}
-Platform: ${PLATFORM}
-Language: ${LANGUAGE}
-AWS Services: ${AWS_SERVICES}
-
-This task has been migrated and tested for LocalStack compatibility.
-The PR pipeline will handle deployment and validation."
-
-        echo "📝 Creating commit..."
-        git commit -m "$COMMIT_MSG"
-
-        if [ $? -ne 0 ]; then
-          echo "❌ Failed to create commit"
-          MIGRATION_REASON="Failed to create git commit"
-        else
-          echo "✅ Commit created"
-
-          # Push branch to origin (force push in case branch exists remotely)
-          echo ""
-          echo "🚀 Pushing branch to origin..."
-          git push -u origin "$NEW_BRANCH" --force
-
-          if [ $? -ne 0 ]; then
-            echo "❌ Failed to push branch"
-            MIGRATION_REASON="Failed to push branch to origin"
-          else
-            echo "✅ Branch pushed to origin"
-
-            # Create Pull Request
-            echo ""
-            echo "📋 Creating Pull Request..."
-
-            PR_TITLE="[LocalStack] ${LS_PR_ID} - ${PLATFORM}/${LANGUAGE}"
-            PR_BODY="## LocalStack Migration
-
-### Task Details
-- **New PR ID:** ${LS_PR_ID}
-- **Original PR ID:** ${ORIGINAL_PR_ID}
-- **Platform:** ${PLATFORM}
-- **Language:** ${LANGUAGE}
-- **AWS Services:** ${AWS_SERVICES}
-- **Complexity:** ${COMPLEXITY}
-
-### Migration Summary
-This PR contains a LocalStack-compatible version of task ${ORIGINAL_PR_ID}, migrated as ${LS_PR_ID}.
-
-The task has been:
-- ✅ Tested for LocalStack deployment
-- ✅ Verified with integration tests
-- ✅ Updated with LocalStack-specific configurations
-
-### Source
-- Original Task: \`${TASK_PATH}\`
-
-### Pipeline
-This PR will be processed by the CI/CD pipeline which will:
-1. Run linting and validation
-2. Deploy to LocalStack
-3. Run integration tests
-4. Report results
-
-### LocalStack Compatibility
-- LocalStack Version: ${LOCALSTACK_VERSION}
-- Iterations to fix: ${ITERATIONS_USED:-1}
-
----
-*This PR was automatically created by the \`/localstack-migrate\` command.*
-*The PR pipeline will handle deployment and testing.*"
-
-            # Create the PR
-            PR_RESULT=$(gh pr create \
-              --repo "$GITHUB_REPO" \
-              --title "$PR_TITLE" \
-              --body "$PR_BODY" \
-              --base main \
-              --head "$NEW_BRANCH" \
-              2>&1)
-
-            if [ $? -eq 0 ]; then
-              NEW_PR_URL="$PR_RESULT"
-              NEW_PR_NUMBER=$(echo "$NEW_PR_URL" | grep -oE '[0-9]+$')
-              MIGRATION_STATUS="success"
-
-              echo ""
-              echo "✅ Pull Request created successfully!"
-              echo "   URL: $NEW_PR_URL"
-              echo "   PR #: $NEW_PR_NUMBER"
-            else
-              echo "❌ Failed to create Pull Request"
-              echo "   Error: $PR_RESULT"
-              MIGRATION_REASON="Failed to create PR: $PR_RESULT"
-            fi
-          fi
-        fi
-
-        # Switch back to main branch
-        git checkout main 2>/dev/null || true
-      fi
-    fi
+    log_success "Pull Request created!"
+    echo "   URL:    $NEW_PR_URL"
+    echo "   Number: #$NEW_PR_NUMBER"
+    echo "   Branch: $NEW_BRANCH"
   fi
 else
   MIGRATION_REASON="${FIX_FAILURE_REASON:-Unknown error}"
-  echo "❌ Migration failed: $MIGRATION_REASON"
+  log_error "Migration failed: $MIGRATION_REASON"
 fi
 
-# Update migration log
-echo ""
-echo "📋 Updating migration log..."
+# ═══════════════════════════════════════════════════════════════
+# PARALLEL-SAFE: Update migration log with file locking
+# Uses localstack-update-log.sh for atomic updates
+# ═══════════════════════════════════════════════════════════════
 
-MIGRATION_ENTRY=$(cat <<EOF
-{
-  "task_path": "$TASK_PATH",
-  "new_pr_url": $([ -n "$NEW_PR_URL" ] && echo "\"$NEW_PR_URL\"" || echo "null"),
-  "new_pr_number": $([ -n "$NEW_PR_NUMBER" ] && echo "\"$NEW_PR_NUMBER\"" || echo "null"),
-  "branch": "${NEW_BRANCH:-null}",
-  "platform": "$PLATFORM",
-  "language": "$LANGUAGE",
-  "ls_pr_id": "${LS_PR_ID:-null}",
-  "original_pr_id": "${ORIGINAL_PR_ID:-$PR_ID}",
-  "aws_services": $(echo "$METADATA" | jq '.aws_services // []'),
-  "status": "$MIGRATION_STATUS",
-  "reason": $([ -n "$MIGRATION_REASON" ] && echo "\"$MIGRATION_REASON\"" || echo "null"),
-  "iterations_used": ${ITERATIONS_USED:-0},
-  "attempted_at": "$(date -Iseconds)"
-}
-EOF
-)
+log_info "Updating migration log (with file locking for parallel safety)..."
 
-# Add to migrations array and update summary
-jq --argjson entry "$MIGRATION_ENTRY" --arg status "$MIGRATION_STATUS" '
-  .migrations += [$entry] |
-  .summary.total_attempted += 1 |
-  if $status == "success" then .summary.successful += 1 else .summary.failed += 1 end
-' "$MIGRATION_LOG" > "${MIGRATION_LOG}.tmp"
-mv "${MIGRATION_LOG}.tmp" "$MIGRATION_LOG"
+# Get AWS services as JSON array
+AWS_SERVICES_JSON=$(jq -c '.aws_services // []' "$WORK_DIR/metadata.json" 2>/dev/null || echo "[]")
 
-echo "✅ Migration log updated"
+"$PROJECT_ROOT/.claude/scripts/localstack-update-log.sh" \
+  --task-path "$TASK_PATH" \
+  --status "$MIGRATION_STATUS" \
+  --pr-url "${NEW_PR_URL:-}" \
+  --pr-number "${NEW_PR_NUMBER:-}" \
+  --branch "${NEW_BRANCH:-}" \
+  --ls-pr-id "${LS_PR_ID:-}" \
+  --original-pr-id "${ORIGINAL_PR_ID:-$PR_ID}" \
+  --platform "$PLATFORM" \
+  --language "$LANGUAGE" \
+  --services "$AWS_SERVICES_JSON" \
+  --reason "${MIGRATION_REASON:-}" \
+  --iterations "${ITERATIONS_USED:-0}"
+
+log_success "Migration log updated"
 ```
 
 ### Step 11: Cleanup and Summary
 
 ```bash
-echo ""
-echo "🧹 Cleaning up work directory..."
-rm -rf "$WORK_DIR"
-echo "✅ Cleanup complete"
+log_section "Cleaning up..."
 
-echo ""
-echo "═══════════════════════════════════════════════════"
+# Clean up work directory
+if [ -d "$WORK_DIR" ]; then
+  rm -rf "$WORK_DIR"
+  log_success "Work directory cleaned: $WORK_DIR"
+fi
+
+# Prune any orphaned worktrees (git worktree cleanup handled by create-pr script)
+git worktree prune 2>/dev/null || true
+
+log_success "Cleanup complete"
+
+# ═══════════════════════════════════════════════════════════════
+# FINAL SUMMARY
+# ═══════════════════════════════════════════════════════════════
+
 if [ "$MIGRATION_STATUS" = "success" ]; then
-  echo "✅ MIGRATION SUCCESSFUL - PR CREATED!"
-  echo "═══════════════════════════════════════════════════"
-  echo ""
+  log_header "✅ MIGRATION SUCCESSFUL - PR CREATED!"
+
   echo "   Original PR ID: ${ORIGINAL_PR_ID:-$PR_ID}"
   echo "   New PR ID:      ${LS_PR_ID:-N/A}"
   echo "   Source:         $TASK_PATH"
@@ -1012,11 +679,9 @@ if [ "$MIGRATION_STATUS" = "success" ]; then
   echo "   1. The PR pipeline will automatically deploy and test"
   echo "   2. Review the PR: $NEW_PR_URL"
   echo "   3. Merge when pipeline passes"
-  echo ""
 else
-  echo "❌ MIGRATION FAILED"
-  echo "═══════════════════════════════════════════════════"
-  echo ""
+  log_header "❌ MIGRATION FAILED"
+
   echo "   Task:   $TASK_PATH"
   echo "   Reason: $MIGRATION_REASON"
   echo ""
@@ -1024,9 +689,9 @@ else
   echo "   - Review errors in migration log"
   echo "   - Try manual migration"
   echo "   - Check if services are supported in LocalStack Community"
-  echo ""
 fi
 
+echo ""
 echo "📋 Migration log: $MIGRATION_LOG"
 echo ""
 
@@ -1076,6 +741,76 @@ fi
   }
 }
 ```
+
+## Parallel Execution
+
+This command supports running multiple instances in parallel for different PRs. This is useful when you want to migrate multiple tasks simultaneously using multiple Claude agents.
+
+### How to Run in Parallel
+
+```bash
+# Terminal/Agent 1
+/localstack-migrate --no-reset Pr7179
+
+# Terminal/Agent 2
+/localstack-migrate --no-reset Pr7180
+
+# Terminal/Agent 3
+/localstack-migrate --no-reset Pr7181
+
+# Terminal/Agent 4
+/localstack-migrate --no-reset Pr7182
+
+# Terminal/Agent 5
+/localstack-migrate --no-reset Pr7183
+```
+
+### Key Features for Parallel Execution
+
+| Feature             | How It's Handled                                                                                |
+| ------------------- | ----------------------------------------------------------------------------------------------- |
+| LocalStack State    | `--no-reset` flag skips state reset; unique stack names (`tap-stack-{PR_ID}`) prevent conflicts |
+| Git Operations      | Uses **git worktrees** (`worktree/git-{PR_ID}`) for isolated branch operations                  |
+| Working Directories | Each migration uses its own directory (`worktree/localstack-{PR_ID}`)                           |
+| Migration Log       | **File locking** prevents race conditions when updating the shared log                          |
+| GitHub PRs          | Each agent creates its own PR with unique branch name (`ls-synth-{PR_ID}`)                      |
+
+### Important Notes
+
+1. **Always use `--no-reset`**: When running multiple agents, use the `--no-reset` flag to prevent one agent from clearing another's deployed resources.
+
+2. **Unique Stack Names**: Each migration automatically uses a unique CloudFormation/CDK stack name based on the PR ID to prevent resource conflicts.
+
+3. **Git Worktrees**: The command uses git worktrees instead of switching branches in the main repository. This allows multiple agents to work on different branches simultaneously without conflicts.
+
+4. **File Locking**: The migration log (`.claude/reports/localstack-migrations.json`) is updated using file locking to prevent corruption when multiple agents finish at the same time.
+
+5. **Resource Cleanup**: Each agent cleans up its own worktree and work directory after completion.
+
+### Pre-Parallel Execution Setup
+
+Before running multiple agents in parallel, optionally reset LocalStack once:
+
+```bash
+# Reset LocalStack state once before starting parallel migrations
+curl -X POST http://localhost:4566/_localstack/state/reset
+
+# Then start your parallel agents with --no-reset
+```
+
+### Troubleshooting Parallel Execution
+
+**Issue: Stack name conflicts**
+
+- Solution: Each migration uses `tap-stack-{PR_ID}` automatically. If you see conflicts, ensure different PRs are being migrated.
+
+**Issue: Git worktree errors**
+
+- Solution: Clean up stale worktrees: `git worktree prune`
+
+**Issue: Migration log corruption**
+
+- Solution: The file locking mechanism should prevent this. If it occurs, manually merge entries.
 
 ## Related Agents
 

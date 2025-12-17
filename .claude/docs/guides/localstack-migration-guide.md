@@ -311,16 +311,29 @@ All migrations are tracked in `.claude/reports/localstack-migrations.json`:
 | EKS     | ❌ Pro only | Not in Community |
 | AppSync | ❌ Pro only | Not in Community |
 
-## Common Fixes Applied
+## Common Fixes Applied (Batch Approach)
 
-The `localstack-fixer` agent automatically applies these fixes:
+The `localstack-fixer` agent uses a **batch fix approach** for speed - it applies ALL applicable fixes in ONE iteration before re-deploying, instead of fixing one issue at a time.
 
-1. **Endpoint Configuration** - Adds LocalStack endpoint URLs
-2. **S3 Path-Style Access** - Enables path-style access for S3
-3. **IAM Simplification** - Simplifies IAM policies for LocalStack
-4. **Removal Policies** - Sets DESTROY for LocalStack resources
-5. **Resource Naming** - Simplifies complex resource names
-6. **Test Configuration** - Updates integration tests for LocalStack
+### Fix Priority Order
+
+| Priority | Fix | When Applied |
+|----------|-----|--------------|
+| 🔴 Critical | Endpoint Configuration | Always (if not present) |
+| 🔴 Critical | S3 Path-Style Access | If using S3/buckets |
+| 🟡 High | Removal Policies | Always (if not present) |
+| 🟡 High | Test Configuration | If test/ exists |
+| 🟡 Medium | IAM Simplification | If IAM errors detected |
+| 🟡 Medium | Resource Naming | If naming errors detected |
+| 🟡 Medium | Unsupported Services | If service errors detected |
+| 🟢 Low | Default Parameters | If parameter errors detected |
+
+### Performance Improvement
+
+With batch fix approach:
+- **Old**: 5 fixes = 5 deployment cycles (~5 minutes)
+- **New**: 5 fixes = 1-2 deployment cycles (~1-2 minutes)
+- **Time saved**: 60-80% for typical migrations
 
 ## PR Structure
 
@@ -352,6 +365,61 @@ The PR pipeline handles:
 - Deployment to LocalStack
 - Integration testing
 - Output file generation (cfn-outputs/, execution-output.md, etc.)
+
+## Metadata Schema Compliance
+
+**CRITICAL**: The `metadata.json` must comply with the schema at `config/schemas/metadata.schema.json`.
+
+### Common CI/CD Failures
+
+If you see errors like:
+- `Invalid #/subtask (schema path: #/properties/subtask/enum)`
+- `Invalid #/subject_labels/1 (schema path: #/properties/subject_labels/items/enum)`
+- `Invalid #/task_id (schema path: #/additionalProperties)`
+
+This means the metadata.json has fields or values not allowed by the schema.
+
+### Fields NOT Allowed
+
+The schema has `additionalProperties: false`. These fields must be REMOVED:
+
+| Field | Action |
+|-------|--------|
+| `task_id` | Remove (use `po_id` instead) |
+| `training_quality` | Remove |
+| `coverage` | Remove |
+| `author` | Remove |
+| `dockerS3Location` | Remove |
+| `pr_id` | Remove |
+| `original_pr_id` | Remove |
+| `localstack_migration` | Remove |
+
+### Subtask Mapping
+
+Old tasks may have invalid subtask values. Map them:
+
+| Invalid Value | Valid Value |
+|--------------|-------------|
+| "Security and Compliance Implementation" | "Security, Compliance, and Governance" |
+| "Security Configuration" | "Security, Compliance, and Governance" |
+| "Database Management" | "Provisioning of Infrastructure Environments" |
+| "Monitoring Setup" | "Infrastructure QA and Management" |
+
+### Subject Labels Mapping
+
+Only these 12 labels are valid:
+- Environment Migration
+- Cloud Environment Setup
+- Multi-Environment Consistency
+- Web Application Deployment
+- Serverless Infrastructure (Functions as Code)
+- CI/CD Pipeline
+- Failure Recovery Automation
+- Security Configuration as Code
+- IaC Diagnosis/Edits
+- IaC Optimization
+- Infrastructure Analysis/Monitoring
+- General Infrastructure Tooling QA
 
 ## Troubleshooting
 
@@ -445,8 +513,79 @@ gh pr create --title "[LocalStack] ls-Pr7179 - cdk/ts" --body "LocalStack migrat
 
 **Note:** The PR pipeline will automatically deploy and test. No manual deployment needed.
 
+## Parallel Execution (Multiple Agents)
+
+The migration command supports running multiple instances in parallel for different PRs. This is useful for migrating many tasks quickly using multiple Claude agents.
+
+### Running 5 Agents in Parallel
+
+```bash
+# Reset LocalStack once before starting (optional)
+curl -X POST http://localhost:4566/_localstack/state/reset
+
+# Then in 5 separate terminals/agents, run with --no-reset:
+# Agent 1: /localstack-migrate --no-reset Pr7179
+# Agent 2: /localstack-migrate --no-reset Pr7180
+# Agent 3: /localstack-migrate --no-reset Pr7181
+# Agent 4: /localstack-migrate --no-reset Pr7182
+# Agent 5: /localstack-migrate --no-reset Pr7183
+```
+
+### Parallel Execution Features
+
+| Challenge                        | Solution                                      |
+| -------------------------------- | --------------------------------------------- |
+| LocalStack state reset conflicts | `--no-reset` flag + unique stack names per PR |
+| Git branch conflicts             | **Git worktrees** for isolated operations     |
+| Migration log race conditions    | **File locking** mechanism                    |
+| Working directory conflicts      | Separate directories per PR                   |
+
+### Important: Always Use `--no-reset`
+
+When running multiple agents in parallel, **always use the `--no-reset` flag**. This prevents one agent from resetting LocalStack and destroying another agent's deployed resources.
+
+Each migration automatically uses a unique stack name (`tap-stack-{PR_ID}`) to prevent CloudFormation stack conflicts.
+
+## Configuration
+
+All LocalStack migration settings are centralized in `.claude/config/localstack.yaml`.
+
+### Key Configuration Sections
+
+| Section | Description |
+|---------|-------------|
+| `iteration` | Max iterations, batch fix settings |
+| `timeouts` | Deployment, test, install timeouts |
+| `localstack` | Endpoint, region, credentials |
+| `batch_fix` | Fix priority, preventive fixes |
+| `service_compatibility` | High/Medium/Low/Pro-only services |
+| `smart_selection` | Scoring for task selection |
+| `parallel` | Parallel execution settings |
+| `platforms` | CDK, CFN, TF, Pulumi specific settings |
+
+### Example Configuration Changes
+
+```yaml
+# Increase max iterations
+iteration:
+  max_fix_iterations: 5
+
+# Disable batch fix (revert to one-at-a-time)
+batch_fix:
+  enabled: false
+
+# Change LocalStack endpoint
+localstack:
+  endpoint: "http://localstack:4566"
+
+# Adjust parallel execution
+parallel:
+  max_concurrent_agents: 5
+```
+
 ## Related Files
 
+- `.claude/config/localstack.yaml` - **Central configuration file**
 - `.claude/commands/localstack-migrate.md` - Main command
 - `.claude/agents/localstack-task-selector.md` - Task selection agent
 - `.claude/agents/localstack-deploy-tester.md` - Deployment testing agent
