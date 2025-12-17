@@ -326,7 +326,7 @@ Resources:
       FunctionName: !Sub
         - ${ResourcePrefix}-function-${AWS::StackName}
         - ResourcePrefix: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, ResourcePrefix]
-      Runtime: nodejs22.x
+      Runtime: nodejs20.x
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       MemorySize: !FindInMap [EnvironmentConfig, !Ref EnvironmentSuffixName, LambdaMemorySize]

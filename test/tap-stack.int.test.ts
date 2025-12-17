@@ -144,7 +144,7 @@ describe('TapStack Serverless Integration Tests', () => {
 
         expect(response.Configuration).toBeDefined();
         expect(response.Configuration!.FunctionName).toBe(lambdaFunctionName);
-        expect(response.Configuration!.Runtime).toBe('nodejs22.x');
+        expect(response.Configuration!.Runtime).toBe('nodejs20.x');
         expect(response.Configuration!.Timeout).toBe(30);
       }
     });

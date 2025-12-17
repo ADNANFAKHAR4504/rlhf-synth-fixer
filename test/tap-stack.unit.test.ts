@@ -62,7 +62,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('Lambda function should use correct runtime', () => {
       const function_ = template.Resources.HelloWorldFunction;
-      expect(function_.Properties.Runtime).toBe('nodejs22.x');
+      expect(function_.Properties.Runtime).toBe('nodejs20.x');
     });
 
     test('S3 buckets should have encryption enabled', () => {
