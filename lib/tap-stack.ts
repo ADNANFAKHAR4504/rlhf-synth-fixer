@@ -224,13 +224,11 @@ export class TapStack extends cdk.Stack {
       new cdk.CfnOutput(this, 'CloudTrailArn', {
         value: this.cloudTrail.trailArn,
         description: 'ARN of the CloudTrail monitoring S3 data events',
-        exportName: `CloudTrailArn-${environmentSuffix}`,
       });
 
       new cdk.CfnOutput(this, 'CloudTrailLogBucketName', {
         value: trailLogBucket.bucketName,
         description: 'Name of the CloudTrail log bucket',
-        exportName: `CloudTrailLogBucketName-${environmentSuffix}`,
       });
     }
 
@@ -238,13 +236,11 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'SecuredBucketName', {
       value: this.securedBucket.bucketName,
       description: 'Name of the secured S3 bucket',
-      exportName: `SecuredBucketName-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'SecuredBucketArn', {
       value: this.securedBucket.bucketArn,
       description: 'ARN of the secured S3 bucket',
-      exportName: `SecuredBucketArn-${environmentSuffix}`,
     });
 
     // KMS outputs only for non-LocalStack
@@ -252,32 +248,27 @@ export class TapStack extends cdk.Stack {
       new cdk.CfnOutput(this, 'KmsKeyArn', {
         value: this.kmsKey.keyArn,
         description: 'ARN of the KMS key for encryption',
-        exportName: `KmsKeyArn-${environmentSuffix}`,
       });
 
       new cdk.CfnOutput(this, 'KmsKeyId', {
         value: this.kmsKey.keyId,
         description: 'ID of the KMS key for encryption',
-        exportName: `KmsKeyId-${environmentSuffix}`,
       });
     }
 
     new cdk.CfnOutput(this, 'AllowedPrincipals', {
       value: allowedPrincipals.join(','),
       description: 'List of allowed principal ARNs',
-      exportName: `AllowedPrincipals-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'EnvironmentSuffix', {
       value: environmentSuffix,
       description: 'Environment suffix used for resource naming',
-      exportName: `EnvironmentSuffix-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'IsLocalStack', {
       value: isLocalStack ? 'true' : 'false',
       description: 'Whether deployed to LocalStack',
-      exportName: `IsLocalStack-${environmentSuffix}`,
     });
   }
 }
