@@ -131,18 +131,22 @@ echo -e "${BLUE}⏱️  Waiting 10 seconds for LocalStack to initialize...${NC}"
 sleep 10
 
 while [ $attempt -lt $max_attempts ]; do
+    # Show logs on first attempt to debug CI issues immediately
+    if [ $attempt -eq 0 ]; then
+        echo -e "${BLUE}📋 LocalStack startup logs:${NC}"
+        docker logs localstack 2>&1 | tail -30
+        echo ""
+    fi
+
     # Check container is still running
     if ! docker ps | grep -q localstack; then
         echo -e "${RED}❌ LocalStack container stopped unexpectedly!${NC}"
-        echo -e "${YELLOW}💡 Container logs (last 100 lines):${NC}"
-        docker logs localstack 2>&1 | tail -100
+        echo -e "${YELLOW}💡 Full container logs:${NC}"
+        docker logs localstack 2>&1
+        echo ""
+        echo -e "${YELLOW}💡 Container exit status:${NC}"
+        docker inspect localstack --format='{{.State.ExitCode}}' 2>/dev/null || echo "Cannot get exit code"
         exit 1
-    fi
-
-    # Show logs on early attempts to debug CI issues
-    if [ $attempt -eq 2 ] || [ $attempt -eq 5 ]; then
-        echo -e "${BLUE}📋 LocalStack logs (checking for errors):${NC}"
-        docker logs localstack 2>&1 | tail -20
     fi
 
     # Try to connect to LocalStack health endpoint with verbose output on first few attempts
