@@ -30,6 +30,202 @@ batch_fix:
   conditional_fixes: [...] # Fixes based on error patterns
 ```
 
+## 🔴 CRITICAL: Guardrails and Boundaries
+
+**The agent MUST respect these boundaries to prevent destructive operations.**
+
+### Restricted Paths (NEVER operate in these directories)
+
+```yaml
+restricted_paths:
+  # Repository infrastructure - NEVER modify
+  - scripts/           # Shell scripts for CI/CD and deployment
+  - .github/           # GitHub Actions and workflows
+  - .claude/           # Claude agent configurations
+  - config/            # Schema and configuration files
+  - node_modules/      # Dependencies
+  - dist/              # Build output
+  - .git/              # Git internals
+
+  # Never delete these directories (even in worktree)
+  never_delete:
+    - scripts/
+    - .github/
+    - .claude/
+    - config/
+    - lib/              # Main source code
+    - test/             # Test files
+```
+
+### Allowed Paths (Operations permitted ONLY here)
+
+```yaml
+allowed_paths:
+  # ONLY operate within the task's working directory
+  working_directory_patterns:
+    - worktree/localstack-*    # LocalStack worktrees
+    - worktree/fixer-*         # Fixer worktrees
+    - worktree/synth-*         # Synth worktrees
+
+  # Within the worktree, only modify these directories
+  modifiable_directories:
+    - lib/               # Main IaC source code
+    - test/              # Test files
+    - metadata.json      # Task metadata
+    - execution-output.md # Execution logs
+    - package.json       # Only for dependency issues (NOT scripts)
+    - tsconfig.json      # TypeScript configuration
+    - jest.config.js     # Jest configuration
+    - cdk.json           # CDK configuration
+    - Pulumi.yaml        # Pulumi configuration
+    - *.tf               # Terraform files
+    - *.py               # Python files
+```
+
+### Path Validation (MUST run before ANY file operation)
+
+```bash
+#!/bin/bash
+# validate_path.sh - Run BEFORE any file operation
+
+validate_path() {
+  local TARGET_PATH="$1"
+  local OPERATION="$2"  # read, write, delete
+
+  # Get absolute path
+  local ABS_PATH=$(realpath "$TARGET_PATH" 2>/dev/null || echo "$TARGET_PATH")
+  local PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+
+  # ═══════════════════════════════════════════════════════════════
+  # BLOCKED PATHS - NEVER allow operations here
+  # ═══════════════════════════════════════════════════════════════
+
+  BLOCKED_PATHS=(
+    "scripts"
+    ".github"
+    ".claude"
+    "config"
+    "node_modules"
+    ".git"
+    "dist"
+    "archive"
+    "templates"
+    "subcategory-references"
+  )
+
+  for blocked in "${BLOCKED_PATHS[@]}"; do
+    if [[ "$ABS_PATH" == *"$PROJECT_ROOT/$blocked"* ]] && [[ "$ABS_PATH" != *"worktree/"* ]]; then
+      echo "❌ BLOCKED: Cannot $OPERATION in restricted path: $blocked"
+      echo "   Target: $TARGET_PATH"
+      echo "   This path is protected repository infrastructure."
+      return 1
+    fi
+  done
+
+  # ═══════════════════════════════════════════════════════════════
+  # DELETE RESTRICTIONS - Extra protection for delete operations
+  # ═══════════════════════════════════════════════════════════════
+
+  if [[ "$OPERATION" == "delete" ]]; then
+    # Never delete directories, only files
+    if [[ -d "$TARGET_PATH" ]]; then
+      echo "❌ BLOCKED: Cannot delete directories. Only file deletion is allowed."
+      echo "   Target: $TARGET_PATH"
+      return 1
+    fi
+
+    # Only allow deletion within worktree
+    if [[ "$ABS_PATH" != *"worktree/"* ]]; then
+      echo "❌ BLOCKED: Delete operations only allowed within worktree/"
+      echo "   Target: $TARGET_PATH"
+      return 1
+    fi
+
+    # Never delete these files even in worktree
+    PROTECTED_FILES=(
+      "metadata.json"
+      "PROMPT.md"
+      "MODEL_RESPONSE.md"
+      "IDEAL_RESPONSE.md"
+    )
+
+    local FILENAME=$(basename "$TARGET_PATH")
+    for protected in "${PROTECTED_FILES[@]}"; do
+      if [[ "$FILENAME" == "$protected" ]]; then
+        echo "❌ BLOCKED: Cannot delete protected file: $protected"
+        return 1
+      fi
+    done
+  fi
+
+  # ═══════════════════════════════════════════════════════════════
+  # WORKTREE VALIDATION - Ensure we're in a valid worktree
+  # ═══════════════════════════════════════════════════════════════
+
+  if [[ "$OPERATION" == "write" || "$OPERATION" == "delete" ]]; then
+    # Get current working directory
+    local CWD=$(pwd)
+
+    # Check if we're in a worktree
+    if [[ "$CWD" != *"worktree/"* ]] && [[ "$ABS_PATH" != *"worktree/"* ]]; then
+      echo "❌ BLOCKED: Write/delete operations only allowed within worktree/"
+      echo "   Current directory: $CWD"
+      echo "   Target: $TARGET_PATH"
+      echo "   Please ensure you're working in an isolated worktree."
+      return 1
+    fi
+  fi
+
+  echo "✅ Path validated: $TARGET_PATH ($OPERATION)"
+  return 0
+}
+
+# Example usage:
+# validate_path "lib/index.ts" "write" || exit 1
+# validate_path "scripts/deploy.sh" "write" || exit 1  # Would be BLOCKED
+```
+
+### Agent Behavior Rules
+
+1. **ALWAYS verify current directory** before any file operation
+2. **NEVER use `rm -rf`** on any directory
+3. **NEVER modify files outside the worktree** (except reading for reference)
+4. **ALWAYS use the validation function** before file operations
+5. **If unsure about a path, ASK the user** rather than proceeding
+6. **STOP immediately** if a blocked path is detected
+
+### Automatic Guardrail Enforcement
+
+The agent MUST add this check at the start of every fix application:
+
+```bash
+# At the start of fix application
+echo "🛡️ Validating working directory..."
+
+# Ensure we're in a worktree
+CURRENT_DIR=$(pwd)
+if [[ "$CURRENT_DIR" != *"worktree/"* ]]; then
+  echo "❌ FATAL: Not in a worktree directory!"
+  echo "   Current: $CURRENT_DIR"
+  echo "   Expected: */worktree/*"
+  echo ""
+  echo "🔧 To fix: cd to the correct worktree before applying fixes"
+  exit 1
+fi
+
+# Ensure we're not in a restricted subdirectory within worktree
+for restricted in scripts .github .claude config; do
+  if [[ "$CURRENT_DIR" == *"/$restricted"* ]] || [[ "$CURRENT_DIR" == *"/$restricted" ]]; then
+    echo "❌ FATAL: In restricted directory: $restricted"
+    echo "   Current: $CURRENT_DIR"
+    cd ..
+    echo "   Moved to: $(pwd)"
+  fi
+done
+
+echo "✅ Working directory validated: $CURRENT_DIR"
+```
+
 ## Input Parameters
 
 ### Local Mode (from localstack-migrate)
@@ -665,7 +861,7 @@ for fix in "${FIXES_TO_APPLY[@]}"; do
            --argjson valid_turn_types "$VALID_TURN_TYPES" \
            --argjson valid_teams "$VALID_TEAMS" '
 
-          # Map invalid subtask to valid ones
+          # Map invalid subtask to valid ones (MUST be a single string value)
           def map_subtask:
             if . == null then "Infrastructure QA and Management"
             elif . == "Security and Compliance Implementation" then "Security, Compliance, and Governance"
@@ -682,6 +878,18 @@ for fix in "${FIXES_TO_APPLY[@]}"; do
             elif . == "Disaster Recovery" then "Failure Recovery and High Availability"
             elif ($valid_subtasks | index(.)) then .
             else "Infrastructure QA and Management"
+            end;
+
+          # CRITICAL: Enforce subtask is a SINGLE string, not an array!
+          def enforce_subtask_string:
+            if type == "array" then
+              if length > 0 then .[0] | map_subtask
+              else "Infrastructure QA and Management"
+              end
+            elif type == "string" then
+              . | map_subtask
+            else
+              "Infrastructure QA and Management"
             end;
 
           # Map invalid subject_label to valid one
@@ -713,6 +921,7 @@ for fix in "${FIXES_TO_APPLY[@]}"; do
           def validate_started_at: if . == null or . == "" then (now | todate) else . end;
 
           # Build sanitized object with ONLY allowed fields
+          # NOTE: subtask uses enforce_subtask_string to ensure it's a single value!
           {
             platform: (.platform | validate_platform),
             language: (.language | validate_language),
@@ -721,7 +930,7 @@ for fix in "${FIXES_TO_APPLY[@]}"; do
             po_id: (.po_id // .task_id // "unknown"),
             team: (.team | validate_team),
             startedAt: (.startedAt | validate_started_at),
-            subtask: (.subtask | map_subtask),
+            subtask: (.subtask | enforce_subtask_string),
             provider: (.provider // "localstack"),
             subject_labels: (
               [.subject_labels[]? | map_label]
@@ -1013,34 +1222,246 @@ Automated by localstack-fixer agent."
 fi
 ```
 
-### Step 10: Trigger CI/CD Re-run and Monitor (PR MODE ONLY)
+### Step 10: Monitor CI/CD Until Production Ready (PR MODE ONLY)
+
+**🔴 CRITICAL**: The agent MUST continue watching CI/CD after pushing fixes until the PR is production ready. Do NOT stop after pushing - iterate until all jobs pass.
 
 ```bash
 # ═══════════════════════════════════════════════════════════════
 # LOCAL MODE: Skip - localstack-migrate will re-deploy
-# PR MODE: Optionally trigger CI/CD re-run
+# PR MODE: Monitor CI/CD until production ready
 # ═══════════════════════════════════════════════════════════════
 
 if [[ "$MODE" == "pr" ]]; then
   echo ""
   echo "═══════════════════════════════════════════════════"
-  echo "🔄 TRIGGERING CI/CD RE-RUN"
+  echo "🔄 MONITORING CI/CD UNTIL PRODUCTION READY"
   echo "═══════════════════════════════════════════════════"
   echo ""
 
-  if [[ "$RETRY_ALL" == "true" ]]; then
-    echo "🔄 Re-running all failed jobs..."
-    gh run rerun "$RUN_ID" --repo "$GITHUB_REPO" --failed 2>/dev/null || true
-  fi
+  # ═══════════════════════════════════════════════════════════════
+  # PRODUCTION READY LOOP - MUST iterate until ALL CI/CD jobs pass
+  # ═══════════════════════════════════════════════════════════════
 
-  echo "📋 Next Steps:"
-  echo "   1. CI/CD will automatically trigger on the new commit"
-  echo "   2. Monitor the workflow: gh run watch --repo $GITHUB_REPO"
-  echo "   3. View PR: https://github.com/$GITHUB_REPO/pull/$PR_NUMBER"
+  CICD_ITERATION=1
+  MAX_CICD_ITERATIONS=10  # Maximum iterations to prevent infinite loops
+  PRODUCTION_READY=false
+  CICD_WAIT_TIMEOUT=900   # 15 minutes per iteration
+  POLL_INTERVAL=30        # Poll every 30 seconds
+
+  while [ $CICD_ITERATION -le $MAX_CICD_ITERATIONS ] && [ "$PRODUCTION_READY" == "false" ]; do
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "🔄 CI/CD Iteration ${CICD_ITERATION}/${MAX_CICD_ITERATIONS}"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+
+    # Wait for GitHub to process the push and start workflows
+    echo "⏳ Waiting for CI/CD to register changes..."
+    sleep 30
+
+    # Poll CI/CD status until complete or timeout
+    WAIT_TIME=0
+    CICD_COMPLETE=false
+
+    while [ $WAIT_TIME -lt $CICD_WAIT_TIMEOUT ] && [ "$CICD_COMPLETE" == "false" ]; do
+      # Fetch latest workflow run
+      LATEST_RUN=$(gh run list --repo "$GITHUB_REPO" --branch "$PR_BRANCH" --limit 1 \
+        --json databaseId,status,conclusion 2>/dev/null | jq '.[0]' 2>/dev/null)
+
+      if [[ -z "$LATEST_RUN" ]] || [[ "$LATEST_RUN" == "null" ]]; then
+        echo "⚠️ Could not fetch workflow status, retrying..."
+        sleep $POLL_INTERVAL
+        WAIT_TIME=$((WAIT_TIME + POLL_INTERVAL))
+        continue
+      fi
+
+      RUN_STATUS=$(echo "$LATEST_RUN" | jq -r '.status // "unknown"')
+      RUN_CONCLUSION=$(echo "$LATEST_RUN" | jq -r '.conclusion // "pending"')
+      RUN_ID=$(echo "$LATEST_RUN" | jq -r '.databaseId')
+
+      if [[ "$RUN_STATUS" == "completed" ]]; then
+        CICD_COMPLETE=true
+        echo "✅ CI/CD run completed with conclusion: $RUN_CONCLUSION"
+      else
+        echo "⏳ CI/CD still running... Status: $RUN_STATUS (${WAIT_TIME}s / ${CICD_WAIT_TIMEOUT}s)"
+        sleep $POLL_INTERVAL
+        WAIT_TIME=$((WAIT_TIME + POLL_INTERVAL))
+      fi
+    done
+
+    # Check if CI/CD timed out
+    if [ "$CICD_COMPLETE" == "false" ]; then
+      echo "⏰ CI/CD timeout after ${CICD_WAIT_TIMEOUT}s"
+      echo "   Will check again in next iteration..."
+      CICD_ITERATION=$((CICD_ITERATION + 1))
+      continue
+    fi
+
+    # Check CI/CD result
+    if [[ "$RUN_CONCLUSION" == "success" ]]; then
+      echo ""
+      echo "🎉 ALL CI/CD JOBS PASSED!"
+      echo ""
+      PRODUCTION_READY=true
+      break
+    fi
+
+    # CI/CD failed - analyze failures and apply more fixes
+    echo ""
+    echo "❌ CI/CD failed with conclusion: $RUN_CONCLUSION"
+    echo "   Analyzing failures for iteration ${CICD_ITERATION}..."
+    echo ""
+
+    # Fetch failed jobs from this run
+    JOBS=$(gh run view "$RUN_ID" --repo "$GITHUB_REPO" --json jobs 2>/dev/null | jq '.jobs // []')
+    FAILED_JOBS=$(echo "$JOBS" | jq '[.[] | select(.conclusion == "failure")]')
+    FAILED_COUNT=$(echo "$FAILED_JOBS" | jq 'length')
+
+    echo "📋 Job Status (Iteration $CICD_ITERATION):"
+    echo "$JOBS" | jq -r '.[] | "   \(if .conclusion == "success" then "✅" elif .conclusion == "failure" then "❌" elif .conclusion == "skipped" then "⏭️" else "🔄" end) \(.name) (\(.conclusion // "running"))"'
+    echo ""
+
+    if [[ "$FAILED_COUNT" -eq 0 ]]; then
+      # No failures but conclusion wasn't success - might be cancelled or skipped
+      echo "⚠️ No failed jobs but conclusion was: $RUN_CONCLUSION"
+      if [[ "$RUN_CONCLUSION" == "cancelled" ]]; then
+        echo "   Workflow was cancelled. Triggering re-run..."
+        gh run rerun "$RUN_ID" --repo "$GITHUB_REPO" 2>/dev/null || true
+      fi
+      CICD_ITERATION=$((CICD_ITERATION + 1))
+      continue
+    fi
+
+    echo "❌ Found $FAILED_COUNT failed job(s). Fetching logs..."
+    echo ""
+
+    # Fetch error logs from failed jobs
+    LOG_DIR=$(mktemp -d)
+    ALL_ERRORS_FILE="$LOG_DIR/all_errors.txt"
+    touch "$ALL_ERRORS_FILE"
+
+    echo "$FAILED_JOBS" | jq -c '.[]' | while read -r job; do
+      JOB_NAME=$(echo "$job" | jq -r '.name')
+      JOB_ID=$(echo "$job" | jq -r '.databaseId')
+
+      echo "📥 Fetching logs for: $JOB_NAME..."
+      gh run view "$RUN_ID" --repo "$GITHUB_REPO" --log --job "$JOB_ID" > "$LOG_DIR/job_${JOB_ID}.log" 2>/dev/null || true
+
+      if [[ -f "$LOG_DIR/job_${JOB_ID}.log" ]]; then
+        grep -iE "error:|Error:|ERROR|failed|Failed|FAILED|exception" "$LOG_DIR/job_${JOB_ID}.log" >> "$ALL_ERRORS_FILE" 2>/dev/null || true
+      fi
+    done
+
+    # Parse new errors and identify additional fixes
+    NEW_ERRORS=$(sort -u "$ALL_ERRORS_FILE" | grep -v '^$' | head -20)
+    NEW_ERROR_COUNT=$(echo "$NEW_ERRORS" | wc -l | tr -d ' ')
+
+    echo ""
+    echo "🔍 Found $NEW_ERROR_COUNT new error patterns"
+    echo ""
+
+    if [[ "$NEW_ERROR_COUNT" -gt 0 ]]; then
+      echo "🔧 Analyzing errors and applying additional fixes..."
+      echo ""
+
+      # Re-run the fix classification and application (Step 6-8)
+      # This will be done by returning to the worktree and applying fixes
+
+      if [[ -d "$WORK_DIR" ]]; then
+        cd "$WORK_DIR"
+
+        # Apply additional fixes based on new errors
+        # (The agent should analyze $NEW_ERRORS and apply appropriate fixes)
+
+        # Check for common patterns
+        if echo "$NEW_ERRORS" | grep -qiE "metadata|schema|subtask|subject_labels"; then
+          echo "   🔧 Applying additional metadata fixes..."
+          # Re-run metadata sanitization
+          if [[ -f "metadata.json" ]]; then
+            bash "$PROJECT_ROOT/.claude/scripts/localstack-sanitize-metadata.sh" 2>/dev/null || true
+          fi
+        fi
+
+        if echo "$NEW_ERRORS" | grep -qiE "lint|eslint|prettier"; then
+          echo "   🔧 Running lint fix..."
+          npm run lint:fix 2>/dev/null || npm run lint -- --fix 2>/dev/null || true
+        fi
+
+        if echo "$NEW_ERRORS" | grep -qiE "test|jest|assertion"; then
+          echo "   🔧 Checking test configuration..."
+          # Additional test fixes can be added here
+        fi
+
+        # Commit and push if there are changes
+        if ! git diff --quiet || ! git diff --cached --quiet; then
+          git add -A
+          git commit -m "fix(localstack): iteration ${CICD_ITERATION} fixes for PR #${PR_NUMBER}
+
+Applied additional fixes based on CI/CD failure analysis.
+
+Iteration: ${CICD_ITERATION}/${MAX_CICD_ITERATIONS}
+Errors found: ${NEW_ERROR_COUNT}
+
+Automated by localstack-fixer agent."
+
+          echo "📤 Pushing iteration ${CICD_ITERATION} fixes..."
+          git push origin "$PR_BRANCH"
+          echo "✅ Pushed fixes for iteration ${CICD_ITERATION}"
+        else
+          echo "ℹ️ No additional changes to commit"
+        fi
+
+        cd "$PROJECT_ROOT"
+      fi
+    fi
+
+    # Cleanup temp directory
+    rm -rf "$LOG_DIR"
+
+    CICD_ITERATION=$((CICD_ITERATION + 1))
+  done
+
+  # Final status
   echo ""
-  echo "💡 To check status again:"
-  echo "   /localstack-fixer --status $PR_NUMBER"
-  echo ""
+  echo "═══════════════════════════════════════════════════"
+  if [ "$PRODUCTION_READY" == "true" ]; then
+    echo "✅ PRODUCTION READY - All CI/CD jobs passing!"
+    echo ""
+    echo "   PR #${PR_NUMBER} is ready for merge"
+    echo "   URL: https://github.com/$GITHUB_REPO/pull/$PR_NUMBER"
+  else
+    echo "⚠️ MAX ITERATIONS REACHED (${MAX_CICD_ITERATIONS})"
+    echo ""
+    echo "   The agent has reached the maximum number of fix iterations."
+    echo "   Manual intervention may be required."
+    echo ""
+    echo "   PR URL: https://github.com/$GITHUB_REPO/pull/$PR_NUMBER"
+    echo ""
+    echo "   📋 Recommended Actions:"
+    echo "   1. Review the latest CI/CD logs manually"
+    echo "   2. Check for issues not covered by automated fixes"
+    echo "   3. Re-run /localstack-fixer $PR_NUMBER after manual fixes"
+
+    # Post escalation comment to PR
+    ESCALATION_COMMENT="## ⚠️ LocalStack Fixer - Escalation Required
+
+**Status**: Maximum iterations reached (${MAX_CICD_ITERATIONS})
+
+The automated fixer has attempted ${MAX_CICD_ITERATIONS} iterations but CI/CD is still failing.
+
+**Recommended Actions**:
+1. Review the latest CI/CD job logs
+2. Check for issues not covered by automated fixes
+3. Apply manual fixes if needed
+4. Re-run \`/localstack-fixer ${PR_NUMBER}\` after fixes
+
+---
+🤖 Automated by localstack-fixer agent"
+
+    gh pr comment "${PR_NUMBER}" --repo "$GITHUB_REPO" --body "$ESCALATION_COMMENT" 2>/dev/null || true
+  fi
+  echo "═══════════════════════════════════════════════════"
 fi
 ```
 
@@ -1121,12 +1542,45 @@ The schema has `additionalProperties: false`, meaning ONLY these fields are allo
 - `po_id` - string (min 1 char)
 - `team` - enum: 2, 3, 4, 5, 6, synth, synth-1, synth-2, stf
 - `startedAt` - ISO 8601 datetime
-- `subtask` - enum (see below)
+- `subtask` - **SINGLE STRING enum** (see below) - NOT an array!
 - `provider` - enum: aws, localstack
 - `subject_labels` - array of enums (see below)
 - `aws_services` - array of strings
 
-### Valid `subtask` Values
+### 🔴 CRITICAL: `subtask` vs `subject_labels` Type Enforcement
+
+**The `subtask` field is a SINGLE STRING, not an array!**
+
+```yaml
+# ❌ WRONG - subtask as array (5-6 values)
+subtask: ["Security", "Compliance", "Governance", "Access Control", "IAM"]
+
+# ❌ WRONG - multiple subtasks
+subtask: ["Provisioning of Infrastructure Environments", "Application Deployment"]
+
+# ✅ CORRECT - subtask as single string
+subtask: "Security, Compliance, and Governance"
+```
+
+**Validation before committing:**
+
+```bash
+# Check that subtask is a string, not an array
+SUBTASK_TYPE=$(jq -r 'type' <<< "$(jq '.subtask' metadata.json)")
+if [[ "$SUBTASK_TYPE" != "string" ]]; then
+  echo "❌ ERROR: subtask must be a single string, not $SUBTASK_TYPE"
+
+  # Fix: Extract first element if it's an array
+  if [[ "$SUBTASK_TYPE" == "array" ]]; then
+    FIRST_SUBTASK=$(jq -r '.subtask[0] // "Infrastructure QA and Management"' metadata.json)
+    jq --arg s "$FIRST_SUBTASK" '.subtask = $s' metadata.json > metadata.json.tmp
+    mv metadata.json.tmp metadata.json
+    echo "✅ Fixed: Set subtask to first value: $FIRST_SUBTASK"
+  fi
+fi
+```
+
+### Valid `subtask` Values (ONLY ONE of these)
 
 ```
 - "Provisioning of Infrastructure Environments"
@@ -1137,6 +1591,8 @@ The schema has `additionalProperties: false`, meaning ONLY these fields are allo
 - "IaC Program Optimization"
 - "Infrastructure QA and Management"
 ```
+
+**NEVER set subtask to multiple values. Pick exactly ONE.**
 
 ### Valid `subject_labels` Values
 

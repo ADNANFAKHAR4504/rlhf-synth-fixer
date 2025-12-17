@@ -152,6 +152,25 @@ jq --argjson valid_subtasks "$VALID_SUBTASKS" \
   def validate_started_at: if . == null or . == "" then (now | todate) else . end;
   
   # ═══════════════════════════════════════════════════════════════════════
+  # SUBTASK TYPE ENFORCEMENT
+  # CRITICAL: subtask MUST be a single string, not an array!
+  # ═══════════════════════════════════════════════════════════════════════
+  
+  def enforce_subtask_string:
+    # If subtask is an array, take the first element
+    if type == "array" then
+      if length > 0 then .[0] | map_subtask
+      else "Infrastructure QA and Management"
+      end
+    # If subtask is a string, validate it
+    elif type == "string" then
+      . | map_subtask
+    # If subtask is null or invalid type, use default
+    else
+      "Infrastructure QA and Management"
+    end;
+  
+  # ═══════════════════════════════════════════════════════════════════════
   # BUILD SANITIZED OBJECT
   # Only include fields allowed by schema (additionalProperties: false)
   # ═══════════════════════════════════════════════════════════════════════
@@ -164,7 +183,7 @@ jq --argjson valid_subtasks "$VALID_SUBTASKS" \
     po_id: (.po_id // .task_id // "unknown"),
     team: (.team | validate_team),
     startedAt: (.startedAt | validate_started_at),
-    subtask: (.subtask | map_subtask),
+    subtask: (.subtask | enforce_subtask_string),
     provider: "localstack",
     subject_labels: (
       [.subject_labels[]? | map_label]
