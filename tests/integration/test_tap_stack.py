@@ -23,10 +23,30 @@ if os.path.exists(outputs_path):
 else:
     print(f"Warning: CDK outputs file not found at {outputs_path}")
 
-VPC_ID = flat_outputs.get("VpcId")
-SECURITY_GROUP_ID = flat_outputs.get("SecurityGroupId")
+# Get IDs from flat outputs or environment variables (for CI/CD)
+VPC_ID = flat_outputs.get("VpcId") or os.environ.get("VPC_ID")
+SECURITY_GROUP_ID = flat_outputs.get("SecurityGroupId") or os.environ.get("SECURITY_GROUP_ID")
 
-ec2_client = boto3.client("ec2")
+# Configure boto3 client for LocalStack
+def create_ec2_client():
+    """Create EC2 client configured for LocalStack or AWS."""
+    # Check if we're running against LocalStack
+    endpoint_url = os.environ.get("AWS_ENDPOINT_URL")
+    
+    if endpoint_url:
+        # LocalStack configuration
+        return boto3.client(
+            "ec2",
+            endpoint_url=endpoint_url,
+            region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
+            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", "test"),
+            aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "test")
+        )
+    else:
+        # Standard AWS configuration
+        return boto3.client("ec2", region_name="us-east-1")
+
+ec2_client = create_ec2_client()
 
 
 @mark.describe("TapStack Integration Tests")
@@ -36,9 +56,9 @@ class TestTapStackIntegration(unittest.TestCase):
     def setUp(self):
         """Ensure required outputs are available before running tests."""
         if not VPC_ID:
-            self.fail("Missing VpcId in flat-outputs.json")
+            self.fail("Missing VpcId in flat-outputs.json or VPC_ID environment variable")
         if not SECURITY_GROUP_ID:
-            self.fail("Missing SecurityGroupId in flat-outputs.json")
+            self.fail("Missing SecurityGroupId in flat-outputs.json or SECURITY_GROUP_ID environment variable")
 
     @mark.it("confirms VPC is accessible")
     def test_vpc_access(self):
