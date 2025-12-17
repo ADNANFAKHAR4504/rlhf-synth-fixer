@@ -68,6 +68,8 @@ Metadata:
         default: "Default egress CIDR for security groups"
       CloudTrailToCloudWatch:
         default: "Send CloudTrail to CloudWatch Logs"
+      RdsMasterUsername:
+        default: "RDS master username"
 
 Parameters:
   ProjectName:
@@ -876,6 +878,11 @@ Resources:
 
     Type: AWS::RDS::DBInstance
     Condition: CreateRdsCondition
+    DependsOn:
+      - RdsSubnetGroup
+      - RdsParameterGroup
+      - RdsInstanceSecurityGroup
+      - KmsKey
     Properties:
       Engine: postgres
       DBSubnetGroupName: !Ref RdsSubnetGroup
