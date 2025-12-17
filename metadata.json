@@ -1,6 +1,6 @@
 {
   "platform": "cfn",
-  "language": "ts",
+  "language": "yml",
   "complexity": "medium",
   "turn_type": "single",
   "po_id": "74918362",
