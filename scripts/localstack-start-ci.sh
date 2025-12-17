@@ -79,8 +79,6 @@ fi
 echo -e "${YELLOW}🔧 Starting LocalStack container...${NC}"
 
 # Build docker run command with optional API key
-# Using LocalStack 3.7.2 - last stable version before 4.0 removed legacy S3 provider
-# This version has better CDK compatibility and fewer S3 XML parsing issues
 DOCKER_CMD="docker run -d \
   --name localstack \
   -p 4566:4566 \
@@ -88,8 +86,7 @@ DOCKER_CMD="docker run -d \
   -e DATA_DIR=/tmp/localstack/data \
   -e DOCKER_HOST=unix:///var/run/docker.sock \
   -e S3_SKIP_SIGNATURE_VALIDATION=1 \
-  -e ENFORCE_IAM=0 \
-  -e PROVIDER_OVERRIDE_S3=legacy_v2"
+  -e ENFORCE_IAM=0"
 
 # Add SERVICES only if explicitly set
 if [ -n "$SERVICES" ]; then
@@ -105,7 +102,7 @@ fi
 
 DOCKER_CMD="$DOCKER_CMD \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  localstack/localstack-pro:3.7.2"
+  localstack/localstack-pro:4.12.0"
 
 # Execute the docker command
 eval $DOCKER_CMD
@@ -141,11 +138,11 @@ while [ $attempt -lt $max_attempts ]; do
     # Try to connect to LocalStack health endpoint with verbose output on first few attempts
     if [ $attempt -lt 3 ]; then
         echo -e "${BLUE}🔍 Testing connectivity to localhost:4566 (attempt $((attempt + 1)))...${NC}"
-        curl -v --connect-timeout 5 --max-time 10 http://localhost:4566/_localstack/health 2>&1 | head -30 || echo "Connection failed, will retry..."
+        curl -4 -v --connect-timeout 5 --max-time 10 http://localhost:4566/_localstack/health 2>&1 | head -30 || echo "Connection failed, will retry..."
     fi
 
-    # Regular health check (suppress output for cleaner logs)
-    HTTP_CODE=$(curl --connect-timeout 5 --max-time 10 -s -o /dev/null -w "%{http_code}" http://localhost:4566/_localstack/health 2>&1 || echo "000")
+    # Regular health check (suppress output for cleaner logs) - force IPv4
+    HTTP_CODE=$(curl -4 --connect-timeout 5 --max-time 10 -s -o /dev/null -w "%{http_code}" http://localhost:4566/_localstack/health 2>&1 || echo "000")
 
     if [ "$HTTP_CODE" = "200" ]; then
         echo -e "${GREEN}✅ LocalStack is ready!${NC}"
