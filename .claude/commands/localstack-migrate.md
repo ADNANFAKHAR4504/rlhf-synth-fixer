@@ -1,13 +1,13 @@
 ---
 name: localstack-migrate
-description: Migrates tasks from archive folder to LocalStack, testing deployment and fixing issues until successful.
+description: Migrates tasks from archive folder or GitHub PR to LocalStack, testing deployment and fixing issues until successful.
 color: green
 model: sonnet
 ---
 
 # LocalStack Migration Command
 
-Picks a task from the archive folder and ensures it's deployable to LocalStack, fixing issues iteratively until successful.
+Picks a task from the archive folder (or fetches from GitHub PR if not found locally) and ensures it's deployable to LocalStack, fixing issues iteratively until successful.
 
 ## Usage
 
@@ -15,8 +15,11 @@ Picks a task from the archive folder and ensures it's deployable to LocalStack, 
 # Migrate a specific task by path
 /localstack-migrate ./archive/cdk-ts/Pr7179
 
-# Migrate by PR number (auto-detects platform)
+# Migrate by PR number (auto-detects platform, fetches from GitHub if not in archive)
 /localstack-migrate Pr7179
+
+# Migrate by PR number with explicit GitHub fetch
+/localstack-migrate --github Pr2077
 
 # Migrate next unprocessed task from a specific platform
 /localstack-migrate --platform cdk-ts
@@ -55,6 +58,8 @@ SERVICE_FILTER=""
 PICK_NEXT=false
 SMART_SELECT=false
 SHOW_STATS=false
+FORCE_GITHUB=false
+GITHUB_REPO="TuringGpt/iac-test-automations"
 
 # Parse flags
 case "$TASK_PATH" in
@@ -77,6 +82,10 @@ case "$TASK_PATH" in
   --stats)
     SHOW_STATS=true
     TASK_PATH=""
+    ;;
+  --github)
+    FORCE_GITHUB=true
+    TASK_PATH="${2:-}"
     ;;
 esac
 
@@ -191,20 +200,188 @@ if [ "$SHOW_STATS" = true ]; then
 fi
 ```
 
-### Step 4: Select Task to Migrate
+### Step 4: Select Task to Migrate (with GitHub Fetch Support)
 
 ```bash
+FETCHED_FROM_GITHUB=false
+
 if [ -n "$TASK_PATH" ]; then
   # Manual path provided
-  if [[ "$TASK_PATH" =~ ^Pr[0-9]+$ ]]; then
-    # Find task by PR number
-    FOUND_PATH=$(find archive -maxdepth 3 -type d -name "$TASK_PATH" 2>/dev/null | head -1)
-    if [ -z "$FOUND_PATH" ]; then
-      echo "❌ Task not found: $TASK_PATH"
-      echo "💡 Try: find archive -name '$TASK_PATH'"
-      exit 1
+  if [[ "$TASK_PATH" =~ ^Pr[0-9]+$ ]] || [[ "$TASK_PATH" =~ ^[0-9]+$ ]]; then
+    # Normalize PR number format
+    PR_NUMBER="${TASK_PATH#Pr}"
+    PR_ID="Pr${PR_NUMBER}"
+
+    # Find task by PR number in archive
+    FOUND_PATH=$(find archive -maxdepth 3 -type d -name "$PR_ID" 2>/dev/null | head -1)
+
+    if [ -z "$FOUND_PATH" ] || [ "$FORCE_GITHUB" = true ]; then
+      echo ""
+      echo "═══════════════════════════════════════════════════"
+      echo "🔍 FETCHING FROM GITHUB"
+      echo "═══════════════════════════════════════════════════"
+      echo ""
+
+      if [ -z "$FOUND_PATH" ]; then
+        echo "📋 Task $PR_ID not found in archive directory"
+      else
+        echo "📋 Force GitHub fetch requested for $PR_ID"
+      fi
+      echo "🌐 Fetching from GitHub PR #${PR_NUMBER}..."
+      echo ""
+
+      # Check if gh CLI is available
+      if ! command -v gh &> /dev/null; then
+        echo "❌ GitHub CLI (gh) is not installed!"
+        echo ""
+        echo "💡 Install GitHub CLI:"
+        echo "   macOS: brew install gh"
+        echo "   Linux: sudo apt install gh"
+        echo ""
+        echo "💡 Then authenticate:"
+        echo "   gh auth login"
+        exit 1
+      fi
+
+      # Check if authenticated
+      if ! gh auth status &> /dev/null; then
+        echo "❌ GitHub CLI is not authenticated!"
+        echo ""
+        echo "💡 Authenticate with:"
+        echo "   gh auth login"
+        exit 1
+      fi
+
+      echo "✅ GitHub CLI authenticated"
+
+      # Fetch PR details
+      echo "📥 Fetching PR #${PR_NUMBER} details from ${GITHUB_REPO}..."
+
+      PR_INFO=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPO" --json title,headRefName,files,state 2>/dev/null)
+
+      if [ -z "$PR_INFO" ] || [ "$PR_INFO" = "null" ]; then
+        echo "❌ PR #${PR_NUMBER} not found in ${GITHUB_REPO}"
+        echo ""
+        echo "💡 Verify the PR exists:"
+        echo "   gh pr view $PR_NUMBER --repo $GITHUB_REPO"
+        exit 1
+      fi
+
+      PR_TITLE=$(echo "$PR_INFO" | jq -r '.title // "Unknown"')
+      PR_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // "unknown"')
+      PR_STATE=$(echo "$PR_INFO" | jq -r '.state // "unknown"')
+
+      echo ""
+      echo "   Title:  $PR_TITLE"
+      echo "   Branch: $PR_BRANCH"
+      echo "   State:  $PR_STATE"
+      echo ""
+
+      # Create temporary directory for PR files
+      GITHUB_WORK_DIR="worktree/github-${PR_ID}"
+      rm -rf "$GITHUB_WORK_DIR"
+      mkdir -p "$GITHUB_WORK_DIR"
+
+      echo "📁 Created temp directory: $GITHUB_WORK_DIR"
+
+      # Fetch the PR diff and extract changed files
+      echo "📥 Downloading PR files..."
+
+      # Get the list of files changed in the PR
+      PR_FILES=$(gh pr diff "$PR_NUMBER" --repo "$GITHUB_REPO" --name-only 2>/dev/null)
+
+      if [ -z "$PR_FILES" ]; then
+        echo "⚠️  No files found in PR diff, trying to checkout branch..."
+
+        # Alternative: checkout the PR branch
+        git fetch origin "pull/${PR_NUMBER}/head:pr-${PR_NUMBER}" 2>/dev/null || true
+
+        if git rev-parse "pr-${PR_NUMBER}" &>/dev/null; then
+          # Get files from the PR branch
+          git show "pr-${PR_NUMBER}:." --name-only 2>/dev/null | while read -r file; do
+            if [ -n "$file" ]; then
+              mkdir -p "$GITHUB_WORK_DIR/$(dirname "$file")"
+              git show "pr-${PR_NUMBER}:$file" > "$GITHUB_WORK_DIR/$file" 2>/dev/null || true
+            fi
+          done
+
+          # Clean up the temporary branch
+          git branch -D "pr-${PR_NUMBER}" 2>/dev/null || true
+        fi
+      else
+        # Download each file from the PR
+        echo "$PR_FILES" | while read -r file; do
+          if [ -n "$file" ]; then
+            echo "   📄 $file"
+            mkdir -p "$GITHUB_WORK_DIR/$(dirname "$file")"
+            gh api "repos/${GITHUB_REPO}/contents/${file}?ref=${PR_BRANCH}" --jq '.content' 2>/dev/null | base64 -d > "$GITHUB_WORK_DIR/$file" 2>/dev/null || true
+          fi
+        done
+      fi
+
+      # Check if we got the essential files
+      if [ ! -f "$GITHUB_WORK_DIR/metadata.json" ] && [ ! -f "$GITHUB_WORK_DIR/lib/index.ts" ] && [ ! -f "$GITHUB_WORK_DIR/lib/__main__.py" ]; then
+        echo ""
+        echo "⚠️  Could not find task files in PR. Trying full branch checkout..."
+
+        # Try checking out the full branch content
+        TEMP_CLONE_DIR=$(mktemp -d)
+        git clone --depth 1 --branch "$PR_BRANCH" "https://github.com/${GITHUB_REPO}.git" "$TEMP_CLONE_DIR" 2>/dev/null || {
+          echo "❌ Failed to clone PR branch"
+          rm -rf "$TEMP_CLONE_DIR"
+          exit 1
+        }
+
+        # Copy relevant files
+        if [ -d "$TEMP_CLONE_DIR/lib" ]; then
+          cp -r "$TEMP_CLONE_DIR/lib" "$GITHUB_WORK_DIR/"
+        fi
+        if [ -d "$TEMP_CLONE_DIR/test" ]; then
+          cp -r "$TEMP_CLONE_DIR/test" "$GITHUB_WORK_DIR/"
+        fi
+        if [ -f "$TEMP_CLONE_DIR/metadata.json" ]; then
+          cp "$TEMP_CLONE_DIR/metadata.json" "$GITHUB_WORK_DIR/"
+        fi
+        if [ -f "$TEMP_CLONE_DIR/package.json" ]; then
+          cp "$TEMP_CLONE_DIR/package.json" "$GITHUB_WORK_DIR/"
+        fi
+        if [ -f "$TEMP_CLONE_DIR/tsconfig.json" ]; then
+          cp "$TEMP_CLONE_DIR/tsconfig.json" "$GITHUB_WORK_DIR/"
+        fi
+        if [ -f "$TEMP_CLONE_DIR/Pipfile" ]; then
+          cp "$TEMP_CLONE_DIR/Pipfile" "$GITHUB_WORK_DIR/"
+        fi
+
+        rm -rf "$TEMP_CLONE_DIR"
+      fi
+
+      # Verify we have essential files
+      if [ ! -f "$GITHUB_WORK_DIR/metadata.json" ]; then
+        echo ""
+        echo "❌ metadata.json not found in PR #${PR_NUMBER}"
+        echo ""
+        echo "💡 The PR may not contain a valid IaC task structure."
+        echo "   Expected files: metadata.json, lib/ directory"
+        rm -rf "$GITHUB_WORK_DIR"
+        exit 1
+      fi
+
+      echo ""
+      echo "✅ PR files downloaded successfully"
+
+      # Set task path to the GitHub work directory
+      TASK_PATH="$GITHUB_WORK_DIR"
+      FETCHED_FROM_GITHUB=true
+
+      # Log the source
+      echo ""
+      echo "📋 Task Source: GitHub PR #${PR_NUMBER}"
+      echo "   Repository: ${GITHUB_REPO}"
+      echo "   Branch: ${PR_BRANCH}"
+      echo ""
+    else
+      TASK_PATH="$FOUND_PATH"
     fi
-    TASK_PATH="$FOUND_PATH"
   fi
 
   if [ ! -d "$TASK_PATH" ]; then
@@ -212,7 +389,11 @@ if [ -n "$TASK_PATH" ]; then
     exit 1
   fi
 
-  echo "📁 Using specified task: $TASK_PATH"
+  if [ "$FETCHED_FROM_GITHUB" = true ]; then
+    echo "📁 Using task fetched from GitHub: $TASK_PATH"
+  else
+    echo "📁 Using specified task: $TASK_PATH"
+  fi
 
 else
   # Auto-select task

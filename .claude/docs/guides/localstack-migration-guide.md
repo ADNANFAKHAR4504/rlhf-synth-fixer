@@ -1,6 +1,6 @@
 # LocalStack Migration Guide
 
-This guide explains how to use the LocalStack migration system to test and migrate IaC tasks from the archive folder to LocalStack.
+This guide explains how to use the LocalStack migration system to test and migrate IaC tasks from the archive folder (or directly from GitHub PRs) to LocalStack.
 
 ## Overview
 
@@ -16,6 +16,7 @@ The LocalStack migration system consists of:
 Before using the migration system, ensure:
 
 1. **LocalStack is running**:
+
    ```bash
    ./scripts/localstack-start.sh
    ```
@@ -25,6 +26,12 @@ Before using the migration system, ensure:
    - `jq` - JSON processor
    - `cdklocal` (for CDK tasks)
    - `tflocal` (for Terraform tasks)
+   - `gh` - GitHub CLI (for fetching PRs not in archive)
+
+3. **GitHub CLI authenticated** (for GitHub fetch feature):
+   ```bash
+   gh auth login
+   ```
 
 ## Quick Start
 
@@ -37,11 +44,14 @@ Before using the migration system, ensure:
 ### 2. Run a Migration
 
 ```bash
-# Migrate a specific task
+# Migrate a specific task from archive
 /localstack-migrate ./archive/cdk-ts/Pr7179
 
-# Or by PR number
+# Or by PR number (auto-fetches from GitHub if not in archive)
 /localstack-migrate Pr7179
+
+# Force fetch from GitHub even if task exists in archive
+/localstack-migrate --github Pr2077
 
 # Or let the system pick the next task
 /localstack-migrate --next
@@ -55,9 +65,31 @@ Before using the migration system, ensure:
 # By full path
 /localstack-migrate ./archive/cdk-ts/Pr7179
 
-# By PR number (auto-finds in archive/)
+# By PR number (auto-finds in archive/, fetches from GitHub if not found)
 /localstack-migrate Pr7179
 ```
+
+### GitHub Fetch
+
+When a PR is not found in the local archive directory, the command automatically fetches it from GitHub:
+
+```bash
+# Auto-fetch from GitHub if Pr2077 not in archive
+/localstack-migrate Pr2077
+
+# Force fetch from GitHub (even if exists in archive)
+/localstack-migrate --github Pr2077
+
+# Works with just the number too
+/localstack-migrate --github 2077
+```
+
+**Requirements for GitHub fetch:**
+
+1. GitHub CLI (`gh`) must be installed
+2. Must be authenticated: `gh auth login`
+3. PR must exist in `TuringGpt/iac-test-automations` repository
+4. PR must contain a valid task structure (metadata.json, lib/ directory)
 
 ### Platform-Specific
 
@@ -91,6 +123,7 @@ Intelligently picks tasks with highest LocalStack compatibility:
 ```
 
 Smart selection considers:
+
 - AWS services used (high/medium/low compatibility)
 - Platform type (CloudFormation > CDK > Terraform > Pulumi)
 - Task complexity (medium > hard > expert)
@@ -182,36 +215,36 @@ All migrations are tracked in `.claude/reports/localstack-migrations.json`:
 
 ### High Compatibility (Community Edition)
 
-| Service | Status | Notes |
-|---------|--------|-------|
-| S3 | ✅ Excellent | Full support |
-| DynamoDB | ✅ Excellent | Full support |
-| SQS | ✅ Excellent | Full support |
-| SNS | ✅ Excellent | Full support |
-| IAM | ✅ Good | Simplified policies |
-| KMS | ✅ Good | Basic encryption |
-| CloudWatch | ✅ Good | Logs and metrics |
-| Secrets Manager | ✅ Good | Full support |
-| SSM | ✅ Good | Parameter Store |
-| EventBridge | ✅ Good | Events and rules |
+| Service         | Status       | Notes               |
+| --------------- | ------------ | ------------------- |
+| S3              | ✅ Excellent | Full support        |
+| DynamoDB        | ✅ Excellent | Full support        |
+| SQS             | ✅ Excellent | Full support        |
+| SNS             | ✅ Excellent | Full support        |
+| IAM             | ✅ Good      | Simplified policies |
+| KMS             | ✅ Good      | Basic encryption    |
+| CloudWatch      | ✅ Good      | Logs and metrics    |
+| Secrets Manager | ✅ Good      | Full support        |
+| SSM             | ✅ Good      | Parameter Store     |
+| EventBridge     | ✅ Good      | Events and rules    |
 
 ### Medium Compatibility
 
-| Service | Status | Notes |
-|---------|--------|-------|
-| Lambda | ⚠️ Good | May need Docker |
-| API Gateway | ⚠️ Good | REST APIs |
-| Step Functions | ⚠️ Good | State machines |
-| Kinesis | ⚠️ Moderate | Basic streams |
+| Service        | Status      | Notes           |
+| -------------- | ----------- | --------------- |
+| Lambda         | ⚠️ Good     | May need Docker |
+| API Gateway    | ⚠️ Good     | REST APIs       |
+| Step Functions | ⚠️ Good     | State machines  |
+| Kinesis        | ⚠️ Moderate | Basic streams   |
 
 ### Low Compatibility (May Require Pro)
 
-| Service | Status | Notes |
-|---------|--------|-------|
-| ECS | ⚠️ Limited | Basic support |
-| RDS | ⚠️ Limited | Simulated |
-| EC2 | ⚠️ Limited | Mocked |
-| EKS | ❌ Pro only | Not in Community |
+| Service | Status      | Notes            |
+| ------- | ----------- | ---------------- |
+| ECS     | ⚠️ Limited  | Basic support    |
+| RDS     | ⚠️ Limited  | Simulated        |
+| EC2     | ⚠️ Limited  | Mocked           |
+| EKS     | ❌ Pro only | Not in Community |
 | AppSync | ❌ Pro only | Not in Community |
 
 ## Common Fixes Applied
@@ -251,6 +284,41 @@ archive-localstack/Pr7179-cdk-ts/
 # Check health
 curl http://localhost:4566/_localstack/health | jq
 ```
+
+### GitHub CLI Not Installed or Authenticated
+
+```bash
+# Install GitHub CLI
+# macOS
+brew install gh
+
+# Linux (Debian/Ubuntu)
+sudo apt install gh
+
+# Authenticate
+gh auth login
+
+# Verify authentication
+gh auth status
+```
+
+### PR Not Found on GitHub
+
+```bash
+# Verify PR exists
+gh pr view 2077 --repo TuringGpt/iac-test-automations
+
+# List recent PRs
+gh pr list --repo TuringGpt/iac-test-automations --limit 10
+```
+
+### GitHub Fetch Failed - Missing Files
+
+If the PR doesn't contain a valid task structure:
+
+1. Ensure the PR has `metadata.json` in the root
+2. Ensure the PR has a `lib/` directory with IaC code
+3. Check if the PR is a draft or incomplete
 
 ### Deployment Keeps Failing
 
@@ -296,4 +364,3 @@ cd archive-localstack/Pr7179-cdk-ts/
 - `.claude/agents/localstack-fixer.md` - Fix automation agent
 - `.claude/scripts/localstack-select-task.sh` - Selection helper script
 - `.claude/reports/localstack-migrations.json` - Migration tracking log
-
