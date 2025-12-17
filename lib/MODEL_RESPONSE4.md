@@ -672,7 +672,7 @@ The key fix was in the `createSubnets` function where I changed:
 
 ```go
 if err != nil {
-    return err  // ❌ Wrong - missing subnets return value
+    return err  // Wrong - missing subnets return value
 }
 ```
 
@@ -680,7 +680,7 @@ to:
 
 ```go
 if err != nil {
-    return nil, err  // ✅ Correct - returns (subnets, error)
+    return nil, err  // Correct - returns (subnets, error)
 }
 ```
 
