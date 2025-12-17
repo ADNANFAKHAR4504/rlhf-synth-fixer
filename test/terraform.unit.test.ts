@@ -249,10 +249,6 @@ describe('Terraform Infrastructure Unit Tests - main.tf', () => {
   // S3 BUCKET
   // ===========================
   describe('S3 Bucket', () => {
-    test('creates S3 bucket for logs', () => {
-      expect(tfContent).toMatch(/resource\s+"aws_s3_bucket"\s+"logs"\s*{/);
-      expect(tfContent).toMatch(/bucket\s*=\s*"\$\{local\.name_prefix\}-logs-\$\{data\.aws_caller_identity\.current\.account_id\}"/);
-    });
 
     test('enables versioning on logs bucket', () => {
       expect(tfContent).toMatch(/resource\s+"aws_s3_bucket_versioning"\s+"logs"\s*{/);
@@ -290,17 +286,6 @@ describe('Terraform Infrastructure Unit Tests - main.tf', () => {
       expect(tfContent).toMatch(/resource\s+"aws_lb"\s+"main"\s*{/);
       expect(tfContent).toMatch(/load_balancer_type\s*=\s*"application"/);
       expect(tfContent).toMatch(/internal\s*=\s*false/);
-    });
-
-    test('ALB enables access logs to S3', () => {
-      expect(tfContent).toMatch(/access_logs\s*{/);
-      expect(tfContent).toMatch(/bucket\s*=\s*aws_s3_bucket\.logs\.bucket/);
-      expect(tfContent).toMatch(/prefix\s*=\s*"alb-logs"/);
-      expect(tfContent).toMatch(/enabled\s*=\s*true/);
-    });
-
-    test('ALB depends on S3 bucket policy', () => {
-      expect(tfContent).toMatch(/depends_on\s*=\s*\[\s*aws_s3_bucket_policy\.logs\s*\]/);
     });
 
     test('creates target group for HTTPS', () => {

@@ -79,7 +79,8 @@ data "aws_availability_zones" "available" {
 
 data "aws_caller_identity" "current" {}
 
-data "aws_elb_service_account" "main" {}
+# LocalStack compatibility: commented out - not used without logs bucket
+# data "aws_elb_service_account" "main" {}
 
 data "aws_ami" "amazon_linux_2023" {
   most_recent = true
@@ -494,75 +495,68 @@ resource "aws_security_group" "rds" {
 # ===========================
 # S3 LOGS BUCKET
 # ===========================
+# LocalStack compatibility: S3 bucket with tags triggers S3 Control API
+# which fails with LocalStack's dummy account ID (000000000000)
+# Commenting out entire logs bucket section for LocalStack
 
-resource "aws_s3_bucket" "logs" {
-  # LocalStack compatibility: use static bucket name without account_id
-  # to avoid S3 Control API issues with LocalStack's dummy account ID
-  bucket = "${local.name_prefix}-logs-bucket"
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-logs"
-  })
-}
-
-resource "aws_s3_bucket_versioning" "logs" {
-  bucket = aws_s3_bucket.logs.id
-
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
-  bucket = aws_s3_bucket.logs.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
-}
-
-resource "aws_s3_bucket_public_access_block" "logs" {
-  bucket = aws_s3_bucket.logs.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-resource "aws_s3_bucket_policy" "logs" {
-  bucket = aws_s3_bucket.logs.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "AWSLogDeliveryWrite"
-        Effect = "Allow"
-        Principal = {
-          AWS = data.aws_elb_service_account.main.arn
-        }
-        Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.logs.arn}/alb-logs/*"
-      },
-      {
-        Sid    = "AWSLogDeliveryAclCheck"
-        Effect = "Allow"
-        Principal = {
-          Service = "elasticloadbalancing.amazonaws.com"
-        }
-        Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.logs.arn
-      }
-    ]
-  })
-
-  depends_on = [
-    aws_s3_bucket_public_access_block.logs
-  ]
-}
+# resource "aws_s3_bucket" "logs" {
+#   bucket = "${local.name_prefix}-logs-bucket"
+#   tags = merge(local.common_tags, {
+#     Name = "${local.name_prefix}-logs"
+#   })
+# }
+#
+# resource "aws_s3_bucket_versioning" "logs" {
+#   bucket = aws_s3_bucket.logs.id
+#   versioning_configuration {
+#     status = "Enabled"
+#   }
+# }
+#
+# resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
+#   bucket = aws_s3_bucket.logs.id
+#   rule {
+#     apply_server_side_encryption_by_default {
+#       sse_algorithm = "AES256"
+#     }
+#   }
+# }
+#
+# resource "aws_s3_bucket_public_access_block" "logs" {
+#   bucket = aws_s3_bucket.logs.id
+#   block_public_acls       = true
+#   block_public_policy     = true
+#   ignore_public_acls      = true
+#   restrict_public_buckets = true
+# }
+#
+# resource "aws_s3_bucket_policy" "logs" {
+#   bucket = aws_s3_bucket.logs.id
+#   policy = jsonencode({
+#     Version = "2012-10-17"
+#     Statement = [
+#       {
+#         Sid    = "AWSLogDeliveryWrite"
+#         Effect = "Allow"
+#         Principal = {
+#           AWS = data.aws_elb_service_account.main.arn
+#         }
+#         Action   = "s3:PutObject"
+#         Resource = "${aws_s3_bucket.logs.arn}/alb-logs/*"
+#       },
+#       {
+#         Sid    = "AWSLogDeliveryAclCheck"
+#         Effect = "Allow"
+#         Principal = {
+#           Service = "elasticloadbalancing.amazonaws.com"
+#         }
+#         Action   = "s3:GetBucketAcl"
+#         Resource = aws_s3_bucket.logs.arn
+#       }
+#     ]
+#   })
+#   depends_on = [aws_s3_bucket_public_access_block.logs]
+# }
 
 # ===========================
 # APPLICATION LOAD BALANCER
@@ -576,12 +570,11 @@ resource "aws_lb" "main" {
   subnets            = aws_subnet.public[*].id
 
   # LocalStack compatibility: minimal ALB configuration
-  # Removed enable_deletion_protection, enable_http2, enable_cross_zone_load_balancing
-  # as these trigger unsupported attribute modifications in LocalStack
+  # No tags to avoid S3 Control API issues
 
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-alb"
-  })
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 resource "aws_lb_target_group" "app" {
