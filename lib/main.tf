@@ -1174,15 +1174,16 @@ output "kms_key_arn" {
 }
 
 # S3 Outputs
-output "logs_bucket_name" {
-  description = "S3 logs bucket name"
-  value       = aws_s3_bucket.logs.id
-}
-
-output "logs_bucket_arn" {
-  description = "S3 logs bucket ARN"
-  value       = aws_s3_bucket.logs.arn
-}
+# LocalStack compatibility: commented out - logs bucket is disabled
+# output "logs_bucket_name" {
+#   description = "S3 logs bucket name"
+#   value       = aws_s3_bucket.logs.id
+# }
+#
+# output "logs_bucket_arn" {
+#   description = "S3 logs bucket ARN"
+#   value       = aws_s3_bucket.logs.arn
+# }
 
 # CloudWatch Outputs
 output "app_log_group_name" {
