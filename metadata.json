@@ -6,10 +6,22 @@
   "po_id": "291440",
   "team": "4",
   "startedAt": "2025-08-16T16:20:00.928Z",
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "rahulpatil118",
-  "dockerS3Location": ""
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "provider": "localstack",
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Route Table",
+    "Security Group",
+    "EC2",
+    "S3",
+    "DynamoDB",
+    "SNS",
+    "SQS",
+    "CloudWatch Logs",
+    "IAM"
+  ]
 }
