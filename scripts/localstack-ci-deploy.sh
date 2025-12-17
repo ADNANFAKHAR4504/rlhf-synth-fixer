@@ -628,16 +628,34 @@ deploy_terraform() {
     fi
 
     # Initialize Terraform
+    # Use local backend for LocalStack to avoid S3 backend issues
     print_status $YELLOW "🔧 Initializing Terraform..."
-    tflocal init 2>&1
+    
+    # Check if backend is configured - if S3 backend, provide LocalStack config
+    if grep -q 'backend "s3"' *.tf 2>/dev/null; then
+        print_status $YELLOW "   📦 Detected S3 backend, configuring for LocalStack..."
+        tflocal init -input=false -reconfigure \
+            -backend-config="bucket=terraform-state-${ENVIRONMENT_SUFFIX:-dev}" \
+            -backend-config="key=terraform.tfstate" \
+            -backend-config="region=${AWS_DEFAULT_REGION}" \
+            -backend-config="endpoint=${AWS_ENDPOINT_URL}" \
+            -backend-config="skip_credentials_validation=true" \
+            -backend-config="skip_metadata_api_check=true" \
+            -backend-config="force_path_style=true" 2>&1
+        
+        # Create the bucket if it doesn't exist
+        awslocal s3 mb "s3://terraform-state-${ENVIRONMENT_SUFFIX:-dev}" 2>/dev/null || true
+    else
+        tflocal init -input=false -reconfigure 2>&1
+    fi
 
-    # Plan
+    # Plan (disable interactive prompts)
     print_status $YELLOW "📋 Planning deployment..."
-    tflocal plan -out=tfplan 2>&1
+    tflocal plan -input=false -out=tfplan 2>&1
 
-    # Apply
+    # Apply (disable interactive prompts)
     print_status $YELLOW "🚀 Applying changes..."
-    tflocal apply -auto-approve tfplan 2>&1
+    tflocal apply -input=false -auto-approve tfplan 2>&1
     local exit_code=$?
     
     if [ $exit_code -ne 0 ]; then
