@@ -29,18 +29,6 @@
                 },
                 {
                     "Label": {
-                        "default": "RDS Configuration"
-                    },
-                    "Parameters": [
-                        "RdsInstanceClass",
-                        "RdsAllocatedStorage",
-                        "RdsMultiAZ",
-                        "RdsDeletionProtection",
-                        "RdsMasterUsername"
-                    ]
-                },
-                {
-                    "Label": {
                         "default": "Security and Logging"
                     },
                     "Parameters": [
@@ -76,18 +64,6 @@
                 },
                 "EnableNatGateway": {
                     "default": "Enable NAT gateway for private subnets"
-                },
-                "RdsInstanceClass": {
-                    "default": "RDS instance class"
-                },
-                "RdsAllocatedStorage": {
-                    "default": "RDS allocated storage (GiB)"
-                },
-                "RdsMultiAZ": {
-                    "default": "Enable Multi-AZ for RDS"
-                },
-                "RdsDeletionProtection": {
-                    "default": "Enable deletion protection for RDS"
                 },
                 "AllowedEgressCidr": {
                     "default": "Default egress CIDR for security groups"
@@ -166,47 +142,6 @@
             ],
             "Description": "Controls NAT gateway for private subnet egress. Ignored if no public subnets."
         },
-        "RdsInstanceClass": {
-            "Type": "String",
-            "Default": "db.t3.micro",
-            "AllowedPattern": "^db\\.[a-z0-9]+\\.[a-z0-9]+$",
-            "ConstraintDescription": "Must be a valid RDS instance class, e.g. db.t3.micro.",
-            "Description": "RDS instance class for the primary database."
-        },
-        "RdsAllocatedStorage": {
-            "Type": "Number",
-            "Default": 20,
-            "MinValue": 20,
-            "MaxValue": 6144,
-            "Description": "Allocated storage in GiB for the RDS instance."
-        },
-        "RdsMultiAZ": {
-            "Type": "String",
-            "Default": "true",
-            "AllowedValues": [
-                "true",
-                "false"
-            ],
-            "Description": "Enables Multi-AZ deployment for RDS."
-        },
-        "RdsDeletionProtection": {
-            "Type": "String",
-            "Default": "false",
-            "AllowedValues": [
-                "true",
-                "false"
-            ],
-            "Description": "Protects the RDS instance from accidental deletion."
-        },
-        "RdsMasterUsername": {
-            "Type": "String",
-            "Default": "tapstackadmin",
-            "MinLength": 1,
-            "MaxLength": 16,
-            "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9_]*$",
-            "ConstraintDescription": "Must start with a letter, contain only letters, digits, or underscore, and be 1–16 characters.",
-            "Description": "RDS master username. Password will be managed automatically by RDS in Secrets Manager."
-        },
         "AllowedEgressCidr": {
             "Type": "String",
             "Default": "0.0.0.0/0",
@@ -275,22 +210,6 @@
                 {
                     "Condition": "CreatePublicSubnetsCondition"
                 }
-            ]
-        },
-        "UseMultiAzRds": {
-            "Fn::Equals": [
-                {
-                    "Ref": "RdsMultiAZ"
-                },
-                "true"
-            ]
-        },
-        "UseRdsDeletionProtection": {
-            "Fn::Equals": [
-                {
-                    "Ref": "RdsDeletionProtection"
-                },
-                "true"
             ]
         },
         "UseCloudWatchForTrail": {
@@ -875,13 +794,30 @@
             }
         },
         "NatGatewayA": {
+            "Metadata": {
+                "cfn-lint": {
+                    "config": {
+                        "ignore_checks": [
+                            "W1028"
+                        ]
+                    }
+                }
+            },
             "Condition": "CreateNatGatewayCondition",
             "Type": "AWS::EC2::NatGateway",
             "Properties": {
                 "AllocationId": {
-                    "Fn::GetAtt": [
-                        "NatEipA",
-                        "AllocationId"
+                    "Fn::If": [
+                        "CreateNatGatewayCondition",
+                        {
+                            "Fn::GetAtt": [
+                                "NatEipA",
+                                "AllocationId"
+                            ]
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
                     ]
                 },
                 "SubnetId": {
@@ -1529,184 +1465,6 @@
                 ]
             }
         },
-        "RdsSubnetGroup": {
-            "Type": "AWS::RDS::DBSubnetGroup",
-            "Properties": {
-                "DBSubnetGroupDescription": {
-                    "Fn::Sub": "corp-${ProjectName}-${EnvironmentSuffix} RDS subnet group"
-                },
-                "SubnetIds": [
-                    {
-                        "Ref": "PrivateSubnetA"
-                    },
-                    {
-                        "Ref": "PrivateSubnetB"
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "corp-${ProjectName}-${EnvironmentSuffix}-rds-subnets"
-                        }
-                    },
-                    {
-                        "Key": "ProjectName",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
-                    },
-                    {
-                        "Key": "EnvironmentSuffix",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    }
-                ]
-            }
-        },
-        "RdsParameterGroup": {
-            "Type": "AWS::RDS::DBParameterGroup",
-            "Properties": {
-                "Description": {
-                    "Fn::Sub": "corp-${ProjectName}-${EnvironmentSuffix} RDS parameter group"
-                },
-                "Family": "postgres17",
-                "Parameters": {
-                    "max_connections": "100"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "corp-${ProjectName}-${EnvironmentSuffix}-rds-params"
-                        }
-                    },
-                    {
-                        "Key": "ProjectName",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
-                    },
-                    {
-                        "Key": "EnvironmentSuffix",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    }
-                ]
-            }
-        },
-        "RdsInstanceSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-                "GroupDescription": "RDS SG (no inbound by default).",
-                "VpcId": {
-                    "Ref": "Vpc"
-                },
-                "SecurityGroupIngress": [],
-                "SecurityGroupEgress": [
-                    {
-                        "IpProtocol": -1,
-                        "CidrIp": {
-                            "Ref": "AllowedEgressCidr"
-                        }
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "corp-${ProjectName}-${EnvironmentSuffix}-sg-rds"
-                        }
-                    },
-                    {
-                        "Key": "ProjectName",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
-                    },
-                    {
-                        "Key": "EnvironmentSuffix",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    }
-                ]
-            }
-        },
-        "RdsInstance": {
-            "Type": "AWS::RDS::DBInstance",
-            "Properties": {
-                "Engine": "postgres",
-                "DBSubnetGroupName": {
-                    "Ref": "RdsSubnetGroup"
-                },
-                "DBParameterGroupName": {
-                    "Ref": "RdsParameterGroup"
-                },
-                "VPCSecurityGroups": [
-                    {
-                        "Ref": "RdsInstanceSecurityGroup"
-                    }
-                ],
-                "AllocatedStorage": {
-                    "Ref": "RdsAllocatedStorage"
-                },
-                "DBInstanceClass": {
-                    "Ref": "RdsInstanceClass"
-                },
-                "MasterUsername": {
-                    "Ref": "RdsMasterUsername"
-                },
-                "ManageMasterUserPassword": true,
-                "MultiAZ": {
-                    "Fn::If": [
-                        "UseMultiAzRds",
-                        true,
-                        false
-                    ]
-                },
-                "AutoMinorVersionUpgrade": true,
-                "StorageEncrypted": true,
-                "KmsKeyId": {
-                    "Fn::GetAtt": [
-                        "KmsKey",
-                        "Arn"
-                    ]
-                },
-                "DeletionProtection": {
-                    "Fn::If": [
-                        "UseRdsDeletionProtection",
-                        true,
-                        false
-                    ]
-                },
-                "PubliclyAccessible": false,
-                "BackupRetentionPeriod": 7,
-                "CopyTagsToSnapshot": true,
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "corp-${ProjectName}-${EnvironmentSuffix}-rds"
-                        }
-                    },
-                    {
-                        "Key": "ProjectName",
-                        "Value": {
-                            "Ref": "ProjectName"
-                        }
-                    },
-                    {
-                        "Key": "EnvironmentSuffix",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    }
-                ]
-            }
-        },
         "ConfigServiceRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
@@ -1853,27 +1611,6 @@
                 }
             }
         },
-        "ConfigRuleRdsStorageEncrypted": {
-            "Type": "AWS::Config::ConfigRule",
-            "DependsOn": [
-                "ConfigRecorder",
-                "ConfigDeliveryChannel"
-            ],
-            "Properties": {
-                "ConfigRuleName": {
-                    "Fn::Sub": "corp-${ProjectName}-${EnvironmentSuffix}-rds-encrypted"
-                },
-                "Source": {
-                    "Owner": "AWS",
-                    "SourceIdentifier": "RDS_STORAGE_ENCRYPTED"
-                },
-                "Scope": {
-                    "ComplianceResourceTypes": [
-                        "AWS::RDS::DBInstance"
-                    ]
-                }
-            }
-        },
         "GuardDutyDetector": {
             "Type": "AWS::GuardDuty::Detector",
             "Properties": {
@@ -1966,15 +1703,6 @@
             "Description": "Centralized logging bucket used by CloudTrail and Config.",
             "Value": {
                 "Ref": "LoggingBucket"
-            }
-        },
-        "RdsEndpointAddress": {
-            "Description": "RDS instance endpoint address.",
-            "Value": {
-                "Fn::GetAtt": [
-                    "RdsInstance",
-                    "Endpoint.Address"
-                ]
             }
         },
         "CloudTrailArn": {

@@ -266,21 +266,6 @@ describe("TapStack — Live Integration Tests (LocalStack-compatible, no skips)"
     }
   });
 
-  it("RDS endpoint basic check (strict only on AWS)", async () => {
-    const ep = outputs.RdsEndpointAddress || outputs.RDSAddress;
-    expect(typeof ep).toBe("string");
-    if (IS_LOCALSTACK) {
-      expect(ep.length).toBeGreaterThan(0);
-      return;
-    }
-    const resp = await retry(() => rds.send(new DescribeDBInstancesCommand({})));
-    const db = (resp.DBInstances || []).find(i => i.Endpoint?.Address === ep) || (resp.DBInstances || [])[0];
-    expect(db).toBeDefined();
-    expect(db?.StorageEncrypted).toBe(true);
-    expect(db?.PubliclyAccessible).toBe(false);
-    expect(db?.AutoMinorVersionUpgrade).toBe(true);
-  });
-
   it("CloudWatch Logs API responsive", async () => {
     const lg = await retry(() => logs.send(new DescribeLogGroupsCommand({ limit: 5 })));
     expect(Array.isArray(lg.logGroups)).toBe(true);
