@@ -125,7 +125,7 @@ fi
 
 # Give LocalStack more time to start before checking (Pro image needs more initialization time)
 echo -e "${BLUE}⏱️  Waiting 10 seconds for LocalStack to initialize...${NC}"
-sleep 10
+sleep 60
 
 while [ $attempt -lt $max_attempts ]; do
     # Check container is still running
