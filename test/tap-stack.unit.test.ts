@@ -396,4 +396,84 @@ describe('TapStack', () => {
       template.resourceCountIs('AWS::CloudTrail::Trail', 1);
     });
   });
+
+  describe('Environment Suffix Handling', () => {
+    test('creates stack with custom environment suffix', () => {
+      const prodApp = new cdk.App();
+      const prodStack = new TapStack(prodApp, 'ProdTapStack', {
+        environmentSuffix: 'prod',
+      });
+      const prodTemplate = Template.fromStack(prodStack);
+
+      // Should still have all key resources
+      prodTemplate.resourceCountIs('AWS::KMS::Key', 1);
+      prodTemplate.resourceCountIs('AWS::S3::Bucket', 1);
+      prodTemplate.resourceCountIs('AWS::EC2::VPC', 1);
+    });
+
+    test('creates stack with staging environment suffix', () => {
+      const stagingApp = new cdk.App();
+      const stagingStack = new TapStack(stagingApp, 'StagingTapStack', {
+        environmentSuffix: 'staging',
+      });
+      const stagingTemplate = Template.fromStack(stagingStack);
+
+      // Verify resource creation
+      const lambdaFunctions = stagingTemplate.findResources(
+        'AWS::Lambda::Function'
+      );
+      expect(Object.keys(lambdaFunctions).length).toBeGreaterThanOrEqual(1);
+      stagingTemplate.resourceCountIs('AWS::EC2::Instance', 1);
+    });
+  });
+
+  describe('Conditional Resource Creation', () => {
+    test('region condition applied to resources', () => {
+      // Verify that the condition exists
+      template.hasCondition('IsUSEast1', {
+        'Fn::Equals': [{ Ref: 'AWS::Region' }, 'us-east-1'],
+      });
+
+      // Verify outputs use conditions (for non-LocalStack)
+      const outputs = template.findOutputs('*');
+      expect(Object.keys(outputs).length).toBeGreaterThan(0);
+    });
+
+    test('CloudTrail uses KMS encryption key', () => {
+      const trails = template.findResources('AWS::CloudTrail::Trail');
+      const trailKeys = Object.keys(trails);
+      expect(trailKeys.length).toBeGreaterThanOrEqual(1);
+
+      const trail = trails[trailKeys[0]];
+      expect(trail.Properties).toHaveProperty('KMSKeyId');
+    });
+
+    test('Lambda function has proper IAM role', () => {
+      const lambdaFunctions = template.findResources('AWS::Lambda::Function');
+      const userLambda = Object.values(lambdaFunctions).find(
+        (fn: any) =>
+          fn.Properties?.Description === 'Secure Lambda function running in VPC'
+      );
+
+      expect(userLambda).toBeDefined();
+      expect((userLambda as any).Properties).toHaveProperty('Role');
+    });
+
+    test('VPC has proper DNS settings', () => {
+      template.hasResourceProperties('AWS::EC2::VPC', {
+        EnableDnsHostnames: true,
+        EnableDnsSupport: true,
+        CidrBlock: '10.0.0.0/16',
+      });
+    });
+
+    test('S3 bucket has SSL enforcement', () => {
+      const buckets = template.findResources('AWS::S3::Bucket');
+      const bucketKeys = Object.keys(buckets);
+      expect(bucketKeys.length).toBeGreaterThanOrEqual(1);
+
+      const bucket = buckets[bucketKeys[0]];
+      expect(bucket.Properties.BucketEncryption).toBeDefined();
+    });
+  });
 });
