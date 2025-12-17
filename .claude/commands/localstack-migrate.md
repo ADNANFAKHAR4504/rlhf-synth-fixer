@@ -724,26 +724,31 @@ You are fixing task at `${WORK_DIR}` to make it LocalStack-compatible.
 Deployment Errors: ${DEPLOY_ERRORS:-"None"}
 Test Errors: ${TEST_ERRORS:-"None"}
 
-**Your Mission**:
+**Your Mission** (BATCH FIX APPROACH - apply ALL fixes before re-deploying):
 
-1. Analyze the errors in `${WORK_DIR}/execution-output.md`
-2. Apply targeted fixes to make the stack LocalStack-compatible
-3. Re-attempt deployment after each fix
-4. Maximum 5 iterations
-5. Document all changes in `execution-output.md`
+1. Analyze ALL errors in `${WORK_DIR}/execution-output.md`
+2. Identify ALL applicable fixes (including preventive fixes)
+3. Apply ALL fixes in ONE batch before re-deploying
+4. Re-attempt deployment only after ALL fixes are applied
+5. Maximum 3 iterations (reduced due to batch approach)
+6. Document all changes in `execution-output.md`
 
-**Common Fixes**:
+**Batch Fix Strategy** (CRITICAL - do NOT fix one at a time):
 
-1. Add LocalStack endpoint configuration
-2. Fix S3 path-style access issues
-3. Remove/mock unsupported AWS features
-4. Simplify IAM policies for LocalStack
-5. Fix resource naming issues
-6. Update integration tests for LocalStack
+Before EACH re-deployment, apply ALL of these if applicable:
+1. LocalStack endpoint configuration (almost always needed)
+2. S3 path-style access (if using S3/buckets)
+3. RemovalPolicy.DESTROY (always for LocalStack)
+4. IAM policy simplification (if IAM errors)
+5. Resource naming simplification (if naming errors)
+6. Test endpoint configuration (if test/ exists)
+7. Unsupported service conditionals (if service errors)
+8. Default parameter values (if parameter errors)
 
 **Constraints**:
 
-- Maximum 5 fix iterations
+- Maximum 3 fix iterations (batch mode)
+- Apply ALL known fixes per iteration, NOT one at a time
 - Do NOT change core business logic
 - Keep changes minimal and focused
 - Document every change made
@@ -753,9 +758,12 @@ Set variables:
 
 - FIX_SUCCESS=true/false
 - FIX_FAILURE_REASON="reason if failed"
-- ITERATIONS_USED=N
+- ITERATIONS_USED=N (max 3 with batch approach)
+- FIXES_APPLIED="list of all fixes applied"
 
 Exit code 0 if fixed, 1 if unable to fix, 2 if unsupported services.
+
+**Performance Note**: With batch fix approach, expect 1-2 iterations instead of 5. Each iteration applies ALL applicable fixes before re-deploying.
 ```
 
 ### Step 10: Create Pull Request for Migrated Task (Parallel-Safe with Git Worktrees)

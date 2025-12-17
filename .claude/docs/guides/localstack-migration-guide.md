@@ -311,16 +311,29 @@ All migrations are tracked in `.claude/reports/localstack-migrations.json`:
 | EKS     | ❌ Pro only | Not in Community |
 | AppSync | ❌ Pro only | Not in Community |
 
-## Common Fixes Applied
+## Common Fixes Applied (Batch Approach)
 
-The `localstack-fixer` agent automatically applies these fixes:
+The `localstack-fixer` agent uses a **batch fix approach** for speed - it applies ALL applicable fixes in ONE iteration before re-deploying, instead of fixing one issue at a time.
 
-1. **Endpoint Configuration** - Adds LocalStack endpoint URLs
-2. **S3 Path-Style Access** - Enables path-style access for S3
-3. **IAM Simplification** - Simplifies IAM policies for LocalStack
-4. **Removal Policies** - Sets DESTROY for LocalStack resources
-5. **Resource Naming** - Simplifies complex resource names
-6. **Test Configuration** - Updates integration tests for LocalStack
+### Fix Priority Order
+
+| Priority | Fix | When Applied |
+|----------|-----|--------------|
+| 🔴 Critical | Endpoint Configuration | Always (if not present) |
+| 🔴 Critical | S3 Path-Style Access | If using S3/buckets |
+| 🟡 High | Removal Policies | Always (if not present) |
+| 🟡 High | Test Configuration | If test/ exists |
+| 🟡 Medium | IAM Simplification | If IAM errors detected |
+| 🟡 Medium | Resource Naming | If naming errors detected |
+| 🟡 Medium | Unsupported Services | If service errors detected |
+| 🟢 Low | Default Parameters | If parameter errors detected |
+
+### Performance Improvement
+
+With batch fix approach:
+- **Old**: 5 fixes = 5 deployment cycles (~5 minutes)
+- **New**: 5 fixes = 1-2 deployment cycles (~1-2 minutes)
+- **Time saved**: 60-80% for typical migrations
 
 ## PR Structure
 

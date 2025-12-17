@@ -22,19 +22,28 @@ Fixes IaC tasks to make them deployable to LocalStack with minimal, focused chan
 1. **Minimal Changes**: Only modify what's necessary for LocalStack compatibility
 2. **Preserve Logic**: Never change business logic or core functionality
 3. **Document Everything**: Log all changes in execution-output.md
-4. **Iterative Approach**: Fix one issue at a time, re-test after each fix
-5. **Maximum 5 Iterations**: Escalate if not fixed within iterations
+4. **Batch Fix Approach**: Analyze ALL errors and apply ALL known fixes in one iteration before re-testing (NOT one fix at a time)
+5. **Maximum 3 Iterations**: Apply batch fixes, only iterate for unexpected errors (reduced from 5 due to batch approach)
 
 ## Fix Strategy
 
-### Iteration Loop
+### Batch Fix Approach
+
+**Key principle**: Apply ALL known fixes in ONE iteration before re-deploying, instead of fixing one issue at a time.
+
+This dramatically reduces deployment cycles:
+- Old: 5 fixes = 5 deploys (~5 minutes)
+- New: 5 fixes = 1-2 deploys (~1-2 minutes)
+
+### Iteration Loop (Batch Mode)
 
 ```bash
-MAX_ITERATIONS=5
+MAX_ITERATIONS=3  # Reduced from 5 since we batch fix
 ITERATION=0
 FIX_SUCCESS=false
 FIX_FAILURE_REASON=""
 ITERATIONS_USED=0
+FIXES_APPLIED=()
 
 while [ $ITERATION -lt $MAX_ITERATIONS ]; do
   ITERATION=$((ITERATION + 1))
@@ -42,36 +51,163 @@ while [ $ITERATION -lt $MAX_ITERATIONS ]; do
 
   echo ""
   echo "═══════════════════════════════════════════════════"
-  echo "🔧 FIX ITERATION $ITERATION of $MAX_ITERATIONS"
+  echo "🔧 FIX ITERATION $ITERATION of $MAX_ITERATIONS (BATCH MODE)"
   echo "═══════════════════════════════════════════════════"
   echo ""
 
   # Document iteration start
   echo "" >> execution-output.md
-  echo "## Fix Iteration $ITERATION" >> execution-output.md
+  echo "## Fix Iteration $ITERATION (Batch Mode)" >> execution-output.md
   echo "" >> execution-output.md
 
-  # 1. Analyze current errors
-  # 2. Apply targeted fix
-  # 3. Re-attempt deployment
-  # 4. Check result
+  # ═══════════════════════════════════════════════════════════════
+  # STEP 1: Analyze ALL current errors
+  # ═══════════════════════════════════════════════════════════════
+  echo "📋 Analyzing ALL errors..."
+  analyze_all_errors  # Parses DEPLOY_ERRORS and TEST_ERRORS
 
-  # ... (fix logic based on error type)
+  # ═══════════════════════════════════════════════════════════════
+  # STEP 2: Identify ALL applicable fixes (including preventive)
+  # ═══════════════════════════════════════════════════════════════
+  echo "🔍 Identifying ALL applicable fixes..."
+  FIXES_TO_APPLY=()
+  identify_all_fixes  # Populates FIXES_TO_APPLY array
 
-  # Re-test deployment
-  # ... (deployment test)
+  # ═══════════════════════════════════════════════════════════════
+  # STEP 3: Apply ALL fixes BEFORE re-deploying
+  # ═══════════════════════════════════════════════════════════════
+  echo "🔧 Applying ${#FIXES_TO_APPLY[@]} fixes in batch..."
+  echo "" >> execution-output.md
+  echo "### Batch Fixes Applied:" >> execution-output.md
+  
+  for fix in "${FIXES_TO_APPLY[@]}"; do
+    apply_fix "$fix"
+    FIXES_APPLIED+=("$fix")
+  done
 
+  # ═══════════════════════════════════════════════════════════════
+  # STEP 4: Single re-deployment after ALL fixes
+  # ═══════════════════════════════════════════════════════════════
+  echo ""
+  echo "🚀 Re-deploying after batch fixes..."
+  test_deployment
+
+  # ═══════════════════════════════════════════════════════════════
+  # STEP 5: Check result
+  # ═══════════════════════════════════════════════════════════════
   if [ "$DEPLOY_SUCCESS" = true ] && [ "$TEST_SUCCESS" = true ]; then
     FIX_SUCCESS=true
-    echo "✅ Fix successful on iteration $ITERATION"
+    echo "✅ All batch fixes successful on iteration $ITERATION"
+    echo "" >> execution-output.md
+    echo "**Result:** ✅ Deployment and tests successful!" >> execution-output.md
     break
   fi
+
+  # Only continue if new/unexpected errors
+  echo "⚠️ Some issues remain, will analyze new errors in next iteration..."
+  echo "" >> execution-output.md
+  echo "**Result:** Some issues remain, continuing to next iteration..." >> execution-output.md
 done
 
 if [ "$FIX_SUCCESS" != true ]; then
   FIX_FAILURE_REASON="Maximum iterations ($MAX_ITERATIONS) reached without success"
 fi
 ```
+
+### Fix Identification Checklist
+
+For EACH iteration, check and apply ALL of these if applicable:
+
+```bash
+identify_all_fixes() {
+  FIXES_TO_APPLY=()
+
+  # ═══════════════════════════════════════════════════════════════
+  # 1. ENDPOINT CONFIGURATION (almost always needed - apply first)
+  # ═══════════════════════════════════════════════════════════════
+  if ! grep -rq "AWS_ENDPOINT_URL\|localhost:4566\|isLocalStack" lib/ 2>/dev/null; then
+    echo "   ➕ Will add: LocalStack endpoint configuration"
+    FIXES_TO_APPLY+=("endpoint_config")
+  fi
+
+  # ═══════════════════════════════════════════════════════════════
+  # 2. S3 PATH-STYLE ACCESS (if using S3)
+  # ═══════════════════════════════════════════════════════════════
+  if grep -riq "s3\|bucket" lib/ 2>/dev/null; then
+    if ! grep -rq "forcePathStyle\|s3_use_path_style\|path.style" lib/ 2>/dev/null; then
+      echo "   ➕ Will add: S3 path-style access"
+      FIXES_TO_APPLY+=("s3_path_style")
+    fi
+  fi
+
+  # ═══════════════════════════════════════════════════════════════
+  # 3. REMOVAL POLICY (always needed for LocalStack)
+  # ═══════════════════════════════════════════════════════════════
+  if ! grep -rq "RemovalPolicy.DESTROY\|removal_policy.*destroy" lib/ 2>/dev/null; then
+    echo "   ➕ Will add: RemovalPolicy.DESTROY for resources"
+    FIXES_TO_APPLY+=("removal_policy")
+  fi
+
+  # ═══════════════════════════════════════════════════════════════
+  # 4. IAM SIMPLIFICATION (if IAM errors detected)
+  # ═══════════════════════════════════════════════════════════════
+  if echo "$DEPLOY_ERRORS" | grep -qiE "policy|iam|principal|malformed"; then
+    echo "   ➕ Will add: IAM policy simplification"
+    FIXES_TO_APPLY+=("iam_simplify")
+  fi
+
+  # ═══════════════════════════════════════════════════════════════
+  # 5. RESOURCE NAMING (if naming errors detected)
+  # ═══════════════════════════════════════════════════════════════
+  if echo "$DEPLOY_ERRORS" | grep -qiE "name|invalid.*bucket|too long|character"; then
+    echo "   ➕ Will add: Resource naming simplification"
+    FIXES_TO_APPLY+=("resource_naming")
+  fi
+
+  # ═══════════════════════════════════════════════════════════════
+  # 6. UNSUPPORTED SERVICE HANDLING (if service errors detected)
+  # ═══════════════════════════════════════════════════════════════
+  if echo "$DEPLOY_ERRORS" | grep -qiE "not supported|unsupported|not available|appsync|amplify|sagemaker"; then
+    echo "   ➕ Will add: Unsupported service conditional"
+    FIXES_TO_APPLY+=("unsupported_service")
+  fi
+
+  # ═══════════════════════════════════════════════════════════════
+  # 7. TEST CONFIGURATION (if test/ directory exists)
+  # ═══════════════════════════════════════════════════════════════
+  if [ -d "test" ]; then
+    if ! grep -rq "AWS_ENDPOINT_URL\|localhost:4566" test/ 2>/dev/null; then
+      echo "   ➕ Will add: Test endpoint configuration"
+      FIXES_TO_APPLY+=("test_config")
+    fi
+  fi
+
+  # ═══════════════════════════════════════════════════════════════
+  # 8. MISSING PARAMETERS (if parameter errors detected)
+  # ═══════════════════════════════════════════════════════════════
+  if echo "$DEPLOY_ERRORS" | grep -qiE "parameter|missing.*required|undefined"; then
+    echo "   ➕ Will add: Default parameter values"
+    FIXES_TO_APPLY+=("default_parameters")
+  fi
+
+  echo ""
+  echo "📋 Total fixes to apply: ${#FIXES_TO_APPLY[@]}"
+}
+```
+
+### Preventive Fixes Matrix
+
+Apply these fixes proactively (even if no specific error):
+
+| Fix | When to Apply | Priority |
+|-----|---------------|----------|
+| LocalStack endpoint detection | Always (if not present) | 🔴 Critical |
+| S3 path-style access | If using S3/buckets | 🔴 Critical |
+| RemovalPolicy.DESTROY | Always (if not present) | 🟡 High |
+| Test endpoint config | If test/ exists | 🟡 High |
+| IAM simplification | If IAM errors | 🟡 Medium |
+| Resource naming | If naming errors | 🟡 Medium |
+| Unsupported services | If service errors | 🟡 Medium |
 
 ## Common Fixes by Error Type
 
@@ -468,24 +604,45 @@ Bucket name too complex for LocalStack
 
 ## Escalation
 
-If fixes fail after maximum iterations:
+If fixes fail after maximum iterations (now 3 with batch approach):
 
 ```bash
 if [ "$FIX_SUCCESS" != true ]; then
   echo "" >> execution-output.md
   echo "## ⚠️ ESCALATION REQUIRED" >> execution-output.md
   echo "" >> execution-output.md
-  echo "Unable to fix within $MAX_ITERATIONS iterations." >> execution-output.md
+  echo "Unable to fix within $MAX_ITERATIONS iterations (batch mode)." >> execution-output.md
+  echo "" >> execution-output.md
+  echo "**Fixes Attempted:**" >> execution-output.md
+  for fix in "${FIXES_APPLIED[@]}"; do
+    echo "- $fix" >> execution-output.md
+  done
   echo "" >> execution-output.md
   echo "**Remaining Issues:**" >> execution-output.md
   echo "- $DEPLOY_ERRORS" >> execution-output.md
   echo "- $TEST_ERRORS" >> execution-output.md
   echo "" >> execution-output.md
   echo "**Possible Causes:**" >> execution-output.md
-  echo "1. Uses Pro-only LocalStack features" >> execution-output.md
-  echo "2. Complex service dependencies" >> execution-output.md
-  echo "3. Requires manual intervention" >> execution-output.md
+  echo "1. Uses Pro-only LocalStack features (AppSync, EKS full, etc.)" >> execution-output.md
+  echo "2. Complex service dependencies not supported in Community" >> execution-output.md
+  echo "3. Non-standard configuration requiring manual intervention" >> execution-output.md
+  echo "4. Bug in original task code" >> execution-output.md
 
-  FIX_FAILURE_REASON="Max iterations reached - manual review required"
+  FIX_FAILURE_REASON="Max iterations reached with batch fixes - manual review required"
 fi
 ````
+
+## Performance Improvement
+
+With batch fix approach:
+
+| Scenario | Old (One-at-a-time) | New (Batch) | Time Saved |
+|----------|---------------------|-------------|------------|
+| 5 fixes needed | 5 deploys (~5 min) | 1-2 deploys (~1-2 min) | **60-80%** |
+| 3 fixes needed | 3 deploys (~3 min) | 1 deploy (~1 min) | **66%** |
+| Complex task | Up to 5 iterations | Max 3 iterations | **40%** |
+
+The batch approach significantly speeds up migrations by:
+1. Applying ALL known fixes before first re-deploy
+2. Including preventive fixes (not just reactive)
+3. Reducing maximum iterations from 5 to 3
