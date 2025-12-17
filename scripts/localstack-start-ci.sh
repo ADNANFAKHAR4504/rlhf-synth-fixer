@@ -80,14 +80,17 @@ echo -e "${YELLOW}🔧 Starting LocalStack container...${NC}"
 
 # Build docker run command
 # Using LocalStack Pro image with latest version for full AWS service parity
+# CI-optimized settings for GitHub Actions
 DOCKER_CMD="docker run -d \
   --name localstack \
   -p 4566:4566 \
   -e DEBUG=1 \
   -e DATA_DIR=/tmp/localstack/data \
-  -e DOCKER_HOST=unix:///var/run/docker.sock \
   -e S3_SKIP_SIGNATURE_VALIDATION=1 \
-  -e ENFORCE_IAM=0"
+  -e ENFORCE_IAM=0 \
+  -e LOCALSTACK_HOST=localhost.localstack.cloud:4566 \
+  -e GATEWAY_LISTEN=0.0.0.0:4566 \
+  -e LAMBDA_DOCKER_NETWORK=bridge"
 
 # Add SERVICES only if explicitly set
 if [ -n "$SERVICES" ]; then
@@ -123,17 +126,23 @@ if ! command -v curl &> /dev/null; then
     sudo apt-get update && sudo apt-get install -y curl || true
 fi
 
-# Give LocalStack a few seconds to start before checking
-echo -e "${BLUE}⏱️  Waiting 5 seconds for LocalStack to initialize...${NC}"
-sleep 5
+# Give LocalStack more time to start in CI environments
+echo -e "${BLUE}⏱️  Waiting 10 seconds for LocalStack to initialize...${NC}"
+sleep 10
 
 while [ $attempt -lt $max_attempts ]; do
     # Check container is still running
     if ! docker ps | grep -q localstack; then
         echo -e "${RED}❌ LocalStack container stopped unexpectedly!${NC}"
-        echo -e "${YELLOW}💡 Container logs:${NC}"
-        docker logs localstack 2>&1 | tail -50
+        echo -e "${YELLOW}💡 Container logs (last 100 lines):${NC}"
+        docker logs localstack 2>&1 | tail -100
         exit 1
+    fi
+
+    # Show logs on early attempts to debug CI issues
+    if [ $attempt -eq 2 ] || [ $attempt -eq 5 ]; then
+        echo -e "${BLUE}📋 LocalStack logs (checking for errors):${NC}"
+        docker logs localstack 2>&1 | tail -20
     fi
 
     # Try to connect to LocalStack health endpoint with verbose output on first few attempts
