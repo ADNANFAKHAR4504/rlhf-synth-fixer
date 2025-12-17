@@ -350,8 +350,7 @@ Resources:
   # RDS Instance
   RDSInstance:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
-    UpdateReplacePolicy: Snapshot
+    DeletionPolicy: Delete
     Properties:
       DBInstanceIdentifier: !Sub '${Environment}-webapp-db'
       DBInstanceClass: !Ref DBInstanceType
@@ -360,30 +359,15 @@ Resources:
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
-      MasterUsername:
-        !Join [
-          '',
-          [
-            '{{resolve:secretsmanager:',
-            !Ref RDSSecret,
-            ':SecretString:username}}',
-          ],
-        ]
-      MasterUserPassword:
-        !Join [
-          '',
-          [
-            '{{resolve:secretsmanager:',
-            !Ref RDSSecret,
-            ':SecretString:password}}',
-          ],
-        ]
+      MasterUsername: admin
+      MasterUserPassword: !Ref DBMasterPassword
       DBSubnetGroupName: !Ref RDSSubnetGroup
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
-      BackupRetentionPeriod: 7
-      MultiAZ: true
+      BackupRetentionPeriod: 0
+      MultiAZ: false
       PubliclyAccessible: false
+      AutoMinorVersionUpgrade: true
       DeletionProtection: false
       Tags:
         - Key: Name
