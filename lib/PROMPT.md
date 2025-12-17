@@ -17,7 +17,7 @@ Security and compliance requirements (must be encoded in YAML resources, policie
 * **Region guardrails**: Gate template execution so it **only runs in us-east-1 or us-west-2**.
 * **Parameter validation**: Use **Parameters**, **AllowedPattern**, **Min/MaxLength**, and **CloudFormation Rules/Conditions** to prevent invalid inputs and accidental misconfiguration (e.g., region, CIDR ranges, KMS ARNs, detector ID format, S3 names).
 * **Naming**: **All physical resource names** (where naming is required) must include **`${EnvironmentSuffix}`** to avoid collisions; also tag every resource with `ProjectName`, `EnvironmentSuffix`, and `Owner` tags. Prefix names with `corp-` when a Name field is necessary.
-* **Outputs**: Expose key ARNs/IDs/Names (VPC ID, Private Subnet IDs, Launch Template ID, Security Group IDs, S3 bucket names, RDS instance identifier/endpoint, CloudTrail ARN, Config Recorder/DeliveryChannel names, GuardDuty Detector ID, KMS Key ARNs, etc.).
+* **Outputs**: Expose key ARNs/IDs/Names (VPC ID, Private Subnet IDs, Launch Template ID, Security Group IDs, S3 bucket names, RDS instance identifier/endpoint, CloudTrail ARN, Config Recorder/DeliveryChannel names, GuardDuty Detector ID, KMS Key ARNs, etc).
 
 Template conventions and style:
 
