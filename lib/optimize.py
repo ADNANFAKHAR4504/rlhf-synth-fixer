@@ -19,25 +19,35 @@ from botocore.exceptions import ClientError
 class ImageProcessorOptimizer:
     """Handles verification of Lambda image processor optimizations."""
 
-    def __init__(self, environment_suffix: str = 'dev', region_name: str = 'us-east-1'):
+    def __init__(self, environment_suffix: str = 'dev', region_name: str = 'us-east-1', provider: str = 'aws'):
         """
         Initialize the optimizer with AWS clients.
         Args:
             environment_suffix: The environment suffix (default: 'dev')
             region_name: AWS region name (default: 'us-east-1')
+            provider: Provider type - 'aws' or 'localstack' (default: 'aws')
         """
         self.environment_suffix = environment_suffix
         self.region_name = region_name
+        self.provider = provider
+
+        # Configure boto3 for LocalStack if needed
+        client_config = {'region_name': region_name}
+        if provider == 'localstack':
+            localstack_endpoint = os.getenv('AWS_ENDPOINT_URL') or 'http://localhost:4566'
+            client_config['endpoint_url'] = localstack_endpoint
+            print(f"Using LocalStack endpoint: {localstack_endpoint}")
 
         # Initialize AWS clients
-        self.lambda_client = boto3.client('lambda', region_name=region_name)
-        self.cloudwatch_client = boto3.client('cloudwatch', region_name=region_name)
-        self.logs_client = boto3.client('logs', region_name=region_name)
-        self.s3_client = boto3.client('s3', region_name=region_name)
-        self.iam_client = boto3.client('iam', region_name=region_name)
+        self.lambda_client = boto3.client('lambda', **client_config)
+        self.cloudwatch_client = boto3.client('cloudwatch', **client_config)
+        self.logs_client = boto3.client('logs', **client_config)
+        self.s3_client = boto3.client('s3', **client_config)
+        self.iam_client = boto3.client('iam', **client_config)
 
         print(f"Initialized Image Processor optimizer for environment: {environment_suffix}")
         print(f"Region: {region_name}")
+        print(f"Provider: {provider}")
         print("-" * 50)
 
     def get_lambda_function(self) -> Optional[Dict[str, Any]]:
@@ -459,14 +469,32 @@ def main():
         default=None,
         help='AWS region (overrides AWS_REGION env var, defaults to us-east-1)'
     )
+    parser.add_argument(
+        '--provider',
+        '-p',
+        default=None,
+        help='Provider type: aws or localstack (auto-detected from metadata.json if not provided)'
+    )
 
     args = parser.parse_args()
 
     environment_suffix = args.environment or os.getenv('ENVIRONMENT_SUFFIX') or 'dev'
     aws_region = args.region or os.getenv('AWS_REGION') or 'us-east-1'
 
+    # Auto-detect provider from metadata.json
+    provider = args.provider
+    if not provider:
+        try:
+            if os.path.exists('metadata.json'):
+                with open('metadata.json', 'r') as f:
+                    metadata = json.load(f)
+                    provider = metadata.get('provider', 'aws')
+        except Exception:
+            pass
+    provider = provider or 'aws'
+
     try:
-        optimizer = ImageProcessorOptimizer(environment_suffix, aws_region)
+        optimizer = ImageProcessorOptimizer(environment_suffix, aws_region, provider)
         success = optimizer.run_optimization()
         sys.exit(0 if success else 1)
     except KeyboardInterrupt:
