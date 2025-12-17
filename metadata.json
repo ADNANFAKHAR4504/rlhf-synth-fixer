@@ -15,6 +15,5 @@
     "IAM",
     "CloudWatch"
   ],
-  "region": "us-east-1",
   "provider": "localstack"
 }
