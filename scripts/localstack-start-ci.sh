@@ -123,9 +123,9 @@ if ! command -v curl &> /dev/null; then
     sudo apt-get update && sudo apt-get install -y curl || true
 fi
 
-# Give LocalStack more time to start in CI environments
+# Give LocalStack more time to start before checking (Pro image needs more initialization time)
 echo -e "${BLUE}⏱️  Waiting 10 seconds for LocalStack to initialize...${NC}"
-sleep 10
+sleep 60
 
 while [ $attempt -lt $max_attempts ]; do
     # Show logs on first attempt to debug CI issues immediately
@@ -150,6 +150,12 @@ while [ $attempt -lt $max_attempts ]; do
     if [ $attempt -lt 3 ]; then
         echo -e "${BLUE}🔍 Testing connectivity to localhost:4566 (attempt $((attempt + 1)))...${NC}"
         curl -4 -v --connect-timeout 5 --max-time 10 http://localhost:4566/_localstack/health 2>&1 | head -30 || echo "Connection failed, will retry..."
+    fi
+    
+    # Show container logs every 10 attempts to help debug startup issues
+    if [ $((attempt % 10)) -eq 0 ] && [ $attempt -gt 0 ]; then
+        echo -e "${BLUE}📋 Container logs (last 20 lines):${NC}"
+        docker logs localstack 2>&1 | tail -20
     fi
 
     # Regular health check (suppress output for cleaner logs) - force IPv4
