@@ -9,7 +9,7 @@
   "startedAt": "2025-11-07T11:40:58.959Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "IaC Diagnosis/Edits"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "CloudWatch",
