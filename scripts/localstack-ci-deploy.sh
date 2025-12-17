@@ -184,19 +184,6 @@ describe_terraform_failure() {
     fi
     echo ""
     
-    # Show tainted resources (resources that need to be recreated)
-    print_status $YELLOW "🔍 Tainted Resources (need recreation):"
-    local tainted
-    tainted=$(tflocal state list -state=terraform.tfstate 2>/dev/null | grep -E '\[tainted\]' || tflocal state list 2>/dev/null | while read resource; do
-        tflocal state show "$resource" 2>/dev/null | grep -q "tainted" && echo "$resource"
-    done)
-    if [ -n "$tained" ]; then
-        echo "$tained" | sed 's/^/   ⚠️  /'
-    else
-        print_status $BLUE "   No tainted resources"
-    fi
-    echo ""
-    
     # Show plan file if it exists (shows what was attempted)
     if [ -f "tfplan" ]; then
         print_status $YELLOW "🔍 Planned Changes (from tfplan):"

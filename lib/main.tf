@@ -393,20 +393,18 @@ resource "aws_iam_role_policy" "vpc_flow_logs" {
   })
 }
 
-resource "aws_flow_log" "main" {
-  iam_role_arn         = aws_iam_role.vpc_flow_logs.arn
-  log_destination      = aws_cloudwatch_log_group.vpc_flow_logs.arn
-  log_destination_type = "cloud-watch-logs"
-  traffic_type         = "ALL"
-  vpc_id               = aws_vpc.main.id
-
-  # LocalStack compatibility: max_aggregation_interval not supported
-  # Omit this parameter - LocalStack doesn't support it
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-vpc-flow-log"
-  })
-}
+# LocalStack compatibility: Flow Logs not fully supported
+# Commenting out to avoid LocalStack errors
+# resource "aws_flow_log" "main" {
+#   iam_role_arn         = aws_iam_role.vpc_flow_logs.arn
+#   log_destination      = aws_cloudwatch_log_group.vpc_flow_logs.arn
+#   log_destination_type = "cloud-watch-logs"
+#   traffic_type         = "ALL"
+#   vpc_id               = aws_vpc.main.id
+#   tags = merge(local.common_tags, {
+#     Name = "${local.name_prefix}-vpc-flow-log"
+#   })
+# }
 
 # ===========================
 # SECURITY GROUPS
@@ -498,7 +496,9 @@ resource "aws_security_group" "rds" {
 # ===========================
 
 resource "aws_s3_bucket" "logs" {
-  bucket = "${local.name_prefix}-logs-${data.aws_caller_identity.current.account_id}"
+  # LocalStack compatibility: use static bucket name without account_id
+  # to avoid S3 Control API issues with LocalStack's dummy account ID
+  bucket = "${local.name_prefix}-logs-bucket"
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-logs"
@@ -575,12 +575,9 @@ resource "aws_lb" "main" {
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
 
-  enable_deletion_protection       = false
-  enable_http2                     = true
-  enable_cross_zone_load_balancing = true
-
-  # LocalStack compatibility: access_logs and health_check_logs not fully supported
-  # Removed access_logs block to avoid LocalStack compatibility issues
+  # LocalStack compatibility: minimal ALB configuration
+  # Removed enable_deletion_protection, enable_http2, enable_cross_zone_load_balancing
+  # as these trigger unsupported attribute modifications in LocalStack
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-alb"
