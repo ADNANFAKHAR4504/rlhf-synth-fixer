@@ -10,7 +10,7 @@
   "subtask": "Infrastructure QA and Management",
   "subject_labels": [
     "General Infrastructure Tooling QA",
-    "IaC Optimization"
+    "Infrastructure Analysis/Monitoring"
   ],
   "aws_services": [
     "VPC",
