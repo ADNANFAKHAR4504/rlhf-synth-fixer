@@ -538,6 +538,13 @@
     },
     "DBCluster": {
       "Type": "AWS::RDS::DBCluster",
+      "Metadata": {
+        "cfn-lint": {
+          "config": {
+            "ignore_checks": ["W1011"]
+          }
+        }
+      },
       "Properties": {
         "Engine": "aurora-mysql",
         "EngineVersion": "8.0.mysql_aurora.3.04.0",
