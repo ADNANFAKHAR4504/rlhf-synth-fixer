@@ -6,15 +6,13 @@
   "po_id": "292004",
   "team": "synth-2",
   "startedAt": "2025-08-21T13:19:54.414Z",
-  "subtask": "General Infrastructure Provisioning",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "General Infrastructure Tooling QA",
-    "Network Configuration",
-    "Security Configuration",
-    "Database Management",
-    "Resource Scaling",
-    "Monitoring Setup",
-    "IaC Optimization"
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency",
+    "Security Configuration as Code",
+    "IaC Optimization",
+    "General Infrastructure Tooling QA"
   ],
   "aws_services": [
     "VPC",
