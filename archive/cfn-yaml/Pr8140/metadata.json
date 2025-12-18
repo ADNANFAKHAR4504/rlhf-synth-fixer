@@ -26,5 +26,11 @@
     "VPC Flow Logs",
     "IAM",
     "Network ACL"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mikiaszerihun",
+  "dockerS3Location": ""
 }
