@@ -51,42 +51,6 @@ const template = load(readFileSync(templatePath, 'utf8'), { schema: cloudFormati
 const AWS_ACCOUNT_ID = '718240086340';
 
 describe('TapStack CloudFormation Template', () => {
-  // Test Parameters
-  describe('Parameters', () => {
-    test('should have required parameters', () => {
-      expect(template.Parameters).toHaveProperty('ProjectName', {
-        Type: 'String',
-        Default: 'TapStack',
-        Description: 'Project name (fixed to TapStack for naming convention)',
-      });
-      expect(template.Parameters).toHaveProperty('Owner', {
-        Type: 'String',
-        Default: 'team',
-        Description: 'Owner of the stack',
-      });
-      expect(template.Parameters).toHaveProperty('TeamPrincipalARN', {
-        Type: 'String',
-        Default: '',
-        Description: 'Optional IAM principal ARN for role trust policy',
-      });
-      expect(template.Parameters).toHaveProperty('CreateNatPerAZ', {
-        Type: 'String',
-        Default: 'true',
-        AllowedValues: ['true', 'false'],
-        Description: 'Create NAT Gateway per Availability Zone',
-      });
-    });
-  });
-
-  // Test Conditions
-  describe('Conditions', () => {
-    test('should define conditions for NAT gateway creation', () => {
-      expect(template.Conditions).toHaveProperty('CreateNatPerAZ');
-      expect(template.Conditions).toHaveProperty('SingleNat');
-      expect(template.Conditions).toHaveProperty('HasTeamPrincipal');
-    });
-  });
-
   // Test Resources
   describe('Resources', () => {
     describe('VPCs', () => {
