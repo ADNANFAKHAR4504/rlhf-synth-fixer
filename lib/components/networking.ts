@@ -89,28 +89,17 @@ export class NetworkingInfrastructure extends ComponentResource {
    * Get availability zones for the region with fallback
    */
   private getAvailabilityZones(): string[] {
-    // Detect LocalStack environment - uses different AZ mappings
+    // Detect LocalStack environment
     const isLocalStack =
       !!process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
       !!process.env.AWS_ENDPOINT_URL?.includes('localstack');
 
-    // LocalStack-specific AZ mapping (LocalStack supports different AZs than real AWS)
-    const localStackAzMap: Record<string, string[]> = {
-      'us-east-1': ['us-east-1a', 'us-east-1b'],
-      'us-east-2': ['us-east-2a', 'us-east-2b'],
-      'us-west-1': ['us-west-1a', 'us-west-1b'], // LocalStack supports 'b', not 'c'
-      'us-west-2': ['us-west-2a', 'us-west-2b'],
-      'eu-west-1': ['eu-west-1a', 'eu-west-1b'],
-      'eu-central-1': ['eu-central-1a', 'eu-central-1b'],
-      'ap-southeast-1': ['ap-southeast-1a', 'ap-southeast-1b'],
-      'ap-northeast-1': ['ap-northeast-1a', 'ap-northeast-1c'],
-    };
-
-    // Real AWS region-specific AZ mapping for reliable deployments
+    // Region-specific AZ mapping for reliable deployments
+    // Note: us-west-1 uses 'b' for LocalStack (which doesn't support 'c') and 'c' for real AWS (which doesn't have 'b')
     const regionAzMap: Record<string, string[]> = {
       'us-east-1': ['us-east-1a', 'us-east-1b'],
       'us-east-2': ['us-east-2a', 'us-east-2b'],
-      'us-west-1': ['us-west-1a', 'us-west-1c'], // us-west-1 doesn't have 'b' in real AWS
+      'us-west-1': isLocalStack ? ['us-west-1a', 'us-west-1b'] : ['us-west-1a', 'us-west-1c'],
       'us-west-2': ['us-west-2a', 'us-west-2b'],
       'us-gov-east-1': ['us-gov-east-1a', 'us-gov-east-1b'],
       'us-gov-west-1': ['us-gov-west-1a', 'us-gov-west-1b'],
@@ -120,15 +109,9 @@ export class NetworkingInfrastructure extends ComponentResource {
       'ap-northeast-1': ['ap-northeast-1a', 'ap-northeast-1c'],
     };
 
-    // Use LocalStack-specific mapping when running on LocalStack
-    const azMap = isLocalStack ? localStackAzMap : regionAzMap;
-    const availableAzs = azMap[this.region];
-
+    const availableAzs = regionAzMap[this.region];
     if (availableAzs) {
-      console.log(
-        `Using known AZs for ${this.region}${isLocalStack ? ' (LocalStack)' : ''}:`,
-        availableAzs
-      );
+      console.log(`Using known AZs for ${this.region}${isLocalStack ? ' (LocalStack)' : ''}:`, availableAzs);
       return availableAzs;
     }
 
