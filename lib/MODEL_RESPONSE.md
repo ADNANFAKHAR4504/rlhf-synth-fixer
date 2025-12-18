@@ -232,28 +232,28 @@ Outputs:
 
 ## Key Features and Security Controls
 
-### 🔐 **Encryption & Key Management**
+### **Encryption & Key Management**
 - **Dedicated KMS Key**: Creates a customer-managed KMS key with automatic rotation
 - **Enforced Encryption**: Bucket policy denies any uploads without proper KMS encryption
 - **Key Alias**: Provides a user-friendly alias for the KMS key
 
-### 📊 **Logging & Monitoring**
+### **Logging & Monitoring**
 - **Separate Logging Bucket**: Dedicated bucket for access logs with its own security controls
 - **CloudWatch Integration**: Configured for object creation/deletion notifications
 - **Lifecycle Management**: Automatic log retention and cleanup policies
 
-### 🛡️ **Access Controls**
+### **Access Controls**
 - **Multi-layered Security**: Combines bucket policies, encryption, and access controls
 - **Cross-Account Access**: Secure read-only access for external partners
 - **Transport Security**: Enforces HTTPS for all requests
 - **Public Access Block**: Prevents any public access configurations
 
-### 🔄 **Data Protection**
+### **Data Protection**
 - **Versioning Enabled**: Protects against accidental overwrites and deletions
 - **Deletion Policy**: `Retain` policy prevents accidental bucket deletion
 - **Lifecycle Policies**: Automatic transition to cost-effective storage classes
 
-### 📋 **Compliance Features**
+### **Compliance Features**
 - **Comprehensive Tagging**: Proper resource tagging for governance
 - **Parameter Validation**: Ensures external account ID format is correct
 - **Export Values**: Makes key resources available to other stacks
