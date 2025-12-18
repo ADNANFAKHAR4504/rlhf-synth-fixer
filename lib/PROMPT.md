@@ -18,7 +18,7 @@ Global e-commerce platform requires consistent, high-availability infrastructure
     * Log groups for app/system logs.
     * **Alarms** on EC2 **CPUUtilization** and **memory** (via CloudWatch Agent), and a basic RDS CPU alarm.
   * Minimal, least-privilege **IAM roles/policies** for EC2, and any service roles required by the template.
-* The template must be **region-agnostic** (deploy the same template independently to us-east-1, eu-west-1, and ap-southeast-1). Do not hard-code region identifiers; rely on pseudo-parameters or parameterization.
+* The template must be **region-agnostic** (deploy the same template independently to us-east-1, eu-west-1 and ap-southeast-1). Do not hard-code region identifiers; rely on pseudo-parameters or parameterization.
 * All logical and physical **resource names must include `ENVIRONMENT_SUFFIX`** to avoid collisions across environments and regions.
 
 # Constraints & best practices
