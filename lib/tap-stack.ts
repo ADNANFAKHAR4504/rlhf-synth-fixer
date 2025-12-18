@@ -16,10 +16,11 @@ export class TapStack extends cdk.Stack {
     super(scope, id, props);
 
     // Detect LocalStack environment - check both env var and context
-    const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                         process.env.AWS_ENDPOINT_URL?.includes('4566') ||
-                         this.node.tryGetContext('localstack') === true ||
-                         this.node.tryGetContext('localstack') === 'true';
+    const isLocalStack =
+      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+      process.env.AWS_ENDPOINT_URL?.includes('4566') ||
+      this.node.tryGetContext('localstack') === true ||
+      this.node.tryGetContext('localstack') === 'true';
 
     // Get environment suffix from props, context, or use 'dev' as default
     const environmentSuffix =
@@ -42,7 +43,9 @@ export class TapStack extends cdk.Stack {
         {
           cidrMask: 24,
           name: 'Private',
-          subnetType: isLocalStack ? ec2.SubnetType.PRIVATE_ISOLATED : ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          subnetType: isLocalStack
+            ? ec2.SubnetType.PRIVATE_ISOLATED
+            : ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
       ],
       natGateways: isLocalStack ? 0 : 2, // Disable NAT Gateways for LocalStack (Community limitation)
