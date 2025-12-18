@@ -543,7 +543,9 @@
         "EngineVersion": "8.0.mysql_aurora.3.04.0",
         "DatabaseName": "paymentdb",
         "MasterUsername": "admin",
-        "MasterUserPassword": { "Ref": "DBMasterPassword" },
+        "MasterUserPassword": {
+          "Ref": "DBMasterPassword"
+        },
         "DBSubnetGroupName": {
           "Ref": "DBSubnetGroup"
         },
