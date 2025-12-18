@@ -20,6 +20,5 @@
     "CloudWatch LogGroup",
     "IAM",
     "X-Ray"
-  ],
-  "author": "veera-turing"
+  ]
 }
