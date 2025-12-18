@@ -1,5 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
+import { CfnAutoScalingGroup } from 'aws-cdk-lib/aws-autoscaling';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
@@ -230,6 +231,11 @@ export class TapStack extends cdk.Stack {
         }),
       }
     );
+
+    // LocalStack compatibility: Override LaunchTemplate version reference
+    // CDK tries to use Fn::GetAtt for LatestVersionNumber, which doesn't work in LocalStack
+    const cfnAutoScalingGroup = autoScalingGroup.node.defaultChild as CfnAutoScalingGroup;
+    cfnAutoScalingGroup.addOverride('Properties.LaunchTemplate.Version', '$Latest');
 
     cdk.Tags.of(autoScalingGroup).add('Owner', commonTags.Owner);
     cdk.Tags.of(autoScalingGroup).add('Purpose', commonTags.Purpose);
