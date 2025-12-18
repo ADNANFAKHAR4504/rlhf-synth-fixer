@@ -20,6 +20,5 @@
     "Security Groups",
     "VPC Endpoints"
   ],
-  "provider": "localstack",
-  "training_quality": 10
+  "provider": "localstack"
 }
