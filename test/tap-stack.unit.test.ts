@@ -457,20 +457,29 @@ describe('Subnet Configuration', () => {
 
 describe('Bucket Name Truncation', () => {
     it('should truncate bucket name when it exceeds 63 characters', () => {
-        // Create a stack with a very long name to trigger bucket name truncation
-        const longStackName = 'this-is-a-very-long-stack-name-that-will-exceed-the-s3-bucket-limit';
-        const longNameStack = new TapStack(longStackName, {
-            tags: {
-                Environment: 'test',
-                Application: 'nova-model-breaking',
-                Owner: 'test-team',
-            },
-        });
+        // Mock pulumi.getStack to return a very long stack name that will
+        // cause the bucket name to exceed 63 characters
+        const originalGetStack = pulumi.getStack;
+        const longStackName = 'this-is-an-extremely-long-stack-name-that-will-definitely-exceed-the-s3-bucket-63-char-limit';
+        jest.spyOn(pulumi, 'getStack').mockReturnValue(longStackName);
         
-        // Stack should still be created successfully
-        expect(longNameStack).toBeDefined();
-        expect(longNameStack.logsBucket).toBeDefined();
-        expect(longNameStack.regions).toEqual(['us-east-1', 'us-west-2']);
+        try {
+            const longNameStack = new TapStack('truncation-test-stack', {
+                tags: {
+                    Environment: 'test',
+                    Application: 'nova-model-breaking',
+                    Owner: 'test-team',
+                },
+            });
+            
+            // Stack should still be created successfully
+            expect(longNameStack).toBeDefined();
+            expect(longNameStack.logsBucket).toBeDefined();
+            expect(longNameStack.regions).toEqual(['us-east-1', 'us-west-2']);
+        } finally {
+            // Restore original getStack
+            jest.spyOn(pulumi, 'getStack').mockImplementation(originalGetStack);
+        }
     });
 });
 });
