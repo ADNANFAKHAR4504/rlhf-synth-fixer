@@ -24,5 +24,12 @@
     "Logs",
     "Application Auto Scaling"
   ],
-  "provider": "localstack"
+  "provider": "localstack",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "adnan-turing",
+  "dockerS3Location": ""
 }
