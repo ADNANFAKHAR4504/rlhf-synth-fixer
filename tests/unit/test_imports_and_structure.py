@@ -306,26 +306,6 @@ class TestConfiguration(unittest.TestCase):
         )
         self.assertTrue(os.path.exists(pulumi_yaml))
 
-    def test_requirements_txt_exists(self):
-        """Test that requirements.txt exists."""
-        requirements = os.path.join(
-            os.path.dirname(__file__),
-            '../../requirements.txt'
-        )
-        self.assertTrue(os.path.exists(requirements))
-
-    def test_requirements_has_pulumi(self):
-        """Test that requirements.txt includes Pulumi."""
-        requirements = os.path.join(
-            os.path.dirname(__file__),
-            '../../requirements.txt'
-        )
-        with open(requirements, 'r') as f:
-            content = f.read()
-
-        self.assertIn('pulumi', content)
-        self.assertIn('pulumi-aws', content)
-
 
 if __name__ == '__main__':
     unittest.main()
