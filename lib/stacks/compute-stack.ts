@@ -163,7 +163,7 @@ export class ComputeStack extends Construct {
     this.authorizerFunction = new lambda.Function(this, 'AuthorizerFunction', {
       runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'authorizer.handler',
-      code: lambda.Code.fromAsset('lib/lambda'),
+      code: lambda.Code.fromAsset('dist/lib/lambda'),
       role: authorizerRole,
       vpc: props.vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
@@ -184,7 +184,7 @@ export class ComputeStack extends Construct {
       {
         runtime: lambda.Runtime.NODEJS_20_X,
         handler: 'documentProcessor.handler',
-        code: lambda.Code.fromAsset('lib/lambda'),
+        code: lambda.Code.fromAsset('dist/lib/lambda'),
         role: documentProcessorRole,
         vpc: props.vpc,
         vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
@@ -203,7 +203,7 @@ export class ComputeStack extends Construct {
     this.apiHandlerFunction = new lambda.Function(this, 'ApiHandlerFunction', {
       runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'apiHandler.handler',
-      code: lambda.Code.fromAsset('lib/lambda'),
+      code: lambda.Code.fromAsset('dist/lib/lambda'),
       role: apiHandlerRole,
       vpc: props.vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
