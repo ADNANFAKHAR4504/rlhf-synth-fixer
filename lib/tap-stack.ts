@@ -19,15 +19,21 @@ export class TapStack extends cdk.Stack {
     const stackName = `TapStack${environmentSuffix}`;
 
     // SSM parameter for AMI ID (required for CfnInstance)
-    const amiIdParameter = new cdk.CfnParameter(this, 'SsmParameterValueawsserviceamiamazonlinuxlatestal2023amikernel61x8664C96584B6F00A464EAD1953AFF4B05118Parameter', {
-      type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>',
-      default: '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64',
-    });
+    const amiIdParameter = new cdk.CfnParameter(
+      this,
+      'SsmParameterValueawsserviceamiamazonlinuxlatestal2023amikernel61x8664C96584B6F00A464EAD1953AFF4B05118Parameter',
+      {
+        type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>',
+        default:
+          '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64',
+      }
+    );
 
     // Create VPC with CIDR 10.0.0.0/16
     // LocalStack Community has limited NAT Gateway support, so use PRIVATE_ISOLATED for testing
-    const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                        process.env.AWS_ENDPOINT_URL?.includes('4566');
+    const isLocalStack =
+      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+      process.env.AWS_ENDPOINT_URL?.includes('4566');
 
     const vpc = new ec2.Vpc(this, 'TapVpc', {
       ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
@@ -42,7 +48,9 @@ export class TapStack extends cdk.Stack {
           cidrMask: 24,
           name: 'PrivateSubnet',
           // Use PRIVATE_ISOLATED for LocalStack (no NAT Gateway)
-          subnetType: isLocalStack ? ec2.SubnetType.PRIVATE_ISOLATED : ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          subnetType: isLocalStack
+            ? ec2.SubnetType.PRIVATE_ISOLATED
+            : ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
       ],
       // Disable NAT Gateway for LocalStack
