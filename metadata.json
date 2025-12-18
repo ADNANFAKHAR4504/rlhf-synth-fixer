@@ -7,9 +7,9 @@
   "team": "3",
   "provider": "localstack",
   "startedAt": "2025-10-03T12:37:33.641Z",
-  "subtask": "Web Application Deployment",
+  "subtask": "Application Deployment",
   "subject_labels": [
-    "Provisioning of Infrastructure Environments"
+    "Web Application Deployment"
   ],
   "aws_services": [
     "VPC",
@@ -23,6 +23,5 @@
     "CloudWatch",
     "IAM",
     "Cognito"
-  ],
-  "training_quality": 8
+  ]
 }
