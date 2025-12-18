@@ -574,57 +574,58 @@ class TapStack(pulumi.ComponentResource):
                 opts=pulumi.ResourceOptions(parent=self)
             )
 
-        # Create VPC Flow Logs
-        flow_log_role = aws.iam.Role(
-            f"{environment}-flow-log-role-{self.environment_suffix}",
-            assume_role_policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [{
-                    "Effect": "Allow",
-                    "Principal": {"Service": "vpc-flow-logs.amazonaws.com"},
-                    "Action": "sts:AssumeRole"
-                }]
-            }),
-            opts=pulumi.ResourceOptions(parent=self)
-        )
+        # Create VPC Flow Logs (skip in LocalStack as it doesn't fully support Flow Logs)
+        if not self.is_localstack:
+            flow_log_role = aws.iam.Role(
+                f"{environment}-flow-log-role-{self.environment_suffix}",
+                assume_role_policy=json.dumps({
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                        "Effect": "Allow",
+                        "Principal": {"Service": "vpc-flow-logs.amazonaws.com"},
+                        "Action": "sts:AssumeRole"
+                    }]
+                }),
+                opts=pulumi.ResourceOptions(parent=self)
+            )
 
-        flow_log_policy = aws.iam.RolePolicy(
-            f"{environment}-flow-log-policy-{self.environment_suffix}",
-            role=flow_log_role.id,
-            policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [{
-                    "Effect": "Allow",
-                    "Action": [
-                        "logs:CreateLogGroup",
-                        "logs:CreateLogStream",
-                        "logs:PutLogEvents",
-                        "logs:DescribeLogGroups",
-                        "logs:DescribeLogStreams"
-                    ],
-                    "Resource": "*"
-                }]
-            }),
-            opts=pulumi.ResourceOptions(parent=self)
-        )
+            flow_log_policy = aws.iam.RolePolicy(
+                f"{environment}-flow-log-policy-{self.environment_suffix}",
+                role=flow_log_role.id,
+                policy=json.dumps({
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                        "Effect": "Allow",
+                        "Action": [
+                            "logs:CreateLogGroup",
+                            "logs:CreateLogStream",
+                            "logs:PutLogEvents",
+                            "logs:DescribeLogGroups",
+                            "logs:DescribeLogStreams"
+                        ],
+                        "Resource": "*"
+                    }]
+                }),
+                opts=pulumi.ResourceOptions(parent=self)
+            )
 
-        flow_log_group = aws.cloudwatch.LogGroup(
-            f"{environment}-vpc-flow-logs-{self.environment_suffix}",
-            name=f"/aws/vpc/flow-logs/{environment}-{self.environment_suffix}",
-            retention_in_days=7,
-            opts=pulumi.ResourceOptions(parent=self)
-        )
+            flow_log_group = aws.cloudwatch.LogGroup(
+                f"{environment}-vpc-flow-logs-{self.environment_suffix}",
+                name=f"/aws/vpc/flow-logs/{environment}-{self.environment_suffix}",
+                retention_in_days=7,
+                opts=pulumi.ResourceOptions(parent=self)
+            )
 
-        flow_log = aws.ec2.FlowLog(
-            f"{environment}-flow-log-{self.environment_suffix}",
-            vpc_id=vpc.id,
-            traffic_type="ALL",
-            iam_role_arn=flow_log_role.arn,
-            log_destination_type="cloud-watch-logs",
-            log_destination=flow_log_group.arn,
-            tags={"Name": f"{environment}-flow-log-{self.environment_suffix}"},
-            opts=pulumi.ResourceOptions(parent=self, depends_on=[flow_log_policy])
-        )
+            flow_log = aws.ec2.FlowLog(
+                f"{environment}-flow-log-{self.environment_suffix}",
+                vpc_id=vpc.id,
+                traffic_type="ALL",
+                iam_role_arn=flow_log_role.arn,
+                log_destination_type="cloud-watch-logs",
+                log_destination=flow_log_group.arn,
+                tags={"Name": f"{environment}-flow-log-{self.environment_suffix}"},
+                opts=pulumi.ResourceOptions(parent=self, depends_on=[flow_log_policy])
+            )
 
         return {
             "vpc": vpc,

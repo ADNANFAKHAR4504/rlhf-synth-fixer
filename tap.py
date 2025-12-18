@@ -23,6 +23,13 @@ config = Config()
 environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
 STACK_NAME = f"TapStack{environment_suffix}"
 
+# Detect LocalStack mode
+is_localstack = (
+    os.getenv('LOCALSTACK_HOSTNAME') is not None or
+    os.getenv('IS_LOCALSTACK', '').lower() == 'true' or
+    os.getenv('AWS_ENDPOINT_URL') is not None
+)
+
 repository_name = os.getenv('REPOSITORY', 'unknown')
 commit_author = os.getenv('COMMIT_AUTHOR', 'unknown')
 pr_number = os.getenv('PR_NUMBER', 'unknown')
@@ -51,6 +58,7 @@ provider = aws.Provider('aws',
 stack = TapStack(
     name="pulumi-infra",
     environment_suffix=environment_suffix,
+    is_localstack=is_localstack,
     opts=ResourceOptions(provider=provider)
 )
 
