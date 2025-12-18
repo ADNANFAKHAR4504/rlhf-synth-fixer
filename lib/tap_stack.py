@@ -238,13 +238,37 @@ class TapStack(Stack):
 
     # Auto Scaling Group
     # Note: Using public subnets for LocalStack since NAT Gateway is not available
+    # Using instance_type and machine_image directly instead of launch_template
+    # to avoid CloudFormation LaunchTemplate.LatestVersionNumber issues
     asg = autoscaling.AutoScalingGroup(
       self, f"tap-asg-{environment_suffix}",
       vpc=vpc,
       vpc_subnets=ec2.SubnetSelection(
         subnet_type=ec2.SubnetType.PUBLIC  # Changed for LocalStack compatibility
       ),
-      launch_template=launch_template,
+      instance_type=ec2.InstanceType.of(
+        ec2.InstanceClass.BURSTABLE3,
+        ec2.InstanceSize.MICRO,
+      ),
+      machine_image=ec2.AmazonLinuxImage(
+        generation=ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
+        edition=ec2.AmazonLinuxEdition.STANDARD,
+        virtualization=ec2.AmazonLinuxVirt.HVM,
+        storage=ec2.AmazonLinuxStorage.GENERAL_PURPOSE,
+      ),
+      security_group=ec2_sg,
+      role=ec2_role,
+      user_data=user_data_script,
+      block_devices=[
+        autoscaling.BlockDevice(
+          device_name="/dev/xvda",
+          volume=autoscaling.BlockDeviceVolume.ebs(
+            volume_size=8,
+            encrypted=True,
+            delete_on_termination=True,
+          ),
+        )
+      ],
       min_capacity=2,
       max_capacity=10,
       desired_capacity=2,
