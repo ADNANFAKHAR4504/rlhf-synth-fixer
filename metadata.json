@@ -22,5 +22,6 @@
     "Timestream",
     "EventBridge Scheduler"
   ],
-  "provider": "localstack"
+  "provider": "localstack",
+  "training_quality": 6
 }
