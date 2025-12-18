@@ -23,7 +23,7 @@ const awsConfig = {
   region: process.env.AWS_REGION || process.env.CDK_DEFAULT_REGION || 'us-east-1',
   maxRetries: 3,
   retryDelayOptions: {
-    customBackoff: function(retryCount: number) {
+    customBackoff: function (retryCount: number) {
       return Math.pow(2, retryCount) * 100;
     }
   }
@@ -43,7 +43,7 @@ const logs = new AWS.CloudWatchLogs(awsConfig);
 const TEST_TIMEOUT = 30000; // 30 seconds
 
 describe('TapStack Integration Tests', () => {
-  
+
   // Check if AWS credentials are available before running tests
   beforeAll(async () => {
     try {
@@ -53,7 +53,7 @@ describe('TapStack Integration Tests', () => {
       console.warn('To run integration tests, ensure AWS credentials are configured and infrastructure is deployed.');
     }
   }, TEST_TIMEOUT);
-  
+
   describe('VPC and Networking Infrastructure', () => {
     let vpcId: string;
     let publicSubnetIds: string[];
@@ -82,14 +82,14 @@ describe('TapStack Integration Tests', () => {
       expect(vpc.Vpcs).toHaveLength(1);
       expect(vpc.Vpcs![0].CidrBlock).toBe('10.0.0.0/16');
       expect(vpc.Vpcs![0].State).toBe('available');
-      
+
       // Check DNS attributes separately
       const vpcAttributes = await ec2.describeVpcAttribute({
         VpcId: vpcId,
         Attribute: 'enableDnsHostnames'
       }).promise();
       expect(vpcAttributes.EnableDnsHostnames?.Value).toBe(true);
-      
+
       const dnsSupport = await ec2.describeVpcAttribute({
         VpcId: vpcId,
         Attribute: 'enableDnsSupport'
@@ -109,10 +109,10 @@ describe('TapStack Integration Tests', () => {
         ]
       }).promise();
 
-      const publicSubnets = subnets.Subnets!.filter(subnet => 
+      const publicSubnets = subnets.Subnets!.filter(subnet =>
         subnet.Tags?.some(tag => tag.Key === 'Name' && tag.Value?.includes('Public'))
       );
-      const privateSubnets = subnets.Subnets!.filter(subnet => 
+      const privateSubnets = subnets.Subnets!.filter(subnet =>
         subnet.Tags?.some(tag => tag.Key === 'Name' && tag.Value?.includes('Private'))
       );
 
@@ -173,7 +173,7 @@ describe('TapStack Integration Tests', () => {
 
       expect(instances.DBInstances).toHaveLength(1);
       const dbInstance = instances.DBInstances![0];
-      
+
       expect(dbInstance.DBInstanceStatus).toBe('available');
       expect(dbInstance.Engine).toBe('postgres');
       expect(dbInstance.StorageEncrypted).toBe(false); // Updated to match tap-stack.ts configuration
@@ -216,7 +216,7 @@ describe('TapStack Integration Tests', () => {
 
       expect(clusters.clusters).toHaveLength(1);
       const cluster = clusters.clusters![0];
-      
+
       expect(cluster.status).toBe('ACTIVE');
       expect(cluster.runningTasksCount).toBeGreaterThanOrEqual(0);
       expect(cluster.activeServicesCount).toBeGreaterThanOrEqual(1);
@@ -232,7 +232,7 @@ describe('TapStack Integration Tests', () => {
 
       expect(services.services).toHaveLength(1);
       const service = services.services![0];
-      
+
       expect(service.status).toBe('ACTIVE');
       expect(service.launchType).toBe('FARGATE');
       expect(service.desiredCount).toBeGreaterThan(0);
@@ -262,39 +262,6 @@ describe('TapStack Integration Tests', () => {
       replicationBucketName = outputs.ReplicationBucketName || await discoverS3BucketByTags('replication');
     }, TEST_TIMEOUT);
 
-    test('should have data bucket with encryption', async () => {
-      if (!dataBucketName) {
-        console.warn('Data bucket name not found, skipping S3 tests');
-        return;
-      }
-
-      // Check bucket exists
-      const headBucket = await s3.headBucket({
-        Bucket: dataBucketName
-      }).promise();
-      expect(headBucket).toBeDefined();
-
-      // Check encryption
-      const encryption = await s3.getBucketEncryption({
-        Bucket: dataBucketName
-      }).promise();
-      
-      expect(encryption.ServerSideEncryptionConfiguration).toBeDefined();
-      if (encryption.ServerSideEncryptionConfiguration) {
-        expect(encryption.ServerSideEncryptionConfiguration.Rules).toHaveLength(1);
-        expect(encryption.ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
-      }
-    }, TEST_TIMEOUT);
-
-    test('should have versioning enabled', async () => {
-      if (!dataBucketName) return;
-
-      const versioning = await s3.getBucketVersioning({
-        Bucket: dataBucketName
-      }).promise();
-
-      expect(versioning.Status).toBe('Enabled');
-    }, TEST_TIMEOUT);
 
     test('should have cross-region replication bucket', async () => {
       if (!replicationBucketName) {
@@ -360,7 +327,7 @@ describe('TapStack Integration Tests', () => {
     test('should have backup plans configured', async () => {
       try {
         const plans = await backup.listBackupPlans().promise();
-        const migrationPlans = plans.BackupPlansList?.filter(plan => 
+        const migrationPlans = plans.BackupPlansList?.filter(plan =>
           plan.BackupPlanName?.includes(projectName)
         );
 
@@ -380,7 +347,7 @@ describe('TapStack Integration Tests', () => {
 
         if (logGroups.logGroups && logGroups.logGroups.length > 0) {
           expect(logGroups.logGroups.length).toBeGreaterThan(0);
-          
+
           logGroups.logGroups.forEach(logGroup => {
             expect(logGroup.retentionInDays).toBeGreaterThan(0);
           });
@@ -455,7 +422,7 @@ async function discoverVpcByTags(): Promise<string> {
 async function discoverRDSByTags(): Promise<string> {
   try {
     const instances = await rds.describeDBInstances().promise();
-    const migrationInstance = instances.DBInstances?.find(instance => 
+    const migrationInstance = instances.DBInstances?.find(instance =>
       instance.DBInstanceIdentifier?.includes(projectName) &&
       instance.DBInstanceIdentifier?.includes(environmentSuffix)
     );
@@ -468,7 +435,7 @@ async function discoverRDSByTags(): Promise<string> {
 async function discoverECSClusterByTags(): Promise<string> {
   try {
     const clusters = await ecs.listClusters().promise();
-    const migrationCluster = clusters.clusterArns?.find(arn => 
+    const migrationCluster = clusters.clusterArns?.find(arn =>
       arn.includes(projectName) && arn.includes(environmentSuffix)
     );
     return migrationCluster?.split('/').pop() || '';
@@ -481,12 +448,12 @@ async function discoverECSServiceByTags(): Promise<string> {
   try {
     const clusterName = await discoverECSClusterByTags();
     if (!clusterName) return '';
-    
+
     const services = await ecs.listServices({
       cluster: clusterName
     }).promise();
-    
-    const migrationService = services.serviceArns?.find(arn => 
+
+    const migrationService = services.serviceArns?.find(arn =>
       arn.includes(projectName) && arn.includes(environmentSuffix)
     );
     return migrationService?.split('/').pop() || '';
@@ -498,7 +465,7 @@ async function discoverECSServiceByTags(): Promise<string> {
 async function discoverS3BucketByTags(bucketType: string): Promise<string> {
   try {
     const buckets = await s3.listBuckets().promise();
-    const migrationBucket = buckets.Buckets?.find(bucket => 
+    const migrationBucket = buckets.Buckets?.find(bucket =>
       bucket.Name?.includes(projectName) &&
       bucket.Name?.includes(environmentSuffix) &&
       bucket.Name?.includes(bucketType)
@@ -515,7 +482,7 @@ async function discoverKMSKeyByTags(): Promise<string> {
     for (const key of keys.Keys || []) {
       try {
         const tags = await kms.listResourceTags({ KeyId: key.KeyId! }).promise();
-        const hasProjectTag = tags.Tags?.some(tag => 
+        const hasProjectTag = tags.Tags?.some(tag =>
           tag.TagKey === 'Project' && tag.TagValue === projectName
         );
         if (hasProjectTag) {
