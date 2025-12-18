@@ -46,13 +46,13 @@ const app = new cdk.App();
 const envName = app.node.tryGetContext('env') || 'dev';
 
 // Define environment-specific configurations
+// Note: AMI is not specified here as the stack uses MachineImage.latestAmazonLinux2023()
 const environmentConfigs: Record<string, EnvironmentConfig> = {
   dev: {
     environmentName: 'dev',
     cloudProvider: 'aws',
     awsRegion: process.env.AWS_REGION || 'us-east-1',
     awsVpcCidr: '10.0.0.0/16',
-    awsAmi: 'ami-0c02fb55956c7d316', // Amazon Linux 2023 AMI (us-east-1)
     awsInstanceType: 't3.micro',
     awsS3BucketSuffix: 'dev-bucket',
     azureLocation: 'East US',
@@ -66,7 +66,6 @@ const environmentConfigs: Record<string, EnvironmentConfig> = {
     cloudProvider: 'aws',
     awsRegion: process.env.AWS_REGION || 'us-east-1',
     awsVpcCidr: '10.10.0.0/16',
-    awsAmi: 'ami-0c02fb55956c7d316', // Amazon Linux 2023 AMI (us-east-1)
     awsInstanceType: 't3.small',
     awsS3BucketSuffix: 'staging-bucket',
     azureLocation: 'West US',
@@ -80,7 +79,6 @@ const environmentConfigs: Record<string, EnvironmentConfig> = {
     cloudProvider: 'aws',
     awsRegion: process.env.AWS_REGION || 'us-east-1',
     awsVpcCidr: '10.20.0.0/16',
-    awsAmi: 'ami-0c02fb55956c7d316', // Amazon Linux 2023 AMI (us-east-1)
     awsInstanceType: 't3.medium',
     awsS3BucketSuffix: 'prod-bucket',
     azureLocation: 'East US',
@@ -142,12 +140,12 @@ import {
 
 // Define an interface for the environment-specific configuration
 // Export this interface so it can be imported in bin/tap.ts
+// Note: awsAmi is not included as the stack uses MachineImage.latestAmazonLinux2023()
 export interface EnvironmentConfig {
   environmentName: string;
   cloudProvider: 'aws' | 'azure';
   awsRegion: string;
   awsVpcCidr: string;
-  awsAmi: string;
   awsInstanceType: string;
   awsS3BucketSuffix: string;
   azureLocation: string;
@@ -183,12 +181,12 @@ export class TapStack extends cdk.Stack {
       config = props.environmentConfig;
     } else if (props.environmentSuffix) {
       // Create a default config using environmentSuffix (legacy support)
+      // Note: awsAmi not included - stack will use MachineImage.latestAmazonLinux2023()
       config = {
         environmentName: props.environmentSuffix,
         cloudProvider: 'aws', // Default to AWS
         awsRegion: process.env.CDK_DEFAULT_REGION || 'us-east-1',
         awsVpcCidr: '10.0.0.0/16',
-        awsAmi: 'ami-0c02fb55956c7d316', // Default Amazon Linux 2
         awsInstanceType: 't3.micro',
         awsS3BucketSuffix: 'storage',
         azureLocation: 'East US',
@@ -377,7 +375,12 @@ npm test
 
 1. **Configuration Location**: Environment configs are defined inline in bin/tap.ts rather than external JSON files for better type safety and maintainability
 2. **Stack Naming**: Uses TapStack class with dynamic naming via environment suffix
-3. **AMI Selection**: Uses MachineImage.latestAmazonLinux2023() for production code, ensuring compatibility with LocalStack
+3. **AMI Selection**: Uses MachineImage.latestAmazonLinux2023() in the stack implementation rather than hardcoded AMI IDs, ensuring:
+   - Automatic selection of the latest Amazon Linux 2023 AMI
+   - Better LocalStack compatibility (no region-specific AMI dependencies)
+   - Reduced maintenance burden (no need to update AMI IDs per region)
+   - More reliable deployments across different AWS regions
 4. **Legacy Support**: Maintains backward compatibility with environmentSuffix parameter while supporting new environmentConfig approach
+5. **Clean Configuration**: EnvironmentConfig interface excludes unused fields (like awsAmi) to prevent confusion and maintain clarity
 
 This solution provides a solid foundation for multi-cloud infrastructure that can be extended and customized as requirements evolve.
