@@ -371,21 +371,18 @@ Resources:
       DBInstanceIdentifier: !Sub '${AWS::StackName}-mysql-db-${EnvironmentSuffix}'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0.37'
+      EngineVersion: '5.7'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
+      MasterUserPassword: 'password123'
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
       BackupRetentionPeriod: 7
       MultiAZ: false
       PubliclyAccessible: false
-      MonitoringInterval: 60
-      MonitoringRoleArn: !GetAtt RDSMonitoringRole.Arn
-      EnablePerformanceInsights: false
       DeletionProtection: false
       Tags:
         - Key: Name

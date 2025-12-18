@@ -564,11 +564,11 @@ Outputs:
 
 ## Compliance with Requirements
 
-✅ **Requirement 1**: Security groups deny all traffic except SSH from specific IP range
-✅ **Requirement 2**: S3 buckets have server-side encryption using AWS-managed keys
-✅ **Requirement 3**: RDS database in private subnet, not publicly accessible
-✅ **Requirement 4**: IAM roles follow least privilege principles
-✅ **Requirement 5**: SNS topic configured for security compliance alerts
+**Requirement 1**: Security groups deny all traffic except SSH from specific IP range
+**Requirement 2**: S3 buckets have server-side encryption using AWS-managed keys
+**Requirement 3**: RDS database in private subnet, not publicly accessible
+**Requirement 4**: IAM roles follow least privilege principles
+**Requirement 5**: SNS topic configured for security compliance alerts
 
 ## Best Practices Implemented
 
