@@ -8,7 +8,6 @@ manages environment-specific configurations.
 from typing import Optional
 
 import aws_cdk as cdk
-from aws_cdk import CfnOutput
 from constructs import Construct
 
 # Import your stacks here
@@ -120,26 +119,34 @@ class TapStack(cdk.Stack):
 
         # Export outputs from nested stack to parent stack
         # Access resources directly from the nested stack
-        CfnOutput(self,
-                  "RdsEndpoint",
-                  value=self.rds_infra.db_instance.instance_endpoint.hostname,
-                  description="RDS PostgreSQL endpoint",
-                  export_name=f"RdsEndpoint-{environment_suffix}")
+        cdk.CfnOutput(
+            self,
+            "RdsEndpoint",
+            value=self.rds_infra.db_instance.instance_endpoint.hostname,
+            description="RDS PostgreSQL endpoint",
+            export_name=f"RdsEndpoint-{environment_suffix}"
+        )
 
-        CfnOutput(self,
-                  "RdsPort",
-                  value=str(self.rds_infra.db_instance.instance_endpoint.port),
-                  description="RDS PostgreSQL port",
-                  export_name=f"RdsPort-{environment_suffix}")
+        cdk.CfnOutput(
+            self,
+            "RdsPort",
+            value=str(self.rds_infra.db_instance.instance_endpoint.port),
+            description="RDS PostgreSQL port",
+            export_name=f"RdsPort-{environment_suffix}"
+        )
 
-        CfnOutput(self,
-                  "BackupBucketName",
-                  value=self.rds_infra.backup_bucket.bucket_name,
-                  description="S3 backup bucket name",
-                  export_name=f"BackupBucketName-{environment_suffix}")
+        cdk.CfnOutput(
+            self,
+            "BackupBucketName",
+            value=self.rds_infra.backup_bucket.bucket_name,
+            description="S3 backup bucket name",
+            export_name=f"BackupBucketName-{environment_suffix}"
+        )
 
-        CfnOutput(self,
-                  "NotificationTopicArn",
-                  value=self.rds_infra.notification_topic.topic_arn,
-                  description="SNS notification topic ARN",
-                  export_name=f"NotificationTopicArn-{environment_suffix}")
+        cdk.CfnOutput(
+            self,
+            "NotificationTopicArn",
+            value=self.rds_infra.notification_topic.topic_arn,
+            description="SNS notification topic ARN",
+            export_name=f"NotificationTopicArn-{environment_suffix}"
+        )
