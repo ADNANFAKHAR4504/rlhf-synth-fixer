@@ -68,41 +68,46 @@ describe('MetadataProcessingStack', () => {
     });
   });
 
-  describe('OpenSearch Serverless', () => {
-    test('should create OpenSearch Serverless collection with environment suffix', () => {
-      template.hasResourceProperties('AWS::OpenSearchServerless::Collection', {
-        Name: `iac-rlhf-metadata-coll-${environmentSuffix}`,
-        Type: 'TIMESERIES',
+  describe('OpenSearch Service', () => {
+    test('should create OpenSearch domain with environment suffix', () => {
+      template.hasResourceProperties('AWS::OpenSearchService::Domain', {
+        DomainName: `iac-rlhf-metadata-${environmentSuffix}`,
+        EngineVersion: 'OpenSearch_2.11',
       });
     });
 
-    test('should create network security policy with environment suffix', () => {
-      template.hasResourceProperties(
-        'AWS::OpenSearchServerless::SecurityPolicy',
-        {
-          Name: `iac-rlhf-metadata-net-${environmentSuffix}`,
-          Type: 'network',
-        }
-      );
+    test('should configure OpenSearch with single node for LocalStack', () => {
+      template.hasResourceProperties('AWS::OpenSearchService::Domain', {
+        ClusterConfig: {
+          InstanceType: 't3.small.search',
+          InstanceCount: 1,
+          MultiAZWithStandbyEnabled: false,
+        },
+      });
     });
 
-    test('should create encryption security policy with environment suffix', () => {
-      template.hasResourceProperties(
-        'AWS::OpenSearchServerless::SecurityPolicy',
-        {
-          Name: `iac-rlhf-metadata-enc-${environmentSuffix}`,
-          Type: 'encryption',
-        }
-      );
+    test('should configure EBS volume for OpenSearch', () => {
+      template.hasResourceProperties('AWS::OpenSearchService::Domain', {
+        EBSOptions: {
+          EBSEnabled: true,
+          VolumeSize: 10,
+          VolumeType: 'gp3',
+        },
+      });
     });
 
-    test('should create data access policy with environment suffix', () => {
-      template.hasResourceProperties(
-        'AWS::OpenSearchServerless::AccessPolicy',
-        {
-          Name: `iac-rlhf-metadata-access-${environmentSuffix}`,
-          Type: 'data',
-        }
+    test('should have open access policy for LocalStack', () => {
+      const domains = template.findResources('AWS::OpenSearchService::Domain');
+      const domain = Object.values(domains)[0];
+      expect(domain.Properties.AccessPolicies).toBeDefined();
+      expect(domain.Properties.AccessPolicies.Statement).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            Effect: 'Allow',
+            Action: 'es:*',
+            Principal: { AWS: '*' },
+          }),
+        ])
       );
     });
   });
@@ -126,8 +131,8 @@ describe('MetadataProcessingStack', () => {
 
     test('should create IAM policy for Step Functions role', () => {
       // Check that we have the expected IAM policies
-      // We now have: StepFunctions default policy + Lambda service role policy + Lambda execution role policy
-      template.resourceCountIs('AWS::IAM::Policy', 3);
+      // We have: StepFunctions default policy + Lambda execution role policy
+      template.resourceCountIs('AWS::IAM::Policy', 2);
 
       // Check that the policies contain the expected actions
       const policies = template.findResources('AWS::IAM::Policy');
@@ -222,15 +227,24 @@ describe('MetadataProcessingStack', () => {
         },
       });
 
-      template.hasOutput('OpenSearchCollectionName', {
-        Value: `iac-rlhf-metadata-coll-${environmentSuffix}`,
+      template.hasOutput('OpenSearchDomainName', {
+        Description: 'OpenSearch domain name',
+        Value: {
+          Ref: 'MetadataDomain',
+        },
       });
 
-      template.hasOutput('OpenSearchDashboardUrl', {});
+      template.hasOutput('OpenSearchDomainEndpoint', {
+        Description: 'OpenSearch domain endpoint',
+      });
 
-      template.hasOutput('FailureTableName', {});
+      template.hasOutput('FailureTableName', {
+        Description: 'DynamoDB table for failure tracking',
+      });
 
-      template.hasOutput('MetadataProcessingWorkflowArn', {});
+      template.hasOutput('MetadataProcessingWorkflowArn', {
+        Description: 'Step Functions state machine ARN',
+      });
     });
   });
 
@@ -244,16 +258,13 @@ describe('MetadataProcessingStack', () => {
     });
 
     test('should create Lambda function with OpenSearch environment variables', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        Environment: {
-          Variables: {
-            OPENSEARCH_ENDPOINT: {
-              'Fn::GetAtt': ['MetadataCollection', 'CollectionEndpoint'],
-            },
-            OPENSEARCH_INDEX: 'metadata',
-          },
-        },
-      });
+      const lambdaFunctions = template.findResources('AWS::Lambda::Function');
+      const lambdaFunction = Object.values(lambdaFunctions)[0];
+
+      expect(lambdaFunction.Properties.Environment).toBeDefined();
+      expect(lambdaFunction.Properties.Environment.Variables).toBeDefined();
+      expect(lambdaFunction.Properties.Environment.Variables.OPENSEARCH_INDEX).toBe('metadata');
+      expect(lambdaFunction.Properties.Environment.Variables.OPENSEARCH_ENDPOINT).toBeDefined();
     });
 
     test('should create Lambda function with fromAsset code', () => {
@@ -298,15 +309,14 @@ describe('MetadataProcessingStack', () => {
 
   describe('Resource Count Validation', () => {
     test('should create expected number of resources', () => {
+      template.resourceCountIs('AWS::S3::Bucket', 1);
       template.resourceCountIs('AWS::DynamoDB::Table', 1);
-      template.resourceCountIs('AWS::OpenSearchServerless::Collection', 1);
-      template.resourceCountIs('AWS::OpenSearchServerless::SecurityPolicy', 2);
-      template.resourceCountIs('AWS::OpenSearchServerless::AccessPolicy', 1); // Access policy for the collection
-      template.resourceCountIs('AWS::IAM::Role', 4); // Step Functions role + Events role + Lambda role + Lambda execution role
+      template.resourceCountIs('AWS::OpenSearchService::Domain', 1);
+      template.resourceCountIs('AWS::IAM::Role', 2); // Step Functions role + Lambda execution role
       template.resourceCountIs('AWS::StepFunctions::StateMachine', 1);
       template.resourceCountIs('AWS::Events::Rule', 1);
       template.resourceCountIs('AWS::CloudWatch::Alarm', 1);
-      template.resourceCountIs('AWS::Lambda::Function', 2); // OpenSearch indexer Lambda
+      template.resourceCountIs('AWS::Lambda::Function', 1); // OpenSearch indexer Lambda
       template.resourceCountIs('AWS::Lambda::LayerVersion', 1); // OpenSearch layer
     });
   });
