@@ -37,7 +37,10 @@ try {
 }
 
 const cfnClient = new CloudFormationClient({ region: 'us-east-1' });
-const s3Client = new S3Client({ region: 'us-east-1' });
+const s3Client = new S3Client({
+  region: 'us-east-1',
+  forcePathStyle: true,
+});
 const logsClient = new CloudWatchLogsClient({ region: 'us-east-1' });
 const ec2Client = new EC2Client({ region: 'us-east-1' });
 

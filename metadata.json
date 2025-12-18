@@ -6,16 +6,11 @@
   "po_id": "291514",
   "team": "2",
   "startedAt": "2025-08-17T17:54:55.529Z",
-  "subtask": "General Infrastructure Provisioning",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
   "subject_labels": [
-    "General Infrastructure Tooling QA",
-    "IaC Optimization",
-    "Security Configuration",
-    "Database Management",
-    "Network Configuration",
-    "Access Control"
+    "Cloud Environment Setup"
   ],
-  "training_quality": 7,
   "aws_services": [
     "AWS::IAM::Role",
     "AWS::IAM::InstanceProfile",
@@ -34,11 +29,5 @@
     "AWS::RDS::DBParameterGroup",
     "AWS::SecretsManager::Secret",
     "AWS::RDS::DBInstance"
-  ],
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "matkadturing",
-  "dockerS3Location": ""
+  ]
 }
