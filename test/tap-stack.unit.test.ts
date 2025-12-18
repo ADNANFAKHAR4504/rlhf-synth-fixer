@@ -1,5 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { TapStack } from '../lib/tap-stack';
+import { MetadataProcessingStack } from '../lib/metadata-stack';
 
 // Mock the nested stacks to verify they are called correctly
 jest.mock('../lib/metadata-stack');
@@ -13,6 +14,20 @@ describe('TapStack', () => {
   beforeEach(() => {
     // Reset mocks before each test
     jest.clearAllMocks();
+
+    // Mock the MetadataProcessingStack to return a nestedStackResource with getAtt method
+    const mockNestedStackResource = {
+      getAtt: jest.fn((attributeName: string) => ({
+        toString: () => `mock-${attributeName}`
+      }))
+    };
+
+    (MetadataProcessingStack as jest.MockedClass<typeof MetadataProcessingStack>).mockImplementation(
+      function(this: any, scope: any, id: string, props: any) {
+        this.nestedStackResource = mockNestedStackResource;
+        return this;
+      } as any
+    );
 
     app = new cdk.App();
     stack = new TapStack(app, 'TestTapStack', { environmentSuffix });
@@ -63,9 +78,39 @@ describe('TapStack', () => {
     });
 
     test('should have environment suffix in context or props', () => {
-      const stackWithContext = new TapStack(app, 'TestTapStackContext');
-      stackWithContext.node.setContext('environmentSuffix', 'context-test');
+      // Create a new app for this test to avoid conflicts
+      const testApp = new cdk.App();
+      testApp.node.setContext('environmentSuffix', 'context-test');
+      const stackWithContext = new TapStack(testApp, 'TestTapStackContext');
       expect(stackWithContext.node.tryGetContext('environmentSuffix')).toBe('context-test');
+    });
+  });
+
+  describe('Stack Outputs', () => {
+    test('should create stack outputs if nested stack outputs exist', () => {
+      // Verify that the stack has outputs
+      const outputs = stack.node.findAll().filter(
+        child => child instanceof cdk.CfnOutput
+      );
+
+      // Should have 5 outputs
+      expect(outputs.length).toBeGreaterThanOrEqual(5);
+    });
+
+    test('should call getAtt on nested stack resource for each output', () => {
+      // Get the mock instance
+      const mockInstance = (MetadataProcessingStack as jest.MockedClass<typeof MetadataProcessingStack>).mock.results[0]?.value;
+
+      if (mockInstance?.nestedStackResource) {
+        const mockGetAtt = mockInstance.nestedStackResource.getAtt;
+
+        // Verify getAtt was called for each output
+        expect(mockGetAtt).toHaveBeenCalledWith('Outputs.MetadataBucketName');
+        expect(mockGetAtt).toHaveBeenCalledWith('Outputs.OpenSearchDomainName');
+        expect(mockGetAtt).toHaveBeenCalledWith('Outputs.OpenSearchDomainEndpoint');
+        expect(mockGetAtt).toHaveBeenCalledWith('Outputs.FailureTableName');
+        expect(mockGetAtt).toHaveBeenCalledWith('Outputs.MetadataProcessingWorkflowArn');
+      }
     });
   });
 });
