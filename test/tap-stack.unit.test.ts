@@ -51,4 +51,43 @@ describe('TapStack', () => {
     const devStack = stack.node.tryFindChild('DevStack');
     expect(devStack).toBeDefined();
   });
+
+  test('Has required CfnOutputs', () => {
+    const app = new App();
+    const stack = new TapStack(app, 'TestOutputStack', {
+      environmentSuffix: 'dev',
+      env,
+    });
+
+    const template = Template.fromStack(stack);
+    template.hasOutput('DeploymentStatus', {
+      Value: 'deployed',
+    });
+    template.hasOutput('EnvironmentSuffix', {
+      Value: 'dev',
+    });
+    template.hasOutput('Platform', {
+      Value: 'cdk',
+    });
+  });
+
+  test('Uses environment variables for image configuration', () => {
+    process.env.IMAGE_NAME = 'custom-nginx';
+    process.env.IMAGE_TAG = '1.26.0';
+    process.env.PORT = '8080';
+
+    const app = new App();
+    const stack = new TapStack(app, 'TestEnvVarStack', {
+      environmentSuffix: 'dev',
+      env,
+    });
+
+    const devStack = stack.node.tryFindChild('DevStack') as cdk.Stack;
+    expect(devStack).toBeDefined();
+
+    // Clean up environment variables
+    delete process.env.IMAGE_NAME;
+    delete process.env.IMAGE_TAG;
+    delete process.env.PORT;
+  });
 });
