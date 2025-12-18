@@ -1,0 +1,21 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291340",
+  "team": "2",
+  "startedAt": "2025-08-12T15:17:39.459Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)",
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "CloudWatch Logs",
+    "IAM"
+  ]
+}
