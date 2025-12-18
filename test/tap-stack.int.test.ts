@@ -49,9 +49,12 @@ describe('ProjectX Serverless Infrastructure Integration Tests', () => {
 
     test('should have a valid API Gateway URL in outputs', () => {
       expect(apiUrl).toBeDefined();
-      // LocalStack uses different URL format: http://localhost:4566/restapis/{id}/{stage}/_user_request_/
+      // LocalStack URL format: https://{apiId}.execute-api.localhost.localstack.cloud:4566/{stage}/
+      // or legacy: http://localhost:4566/restapis/{id}/{stage}/_user_request_/
       if (isLocalStack) {
-        expect(apiUrl).toMatch(/^http:\/\/localhost:4566\/restapis\/[a-z0-9]+\//);
+        expect(apiUrl).toMatch(
+          /^https?:\/\/([a-z0-9]+\.execute-api\.localhost\.localstack\.cloud:4566|localhost:4566\/restapis\/[a-z0-9]+)\//
+        );
       } else {
         expect(apiUrl).toMatch(
           /^https:\/\/[a-z0-9]+\.execute-api\.[a-z0-9-]+\.amazonaws\.com/
