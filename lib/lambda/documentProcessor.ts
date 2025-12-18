@@ -1,7 +1,7 @@
 import { S3Client, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
-import { S3Event, S3EventRecord } from 'aws-lambda';
+import { S3Event } from 'aws-lambda';
 
 const s3Client = new S3Client({});
 const dynamoClient = new DynamoDBClient({});
