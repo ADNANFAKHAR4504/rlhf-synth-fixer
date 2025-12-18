@@ -12,7 +12,7 @@ The `lib/TapStack.yml` CloudFormation template deploys a comprehensive security 
    - AWS KMS Customer Managed Key (CMK) for all encryption needs
    - S3 buckets with KMS encryption and HTTPS-only access policies
    - EBS volumes encrypted with KMS
-   - CloudWatch Logs encrypted with KMS  
+   - CloudWatch Logs encrypted with KMS
    - SNS topic encrypted with KMS
 
 2. **Network Security**
@@ -45,20 +45,20 @@ The `lib/TapStack.yml` CloudFormation template deploys a comprehensive security 
 
 ```yaml
 Parameters:
-  EnvironmentSuffix: 
+  EnvironmentSuffix:
     Type: String
     Default: 'dev'
     Description: 'Environment suffix for resource naming'
-    
+
   EC2AMIId:
     Type: AWS::EC2::Image::Id
     Default: 'ami-0c02fb55956c7d316'
-    
+
   EC2InstanceType:
     Type: String
     Default: 't3.medium'
     AllowedValues: [t3.micro, t3.small, t3.medium, t3.large]
-    
+
   AllowedSSHCIDR:
     Type: String
     Default: '10.0.0.0/8'
@@ -68,6 +68,7 @@ Parameters:
 ### Key Resources
 
 #### 1. **KMS Encryption Key**
+
 ```yaml
 ProdKMSKey:
   Type: AWS::KMS::Key
@@ -76,21 +77,23 @@ ProdKMSKey:
       Statement:
         - Sid: Enable IAM User Permissions (Root)
         - Sid: Allow CloudWatch Logs
-        - Sid: Allow S3 Service  
+        - Sid: Allow S3 Service
         - Sid: Allow EC2 Service
         - Sid: Allow SNS Service
 ```
 
 #### 2. **VPC & Networking**
+
 ```yaml
 ProdVPC: (10.0.0.0/16)
-ProdPublicSubnet: (10.0.1.0/24) 
+ProdPublicSubnet: (10.0.1.0/24)
 ProdPrivateSubnet: (10.0.2.0/24)
 ProdNATGateway: (In public subnet)
 ProdInternetGateway: (For public subnet access)
 ```
 
 #### 3. **Security Groups**
+
 ```yaml
 ProdEC2SecurityGroup:
   SecurityGroupIngress:
@@ -103,6 +106,7 @@ ProdEC2SecurityGroup:
 ```
 
 #### 4. **IAM Role (Least Privilege)**
+
 ```yaml
 ProdEC2Role:
   Policies:
@@ -116,13 +120,14 @@ ProdEC2Role:
 ```
 
 #### 5. **S3 Security Controls**
+
 ```yaml
 ProdS3Bucket:
   BucketEncryption: KMS with prod KMS key
   PublicAccessBlockConfiguration: All blocked (true)
   VersioningConfiguration: Enabled
   LoggingConfiguration: To ProdS3LoggingBucket
-  
+
 ProdS3BucketPolicy:
   Statements:
     - DenyInsecureConnections (aws:SecureTransport: false)
@@ -130,6 +135,7 @@ ProdS3BucketPolicy:
 ```
 
 #### 6. **EC2 Instance**
+
 ```yaml
 ProdEC2Instance:
   SubnetId: ProdPrivateSubnet (no public IP)
@@ -142,6 +148,7 @@ ProdEC2Instance:
 ```
 
 #### 7. **CloudWatch Monitoring**
+
 ```yaml
 ProdCloudWatchLogGroup:
   LogGroupName: '/aws/ec2/prod-${EnvironmentSuffix}-logs'
@@ -157,8 +164,9 @@ ProdSNSTopic: (Encrypted with KMS)
 ## Resource Naming Convention
 
 All resources follow the `prod-${EnvironmentSuffix}` naming convention:
+
 - `prod-${EnvironmentSuffix}-vpc`
-- `prod-${EnvironmentSuffix}-ec2-role`  
+- `prod-${EnvironmentSuffix}-ec2-role`
 - `prod-${EnvironmentSuffix}-secure-bucket-${AWS::AccountId}-${AWS::Region}`
 - `prod-${EnvironmentSuffix}-alerts`
 - And so on...
@@ -174,7 +182,7 @@ The template provides comprehensive outputs for integration testing:
 ```yaml
 Outputs:
   VPCId: VPC identifier
-  PrivateSubnetId: Private subnet identifier  
+  PrivateSubnetId: Private subnet identifier
   EC2InstanceId: EC2 instance identifier
   S3BucketName: Secure S3 bucket name
   KMSKeyId: KMS encryption key identifier
@@ -228,7 +236,7 @@ Outputs:
 
 - **Defense in Depth**: Multiple layers of security controls
 - **Zero Trust Network**: No implicit trust, verify everything
-- **Principle of Least Privilege**: Minimal required permissions only  
+- **Principle of Least Privilege**: Minimal required permissions only
 - **Encryption Everywhere**: Data encrypted at rest and in transit
 - **Network Segmentation**: Resources isolated in private subnets
 - **Comprehensive Monitoring**: Full observability of infrastructure
@@ -237,12 +245,13 @@ Outputs:
 ## Testing Coverage
 
 ### Unit Tests (42 tests)
+
 - Template structure validation
 - Parameter configuration
 - KMS key policies and encryption setup
 - VPC and networking configuration
 - Security group rules validation
-- IAM role least-privilege policies  
+- IAM role least-privilege policies
 - S3 security controls verification
 - EC2 instance security configuration
 - CloudWatch monitoring setup
@@ -250,6 +259,7 @@ Outputs:
 - Deletion policies verification
 
 ### Integration Tests (16 tests)
+
 - Live AWS resource validation
 - End-to-end security workflow testing
 - Resource connectivity and isolation

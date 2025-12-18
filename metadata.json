@@ -7,7 +7,7 @@
   "team": "4",
   "startedAt": "2025-08-19T20:52:46.340Z",
   "subtask": "Security, Compliance, and Governance",
-  "provider": "aws",
+  "provider": "localstack",
   "subject_labels": [
     "Security Configuration as Code"
   ],
