@@ -17,7 +17,6 @@ export class TapStack extends cdk.Stack {
     // Create the resources infrastructure stack
     this.resourcesStack = new ResourcesStack(this, 'ResourcesStack', {
       environmentSuffix,
-      env: props?.env,
     });
 
     // Export outputs from nested stack to parent stack

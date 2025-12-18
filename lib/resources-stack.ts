@@ -18,11 +18,11 @@ import { Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { BlockPublicAccess, Bucket } from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
-interface ResourcesStackProps extends cdk.StackProps {
+interface ResourcesStackProps {
   environmentSuffix?: string;
 }
 
-export class ResourcesStack extends cdk.Stack {
+export class ResourcesStack extends Construct {
   public readonly bucket: Bucket;
   public readonly instanceRole: Role;
   public readonly vpc: IVpc;
@@ -32,7 +32,7 @@ export class ResourcesStack extends cdk.Stack {
   public readonly eipAssociation: CfnEIPAssociation;
 
   constructor(scope: Construct, id: string, props?: ResourcesStackProps) {
-    super(scope, id, props);
+    super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
 
@@ -136,46 +136,5 @@ export class ResourcesStack extends cdk.Stack {
         allocationId: this.eip.attrAllocationId,
       }
     );
-
-    // Outputs
-    new cdk.CfnOutput(this, 'S3BucketName', {
-      value: this.bucket.bucketName,
-      description: 'S3 Bucket Name',
-    });
-
-    new cdk.CfnOutput(this, 'S3BucketArn', {
-      value: this.bucket.bucketArn,
-      description: 'S3 Bucket ARN',
-    });
-
-    new cdk.CfnOutput(this, 'EC2InstanceId', {
-      value: this.instance.instanceId,
-      description: 'EC2 Instance ID',
-    });
-
-    new cdk.CfnOutput(this, 'EC2InstancePrivateIp', {
-      value: this.instance.instancePrivateIp,
-      description: 'EC2 Instance Private IP',
-    });
-
-    new cdk.CfnOutput(this, 'ElasticIP', {
-      value: this.eip.ref,
-      description: 'Elastic IP Address',
-    });
-
-    new cdk.CfnOutput(this, 'SecurityGroupId', {
-      value: this.securityGroup.securityGroupId,
-      description: 'Security Group ID',
-    });
-
-    new cdk.CfnOutput(this, 'VpcId', {
-      value: this.vpc.vpcId,
-      description: 'VPC ID',
-    });
-
-    new cdk.CfnOutput(this, 'InstanceRoleArn', {
-      value: this.instanceRole.roleArn,
-      description: 'EC2 Instance IAM Role ARN',
-    });
   }
 }
