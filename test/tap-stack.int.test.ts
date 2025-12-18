@@ -185,23 +185,6 @@ describe('TapStack CloudFormation Template - Integration Tests', () => {
     });
   });
 
-  describe('RDS Instance', () => {
-    let rdsEndpoint: string;
-    let dbInstanceId: string;
-
-    beforeAll(async () => {
-      const { stdout } = await execAsync(`aws cloudformation describe-stacks --stack-name ${STACK_NAME} --region ${AWS_REGION} --endpoint-url ${AWS_ENDPOINT} --query 'Stacks[0].Outputs[?OutputKey==\`RDSEndpoint\`].OutputValue' --output text`, {
-        env: {
-          ...process.env,
-          AWS_ACCESS_KEY_ID,
-          AWS_SECRET_ACCESS_KEY,
-          AWS_REGION,
-        }
-      });
-      rdsEndpoint = stdout.trim();
-      dbInstanceId = `${STACK_NAME}-mysql-db-${ENVIRONMENT_SUFFIX}`;
-    });
-  });
 
   describe('SNS Topic', () => {
     let snsTopicArn: string;
