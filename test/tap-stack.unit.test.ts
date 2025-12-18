@@ -321,8 +321,8 @@ describe('TapStack', () => {
   describe('Environment Suffix Handling', () => {
     test('uses provided environment suffix', () => {
       const customApp = new cdk.App();
-      const customStack = new TapStack(customApp, 'CustomTapStack', { 
-        environmentSuffix: 'test' 
+      const customStack = new TapStack(customApp, 'CustomTapStack', {
+        environmentSuffix: 'test'
       });
       const customTemplate = Template.fromStack(customStack);
 
@@ -334,8 +334,8 @@ describe('TapStack', () => {
     });
 
     test('uses context environment suffix when not provided in props', () => {
-      const contextApp = new cdk.App({ 
-        context: { environmentSuffix: 'context-test' } 
+      const contextApp = new cdk.App({
+        context: { environmentSuffix: 'context-test' }
       });
       const contextStack = new TapStack(contextApp, 'ContextTapStack');
       const contextTemplate = Template.fromStack(contextStack);
@@ -356,6 +356,21 @@ describe('TapStack', () => {
         Export: {
           Name: 'SecureVPC-dev',
         },
+      });
+    });
+  });
+
+  describe('LocalStack Configuration', () => {
+    test('applies RemovalPolicy.DESTROY for LocalStack environment', () => {
+      const localstackApp = new cdk.App({
+        context: { localstack: true }
+      });
+      const localstackStack = new TapStack(localstackApp, 'LocalStackTapStack');
+      const localstackTemplate = Template.fromStack(localstackStack);
+
+      // Verify bastion instance has DeletionPolicy: Delete
+      localstackTemplate.hasResource('AWS::EC2::Instance', {
+        DeletionPolicy: 'Delete',
       });
     });
   });
