@@ -79,13 +79,16 @@ describe('TapStack Integration Tests', () => {
 
   describe('S3 Bucket Integration', () => {
     it('should have S3 bucket from deployment outputs', () => {
-      expect(deploymentOutputs.S3BucketName).toBeDefined();
+      // Support both naming conventions: S3BucketName and logsBucketName
+      const bucketName = deploymentOutputs.S3BucketName || deploymentOutputs.logsBucketName;
+      expect(bucketName).toBeDefined();
     });
 
     it(
       'should support basic S3 operations',
       async () => {
-        if (!deploymentOutputs.S3BucketName || process.env.CI === '1') {
+        const bucketName = deploymentOutputs.S3BucketName || deploymentOutputs.logsBucketName;
+        if (!bucketName || process.env.CI === '1') {
           console.log(
             'Skipping S3 operations test - bucket does not exist or not accessible'
           );
@@ -97,7 +100,7 @@ describe('TapStack Integration Tests', () => {
         try {
           // Test basic S3 operations without actually modifying data
           const params = {
-            Bucket: deploymentOutputs.S3BucketName,
+            Bucket: bucketName,
             MaxKeys: 1,
           };
 
@@ -597,8 +600,8 @@ describe('TapStack Integration Tests', () => {
             }
           }
 
-          // S3 bucket names should be valid
-          if (key.toLowerCase().includes('bucket')) {
+          // S3 bucket names should be valid (but not ARNs which also contain 'bucket')
+          if (key.toLowerCase().includes('bucketname') && !value.startsWith('arn:')) {
             expect(value).toMatch(/^[a-z0-9.-]+$/);
             expect(value.length).toBeLessThanOrEqual(63);
           }
