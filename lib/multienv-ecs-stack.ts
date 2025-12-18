@@ -52,13 +52,31 @@ export class MultiEnvEcsStack extends cdk.Stack {
     });
 
     // Add EC2 capacity for LocalStack compatibility (Fargate not fully supported in Community)
-    cluster.addCapacity(`${config.envName}DefaultAutoScalingGroup`, {
-      instanceType: new ec2.InstanceType('t3.small'),
-      machineImage: ecs.EcsOptimizedImage.amazonLinux2(),
-      minCapacity: 1,
-      maxCapacity: 3,
-      desiredCapacity: 2,
-    });
+    const autoScalingGroup = cluster.addCapacity(
+      `${config.envName}DefaultAutoScalingGroup`,
+      {
+        instanceType: new ec2.InstanceType('t3.small'),
+        machineImage: ecs.EcsOptimizedImage.amazonLinux2(),
+        minCapacity: 1,
+        maxCapacity: 3,
+        desiredCapacity: 2,
+        // Use $Default for LocalStack to avoid LaunchTemplate.LatestVersionNumber issue
+        ...(isLocalStack
+          ? {
+              vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
+            }
+          : {}),
+      }
+    );
+
+    // For LocalStack, explicitly set the launch template version to avoid LatestVersionNumber issue
+    if (isLocalStack && autoScalingGroup.node.defaultChild) {
+      const asgResource = autoScalingGroup.node.defaultChild as cdk.CfnResource;
+      asgResource.addPropertyOverride(
+        'LaunchTemplate.Version',
+        '$Default'
+      );
+    }
 
     // Enable ECS Container Insights (only if not LocalStack)
     if (!isLocalStack) {

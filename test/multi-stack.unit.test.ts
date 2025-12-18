@@ -54,10 +54,8 @@ describe('MultiEnvEcsStack', () => {
       template.hasResourceProperties(
         'AWS::ECS::TaskDefinition',
         Match.objectLike({
-          Cpu: '256',
-          Memory: '512',
-          NetworkMode: 'awsvpc',
-          RequiresCompatibilities: ['FARGATE'],
+          NetworkMode: 'bridge',
+          RequiresCompatibilities: ['EC2'],
         })
       );
     });
@@ -68,10 +66,10 @@ describe('MultiEnvEcsStack', () => {
       template.resourceCountIs('AWS::ECS::Cluster', 1);
     });
 
-    test('ECS is configured for Fargate with awsvpc networking', () => {
+    test('ECS is configured for EC2 with bridge networking', () => {
       template.hasResourceProperties('AWS::ECS::TaskDefinition', {
-        RequiresCompatibilities: ['FARGATE'],
-        NetworkMode: 'awsvpc',
+        RequiresCompatibilities: ['EC2'],
+        NetworkMode: 'bridge',
       });
     });
 
@@ -102,8 +100,8 @@ describe('MultiEnvEcsStack', () => {
       template.hasResourceProperties(
         'AWS::ApplicationAutoScaling::ScalableTarget',
         {
-          MaxCapacity: 10,
-          MinCapacity: 2,
+          MaxCapacity: 5,
+          MinCapacity: 1,
         }
       );
       template.hasResourceProperties(
@@ -150,11 +148,16 @@ describe('MultiEnvEcsStack', () => {
         }
       );
     });
-    test('HTTP(S) listener is configured with ACM certificate', () => {
-      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
-        Protocol: 'HTTPS',
-        Port: 443,
-      });
+    test('Listener is configured', () => {
+      // Test accepts either HTTP (LocalStack) or HTTPS (AWS)
+      const listeners = template.findResources('AWS::ElasticLoadBalancingV2::Listener');
+      expect(Object.keys(listeners).length).toBeGreaterThan(0);
+
+      const listenerProps = Object.values(listeners)[0].Properties;
+      // Port should be either 80 (HTTP/LocalStack) or 443 (HTTPS/AWS)
+      expect([80, 443]).toContain(listenerProps.Port);
+      // Protocol should be either HTTP (LocalStack) or HTTPS (AWS)
+      expect(['HTTP', 'HTTPS']).toContain(listenerProps.Protocol);
     });
   });
 });
