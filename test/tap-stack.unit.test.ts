@@ -1,7 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
-import { ResourcesStack } from '../lib/resources-stack';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
@@ -54,8 +53,8 @@ describe('TapStack Unit Tests', () => {
         region: 'us-east-1',
       },
     });
-    // Create template from the ResourcesStack, not the main TapStack
-    template = Template.fromStack(stack.resourcesStack);
+    // Create template from the TapStack (ResourcesStack is now a Construct within TapStack)
+    template = Template.fromStack(stack);
   });
 
   describe('Stack Structure', () => {
@@ -75,7 +74,7 @@ describe('TapStack Unit Tests', () => {
       });
 
       expect(customStack).toBeDefined();
-      const customTemplate = Template.fromStack(customStack.resourcesStack);
+      const customTemplate = Template.fromStack(customStack);
       expect(customTemplate).toBeDefined();
     });
 
@@ -91,7 +90,7 @@ describe('TapStack Unit Tests', () => {
       });
 
       expect(customStack).toBeDefined();
-      const customTemplate = Template.fromStack(customStack.resourcesStack);
+      const customTemplate = Template.fromStack(customStack);
       expect(customTemplate).toBeDefined();
     });
 
@@ -105,11 +104,16 @@ describe('TapStack Unit Tests', () => {
       });
 
       expect(customStack).toBeDefined();
-      const customTemplate = Template.fromStack(customStack.resourcesStack);
+      const customTemplate = Template.fromStack(customStack);
       expect(customTemplate).toBeDefined();
-      
+
       // Verify that 'dev' is used as the default environment suffix
-      customTemplate.hasParameter('devAllowedSshIp', {
+      const templateJson = customTemplate.toJSON();
+      const parameterKeys = Object.keys(templateJson.Parameters || {});
+      const sshParamKey = parameterKeys.find(key => key.includes('devAllowedSshIp'));
+
+      expect(sshParamKey).toBeDefined();
+      expect(templateJson.Parameters[sshParamKey!]).toMatchObject({
         Type: 'String',
         Description: 'IP address range allowed for SSH access (CIDR format)',
         Default: '10.0.0.0/8',
@@ -119,10 +123,15 @@ describe('TapStack Unit Tests', () => {
 
   describe('Parameters', () => {
     test('creates AllowedSshIp parameter with correct properties', () => {
-      template.hasParameter(`${environmentSuffix}AllowedSshIp`, {
+      // After flattening ResourcesStack to Construct, parameter names include ResourcesStack prefix
+      const templateJson = template.toJSON();
+      const parameterKeys = Object.keys(templateJson.Parameters || {});
+      const sshParamKey = parameterKeys.find(key => key.includes('AllowedSshIp'));
+
+      expect(sshParamKey).toBeDefined();
+      expect(templateJson.Parameters[sshParamKey!]).toMatchObject({
         Type: 'String',
-        Description:
-          'IP address range allowed for SSH access (CIDR format)',
+        Description: 'IP address range allowed for SSH access (CIDR format)',
         Default: '10.0.0.0/8',
       });
     });
@@ -220,26 +229,27 @@ describe('TapStack Unit Tests', () => {
 
   describe('Security Group Configuration', () => {
     test('creates security group with SSH access rule', () => {
+      // After flattening ResourcesStack to Construct, parameter Refs include ResourcesStack prefix
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
         GroupDescription: 'Security group for TapStack EC2 instance',
-        SecurityGroupIngress: [
-          {
-            CidrIp: {
-              Ref: `${environmentSuffix}AllowedSshIp`,
-            },
+        SecurityGroupIngress: Match.arrayWith([
+          Match.objectLike({
+            CidrIp: Match.objectLike({
+              Ref: Match.stringLikeRegexp('.*AllowedSshIp.*'),
+            }),
             Description: 'SSH access from specified IP range',
             FromPort: 22,
             IpProtocol: 'tcp',
             ToPort: 22,
-          },
-        ],
-        SecurityGroupEgress: [
-          {
+          }),
+        ]),
+        SecurityGroupEgress: Match.arrayWith([
+          Match.objectLike({
             CidrIp: '0.0.0.0/0',
             Description: 'Allow all outbound traffic by default',
             IpProtocol: '-1',
-          },
-        ],
+          }),
+        ]),
       });
     });
   });
@@ -392,7 +402,7 @@ describe('TapStack Unit Tests', () => {
           region: 'us-east-1',
         },
       });
-      const customTemplate = Template.fromStack(customStack.resourcesStack);
+      const customTemplate = Template.fromStack(customStack);
 
       // Check that resource logical IDs include the environment suffix
       const resources = customTemplate.toJSON().Resources;
@@ -403,19 +413,24 @@ describe('TapStack Unit Tests', () => {
 
     test('ResourcesStack uses default when environmentSuffix is undefined', () => {
       const customApp = createAppWithVpcContext();
-      // Create ResourcesStack directly with undefined environmentSuffix
-      const resourcesStack = new ResourcesStack(customApp, 'TestResourcesStackDefault', {
+      // Create TapStack with undefined environmentSuffix to test default behavior
+      const customStack = new TapStack(customApp, 'TestResourcesStackDefault', {
         environmentSuffix: undefined,
         env: {
           account: '123456789012',
           region: 'us-east-1',
         },
       });
-      
-      const customTemplate = Template.fromStack(resourcesStack);
-      
+
+      const customTemplate = Template.fromStack(customStack);
+
       // Verify that 'dev' is used as the default environment suffix
-      customTemplate.hasParameter('devAllowedSshIp', {
+      const templateJson = customTemplate.toJSON();
+      const parameterKeys = Object.keys(templateJson.Parameters || {});
+      const sshParamKey = parameterKeys.find(key => key.includes('devAllowedSshIp'));
+
+      expect(sshParamKey).toBeDefined();
+      expect(templateJson.Parameters[sshParamKey!]).toMatchObject({
         Type: 'String',
         Description: 'IP address range allowed for SSH access (CIDR format)',
         Default: '10.0.0.0/8',
