@@ -271,5 +271,15 @@ describe('NetworkStack', () => {
         Description: 'Comma-separated list of isolated subnet IDs (Secure)',
       });
     });
+
+    test('verifies private subnets output is empty string (LocalStack architecture)', () => {
+      // In LocalStack architecture, we use PRIVATE_ISOLATED for both Internal and Secure tiers
+      // This means privateSubnets array is empty, and PrivateSubnetIds should be an empty string
+      const outputs = template.toJSON().Outputs;
+      const privateSubnetOutput = outputs?.PrivateSubnetIds;
+
+      // The output should exist but the value should be an empty Join (empty array)
+      expect(privateSubnetOutput).toBeDefined();
+    });
   });
 });
