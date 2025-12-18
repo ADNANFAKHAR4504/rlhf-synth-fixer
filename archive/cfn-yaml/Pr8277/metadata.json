@@ -1,0 +1,29 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "284215_ls",
+  "team": "2",
+  "startedAt": "2025-12-17T18:22:55.590Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3 Bucket",
+    "CloudFormation",
+    "Lambda",
+    "EventBridge",
+    "CloudWatch LogGroup",
+    "VPC"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}
