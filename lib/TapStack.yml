@@ -145,42 +145,6 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentType
 
-  # NatGateway1EIP:
-  #   Type: AWS::EC2::EIP
-  #   DependsOn: AttachGateway
-  #   Properties:
-  #     Domain: vpc
-  #     Tags:
-  #       - Key: Name
-  #         Value: !Sub nat-eip-1-${EnvironmentSuffix}
-
-  # NatGateway2EIP:
-  #   Type: AWS::EC2::EIP
-  #   DependsOn: AttachGateway
-  #   Properties:
-  #     Domain: vpc
-  #     Tags:
-  #       - Key: Name
-  #         Value: !Sub nat-eip-2-${EnvironmentSuffix}
-
-  # NatGateway1:
-  #   Type: AWS::EC2::NatGateway
-  #   Properties:
-  #     AllocationId: !GetAtt NatGateway1EIP.AllocationId
-  #     SubnetId: !Ref PublicSubnet1
-  #     Tags:
-  #       - Key: Name
-  #         Value: !Sub nat-gateway-1-${EnvironmentSuffix}
-
-  # NatGateway2:
-    # Type: AWS::EC2::NatGateway
-    # Properties:
-    #   AllocationId: !GetAtt NatGateway2EIP.AllocationId
-    #   SubnetId: !Ref PublicSubnet2
-    #   Tags:
-    #     - Key: Name
-    #       Value: !Sub nat-gateway-2-${EnvironmentSuffix}
-
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -226,7 +190,6 @@ Resources:
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       DestinationCidrBlock: 0.0.0.0/0
-      # NatGatewayId: !Ref NatGateway1
 
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -249,7 +212,6 @@ Resources:
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
       DestinationCidrBlock: 0.0.0.0/0
-      # NatGatewayId: !Ref NatGateway2
 
   PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -430,46 +392,6 @@ Resources:
                 Value: !Sub ec2-instance-${EnvironmentSuffix}
               - Key: Environment
                 Value: !Ref EnvironmentType
-
-  # Auto Scaling Group
-  # AutoScalingGroup:
-  #   Type: AWS::AutoScaling::AutoScalingGroup
-  #   DependsOn:
-  #     - PrivateRoute1
-  #     - PrivateRoute2
-  #   Properties:
-  #     AutoScalingGroupName: !Sub asg-${EnvironmentSuffix}
-  #     MinSize: 2
-  #     MaxSize: 4
-  #     DesiredCapacity: 2
-  #     HealthCheckType: ELB
-  #     HealthCheckGracePeriod: 300
-  #     LaunchTemplate:
-  #       LaunchTemplateId: !Ref LaunchTemplate
-  #       Version: !GetAtt LaunchTemplate.LatestVersionNumber
-  #     VPCZoneIdentifier:
-  #       - !Ref PrivateSubnet1
-  #       - !Ref PrivateSubnet2
-  #     TargetGroupARNs:
-  #       - !Ref ALBTargetGroup
-  #     Tags:
-  #       - Key: Name
-  #         Value: !Sub asg-${EnvironmentSuffix}
-  #         PropagateAtLaunch: false
-  #       - Key: Environment
-  #         Value: !Ref EnvironmentType
-  #         PropagateAtLaunch: true
-
-  # Scaling Policies
-  # ScaleUpPolicy:
-  #   Type: AWS::AutoScaling::ScalingPolicy
-  #   Properties:
-  #     AutoScalingGroupName: !Ref AutoScalingGroup
-  #     PolicyType: TargetTrackingScaling
-  #     TargetTrackingConfiguration:
-  #       PredefinedMetricSpecification:
-  #         PredefinedMetricType: ASGAverageCPUUtilization
-  #       TargetValue: !FindInMap [EnvironmentConfig, !Ref EnvironmentType, CPUAlarmThreshold]
 
   # RDS Subnet Group
   DBSubnetGroup:
@@ -768,12 +690,6 @@ Outputs:
     Value: !GetAtt DataProcessingFunction.Arn
     Export:
       Name: !Sub ${AWS::StackName}-Lambda-Arn
-
-  # AutoScalingGroupName:
-  #   Description: Name of the Auto Scaling Group
-  #   Value: !Ref AutoScalingGroup
-  #   Export:
-  #     Name: !Sub ${AWS::StackName}-ASG-Name
 
   AlarmTopicArn:
     Description: ARN of the SNS topic for alarms

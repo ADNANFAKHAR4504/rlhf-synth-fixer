@@ -18,16 +18,10 @@ Create a multi-environment infrastructure deployment using **CloudFormation with
    - VPC with public and private subnets across 2 availability zones
    - Environment-specific CIDR blocks: 10.0.0.0/16 (dev), 10.1.0.0/16 (staging), 10.2.0.0/16 (prod)
    - Same subnet structure but different IP ranges per environment
-   - NAT Gateways for private subnet internet access
    - Internet Gateway for public subnets
 
 2. **Compute Resources**
    - Application Load Balancer with identical listener rules across environments
-   - Auto Scaling Group with environment-specific instance types:
-     - Dev: t3.micro
-     - Staging: t3.small
-     - Production: t3.medium
-   - Min 2, max 4 instances with CPU-based scaling policies
 
 3. **Database**
    - RDS MySQL instances with environment-specific backup retention:
@@ -48,14 +42,6 @@ Create a multi-environment infrastructure deployment using **CloudFormation with
      - Staging: 256MB
      - Production: 512MB
    - Environment-specific IAM roles with least privilege
-
-6. **Monitoring**
-   - CloudWatch alarms for CPU utilization with environment-specific thresholds:
-     - Dev: 80%
-     - Staging: 70%
-     - Production: 60%
-   - Alarms for RDS connections and disk usage
-   - SNS topics for alarm notifications
 
 ### Technical Requirements
 
@@ -81,14 +67,12 @@ Create a multi-environment infrastructure deployment using **CloudFormation with
 
 ### AWS Services
 
-- VPC with subnets, route tables, NAT Gateways, Internet Gateway
+- VPC with subnets, route tables, Internet Gateway
 - Application Load Balancer with target groups and listeners
-- Auto Scaling Group with launch templates
 - EC2 instances (managed by ASG)
 - RDS MySQL database
 - S3 buckets for static assets and data
 - Lambda functions with execution roles
-- CloudWatch alarms and metrics
 - IAM roles and policies
 - Systems Manager Parameter Store for secrets
 
@@ -99,7 +83,6 @@ Create a multi-environment infrastructure deployment using **CloudFormation with
 - Same VPC structure, different CIDR ranges per environment
 - RDS automated backups only in staging and production
 - Systems Manager Parameter Store dynamic references for database passwords
-- Environment-specific CloudWatch alarm thresholds
 - Consistent S3 bucket naming pattern: {company}-{environmentSuffix}-{purpose}
 - Least privilege IAM roles per environment
 - All environments must use identical resource structure
@@ -122,11 +105,8 @@ Create a multi-environment infrastructure deployment using **CloudFormation with
 - Mappings for environment-specific values
 - VPC with public/private subnets across 2 AZs
 - Application Load Balancer with target group
-- Auto Scaling Group with launch template
-- RDS MySQL with Parameter Store password reference
 - Lambda functions with IAM roles
 - S3 buckets with environment-appropriate versioning
-- CloudWatch alarms with environment-specific thresholds
 - IAM roles with appropriate permissions
 - Outputs for resource identifiers
 - Documentation for StackSet deployment
