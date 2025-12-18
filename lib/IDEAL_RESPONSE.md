@@ -558,7 +558,7 @@ Resources:
                       </div>
                   </div>
                   
-                  <div class="status">✓ Instance Healthy</div>
+                  <div class="status"> Instance Healthy</div>
                   
                   <p style="margin-top: 30px; color: #666; font-size: 14px;">
                       This instance has read/write access to the S3 bucket and is part of the high-availability infrastructure.
@@ -750,7 +750,7 @@ Resources:
                       </div>
                   </div>
                   
-                  <div class="status">✓ Instance Healthy</div>
+                  <div class="status"> Instance Healthy</div>
                   
                   <p style="margin-top: 30px; color: #666; font-size: 14px;">
                       This instance has read/write access to the S3 bucket and is part of the high-availability infrastructure.
