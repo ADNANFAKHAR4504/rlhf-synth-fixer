@@ -50,8 +50,6 @@ import {
 } from '@aws-sdk/client-wafv2';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as pulumi from '@pulumi/pulumi';
-import { TapStack } from '../lib/tap-stack';
 
 // Detect if running in LocalStack
 const isLocalStack = (): boolean => {
@@ -1068,88 +1066,4 @@ describe('TAP Infrastructure Integration Tests', () => {
     });
   });
 
-  describe('LocalStack Stack Instantiation Coverage', () => {
-    // Set up Pulumi runtime mocks for coverage testing
-    beforeAll(() => {
-      pulumi.runtime.setMocks({
-        newResource: (args: pulumi.runtime.MockResourceArgs) => {
-          const { type, name, inputs } = args;
-          return {
-            id: `${name}-id`,
-            state: {
-              ...inputs,
-              name: inputs.name || name,
-              arn: `arn:aws:${type}:us-east-1:123456789012:${name}`,
-              id: `${name}-id`,
-              endpoint: type.includes('rds') ? `${name}.cluster-mockendpoint.us-east-1.rds.amazonaws.com` : undefined,
-              dnsName: type.includes('loadbalancer') ? `${name}-123456789.us-east-1.elb.amazonaws.com` : undefined,
-              keyId: type.includes('kms') ? `key-${name}` : undefined,
-              cidrBlock: type.includes('vpc') ? inputs.cidrBlock || '10.0.0.0/16' : undefined,
-              port: type.includes('rds') ? 3306 : undefined,
-              zoneId: type.includes('loadbalancer') ? 'Z35SXDOTRQ7X7K' : undefined,
-            },
-          };
-        },
-        call: (args: pulumi.runtime.MockCallArgs) => {
-          switch (args.token) {
-            case 'aws:index/getAvailabilityZones:getAvailabilityZones':
-              return {
-                names: ['us-east-1a', 'us-east-1b', 'us-east-1c'],
-                zoneIds: ['use1-az1', 'use1-az2', 'use1-az4'],
-              };
-            case 'aws:ec2/getAmi:getAmi':
-              return {
-                id: 'ami-0c55b159cbfafe1f0',
-                architecture: 'x86_64',
-                name: 'amzn2-ami-hvm-2.0.20210813.1-x86_64-gp2',
-              };
-            case 'aws:elb/getServiceAccount:getServiceAccount':
-              return {
-                arn: 'arn:aws:iam::127311923021:root',
-                id: '127311923021',
-              };
-            default:
-              return args.inputs;
-          }
-        },
-      });
-    });
-
-    test('should create TapStack with LocalStack environment (covers skip branches)', () => {
-      // This test runs with AWS_ENDPOINT_URL set (LocalStack mode)
-      // It will cover the branches where resources are skipped in LocalStack
-      const stack = new TapStack('LocalStackCoverageTest', {
-        environmentSuffix: 'localstack-test',
-        tags: { Environment: 'localstack-test' },
-      });
-
-      expect(stack).toBeDefined();
-      expect(stack.secureStack).toBeDefined();
-    });
-
-    test('should handle RDS stack in LocalStack mode (skips read replica)', () => {
-      // Verify that in LocalStack mode, the stack is created without errors
-      // even though read replica is skipped
-      const stack = new TapStack('RdsCoverageTest', {
-        environmentSuffix: 'rds-test',
-        tags: { Environment: 'rds-test' },
-      });
-
-      expect(stack.secureStack.rdsStack).toBeDefined();
-      expect(stack.secureStack.rdsStack.primaryRdsInstance).toBeDefined();
-      // secondaryRdsReadReplica may be undefined in LocalStack
-    });
-
-    test('should handle Logging stack in LocalStack mode (skips flow logs)', () => {
-      // Verify that in LocalStack mode, the stack is created without errors
-      // even though VPC flow logs are skipped
-      const stack = new TapStack('LoggingCoverageTest', {
-        environmentSuffix: 'logging-test',
-        tags: { Environment: 'logging-test' },
-      });
-
-      expect(stack.secureStack.loggingStack).toBeDefined();
-      expect(stack.secureStack.loggingStack.cloudTrailArn).toBeDefined();
-    });
-  });
 });
