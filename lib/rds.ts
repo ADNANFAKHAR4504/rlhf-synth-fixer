@@ -10,11 +10,17 @@ import { VpcStack } from './vpc';
 import { SecurityGroupsStack } from './security-groups';
 import { KmsStack } from './kms';
 
+// Detect if running in LocalStack
+const isLocalStack = (): boolean => {
+  const endpoint = process.env.AWS_ENDPOINT_URL || '';
+  return endpoint.includes('localhost') || endpoint.includes('localstack');
+};
+
 export class RdsStack extends pulumi.ComponentResource {
   public readonly primaryDbSubnetGroup: aws.rds.SubnetGroup;
   public readonly secondaryDbSubnetGroup: aws.rds.SubnetGroup;
   public readonly primaryRdsInstance: aws.rds.Instance;
-  public readonly secondaryRdsReadReplica: aws.rds.Instance;
+  public readonly secondaryRdsReadReplica?: aws.rds.Instance;
 
   constructor(
     name: string,
@@ -110,35 +116,42 @@ export class RdsStack extends pulumi.ComponentResource {
       { provider: primaryProvider, parent: this }
     );
 
-    // Cross-region read replica
-    this.secondaryRdsReadReplica = new aws.rds.Instance(
-      `${args.environment}-secondary-mysql-read-replica`,
-      {
-        identifier: `${args.environment}-secondary-mysql-read-replica`,
-        replicateSourceDb: this.primaryRdsInstance.arn,
-        instanceClass: dbInstanceClass,
-        storageEncrypted: true,
-        kmsKeyId: args.kmsStack.secondaryKmsKey.arn,
-        vpcSecurityGroupIds: [
-          args.securityGroupsStack.secondaryDbSecurityGroup.id,
-        ],
-        dbSubnetGroupName: this.secondaryDbSubnetGroup.name,
-        skipFinalSnapshot: false,
-        finalSnapshotIdentifier: `${args.environment}-secondary-mysql-final-snapshot`,
-        deletionProtection: true, // Enable deletion protection for production
-        tags: {
-          ...commonTags,
-          Name: `${args.environment}-Secondary-MySQL-Read-Replica`,
+    // Cross-region read replica (skip in LocalStack - not fully supported)
+    if (!isLocalStack()) {
+      this.secondaryRdsReadReplica = new aws.rds.Instance(
+        `${args.environment}-secondary-mysql-read-replica`,
+        {
+          identifier: `${args.environment}-secondary-mysql-read-replica`,
+          replicateSourceDb: this.primaryRdsInstance.arn,
+          instanceClass: dbInstanceClass,
+          storageEncrypted: true,
+          kmsKeyId: args.kmsStack.secondaryKmsKey.arn,
+          vpcSecurityGroupIds: [
+            args.securityGroupsStack.secondaryDbSecurityGroup.id,
+          ],
+          dbSubnetGroupName: this.secondaryDbSubnetGroup.name,
+          skipFinalSnapshot: false,
+          finalSnapshotIdentifier: `${args.environment}-secondary-mysql-final-snapshot`,
+          deletionProtection: true, // Enable deletion protection for production
+          tags: {
+            ...commonTags,
+            Name: `${args.environment}-Secondary-MySQL-Read-Replica`,
+          },
         },
-      },
-      { provider: secondaryProvider, parent: this }
-    );
+        { provider: secondaryProvider, parent: this }
+      );
+    }
 
-    this.registerOutputs({
+    const outputs: Record<string, pulumi.Output<unknown>> = {
       primaryDbEndpoint: this.primaryRdsInstance.endpoint,
       primaryDbPort: this.primaryRdsInstance.port,
-      secondaryDbEndpoint: this.secondaryRdsReadReplica.endpoint,
-      secondaryDbPort: this.secondaryRdsReadReplica.port,
-    });
+    };
+
+    if (this.secondaryRdsReadReplica) {
+      outputs.secondaryDbEndpoint = this.secondaryRdsReadReplica.endpoint;
+      outputs.secondaryDbPort = this.secondaryRdsReadReplica.port;
+    }
+
+    this.registerOutputs(outputs);
   }
 }

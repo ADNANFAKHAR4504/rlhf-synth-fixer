@@ -192,8 +192,12 @@ export class SecureStack extends pulumi.ComponentResource {
       // RDS Information
       primaryDbEndpoint: this.rdsStack.primaryRdsInstance.endpoint,
       primaryDbPort: this.rdsStack.primaryRdsInstance.port,
-      secondaryDbEndpoint: this.rdsStack.secondaryRdsReadReplica.endpoint,
-      secondaryDbPort: this.rdsStack.secondaryRdsReadReplica.port,
+      ...(this.rdsStack.secondaryRdsReadReplica
+        ? {
+            secondaryDbEndpoint: this.rdsStack.secondaryRdsReadReplica.endpoint,
+            secondaryDbPort: this.rdsStack.secondaryRdsReadReplica.port,
+          }
+        : {}),
 
       // Load Balancer
       loadBalancerDnsName:
