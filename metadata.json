@@ -1,0 +1,23 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "313",
+  "team": "synth",
+  "startedAt": "2025-08-06T20:02:57-05:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "vpc",
+    "ec2",
+    "rds",
+    "s3",
+    "iam",
+    "kms"
+  ]
+}
