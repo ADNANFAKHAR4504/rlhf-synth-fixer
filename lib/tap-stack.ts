@@ -7,7 +7,9 @@ import * as kms from 'aws-cdk-lib/aws-kms';
 import { Construct } from 'constructs';
 
 // LocalStack detection
-const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') || process.env.AWS_ENDPOINT_URL?.includes('4566');
+const isLocalStack =
+  process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+  process.env.AWS_ENDPOINT_URL?.includes('4566');
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -35,7 +37,9 @@ export class TapStack extends cdk.Stack {
         },
         {
           name: 'PrivateSubnet',
-          subnetType: isLocalStack ? ec2.SubnetType.PUBLIC : ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          subnetType: isLocalStack
+            ? ec2.SubnetType.PUBLIC
+            : ec2.SubnetType.PRIVATE_WITH_EGRESS,
           cidrMask: 24,
         },
       ],
@@ -191,11 +195,13 @@ export class TapStack extends cdk.Stack {
     const dbSubnetGroup = new rds.SubnetGroup(this, 'DatabaseSubnetGroup', {
       description: 'Subnet group for RDS instances in private subnets',
       vpc: vpc,
-      vpcSubnets: isLocalStack ? {
-        subnetGroupName: 'PrivateSubnet',
-      } : {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
+      vpcSubnets: isLocalStack
+        ? {
+            subnetGroupName: 'PrivateSubnet',
+          }
+        : {
+            subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          },
     });
 
     // RDS instance in private subnets with encryption
