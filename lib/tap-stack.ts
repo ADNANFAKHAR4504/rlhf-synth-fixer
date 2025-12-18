@@ -148,9 +148,8 @@ export class TapStack extends cdk.Stack {
         {
           vpc: vpc,
           instanceType: new InstanceType(config.awsInstanceType),
-          machineImage: MachineImage.genericLinux({
-            [config.awsRegion]: config.awsAmi,
-          }),
+          // Use Amazon Linux 2023 AMI for simplicity (works with LocalStack)
+          machineImage: MachineImage.latestAmazonLinux2023(),
           securityGroup: ec2SecurityGroup,
           vpcSubnets: { subnetType: SubnetType.PUBLIC }, // Deploy in public subnet for simplicity
         }
