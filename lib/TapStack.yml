@@ -727,12 +727,12 @@ Resources:
     DeletionPolicy: Delete
     Properties:
       DBInstanceIdentifier: !Sub payment-processing-db-${EnvironmentSuffix}
-      DBInstanceClass: db.t3.micro
+      DBInstanceClass: !Ref DBInstanceClass
       Engine: mysql
-      EngineVersion: 8.0
+      EngineVersion: "8.0.35"
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: TempPassword123!
-      AllocatedStorage: 20
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}::password}}'
+      AllocatedStorage: !Ref DBAllocatedStorage
       StorageType: gp2
       MultiAZ: false
       DBSubnetGroupName: !Ref DBSubnetGroup
