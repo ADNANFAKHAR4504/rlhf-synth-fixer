@@ -432,30 +432,6 @@ aws s3 ls s3://tap-storage-dev-123456789012-us-east-1 --region us-east-1
 aws s3 cp prompt.json s3://tap-storage-dev-123456789012-us-east-1/ --region us-east-1
 ```
 
-### DynamoDB Access Pattern
-
-```python
-import boto3
-
-# DynamoDB client with TLS
-dynamodb = boto3.resource('dynamodb',
-                         region_name='us-east-1',
-                         use_ssl=True)
-
-table = dynamodb.Table('TurnAroundPromptTabledev')
-
-# Put prompt item
-table.put_item(Item={
-    'id': 'prompt-123',
-    'prompt': 'Generate a summary of the document',
-    'timestamp': '2024-01-01T00:00:00Z'
-})
-
-# Get prompt item
-response = table.get_item(Key={'id': 'prompt-123'})
-print(response['Item'])
-```
-
 ## Testing Strategy
 
 ### Unit Tests
