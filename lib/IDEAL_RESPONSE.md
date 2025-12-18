@@ -304,17 +304,17 @@ This project provisions a production-grade AWS ECS Fargate deployment using AWS 
 - **Auto Scaling based on metrics**
 - **Tagged Resources for Cost and Environment Management**
 
-## 🏗️ Prerequisites
+## Prerequisites
 
 - AWS CLI configured with appropriate permissions
 - AWS CDK installed
 - Node.js v22.17.0
 - AWS CLI configured with `aws configure`
-- CDK CLI v2 installed:  
+- CDK CLI v2 installed:
   ```bash
   npm install -g aws-cdk
 
-## 🚀 Deployment
+## Deployment
 
 1. Install dependencies:
 
