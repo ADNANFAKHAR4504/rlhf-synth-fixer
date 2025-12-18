@@ -19,5 +19,12 @@
     "CloudWatch",
     "IAM",
     "X-Ray"
-  ]
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "emmanuel-turing",
+  "dockerS3Location": ""
 }
