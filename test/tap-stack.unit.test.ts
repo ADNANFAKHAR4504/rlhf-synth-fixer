@@ -1,12 +1,15 @@
 // test/tap-stack.unit.test.ts
 
 import * as pulumi from "@pulumi/pulumi";
-import { TapStack, createTapStackArgs } from "../lib/tap-stack";
-import { NetworkInfrastructure } from "../lib/components/networking";
-import { FrontendInfrastructure } from "../lib/components/user";
-import { BackendInfrastructure } from "../lib/components/backend";
-import { DataProcessingInfrastructure } from "../lib/components/data";
-import { MonitoringInfrastructure } from "../lib/components/monitoring";
+import { 
+    TapStack, 
+    createTapStackArgs,
+    NetworkInfrastructure,
+    FrontendInfrastructure,
+    BackendInfrastructure,
+    DataProcessingInfrastructure,
+    MonitoringInfrastructure
+} from "../lib/tap-stack";
 
 // Mock AWS SDK at the top level before any imports
 jest.mock("@pulumi/aws", () => ({
