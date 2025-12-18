@@ -357,4 +357,40 @@ describe('TapStack', () => {
       });
     });
   });
+
+  describe('LocalStack Configuration', () => {
+    test('applies RemovalPolicy.DESTROY when AWS_ENDPOINT_URL includes localhost', () => {
+      process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
+      const testApp = new cdk.App();
+      const stack = new TapStack(testApp, 'LocalStackTestStack', {
+        environmentSuffix: 'local',
+      });
+
+      const stackTemplate = Template.fromStack(stack);
+
+      // Verify VPC is created with DeletionPolicy: Delete
+      stackTemplate.hasResource('AWS::EC2::VPC', {
+        DeletionPolicy: 'Delete',
+      });
+
+      delete process.env.AWS_ENDPOINT_URL;
+    });
+
+    test('applies RemovalPolicy.DESTROY when AWS_ENDPOINT_URL includes 4566', () => {
+      process.env.AWS_ENDPOINT_URL = 'http://localstack:4566';
+      const testApp = new cdk.App();
+      const stack = new TapStack(testApp, 'LocalStackTestStack2', {
+        environmentSuffix: 'local',
+      });
+
+      const stackTemplate = Template.fromStack(stack);
+
+      // Verify VPC is created with DeletionPolicy: Delete
+      stackTemplate.hasResource('AWS::EC2::VPC', {
+        DeletionPolicy: 'Delete',
+      });
+
+      delete process.env.AWS_ENDPOINT_URL;
+    });
+  });
 });
