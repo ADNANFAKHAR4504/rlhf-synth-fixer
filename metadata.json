@@ -6,17 +6,13 @@
   "po_id": "291451",
   "team": "4",
   "startedAt": "2025-08-19T20:52:46.340Z",
-  "subtask": "Security and Compliance Implementation",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "aws",
   "subject_labels": [
-    "Security Configuration",
+    "Security Configuration as Code",
     "IaC Optimization",
-    "Network Configuration",
-    "Access Control",
-    "Database Management",
-    "Monitoring Setup",
     "General Infrastructure Tooling QA"
   ],
-  "training_quality": 9,
   "aws_services": [
     "KMS",
     "VPC",
@@ -30,11 +26,5 @@
     "CloudWatch Logs",
     "EBS",
     "Route Tables"
-  ],
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "rahulpatil118",
-  "dockerS3Location": ""
+  ]
 }
