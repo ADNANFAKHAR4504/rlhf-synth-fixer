@@ -413,27 +413,44 @@ deploy_cdk() {
     print_status $YELLOW "📊 Collecting deployment outputs..."
     local stack_prefix="TapStack"
     local output_json="{}"
+    local temp_output_file="/tmp/stack_outputs_$$.json"
+    rm -f "$temp_output_file"
 
     # Get all stacks that match the pattern (handles multi-region deployments)
-    # Use grep to filter because starts_with may not work reliably in LocalStack
-    local all_stacks=$(awslocal cloudformation list-stacks \
-        --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE \
-        --query 'StackSummaries[].StackName' \
-        --output text 2>/dev/null | tr '\t' '\n' | grep "^${stack_prefix}" || echo "")
+    # Query multiple regions since CDK may deploy to different regions
+    local regions=("us-east-1" "us-west-2" "us-east-2" "eu-west-1")
+    local found_stacks=()
 
-    if [ -n "$all_stacks" ]; then
-        print_status $BLUE "   Found stacks:"
-        echo "$all_stacks" | while read stack; do
-            print_status $BLUE "     - $stack"
-        done
+    print_status $BLUE "   Searching for stacks in multiple regions..."
+    for region in "${regions[@]}"; do
+        print_status $BLUE "     Checking region: $region"
+        local region_stacks=$(AWS_DEFAULT_REGION=$region awslocal cloudformation list-stacks \
+            --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE \
+            --query 'StackSummaries[].StackName' \
+            --output text 2>/dev/null | tr '\t' '\n' | grep "^${stack_prefix}" || echo "")
+
+        if [ -n "$region_stacks" ]; then
+            while IFS= read -r stack; do
+                if [ -n "$stack" ]; then
+                    found_stacks+=("$region:$stack")
+                    print_status $GREEN "       ✓ Found: $stack"
+                fi
+            done <<< "$region_stacks"
+        fi
+    done
+
+    if [ ${#found_stacks[@]} -gt 0 ]; then
+        print_status $BLUE "   Found ${#found_stacks[@]} stack(s) total"
 
         # Collect outputs from all matching stacks
-        echo "$all_stacks" | while read stack; do
-            if [ -n "$stack" ]; then
-                print_status $BLUE "   Collecting outputs from: $stack"
-                local stack_outputs=$(awslocal cloudformation describe-stacks --stack-name "$stack" \
-                    --query 'Stacks[0].Outputs' \
-                    --output json 2>/dev/null | python3 -c "
+        for stack_entry in "${found_stacks[@]}"; do
+            local region="${stack_entry%%:*}"
+            local stack="${stack_entry#*:}"
+
+            print_status $BLUE "   Collecting outputs from: $stack (region: $region)"
+            local stack_outputs=$(AWS_DEFAULT_REGION=$region awslocal cloudformation describe-stacks --stack-name "$stack" \
+                --query 'Stacks[0].Outputs' \
+                --output json 2>/dev/null | python3 -c "
 import sys, json
 try:
     data = json.load(sys.stdin)
@@ -448,18 +465,19 @@ except:
     print('{}')
 " || echo "{}")
 
-                # Merge outputs into a temporary file to persist across the while loop
-                echo "$stack_outputs" >> /tmp/stack_outputs_$$.json
+            # Append outputs to temporary file
+            if [ -n "$stack_outputs" ] && [ "$stack_outputs" != "{}" ]; then
+                echo "$stack_outputs" >> "$temp_output_file"
             fi
         done
 
         # Merge all collected outputs
-        if [ -f "/tmp/stack_outputs_$$.json" ]; then
+        if [ -f "$temp_output_file" ]; then
             output_json=$(python3 -c "
 import sys, json
 merged = {}
 try:
-    with open('/tmp/stack_outputs_$$.json', 'r') as f:
+    with open('$temp_output_file', 'r') as f:
         for line in f:
             line = line.strip()
             if line and line != '{}':
@@ -472,10 +490,10 @@ try:
 except:
     print('{}')
 ")
-            rm -f "/tmp/stack_outputs_$$.json"
+            rm -f "$temp_output_file"
         fi
     else
-        print_status $YELLOW "   ⚠️  No stacks found matching pattern: ${stack_prefix}*"
+        print_status $YELLOW "   ⚠️  No stacks found matching pattern: ${stack_prefix}* in any region"
     fi
 
     save_outputs "$output_json"
