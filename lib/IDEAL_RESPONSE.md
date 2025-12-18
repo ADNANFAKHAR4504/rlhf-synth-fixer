@@ -1,6 +1,6 @@
 # Secure AWS Infrastructure with Terraform - Production-Ready Solution
 
-This solution provides a complete, production-ready Terraform configuration for secure AWS infrastructure with comprehensive testing, proper state management, and deployment best practices.
+This solution provides a complete, production-ready Terraform configuration for secure AWS infrastructure with comprehensive testing, proper state management, and deployment best practices
 
 ## Enhanced Implementation
 
