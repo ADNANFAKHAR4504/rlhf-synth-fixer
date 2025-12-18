@@ -46,17 +46,23 @@ export class TapStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'PublicSubnetIds', {
-      value: networkStack.vpc.publicSubnets.map(subnet => subnet.subnetId).join(','),
+      value: networkStack.vpc.publicSubnets
+        .map(subnet => subnet.subnetId)
+        .join(','),
       description: 'Comma-separated list of public subnet IDs (DMZ)',
     });
 
     new cdk.CfnOutput(this, 'PrivateSubnetIds', {
-      value: networkStack.vpc.privateSubnets.map(subnet => subnet.subnetId).join(','),
+      value: networkStack.vpc.privateSubnets
+        .map(subnet => subnet.subnetId)
+        .join(','),
       description: 'Comma-separated list of private subnet IDs (Internal)',
     });
 
     new cdk.CfnOutput(this, 'IsolatedSubnetIds', {
-      value: networkStack.vpc.isolatedSubnets.map(subnet => subnet.subnetId).join(','),
+      value: networkStack.vpc.isolatedSubnets
+        .map(subnet => subnet.subnetId)
+        .join(','),
       description: 'Comma-separated list of isolated subnet IDs (Secure)',
     });
   }
