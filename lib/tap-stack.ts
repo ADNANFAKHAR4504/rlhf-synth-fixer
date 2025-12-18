@@ -35,7 +35,30 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    // Outputs are already defined in ServerlessStack itself
-    // No need to duplicate them here to avoid cross-stack reference errors
+    // Outputs - reference the nested stack outputs
+    // These are required for CI/CD pipeline validation
+    new cdk.CfnOutput(this, 'BucketName', {
+      value: this.serverlessStack.bucket.bucketName,
+      description: 'Name of the S3 bucket for user data',
+      exportName: `BucketName-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'LambdaFunctionName', {
+      value: this.serverlessStack.lambda.functionName,
+      description: 'Name of the Lambda function',
+      exportName: `LambdaFunctionName-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'ApiGatewayUrl', {
+      value: this.serverlessStack.api.url,
+      description: 'URL of the API Gateway',
+      exportName: `ApiGatewayUrl-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'ApiGatewayId', {
+      value: this.serverlessStack.api.restApiId,
+      description: 'ID of the API Gateway',
+      exportName: `ApiGatewayId-${environmentSuffix}`,
+    });
   }
 }
