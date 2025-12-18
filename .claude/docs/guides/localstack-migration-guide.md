@@ -366,6 +366,61 @@ The PR pipeline handles:
 - Integration testing
 - Output file generation (cfn-outputs/, execution-output.md, etc.)
 
+## Metadata Schema Compliance
+
+**CRITICAL**: The `metadata.json` must comply with the schema at `config/schemas/metadata.schema.json`.
+
+### Common CI/CD Failures
+
+If you see errors like:
+- `Invalid #/subtask (schema path: #/properties/subtask/enum)`
+- `Invalid #/subject_labels/1 (schema path: #/properties/subject_labels/items/enum)`
+- `Invalid #/task_id (schema path: #/additionalProperties)`
+
+This means the metadata.json has fields or values not allowed by the schema.
+
+### Fields NOT Allowed
+
+The schema has `additionalProperties: false`. These fields must be REMOVED:
+
+| Field | Action |
+|-------|--------|
+| `task_id` | Remove (use `po_id` instead) |
+| `training_quality` | Remove |
+| `coverage` | Remove |
+| `author` | Remove |
+| `dockerS3Location` | Remove |
+| `pr_id` | Remove |
+| `original_pr_id` | Remove |
+| `localstack_migration` | Remove |
+
+### Subtask Mapping
+
+Old tasks may have invalid subtask values. Map them:
+
+| Invalid Value | Valid Value |
+|--------------|-------------|
+| "Security and Compliance Implementation" | "Security, Compliance, and Governance" |
+| "Security Configuration" | "Security, Compliance, and Governance" |
+| "Database Management" | "Provisioning of Infrastructure Environments" |
+| "Monitoring Setup" | "Infrastructure QA and Management" |
+
+### Subject Labels Mapping
+
+Only these 12 labels are valid:
+- Environment Migration
+- Cloud Environment Setup
+- Multi-Environment Consistency
+- Web Application Deployment
+- Serverless Infrastructure (Functions as Code)
+- CI/CD Pipeline
+- Failure Recovery Automation
+- Security Configuration as Code
+- IaC Diagnosis/Edits
+- IaC Optimization
+- Infrastructure Analysis/Monitoring
+- General Infrastructure Tooling QA
+
 ## Troubleshooting
 
 ### LocalStack Not Running
