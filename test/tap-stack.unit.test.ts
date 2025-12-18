@@ -9,6 +9,9 @@ describe('TapStack Unit Tests', () => {
   const environmentSuffix = 'test';
 
   beforeEach(() => {
+    // Clear LocalStack environment variables
+    delete process.env.AWS_ENDPOINT_URL;
+
     app = new cdk.App();
     stack = new TapStack(app, 'TestTapStack', {
       environmentSuffix,
@@ -389,6 +392,105 @@ describe('TapStack Unit Tests', () => {
       template.hasResourceProperties('AWS::IAM::Role', {
         RoleName: Match.stringLikeRegexp('^tap-test-.*'),
       });
+    });
+  });
+
+  describe('LocalStack Compatibility', () => {
+    let localStackApp: cdk.App;
+    let localStackStack: TapStack;
+    let localStackTemplate: Template;
+
+    beforeEach(() => {
+      // Set LocalStack environment variables
+      process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
+
+      localStackApp = new cdk.App();
+      localStackStack = new TapStack(localStackApp, 'LocalStackTapStack', {
+        environmentSuffix,
+        env: {
+          account: '000000000000',
+          region: 'us-east-1',
+        },
+      });
+      localStackTemplate = Template.fromStack(localStackStack);
+    });
+
+    afterEach(() => {
+      delete process.env.AWS_ENDPOINT_URL;
+    });
+
+    test('should use simplified VPC with single AZ', () => {
+      // Should have only 1 public subnet (not 4 like AWS path)
+      localStackTemplate.resourceCountIs('AWS::EC2::Subnet', 1);
+    });
+
+    test('should not create NAT Gateway', () => {
+      localStackTemplate.resourceCountIs('AWS::EC2::NatGateway', 0);
+    });
+
+    test('should create Lambda function instead of EC2', () => {
+      // There may be 1-2 Lambda functions (1 for the web function, possibly 1 for custom resource)
+      const lambdas = localStackTemplate.findResources('AWS::Lambda::Function');
+      expect(Object.keys(lambdas).length).toBeGreaterThanOrEqual(1);
+
+      localStackTemplate.hasResourceProperties('AWS::Lambda::Function', {
+        FunctionName: `tap-${environmentSuffix}-web`,
+        Runtime: 'nodejs22.x',
+      });
+    });
+
+    test('should create API Gateway instead of ALB', () => {
+      localStackTemplate.resourceCountIs('AWS::ApiGateway::RestApi', 1);
+      localStackTemplate.hasResourceProperties('AWS::ApiGateway::RestApi', {
+        Name: `tap-${environmentSuffix}-api`,
+      });
+    });
+
+    test('should not create EC2 instances', () => {
+      localStackTemplate.resourceCountIs('AWS::EC2::Instance', 0);
+    });
+
+    test('should not create Application Load Balancer', () => {
+      localStackTemplate.resourceCountIs(
+        'AWS::ElasticLoadBalancingV2::LoadBalancer',
+        0
+      );
+    });
+
+    test('should create Lambda execution role', () => {
+      localStackTemplate.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: `tap-${environmentSuffix}-lambda-role`,
+        AssumeRolePolicyDocument: Match.objectLike({
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Effect: 'Allow',
+              Principal: {
+                Service: 'lambda.amazonaws.com',
+              },
+              Action: 'sts:AssumeRole',
+            }),
+          ]),
+        }),
+      });
+    });
+
+    test('should have API Gateway output instead of ALB', () => {
+      localStackTemplate.hasOutput('ApiUrl', {
+        Description: 'API Gateway URL (LocalStack)',
+        Export: {
+          Name: `tap-${environmentSuffix}-api-url`,
+        },
+      });
+    });
+
+    test('should not have Elastic IP output', () => {
+      const outputs = localStackTemplate.toJSON().Outputs || {};
+      expect(outputs.ElasticIPAddress).toBeUndefined();
+    });
+
+    test('should not have Load Balancer DNS output', () => {
+      const outputs = localStackTemplate.toJSON().Outputs || {};
+      expect(outputs.LoadBalancerDNS).toBeUndefined();
     });
   });
 });
