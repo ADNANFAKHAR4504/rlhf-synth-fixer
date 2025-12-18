@@ -17,6 +17,12 @@ interface MetadataProcessingStackProps extends cdk.StackProps {
 }
 
 export class MetadataProcessingStack extends cdk.Stack {
+  public readonly metadataBucketName: string;
+  public readonly openSearchDomainName: string;
+  public readonly openSearchDomainEndpoint: string;
+  public readonly failureTableName: string;
+  public readonly workflowArn: string;
+
   constructor(
     scope: Construct,
     id: string,
@@ -292,29 +298,36 @@ export class MetadataProcessingStack extends cdk.Stack {
         cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
     });
 
+    // Assign public properties
+    this.metadataBucketName = metadataBucket.bucketName;
+    this.openSearchDomainName = openSearchDomain.domainName;
+    this.openSearchDomainEndpoint = `https://${openSearchDomain.domainEndpoint}`;
+    this.failureTableName = failureTable.tableName;
+    this.workflowArn = metadataProcessingWorkflow.stateMachineArn;
+
     // Outputs
     new cdk.CfnOutput(this, 'MetadataBucketName', {
-      value: metadataBucket.bucketName,
+      value: this.metadataBucketName,
       description: 'S3 bucket for metadata.json files',
     });
 
     new cdk.CfnOutput(this, 'OpenSearchDomainName', {
-      value: openSearchDomain.domainName,
+      value: this.openSearchDomainName,
       description: 'OpenSearch domain name',
     });
 
     new cdk.CfnOutput(this, 'OpenSearchDomainEndpoint', {
-      value: `https://${openSearchDomain.domainEndpoint}`,
+      value: this.openSearchDomainEndpoint,
       description: 'OpenSearch domain endpoint',
     });
 
     new cdk.CfnOutput(this, 'FailureTableName', {
-      value: failureTable.tableName,
+      value: this.failureTableName,
       description: 'DynamoDB table for failure tracking',
     });
 
     new cdk.CfnOutput(this, 'MetadataProcessingWorkflowArn', {
-      value: metadataProcessingWorkflow.stateMachineArn,
+      value: this.workflowArn,
       description: 'Step Functions state machine ARN',
     });
   }
