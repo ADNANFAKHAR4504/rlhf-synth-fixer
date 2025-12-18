@@ -4,16 +4,11 @@
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "291813",
-  "team": "2",
+  "team": "synth",
   "startedAt": "2025-08-21T08:54:32.062Z",
-  "subtask": "Database and Storage Setup",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Database Management",
-    "Security Configuration",
-    "Monitoring Setup",
-    "General Infrastructure Tooling QA",
-    "Performance Optimization",
-    "Access Control"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "RDS",
