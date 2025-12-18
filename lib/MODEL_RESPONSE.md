@@ -633,36 +633,36 @@ constructs>=10.3.0
 
 ## Security Features Implemented
 
-### 🔒 **Network Security**
+### **Network Security**
 - VPC with public/private subnets across multiple AZs
 - Security groups with least privilege access
 - VPC Flow Logs for network monitoring
 - Bastion host for secure SSH access
 
-### 🔐 **Encryption**
+### **Encryption**
 - KMS keys with automatic rotation
 - S3 buckets encrypted with customer-managed KMS keys
 - RDS encryption at rest and in transit
 - CloudTrail logs encrypted
 
-### 👤 **Identity & Access Management**
+### **Identity & Access Management**
 - IAM roles with minimal privileges
 - Instance profiles for EC2 instances
 - Secrets Manager for sensitive data
 - No hardcoded credentials
 
-### 📊 **Monitoring & Auditing**
+### **Monitoring & Auditing**
 - CloudTrail for API call auditing
 - VPC Flow Logs
 - CloudWatch integration
 - Performance Insights for RDS
 
-### 🏗️ **High Availability**
+### **High Availability**
 - Multi-AZ RDS deployment
 - Resources distributed across multiple AZs
 - Automated backups enabled
 
-### 🛡️ **Data Protection**
+### **Data Protection**
 - S3 buckets with public access blocked
 - Versioning enabled on S3 buckets
 - Lifecycle policies for cost optimization
