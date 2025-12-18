@@ -881,17 +881,9 @@ The stack provides the following outputs:
 - **TimestreamDatabaseName**: Timestream database (if enabled)
 - **HourlyScheduleArn**: EventBridge hourly schedule ARN
 
-## Testing the Deployment
-
-### Send Sensor Data
-
-
-### Trigger Anomaly Detection
-
-
 ## Notes
 
-1. **Timestream Availability**: Timestream requires explicit enablement in some AWS accounts. Use the  parameter to control deployment.
+1. **Timestream Availability**: Timestream requires explicit enablement in some AWS accounts. Use the `EnableTimestream` parameter to control deployment.
 
 2. **Environment Suffix**: Always use a unique environment suffix to avoid resource naming conflicts.
 
