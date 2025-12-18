@@ -79,7 +79,15 @@ data "aws_availability_zones" "available" {
 
 data "aws_caller_identity" "current" {}
 
+# -------------------------------------------------------------------
+# LocalStack limitation (Community / coverage):
+# ELB/ALB-related lookups are disabled because ELBv2 is not supported.
+# Error observed:
+# "StatusCode: 501 ... API for service 'elbv2' not yet implemented or pro feature"
+# -------------------------------------------------------------------
+/*
 data "aws_elb_service_account" "main" {}
+*/
 
 data "aws_ami" "amazon_linux_2023" {
   most_recent = true
@@ -529,6 +537,13 @@ resource "aws_s3_bucket_public_access_block" "logs" {
   restrict_public_buckets = true
 }
 
+# -------------------------------------------------------------------
+# LocalStack limitation (Community / coverage):
+# ALB access log delivery policy disabled because ALB/ELBv2 is disabled.
+# ELBv2 error observed:
+# "StatusCode: 501 ... API for service 'elbv2' not yet implemented or pro feature"
+# -------------------------------------------------------------------
+/*
 resource "aws_s3_bucket_policy" "logs" {
   bucket = aws_s3_bucket.logs.id
 
@@ -560,11 +575,19 @@ resource "aws_s3_bucket_policy" "logs" {
     aws_s3_bucket_public_access_block.logs
   ]
 }
+*/
 
 # ===========================
 # APPLICATION LOAD BALANCER
 # ===========================
 
+# -------------------------------------------------------------------
+# LocalStack limitation (Community / coverage):
+# ELBv2 (ALB, Target Group, Listener) is not supported in this LocalStack run.
+# Error observed:
+# "StatusCode: 501 ... API for service 'elbv2' not yet implemented or pro feature"
+# -------------------------------------------------------------------
+/*
 resource "aws_lb" "main" {
   name               = "${local.name_prefix}-alb"
   internal           = false
@@ -627,11 +650,19 @@ resource "aws_lb_listener" "http" {
     Name = "${local.name_prefix}-http-listener"
   })
 }
+*/
 
 # ===========================
 # WAF v2
 # ===========================
 
+# -------------------------------------------------------------------
+# LocalStack limitation (Community / coverage):
+# WAFv2 is not supported in this LocalStack run.
+# Error observed:
+# "StatusCode: 501 ... API for service 'wafv2' not yet implemented or pro feature"
+# -------------------------------------------------------------------
+/*
 resource "aws_wafv2_web_acl" "main" {
   name  = "${local.name_prefix}-waf"
   scope = "REGIONAL"
@@ -721,6 +752,7 @@ resource "aws_wafv2_web_acl_association" "alb" {
   resource_arn = aws_lb.main.arn
   web_acl_arn  = aws_wafv2_web_acl.main.arn
 }
+*/
 
 # ===========================
 # CLOUDWATCH LOG GROUP FOR APP
@@ -819,34 +851,34 @@ resource "aws_launch_template" "app" {
     #!/bin/bash
     yum update -y
     yum install -y nginx
-    
+
     # Generate self-signed certificate
     mkdir -p /etc/nginx/ssl
     openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
       -keyout /etc/nginx/ssl/nginx.key \
       -out /etc/nginx/ssl/nginx.crt \
       -subj "/C=US/ST=State/L=City/O=Organization/CN=${local.name_prefix}.local"
-    
+
     # Configure nginx for HTTPS
     cat > /etc/nginx/conf.d/https.conf <<EOF
     server {
         listen 443 ssl;
         server_name _;
-        
+
         ssl_certificate /etc/nginx/ssl/nginx.crt;
         ssl_certificate_key /etc/nginx/ssl/nginx.key;
-        
+
         location / {
             root /usr/share/nginx/html;
             index index.html;
         }
     }
     EOF
-    
+
     # Install CloudWatch agent
     wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
     rpm -U ./amazon-cloudwatch-agent.rpm
-    
+
     # Configure CloudWatch agent
     cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
     {
@@ -870,7 +902,7 @@ resource "aws_launch_template" "app" {
       }
     }
     EOF
-    
+
     # Start services
     systemctl enable nginx
     systemctl start nginx
@@ -895,6 +927,13 @@ resource "aws_launch_template" "app" {
 # RDS SUBNET GROUP
 # ===========================
 
+# -------------------------------------------------------------------
+# LocalStack limitation (Community / coverage):
+# RDS is not supported in this LocalStack run.
+# Error observed:
+# "StatusCode: 501 ... API for service 'rds' not yet implemented or pro feature"
+# -------------------------------------------------------------------
+/*
 resource "aws_db_subnet_group" "main" {
   name       = "${local.name_prefix}-db-subnet-group"
   subnet_ids = aws_subnet.private_db[*].id
@@ -903,10 +942,6 @@ resource "aws_db_subnet_group" "main" {
     Name = "${local.name_prefix}-db-subnet-group"
   })
 }
-
-# ===========================
-# RDS POSTGRESQL INSTANCE
-# ===========================
 
 resource "aws_db_instance" "postgres" {
   identifier     = "${local.name_prefix}-postgres"
@@ -943,6 +978,7 @@ resource "aws_db_instance" "postgres" {
     Name = "${local.name_prefix}-postgres"
   })
 }
+*/
 
 # ===========================
 # OUTPUTS
@@ -1072,7 +1108,13 @@ output "rds_security_group_name" {
   value       = aws_security_group.rds.name
 }
 
-# ALB Outputs
+# -------------------------------------------------------------------
+# LocalStack (Community) compatibility:
+# ALB outputs disabled because ELBv2/ALB resources are disabled above.
+# Error observed:
+# "StatusCode: 501 ... API for service 'elbv2' not yet implemented or pro feature"
+# -------------------------------------------------------------------
+/*
 output "alb_dns_name" {
   description = "ALB DNS name"
   value       = aws_lb.main.dns_name
@@ -1097,6 +1139,7 @@ output "http_listener_arn" {
   description = "HTTP listener ARN"
   value       = aws_lb_listener.http.arn
 }
+*/
 
 # Launch Template Outputs
 output "launch_template_id" {
@@ -1109,7 +1152,13 @@ output "launch_template_latest_version" {
   value       = aws_launch_template.app.latest_version
 }
 
-# RDS Outputs
+# -------------------------------------------------------------------
+# LocalStack (Community) compatibility:
+# RDS outputs disabled because RDS resources are disabled above.
+# Error observed:
+# "StatusCode: 501 ... API for service 'rds' not yet implemented or pro feature"
+# -------------------------------------------------------------------
+/*
 output "rds_instance_id" {
   description = "RDS instance ID"
   value       = aws_db_instance.postgres.id
@@ -1176,6 +1225,13 @@ output "rds_subnet_group_name" {
   value       = aws_db_subnet_group.main.name
 }
 
+output "database_connection_string" {
+  description = "PostgreSQL connection string"
+  value       = "postgresql://${aws_db_instance.postgres.username}:****@${aws_db_instance.postgres.endpoint}/${aws_db_instance.postgres.db_name}"
+  sensitive   = true
+}
+*/
+
 # KMS Outputs
 output "kms_key_id" {
   description = "KMS key ID"
@@ -1219,7 +1275,13 @@ output "vpc_flow_logs_group_arn" {
   value       = aws_cloudwatch_log_group.vpc_flow_logs.arn
 }
 
-# WAF Outputs
+# -------------------------------------------------------------------
+# LocalStack (Community) compatibility:
+# WAF outputs disabled because WAFv2 resources are disabled above.
+# Error observed:
+# "StatusCode: 501 ... API for service 'wafv2' not yet implemented or pro feature"
+# -------------------------------------------------------------------
+/*
 output "waf_web_acl_id" {
   description = "WAF WebACL ID"
   value       = aws_wafv2_web_acl.main.id
@@ -1229,6 +1291,7 @@ output "waf_web_acl_arn" {
   description = "WAF WebACL ARN"
   value       = aws_wafv2_web_acl.main.arn
 }
+*/
 
 # IAM Outputs
 output "ec2_role_arn" {
@@ -1239,13 +1302,6 @@ output "ec2_role_arn" {
 output "vpc_flow_logs_role_arn" {
   description = "VPC Flow Logs IAM role ARN"
   value       = aws_iam_role.vpc_flow_logs.arn
-}
-
-# Connection Strings
-output "database_connection_string" {
-  description = "PostgreSQL connection string"
-  value       = "postgresql://${aws_db_instance.postgres.username}:****@${aws_db_instance.postgres.endpoint}/${aws_db_instance.postgres.db_name}"
-  sensitive   = true
 }
 
 # Configuration Outputs
