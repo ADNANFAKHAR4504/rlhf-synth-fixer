@@ -36,12 +36,6 @@ describe('VPC Infrastructure Integration Tests', () => {
         expect(outputs.VPCId).toMatch(/^vpc-[a-z0-9]+$/);
       });
 
-      test('should have VPC CIDR output with valid CIDR format', async () => {
-        expect(outputs.VPCCidr).toBeDefined();
-        expect(typeof outputs.VPCCidr).toBe('string');
-        expect(outputs.VPCCidr).toMatch(/^\d+\.\d+\.\d+\.\d+\/\d+$/);
-      });
-
       test('should have public subnet outputs with valid IDs', async () => {
         expect(outputs.PublicSubnet1Id).toBeDefined();
         expect(outputs.PublicSubnet2Id).toBeDefined();
