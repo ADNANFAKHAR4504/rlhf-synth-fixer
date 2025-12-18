@@ -11,5 +11,12 @@
   "subject_labels": [
     "General Infrastructure Tooling QA",
     "IaC Optimization"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "DynamoDB",
+    "CloudFormation"
   ]
 }
