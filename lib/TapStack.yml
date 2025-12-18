@@ -352,7 +352,6 @@ Resources:
 
   SecurityGroupRds:
     Type: AWS::EC2::SecurityGroup
-    Condition: IsAws
     Properties:
       GroupDescription: RDS private access SG
       VpcId: !Ref VPC
@@ -548,7 +547,6 @@ Resources:
   # pipeline-safe: no DBSubnetGroupName (prevents collisions)
   RDSSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
-    Condition: IsAws
     Properties:
       DBSubnetGroupDescription: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-subnet-group'
       SubnetIds: [!Ref PrivateSubnetA, !Ref PrivateSubnetB]
@@ -556,54 +554,41 @@ Resources:
 
   RDSParameterGroup:
     Type: AWS::RDS::DBParameterGroup
-    Condition: IsAws
     Properties:
       Description: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-params'
       Family: !If [EngineIsPg, 'postgres16', 'mysql8.0']
       Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-params' }]
 
   # ✅ pipeline-safe: no DBInstanceIdentifier (prevents collisions + length issues)
-  RDSInstanceAws:
+  RDSInstance:
     Type: AWS::RDS::DBInstance
-    Condition: IsAws
-    DeletionPolicy: Snapshot
-    UpdateReplacePolicy: Snapshot
-    Properties:
-      Engine: !Ref RdsEngine
-      EngineVersion: !If [EngineIsPg, !Ref RdsEngineVersionPostgres, !Ref RdsEngineVersionMySql]
-      DBInstanceClass: !Ref RdsInstanceClass
-      AllocatedStorage: !Ref RdsAllocatedStorage
-      StorageEncrypted: true
-      PubliclyAccessible: false
-      VPCSecurityGroups: [!Ref SecurityGroupRds]
-      DBSubnetGroupName: !Ref RDSSubnetGroup
-      DBParameterGroupName: !Ref RDSParameterGroup
-      DeletionProtection: !If [RetainDbSnapshot, true, false]
-      MasterUsername: !Sub '{{resolve:secretsmanager:${DbSecret}::username}}'
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DbSecret}::password}}'
-      DBName: !Ref DBName
-      BackupRetentionPeriod: 7
-      MultiAZ: false
-      AutoMinorVersionUpgrade: true
-      EnableCloudwatchLogsExports: !If [EngineIsPg, ['postgresql'], ['error']]
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rds'
-
-  RDSInstanceLocal:
-    Type: AWS::RDS::DBInstance
-    Condition: IsLocalStack
     Metadata:
       cfn-lint:
         config:
           ignore_checks: ["W2501"]
+    DeletionPolicy: !If [IsAws, Snapshot, Delete]
+    UpdateReplacePolicy: !If [IsAws, Snapshot, Delete]
     Properties:
-      Engine: postgres
-      DBInstanceClass: db.t3.micro
-      AllocatedStorage: 20
+      Engine: !If [IsAws, !Ref RdsEngine, postgres]
+      EngineVersion: !If [IsAws, !If [EngineIsPg, !Ref RdsEngineVersionPostgres, !Ref RdsEngineVersionMySql], !Ref 'AWS::NoValue']
+      DBInstanceClass: !If [IsAws, !Ref RdsInstanceClass, db.t3.micro]
+      AllocatedStorage: !If [IsAws, !Ref RdsAllocatedStorage, 20]
+      StorageEncrypted: !If [IsAws, true, !Ref 'AWS::NoValue']
       PubliclyAccessible: false
-      MasterUsername: masteruser
-      MasterUserPassword: localstackpassword  # Hardcoded for LocalStack to avoid dynamic reference bug
+      VPCSecurityGroups: !If [IsAws, [!Ref SecurityGroupRds], !Ref 'AWS::NoValue']
+      DBSubnetGroupName: !If [IsAws, !Ref RDSSubnetGroup, !Ref 'AWS::NoValue']
+      DBParameterGroupName: !If [IsAws, !Ref RDSParameterGroup, !Ref 'AWS::NoValue']
+      DeletionProtection: !If [IsAws, !If [RetainDbSnapshot, true, false], !Ref 'AWS::NoValue']
+      MasterUsername: !If [IsAws, !Sub '{{resolve:secretsmanager:${DbSecret}::username}}', masteruser]
+      MasterUserPassword: !If [IsAws, !Sub '{{resolve:secretsmanager:${DbSecret}::password}}', localstackpassword]
+      DBName: !If [IsAws, !Ref DBName, !Ref 'AWS::NoValue']
+      BackupRetentionPeriod: !If [IsAws, 7, !Ref 'AWS::NoValue']
+      MultiAZ: !If [IsAws, false, !Ref 'AWS::NoValue']
+      AutoMinorVersionUpgrade: !If [IsAws, true, !Ref 'AWS::NoValue']
+      EnableCloudwatchLogsExports: !If [IsAws, !If [EngineIsPg, ['postgresql'], ['error']], !Ref 'AWS::NoValue']
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rds'
 
   AlarmRdsCpuHigh:
     Type: AWS::CloudWatch::Alarm
@@ -613,7 +598,7 @@ Resources:
       MetricName: CPUUtilization
       Dimensions:
         - Name: DBInstanceIdentifier
-          Value: !Ref RDSInstanceAws
+          Value: !Ref RDSInstance
       Statistic: Average
       Period: 300
       EvaluationPeriods: 1
@@ -670,7 +655,7 @@ Outputs:
   RdsEndpoint:
     Condition: IsAws
     Description: RDS endpoint address
-    Value: !GetAtt RDSInstanceAws.Endpoint.Address
+    Value: !GetAtt RDSInstance.Endpoint.Address
 
   DbSecretArn:
     Condition: IsAws
