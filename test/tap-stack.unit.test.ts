@@ -43,8 +43,8 @@ describe('TapStack CloudFormation Template - Production Security Infrastructure'
     test('should have EC2AMIId parameter', () => {
       expect(template.Parameters.EC2AMIId).toBeDefined();
       const amiParam = template.Parameters.EC2AMIId;
-      expect(amiParam.Type).toBe('AWS::EC2::Image::Id');
-      expect(amiParam.Default).toBe('ami-0c02fb55956c7d316');
+      expect(amiParam.Type).toBe('AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>');
+      expect(amiParam.Default).toBe('/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64');
     });
 
     test('should have EC2InstanceType parameter with allowed values', () => {
