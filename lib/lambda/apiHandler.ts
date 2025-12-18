@@ -1,18 +1,43 @@
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
-const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const {
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import {
   DynamoDBDocumentClient,
   GetCommand,
   QueryCommand,
   PutCommand,
-} = require('@aws-sdk/lib-dynamodb');
-const { randomUUID } = require('crypto');
+} from '@aws-sdk/lib-dynamodb';
+import { randomUUID } from 'crypto';
+import {
+  APIGatewayProxyEvent,
+  APIGatewayProxyResult,
+} from 'aws-lambda';
 
 const s3Client = new S3Client({});
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
-exports.handler = async event => {
+interface DocumentUploadRequest {
+  fileName: string;
+  content: string;
+  contentType?: string;
+}
+
+interface DocumentMetadata {
+  documentId: string;
+  uploadTimestamp: number;
+  fileName: string;
+  bucket: string;
+  key: string;
+  size: number;
+  contentType: string;
+  uploadedAt: string;
+  status: string;
+  userId: string;
+}
+
+export const handler = async (
+  event: APIGatewayProxyEvent
+): Promise<APIGatewayProxyResult> => {
   console.log('API handler event:', JSON.stringify(event, null, 2));
 
   const { httpMethod, path, body, requestContext } = event;
@@ -21,7 +46,7 @@ exports.handler = async event => {
   try {
     if (httpMethod === 'POST' && path === '/documents') {
       // Document upload
-      const requestBody = JSON.parse(body || '{}');
+      const requestBody: DocumentUploadRequest = JSON.parse(body || '{}');
       const { fileName, content, contentType } = requestBody;
 
       if (!fileName || !content) {
@@ -85,21 +110,23 @@ exports.handler = async event => {
 
       // Store metadata in DynamoDB
       const uploadTimestamp = Date.now();
+      const item: DocumentMetadata = {
+        documentId,
+        uploadTimestamp,
+        fileName,
+        bucket: process.env.DOCUMENTS_BUCKET!,
+        key,
+        size: Buffer.byteLength(content, 'base64'),
+        contentType: contentType || 'application/octet-stream',
+        uploadedAt: new Date().toISOString(),
+        status: 'uploaded',
+        userId,
+      };
+
       await docClient.send(
         new PutCommand({
           TableName: process.env.DOCUMENTS_TABLE,
-          Item: {
-            documentId,
-            uploadTimestamp,
-            fileName,
-            bucket: process.env.DOCUMENTS_BUCKET,
-            key,
-            size: Buffer.byteLength(content, 'base64'),
-            contentType: contentType || 'application/octet-stream',
-            uploadedAt: new Date().toISOString(),
-            status: 'uploaded',
-            userId,
-          },
+          Item: item,
         })
       );
 
@@ -121,7 +148,7 @@ exports.handler = async event => {
 
       // If uploadTimestamp is provided in the path, use it for exact lookup
       if (pathParts.length > 3) {
-        const uploadTimestamp = parseInt(pathParts[3]);
+        const uploadTimestamp = parseInt(pathParts[3], 10);
         const result = await docClient.send(
           new GetCommand({
             TableName: process.env.DOCUMENTS_TABLE,
@@ -206,7 +233,7 @@ exports.handler = async event => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: 'Not found' }),
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('API handler error:', error);
 
     // Handle specific error types

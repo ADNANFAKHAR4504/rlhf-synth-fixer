@@ -1,12 +1,32 @@
-const { S3Client, HeadObjectCommand } = require('@aws-sdk/client-s3');
-const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, PutCommand } = require('@aws-sdk/lib-dynamodb');
+import { S3Client, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { S3Event, S3EventRecord } from 'aws-lambda';
 
 const s3Client = new S3Client({});
 const dynamoClient = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
-exports.handler = async event => {
+interface DocumentMetadata {
+  documentId: string;
+  uploadTimestamp: number;
+  fileName: string;
+  bucket: string;
+  key: string;
+  size: number;
+  contentType: string;
+  uploadedAt: string;
+  status: string;
+  processedAt: string;
+  userId: string;
+}
+
+interface ErrorDocumentMetadata extends DocumentMetadata {
+  error: string;
+  errorType: string;
+}
+
+export const handler = async (event: S3Event): Promise<void> => {
   console.log('Document processor event:', JSON.stringify(event, null, 2));
 
   for (const record of event.Records) {
@@ -24,16 +44,16 @@ exports.handler = async event => {
         );
 
         // Extract document metadata
-        const documentId = key.split('/').pop().split('.')[0];
+        const documentId = key.split('/').pop()?.split('.')[0] || 'unknown';
         const uploadTimestamp = Date.now();
-        const metadata = {
+        const metadata: DocumentMetadata = {
           documentId,
           uploadTimestamp,
-          fileName: key.split('/').pop(),
+          fileName: key.split('/').pop() || 'unknown',
           bucket,
           key,
-          size: objectInfo.ContentLength,
-          contentType: objectInfo.ContentType,
+          size: objectInfo.ContentLength || 0,
+          contentType: objectInfo.ContentType || 'application/octet-stream',
           uploadedAt: new Date().toISOString(),
           status: 'processed',
           processedAt: new Date().toISOString(),
@@ -49,12 +69,12 @@ exports.handler = async event => {
         );
 
         console.log('Successfully processed document:', documentId);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error processing document:', error);
 
         // Handle specific error types
         let errorStatus = 'error';
-        let errorDetails = error.message;
+        let errorDetails = error.message || 'Unknown error';
 
         if (error.name === 'NoSuchKey') {
           errorStatus = 's3_not_found';
@@ -72,24 +92,29 @@ exports.handler = async event => {
 
         // Store error information with enhanced details
         try {
+          const errorMetadata: ErrorDocumentMetadata = {
+            documentId: key.split('/').pop()?.split('.')[0] || 'unknown',
+            uploadTimestamp: Date.now(),
+            fileName: key.split('/').pop() || 'unknown',
+            bucket,
+            key,
+            size: 0,
+            contentType: 'application/octet-stream',
+            uploadedAt: new Date().toISOString(),
+            status: errorStatus,
+            error: errorDetails,
+            errorType: error.name || 'UnknownError',
+            processedAt: new Date().toISOString(),
+            userId: key.split('/')[1] || 'anonymous',
+          };
+
           await docClient.send(
             new PutCommand({
               TableName: process.env.DOCUMENTS_TABLE,
-              Item: {
-                documentId: key.split('/').pop().split('.')[0],
-                uploadTimestamp: Date.now(),
-                fileName: key.split('/').pop(),
-                bucket,
-                key,
-                status: errorStatus,
-                error: errorDetails,
-                errorType: error.name || 'UnknownError',
-                processedAt: new Date().toISOString(),
-                userId: key.split('/')[1] || 'anonymous',
-              },
+              Item: errorMetadata,
             })
           );
-        } catch (dbError) {
+        } catch (dbError: any) {
           console.error(
             'Failed to store error information in DynamoDB:',
             dbError

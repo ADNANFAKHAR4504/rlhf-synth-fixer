@@ -1,10 +1,30 @@
-const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, GetCommand } = require('@aws-sdk/lib-dynamodb');
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
+import {
+  APIGatewayTokenAuthorizerEvent,
+  APIGatewayAuthorizerResult,
+  PolicyDocument,
+  Statement,
+} from 'aws-lambda';
 
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
 
-exports.handler = async event => {
+interface ApiKeyItem {
+  apiKey: string;
+  status: string;
+  permissions: string;
+  userId: string;
+}
+
+interface AuthorizerContext {
+  userId: string;
+  permissions: string;
+}
+
+export const handler = async (
+  event: APIGatewayTokenAuthorizerEvent
+): Promise<APIGatewayAuthorizerResult> => {
   console.log('Authorizer event:', JSON.stringify(event, null, 2));
 
   const apiKey = event.headers?.['x-api-key'] || event.headers?.['X-Api-Key'];
@@ -14,6 +34,7 @@ exports.handler = async event => {
     console.log('No API key provided');
     throw new Error('Unauthorized');
   }
+
   try {
     const result = await docClient.send(
       new GetCommand({
@@ -21,12 +42,15 @@ exports.handler = async event => {
         Key: { apiKey },
       })
     );
+
     if (!result.Item || result.Item.status !== 'active') {
       console.log('API key not found or inactive:', apiKey);
       throw new Error('Unauthorized');
     }
-    const permissions = result.Item.permissions || 'read';
-    const userId = result.Item.userId || 'anonymous';
+
+    const item = result.Item as ApiKeyItem;
+    const permissions = item.permissions || 'read';
+    const userId = item.userId || 'anonymous';
 
     console.log(
       'Found user:',
@@ -60,31 +84,36 @@ exports.handler = async event => {
       );
       throw new Error('Forbidden');
     }
-    const policy = {
-      principalId: userId,
-      policyDocument: {
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Action: 'execute-api:Invoke',
-            Effect: 'Allow',
-            Resource: event.methodArn,
-          },
-        ],
-      },
-      context: {
-        userId: userId,
-        permissions: permissions,
-      },
+
+    const statement: Statement = {
+      Action: 'execute-api:Invoke',
+      Effect: 'Allow',
+      Resource: event.methodArn,
     };
+
+    const policyDocument: PolicyDocument = {
+      Version: '2012-10-17',
+      Statement: [statement],
+    };
+
+    const policy: APIGatewayAuthorizerResult = {
+      principalId: userId,
+      policyDocument,
+      context: {
+        userId,
+        permissions,
+      } as AuthorizerContext,
+    };
+
     console.log(
       'Authorization successful for user:',
       userId,
       'with permissions:',
       permissions
     );
+
     return policy;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Authorization failed:', error.message);
 
     // Handle specific DynamoDB errors
