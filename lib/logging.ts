@@ -4,6 +4,12 @@ import { getCommonTags, primaryRegion } from './config';
 import { LoadBalancerStack } from './load-balancer';
 import { VpcStack } from './vpc';
 
+// Detect if running in LocalStack
+const isLocalStack = (): boolean => {
+  const endpoint = process.env.AWS_ENDPOINT_URL || '';
+  return endpoint.includes('localhost') || endpoint.includes('localstack');
+};
+
 // Get ELB service account for current region
 const elbServiceAccount = aws.elb.getServiceAccount({
   region: primaryRegion,
@@ -185,22 +191,24 @@ export class LoggingStack extends pulumi.ComponentResource {
       { provider: primaryProvider, parent: this }
     );
 
-    // VPC Flow Logs for Primary VPC
-    new aws.ec2.FlowLog(
-      `${args.environment}-primary-vpc-flow-logs`,
-      {
-        iamRoleArn: flowLogsRole.arn,
-        logDestination: vpcLogGroup.arn,
-        logDestinationType: 'cloud-watch-logs',
-        vpcId: args.vpcStack.primaryVpc.id,
-        trafficType: 'ALL',
-        tags: {
-          ...commonTags,
-          Name: `${args.environment}-Primary-VPC-Flow-Logs`,
+    // VPC Flow Logs for Primary VPC (skip in LocalStack due to unsupported maxAggregationInterval)
+    if (!isLocalStack()) {
+      new aws.ec2.FlowLog(
+        `${args.environment}-primary-vpc-flow-logs`,
+        {
+          iamRoleArn: flowLogsRole.arn,
+          logDestination: vpcLogGroup.arn,
+          logDestinationType: 'cloud-watch-logs',
+          vpcId: args.vpcStack.primaryVpc.id,
+          trafficType: 'ALL',
+          tags: {
+            ...commonTags,
+            Name: `${args.environment}-Primary-VPC-Flow-Logs`,
+          },
         },
-      },
-      { provider: primaryProvider, parent: this }
-    );
+        { provider: primaryProvider, parent: this }
+      );
+    }
 
     // S3 Bucket Policy for ALB and CloudTrail logs
     new aws.s3.BucketPolicy(
