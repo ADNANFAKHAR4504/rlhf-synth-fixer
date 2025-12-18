@@ -1,0 +1,27 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291495",
+  "team": "synth-2",
+  "startedAt": "2025-08-18T21:44:50.456Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "AWS Elastic Beanstalk",
+    "AWS VPC",
+    "AWS EC2",
+    "AWS IAM",
+    "AWS Auto Scaling",
+    "AWS CloudWatch",
+    "AWS SNS",
+    "AWS Application Load Balancer",
+    "AWS NAT Gateway",
+    "AWS Internet Gateway",
+    "AWS Security Groups"
+  ],
+  "provider": "localstack"
+}
