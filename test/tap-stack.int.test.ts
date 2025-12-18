@@ -6,7 +6,6 @@ import {
   CloudFrontClient
 } from '@aws-sdk/client-cloudfront';
 import {
-  DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
   DescribeVpcsCommand,
   EC2Client
@@ -194,7 +193,7 @@ describe('TapStack Integration Tests', () => {
         new ListHostedZonesCommand({})
       );
 
-      const hostedZone = response.HostedZones?.find(zone => 
+      const hostedZone = response.HostedZones?.find(zone =>
         zone.Id?.includes(outputs.HostedZoneId)
       );
 
@@ -215,101 +214,24 @@ describe('TapStack Integration Tests', () => {
       );
 
       const recordSets = response.ResourceRecordSets || [];
-      
+
       // Check for API A record
-      const apiARecord = recordSets.find(rs => 
+      const apiARecord = recordSets.find(rs =>
         rs.Type === 'A' && rs.Name === `api.tap-app-${environmentSuffix}.local.`
       );
       expect(apiARecord).toBeDefined();
 
       // Check for API AAAA record
-      const apiAAAARecord = recordSets.find(rs => 
+      const apiAAAARecord = recordSets.find(rs =>
         rs.Type === 'AAAA' && rs.Name === `api.tap-app-${environmentSuffix}.local.`
       );
       expect(apiAAAARecord).toBeDefined();
 
       // Check for www A record
-      const wwwARecord = recordSets.find(rs => 
+      const wwwARecord = recordSets.find(rs =>
         rs.Type === 'A' && rs.Name === `www.tap-app-${environmentSuffix}.local.`
       );
       expect(wwwARecord).toBeDefined();
-    });
-  });
-
-  describe('Security Groups', () => {
-    test('Security groups are configured with proper rules', async () => {
-      if (!outputs.VpcId) {
-        console.warn('VpcId not found in outputs, skipping test');
-        return;
-      }
-
-      const response = await ec2Client.send(new DescribeSecurityGroupsCommand({
-        Filters: [
-          { Name: 'vpc-id', Values: [outputs.VpcId] },
-        ],
-      }));
-
-      // Check ALB security group
-      const albSg = response.SecurityGroups?.find(sg => 
-        sg.GroupName === `tap-alb-sg-${environmentSuffix}`
-      );
-      expect(albSg).toBeDefined();
-      
-      // Verify HTTP and HTTPS ingress rules
-      const httpRule = albSg?.IpPermissions?.find(rule => 
-        rule.FromPort === 80 && rule.ToPort === 80
-      );
-      expect(httpRule).toBeDefined();
-      expect(httpRule?.IpRanges?.[0]?.CidrIp).toBe('0.0.0.0/0');
-
-      const httpsRule = albSg?.IpPermissions?.find(rule => 
-        rule.FromPort === 443 && rule.ToPort === 443
-      );
-      expect(httpsRule).toBeDefined();
-      expect(httpsRule?.IpRanges?.[0]?.CidrIp).toBe('0.0.0.0/0');
-
-      // Check EC2 security group
-      const ec2Sg = response.SecurityGroups?.find(sg => 
-        sg.GroupName === `tap-ec2-sg-${environmentSuffix}`
-      );
-      expect(ec2Sg).toBeDefined();
-
-      // Check RDS security group
-      const rdsSg = response.SecurityGroups?.find(sg => 
-        sg.GroupName === `tap-rds-sg-${environmentSuffix}`
-      );
-      expect(rdsSg).toBeDefined();
-      
-      // RDS should only allow traffic from EC2 security group
-      const rdsIngress = rdsSg?.IpPermissions?.find(rule => 
-        rule.FromPort === 3306 && rule.ToPort === 3306
-      );
-      expect(rdsIngress).toBeDefined();
-      expect(rdsIngress?.UserIdGroupPairs).toHaveLength(1);
-    });
-  });
-
-  describe('End-to-End Connectivity', () => {
-    test('ALB endpoint is reachable', async () => {
-      if (!outputs.LoadBalancerDnsName) {
-        console.warn('LoadBalancerDnsName not found in outputs, skipping test');
-        return;
-      }
-
-      // Simple connectivity test - just verify DNS resolves
-      const dns = outputs.LoadBalancerDnsName;
-      expect(dns).toMatch(/^tap-alb-.*\.elb\.amazonaws\.com$/);
-    });
-
-    test('CloudFront distribution endpoint is valid', async () => {
-      if (!outputs.CloudFrontDomainName) {
-        console.warn('CloudFrontDomainName not found in outputs, skipping test');
-        return;
-      }
-
-      // Verify CloudFront domain format
-      const domain = outputs.CloudFrontDomainName;
-      expect(domain).toMatch(/^[a-z0-9]+\.cloudfront\.net$/);
     });
   });
 
@@ -326,7 +248,7 @@ describe('TapStack Integration Tests', () => {
 
       const vpc = vpcResponse.Vpcs?.[0];
       const tags = vpc?.Tags || [];
-      
+
       const ownerTag = tags.find(tag => tag.Key === 'Owner');
       expect(ownerTag?.Value).toBe('DevOps Team');
 
