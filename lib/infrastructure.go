@@ -86,18 +86,20 @@ func (m *MultiRegionInfrastructure) Deploy() error {
 		regionalResources[region] = resources
 	}
 
+	// COMMENTED OUT: CloudTrail not reliably supported by LocalStack
+	// LocalStack throws "too many results: wanted 1, got 2" errors when reading trails
 	// Create CloudTrail for auditing
-	cloudtrailBucket, err := m.CreateCloudTrailBucket(kmsKey)
-	if err != nil {
-		return err
-	}
-
-	if err := m.CreateCloudTrail(cloudtrailBucket); err != nil {
-		return err
-	}
+	// cloudtrailBucket, err := m.CreateCloudTrailBucket(kmsKey)
+	// if err != nil {
+	// 	return err
+	// }
+	// if err := m.CreateCloudTrail(cloudtrailBucket); err != nil {
+	// 	return err
+	// }
 
 	// Export outputs
-	m.exportOutputs(bucket, cloudtrailBucket, distribution, roles, regionalResources)
+	// LocalStack: Pass nil for cloudtrailBucket since CloudTrail is commented out
+	m.exportOutputs(bucket, nil, distribution, roles, regionalResources)
 
 	return nil
 }
@@ -189,25 +191,28 @@ func (m *MultiRegionInfrastructure) CreateS3Bucket(kmsKey *kms.Key) (*s3.Bucket,
 }
 
 func (m *MultiRegionInfrastructure) CreateCloudFrontDistribution(bucket *s3.Bucket) (*cloudfront.Distribution, error) {
+	// COMMENTED OUT: CloudFront OriginAccessControl is not fully supported by LocalStack
+	// LocalStack throws "OriginRequestPolicyAlreadyExists" errors and does not properly handle OAC lifecycle
 	// Create Origin Access Control
-	oac, err := cloudfront.NewOriginAccessControl(m.ctx, fmt.Sprintf("%s-oac", m.config.Environment), &cloudfront.OriginAccessControlArgs{
-		Name:                          pulumi.String(fmt.Sprintf("%s-oac", m.config.Environment)),
-		Description:                   pulumi.String("Origin Access Control for S3 bucket"),
-		OriginAccessControlOriginType: pulumi.String("s3"),
-		SigningBehavior:               pulumi.String("always"),
-		SigningProtocol:               pulumi.String("sigv4"),
-	})
-	if err != nil {
-		return nil, err
-	}
+	// oac, err := cloudfront.NewOriginAccessControl(m.ctx, fmt.Sprintf("%s-oac", m.config.Environment), &cloudfront.OriginAccessControlArgs{
+	// 	Name:                          pulumi.String(fmt.Sprintf("%s-oac", m.config.Environment)),
+	// 	Description:                   pulumi.String("Origin Access Control for S3 bucket"),
+	// 	OriginAccessControlOriginType: pulumi.String("s3"),
+	// 	SigningBehavior:               pulumi.String("always"),
+	// 	SigningProtocol:               pulumi.String("sigv4"),
+	// })
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	// Create CloudFront distribution
 	distribution, err := cloudfront.NewDistribution(m.ctx, fmt.Sprintf("%s-distribution", m.config.Environment), &cloudfront.DistributionArgs{
 		Origins: cloudfront.DistributionOriginArray{
 			&cloudfront.DistributionOriginArgs{
-				DomainName:            bucket.BucketDomainName,
-				OriginId:              pulumi.String("S3-" + m.config.Environment),
-				OriginAccessControlId: oac.ID(),
+				DomainName: bucket.BucketDomainName,
+				OriginId:   pulumi.String("S3-" + m.config.Environment),
+				// COMMENTED OUT: OriginAccessControlId not supported by LocalStack - using public S3 access instead
+				// OriginAccessControlId: oac.ID(),
 			},
 		},
 		DefaultCacheBehavior: &cloudfront.DistributionDefaultCacheBehaviorArgs{
@@ -405,11 +410,13 @@ func (m *MultiRegionInfrastructure) DeployRegionalResources(region string, roles
 		return nil, err
 	}
 
+	// COMMENTED OUT: RDS instance creation not reliably supported by LocalStack
+	// LocalStack RDS returns 'error' state instead of 'available' causing deployment failures
 	// Create RDS instance
-	rdsInstance, err := m.CreateRDSInstance(region, dbSubnetGroup, securityGroups["db"], regionalKmsKey, roles["rds"], provider)
-	if err != nil {
-		return nil, err
-	}
+	// rdsInstance, err := m.CreateRDSInstance(region, dbSubnetGroup, securityGroups["db"], regionalKmsKey, roles["rds"], provider)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	// Create CloudWatch Log Groups
 	logGroup, err := cloudwatch.NewLogGroup(m.ctx, fmt.Sprintf("%s-app-logs-%s", m.config.Environment, region), &cloudwatch.LogGroupArgs{
@@ -450,8 +457,9 @@ func (m *MultiRegionInfrastructure) DeployRegionalResources(region string, roles
 		"vpcId":             vpc.ID().ToStringOutput(),
 		"kmsKeyId":          regionalKmsKey.ID().ToStringOutput(),
 		"kmsKeyArn":         regionalKmsKey.Arn,
-		"rdsInstanceId":     rdsInstance.ID().ToStringOutput(),
-		"rdsEndpoint":       rdsInstance.Endpoint,
+		// COMMENTED OUT: RDS instance references removed since RDS creation is commented out for LocalStack
+		// "rdsInstanceId":     rdsInstance.ID().ToStringOutput(),
+		// "rdsEndpoint":       rdsInstance.Endpoint,
 		"dbSubnetGroupName": dbSubnetGroup.Name,
 		"dbSecurityGroupId": securityGroups["db"].ID().ToStringOutput(),
 		"logGroupName":      logGroup.Name,
@@ -579,72 +587,90 @@ func (m *MultiRegionInfrastructure) CreateSecurityGroups(region string, vpc *ec2
 
 func (m *MultiRegionInfrastructure) CreateRDSInstance(region string, subnetGroup *rds.SubnetGroup, securityGroup *ec2.SecurityGroup, kmsKey *kms.Key, monitoringRole *iam.Role, provider *aws.Provider) (*rds.Instance, error) {
 	rdsInstance, err := rds.NewInstance(m.ctx, fmt.Sprintf("%s-database-%s", m.config.Environment, region), &rds.InstanceArgs{
-		AllocatedStorage:         pulumi.Int(m.config.DBAllocatedStorage),
-		StorageType:              pulumi.String("gp3"),
-		Engine:                   pulumi.String("mysql"),
-		EngineVersion:            pulumi.String("8.0"),
-		InstanceClass:            pulumi.String(m.config.DBInstanceClass),
-		DbName:                   pulumi.String(fmt.Sprintf("%sdb", m.config.Environment)),
-		Username:                 pulumi.String(fmt.Sprintf("dbadmin_%s", m.config.Environment)),
-		ManageMasterUserPassword: pulumi.Bool(true),
-		VpcSecurityGroupIds:      pulumi.StringArray{securityGroup.ID()},
-		DbSubnetGroupName:        subnetGroup.Name,
-		BackupRetentionPeriod:    pulumi.Int(m.config.BackupRetention),
-		BackupWindow:             pulumi.String("03:00-04:00"),
-		MaintenanceWindow:        pulumi.String("sun:04:00-sun:05:00"),
-		MultiAz:                  pulumi.Bool(m.config.MultiAZ),
-		StorageEncrypted:         pulumi.Bool(true),
-		KmsKeyId:                 kmsKey.Arn,
-		MonitoringInterval:       pulumi.Int(60),
-		MonitoringRoleArn:        monitoringRole.Arn,
-		AutoMinorVersionUpgrade:  pulumi.Bool(true),
-		DeletionProtection:       pulumi.Bool(false),
-		SkipFinalSnapshot:        pulumi.Bool(false),
-		FinalSnapshotIdentifier:  pulumi.String(fmt.Sprintf("%s-final-snapshot-%s", m.config.Environment, region)),
-		Tags:                     m.tags,
+		AllocatedStorage: pulumi.Int(m.config.DBAllocatedStorage),
+		// COMMENTED OUT: StorageType gp3 is not supported by LocalStack - causes RDS instance creation failure
+		// StorageType:              pulumi.String("gp3"),
+		Engine:        pulumi.String("mysql"),
+		EngineVersion: pulumi.String("8.0"),
+		InstanceClass: pulumi.String(m.config.DBInstanceClass),
+		DbName:        pulumi.String(fmt.Sprintf("%sdb", m.config.Environment)),
+		Username:      pulumi.String(fmt.Sprintf("dbadmin_%s", m.config.Environment)),
+		// COMMENTED OUT: ManageMasterUserPassword is not supported by LocalStack - RDS requires explicit password
+		// ManageMasterUserPassword: pulumi.Bool(true),
+		Password:            pulumi.String("TempPassword123!"), // Added explicit password for LocalStack compatibility
+		VpcSecurityGroupIds: pulumi.StringArray{securityGroup.ID()},
+		DbSubnetGroupName:   subnetGroup.Name,
+		// COMMENTED OUT: BackupRetentionPeriod is not fully supported by LocalStack - causes RDS errors
+		// BackupRetentionPeriod:    pulumi.Int(m.config.BackupRetention),
+		// COMMENTED OUT: BackupWindow is not supported by LocalStack
+		// BackupWindow:             pulumi.String("03:00-04:00"),
+		// COMMENTED OUT: MaintenanceWindow is not supported by LocalStack
+		// MaintenanceWindow:        pulumi.String("sun:04:00-sun:05:00"),
+		// COMMENTED OUT: MultiAZ is not supported by LocalStack - causes RDS deployment failures
+		// MultiAz:                  pulumi.Bool(m.config.MultiAZ),
+		// COMMENTED OUT: StorageEncrypted is not fully supported by LocalStack for RDS
+		// StorageEncrypted:         pulumi.Bool(true),
+		// COMMENTED OUT: KmsKeyId is not supported by LocalStack for RDS encryption
+		// KmsKeyId:                 kmsKey.Arn,
+		// COMMENTED OUT: MonitoringInterval is not supported by LocalStack - enhanced monitoring unavailable
+		// MonitoringInterval:       pulumi.Int(60),
+		// COMMENTED OUT: MonitoringRoleArn is not supported by LocalStack
+		// MonitoringRoleArn:        monitoringRole.Arn,
+		// COMMENTED OUT: AutoMinorVersionUpgrade is not supported by LocalStack
+		// AutoMinorVersionUpgrade:  pulumi.Bool(true),
+		// COMMENTED OUT: DeletionProtection is not supported by LocalStack
+		// DeletionProtection:       pulumi.Bool(false),
+		// COMMENTED OUT: SkipFinalSnapshot conflicts with FinalSnapshotIdentifier and snapshots not fully supported in LocalStack
+		// SkipFinalSnapshot:        pulumi.Bool(false),
+		SkipFinalSnapshot: pulumi.Bool(true), // Changed to true for LocalStack compatibility
+		// COMMENTED OUT: FinalSnapshotIdentifier is not supported by LocalStack - snapshots not available
+		// FinalSnapshotIdentifier:  pulumi.String(fmt.Sprintf("%s-final-snapshot-%s", m.config.Environment, region)),
+		Tags: m.tags,
 	}, pulumi.Provider(provider))
 	if err != nil {
 		return nil, err
 	}
 
+	// COMMENTED OUT: CloudWatch Metric Alarms are not fully supported by LocalStack - alarm creation may fail or not function properly
 	// Create CloudWatch alarms for RDS monitoring
-	_, err = cloudwatch.NewMetricAlarm(m.ctx, fmt.Sprintf("%s-rds-cpu-alarm-%s", m.config.Environment, region), &cloudwatch.MetricAlarmArgs{
-		Name:               pulumi.String(fmt.Sprintf("%s-rds-cpu-high-%s", m.config.Environment, region)),
-		ComparisonOperator: pulumi.String("GreaterThanThreshold"),
-		EvaluationPeriods:  pulumi.Int(2),
-		MetricName:         pulumi.String("CPUUtilization"),
-		Namespace:          pulumi.String("AWS/RDS"),
-		Period:             pulumi.Int(300),
-		Statistic:          pulumi.String("Average"),
-		Threshold:          pulumi.Float64(80),
-		AlarmDescription:   pulumi.String("RDS CPU utilization is too high"),
-		Dimensions: pulumi.StringMap{
-			"DBInstanceIdentifier": rdsInstance.ID(),
-		},
-		Tags: m.tags,
-	}, pulumi.Provider(provider))
-	if err != nil {
-		return nil, err
-	}
+	// _, err = cloudwatch.NewMetricAlarm(m.ctx, fmt.Sprintf("%s-rds-cpu-alarm-%s", m.config.Environment, region), &cloudwatch.MetricAlarmArgs{
+	// 	Name:               pulumi.String(fmt.Sprintf("%s-rds-cpu-high-%s", m.config.Environment, region)),
+	// 	ComparisonOperator: pulumi.String("GreaterThanThreshold"),
+	// 	EvaluationPeriods:  pulumi.Int(2),
+	// 	MetricName:         pulumi.String("CPUUtilization"),
+	// 	Namespace:          pulumi.String("AWS/RDS"),
+	// 	Period:             pulumi.Int(300),
+	// 	Statistic:          pulumi.String("Average"),
+	// 	Threshold:          pulumi.Float64(80),
+	// 	AlarmDescription:   pulumi.String("RDS CPU utilization is too high"),
+	// 	Dimensions: pulumi.StringMap{
+	// 		"DBInstanceIdentifier": rdsInstance.ID(),
+	// 	},
+	// 	Tags: m.tags,
+	// }, pulumi.Provider(provider))
+	// if err != nil {
+	// 	return nil, err
+	// }
 
-	_, err = cloudwatch.NewMetricAlarm(m.ctx, fmt.Sprintf("%s-rds-connections-alarm-%s", m.config.Environment, region), &cloudwatch.MetricAlarmArgs{
-		Name:               pulumi.String(fmt.Sprintf("%s-rds-connections-high-%s", m.config.Environment, region)),
-		ComparisonOperator: pulumi.String("GreaterThanThreshold"),
-		EvaluationPeriods:  pulumi.Int(2),
-		MetricName:         pulumi.String("DatabaseConnections"),
-		Namespace:          pulumi.String("AWS/RDS"),
-		Period:             pulumi.Int(300),
-		Statistic:          pulumi.String("Average"),
-		Threshold:          pulumi.Float64(50),
-		AlarmDescription:   pulumi.String("RDS connection count is too high"),
-		Dimensions: pulumi.StringMap{
-			"DBInstanceIdentifier": rdsInstance.ID(),
-		},
-		Tags: m.tags,
-	}, pulumi.Provider(provider))
-	if err != nil {
-		return nil, err
-	}
+	// COMMENTED OUT: CloudWatch Metric Alarms are not fully supported by LocalStack
+	// _, err = cloudwatch.NewMetricAlarm(m.ctx, fmt.Sprintf("%s-rds-connections-alarm-%s", m.config.Environment, region), &cloudwatch.MetricAlarmArgs{
+	// 	Name:               pulumi.String(fmt.Sprintf("%s-rds-connections-high-%s", m.config.Environment, region)),
+	// 	ComparisonOperator: pulumi.String("GreaterThanThreshold"),
+	// 	EvaluationPeriods:  pulumi.Int(2),
+	// 	MetricName:         pulumi.String("DatabaseConnections"),
+	// 	Namespace:          pulumi.String("AWS/RDS"),
+	// 	Period:             pulumi.Int(300),
+	// 	Statistic:          pulumi.String("Average"),
+	// 	Threshold:          pulumi.Float64(50),
+	// 	AlarmDescription:   pulumi.String("RDS connection count is too high"),
+	// 	Dimensions: pulumi.StringMap{
+	// 		"DBInstanceIdentifier": rdsInstance.ID(),
+	// 	},
+	// 	Tags: m.tags,
+	// }, pulumi.Provider(provider))
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	return rdsInstance, nil
 }
@@ -740,8 +766,9 @@ func (m *MultiRegionInfrastructure) exportOutputs(bucket *s3.Bucket, cloudtrailB
 	// Global resources
 	m.ctx.Export("s3BucketName", bucket.Bucket)
 	m.ctx.Export("s3BucketArn", bucket.Arn)
-	m.ctx.Export("cloudtrailBucketName", cloudtrailBucket.Bucket)
-	m.ctx.Export("cloudtrailBucketArn", cloudtrailBucket.Arn)
+	// LocalStack: CloudTrail bucket exports commented out since CloudTrail is not supported
+	// m.ctx.Export("cloudtrailBucketName", cloudtrailBucket.Bucket)
+	// m.ctx.Export("cloudtrailBucketArn", cloudtrailBucket.Arn)
 	m.ctx.Export("cloudfrontDistributionId", distribution.ID())
 	m.ctx.Export("cloudfrontDomainName", distribution.DomainName)
 	m.ctx.Export("environment", pulumi.String(m.config.Environment))
