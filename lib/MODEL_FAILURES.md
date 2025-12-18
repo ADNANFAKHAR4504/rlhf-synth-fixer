@@ -241,8 +241,8 @@ const bucket = new s3.Bucket(this, 'DataBucket', {
 
 **PROMPT Requirements:**
 
-- S3 bucket with versioning enabled ✅
-- Configure with `blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL` ✅
+- S3 bucket with versioning enabled (Yes)
+- Configure with `blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL` (Yes)
 - Setup should deploy and tear down cleanly without errors
 
 **IDEAL_RESPONSE Solution:**
@@ -344,8 +344,8 @@ new TapStack(app, `TapStack${env}`, {
 
 **PROMPT Requirements:**
 
-- Deploy in 'us-east-1' region ✅
-- Support environment-specific deployments ✅
+- Deploy in 'us-east-1' region (Yes)
+- Support environment-specific deployments (Yes)
 
 **IDEAL_RESPONSE Solution:**
 
