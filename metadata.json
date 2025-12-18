@@ -1,0 +1,18 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291948",
+  "team": "1",
+  "startedAt": "2025-08-17T12:57:13.800Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": ["Cloud Environment Setup"],
+  "aws_services": ["VPC", "EC2", "NLB", "S3", "CloudWatch", "IAM"],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Vuttisai",
+  "dockerS3Location": ""
+}
