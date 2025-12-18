@@ -6,13 +6,8 @@
   "po_id": "291390",
   "team": "3",
   "startedAt": "2025-08-14T11:11:30.754Z",
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "veera-turing",
-  "dockerS3Location": "",
+  "subtask": "Web Application Deployment",
   "provider": "localstack",
-  "aws_services": ["EC2", "VPC", "RDS", "ELB", "AutoScaling", "SecretsManager", "IAM"],
-  "subtask": "Infrastructure Deployment"
+  "subject_labels": ["Web Application Deployment"],
+  "aws_services": ["EC2", "VPC", "RDS", "ELB", "AutoScaling", "SecretsManager", "IAM"]
 }
