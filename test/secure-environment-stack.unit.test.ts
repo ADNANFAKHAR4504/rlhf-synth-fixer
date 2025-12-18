@@ -446,10 +446,18 @@ describe('SecureEnvironmentStack', () => {
     });
 
     test('validates EC2 private subnet deployment', () => {
-      // Ensure EC2 instances are in private subnets (no direct internet access)
-      template.hasResourceProperties('AWS::EC2::Instance', {
-        SubnetId: Match.anyValue(), // The template logic ensures this is a private subnet
-      });
+      // Ensure EC2 instances exist (SubnetId OR NetworkInterfaces present)
+      // When associatePublicIpAddress is explicitly set, CDK uses NetworkInterfaces
+      const resources = template.findResources('AWS::EC2::Instance');
+      const instanceKeys = Object.keys(resources);
+      expect(instanceKeys.length).toBeGreaterThan(0);
+
+      // Verify the instance has either SubnetId or NetworkInterfaces (both are valid)
+      const instance = resources[instanceKeys[0]];
+      const hasSubnetConfig =
+        instance.Properties.SubnetId !== undefined ||
+        instance.Properties.NetworkInterfaces !== undefined;
+      expect(hasSubnetConfig).toBe(true);
 
       // Verify no EC2 instances get public IPs directly
       template.hasResourceProperties('AWS::EC2::Subnet', {
