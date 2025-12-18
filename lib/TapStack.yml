@@ -14,11 +14,12 @@ Parameters:
     Type: String
     Default: ''
     Description: Optional IAM principal ARN for role trust policy
-  CreateNatPerAZ:
-    Type: String
-    Default: 'true'
-    AllowedValues: ['true', 'false']
-    Description: Create NAT Gateway per Availability Zone
+  # LOCALSTACK INCOMPATIBILITY: Parameter commented out since NAT Gateway resources are not used
+  # CreateNatPerAZ:
+  #   Type: String
+  #   Default: 'true'
+  #   AllowedValues: ['true', 'false']
+  #   Description: Create NAT Gateway per Availability Zone
 
 Conditions:
   # LOCALSTACK INCOMPATIBILITY: NAT Gateway conditions commented out
@@ -167,7 +168,7 @@ Resources:
 
   DevEIPA:
     Type: AWS::EC2::EIP
-    Condition: CreateNatPerAZ
+    # Condition: CreateNatPerAZ
     Properties:
       Domain: vpc
       Tags:
@@ -182,7 +183,7 @@ Resources:
 
   DevNatGatewayA:
     Type: AWS::EC2::NatGateway
-    Condition: CreateNatPerAZ
+    # Condition: CreateNatPerAZ
     Properties:
       SubnetId: !Ref DevPublicSubnetA
       AllocationId: !GetAtt DevEIPA.AllocationId
@@ -198,7 +199,7 @@ Resources:
 
   DevEIPB:
     Type: AWS::EC2::EIP
-    Condition: CreateNatPerAZ
+    # Condition: CreateNatPerAZ
     Properties:
       Domain: vpc
       Tags:
@@ -213,7 +214,7 @@ Resources:
 
   DevNatGatewayB:
     Type: AWS::EC2::NatGateway
-    Condition: CreateNatPerAZ
+    # Condition: CreateNatPerAZ
     Properties:
       SubnetId: !Ref DevPublicSubnetB
       AllocationId: !GetAtt DevEIPB.AllocationId
