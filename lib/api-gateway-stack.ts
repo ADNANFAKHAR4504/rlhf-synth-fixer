@@ -16,6 +16,10 @@ export class ApiGatewayStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ApiGatewayStackProps) {
     super(scope, id, props);
 
+    // Detect LocalStack environment
+    const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+                         process.env.AWS_ENDPOINT_URL?.includes('4566');
+
     // Create REST API
     this.api = new apigateway.RestApi(this, 'UserApi', {
       restApiName: `User-API-${props.environmentSuffix}`,
@@ -24,9 +28,10 @@ export class ApiGatewayStack extends cdk.Stack {
         stageName: props.environmentSuffix,
         throttlingRateLimit: 100,
         throttlingBurstLimit: 200,
-        metricsEnabled: true,
+        // Disable metrics and tracing for LocalStack
+        metricsEnabled: !isLocalStack,
         loggingLevel: apigateway.MethodLoggingLevel.INFO,
-        dataTraceEnabled: true,
+        dataTraceEnabled: !isLocalStack,
       },
       defaultCorsPreflightOptions: {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,
