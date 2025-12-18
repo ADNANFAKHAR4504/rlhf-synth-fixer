@@ -93,7 +93,12 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('Database Resources', () => {
-    test('RDS instance should be available', async () => {
+    test('RDS instance should be available (skipped in LocalStack)', async () => {
+      if (isLocalStack) {
+        console.log('RDS is disabled in LocalStack, skipping test');
+        return;
+      }
+
       if (!outputs.DatabaseEndpoint) {
         console.log('DatabaseEndpoint not found in outputs, skipping test');
         return;

@@ -1,37 +1,55 @@
-import * as cdk from "aws-cdk-lib";
-import { Match, Template } from "aws-cdk-lib/assertions";
-import * as ec2 from "aws-cdk-lib/aws-ec2";
-import { EnvironmentConfig, TapStack } from "../lib/tap-stack";
+import * as cdk from 'aws-cdk-lib';
+import { Match, Template } from 'aws-cdk-lib/assertions';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import { EnvironmentConfig, TapStack } from '../lib/tap-stack';
 
 const testConfigs: Record<string, EnvironmentConfig> = {
   dev: {
-    vpcCidr: "10.0.0.0/16",
-    instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
-    dbInstanceClass: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.SMALL),
+    vpcCidr: '10.0.0.0/16',
+    instanceType: ec2.InstanceType.of(
+      ec2.InstanceClass.T3,
+      ec2.InstanceSize.MICRO
+    ),
+    dbInstanceClass: ec2.InstanceType.of(
+      ec2.InstanceClass.T3,
+      ec2.InstanceSize.SMALL
+    ),
     dbAllocatedStorage: 20,
     bucketVersioning: false,
   },
   staging: {
-    vpcCidr: "10.1.0.0/16",
-    instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.SMALL),
-    dbInstanceClass: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.SMALL),
+    vpcCidr: '10.1.0.0/16',
+    instanceType: ec2.InstanceType.of(
+      ec2.InstanceClass.T3,
+      ec2.InstanceSize.SMALL
+    ),
+    dbInstanceClass: ec2.InstanceType.of(
+      ec2.InstanceClass.T3,
+      ec2.InstanceSize.SMALL
+    ),
     dbAllocatedStorage: 50,
     bucketVersioning: true,
   },
   production: {
-    vpcCidr: "10.2.0.0/16",
-    instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MEDIUM),
-    dbInstanceClass: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MEDIUM),
+    vpcCidr: '10.2.0.0/16',
+    instanceType: ec2.InstanceType.of(
+      ec2.InstanceClass.T3,
+      ec2.InstanceSize.MEDIUM
+    ),
+    dbInstanceClass: ec2.InstanceType.of(
+      ec2.InstanceClass.T3,
+      ec2.InstanceSize.MEDIUM
+    ),
     dbAllocatedStorage: 100,
-    customAmiId: "ami-0abcdef1234567890",
+    customAmiId: 'ami-0abcdef1234567890',
     bucketVersioning: true,
   },
 };
 
-describe("TapStack Tests", () => {
-  const environments = ["dev", "staging", "production"];
+describe('TapStack Tests', () => {
+  const environments = ['dev', 'staging', 'production'];
 
-  environments.forEach((env) => {
+  environments.forEach(env => {
     describe(`${env} environment`, () => {
       let app: cdk.App;
       let stack: TapStack;
@@ -49,30 +67,30 @@ describe("TapStack Tests", () => {
       // -------------------------
       // VPC TESTS
       // -------------------------
-      test("creates VPC with correct CIDR", () => {
-        template.hasResourceProperties("AWS::EC2::VPC", {
+      test('creates VPC with correct CIDR', () => {
+        template.hasResourceProperties('AWS::EC2::VPC', {
           CidrBlock: testConfigs[env].vpcCidr,
           EnableDnsHostnames: true,
           EnableDnsSupport: true,
         });
       });
 
-      test("creates 3 subnet types", () => {
-        const subnets = template.findResources("AWS::EC2::Subnet");
+      test('creates 3 subnet types', () => {
+        const subnets = template.findResources('AWS::EC2::Subnet');
         expect(Object.keys(subnets).length).toBeGreaterThanOrEqual(6);
       });
 
-      test("creates NAT gateways", () => {
-        const natGateways = template.findResources("AWS::EC2::NatGateway");
+      test('creates NAT gateways', () => {
+        const natGateways = template.findResources('AWS::EC2::NatGateway');
         expect(Object.keys(natGateways).length).toBeGreaterThanOrEqual(2);
       });
 
       // -------------------------
       // SECURITY GROUPS
       // -------------------------
-      test("web security group has correct ingress rules", () => {
-        template.hasResourceProperties("AWS::EC2::SecurityGroup", {
-          GroupDescription: Match.stringLikeRegexp("web servers"),
+      test('web security group has correct ingress rules', () => {
+        template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+          GroupDescription: Match.stringLikeRegexp('web servers'),
           SecurityGroupIngress: Match.arrayWith([
             Match.objectLike({ FromPort: 80, ToPort: 80 }),
             Match.objectLike({ FromPort: 443, ToPort: 443 }),
@@ -81,8 +99,10 @@ describe("TapStack Tests", () => {
         });
       });
 
-      test("database security group allows MySQL from web SG", () => {
-        const ingress = template.findResources("AWS::EC2::SecurityGroupIngress");
+      test('database security group allows MySQL from web SG', () => {
+        const ingress = template.findResources(
+          'AWS::EC2::SecurityGroupIngress'
+        );
         const dbRule = Object.values(ingress).find(
           (r: any) => r.Properties?.FromPort === 3306
         );
@@ -92,8 +112,8 @@ describe("TapStack Tests", () => {
       // -------------------------
       // COMPUTE (Launch Template + ASG)
       // -------------------------
-      test("creates launch template with correct instance type", () => {
-        template.hasResourceProperties("AWS::EC2::LaunchTemplate", {
+      test('creates launch template with correct instance type', () => {
+        template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
           LaunchTemplateData: Match.objectLike({
             InstanceType: testConfigs[env].instanceType.toString(),
           }),
@@ -103,58 +123,79 @@ describe("TapStack Tests", () => {
       // -------------------------
       // LOAD BALANCER
       // -------------------------
-      test("creates ALB with listener", () => {
-        template.hasResourceProperties("AWS::ElasticLoadBalancingV2::LoadBalancer", {
-          Scheme: "internet-facing",
-        });
-        template.hasResourceProperties("AWS::ElasticLoadBalancingV2::Listener", {
-          Port: 80,
-        });
+      test('creates ALB with listener', () => {
+        template.hasResourceProperties(
+          'AWS::ElasticLoadBalancingV2::LoadBalancer',
+          {
+            Scheme: 'internet-facing',
+          }
+        );
+        template.hasResourceProperties(
+          'AWS::ElasticLoadBalancingV2::Listener',
+          {
+            Port: 80,
+          }
+        );
       });
 
       // -------------------------
       // DATABASE
       // -------------------------
-      test("creates RDS instance with correct config", () => {
-        template.hasResourceProperties("AWS::RDS::DBInstance", {
-          DBInstanceClass: `db.${testConfigs[env].dbInstanceClass.toString()}`,
-          AllocatedStorage: `${testConfigs[env].dbAllocatedStorage}`,
-          Engine: "mysql",
-        });
+      test('creates RDS instance with correct config (except in LocalStack)', () => {
+        // In LocalStack, RDS is disabled due to provisioning issues
+        const isLocalStackTest =
+          process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+          process.env.AWS_ENDPOINT_URL?.includes('4566');
+
+        if (!isLocalStackTest) {
+          template.hasResourceProperties('AWS::RDS::DBInstance', {
+            DBInstanceClass: `db.${testConfigs[env].dbInstanceClass.toString()}`,
+            AllocatedStorage: `${testConfigs[env].dbAllocatedStorage}`,
+            Engine: 'mysql',
+          });
+        } else {
+          // In LocalStack, RDS should NOT be present
+          const resources = template.findResources('AWS::RDS::DBInstance');
+          expect(Object.keys(resources).length).toBe(0);
+        }
       });
 
       // -------------------------
       // S3 BUCKETS
       // -------------------------
-      test("creates assets S3 bucket", () => {
-        const buckets = template.findResources("AWS::S3::Bucket");
+      test('creates assets S3 bucket', () => {
+        const buckets = template.findResources('AWS::S3::Bucket');
 
         // Find the assets bucket by matching the logical ID name
         const assetsBucket = Object.values(buckets).find((b: any) =>
-          JSON.stringify(b.Properties.BucketName).includes("assets")
+          JSON.stringify(b.Properties.BucketName).includes('assets')
         );
 
         expect(assetsBucket).toBeDefined();
-        expect(JSON.stringify(assetsBucket?.Properties.BucketName)).toContain(`tap-${env}-assets`);
+        expect(JSON.stringify(assetsBucket?.Properties.BucketName)).toContain(
+          `tap-${env}-assets`
+        );
       });
 
-      test("creates logs S3 bucket", () => {
-        const buckets = template.findResources("AWS::S3::Bucket");
+      test('creates logs S3 bucket', () => {
+        const buckets = template.findResources('AWS::S3::Bucket');
 
         // Find the logs bucket by matching the logical ID name
         const logsBucket = Object.values(buckets).find((b: any) =>
-          JSON.stringify(b.Properties.BucketName).includes("logs")
+          JSON.stringify(b.Properties.BucketName).includes('logs')
         );
 
         expect(logsBucket).toBeDefined();
-        expect(JSON.stringify(logsBucket?.Properties.BucketName)).toContain(`tap-${env}-logs`);
+        expect(JSON.stringify(logsBucket?.Properties.BucketName)).toContain(
+          `tap-${env}-logs`
+        );
       });
 
       // -------------------------
       // MONITORING
       // -------------------------
-      test("creates CloudWatch log group", () => {
-        template.hasResourceProperties("AWS::Logs::LogGroup", {
+      test('creates CloudWatch log group', () => {
+        template.hasResourceProperties('AWS::Logs::LogGroup', {
           LogGroupName: `/aws/webapp/${env}`,
         });
       });
@@ -162,17 +203,17 @@ describe("TapStack Tests", () => {
       // -------------------------
       // OUTPUTS
       // -------------------------
-      test("creates required outputs", () => {
-        const outputs = template.findOutputs("*");
+      test('creates required outputs', () => {
+        const outputs = template.findOutputs('*');
         expect(Object.keys(outputs)).toEqual(
           expect.arrayContaining([
-            "LoadBalancerDNS",
-            "DatabaseEndpoint",
-            "AssetsBucketName",
-            "LogsBucketName",
-            "VPCId",
-            "KeyPairName",
-            "LogGroupName",
+            'LoadBalancerDNS',
+            'DatabaseEndpoint',
+            'AssetsBucketName',
+            'LogsBucketName',
+            'VPCId',
+            'KeyPairName',
+            'LogGroupName',
           ])
         );
       });
@@ -180,17 +221,17 @@ describe("TapStack Tests", () => {
   });
 
   // Additional tests for LocalStack-specific code paths
-  describe("LocalStack compatibility", () => {
+  describe('LocalStack compatibility', () => {
     let app: cdk.App;
     let stack: TapStack;
     let template: Template;
 
     beforeEach(() => {
       // Simulate LocalStack environment
-      process.env.AWS_ENDPOINT_URL = "http://localhost:4566";
+      process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
       app = new cdk.App();
-      stack = new TapStack(app, "TestTapStack-localstack", {
-        environmentSuffix: "dev",
+      stack = new TapStack(app, 'TestTapStack-localstack', {
+        environmentSuffix: 'dev',
         config: testConfigs.dev,
       });
       template = Template.fromStack(stack);
@@ -200,19 +241,23 @@ describe("TapStack Tests", () => {
       delete process.env.AWS_ENDPOINT_URL;
     });
 
-    test("uses simplified bucket names for LocalStack", () => {
-      const buckets = template.findResources("AWS::S3::Bucket");
+    test('uses simplified bucket names for LocalStack', () => {
+      const buckets = template.findResources('AWS::S3::Bucket');
       const bucketNames = Object.values(buckets).map((b: any) =>
         JSON.stringify(b.Properties.BucketName)
       );
       // In LocalStack, bucket names should be simple (no account/region)
-      expect(bucketNames.some(name => name.includes("assets-dev") || name.includes("logs-dev"))).toBeTruthy();
+      expect(
+        bucketNames.some(
+          name => name.includes('assets-dev') || name.includes('logs-dev')
+        )
+      ).toBeTruthy();
     });
 
-    test("VPC does not restrict default security group in LocalStack", () => {
+    test('VPC does not restrict default security group in LocalStack', () => {
       // When isLocalStack is true, restrictDefaultSecurityGroup should be false
       // This is a synthesized property, so we verify VPC is created
-      template.hasResourceProperties("AWS::EC2::VPC", {
+      template.hasResourceProperties('AWS::EC2::VPC', {
         EnableDnsHostnames: true,
         EnableDnsSupport: true,
       });
@@ -220,97 +265,101 @@ describe("TapStack Tests", () => {
   });
 
   // Test context-based environment suffix
-  describe("Context-based configuration", () => {
-    test("uses context value for environmentSuffix if provided", () => {
+  describe('Context-based configuration', () => {
+    test('uses context value for environmentSuffix if provided', () => {
       const app = new cdk.App({
         context: {
-          environmentSuffix: "context-test",
+          environmentSuffix: 'context-test',
         },
       });
-      const stack = new TapStack(app, "TestTapStack-context", {
+      const stack = new TapStack(app, 'TestTapStack-context', {
         config: testConfigs.dev,
       });
       const template = Template.fromStack(stack);
 
       // Verify environment suffix is used in resource naming
-      template.hasResourceProperties("AWS::Logs::LogGroup", {
-        LogGroupName: "/aws/webapp/context-test",
+      template.hasResourceProperties('AWS::Logs::LogGroup', {
+        LogGroupName: '/aws/webapp/context-test',
       });
     });
 
     test("defaults to 'dev' when no environmentSuffix provided", () => {
       const app = new cdk.App();
-      const stack = new TapStack(app, "TestTapStack-default", {
+      const stack = new TapStack(app, 'TestTapStack-default', {
         config: testConfigs.dev,
       });
       const template = Template.fromStack(stack);
 
       // Should default to 'dev'
-      template.hasResourceProperties("AWS::Logs::LogGroup", {
-        LogGroupName: "/aws/webapp/dev",
+      template.hasResourceProperties('AWS::Logs::LogGroup', {
+        LogGroupName: '/aws/webapp/dev',
       });
     });
   });
 
   // Test custom AMI configuration
-  describe("Custom AMI configuration", () => {
-    test("uses custom AMI when specified", () => {
+  describe('Custom AMI configuration', () => {
+    test('uses custom AMI when specified', () => {
       const app = new cdk.App();
-      const stack = new TapStack(app, "TestTapStack-custom-ami", {
-        environmentSuffix: "production",
+      const stack = new TapStack(app, 'TestTapStack-custom-ami', {
+        environmentSuffix: 'production',
         config: testConfigs.production,
       });
       const template = Template.fromStack(stack);
 
       // Custom AMI is specified in production config
-      template.hasResourceProperties("AWS::EC2::LaunchTemplate", {
+      template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
         LaunchTemplateData: Match.objectLike({
-          ImageId: "ami-0abcdef1234567890",
+          ImageId: 'ami-0abcdef1234567890',
         }),
       });
     });
   });
 
   // Test lifecycle rules variations
-  describe("S3 Lifecycle rules", () => {
-    test("production has different lifecycle rules", () => {
+  describe('S3 Lifecycle rules', () => {
+    test('production has different lifecycle rules', () => {
       const app = new cdk.App();
-      const stack = new TapStack(app, "TestTapStack-prod-lifecycle", {
-        environmentSuffix: "Production",
+      const stack = new TapStack(app, 'TestTapStack-prod-lifecycle', {
+        environmentSuffix: 'Production',
         config: testConfigs.production,
       });
       const template = Template.fromStack(stack);
 
       // Verify buckets exist (lifecycle rules are handled by CDK)
-      const buckets = template.findResources("AWS::S3::Bucket");
+      const buckets = template.findResources('AWS::S3::Bucket');
       expect(Object.keys(buckets).length).toBeGreaterThanOrEqual(2);
     });
   });
 
   // Test deletion protection
-  describe("Deletion protection", () => {
-    test("production has deletion protection enabled", () => {
+  describe('Deletion protection (non-LocalStack only)', () => {
+    beforeEach(() => {
+      delete process.env.AWS_ENDPOINT_URL;
+    });
+
+    test('production has deletion protection enabled', () => {
       const app = new cdk.App();
-      const stack = new TapStack(app, "TestTapStack-prod-protection", {
-        environmentSuffix: "Production",
+      const stack = new TapStack(app, 'TestTapStack-prod-protection', {
+        environmentSuffix: 'Production',
         config: testConfigs.production,
       });
       const template = Template.fromStack(stack);
 
-      template.hasResourceProperties("AWS::RDS::DBInstance", {
+      template.hasResourceProperties('AWS::RDS::DBInstance', {
         DeletionProtection: true,
       });
     });
 
-    test("non-production does not have deletion protection", () => {
+    test('non-production does not have deletion protection', () => {
       const app = new cdk.App();
-      const stack = new TapStack(app, "TestTapStack-dev-no-protection", {
-        environmentSuffix: "dev",
+      const stack = new TapStack(app, 'TestTapStack-dev-no-protection', {
+        environmentSuffix: 'dev',
         config: testConfigs.dev,
       });
       const template = Template.fromStack(stack);
 
-      template.hasResourceProperties("AWS::RDS::DBInstance", {
+      template.hasResourceProperties('AWS::RDS::DBInstance', {
         DeletionProtection: false,
       });
     });

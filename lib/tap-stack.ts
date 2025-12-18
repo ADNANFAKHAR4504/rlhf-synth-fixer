@@ -209,35 +209,36 @@ export class TapStack extends cdk.Stack {
     });
 
     // RDS Database Instance
-    // Note: LocalStack RDS can be slow to provision. For faster deployments,
-    // consider using smaller allocatedStorage or skipping RDS in LocalStack environments.
-    const database = new rds.DatabaseInstance(this, 'Database', {
-      instanceIdentifier: `${environmentSuffix}-db-${environmentSuffix}`,
-      engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_0,
-      }),
-      instanceType: config.dbInstanceClass,
-      // Use minimal storage for LocalStack to speed up provisioning
-      allocatedStorage: isLocalStack ? 5 : config.dbAllocatedStorage,
-      storageType: rds.StorageType.GP2,
-      vpc,
-      subnetGroup: dbSubnetGroup,
-      securityGroups: [dbSecurityGroup],
-      databaseName: 'webappdb',
-      credentials: rds.Credentials.fromGeneratedSecret('admin', {
-        secretName: `${environmentSuffix}-db-creds-${environmentSuffix}`,
-      }),
-      // Skip backups in LocalStack for faster provisioning
-      backupRetention:
-        isLocalStack
-          ? cdk.Duration.days(0)
-          : environmentSuffix === 'Production'
+    // Note: RDS is DISABLED in LocalStack due to provisioning timeouts.
+    // LocalStack Community Edition has limited RDS support.
+    // For production AWS deployments, RDS will be created normally.
+    let database: rds.DatabaseInstance | undefined;
+
+    if (!isLocalStack) {
+      database = new rds.DatabaseInstance(this, 'Database', {
+        instanceIdentifier: `${environmentSuffix}-db-${environmentSuffix}`,
+        engine: rds.DatabaseInstanceEngine.mysql({
+          version: rds.MysqlEngineVersion.VER_8_0,
+        }),
+        instanceType: config.dbInstanceClass,
+        allocatedStorage: config.dbAllocatedStorage,
+        storageType: rds.StorageType.GP2,
+        vpc,
+        subnetGroup: dbSubnetGroup,
+        securityGroups: [dbSecurityGroup],
+        databaseName: 'webappdb',
+        credentials: rds.Credentials.fromGeneratedSecret('admin', {
+          secretName: `${environmentSuffix}-db-creds-${environmentSuffix}`,
+        }),
+        backupRetention:
+          environmentSuffix === 'Production'
             ? cdk.Duration.days(7)
             : cdk.Duration.days(1),
-      deleteAutomatedBackups: environmentSuffix !== 'Production',
-      deletionProtection: isLocalStack ? false : environmentSuffix === 'Production',
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
+        deleteAutomatedBackups: environmentSuffix !== 'Production',
+        deletionProtection: environmentSuffix === 'Production',
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      });
+    }
 
     // S3 Bucket for application assets
     const assetsBucket = new s3.Bucket(this, 'AssetsBucket', {
@@ -303,10 +304,12 @@ export class TapStack extends cdk.Stack {
       description: `Load Balancer DNS for ${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, 'DatabaseEndpoint', {
-      value: database.instanceEndpoint.hostname,
-      description: `Database endpoint for ${environmentSuffix}`,
-    });
+    if (database) {
+      new cdk.CfnOutput(this, 'DatabaseEndpoint', {
+        value: database.instanceEndpoint.hostname,
+        description: `Database endpoint for ${environmentSuffix}`,
+      });
+    }
 
     new cdk.CfnOutput(this, 'AssetsBucketName', {
       value: assetsBucket.bucketName,
