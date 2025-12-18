@@ -516,7 +516,7 @@ Resources:
           </head>
           <body>
               <div class="container">
-                  <h1>🚀 ${EnvironmentName} Web Application Infrastructure</h1>
+                  <h1> ${EnvironmentName} Web Application Infrastructure</h1>
                   <p>Welcome to the production-grade multi-tier web application!</p>
                   
                   <div class="info-grid">
@@ -708,7 +708,7 @@ Resources:
           </head>
           <body>
               <div class="container">
-                  <h1>🚀 ${EnvironmentName} Web Application Infrastructure</h1>
+                  <h1> ${EnvironmentName} Web Application Infrastructure</h1>
                   <p>Welcome to the production-grade multi-tier web application!</p>
                   
                   <div class="info-grid">
@@ -955,7 +955,7 @@ Resources:
             </head>
             <body>
                 <div class="container">
-                    <h1>🔄 Auto Scaled Instance <span class="badge">ASG</span></h1>
+                    <h1> Auto Scaled Instance <span class="badge">ASG</span></h1>
                     <p>This instance was automatically provisioned by the Auto Scaling Group.</p>
                     
                     <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0;">
