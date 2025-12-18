@@ -12,16 +12,23 @@
     "Security Configuration as Code"
   ],
   "aws_services": [
-    "IAM",
-    "S3",
     "EC2",
     "VPC",
-    "Security Groups",
+    "IAM",
     "Lambda",
-    "RDS",
-    "KMS",
     "API Gateway",
     "CloudFront",
-    "ECS (Fargate)"
-  ]
+    "S3",
+    "KMS",
+    "CloudWatch",
+    "CloudTrail",
+    "ECS"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Chandan-devs-tech",
+  "dockerS3Location": ""
 }
