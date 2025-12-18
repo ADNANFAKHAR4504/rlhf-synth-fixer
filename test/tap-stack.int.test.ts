@@ -13,12 +13,15 @@ const region = process.env.AWS_DEFAULT_REGION || 'us-east-1';
 const endpoint = process.env.AWS_ENDPOINT_URL || undefined;
 
 // LocalStack-compatible client configuration
-const isLocalStack = endpoint?.includes('localhost') || endpoint?.includes('4566');
-const clientConfig = isLocalStack ? {
-  region,
-  endpoint,
-  forcePathStyle: true,  // Required for S3 with LocalStack
-} : { region };
+const isLocalStack =
+  endpoint?.includes('localhost') || endpoint?.includes('4566');
+const clientConfig = isLocalStack
+  ? {
+      region,
+      endpoint,
+      forcePathStyle: true, // Required for S3 with LocalStack
+    }
+  : { region };
 
 const dynamodb = new DynamoDB.DynamoDBClient(clientConfig);
 const s3 = new S3.S3Client(clientConfig);

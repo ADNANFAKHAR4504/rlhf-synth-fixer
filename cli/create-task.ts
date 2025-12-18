@@ -354,18 +354,18 @@ async function main(): Promise<void> {
       ...(taskSubCategory ? { subject_labels: [taskSubCategory] } : {}),
       ...(resourcesText && resourcesText.trim().length > 0
         ? {
-          aws_services: resourcesText
-            .split(',')
-            .map(s => s.trim())
-            .filter(s => s.length > 0),
-        }
+            aws_services: resourcesText
+              .split(',')
+              .map(s => s.trim())
+              .filter(s => s.length > 0),
+          }
         : {}),
       ...(deployEnv
         ? {
-          task_config: {
-            deploy_env: deployEnv,
-          },
-        }
+            task_config: {
+              deploy_env: deployEnv,
+            },
+          }
         : {}),
     };
 
@@ -464,7 +464,11 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock"
 `;
 
-        const dockerComposePath = path.join(__dirname, '..', 'docker-compose.yml');
+        const dockerComposePath = path.join(
+          __dirname,
+          '..',
+          'docker-compose.yml'
+        );
         await fs.writeFile(dockerComposePath, dockerComposeContent, 'utf8');
         console.log('✓ Created docker-compose.yml');
 
@@ -477,7 +481,11 @@ export AWS_DEFAULT_REGION=us-east-1
 `;
 
         const localStackConfigPath = path.join(libDir, 'localstack-env.sh');
-        await fs.writeFile(localStackConfigPath, localStackConfigContent, 'utf8');
+        await fs.writeFile(
+          localStackConfigPath,
+          localStackConfigContent,
+          'utf8'
+        );
         console.log('✓ Created lib/localstack-env.sh');
 
         // Create LocalStack README in lib
@@ -529,7 +537,11 @@ docker-compose down
 `;
 
         const localStackReadmePath = path.join(libDir, 'LOCALSTACK.md');
-        await fs.writeFile(localStackReadmePath, localStackReadmeContent, 'utf8');
+        await fs.writeFile(
+          localStackReadmePath,
+          localStackReadmeContent,
+          'utf8'
+        );
         console.log('✓ Created lib/LOCALSTACK.md');
       }
 
