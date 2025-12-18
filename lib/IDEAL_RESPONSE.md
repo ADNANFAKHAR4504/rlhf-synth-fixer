@@ -654,11 +654,17 @@ import { VpcStack } from './vpc';
 import { SecurityGroupsStack } from './security-groups';
 import { KmsStack } from './kms';
 
+// Detect if running in LocalStack
+const isLocalStack = (): boolean => {
+  const endpoint = process.env.AWS_ENDPOINT_URL || '';
+  return endpoint.includes('localhost') || endpoint.includes('localstack');
+};
+
 export class RdsStack extends pulumi.ComponentResource {
   public readonly primaryDbSubnetGroup: aws.rds.SubnetGroup;
   public readonly secondaryDbSubnetGroup: aws.rds.SubnetGroup;
   public readonly primaryRdsInstance: aws.rds.Instance;
-  public readonly secondaryRdsReadReplica: aws.rds.Instance;
+  public readonly secondaryRdsReadReplica?: aws.rds.Instance;
 
   constructor(
     name: string,
@@ -754,36 +760,45 @@ export class RdsStack extends pulumi.ComponentResource {
       { provider: primaryProvider, parent: this }
     );
 
-    // Cross-region read replica
-    this.secondaryRdsReadReplica = new aws.rds.Instance(
-      `${args.environment}-secondary-mysql-read-replica`,
-      {
-        identifier: `${args.environment}-secondary-mysql-read-replica`,
-        replicateSourceDb: this.primaryRdsInstance.arn,
-        instanceClass: dbInstanceClass,
-        storageEncrypted: true,
-        kmsKeyId: args.kmsStack.secondaryKmsKey.arn,
-        vpcSecurityGroupIds: [
-          args.securityGroupsStack.secondaryDbSecurityGroup.id,
-        ],
-        dbSubnetGroupName: this.secondaryDbSubnetGroup.name,
-        skipFinalSnapshot: false,
-        finalSnapshotIdentifier: `${args.environment}-secondary-mysql-final-snapshot`,
-        deletionProtection: true, // Enable deletion protection for production
-        tags: {
-          ...commonTags,
-          Name: `${args.environment}-Secondary-MySQL-Read-Replica`,
+    // Cross-region read replica (skip in LocalStack - not fully supported)
+    /* istanbul ignore if -- @preserve LocalStack doesn't fully support cross-region RDS read replicas */
+    if (!isLocalStack()) {
+      this.secondaryRdsReadReplica = new aws.rds.Instance(
+        `${args.environment}-secondary-mysql-read-replica`,
+        {
+          identifier: `${args.environment}-secondary-mysql-read-replica`,
+          replicateSourceDb: this.primaryRdsInstance.arn,
+          instanceClass: dbInstanceClass,
+          storageEncrypted: true,
+          kmsKeyId: args.kmsStack.secondaryKmsKey.arn,
+          vpcSecurityGroupIds: [
+            args.securityGroupsStack.secondaryDbSecurityGroup.id,
+          ],
+          dbSubnetGroupName: this.secondaryDbSubnetGroup.name,
+          skipFinalSnapshot: false,
+          finalSnapshotIdentifier: `${args.environment}-secondary-mysql-final-snapshot`,
+          deletionProtection: true, // Enable deletion protection for production
+          tags: {
+            ...commonTags,
+            Name: `${args.environment}-Secondary-MySQL-Read-Replica`,
+          },
         },
-      },
-      { provider: secondaryProvider, parent: this }
-    );
+        { provider: secondaryProvider, parent: this }
+      );
+    }
 
-    this.registerOutputs({
+    const outputs: Record<string, pulumi.Output<unknown>> = {
       primaryDbEndpoint: this.primaryRdsInstance.endpoint,
       primaryDbPort: this.primaryRdsInstance.port,
-      secondaryDbEndpoint: this.secondaryRdsReadReplica.endpoint,
-      secondaryDbPort: this.secondaryRdsReadReplica.port,
-    });
+    };
+
+    /* istanbul ignore if -- @preserve secondaryRdsReadReplica only exists in non-LocalStack environments */
+    if (this.secondaryRdsReadReplica) {
+      outputs.secondaryDbEndpoint = this.secondaryRdsReadReplica.endpoint;
+      outputs.secondaryDbPort = this.secondaryRdsReadReplica.port;
+    }
+
+    this.registerOutputs(outputs);
   }
 }
 ```
@@ -1322,6 +1337,12 @@ import { getCommonTags, primaryRegion } from './config';
 import { LoadBalancerStack } from './load-balancer';
 import { VpcStack } from './vpc';
 
+// Detect if running in LocalStack
+const isLocalStack = (): boolean => {
+  const endpoint = process.env.AWS_ENDPOINT_URL || '';
+  return endpoint.includes('localhost') || endpoint.includes('localstack');
+};
+
 // Get ELB service account for current region
 const elbServiceAccount = aws.elb.getServiceAccount({
   region: primaryRegion,
@@ -1503,22 +1524,25 @@ export class LoggingStack extends pulumi.ComponentResource {
       { provider: primaryProvider, parent: this }
     );
 
-    // VPC Flow Logs for Primary VPC
-    new aws.ec2.FlowLog(
-      `${args.environment}-primary-vpc-flow-logs`,
-      {
-        iamRoleArn: flowLogsRole.arn,
-        logDestination: vpcLogGroup.arn,
-        logDestinationType: 'cloud-watch-logs',
-        vpcId: args.vpcStack.primaryVpc.id,
-        trafficType: 'ALL',
-        tags: {
-          ...commonTags,
-          Name: `${args.environment}-Primary-VPC-Flow-Logs`,
+    // VPC Flow Logs for Primary VPC (skip in LocalStack due to unsupported maxAggregationInterval)
+    /* istanbul ignore if -- @preserve LocalStack doesn't support VPC Flow Logs with maxAggregationInterval */
+    if (!isLocalStack()) {
+      new aws.ec2.FlowLog(
+        `${args.environment}-primary-vpc-flow-logs`,
+        {
+          iamRoleArn: flowLogsRole.arn,
+          logDestination: vpcLogGroup.arn,
+          logDestinationType: 'cloud-watch-logs',
+          vpcId: args.vpcStack.primaryVpc.id,
+          trafficType: 'ALL',
+          tags: {
+            ...commonTags,
+            Name: `${args.environment}-Primary-VPC-Flow-Logs`,
+          },
         },
-      },
-      { provider: primaryProvider, parent: this }
-    );
+        { provider: primaryProvider, parent: this }
+      );
+    }
 
     // S3 Bucket Policy for ALB and CloudTrail logs
     new aws.s3.BucketPolicy(
@@ -1959,8 +1983,13 @@ export class SecureStack extends pulumi.ComponentResource {
       // RDS Information
       primaryDbEndpoint: this.rdsStack.primaryRdsInstance.endpoint,
       primaryDbPort: this.rdsStack.primaryRdsInstance.port,
-      secondaryDbEndpoint: this.rdsStack.secondaryRdsReadReplica.endpoint,
-      secondaryDbPort: this.rdsStack.secondaryRdsReadReplica.port,
+      /* istanbul ignore next -- @preserve secondaryRdsReadReplica only exists in non-LocalStack environments */
+      ...(this.rdsStack.secondaryRdsReadReplica
+        ? {
+            secondaryDbEndpoint: this.rdsStack.secondaryRdsReadReplica.endpoint,
+            secondaryDbPort: this.rdsStack.secondaryRdsReadReplica.port,
+          }
+        : {}),
 
       // Load Balancer
       loadBalancerDnsName:
