@@ -51,6 +51,13 @@ Parameters:
     MaxLength: 16
     AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]*$'
 
+  DBMasterPassword:
+    Type: String
+    Default: 'TempPassword123!'
+    Description: 'Master password for Aurora MySQL cluster (for LocalStack compatibility)'
+    NoEcho: true
+    MinLength: 8
+
   OnPremisesDBEndpoint:
     Type: String
     Default: 'onprem-db.example.com'
@@ -405,22 +412,25 @@ Resources:
   AuroraDBCluster:
     Type: AWS::RDS::DBCluster
     DeletionPolicy: Delete
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - W1011  # Using parameter for LocalStack compatibility instead of dynamic reference
     Properties:
       DBClusterIdentifier: !Sub 'migration-aurora-cluster-${EnvironmentSuffix}'
       Engine: aurora-mysql
       EngineVersion: '8.0.mysql_aurora.3.04.0'
       MasterUsername: !Ref DBMasterUsername
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBMasterPasswordSecret}:SecretString:password}}'
+      MasterUserPassword: !Ref DBMasterPassword
       DatabaseName: appdb
       DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
         - !Ref DatabaseSecurityGroup
-      BackupRetentionPeriod: 7
+      BackupRetentionPeriod: 1
       PreferredBackupWindow: '03:00-04:00'
       PreferredMaintenanceWindow: 'mon:04:00-mon:05:00'
-      ServerlessV2ScalingConfiguration:
-        MinCapacity: 0.5
-        MaxCapacity: 1
+      StorageEncrypted: false
       Tags:
         - Key: Name
           Value: !Sub 'migration-aurora-cluster-${EnvironmentSuffix}'
@@ -432,7 +442,7 @@ Resources:
       DBInstanceIdentifier: !Sub 'migration-aurora-instance-${EnvironmentSuffix}'
       DBClusterIdentifier: !Ref AuroraDBCluster
       Engine: aurora-mysql
-      DBInstanceClass: db.serverless
+      DBInstanceClass: db.t3.medium
       PubliclyAccessible: false
       Tags:
         - Key: Name

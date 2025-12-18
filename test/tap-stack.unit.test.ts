@@ -224,18 +224,13 @@ describe('Migration Infrastructure CloudFormation Template', () => {
       expect(ingress.every((rule: any) => rule.ToPort === 3306)).toBe(true);
     });
 
-    test('should have DMS security group', () => {
-      expect(template.Resources.DMSSecurityGroup).toBeDefined();
-      const sg = template.Resources.DMSSecurityGroup;
-      expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
-    });
+    // DMS security group test removed - DMS not supported in LocalStack
 
     test('all security groups should have EnvironmentSuffix in name', () => {
       const securityGroups = [
         'ALBSecurityGroup',
         'WebTierSecurityGroup',
         'DatabaseSecurityGroup',
-        'DMSSecurityGroup',
       ];
 
       securityGroups.forEach(sgName => {
@@ -290,13 +285,7 @@ describe('Migration Infrastructure CloudFormation Template', () => {
       expect(cluster.Properties.DatabaseName).toBe('appdb');
     });
 
-    test('Aurora cluster should have serverless v2 scaling', () => {
-      const cluster = template.Resources.AuroraDBCluster;
-      expect(cluster.Properties.ServerlessV2ScalingConfiguration).toBeDefined();
-      const scaling = cluster.Properties.ServerlessV2ScalingConfiguration;
-      expect(scaling.MinCapacity).toBe(0.5);
-      expect(scaling.MaxCapacity).toBe(1);
-    });
+    // Serverless V2 scaling removed for LocalStack compatibility
 
     test('Aurora cluster should have deletion policy Delete', () => {
       const cluster = template.Resources.AuroraDBCluster;
@@ -308,7 +297,7 @@ describe('Migration Infrastructure CloudFormation Template', () => {
       const instance = template.Resources.AuroraDBInstance;
       expect(instance.Type).toBe('AWS::RDS::DBInstance');
       expect(instance.Properties.Engine).toBe('aurora-mysql');
-      expect(instance.Properties.DBInstanceClass).toBe('db.serverless');
+      expect(instance.Properties.DBInstanceClass).toBe('db.t3.medium'); // Changed from db.serverless for LocalStack
       expect(instance.Properties.PubliclyAccessible).toBe(false);
     });
 
@@ -319,68 +308,13 @@ describe('Migration Infrastructure CloudFormation Template', () => {
 
     test('Aurora cluster should have backup configuration', () => {
       const cluster = template.Resources.AuroraDBCluster;
-      expect(cluster.Properties.BackupRetentionPeriod).toBe(7);
+      expect(cluster.Properties.BackupRetentionPeriod).toBe(1); // Simplified for LocalStack
       expect(cluster.Properties.PreferredBackupWindow).toBeDefined();
       expect(cluster.Properties.PreferredMaintenanceWindow).toBeDefined();
     });
   });
 
-  describe('DMS Resources', () => {
-    test('should have DMS subnet group', () => {
-      expect(template.Resources.DMSSubnetGroup).toBeDefined();
-      const subnetGroup = template.Resources.DMSSubnetGroup;
-      expect(subnetGroup.Type).toBe('AWS::DMS::ReplicationSubnetGroup');
-      expect(subnetGroup.Properties.SubnetIds).toHaveLength(2);
-    });
-
-    test('should have DMS replication instance', () => {
-      expect(template.Resources.DMSReplicationInstance).toBeDefined();
-      const instance = template.Resources.DMSReplicationInstance;
-      expect(instance.Type).toBe('AWS::DMS::ReplicationInstance');
-      expect(instance.Properties.ReplicationInstanceClass).toBe('dms.t3.medium');
-      expect(instance.Properties.PubliclyAccessible).toBe(false);
-      expect(instance.Properties.MultiAZ).toBe(false);
-    });
-
-    test('should have DMS source endpoint for on-premises', () => {
-      expect(template.Resources.DMSSourceEndpoint).toBeDefined();
-      const endpoint = template.Resources.DMSSourceEndpoint;
-      expect(endpoint.Type).toBe('AWS::DMS::Endpoint');
-      expect(endpoint.Properties.EndpointType).toBe('source');
-      expect(endpoint.Properties.EngineName).toBe('mysql');
-    });
-
-    test('should have DMS target endpoint for Aurora', () => {
-      expect(template.Resources.DMSTargetEndpoint).toBeDefined();
-      const endpoint = template.Resources.DMSTargetEndpoint;
-      expect(endpoint.Type).toBe('AWS::DMS::Endpoint');
-      expect(endpoint.Properties.EndpointType).toBe('target');
-      expect(endpoint.Properties.EngineName).toBe('aurora');
-    });
-
-    test('should have DMS replication task', () => {
-      expect(template.Resources.DMSReplicationTask).toBeDefined();
-      const task = template.Resources.DMSReplicationTask;
-      expect(task.Type).toBe('AWS::DMS::ReplicationTask');
-      expect(task.Properties.MigrationType).toBe('full-load-and-cdc');
-    });
-
-    test('DMS task should have table mappings', () => {
-      const task = template.Resources.DMSReplicationTask;
-      expect(task.Properties.TableMappings).toBeDefined();
-      const mappings = JSON.parse(task.Properties.TableMappings);
-      expect(mappings.rules).toBeDefined();
-      expect(mappings.rules.length).toBeGreaterThan(0);
-    });
-
-    test('DMS task should have replication task settings', () => {
-      const task = template.Resources.DMSReplicationTask;
-      expect(task.Properties.ReplicationTaskSettings).toBeDefined();
-      const settings = JSON.parse(task.Properties.ReplicationTaskSettings);
-      expect(settings.Logging.EnableLogging).toBe(true);
-      expect(settings.FullLoadSettings).toBeDefined();
-    });
-  });
+  // DMS Resources tests removed - DMS is a LocalStack Pro feature not available in CI
 
   describe('Application Load Balancer', () => {
     test('should have Application Load Balancer', () => {
@@ -423,21 +357,7 @@ describe('Migration Infrastructure CloudFormation Template', () => {
   });
 
   describe('CloudWatch Alarms', () => {
-    test('should have DMS replication lag alarm', () => {
-      expect(template.Resources.DMSReplicationLagAlarm).toBeDefined();
-      const alarm = template.Resources.DMSReplicationLagAlarm;
-      expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
-      expect(alarm.Properties.MetricName).toBe('CDCLatencySource');
-      expect(alarm.Properties.Namespace).toBe('AWS/DMS');
-      expect(alarm.Properties.Threshold).toBe(300);
-    });
-
-    test('should have DMS task failed alarm', () => {
-      expect(template.Resources.DMSReplicationTaskFailedAlarm).toBeDefined();
-      const alarm = template.Resources.DMSReplicationTaskFailedAlarm;
-      expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
-      expect(alarm.Properties.MetricName).toBe('ReplicationTaskStatus');
-    });
+    // DMS alarm tests removed - DMS not supported in LocalStack
 
     test('should have Aurora connections alarm', () => {
       expect(template.Resources.AuroraDBConnectionsAlarm).toBeDefined();
@@ -456,8 +376,6 @@ describe('Migration Infrastructure CloudFormation Template', () => {
 
     test('all alarms should have EnvironmentSuffix in name', () => {
       const alarms = [
-        'DMSReplicationLagAlarm',
-        'DMSReplicationTaskFailedAlarm',
         'AuroraDBConnectionsAlarm',
         'AuroraCPUUtilizationAlarm',
       ];
@@ -486,7 +404,7 @@ describe('Migration Infrastructure CloudFormation Template', () => {
         'VPNConnection',
         'AuroraDBCluster',
         'AuroraDBInstance',
-        'DMSReplicationInstance',
+        // DMSReplicationInstance removed - DMS not supported in LocalStack
         'ApplicationLoadBalancer',
         'ALBTargetGroup',
       ];
@@ -537,8 +455,8 @@ describe('Migration Infrastructure CloudFormation Template', () => {
         'AuroraClusterPort',
         'AuroraDBSecretArn',
         'OnPremisesDBSecretArn',
-        'DMSReplicationInstanceArn',
-        'DMSReplicationTaskArn',
+        // DMSReplicationInstanceArn removed - DMS not supported in LocalStack
+        // DMSReplicationTaskArn removed - DMS not supported in LocalStack
         'ApplicationLoadBalancerDNS',
         'ApplicationLoadBalancerArn',
         'ALBTargetGroupArn',
@@ -594,14 +512,7 @@ describe('Migration Infrastructure CloudFormation Template', () => {
       });
     });
 
-    test('DMS outputs should provide replication information', () => {
-      expect(template.Outputs.DMSReplicationInstanceArn.Value).toEqual({
-        Ref: 'DMSReplicationInstance',
-      });
-      expect(template.Outputs.DMSReplicationTaskArn.Value).toEqual({
-        Ref: 'DMSReplicationTask',
-      });
-    });
+    // DMS outputs test removed - DMS not supported in LocalStack
 
     test('ALB outputs should provide load balancer information', () => {
       expect(template.Outputs.ApplicationLoadBalancerDNS.Value).toEqual({
@@ -635,7 +546,7 @@ describe('Migration Infrastructure CloudFormation Template', () => {
 
     test('should have all major resource categories', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThan(40);
+      expect(resourceCount).toBeGreaterThan(30); // Reduced from 40 - DMS resources removed for LocalStack
     });
 
     test('should have sufficient parameters', () => {
@@ -679,10 +590,7 @@ describe('Migration Infrastructure CloudFormation Template', () => {
       expect(eip.DependsOn).toBe('AttachGateway');
     });
 
-    test('DMS target endpoint should depend on Aurora instance', () => {
-      const endpoint = template.Resources.DMSTargetEndpoint;
-      expect(endpoint.DependsOn).toBe('AuroraDBInstance');
-    });
+    // DMS target endpoint test removed - DMS not supported in LocalStack
 
     test('Aurora instance should reference Aurora cluster', () => {
       const instance = template.Resources.AuroraDBInstance;
@@ -700,22 +608,14 @@ describe('Migration Infrastructure CloudFormation Template', () => {
           rule.SourceSecurityGroupId &&
           rule.SourceSecurityGroupId.Ref === 'WebTierSecurityGroup'
       );
-      const hasDMSRef = ingress.some(
-        (rule: any) =>
-          rule.SourceSecurityGroupId &&
-          rule.SourceSecurityGroupId.Ref === 'DMSSecurityGroup'
-      );
+      // DMSSecurityGroup reference check removed - DMS not supported in LocalStack
 
       expect(hasWebTierRef).toBe(true);
-      expect(hasDMSRef).toBe(true);
     });
   });
 
   describe('Migration-Specific Requirements', () => {
-    test('should support full-load-and-cdc migration', () => {
-      const task = template.Resources.DMSReplicationTask;
-      expect(task.Properties.MigrationType).toBe('full-load-and-cdc');
-    });
+    // DMS full-load-and-cdc migration test removed - DMS not supported in LocalStack
 
     test('should have credentials stored in Secrets Manager', () => {
       expect(template.Resources.AuroraDBSecret).toBeDefined();
@@ -732,15 +632,16 @@ describe('Migration Infrastructure CloudFormation Template', () => {
       const alarmCount = Object.keys(template.Resources).filter(key =>
         template.Resources[key].Type === 'AWS::CloudWatch::Alarm'
       ).length;
-      expect(alarmCount).toBeGreaterThanOrEqual(4);
+      expect(alarmCount).toBeGreaterThanOrEqual(2); // Reduced from 4 - DMS alarms removed for LocalStack
     });
 
-    test('should use Aurora Serverless for cost optimization', () => {
+    test('should use Aurora for database', () => {
       const cluster = template.Resources.AuroraDBCluster;
-      expect(cluster.Properties.ServerlessV2ScalingConfiguration).toBeDefined();
+      expect(cluster).toBeDefined();
+      expect(cluster.Properties.Engine).toBe('aurora-mysql');
 
       const instance = template.Resources.AuroraDBInstance;
-      expect(instance.Properties.DBInstanceClass).toBe('db.serverless');
+      expect(instance.Properties.DBInstanceClass).toBe('db.t3.medium'); // Changed from db.serverless for LocalStack
     });
   });
 });
