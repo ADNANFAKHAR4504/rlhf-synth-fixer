@@ -14,6 +14,13 @@
       "Default": "admin",
       "Description": "Master username for RDS Aurora cluster",
       "NoEcho": true
+    },
+    "DBMasterPassword": {
+      "Type": "String",
+      "Default": "TempPassword123!",
+      "Description": "Master password for RDS Aurora cluster",
+      "NoEcho": true,
+      "MinLength": 8
     }
   },
   "Resources": {
@@ -536,7 +543,7 @@
         "EngineVersion": "8.0.mysql_aurora.3.04.0",
         "DatabaseName": "paymentdb",
         "MasterUsername": "admin",
-        "MasterUserPassword": "TempPassword123!",
+        "MasterUserPassword": { "Ref": "DBMasterPassword" },
         "DBSubnetGroupName": {
           "Ref": "DBSubnetGroup"
         },
