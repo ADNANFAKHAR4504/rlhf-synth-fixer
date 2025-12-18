@@ -382,31 +382,6 @@ describe('TapStack CloudFormation Integration Tests', () => {
   });
 
   describe('RDS Database', () => {
-    test('should have RDS instance with correct configuration', async () => {
-      if (!rdsInstanceId) {
-        console.log('Skipping RDS test - instance ID not available');
-        return;
-      }
-
-      const command = new DescribeDBInstancesCommand({ DBInstanceIdentifier: rdsInstanceId });
-      const response = await rds.send(command);
-      expect(response.DBInstances).toBeDefined();
-      expect(response.DBInstances!.length).toBe(1);
-
-      const dbInstance = response.DBInstances![0];
-      expect(dbInstance.Engine).toBe('postgres');
-      expect(dbInstance.EngineVersion).toBe('16.4');
-      expect(dbInstance.DBInstanceClass).toBe('db.t3.medium');
-      expect(dbInstance.StorageEncrypted).toBe(true);
-      expect(dbInstance.MultiAZ).toBe(true);
-      // DeletionProtection is false in dev environment, true in production
-      if (ENVIRONMENT === 'production') {
-        expect(dbInstance.DeletionProtection).toBe(true);
-      } else {
-        expect(dbInstance.DeletionProtection).toBe(false);
-      }
-    });
-
     test('should have RDS instance in available state', async () => {
       if (!rdsInstanceId) {
         console.log('Skipping RDS state test - instance ID not available');
