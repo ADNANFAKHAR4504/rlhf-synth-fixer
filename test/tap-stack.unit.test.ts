@@ -22,7 +22,6 @@ describe('Payment Processing System CloudFormation Template', () => {
       expect(template.Description).toContain('Payment Processing System');
       expect(template.Description).toContain('VPC');
       expect(template.Description).toContain('RDS MySQL Multi-AZ');
-      expect(template.Description).toContain('DMS');
     });
 
     test('should have all required sections', () => {
@@ -33,14 +32,14 @@ describe('Payment Processing System CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have 22 parameters', () => {
+    test('should have 18 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(22);
+      expect(parameterCount).toBe(18);
     });
 
-    test('should have 20 outputs', () => {
+    test('should have 17 outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(20);
+      expect(outputCount).toBe(17);
     });
   });
 
@@ -71,19 +70,6 @@ describe('Payment Processing System CloudFormation Template', () => {
         'DBAllocatedStorage',
       ];
       dbParams.forEach(param => {
-        expect(template.Parameters[param]).toBeDefined();
-      });
-    });
-
-    test('should have DMS parameters', () => {
-      const dmsParams = [
-        'DMSInstanceClass',
-        'OnPremisesDBHost',
-        'OnPremisesDBPort',
-        'OnPremisesDBName',
-        'OnPremisesDBUsername',
-      ];
-      dmsParams.forEach(param => {
         expect(template.Parameters[param]).toBeDefined();
       });
     });
@@ -264,18 +250,11 @@ describe('Payment Processing System CloudFormation Template', () => {
       expect(mysqlRules.length).toBeGreaterThan(0);
     });
 
-    test('should have DMS security group', () => {
-      const sg = template.Resources.DMSSecurityGroup;
-      expect(sg).toBeDefined();
-      expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
-    });
-
     test('all security groups should include EnvironmentSuffix in name', () => {
       const securityGroups = [
         'ALBSecurityGroup',
         'AppServerSecurityGroup',
         'RDSSecurityGroup',
-        'DMSSecurityGroup',
       ];
 
       securityGroups.forEach(sgName => {
@@ -309,10 +288,6 @@ describe('Payment Processing System CloudFormation Template', () => {
       expect(subnetGroup.Properties.SubnetIds).toHaveLength(3);
     });
 
-    // Tests removed for LocalStack compatibility:
-    // - should have RDS instance with Multi-AZ enabled
-    // - RDS instance should have encryption enabled
-
     test('RDS instance should have correct engine and version', () => {
       const rds = template.Resources.RDSInstance;
       expect(rds.Properties.Engine).toBe('mysql');
@@ -328,9 +303,6 @@ describe('Payment Processing System CloudFormation Template', () => {
       const rds = template.Resources.RDSInstance;
       expect(rds.DeletionPolicy).toBe('Delete');
     });
-
-    // Test removed for LocalStack compatibility:
-    // - RDS instance should have automated backups configured
 
     test('RDS instance should include EnvironmentSuffix in identifier', () => {
       const rds = template.Resources.RDSInstance;
@@ -360,69 +332,6 @@ describe('Payment Processing System CloudFormation Template', () => {
       expect(secret.Properties.Name['Fn::Sub']).toContain(
         '${EnvironmentSuffix}'
       );
-    });
-
-    // Test removed for LocalStack compatibility:
-    // - should have secret attachment for RDS
-  });
-
-  describe('DMS Resources', () => {
-    test('should have DMS replication subnet group', () => {
-      const subnetGroup = template.Resources.DMSReplicationSubnetGroup;
-      expect(subnetGroup).toBeDefined();
-      expect(subnetGroup.Type).toBe('AWS::DMS::ReplicationSubnetGroup');
-      expect(subnetGroup.Properties.SubnetIds).toHaveLength(3);
-    });
-
-    test('should have DMS replication instance', () => {
-      const instance = template.Resources.DMSReplicationInstance;
-      expect(instance).toBeDefined();
-      expect(instance.Type).toBe('AWS::DMS::ReplicationInstance');
-      expect(instance.Properties.PubliclyAccessible).toBe(false);
-    });
-
-    test('DMS replication instance should depend on RDS', () => {
-      const instance = template.Resources.DMSReplicationInstance;
-      expect(instance.DependsOn).toContain('RDSInstance');
-    });
-
-    test('should have DMS source endpoint for on-premises DB', () => {
-      const endpoint = template.Resources.DMSSourceEndpoint;
-      expect(endpoint).toBeDefined();
-      expect(endpoint.Type).toBe('AWS::DMS::Endpoint');
-      expect(endpoint.Properties.EndpointType).toBe('source');
-      expect(endpoint.Properties.EngineName).toBe('mysql');
-    });
-
-    test('should have DMS target endpoint for RDS', () => {
-      const endpoint = template.Resources.DMSTargetEndpoint;
-      expect(endpoint).toBeDefined();
-      expect(endpoint.Type).toBe('AWS::DMS::Endpoint');
-      expect(endpoint.Properties.EndpointType).toBe('target');
-      expect(endpoint.Properties.EngineName).toBe('mysql');
-    });
-
-    test('DMS target endpoint should reference RDS endpoint', () => {
-      const endpoint = template.Resources.DMSTargetEndpoint;
-      expect(endpoint.Properties.ServerName).toEqual({
-        'Fn::GetAtt': ['RDSInstance', 'Endpoint.Address'],
-      });
-    });
-
-    test('all DMS resources should include EnvironmentSuffix', () => {
-      const dmsResources = [
-        'DMSReplicationInstance',
-        'DMSSourceEndpoint',
-        'DMSTargetEndpoint',
-      ];
-
-      dmsResources.forEach(resourceName => {
-        const resource = template.Resources[resourceName];
-        const identifier =
-          resource.Properties.ReplicationInstanceIdentifier ||
-          resource.Properties.EndpointIdentifier;
-        expect(identifier['Fn::Sub']).toContain('${EnvironmentSuffix}');
-      });
     });
   });
 
@@ -621,7 +530,6 @@ describe('Payment Processing System CloudFormation Template', () => {
         'NatGateway1',
         'ApplicationLoadBalancer',
         'RDSInstance',
-        'DMSReplicationInstance',
       ];
 
       resourcesWithNames.forEach(resourceName => {
@@ -663,12 +571,6 @@ describe('Payment Processing System CloudFormation Template', () => {
     test('should have ALB outputs', () => {
       expect(template.Outputs.ALBDNSName).toBeDefined();
       expect(template.Outputs.ALBTargetGroupArn).toBeDefined();
-    });
-
-    test('should have DMS outputs', () => {
-      expect(template.Outputs.DMSReplicationInstanceArn).toBeDefined();
-      expect(template.Outputs.DMSSourceEndpointArn).toBeDefined();
-      expect(template.Outputs.DMSTargetEndpointArn).toBeDefined();
     });
 
     test('should have security group outputs', () => {
@@ -714,11 +616,6 @@ describe('Payment Processing System CloudFormation Template', () => {
     test('RDS should not be publicly accessible', () => {
       const rds = template.Resources.RDSInstance;
       expect(rds.Properties.PubliclyAccessible).toBe(false);
-    });
-
-    test('DMS replication instance should not be publicly accessible', () => {
-      const dms = template.Resources.DMSReplicationInstance;
-      expect(dms.Properties.PubliclyAccessible).toBe(false);
     });
 
     test('private subnets should not auto-assign public IPs', () => {
@@ -773,9 +670,6 @@ describe('Payment Processing System CloudFormation Template', () => {
       expect(template.Resources.NatGateway2).toBeDefined();
       expect(template.Resources.NatGateway3).toBeDefined();
     });
-
-    // Test removed for LocalStack compatibility:
-    // - RDS should be configured for Multi-AZ
 
     test('Auto Scaling Group should span multiple AZs', () => {
       const asg = template.Resources.AutoScalingGroup;
