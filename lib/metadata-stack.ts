@@ -17,12 +17,6 @@ interface MetadataProcessingStackProps extends cdk.StackProps {
 }
 
 export class MetadataProcessingStack extends cdk.Stack {
-  public readonly metadataBucketName: string;
-  public readonly openSearchDomainName: string;
-  public readonly openSearchDomainEndpoint: string;
-  public readonly failureTableName: string;
-  public readonly workflowArn: string;
-
   constructor(
     scope: Construct,
     id: string,
@@ -47,6 +41,7 @@ export class MetadataProcessingStack extends cdk.Stack {
       this,
       'MetadataProcessingFailures',
       {
+        tableName: cdk.PhysicalName.GENERATE_IF_NEEDED,
         partitionKey: {
           name: 'executionId',
           type: dynamodb.AttributeType.STRING,
@@ -298,36 +293,29 @@ export class MetadataProcessingStack extends cdk.Stack {
         cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
     });
 
-    // Assign public properties
-    this.metadataBucketName = metadataBucket.bucketName;
-    this.openSearchDomainName = openSearchDomain.domainName;
-    this.openSearchDomainEndpoint = `https://${openSearchDomain.domainEndpoint}`;
-    this.failureTableName = failureTable.tableName;
-    this.workflowArn = metadataProcessingWorkflow.stateMachineArn;
-
     // Outputs
     new cdk.CfnOutput(this, 'MetadataBucketName', {
-      value: this.metadataBucketName,
+      value: metadataBucket.bucketName,
       description: 'S3 bucket for metadata.json files',
     });
 
     new cdk.CfnOutput(this, 'OpenSearchDomainName', {
-      value: this.openSearchDomainName,
+      value: openSearchDomain.domainName,
       description: 'OpenSearch domain name',
     });
 
     new cdk.CfnOutput(this, 'OpenSearchDomainEndpoint', {
-      value: this.openSearchDomainEndpoint,
+      value: `https://${openSearchDomain.domainEndpoint}`,
       description: 'OpenSearch domain endpoint',
     });
 
     new cdk.CfnOutput(this, 'FailureTableName', {
-      value: this.failureTableName,
+      value: failureTable.tableName,
       description: 'DynamoDB table for failure tracking',
     });
 
     new cdk.CfnOutput(this, 'MetadataProcessingWorkflowArn', {
-      value: this.workflowArn,
+      value: metadataProcessingWorkflow.stateMachineArn,
       description: 'Step Functions state machine ARN',
     });
   }

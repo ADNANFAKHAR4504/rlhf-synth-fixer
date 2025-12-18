@@ -29,30 +29,34 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Export outputs from nested stack to parent stack
-    new cdk.CfnOutput(this, 'MetadataBucketName', {
-      value: metadataStack.metadataBucketName,
-      description: 'S3 bucket for metadata.json files',
-    });
+    // Reference the nested stack outputs using GetAtt
+    const nestedStackOutputs = metadataStack.nestedStackResource;
 
-    new cdk.CfnOutput(this, 'OpenSearchDomainName', {
-      value: metadataStack.openSearchDomainName,
-      description: 'OpenSearch domain name',
-    });
+    if (nestedStackOutputs) {
+      new cdk.CfnOutput(this, 'MetadataBucketName', {
+        value: nestedStackOutputs.getAtt('Outputs.MetadataBucketName').toString(),
+        description: 'S3 bucket for metadata.json files',
+      });
 
-    new cdk.CfnOutput(this, 'OpenSearchDomainEndpoint', {
-      value: metadataStack.openSearchDomainEndpoint,
-      description: 'OpenSearch domain endpoint',
-    });
+      new cdk.CfnOutput(this, 'OpenSearchDomainName', {
+        value: nestedStackOutputs.getAtt('Outputs.OpenSearchDomainName').toString(),
+        description: 'OpenSearch domain name',
+      });
 
-    new cdk.CfnOutput(this, 'FailureTableName', {
-      value: metadataStack.failureTableName,
-      description: 'DynamoDB table for failure tracking',
-    });
+      new cdk.CfnOutput(this, 'OpenSearchDomainEndpoint', {
+        value: nestedStackOutputs.getAtt('Outputs.OpenSearchDomainEndpoint').toString(),
+        description: 'OpenSearch domain endpoint',
+      });
 
-    new cdk.CfnOutput(this, 'MetadataProcessingWorkflowArn', {
-      value: metadataStack.workflowArn,
-      description: 'Step Functions state machine ARN',
-    });
+      new cdk.CfnOutput(this, 'FailureTableName', {
+        value: nestedStackOutputs.getAtt('Outputs.FailureTableName').toString(),
+        description: 'DynamoDB table for failure tracking',
+      });
+
+      new cdk.CfnOutput(this, 'MetadataProcessingWorkflowArn', {
+        value: nestedStackOutputs.getAtt('Outputs.MetadataProcessingWorkflowArn').toString(),
+        description: 'Step Functions state machine ARN',
+      });
+    }
   }
 }
