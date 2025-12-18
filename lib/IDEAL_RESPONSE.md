@@ -6,6 +6,9 @@
 
 ```typescript
 // lib/tap-stack.ts
+import * as cdk from 'aws-cdk-lib';
+import { Construct } from 'constructs';
+
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
@@ -14,6 +17,7 @@ export class TapStack extends cdk.Stack {
 }
 
 // bin/tap.ts
+import * as cdk from 'aws-cdk-lib';
 import { TapStack } from '../lib/tap-stack';
 new TapStack(app, stackName, props);
 ```
@@ -21,6 +25,11 @@ new TapStack(app, stackName, props);
 ### 2. **Proper CDK v2 API Usage**
 
 ```typescript
+import * as cdk from 'aws-cdk-lib';
+import * as ecs from 'aws-cdk-lib/aws-ecs';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns';
+
 // Correct ECS Cluster configuration
 const cluster = new ecs.Cluster(this, 'MigrationCluster', {
   vpc,
@@ -44,6 +53,8 @@ const fargateService = new ecsPatterns.ApplicationLoadBalancedFargateService(
 ### 3. **Valid RDS Credentials Configuration**
 
 ```typescript
+import * as rds from 'aws-cdk-lib/aws-rds';
+
 // Correct credentials without unsupported properties
 credentials: rds.Credentials.fromGeneratedSecret('migrationadmin', {
   encryptionKey: encryptionKey, // Only supported properties
@@ -53,6 +64,8 @@ credentials: rds.Credentials.fromGeneratedSecret('migrationadmin', {
 ### 4. **Resource Creation Instead of Import**
 
 ```typescript
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+
 // Create new VPC instead of importing existing
 const vpc = new ec2.Vpc(this, 'MigrationVpc', {
   vpcName: `${projectName}-${environment}-vpc`,
@@ -83,6 +96,8 @@ const privateSubnets = vpc.privateSubnets;
 ### 5. **Simplified Interface Design**
 
 ```typescript
+import * as cdk from 'aws-cdk-lib';
+
 // Clean, simple interface without unnecessary dependencies
 interface TapStackProps extends cdk.StackProps {
   environment: string;
@@ -93,6 +108,8 @@ interface TapStackProps extends cdk.StackProps {
 ### 6. **Proper Regional Parameterization**
 
 ```typescript
+import * as cdk from 'aws-cdk-lib';
+
 // bin/tap.ts - Simple and effective regional configuration
 const region =
   app.node.tryGetContext('region') ||
@@ -121,6 +138,8 @@ bucketName: `${projectName}-${environment}-data-${this.account}-${this.region}`,
 ### 8. **Custom IAM Policies Instead of Managed Policies**
 
 ```typescript
+import * as iam from 'aws-cdk-lib/aws-iam';
+
 // Create custom backup role with inline policies instead of managed policies
 const backupRole = new iam.Role(this, 'BackupRole', {
   assumedBy: new iam.ServicePrincipal('backup.amazonaws.com'),
@@ -154,6 +173,8 @@ backupRole.addToPolicy(
 ### 9. **Regional RDS Engine Version Verification**
 
 ```typescript
+import * as rds from 'aws-cdk-lib/aws-rds';
+
 // Use regionally available PostgreSQL version
 const database = new rds.DatabaseInstance(this, 'MigrationDatabase', {
   engine: rds.DatabaseInstanceEngine.postgres({
@@ -166,6 +187,9 @@ const database = new rds.DatabaseInstance(this, 'MigrationDatabase', {
 ### 10. **Simplified CloudWatch Log Group Configuration**
 
 ```typescript
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as cdk from 'aws-cdk-lib';
+
 // Remove KMS encryption from CloudWatch Log Group to avoid permission issues
 const logGroup = new logs.LogGroup(this, 'ApplicationLogGroup', {
   logGroupName: `/aws/ecs/${projectName}-${environment}`,
@@ -178,6 +202,8 @@ const logGroup = new logs.LogGroup(this, 'ApplicationLogGroup', {
 ### 11. **Default Backup Vault Access Policy**
 
 ```typescript
+import * as backup from 'aws-cdk-lib/aws-backup';
+
 // Use default access policy instead of explicit one
 const backupVault = new backup.BackupVault(this, 'MigrationBackupVault', {
   backupVaultName: `${projectName}-${environment}-backup-vault`,
