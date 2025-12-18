@@ -1,6 +1,7 @@
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
+  roots: ['<rootDir>/test'],
   testMatch: ['**/*.test.ts'],
   collectCoverage: false,
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
@@ -15,5 +16,18 @@ module.exports = {
         resolveJsonModule: true
       }
     }]
-  }
+  },
+  collectCoverageFrom: [
+    '<rootDir>/lib/**/*.ts',
+    '!<rootDir>/lib/**/*.d.ts',
+    '!<rootDir>/lib/**/*.test.ts'
+  ],
+  modulePathIgnorePatterns: [
+    '<rootDir>/archive/',
+    '<rootDir>/templates/',
+    '<rootDir>/cli/',
+    '<rootDir>/scripts/',
+    '<rootDir>/node_modules/',
+    '<rootDir>/cdk.out/'
+  ]
 };
