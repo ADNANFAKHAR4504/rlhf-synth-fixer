@@ -17,7 +17,7 @@ export class TapStack extends cdk.Stack {
       'dev';
 
     // Create the serverless stack
-    const serverlessStack = new ServerlessStack(this, 'ServerlessStack', {
+    new ServerlessStack(this, 'ServerlessStack', {
       environmentSuffix: environmentSuffix,
       env: props?.env,
     });
