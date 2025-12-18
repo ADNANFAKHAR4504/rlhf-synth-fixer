@@ -64,9 +64,11 @@ if (!config) {
 }
 
 // Instantiate the TapStack with environment-specific configuration
-new TapStack(app, `TapStack-${config.environmentName}`, {
+// Stack name format: TapStack${ENVIRONMENT_SUFFIX} (e.g., TapStackdev, TapStackpr8363)
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || config.environmentName;
+new TapStack(app, `TapStack${environmentSuffix}`, {
   environmentConfig: config,
-  environmentSuffix: config.environmentName,
+  environmentSuffix: environmentSuffix,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT || process.env.AWS_ACCOUNT_ID,
     region: config.awsRegion,
