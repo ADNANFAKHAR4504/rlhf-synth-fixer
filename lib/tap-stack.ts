@@ -100,8 +100,9 @@ export class TapStack extends cdk.Stack {
 
     // VPC Configuration - Simplified for LocalStack
     // LocalStack has limited VPC endpoint support, so we simplify the VPC config
-    const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                        process.env.AWS_ENDPOINT_URL?.includes('4566');
+    const isLocalStack =
+      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+      process.env.AWS_ENDPOINT_URL?.includes('4566');
 
     const vpc = new ec2.Vpc(this, 'ServerlessVpc', {
       vpcName: `serverless-vpc-${environmentSuffix}`,
