@@ -139,4 +139,23 @@ describe('TapStack', () => {
     const outputs = customTemplate.toJSON().Outputs;
     expect(outputs.EnvironmentSuffix.Value).toBe('prod');
   });
+
+  test('NAT Gateway handling in non-LocalStack environment', () => {
+    // Ensure we're in non-LocalStack mode
+    delete process.env.AWS_ENDPOINT_URL;
+
+    const nonLocalApp = new cdk.App();
+    const nonLocalStack = new TapStack(nonLocalApp, 'NonLocalStack', {
+      env: { account: '123456789012', region: 'us-east-1' },
+    });
+    const nonLocalTemplate = Template.fromStack(nonLocalStack);
+
+    // Verify NAT Gateway is created in non-LocalStack
+    nonLocalTemplate.resourceCountIs('AWS::EC2::NatGateway', 1);
+
+    // Verify NAT Gateway output exists
+    const outputs = nonLocalTemplate.toJSON().Outputs;
+    expect(outputs.NatGatewayIds).toBeDefined();
+    expect(outputs.NatGatewayIds.Description).toContain('NAT Gateway');
+  });
 });
