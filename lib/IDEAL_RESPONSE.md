@@ -50,7 +50,7 @@ export class TapStack extends pulumi.ComponentResource {
       ManagedBy: 'Pulumi',
     };
 
-    console.log(' Creating Identity and Access Infrastructure...');
+    console.log('Creating Identity and Access Infrastructure...');
 
     // Create shared identity infrastructure
     this.identity = new IdentityInfrastructure(
@@ -66,7 +66,7 @@ export class TapStack extends pulumi.ComponentResource {
       const isPrimary = region === this.regions[0]; // First region is primary
 
       console.log(
-        ` Setting up AWS provider for region: ${region} ${isPrimary ? '(PRIMARY)' : ''}`
+        `Setting up AWS provider for region: ${region} ${isPrimary ? '(PRIMARY)' : ''}`
       );
 
       // Create regional AWS provider with explicit typing
@@ -78,7 +78,7 @@ export class TapStack extends pulumi.ComponentResource {
         { parent: this }
       );
 
-      console.log(` Creating Networking Infrastructure for ${region}...`);
+      console.log(`Creating Networking Infrastructure for ${region}...`);
 
       // Create regional networking
       this.regionalNetworks[region] = new NetworkingInfrastructure(
@@ -92,7 +92,7 @@ export class TapStack extends pulumi.ComponentResource {
         { parent: this, provider: this.providers[region] }
       );
 
-      console.log(` Creating Monitoring Infrastructure for ${region}...`);
+      console.log(`Creating Monitoring Infrastructure for ${region}...`);
 
       // Create regional monitoring
       this.regionalMonitoring[region] = new MonitoringInfrastructure(
@@ -106,7 +106,7 @@ export class TapStack extends pulumi.ComponentResource {
       );
 
       console.log(
-        ` Creating Elastic Beanstalk Infrastructure for ${region}...`
+        `Creating Elastic Beanstalk Infrastructure for ${region}...`
       );
 
       // Create regional Elastic Beanstalk
@@ -140,7 +140,7 @@ export class TapStack extends pulumi.ComponentResource {
     });
 
     console.log(
-      ` TapStack deployment complete for regions: ${this.regions.join(', ')}`
+      `TapStack deployment complete for regions: ${this.regions.join(', ')}`
     );
   }
 }
@@ -255,7 +255,7 @@ export class ElasticBeanstalkInfrastructure extends ComponentResource {
 
     const solutionStackName = this.getSolutionStackName();
     console.log(
-      `🐳 Using Elastic Beanstalk solution stack: ${solutionStackName}`
+      `Using Elastic Beanstalk solution stack: ${solutionStackName}`
     );
 
     return new aws.elasticbeanstalk.ConfigurationTemplate(
@@ -366,7 +366,7 @@ export class ElasticBeanstalkInfrastructure extends ComponentResource {
     // Use deterministic naming based on environment suffix (no random components)
     const envName = `nova-env-${this.regionSuffix}-${this.environmentSuffix}`;
 
-    console.log(`🚀 Creating Elastic Beanstalk environment: ${envName}`);
+    console.log(`Creating Elastic Beanstalk environment: ${envName}`);
 
     return new aws.elasticbeanstalk.Environment(
       `nova-env-${this.regionSuffix}`,
@@ -1047,12 +1047,12 @@ export class NetworkingInfrastructure extends ComponentResource {
 
     const availableAzs = regionAzMap[this.region];
     if (availableAzs) {
-      console.log(`📍 Using known AZs for ${this.region}:`, availableAzs);
+      console.log(`Using known AZs for ${this.region}:`, availableAzs);
       return availableAzs;
     }
 
     // Fallback for unknown regions
-    console.log(`⚠️  Unknown region ${this.region}, using fallback AZs`);
+    console.log(`Unknown region ${this.region}, using fallback AZs`);
     return [`${this.region}a`, `${this.region}c`];
   }
 
@@ -1067,7 +1067,7 @@ export class NetworkingInfrastructure extends ComponentResource {
     const privateBase = 120;
 
     console.log(
-      `🏗️  Creating subnets in ${numAzsToUse} AZs for ${this.region}`
+      `Creating subnets in ${numAzsToUse} AZs for ${this.region}`
     );
 
     for (let i = 0; i < numAzsToUse; i++) {
@@ -1075,7 +1075,7 @@ export class NetworkingInfrastructure extends ComponentResource {
       const publicCidr = `10.${base}.${publicBase + i}.0/24`;
       const privateCidr = `10.${base}.${privateBase + i}.0/24`;
 
-      console.log(`   📍 Creating subnets in AZ: ${azName}`);
+      console.log(`Creating subnets in AZ: ${azName}`);
 
       const publicSubnet = new aws.ec2.Subnet(
         `public-subnet-${i}-${this.regionSuffix}`,
@@ -1115,7 +1115,7 @@ export class NetworkingInfrastructure extends ComponentResource {
     }
 
     console.log(
-      ` Created ${this.publicSubnets.length} public and ${this.privateSubnets.length} private subnets`
+      `Created ${this.publicSubnets.length} public and ${this.privateSubnets.length} private subnets`
     );
   }
 
@@ -1137,7 +1137,7 @@ export class NetworkingInfrastructure extends ComponentResource {
    * Create NAT Gateways for private subnet internet access
    */
   private createNatGateways(): void {
-    console.log(`🔌 Creating ${this.publicSubnets.length} NAT Gateways...`);
+    console.log(`Creating ${this.publicSubnets.length} NAT Gateways...`);
 
     // Create one NAT Gateway per public subnet
     for (let i = 0; i < this.publicSubnets.length; i++) {
@@ -1175,14 +1175,14 @@ export class NetworkingInfrastructure extends ComponentResource {
       this.natGateways.push(natGw);
     }
 
-    console.log(` Created ${this.natGateways.length} NAT Gateways`);
+    console.log(`Created ${this.natGateways.length} NAT Gateways`);
   }
 
   /**
    * Create and configure route tables
    */
   private createRouteTablesAndAssociations(): aws.ec2.RouteTable {
-    console.log('🛣️  Creating route tables and associations...');
+    console.log('Creating route tables and associations...');
 
     const publicRt = new aws.ec2.RouteTable(
       `public-rt-${this.regionSuffix}`,
@@ -1251,7 +1251,7 @@ export class NetworkingInfrastructure extends ComponentResource {
     }
 
     console.log(
-      ` Created public route table and ${this.privateRts.length} private route tables`
+      `Created public route table and ${this.privateRts.length} private route tables`
     );
     return publicRt;
   }
