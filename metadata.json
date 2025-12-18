@@ -6,11 +6,11 @@
   "po_id": "test-migration",
   "team": "synth",
   "startedAt": "2025-07-24T21:22:25.352Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
     "Cloud Environment Setup",
-    "Multi-Environment Consistency"
+    "Multi-Environment Consistency and Replication"
   ],
   "aws_services": [
     "VPC",
