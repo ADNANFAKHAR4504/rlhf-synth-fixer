@@ -62,31 +62,20 @@ export class ResourcesStack extends cdk.Stack {
 
     this.bucket.grantReadWrite(this.instanceRole);
 
-    // Use default VPC
-    // LocalStack: VPC lookup doesn't work, so we create a VPC instead
-    const isLocalStack =
-      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-      process.env.AWS_ENDPOINT_URL?.includes('4566');
-
-    if (isLocalStack) {
-      // For LocalStack, create a simple VPC
-      this.vpc = new Vpc(this, `${environmentSuffix}-TapStackVpc`, {
-        maxAzs: 2,
-        natGateways: 0,
-        subnetConfiguration: [
-          {
-            name: 'Public',
-            subnetType: SubnetType.PUBLIC,
-            cidrMask: 24,
-          },
-        ],
-      });
-    } else {
-      // For AWS, use default VPC lookup
-      this.vpc = Vpc.fromLookup(this, 'DefaultVpc', {
-        isDefault: true,
-      });
-    }
+    // Create a VPC (instead of using default VPC lookup)
+    // VPC lookup requires AWS credentials during synth which causes CI/CD issues
+    // Creating a simple VPC is more reliable for both LocalStack and AWS
+    this.vpc = new Vpc(this, `${environmentSuffix}-TapStackVpc`, {
+      maxAzs: 2,
+      natGateways: 0,
+      subnetConfiguration: [
+        {
+          name: 'Public',
+          subnetType: SubnetType.PUBLIC,
+          cidrMask: 24,
+        },
+      ],
+    });
 
     // Security Group
     this.securityGroup = new SecurityGroup(

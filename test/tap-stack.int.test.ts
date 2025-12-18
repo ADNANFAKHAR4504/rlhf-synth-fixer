@@ -234,7 +234,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
       expect(instance?.Platform).toBeUndefined(); // Linux instances don't have platform field
     });
 
-    test('EC2 instance is in default VPC', async () => {
+    test('EC2 instance is in a VPC', async () => {
       const instanceCommand = new DescribeInstancesCommand({
         InstanceIds: [outputs.EC2InstanceId],
       });
@@ -245,7 +245,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
       expect(vpcId).toBeDefined();
 
-      // Verify it's the default VPC
+      // Verify the VPC exists and is the one from our stack
       const vpcCommand = new DescribeVpcsCommand({
         VpcIds: [vpcId!],
       });
@@ -253,7 +253,8 @@ describe('TapStack Infrastructure Integration Tests', () => {
       const vpcResponse = await ec2Client.send(vpcCommand);
       const vpc = vpcResponse.Vpcs?.[0];
 
-      expect(vpc?.IsDefault).toBe(true);
+      expect(vpc).toBeDefined();
+      expect(vpc?.VpcId).toBe(outputs.VpcId);
     });
 
     test('EC2 instance has proper tags', async () => {
