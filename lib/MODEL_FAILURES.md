@@ -322,7 +322,7 @@ The naming pattern `production-vpc-{environmentSuffix}` correctly combines:
 
 **Deployment Error**:
 ```
-❌ PULUMI_BACKEND_URL environment variable is required for Pulumi projects
+PULUMI_BACKEND_URL environment variable is required for Pulumi projects
 ```
 
 **IDEAL_RESPONSE**: This is not a code issue but an environment configuration requirement:
