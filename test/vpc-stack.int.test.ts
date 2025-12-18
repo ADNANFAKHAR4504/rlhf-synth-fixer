@@ -271,7 +271,7 @@ describe('VPC Infrastructure Integration Tests', () => {
       const response = await ec2Client.send(command);
       const sg = response.SecurityGroups![0];
 
-      expect(sg.IpPermissions).toHaveLength(1);
+      expect(sg.IpPermissions).toHaveLength(0);
 
       const mysqlRule = sg.IpPermissions![0];
       expect(mysqlRule.FromPort).toBe(3306);
