@@ -26,7 +26,7 @@ export class TapStack extends cdk.Stack {
         environmentSuffix,
         env: {
           account: this.account,
-          region: 'us-east-1',
+          region: this.region,
         },
       }
     );
@@ -40,7 +40,7 @@ export class TapStack extends cdk.Stack {
         usersTable: dynamoDbStack.usersTable,
         env: {
           account: this.account,
-          region: 'us-east-1',
+          region: this.region,
         },
       }
     );
@@ -59,7 +59,7 @@ export class TapStack extends cdk.Stack {
         deleteUserFunction: lambdaStack.deleteUserFunction,
         env: {
           account: this.account,
-          region: 'us-east-1',
+          region: this.region,
         },
       }
     );
