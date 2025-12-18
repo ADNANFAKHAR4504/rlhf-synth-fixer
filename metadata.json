@@ -1,0 +1,25 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "289",
+  "team": "synth",
+  "startedAt": "2025-08-05T21:27:59-05:00",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)",
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "StepFunctions",
+    "EventBridge",
+    "CloudWatch",
+    "SNS",
+    "SQS",
+    "IAM"
+  ]
+}
