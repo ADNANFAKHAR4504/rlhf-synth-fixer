@@ -6,7 +6,7 @@ This document outlines the complete CloudFormation template that implements a pr
 
 The `lib/TapStack.yml` CloudFormation template deploys a comprehensive security infrastructure stack that includes:
 
-### 🔐 **Security Features**
+### Security Features
 
 1. **Encryption at Rest and Transit**
    - AWS KMS Customer Managed Key (CMK) for all encryption needs
@@ -185,46 +185,46 @@ Outputs:
 
 ## Security Compliance
 
-### ✅ PROMPT.md Requirements Met
+### PROMPT.md Requirements Met
 
-1. **IAM (Identity & Access Management)** - ✅
+1. **IAM (Identity & Access Management)**
    - Least-privilege IAM roles with specific service permissions
    - Trust policies for EC2 service
    - Restricted S3 and CloudWatch access
 
-2. **Encryption (AWS KMS)** - ✅  
+2. **Encryption (AWS KMS)**
    - Customer managed KMS key for all encryption needs
    - S3 buckets encrypted at rest and in transit
    - EC2 EBS volumes encrypted
    - CloudWatch logs encrypted
    - SNS topic encrypted
 
-3. **Networking & Security Groups** - ✅
+3. **Networking & Security Groups**
    - VPC with public/private subnets
    - NAT gateway for outbound traffic
    - SSH restricted to specific CIDR
    - Minimal security group rules
 
-4. **Compute (EC2 Instance)** - ✅
+4. **Compute (EC2 Instance)**
    - EC2 in private subnet
    - Specific AMI and instance type
    - IAM role with S3 access
    - Encrypted EBS volumes
 
-5. **Storage (S3 Buckets)** - ✅
+5. **Storage (S3 Buckets)**
    - Public access completely blocked
    - KMS encryption enforced
    - HTTPS-only access policy
    - Versioning enabled
    - Access logging
 
-6. **Monitoring & Logging** - ✅
+6. **Monitoring & Logging**
    - CloudWatch alarms for CPU and network
    - Centralized encrypted log group
    - SNS notifications
    - CloudWatch agent on EC2
 
-### 🔒 **Security Best Practices**
+### Security Best Practices
 
 - **Defense in Depth**: Multiple layers of security controls
 - **Zero Trust Network**: No implicit trust, verify everything
