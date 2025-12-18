@@ -53,8 +53,9 @@ export class ElasticBeanstalkInfrastructure extends ComponentResource {
     this.tags = args.tags;
     this.regionSuffix = args.region.replace(/-/g, '').replace(/gov/g, '');
     // Detect LocalStack environment to skip unsupported features like ListTagsForResource
-    this.isLocalStack = !!process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                        !!process.env.AWS_ENDPOINT_URL?.includes('localstack');
+    this.isLocalStack =
+      !!process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+      !!process.env.AWS_ENDPOINT_URL?.includes('localstack');
 
     this.application = this.createApplication();
     this.configTemplate = this.createConfigurationTemplate(args);
@@ -105,7 +106,9 @@ export class ElasticBeanstalkInfrastructure extends ComponentResource {
       .all(args.publicSubnetIds)
       .apply(subnets => {
         if (!subnets || subnets.length === 0) {
-          console.warn(`Warning: No public subnets available for ${this.region}`);
+          console.warn(
+            `Warning: No public subnets available for ${this.region}`
+          );
           return '';
         }
         return subnets.join(',');
@@ -114,16 +117,16 @@ export class ElasticBeanstalkInfrastructure extends ComponentResource {
       .all(args.privateSubnetIds)
       .apply(subnets => {
         if (!subnets || subnets.length === 0) {
-          console.warn(`Warning: No private subnets available for ${this.region}`);
+          console.warn(
+            `Warning: No private subnets available for ${this.region}`
+          );
           return '';
         }
         return subnets.join(',');
       });
 
     const solutionStackName = this.getSolutionStackName();
-    console.log(
-      `Using Elastic Beanstalk solution stack: ${solutionStackName}`
-    );
+    console.log(`Using Elastic Beanstalk solution stack: ${solutionStackName}`);
 
     return new aws.elasticbeanstalk.ConfigurationTemplate(
       `nova-config-${this.regionSuffix}`,

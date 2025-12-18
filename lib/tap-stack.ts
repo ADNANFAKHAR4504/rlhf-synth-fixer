@@ -19,6 +19,7 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly environmentSuffix: string;
   public readonly regions: string[];
   public readonly tags: Record<string, string>;
+  public readonly isLocalStack: boolean;
 
   // Infrastructure components
   public readonly identity: IdentityInfrastructure;
@@ -48,6 +49,11 @@ export class TapStack extends pulumi.ComponentResource {
       Application: 'nova-web-app',
       ManagedBy: 'Pulumi',
     };
+
+    // Detect LocalStack environment - EB not fully supported (ListTagsForResource unavailable)
+    this.isLocalStack =
+      !!process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+      !!process.env.AWS_ENDPOINT_URL?.includes('localstack');
 
     console.log(' Creating Identity and Access Infrastructure...');
 
@@ -104,31 +110,39 @@ export class TapStack extends pulumi.ComponentResource {
         { parent: this, provider: this.providers[region] }
       );
 
-      console.log(
-        ` Creating Elastic Beanstalk Infrastructure for ${region}...`
-      );
-
-      // Create regional Elastic Beanstalk
-      this.regionalElasticBeanstalk[region] =
-        new ElasticBeanstalkInfrastructure(
-          `${name}-eb-${region}`,
-          {
-            region,
-            isPrimary,
-            environment: this.environmentSuffix,
-            environmentSuffix: this.environmentSuffix,
-            vpcId: this.regionalNetworks[region].vpcId,
-            publicSubnetIds: this.regionalNetworks[region].publicSubnetIds,
-            privateSubnetIds: this.regionalNetworks[region].privateSubnetIds,
-            albSecurityGroupId:
-              this.regionalNetworks[region].albSecurityGroupId,
-            ebSecurityGroupId: this.regionalNetworks[region].ebSecurityGroupId,
-            ebServiceRoleArn: this.identity.ebServiceRoleArn,
-            ebInstanceProfileName: this.identity.ebInstanceProfileName,
-            tags: this.tags,
-          },
-          { parent: this, provider: this.providers[region] }
+      // Skip Elastic Beanstalk on LocalStack - ListTagsForResource API not supported
+      if (this.isLocalStack) {
+        console.log(
+          ` Skipping Elastic Beanstalk for ${region} (LocalStack - not fully supported)`
         );
+      } else {
+        console.log(
+          ` Creating Elastic Beanstalk Infrastructure for ${region}...`
+        );
+
+        // Create regional Elastic Beanstalk
+        this.regionalElasticBeanstalk[region] =
+          new ElasticBeanstalkInfrastructure(
+            `${name}-eb-${region}`,
+            {
+              region,
+              isPrimary,
+              environment: this.environmentSuffix,
+              environmentSuffix: this.environmentSuffix,
+              vpcId: this.regionalNetworks[region].vpcId,
+              publicSubnetIds: this.regionalNetworks[region].publicSubnetIds,
+              privateSubnetIds: this.regionalNetworks[region].privateSubnetIds,
+              albSecurityGroupId:
+                this.regionalNetworks[region].albSecurityGroupId,
+              ebSecurityGroupId:
+                this.regionalNetworks[region].ebSecurityGroupId,
+              ebServiceRoleArn: this.identity.ebServiceRoleArn,
+              ebInstanceProfileName: this.identity.ebInstanceProfileName,
+              tags: this.tags,
+            },
+            { parent: this, provider: this.providers[region] }
+          );
+      }
     }
 
     // Register outputs

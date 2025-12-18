@@ -124,9 +124,7 @@ export class NetworkingInfrastructure extends ComponentResource {
     const publicBase = 100;
     const privateBase = 120;
 
-    console.log(
-      `Creating subnets in ${numAzsToUse} AZs for ${this.region}`
-    );
+    console.log(`Creating subnets in ${numAzsToUse} AZs for ${this.region}`);
 
     for (let i = 0; i < numAzsToUse; i++) {
       const azName = availableAzs[i];
