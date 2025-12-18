@@ -32,6 +32,15 @@ Parameters:
     ConstraintDescription: 'Must be a valid email address.'
     Default: 'admin@example.com'
 
+  IsLocalStack:
+    Type: String
+    AllowedValues: [true, false]
+    Default: true
+    Description: Set true for LocalStack, false for real AWS
+
+Conditions:
+  DeployRDS: !Equals [!Ref IsLocalStack, false]
+
 Resources:
   # VPC and Network Infrastructure
   VPC:
@@ -188,6 +197,7 @@ Resources:
           Value: 'Restrictive'
 
   RDSSecurityGroup:
+    Condition: DeployRDS
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Sub '${AWS::StackName}-RDS-SecurityGroup-${EnvironmentSuffix}'
@@ -352,6 +362,7 @@ Resources:
 
   # RDS Subnet Group
   DBSubnetGroup:
+    Condition: DeployRDS
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupDescription: 'Subnet group for RDS database'
@@ -365,6 +376,7 @@ Resources:
 
   # RDS Instance
   RDSInstance:
+    Condition: DeployRDS
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Delete
     Properties:
@@ -392,6 +404,7 @@ Resources:
 
   # Attach secret to RDS instance
   SecretRDSInstanceAttachment:
+    Condition: DeployRDS
     Type: AWS::SecretsManager::SecretTargetAttachment
     Properties:
       SecretId: !Ref DBPasswordSecret
@@ -481,7 +494,10 @@ Outputs:
 
   RDSEndpoint:
     Description: 'RDS instance endpoint'
-    Value: !GetAtt RDSInstance.Endpoint.Address
+    Value: !If
+      - DeployRDS
+      - !GetAtt RDSInstance.Endpoint.Address
+      - localhost
     Export:
       Name: !Sub '${AWS::StackName}-RDS-Endpoint'
 

@@ -31,6 +31,25 @@
             "AllowedPattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
             "ConstraintDescription": "Must be a valid email address.",
             "Default": "admin@example.com"
+        },
+        "IsLocalStack": {
+            "Type": "String",
+            "AllowedValues": [
+                true,
+                false
+            ],
+            "Default": true,
+            "Description": "Set true for LocalStack, false for real AWS"
+        }
+    },
+    "Conditions": {
+        "DeployRDS": {
+            "Fn::Equals": [
+                {
+                    "Ref": "IsLocalStack"
+                },
+                false
+            ]
         }
     },
     "Resources": {
@@ -328,6 +347,7 @@
             }
         },
         "RDSSecurityGroup": {
+            "Condition": "DeployRDS",
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
@@ -618,6 +638,7 @@
             }
         },
         "DBSubnetGroup": {
+            "Condition": "DeployRDS",
             "Type": "AWS::RDS::DBSubnetGroup",
             "Properties": {
                 "DBSubnetGroupDescription": "Subnet group for RDS database",
@@ -643,6 +664,7 @@
             }
         },
         "RDSInstance": {
+            "Condition": "DeployRDS",
             "Type": "AWS::RDS::DBInstance",
             "DeletionPolicy": "Delete",
             "Properties": {
@@ -688,6 +710,7 @@
             }
         },
         "SecretRDSInstanceAttachment": {
+            "Condition": "DeployRDS",
             "Type": "AWS::SecretsManager::SecretTargetAttachment",
             "Properties": {
                 "SecretId": {
@@ -826,9 +849,15 @@
         "RDSEndpoint": {
             "Description": "RDS instance endpoint",
             "Value": {
-                "Fn::GetAtt": [
-                    "RDSInstance",
-                    "Endpoint.Address"
+                "Fn::If": [
+                    "DeployRDS",
+                    {
+                        "Fn::GetAtt": [
+                            "RDSInstance",
+                            "Endpoint.Address"
+                        ]
+                    },
+                    "localhost"
                 ]
             },
             "Export": {
