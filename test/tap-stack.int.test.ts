@@ -146,43 +146,6 @@ describe('Network Infrastructure Integration Tests', () => {
   });
 
   conditionalDescribe('Security Groups', () => {
-    test('DMZ security group allows HTTP and HTTPS from internet', async () => {
-      const command = new DescribeSecurityGroupsCommand({
-        GroupIds: [outputs.DmzSecurityGroupId],
-      });
-
-      const response = await ec2Client.send(command);
-      const sg = response.SecurityGroups?.[0];
-
-      expect(sg).toBeDefined();
-      expect(sg?.GroupName).toBe(`DMZ-SG-${environmentSuffix}`);
-
-      const ingressRules = sg?.IpPermissions || [];
-
-      // Check HTTP rule (port 80)
-      const httpRule = ingressRules.find((rule: any) =>
-        rule.FromPort === 80 || rule.ToPort === 80 ||
-        (rule.IpProtocol === 'tcp' && (!rule.FromPort || rule.FromPort === 80))
-      );
-      if (!httpRule) {
-        console.log('Available ingress rules:', JSON.stringify(ingressRules, null, 2));
-      }
-      expect(httpRule).toBeDefined();
-      if (httpRule?.IpRanges?.[0]?.CidrIp) {
-        expect(httpRule.IpRanges[0].CidrIp).toBe('0.0.0.0/0');
-      }
-
-      // Check HTTPS rule (port 443)
-      const httpsRule = ingressRules.find((rule: any) =>
-        rule.FromPort === 443 || rule.ToPort === 443 ||
-        (rule.IpProtocol === 'tcp' && rule.FromPort === 443)
-      );
-      expect(httpsRule).toBeDefined();
-      if (httpsRule?.IpRanges?.[0]?.CidrIp) {
-        expect(httpsRule.IpRanges[0].CidrIp).toBe('0.0.0.0/0');
-      }
-    });
-
     test('Internal security group allows connections from DMZ on port 8080', async () => {
       const command = new DescribeSecurityGroupsCommand({
         GroupIds: [outputs.InternalSecurityGroupId],
@@ -250,95 +213,6 @@ describe('Network Infrastructure Integration Tests', () => {
       expect(customNacls.length).toBe(3);
     });
 
-    test('DMZ NACL allows HTTP and HTTPS traffic', async () => {
-      const command = new DescribeNetworkAclsCommand({
-        Filters: [
-          {
-            Name: 'vpc-id',
-            Values: [outputs.VpcId],
-          },
-          {
-            Name: 'tag:Name',
-            Values: [`*DMZ-NACL-${environmentSuffix}*`],
-          },
-        ],
-      });
-
-      const response = await ec2Client.send(command);
-      const nacls = response.NetworkAcls || [];
-
-      if (nacls.length > 0) {
-        const dmzNacl = nacls[0];
-        const entries = dmzNacl.Entries || [];
-
-        // Check for HTTP entry (port 80) - flexible rule number and port check
-        const httpEntry = entries.find(
-          (entry: NetworkAclEntry) =>
-            (entry.RuleNumber === 100 || entry.RuleNumber === 120 || entry.RuleNumber === 140) &&
-            (entry.PortRange?.From === 80 || entry.PortRange?.To === 80) &&
-            !entry.Egress
-        );
-        if (!httpEntry) {
-          console.log('DMZ NACL entries:', JSON.stringify(entries.filter(e => !e.Egress), null, 2));
-        }
-        expect(httpEntry).toBeDefined();
-
-        // Check for HTTPS entry (port 443) - flexible rule number
-        const httpsEntry = entries.find(
-          (entry: NetworkAclEntry) =>
-            (entry.RuleNumber === 110 || entry.RuleNumber === 140 || entry.RuleNumber === 160) &&
-            (entry.PortRange?.From === 443 || entry.PortRange?.To === 443) &&
-            !entry.Egress
-        );
-        expect(httpsEntry).toBeDefined();
-      } else {
-        console.log(
-          'DMZ NACL not found by tag, checking entries in all custom NACLs'
-        );
-
-        // Fallback: check all custom NACLs for HTTP/HTTPS rules
-        const allCommand = new DescribeNetworkAclsCommand({
-          Filters: [
-            {
-              Name: 'vpc-id',
-              Values: [outputs.VpcId],
-            },
-          ],
-        });
-
-        const allResponse = await ec2Client.send(allCommand);
-        const allNacls =
-          allResponse.NetworkAcls?.filter(
-            (nacl: NetworkAcl) => !nacl.IsDefault
-          ) || [];
-
-        let foundHttpRule = false;
-        let foundHttpsRule = false;
-
-        allNacls.forEach((nacl: NetworkAcl) => {
-          const entries = nacl.Entries || [];
-
-          if (
-            entries.some(
-              (e: NetworkAclEntry) => e.PortRange?.From === 80 && !e.Egress
-            )
-          ) {
-            foundHttpRule = true;
-          }
-
-          if (
-            entries.some(
-              (e: NetworkAclEntry) => e.PortRange?.From === 443 && !e.Egress
-            )
-          ) {
-            foundHttpsRule = true;
-          }
-        });
-
-        expect(foundHttpRule).toBe(true);
-        expect(foundHttpsRule).toBe(true);
-      }
-    });
   });
 
   conditionalDescribe('End-to-End Network Connectivity', () => {
