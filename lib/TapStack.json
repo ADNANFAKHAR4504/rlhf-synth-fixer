@@ -344,26 +344,6 @@
         }
       }
     },
-    "LambdaFailureDestination": {
-      "Type": "AWS::Lambda::EventInvokeConfig",
-      "Properties": {
-        "FunctionName": {
-          "Ref": "DataAggregationFunction"
-        },
-        "Qualifier": "$LATEST",
-        "MaximumRetryAttempts": 2,
-        "DestinationConfig": {
-          "OnFailure": {
-            "Destination": {
-              "Fn::GetAtt": [
-                "FailedEventsBucket",
-                "Arn"
-              ]
-            }
-          }
-        }
-      }
-    },
     "LambdaInvokePermission": {
       "Type": "AWS::Lambda::Permission",
       "Properties": {
