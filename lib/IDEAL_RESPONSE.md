@@ -15,7 +15,6 @@ It creates a complete production VPC with:
 - Multi-AZ deployment across 3 availability zones
 - Public and private subnets with proper routing
 - Security groups for web and database tiers
-- VPC Flow Logs with S3 storage
 - PCI DSS compliant network segmentation
 """
 
@@ -53,7 +52,6 @@ class TapStack(pulumi.ComponentResource):
     - Internet Gateway and NAT Gateway
     - Route tables with proper routing
     - Security groups for web and database tiers
-    - VPC Flow Logs to S3 with 7-day lifecycle
 
     Args:
         name (str): The logical name of this Pulumi component.
@@ -302,91 +300,6 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Create S3 bucket for VPC Flow Logs
-        self.flow_logs_bucket = aws.s3.Bucket(
-            f'production-flow-logs-{self.environment_suffix}',
-            bucket=f'production-flow-logs-{self.environment_suffix}',
-            force_destroy=True,
-            tags={
-                **resource_tags,
-                'Name': f'production-flow-logs-{self.environment_suffix}'
-            },
-            opts=ResourceOptions(parent=self)
-        )
-
-        # Configure bucket lifecycle policy (7-day retention)
-        self.flow_logs_lifecycle = aws.s3.BucketLifecycleConfiguration(
-            f'production-flow-logs-lifecycle-{self.environment_suffix}',
-            bucket=self.flow_logs_bucket.id,
-            rules=[
-                aws.s3.BucketLifecycleConfigurationRuleArgs(
-                    id='delete-after-7-days',
-                    status='Enabled',
-                    expiration=aws.s3.BucketLifecycleConfigurationRuleExpirationArgs(
-                        days=7
-                    )
-                )
-            ],
-            opts=ResourceOptions(parent=self)
-        )
-
-        # Create IAM role for VPC Flow Logs
-        self.flow_logs_role = aws.iam.Role(
-            f'production-flow-logs-role-{self.environment_suffix}',
-            assume_role_policy=json.dumps({
-                'Version': '2012-10-17',
-                'Statement': [{
-                    'Effect': 'Allow',
-                    'Principal': {
-                        'Service': 'vpc-flow-logs.amazonaws.com'
-                    },
-                    'Action': 'sts:AssumeRole'
-                }]
-            }),
-            tags={
-                **resource_tags,
-                'Name': f'production-flow-logs-role-{self.environment_suffix}'
-            },
-            opts=ResourceOptions(parent=self)
-        )
-
-        # Create IAM policy for Flow Logs to write to S3
-        self.flow_logs_policy = aws.iam.RolePolicy(
-            f'production-flow-logs-policy-{self.environment_suffix}',
-            role=self.flow_logs_role.id,
-            policy=self.flow_logs_bucket.arn.apply(lambda arn: json.dumps({
-                'Version': '2012-10-17',
-                'Statement': [{
-                    'Effect': 'Allow',
-                    'Action': [
-                        's3:PutObject',
-                        's3:GetObject',
-                        's3:ListBucket'
-                    ],
-                    'Resource': [
-                        arn,
-                        f'{arn}/*'
-                    ]
-                }]
-            })),
-            opts=ResourceOptions(parent=self)
-        )
-
-        # Enable VPC Flow Logs
-        self.flow_log = aws.ec2.FlowLog(
-            f'production-flow-log-{self.environment_suffix}',
-            vpc_id=self.vpc.id,
-            traffic_type='ALL',
-            log_destination_type='s3',
-            log_destination=self.flow_logs_bucket.arn,
-            max_aggregation_interval=600,
-            tags={
-                **resource_tags,
-                'Name': f'production-flow-log-{self.environment_suffix}'
-            },
-            opts=ResourceOptions(parent=self, depends_on=[self.flow_logs_policy])
-        )
-
         # Register outputs
         self.register_outputs({
             'vpc_id': self.vpc.id,
@@ -395,8 +308,7 @@ class TapStack(pulumi.ComponentResource):
             'web_security_group_id': self.web_sg.id,
             'database_security_group_id': self.db_sg.id,
             'nat_gateway_id': self.nat_gateway.id,
-            'internet_gateway_id': self.igw.id,
-            'flow_logs_bucket': self.flow_logs_bucket.bucket
+            'internet_gateway_id': self.igw.id
         })
 
         # Export stack outputs
@@ -411,7 +323,6 @@ class TapStack(pulumi.ComponentResource):
         pulumi.export('database_security_group_id', self.db_sg.id)
         pulumi.export('nat_gateway_id', self.nat_gateway.id)
         pulumi.export('internet_gateway_id', self.igw.id)
-        pulumi.export('flow_logs_bucket', self.flow_logs_bucket.bucket)
 
 ```
 
@@ -693,25 +604,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         # Verify source security group
         source_groups = pg_rule.get('UserIdGroupPairs', [])
         self.assertTrue(any(g['GroupId'] == web_sg_id for g in source_groups))
-
-    def test_flow_logs_bucket_exists(self):
-        """Test that VPC Flow Logs S3 bucket exists."""
-        bucket_name = self.outputs['flow_logs_bucket']
-        response = self.s3_client.head_bucket(Bucket=bucket_name)
-        self.assertEqual(response['ResponseMetadata']['HTTPStatusCode'], 200)
-
-    def test_flow_logs_bucket_lifecycle(self):
-        """Test that Flow Logs bucket has 7-day lifecycle policy."""
-        bucket_name = self.outputs['flow_logs_bucket']
-        response = self.s3_client.get_bucket_lifecycle_configuration(Bucket=bucket_name)
-
-        rules = response['Rules']
-        self.assertGreater(len(rules), 0)
-
-        # Check for 7-day expiration rule
-        seven_day_rule = next((r for r in rules if r['Expiration']['Days'] == 7), None)
-        self.assertIsNotNone(seven_day_rule)
-        self.assertEqual(seven_day_rule['Status'], 'Enabled')
 
 
 if __name__ == '__main__':

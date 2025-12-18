@@ -52,8 +52,6 @@ class MyMocks(pulumi.runtime.Mocks):
             outputs["arn"] = f"arn:aws:iam::123456789012:role/{args.name}"
         elif args.typ == "aws:iam/rolePolicy:RolePolicy":
             outputs["id"] = f"policy-{args.name}"
-        elif args.typ == "aws:ec2/flowLog:FlowLog":
-            outputs["id"] = f"fl-{args.name}"
         else:
             outputs["id"] = f"{args.name}-id"
 
@@ -353,70 +351,6 @@ class TestTapStackSecurityGroups(unittest.TestCase):
             return True
 
         return stack.web_sg.egress.apply(validate_egress)
-
-
-class TestTapStackFlowLogs(unittest.TestCase):
-    """Test cases for VPC Flow Logs."""
-
-    @pulumi.runtime.test
-    def test_flow_logs_bucket_creation(self):
-        """Test S3 bucket for flow logs is created."""
-        def check_bucket(args):
-            stack_args = TapStackArgs(environment_suffix="test123")
-            stack = TapStack("test-stack", stack_args)
-
-            self.assertIsNotNone(stack.flow_logs_bucket)
-            return True
-
-        return pulumi.Output.all().apply(check_bucket)
-
-    @pulumi.runtime.test
-    def test_flow_logs_lifecycle_creation(self):
-        """Test lifecycle policy for flow logs bucket is created."""
-        def check_lifecycle(args):
-            stack_args = TapStackArgs(environment_suffix="test123")
-            stack = TapStack("test-stack", stack_args)
-
-            self.assertIsNotNone(stack.flow_logs_lifecycle)
-            return True
-
-        return pulumi.Output.all().apply(check_lifecycle)
-
-    @pulumi.runtime.test
-    def test_flow_logs_role_creation(self):
-        """Test IAM role for flow logs is created."""
-        def check_role(args):
-            stack_args = TapStackArgs(environment_suffix="test123")
-            stack = TapStack("test-stack", stack_args)
-
-            self.assertIsNotNone(stack.flow_logs_role)
-            return True
-
-        return pulumi.Output.all().apply(check_role)
-
-    @pulumi.runtime.test
-    def test_flow_log_creation(self):
-        """Test VPC Flow Log is created."""
-        def check_flow_log(args):
-            stack_args = TapStackArgs(environment_suffix="test123")
-            stack = TapStack("test-stack", stack_args)
-
-            self.assertIsNotNone(stack.flow_log)
-            return True
-
-        return pulumi.Output.all().apply(check_flow_log)
-
-    @pulumi.runtime.test
-    def test_flow_log_traffic_type(self):
-        """Test flow log captures all traffic."""
-        stack_args = TapStackArgs(environment_suffix="test123")
-        stack = TapStack("test-stack", stack_args)
-
-        def validate_traffic_type(traffic_type):
-            self.assertEqual(traffic_type, "ALL")
-            return True
-
-        return stack.flow_log.traffic_type.apply(validate_traffic_type)
 
 
 class TestTapStackTagging(unittest.TestCase):

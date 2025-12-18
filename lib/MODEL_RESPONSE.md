@@ -15,7 +15,6 @@ It creates a complete production VPC with:
 - Multi-AZ deployment across 3 availability zones
 - Public and private subnets with proper routing
 - Security groups for web and database tiers
-- VPC Flow Logs with S3 storage
 - PCI DSS compliant network segmentation
 """
 
@@ -52,7 +51,6 @@ class TapStack(pulumi.ComponentResource):
     - Internet Gateway and NAT Gateway
     - Route tables with proper routing
     - Security groups for web and database tiers
-    - VPC Flow Logs to S3 with 7-day lifecycle
 
     Args:
         name (str): The logical name of this Pulumi component.
@@ -301,90 +299,6 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Create S3 bucket for VPC Flow Logs
-        self.flow_logs_bucket = aws.s3.Bucket(
-            f'production-flow-logs-{self.environment_suffix}',
-            bucket=f'production-flow-logs-{self.environment_suffix}',
-            force_destroy=True,
-            tags={
-                **resource_tags,
-                'Name': f'production-flow-logs-{self.environment_suffix}'
-            },
-            opts=ResourceOptions(parent=self)
-        )
-
-        # Configure bucket lifecycle policy (7-day retention)
-        self.flow_logs_lifecycle = aws.s3.BucketLifecycleConfigurationV2(
-            f'production-flow-logs-lifecycle-{self.environment_suffix}',
-            bucket=self.flow_logs_bucket.id,
-            rules=[
-                aws.s3.BucketLifecycleConfigurationV2RuleArgs(
-                    id='delete-after-7-days',
-                    status='Enabled',
-                    expiration=aws.s3.BucketLifecycleConfigurationV2RuleExpirationArgs(
-                        days=7
-                    )
-                )
-            ],
-            opts=ResourceOptions(parent=self)
-        )
-
-        # Create IAM role for VPC Flow Logs
-        self.flow_logs_role = aws.iam.Role(
-            f'production-flow-logs-role-{self.environment_suffix}',
-            assume_role_policy=json.dumps({
-                'Version': '2012-10-17',
-                'Statement': [{
-                    'Effect': 'Allow',
-                    'Principal': {
-                        'Service': 'vpc-flow-logs.amazonaws.com'
-                    },
-                    'Action': 'sts:AssumeRole'
-                }]
-            }),
-            tags={
-                **resource_tags,
-                'Name': f'production-flow-logs-role-{self.environment_suffix}'
-            },
-            opts=ResourceOptions(parent=self)
-        )
-
-        # Create IAM policy for Flow Logs to write to S3
-        self.flow_logs_policy = aws.iam.RolePolicy(
-            f'production-flow-logs-policy-{self.environment_suffix}',
-            role=self.flow_logs_role.id,
-            policy=self.flow_logs_bucket.arn.apply(lambda arn: json.dumps({
-                'Version': '2012-10-17',
-                'Statement': [{
-                    'Effect': 'Allow',
-                    'Action': [
-                        's3:PutObject',
-                        's3:GetObject',
-                        's3:ListBucket'
-                    ],
-                    'Resource': [
-                        arn,
-                        f'{arn}/*'
-                    ]
-                }]
-            })),
-            opts=ResourceOptions(parent=self)
-        )
-
-        # Enable VPC Flow Logs
-        self.flow_log = aws.ec2.FlowLog(
-            f'production-flow-log-{self.environment_suffix}',
-            vpc_id=self.vpc.id,
-            traffic_type='ALL',
-            log_destination_type='s3',
-            log_destination=self.flow_logs_bucket.arn,
-            tags={
-                **resource_tags,
-                'Name': f'production-flow-log-{self.environment_suffix}'
-            },
-            opts=ResourceOptions(parent=self, depends_on=[self.flow_logs_policy])
-        )
-
         # Register outputs
         self.register_outputs({
             'vpc_id': self.vpc.id,
@@ -393,8 +307,7 @@ class TapStack(pulumi.ComponentResource):
             'web_security_group_id': self.web_sg.id,
             'database_security_group_id': self.db_sg.id,
             'nat_gateway_id': self.nat_gateway.id,
-            'internet_gateway_id': self.igw.id,
-            'flow_logs_bucket': self.flow_logs_bucket.bucket
+            'internet_gateway_id': self.igw.id
         })
 
         # Export stack outputs
@@ -409,7 +322,6 @@ class TapStack(pulumi.ComponentResource):
         pulumi.export('database_security_group_id', self.db_sg.id)
         pulumi.export('nat_gateway_id', self.nat_gateway.id)
         pulumi.export('internet_gateway_id', self.igw.id)
-        pulumi.export('flow_logs_bucket', self.flow_logs_bucket.bucket)
 ```
 
 ## Deployment
@@ -440,7 +352,6 @@ After deployment, the following outputs are available:
 - `database_security_group_id`: Database security group ID
 - `nat_gateway_id`: NAT Gateway ID
 - `internet_gateway_id`: Internet Gateway ID
-- `flow_logs_bucket`: S3 bucket name for VPC Flow Logs
 
 ## Destroy Infrastructure
 
@@ -454,14 +365,11 @@ pulumi destroy
 This infrastructure meets PCI DSS requirements:
 - Network segmentation between public and private tiers
 - Least-privilege security group rules
-- VPC Flow Logs for audit trails
 - Multi-AZ deployment for high availability
 
 ## Cost Optimization
 
 - Single NAT Gateway shared across all private subnets
-- 7-day log retention to minimize S3 storage costs
-- Serverless VPC Flow Logs (no CloudWatch Logs groups)
 
 ## Tags
 

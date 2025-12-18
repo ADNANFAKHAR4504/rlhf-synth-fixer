@@ -4,7 +4,7 @@ We need to build a secure VPC infrastructure for a fintech startup's payment pro
 
 The startup is launching their payment processing platform and needs rock-solid network security. They've specifically chosen Python for infrastructure code because their engineering team already knows Python well. We're looking at a multi-availability zone setup in us-east-1 to ensure high availability. The architecture needs public subnets for load balancers and private subnets for application servers, with proper routing through a NAT Gateway for outbound internet access from private resources.
 
-For compliance reasons, we need VPC Flow Logs enabled and stored in S3 with a 7-day lifecycle policy. The security groups need to follow least-privilege principles with web servers accepting HTTPS from anywhere but SSH only from within the VPC, and database servers only accepting PostgreSQL connections from the web server security group.
+The security groups need to follow least-privilege principles with web servers accepting HTTPS from anywhere but SSH only from within the VPC, and database servers only accepting PostgreSQL connections from the web server security group.
 
 ## What we need to build
 
@@ -47,18 +47,12 @@ Create a production-ready VPC infrastructure using **Pulumi with Python** for a 
    - Database security group: allow PostgreSQL (5432) only from web server security group
    - Follow least-privilege principle with explicit ingress/egress rules
 
-7. **VPC Flow Logs**
-   - Enable VPC Flow Logs
-   - Store logs in S3 bucket
-   - Configure 7-day lifecycle policy for log retention
-   - Create IAM role with necessary permissions for Flow Logs
-
-8. **Resource Naming and Tagging**
+7. **Resource Naming and Tagging**
    - Use naming convention: production-{service}-{resource-type}
    - Resource names must include **environmentSuffix** parameter for uniqueness
    - Tag all resources with Environment=production and ManagedBy=pulumi
 
-9. **Stack Outputs**
+8. **Stack Outputs**
    - Export VPC ID
    - Export all 6 subnet IDs (3 public + 3 private)
    - Export both security group IDs (web and database)
@@ -68,9 +62,6 @@ Create a production-ready VPC infrastructure using **Pulumi with Python** for a 
 - All infrastructure defined using **Pulumi with Python**
 - Use **VPC** for network foundation
 - Use **EC2** for Elastic IPs and NAT Gateway
-- Use **S3** for VPC Flow Logs storage
-- Use **IAM** for Flow Logs role and permissions
-- Use **CloudWatch Logs** as alternative option for Flow Logs
 - Resource names must include **environmentSuffix** for uniqueness
 - Follow naming convention: production-{resource-type}-{environmentSuffix}
 - Deploy to **us-east-1** region
@@ -90,14 +81,13 @@ Create a production-ready VPC infrastructure using **Pulumi with Python** for a 
 - Single NAT Gateway shared by all private subnets (cost optimization)
 - Security groups must use explicit ingress/egress rules
 - All resources must have production and pulumi tags
-- VPC Flow Logs must have 7-day S3 lifecycle policy
 
 ## Success Criteria
 
 - **Functionality**: Complete VPC with 6 subnets across 3 AZs, proper routing, and working security groups
 - **Performance**: Multi-AZ deployment for high availability
 - **Reliability**: Redundant subnets across availability zones
-- **Security**: PCI DSS compliant network segmentation, least-privilege security groups, Flow Logs enabled
+- **Security**: PCI DSS compliant network segmentation, least-privilege security groups
 - **Resource Naming**: All resources include environmentSuffix parameter
 - **Code Quality**: Python, well-tested, documented, follows Pulumi best practices
 - **Cost Optimization**: Single NAT Gateway shared across all private subnets
@@ -109,8 +99,6 @@ Create a production-ready VPC infrastructure using **Pulumi with Python** for a 
 - 3 public subnets and 3 private subnets across 3 AZs
 - Internet Gateway and NAT Gateway with proper routing
 - Two security groups (web and database) with correct rules
-- VPC Flow Logs to S3 with 7-day lifecycle
-- IAM role for Flow Logs permissions
 - Stack exports for VPC ID, subnet IDs, and security group IDs
 - Unit tests for all components
 - Documentation and deployment instructions

@@ -38,7 +38,6 @@ The MODEL_RESPONSE provided a generally correct VPC infrastructure implementatio
 - Security group rules (web and database)
 - S3 bucket lifecycle policy configuration
 - IAM role and policy creation
-- VPC Flow Logs configuration
 - Stack outputs validation
 
 **Root Cause**: The model generated test file structure but did not implement actual test logic, likely due to:
@@ -77,7 +76,6 @@ The MODEL_RESPONSE provided a generally correct VPC infrastructure implementatio
 - Verify 3 public subnets exist with correct CIDR blocks
 - Verify 3 private subnets exist with correct CIDR blocks
 - Test security group rules (web allows HTTPS, DB allows PostgreSQL from web SG)
-- Validate VPC Flow Logs S3 bucket exists
 - Test routing tables (public routes to IGW, private routes to NAT)
 - NO mocking - use real AWS resources
 

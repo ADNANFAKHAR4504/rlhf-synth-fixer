@@ -190,69 +190,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
         self.assertTrue(postgres_rule_found, 'DB SG should allow PostgreSQL (port 5432)')
 
-    def test_flow_logs_bucket_exists(self):
-        """Test that VPC Flow Logs S3 bucket exists."""
-        if 'flow_logs_bucket' not in self.outputs:
-            self.skipTest('flow_logs_bucket not in outputs')
-
-        bucket_name = self.outputs['flow_logs_bucket']
-
-        try:
-            self.s3_client.head_bucket(Bucket=bucket_name)
-        except ClientError as e:
-            self.fail(f'Flow logs bucket {bucket_name} does not exist: {e}')
-
-    def test_flow_logs_bucket_has_lifecycle(self):
-        """Test that Flow Logs bucket has lifecycle configuration."""
-        if 'flow_logs_bucket' not in self.outputs:
-            self.skipTest('flow_logs_bucket not in outputs')
-
-        bucket_name = self.outputs['flow_logs_bucket']
-
-        try:
-            response = self.s3_client.get_bucket_lifecycle_configuration(
-                Bucket=bucket_name
-            )
-            rules = response.get('Rules', [])
-            self.assertTrue(len(rules) > 0, 'Bucket should have lifecycle rules')
-
-            # Check for 7-day expiration rule
-            expiration_found = False
-            for rule in rules:
-                if rule.get('Status') == 'Enabled':
-                    expiration = rule.get('Expiration', {})
-                    if expiration.get('Days') == 7:
-                        expiration_found = True
-                        break
-
-            self.assertTrue(expiration_found, 'Should have 7-day expiration rule')
-        except ClientError as e:
-            if e.response['Error']['Code'] == 'NoSuchLifecycleConfiguration':
-                self.fail('Flow logs bucket has no lifecycle configuration')
-            raise
-
-    def test_vpc_flow_log_exists(self):
-        """Test that VPC Flow Log is enabled."""
-        vpc_id = self.outputs.get('vpc_id')
-        if not vpc_id:
-            self.skipTest('vpc_id not in outputs')
-
-        response = self.ec2_client.describe_flow_logs(
-            Filters=[
-                {'Name': 'resource-id', 'Values': [vpc_id]}
-            ]
-        )
-
-        flow_logs = response['FlowLogs']
-        self.assertTrue(len(flow_logs) > 0, 'VPC should have flow logs enabled')
-
-        # Check flow log is active
-        active_log = next(
-            (fl for fl in flow_logs if fl['FlowLogStatus'] == 'ACTIVE'),
-            None
-        )
-        self.assertIsNotNone(active_log, 'Should have an active flow log')
-
     def test_resources_have_proper_tags(self):
         """Test that resources have proper tags."""
         vpc_id = self.outputs.get('vpc_id')
