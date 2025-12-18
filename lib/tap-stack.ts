@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface TapStackArgs {
   environmentSuffix?: string;
@@ -81,7 +81,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Enable Contributor Insights
-    const _contributorInsights = new aws.dynamodb.ContributorInsights(
+    void new aws.dynamodb.ContributorInsights(
       `table-insights-${environmentSuffix}`,
       {
         tableName: table.name,
@@ -90,7 +90,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // CloudWatch Alarm for Read Capacity
-    const _readAlarm = new aws.cloudwatch.MetricAlarm(
+    void new aws.cloudwatch.MetricAlarm(
       `table-read-alarm-${environmentSuffix}`,
       {
         name: `table-read-alarm-${environmentSuffix}`,
@@ -111,7 +111,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // CloudWatch Alarm for Write Capacity
-    const _writeAlarm = new aws.cloudwatch.MetricAlarm(
+    void new aws.cloudwatch.MetricAlarm(
       `table-write-alarm-${environmentSuffix}`,
       {
         name: `table-write-alarm-${environmentSuffix}`,
@@ -154,7 +154,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // IAM Policy for DynamoDB read access
-    const _dynamoReadPolicy = new aws.iam.RolePolicy(
+    void new aws.iam.RolePolicy(
       `lambda-dynamodb-read-policy-${environmentSuffix}`,
       {
         name: `lambda-dynamodb-read-policy-${environmentSuffix}`,
@@ -194,7 +194,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Attach basic Lambda execution policy
-    const _lambdaBasicPolicy = new aws.iam.RolePolicyAttachment(
+    void new aws.iam.RolePolicyAttachment(
       `lambda-basic-execution-${environmentSuffix}`,
       {
         role: lambdaRole.name,
