@@ -676,8 +676,8 @@ vpc-infrastructure/
                         ├── VpcInfrastructureApp.java
                         └── VpcInfrastructureStack.java
 
-                        
-🚀 Gradle Commands:
+
+Gradle Commands:
 Build and Run:
 # Build the project
 ./gradlew build
@@ -708,7 +708,7 @@ Testing:
 
 # Run tests with detailed output
 ./gradlew test --info
-🔧 Key Gradle Features:
+Key Gradle Features:
 Custom CDK Tasks: Integrated CDK commands as Gradle tasks
 Modern Gradle: Using Gradle 8.5 with latest features
 Java 17: Configured for modern Java with proper compiler settings

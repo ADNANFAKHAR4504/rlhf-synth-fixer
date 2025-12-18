@@ -296,13 +296,13 @@ pom.xml Dependencies
 ```
 
 ## Key Features Implemented:
-* 🏗️ Modern AWS Features:
+* Modern AWS Features:
 * Latest EC2 Instance Types: Using T3.micro (latest generation) for better performance and cost efficiency
 * Launch Template: Ready for EC2 Fleet scaling with pre-configured settings
 * CloudFront VPC Origins Ready: Web security group configured for HTTP/HTTPS traffic
 * Amazon Linux 2023: Latest AMI with improved security and performance
 
-## 🔒 Security Best Practices:
+## Security Best Practices:
 * SSH access limited to specific IP (203.0.113.0/32)
 * Separate security groups for SSH and web traffic
 * IAM role with minimal required permissions (SSM + CloudWatch)
@@ -310,7 +310,7 @@ pom.xml Dependencies
 * No unnecessary NAT gateways (cost optimization)
 
 
-## 📊 Production-Ready Features:
+## Production-Ready Features:
 * Comprehensive resource tagging for cost tracking
 * CloudWatch agent installation for monitoring
 * SSM access for secure shell access without SSH keys
@@ -318,14 +318,14 @@ pom.xml Dependencies
 * Proper DNS resolution enabled
 
 
-## 🚀 Scalability Preparation:
+## Scalability Preparation:
 * Launch template configured for EC2 Fleet usage
 * Security groups ready for load balancer integration
 * VPC designed for future CloudFront VPC Origins
 * Multiple AZ deployment ready
 
 
-## 📝 Usage Instructions:
+## Usage Instructions:
 * Replace the key pair name in the code with your actual EC2 key pair
 
 ## Deploy the stack:
