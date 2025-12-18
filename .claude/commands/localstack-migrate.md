@@ -13,16 +13,33 @@ Picks a task from the archive folder (or fetches from GitHub PR if not found loc
 
 This command uses settings from `.claude/config/localstack.yaml`. Key configurable options:
 
-| Setting                                | Default | Description                    |
-| -------------------------------------- | ------- | ------------------------------ |
-| `iteration.max_fix_iterations`         | 3       | Maximum fix iterations         |
-| `iteration.use_batch_fix`              | true    | Enable batch fix approach      |
-| `localstack.reset_state_before_deploy` | false   | Reset LocalStack before deploy |
-| `parallel.enabled`                     | true    | Enable parallel execution      |
-| `parallel.max_concurrent_agents`       | 10      | Max parallel agents            |
-| `smart_selection.enabled`              | true    | Enable smart task selection    |
+| Setting                                | Default                        | Description                    |
+| -------------------------------------- | ------------------------------ | ------------------------------ |
+| `github.repo`                          | TuringGpt/iac-test-automations | GitHub repository              |
+| `iteration.max_fix_iterations`         | 3                              | Maximum fix iterations         |
+| `iteration.use_batch_fix`              | true                           | Enable batch fix approach      |
+| `localstack.reset_state_before_deploy` | false                          | Reset LocalStack before deploy |
+| `parallel.enabled`                     | true                           | Enable parallel execution      |
+| `parallel.max_concurrent_agents`       | 10                             | Max parallel agents            |
+| `smart_selection.enabled`              | true                           | Enable smart task selection    |
 
 See `.claude/config/localstack.yaml` for full configuration options.
+
+## Modular Scripts
+
+This command uses modular shell scripts in `.claude/scripts/` for better maintainability:
+
+| Script                            | Description                                      |
+| --------------------------------- | ------------------------------------------------ |
+| `localstack-common.sh`            | Common functions, config loading, error handling |
+| `localstack-init.sh`              | Environment validation and initialization        |
+| `localstack-select-task.sh`       | Task selection logic                             |
+| `localstack-fetch-github.sh`      | Fetch tasks from GitHub PRs                      |
+| `localstack-sanitize-metadata.sh` | Sanitize metadata.json for schema compliance     |
+| `localstack-create-pr.sh`         | Create GitHub PR with migrated code              |
+| `localstack-update-log.sh`        | Update migration log with file locking           |
+
+All scripts use `set -euo pipefail` for strict error handling and trap handlers for cleanup.
 
 ## Usage
 
@@ -65,13 +82,26 @@ See `.claude/config/localstack.yaml` for full configuration options.
 ### Step 1: Initialize and Validate Environment
 
 ```bash
-echo ""
-echo "═══════════════════════════════════════════════════"
-echo "🚀 LOCALSTACK MIGRATION"
-echo "═══════════════════════════════════════════════════"
-echo ""
+#!/bin/bash
+# ═══════════════════════════════════════════════════════════════════════════
+# LocalStack Migration - Main Workflow
+# ═══════════════════════════════════════════════════════════════════════════
+# Uses modular scripts from .claude/scripts/ for maintainability
+# All scripts use set -euo pipefail and trap handlers for error handling
+# ═══════════════════════════════════════════════════════════════════════════
 
+set -euo pipefail
+
+# Source common functions (loads config, sets up error handling)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(git rev-parse --show-toplevel)"
+source "$PROJECT_ROOT/.claude/scripts/localstack-common.sh"
+
+# Setup error handling with trap
+setup_error_handling
+
+log_header "🚀 LOCALSTACK MIGRATION"
+
 cd "$PROJECT_ROOT"
 
 # Parse arguments
@@ -83,7 +113,9 @@ SMART_SELECT=false
 SHOW_STATS=false
 FORCE_GITHUB=false
 SKIP_RESET=false
-GITHUB_REPO="TuringGpt/iac-test-automations"
+
+# Note: GITHUB_REPO is loaded from config via localstack-common.sh
+# Default: TuringGpt/iac-test-automations (from .claude/config/localstack.yaml)
 
 # Parse flags (support combining --no-reset with other options)
 ARGS=("$@")
@@ -91,7 +123,7 @@ for ((i=0; i<${#ARGS[@]}; i++)); do
   case "${ARGS[i]}" in
     --no-reset)
       SKIP_RESET=true
-      echo "🔄 Parallel mode: LocalStack state reset will be skipped"
+      log_info "Parallel mode: LocalStack state reset will be skipped"
       ;;
     --platform)
       PLATFORM_FILTER="${ARGS[i+1]:-}"
@@ -129,62 +161,23 @@ for ((i=0; i<${#ARGS[@]}; i++)); do
   esac
 done
 
-# Check LocalStack is running
-echo "🔍 Checking LocalStack status..."
-if ! curl -s http://localhost:4566/_localstack/health > /dev/null 2>&1; then
-  echo "❌ LocalStack is not running!"
-  echo ""
-  echo "💡 Start LocalStack first:"
-  echo "   ./scripts/localstack-start.sh"
-  echo ""
-  exit 1
+# Run initialization script (validates environment, checks prerequisites)
+if [ "$SKIP_RESET" = true ]; then
+  source "$PROJECT_ROOT/.claude/scripts/localstack-init.sh" --skip-reset
+else
+  source "$PROJECT_ROOT/.claude/scripts/localstack-init.sh"
 fi
-
-LOCALSTACK_VERSION=$(curl -s http://localhost:4566/_localstack/health | jq -r '.version // "unknown"')
-echo "✅ LocalStack is running (version: $LOCALSTACK_VERSION)"
-echo ""
-
-# Check required tools
-MISSING_TOOLS=()
-for tool in awslocal jq curl; do
-  if ! command -v $tool &> /dev/null; then
-    MISSING_TOOLS+=("$tool")
-  fi
-done
-
-if [ ${#MISSING_TOOLS[@]} -gt 0 ]; then
-  echo "❌ Missing required tools: ${MISSING_TOOLS[*]}"
-  echo "💡 Install with: pip install awscli-local (for awslocal)"
-  exit 1
-fi
-echo "✅ Required tools available"
-echo ""
 ```
 
 ### Step 2: Initialize Migration Log
 
-```bash
-MIGRATION_LOG=".claude/reports/localstack-migrations.json"
-mkdir -p .claude/reports
+> **Note**: Migration log initialization is handled by `localstack-init.sh` sourced in Step 1.
+> The log path is loaded from config: `migration_log.path` (default: `.claude/reports/localstack-migrations.json`)
 
-# Initialize migration log if not exists
-if [ ! -f "$MIGRATION_LOG" ]; then
-  cat > "$MIGRATION_LOG" << 'EOF'
-{
-  "created_at": "$(date -Iseconds)",
-  "migrations": [],
-  "summary": {
-    "total_attempted": 0,
-    "successful": 0,
-    "failed": 0
-  }
-}
-EOF
-  # Fix the date
-  jq --arg ts "$(date -Iseconds)" '.created_at = $ts' "$MIGRATION_LOG" > "${MIGRATION_LOG}.tmp"
-  mv "${MIGRATION_LOG}.tmp" "$MIGRATION_LOG"
-  echo "📋 Created migration log: $MIGRATION_LOG"
-fi
+```bash
+# Migration log is already initialized by localstack-init.sh
+# MIGRATION_LOG variable is exported from localstack-common.sh
+log_info "Migration log: $MIGRATION_LOG"
 ```
 
 ### Step 3: Show Statistics (if requested)
@@ -242,6 +235,13 @@ fi
 
 ### Step 4: Select Task to Migrate (with GitHub Fetch Support)
 
+> **Note**: GitHub fetch uses `localstack-fetch-github.sh` which handles:
+>
+> - GitHub CLI authentication checks
+> - PR file downloading via API or branch clone
+> - Task structure validation
+> - Error handling with cleanup
+
 ```bash
 FETCHED_FROM_GITHUB=false
 
@@ -249,275 +249,61 @@ if [ -n "$TASK_PATH" ]; then
   # Manual path provided
   if [[ "$TASK_PATH" =~ ^Pr[0-9]+$ ]] || [[ "$TASK_PATH" =~ ^[0-9]+$ ]]; then
     # Normalize PR number format
-    PR_NUMBER="${TASK_PATH#Pr}"
-    PR_ID="Pr${PR_NUMBER}"
+    PR_NUMBER=$(normalize_pr_number "$TASK_PATH")
+    PR_ID=$(get_pr_id "$PR_NUMBER")
 
     # Find task by PR number in archive
     FOUND_PATH=$(find archive -maxdepth 3 -type d -name "$PR_ID" 2>/dev/null | head -1)
 
     if [ -z "$FOUND_PATH" ] || [ "$FORCE_GITHUB" = true ]; then
-      echo ""
-      echo "═══════════════════════════════════════════════════"
-      echo "🔍 FETCHING FROM GITHUB"
-      echo "═══════════════════════════════════════════════════"
-      echo ""
+      # Use modular GitHub fetch script
+      GITHUB_WORK_DIR=$("$PROJECT_ROOT/.claude/scripts/localstack-fetch-github.sh" "$PR_NUMBER" 2>&1 | tail -1)
 
-      if [ -z "$FOUND_PATH" ]; then
-        echo "📋 Task $PR_ID not found in archive directory"
+      if [ -d "$GITHUB_WORK_DIR" ] && [ -f "$GITHUB_WORK_DIR/metadata.json" ]; then
+        TASK_PATH="$GITHUB_WORK_DIR"
+        FETCHED_FROM_GITHUB=true
+        log_success "Task fetched from GitHub: $TASK_PATH"
       else
-        echo "📋 Force GitHub fetch requested for $PR_ID"
-      fi
-      echo "🌐 Fetching from GitHub PR #${PR_NUMBER}..."
-      echo ""
-
-      # Check if gh CLI is available
-      if ! command -v gh &> /dev/null; then
-        echo "❌ GitHub CLI (gh) is not installed!"
-        echo ""
-        echo "💡 Install GitHub CLI:"
-        echo "   macOS: brew install gh"
-        echo "   Linux: sudo apt install gh"
-        echo ""
-        echo "💡 Then authenticate:"
-        echo "   gh auth login"
+        log_error "Failed to fetch task from GitHub PR #$PR_NUMBER"
         exit 1
       fi
-
-      # Check if authenticated
-      if ! gh auth status &> /dev/null; then
-        echo "❌ GitHub CLI is not authenticated!"
-        echo ""
-        echo "💡 Authenticate with:"
-        echo "   gh auth login"
-        exit 1
-      fi
-
-      echo "✅ GitHub CLI authenticated"
-
-      # Fetch PR details
-      echo "📥 Fetching PR #${PR_NUMBER} details from ${GITHUB_REPO}..."
-
-      PR_INFO=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPO" --json title,headRefName,files,state 2>/dev/null)
-
-      if [ -z "$PR_INFO" ] || [ "$PR_INFO" = "null" ]; then
-        echo "❌ PR #${PR_NUMBER} not found in ${GITHUB_REPO}"
-        echo ""
-        echo "💡 Verify the PR exists:"
-        echo "   gh pr view $PR_NUMBER --repo $GITHUB_REPO"
-        exit 1
-      fi
-
-      PR_TITLE=$(echo "$PR_INFO" | jq -r '.title // "Unknown"')
-      PR_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // "unknown"')
-      PR_STATE=$(echo "$PR_INFO" | jq -r '.state // "unknown"')
-
-      echo ""
-      echo "   Title:  $PR_TITLE"
-      echo "   Branch: $PR_BRANCH"
-      echo "   State:  $PR_STATE"
-      echo ""
-
-      # Create temporary directory for PR files
-      GITHUB_WORK_DIR="worktree/github-${PR_ID}"
-      rm -rf "$GITHUB_WORK_DIR"
-      mkdir -p "$GITHUB_WORK_DIR"
-
-      echo "📁 Created temp directory: $GITHUB_WORK_DIR"
-
-      # Fetch the PR diff and extract changed files
-      echo "📥 Downloading PR files..."
-
-      # Get the list of files changed in the PR
-      PR_FILES=$(gh pr diff "$PR_NUMBER" --repo "$GITHUB_REPO" --name-only 2>/dev/null)
-
-      if [ -z "$PR_FILES" ]; then
-        echo "⚠️  No files found in PR diff, trying to checkout branch..."
-
-        # Alternative: checkout the PR branch
-        git fetch origin "pull/${PR_NUMBER}/head:pr-${PR_NUMBER}" 2>/dev/null || true
-
-        if git rev-parse "pr-${PR_NUMBER}" &>/dev/null; then
-          # Get files from the PR branch
-          git show "pr-${PR_NUMBER}:." --name-only 2>/dev/null | while read -r file; do
-            if [ -n "$file" ]; then
-              mkdir -p "$GITHUB_WORK_DIR/$(dirname "$file")"
-              git show "pr-${PR_NUMBER}:$file" > "$GITHUB_WORK_DIR/$file" 2>/dev/null || true
-            fi
-          done
-
-          # Clean up the temporary branch
-          git branch -D "pr-${PR_NUMBER}" 2>/dev/null || true
-        fi
-      else
-        # Download each file from the PR
-        echo "$PR_FILES" | while read -r file; do
-          if [ -n "$file" ]; then
-            echo "   📄 $file"
-            mkdir -p "$GITHUB_WORK_DIR/$(dirname "$file")"
-            gh api "repos/${GITHUB_REPO}/contents/${file}?ref=${PR_BRANCH}" --jq '.content' 2>/dev/null | base64 -d > "$GITHUB_WORK_DIR/$file" 2>/dev/null || true
-          fi
-        done
-      fi
-
-      # Check if we got the essential files
-      if [ ! -f "$GITHUB_WORK_DIR/metadata.json" ] && [ ! -f "$GITHUB_WORK_DIR/lib/index.ts" ] && [ ! -f "$GITHUB_WORK_DIR/lib/__main__.py" ]; then
-        echo ""
-        echo "⚠️  Could not find task files in PR. Trying full branch checkout..."
-
-        # Try checking out the full branch content
-        TEMP_CLONE_DIR=$(mktemp -d)
-        git clone --depth 1 --branch "$PR_BRANCH" "https://github.com/${GITHUB_REPO}.git" "$TEMP_CLONE_DIR" 2>/dev/null || {
-          echo "❌ Failed to clone PR branch"
-          rm -rf "$TEMP_CLONE_DIR"
-          exit 1
-        }
-
-        # Copy relevant files
-        if [ -d "$TEMP_CLONE_DIR/lib" ]; then
-          cp -r "$TEMP_CLONE_DIR/lib" "$GITHUB_WORK_DIR/"
-        fi
-        if [ -d "$TEMP_CLONE_DIR/test" ]; then
-          cp -r "$TEMP_CLONE_DIR/test" "$GITHUB_WORK_DIR/"
-        fi
-        if [ -f "$TEMP_CLONE_DIR/metadata.json" ]; then
-          cp "$TEMP_CLONE_DIR/metadata.json" "$GITHUB_WORK_DIR/"
-        fi
-        if [ -f "$TEMP_CLONE_DIR/package.json" ]; then
-          cp "$TEMP_CLONE_DIR/package.json" "$GITHUB_WORK_DIR/"
-        fi
-        if [ -f "$TEMP_CLONE_DIR/tsconfig.json" ]; then
-          cp "$TEMP_CLONE_DIR/tsconfig.json" "$GITHUB_WORK_DIR/"
-        fi
-        if [ -f "$TEMP_CLONE_DIR/Pipfile" ]; then
-          cp "$TEMP_CLONE_DIR/Pipfile" "$GITHUB_WORK_DIR/"
-        fi
-
-        rm -rf "$TEMP_CLONE_DIR"
-      fi
-
-      # Verify we have essential files
-      if [ ! -f "$GITHUB_WORK_DIR/metadata.json" ]; then
-        echo ""
-        echo "❌ metadata.json not found in PR #${PR_NUMBER}"
-        echo ""
-        echo "💡 The PR may not contain a valid IaC task structure."
-        echo "   Expected files: metadata.json, lib/ directory"
-        rm -rf "$GITHUB_WORK_DIR"
-        exit 1
-      fi
-
-      echo ""
-      echo "✅ PR files downloaded successfully"
-
-      # Set task path to the GitHub work directory
-      TASK_PATH="$GITHUB_WORK_DIR"
-      FETCHED_FROM_GITHUB=true
-
-      # Log the source
-      echo ""
-      echo "📋 Task Source: GitHub PR #${PR_NUMBER}"
-      echo "   Repository: ${GITHUB_REPO}"
-      echo "   Branch: ${PR_BRANCH}"
-      echo ""
     else
       TASK_PATH="$FOUND_PATH"
     fi
   fi
 
   if [ ! -d "$TASK_PATH" ]; then
-    echo "❌ Directory not found: $TASK_PATH"
+    log_error "Directory not found: $TASK_PATH"
     exit 1
   fi
 
   if [ "$FETCHED_FROM_GITHUB" = true ]; then
-    echo "📁 Using task fetched from GitHub: $TASK_PATH"
+    log_info "Using task fetched from GitHub: $TASK_PATH"
   else
-    echo "📁 Using specified task: $TASK_PATH"
+    log_info "Using specified task: $TASK_PATH"
   fi
 
 else
-  # Auto-select task
-  echo "🔍 Selecting task to migrate..."
+  # Auto-select task using the selection script
+  log_info "Selecting task to migrate..."
 
-  # Get already migrated/attempted tasks
-  ATTEMPTED=$(jq -r '.migrations[].task_path' "$MIGRATION_LOG" 2>/dev/null | sort -u)
-
-  # Build search path
-  SEARCH_DIR="archive"
-  if [ -n "$PLATFORM_FILTER" ]; then
-    SEARCH_DIR="archive/$PLATFORM_FILTER"
-    echo "   Platform filter: $PLATFORM_FILTER"
+  if [ "$SMART_SELECT" = true ]; then
+    TASK_PATH=$("$PROJECT_ROOT/.claude/scripts/localstack-select-task.sh" smart 2>&1 | head -1)
+  elif [ -n "$PLATFORM_FILTER" ]; then
+    TASK_PATH=$("$PROJECT_ROOT/.claude/scripts/localstack-select-task.sh" platform "$PLATFORM_FILTER" 2>&1 | head -1)
+  elif [ -n "$SERVICE_FILTER" ]; then
+    TASK_PATH=$("$PROJECT_ROOT/.claude/scripts/localstack-select-task.sh" service "$SERVICE_FILTER" 2>&1 | head -1)
+  else
+    TASK_PATH=$("$PROJECT_ROOT/.claude/scripts/localstack-select-task.sh" next 2>&1 | head -1)
   fi
 
-  # Define service compatibility for smart selection
-  HIGH_COMPAT_SERVICES="s3 dynamodb sqs sns iam kms cloudwatch logs secretsmanager ssm"
-  MED_COMPAT_SERVICES="lambda apigateway stepfunctions events"
-  LOW_COMPAT_SERVICES="ecs rds ec2 eks fargate alb appsync"
-
-  # Find candidate tasks
-  TASK_PATH=""
-  BEST_SCORE=0
-
-  for dir in $(find "$SEARCH_DIR" -maxdepth 3 -type d -name "Pr*" 2>/dev/null | sort); do
-    if [ ! -f "$dir/metadata.json" ]; then
-      continue
-    fi
-
-    # Skip already attempted
-    if echo "$ATTEMPTED" | grep -q "^$dir$"; then
-      continue
-    fi
-
-    # Service filter
-    if [ -n "$SERVICE_FILTER" ]; then
-      if ! jq -e --arg svc "$SERVICE_FILTER" '.aws_services | map(ascii_downcase) | any(. | contains($svc | ascii_downcase))' "$dir/metadata.json" >/dev/null 2>&1; then
-        continue
-      fi
-    fi
-
-    # Smart selection scoring
-    if [ "$SMART_SELECT" = true ]; then
-      SCORE=100
-      SERVICES=$(jq -r '.aws_services[]?' "$dir/metadata.json" 2>/dev/null | tr '[:upper:]' '[:lower:]')
-
-      for svc in $SERVICES; do
-        svc_lower=$(echo "$svc" | tr '[:upper:]' '[:lower:]' | tr -d ' ')
-        if echo "$LOW_COMPAT_SERVICES" | grep -qi "$svc_lower"; then
-          SCORE=$((SCORE - 25))
-        elif echo "$MED_COMPAT_SERVICES" | grep -qi "$svc_lower"; then
-          SCORE=$((SCORE - 10))
-        fi
-      done
-
-      # Prefer simpler platforms
-      PLATFORM=$(jq -r '.platform' "$dir/metadata.json")
-      case "$PLATFORM" in
-        cfn) SCORE=$((SCORE + 10)) ;;
-        cdk) SCORE=$((SCORE + 5)) ;;
-      esac
-
-      if [ "$SCORE" -gt "$BEST_SCORE" ]; then
-        BEST_SCORE=$SCORE
-        TASK_PATH="$dir"
-      fi
-    else
-      # Simple sequential selection
-      TASK_PATH="$dir"
-      break
-    fi
-  done
-
   if [ -z "$TASK_PATH" ]; then
-    echo "✅ All tasks in $SEARCH_DIR have been processed!"
+    log_success "All tasks have been processed!"
     echo ""
     echo "💡 Options:"
     echo "   - Try a different platform: /localstack-migrate --platform <platform>"
     echo "   - View stats: /localstack-migrate --stats"
     exit 0
-  fi
-
-  if [ "$SMART_SELECT" = true ]; then
-    echo "   Smart selection score: $BEST_SCORE"
   fi
 fi
 
@@ -600,23 +386,15 @@ echo ""
 
 ### Step 7: Reset LocalStack State (Skipped in Parallel Mode)
 
-```bash
-if [ "$SKIP_RESET" = true ]; then
-  echo "⏭️  Skipping LocalStack state reset (parallel mode / --no-reset flag)"
-  echo "   ℹ️  Using unique stack name: tap-stack-${PR_ID}"
-  echo ""
-else
-  echo "🧹 Resetting LocalStack state..."
-  curl -X POST http://localhost:4566/_localstack/state/reset 2>/dev/null && echo "✅ LocalStack state reset" || echo "⚠️  State reset not available (continuing anyway)"
-  echo ""
-fi
+> **Note**: LocalStack state management is handled by `localstack-init.sh` sourced in Step 1.
+> The `--skip-reset` / `--no-reset` flag is respected automatically.
 
+```bash
+# LocalStack reset was already handled by localstack-init.sh
 # For parallel execution, use unique stack names based on PR_ID
-# This ensures different migrations don't conflict with each other
 STACK_NAME="tap-stack-${PR_ID}"
 export STACK_NAME
-echo "📋 Using stack name: $STACK_NAME"
-echo ""
+log_info "Using stack name: $STACK_NAME"
 ```
 
 ### Step 8: Invoke LocalStack Deploy Tester Agent
@@ -784,458 +562,108 @@ Exit code 0 if fixed, 1 if unable to fix, 2 if unsupported services.
 
 ### Step 10: Create Pull Request for Migrated Task (Parallel-Safe with Git Worktrees)
 
+> **Note**: This step uses modular scripts for better maintainability:
+>
+> - `localstack-sanitize-metadata.sh` - Sanitizes metadata.json for schema compliance
+> - `localstack-create-pr.sh` - Creates PR with git worktrees for parallel safety
+> - `localstack-update-log.sh` - Updates migration log with file locking
+
 ```bash
-echo ""
-echo "═══════════════════════════════════════════════════"
-echo "📦 CREATING PULL REQUEST (Parallel-Safe)"
-echo "═══════════════════════════════════════════════════"
-echo ""
+log_header "📦 CREATING PULL REQUEST (Parallel-Safe)"
 
 MIGRATION_STATUS="failed"
 MIGRATION_REASON=""
 NEW_PR_URL=""
 NEW_PR_NUMBER=""
-GIT_WORKTREE_DIR=""
+NEW_BRANCH=""
+LS_PR_ID=""
+ORIGINAL_PR_ID="$PR_ID"
 
 if [ "$FIX_SUCCESS" = "true" ]; then
+  # Use modular PR creation script
+  # This handles: metadata sanitization, git worktree, commit, push, PR creation
 
-  # Check if gh CLI is available
-  if ! command -v gh &> /dev/null; then
-    echo "❌ GitHub CLI (gh) is not installed!"
-    echo ""
-    echo "💡 Install GitHub CLI:"
-    echo "   macOS: brew install gh"
-    echo "   Linux: sudo apt install gh"
-    echo ""
-    MIGRATION_REASON="GitHub CLI not installed"
-  else
-    # Check if authenticated
-    if ! gh auth status &> /dev/null; then
-      echo "❌ GitHub CLI is not authenticated!"
-      echo ""
-      echo "💡 Authenticate with:"
-      echo "   gh auth login"
-      MIGRATION_REASON="GitHub CLI not authenticated"
-    else
-      echo "✅ GitHub CLI authenticated"
+  PR_OUTPUT=$("$PROJECT_ROOT/.claude/scripts/localstack-create-pr.sh" \
+    "$WORK_DIR" \
+    "$PR_ID" \
+    --platform "$PLATFORM" \
+    --language "$LANGUAGE" \
+    --services "$AWS_SERVICES" \
+    --iterations "${ITERATIONS_USED:-1}" \
+    --complexity "${COMPLEXITY:-medium}" \
+    2>&1) || {
+    MIGRATION_REASON="PR creation script failed"
+    log_error "Failed to create PR"
+  }
 
-      # Generate new PR ID with ls- prefix
-      ORIGINAL_PR_ID="$PR_ID"
-      LS_PR_ID="ls-${PR_ID}"
+  # Parse output from create-pr script
+  if echo "$PR_OUTPUT" | grep -q "NEW_PR_URL="; then
+    NEW_PR_URL=$(echo "$PR_OUTPUT" | grep "NEW_PR_URL=" | cut -d= -f2)
+    NEW_PR_NUMBER=$(echo "$PR_OUTPUT" | grep "NEW_PR_NUMBER=" | cut -d= -f2)
+    NEW_BRANCH=$(echo "$PR_OUTPUT" | grep "NEW_BRANCH=" | cut -d= -f2)
+    LS_PR_ID=$(echo "$PR_OUTPUT" | grep "LS_PR_ID=" | cut -d= -f2)
+    MIGRATION_STATUS="success"
 
-      # Generate branch name: ls-synth-{original_pr_id}
-      NEW_BRANCH="ls-synth-${PR_ID}"
-
-      echo ""
-      echo "📋 Original PR ID: $ORIGINAL_PR_ID"
-      echo "📋 New PR ID: $LS_PR_ID"
-      echo "🌿 Creating new branch: $NEW_BRANCH"
-
-      # Navigate to project root
-      cd "$PROJECT_ROOT"
-
-      # ═══════════════════════════════════════════════════════════════
-      # PARALLEL-SAFE: Use git worktree for isolated branch operations
-      # This allows multiple agents to work simultaneously without conflicts
-      # ═══════════════════════════════════════════════════════════════
-
-      GIT_WORKTREE_DIR="worktree/git-${PR_ID}"
-
-      echo ""
-      echo "🔀 Using git worktree for parallel-safe operations..."
-      echo "   Worktree directory: $GIT_WORKTREE_DIR"
-
-      # Clean up any existing worktree for this PR
-      if [ -d "$GIT_WORKTREE_DIR" ]; then
-        echo "   🧹 Cleaning existing worktree..."
-        git worktree remove "$GIT_WORKTREE_DIR" --force 2>/dev/null || rm -rf "$GIT_WORKTREE_DIR"
-      fi
-
-      # Delete the branch if it exists locally (from previous runs)
-      if git show-ref --verify --quiet "refs/heads/$NEW_BRANCH"; then
-        echo "   ⚠️  Branch $NEW_BRANCH exists locally, deleting..."
-        git branch -D "$NEW_BRANCH" 2>/dev/null || true
-      fi
-
-      # Fetch latest main without switching branches
-      echo "   📥 Fetching latest main..."
-      git fetch origin main:main 2>/dev/null || git fetch origin main 2>/dev/null || true
-
-      # Create a new worktree with the new branch based on origin/main
-      echo "   📁 Creating isolated worktree with new branch..."
-      git worktree add -b "$NEW_BRANCH" "$GIT_WORKTREE_DIR" origin/main 2>/dev/null
-
-      if [ $? -ne 0 ]; then
-        # Try alternative: create worktree from main
-        git worktree add -b "$NEW_BRANCH" "$GIT_WORKTREE_DIR" main 2>/dev/null
-      fi
-
-      if [ ! -d "$GIT_WORKTREE_DIR" ]; then
-        echo "❌ Failed to create git worktree"
-        MIGRATION_REASON="Failed to create git worktree"
-      else
-        echo "   ✅ Worktree created: $GIT_WORKTREE_DIR"
-
-        # ═══════════════════════════════════════════════════════════════
-        # CRITICAL: Sanitize metadata.json to comply with schema
-        # The schema has additionalProperties: false, so we MUST remove
-        # fields not in the schema and fix invalid enum values
-        # ═══════════════════════════════════════════════════════════════
-        if [ -f "$WORK_DIR/metadata.json" ]; then
-          echo "📝 Sanitizing metadata.json to comply with schema..."
-          
-          # Define allowed fields per schema (additionalProperties: false)
-          # Required: platform, language, complexity, turn_type, po_id, team, startedAt, subtask, provider, subject_labels, aws_services
-          # The schema does NOT allow: task_id, training_quality, coverage, author, dockerS3Location, pr_id, original_pr_id, localstack_migration
-          
-          # Valid subtask values
-          VALID_SUBTASKS='["Provisioning of Infrastructure Environments","Application Deployment","CI/CD Pipeline Integration","Failure Recovery and High Availability","Security, Compliance, and Governance","IaC Program Optimization","Infrastructure QA and Management"]'
-          
-          # Valid subject_labels values
-          VALID_LABELS='["Environment Migration","Cloud Environment Setup","Multi-Environment Consistency","Web Application Deployment","Serverless Infrastructure (Functions as Code)","CI/CD Pipeline","Failure Recovery Automation","Security Configuration as Code","IaC Diagnosis/Edits","IaC Optimization","Infrastructure Analysis/Monitoring","General Infrastructure Tooling QA"]'
-          
-          # Sanitize metadata.json:
-          # 1. Keep only allowed fields
-          # 2. Set provider to "localstack"
-          # 3. Map invalid subtask to closest valid value
-          # 4. Filter subject_labels to only valid values
-          jq --argjson valid_subtasks "$VALID_SUBTASKS" --argjson valid_labels "$VALID_LABELS" '
-            # Map invalid subtask to valid ones
-            def map_subtask:
-              if . == null then "Infrastructure QA and Management"
-              elif . == "Security and Compliance Implementation" then "Security, Compliance, and Governance"
-              elif . == "Security Configuration" then "Security, Compliance, and Governance"
-              elif . == "Database Management" then "Provisioning of Infrastructure Environments"
-              elif . == "Network Configuration" then "Provisioning of Infrastructure Environments"
-              elif . == "Monitoring Setup" then "Infrastructure QA and Management"
-              elif . == "Performance Optimization" then "IaC Program Optimization"
-              elif . == "Access Control" then "Security, Compliance, and Governance"
-              elif ($valid_subtasks | index(.)) then .
-              else "Infrastructure QA and Management"
-              end;
-            
-            # Filter subject_labels to only valid values, map common invalid ones
-            def map_label:
-              if . == "Security Configuration" then "Security Configuration as Code"
-              elif . == "Database Management" then "General Infrastructure Tooling QA"
-              elif . == "Network Configuration" then "Cloud Environment Setup"
-              elif . == "Access Control" then "Security Configuration as Code"
-              elif . == "Monitoring Setup" then "Infrastructure Analysis/Monitoring"
-              elif . == "Performance Optimization" then "IaC Optimization"
-              else .
-              end;
-            
-            # Keep only schema-allowed fields and sanitize values
-            {
-              platform: .platform,
-              language: .language,
-              complexity: .complexity,
-              turn_type: .turn_type,
-              po_id: (.po_id // .task_id // "unknown"),
-              team: .team,
-              startedAt: .startedAt,
-              subtask: (.subtask | map_subtask),
-              provider: "localstack",
-              subject_labels: ([.subject_labels[] | map_label] | unique | map(select(. as $l | $valid_labels | index($l))) | if length == 0 then ["General Infrastructure Tooling QA"] else . end),
-              aws_services: .aws_services
-            }
-          ' "$WORK_DIR/metadata.json" > "$WORK_DIR/metadata.json.tmp"
-          
-          mv "$WORK_DIR/metadata.json.tmp" "$WORK_DIR/metadata.json"
-          echo "   ✅ metadata.json sanitized for schema compliance"
-          
-          # Validate the result
-          echo "   📋 Sanitized metadata:"
-          jq -c '{platform, language, subtask, provider, subject_labels: (.subject_labels | length)}' "$WORK_DIR/metadata.json"
-        fi
-
-        # Copy work directory contents to the isolated worktree (not project root!)
-        echo ""
-        echo "📁 Preparing PR files in isolated worktree..."
-
-        # Copy lib/ directory
-        if [ -d "$WORK_DIR/lib" ]; then
-          rm -rf "$GIT_WORKTREE_DIR/lib/"
-          cp -r "$WORK_DIR/lib" "$GIT_WORKTREE_DIR/"
-          echo "   ✅ Copied lib/"
-        fi
-
-        # Copy test/ directory
-        if [ -d "$WORK_DIR/test" ]; then
-          rm -rf "$GIT_WORKTREE_DIR/test/"
-          cp -r "$WORK_DIR/test" "$GIT_WORKTREE_DIR/"
-          echo "   ✅ Copied test/"
-        fi
-
-        # Copy metadata.json
-        if [ -f "$WORK_DIR/metadata.json" ]; then
-          cp "$WORK_DIR/metadata.json" "$GIT_WORKTREE_DIR/"
-          echo "   ✅ Copied metadata.json"
-        fi
-
-        # Copy any other essential files
-        for file in Pipfile Pipfile.lock requirements.txt cdk.json cdktf.json Pulumi.yaml main.tf; do
-          if [ -f "$WORK_DIR/$file" ]; then
-            cp "$WORK_DIR/$file" "$GIT_WORKTREE_DIR/"
-            echo "   ✅ Copied $file"
-          fi
-        done
-
-        echo ""
-        echo "✅ PR files prepared in worktree"
-
-        # Change to worktree directory for git operations
-        cd "$GIT_WORKTREE_DIR"
-
-        # Stage all changes
-        echo ""
-        echo "📝 Staging changes in worktree..."
-        git add lib/ test/ metadata.json 2>/dev/null || true
-        git add Pipfile Pipfile.lock requirements.txt cdk.json cdktf.json Pulumi.yaml main.tf 2>/dev/null || true
-        git add -A  # Stage any other changes
-
-        # Create commit
-        COMMIT_MSG="feat(localstack): ${LS_PR_ID} - LocalStack compatible task
-
-PR ID: ${LS_PR_ID}
-Original PR ID: ${ORIGINAL_PR_ID}
-Platform: ${PLATFORM}
-Language: ${LANGUAGE}
-AWS Services: ${AWS_SERVICES}
-
-This task has been migrated and tested for LocalStack compatibility.
-The PR pipeline will handle deployment and validation."
-
-        echo "📝 Creating commit..."
-        git commit -m "$COMMIT_MSG"
-
-        if [ $? -ne 0 ]; then
-          echo "❌ Failed to create commit"
-          MIGRATION_REASON="Failed to create git commit"
-        else
-          echo "✅ Commit created"
-
-          # Push branch to origin (force push in case branch exists remotely)
-          echo ""
-          echo "🚀 Pushing branch to origin..."
-          git push -u origin "$NEW_BRANCH" --force
-
-          if [ $? -ne 0 ]; then
-            echo "❌ Failed to push branch"
-            MIGRATION_REASON="Failed to push branch to origin"
-          else
-            echo "✅ Branch pushed to origin"
-
-            # Create Pull Request
-            echo ""
-            echo "📋 Creating Pull Request..."
-
-            PR_TITLE="[LocalStack] ${LS_PR_ID} - ${PLATFORM}/${LANGUAGE}"
-            PR_BODY="## LocalStack Migration
-
-### Task Details
-- **New PR ID:** ${LS_PR_ID}
-- **Original PR ID:** ${ORIGINAL_PR_ID}
-- **Platform:** ${PLATFORM}
-- **Language:** ${LANGUAGE}
-- **AWS Services:** ${AWS_SERVICES}
-- **Complexity:** ${COMPLEXITY}
-
-### Migration Summary
-This PR contains a LocalStack-compatible version of task ${ORIGINAL_PR_ID}, migrated as ${LS_PR_ID}.
-
-The task has been:
-- ✅ Tested for LocalStack deployment
-- ✅ Verified with integration tests
-- ✅ Updated with LocalStack-specific configurations
-
-### Source
-- Original Task: \`${TASK_PATH}\`
-
-### Pipeline
-This PR will be processed by the CI/CD pipeline which will:
-1. Run linting and validation
-2. Deploy to LocalStack
-3. Run integration tests
-4. Report results
-
-### LocalStack Compatibility
-- LocalStack Version: ${LOCALSTACK_VERSION}
-- Iterations to fix: ${ITERATIONS_USED:-1}
-
----
-*This PR was automatically created by the \`/localstack-migrate\` command.*
-*The PR pipeline will handle deployment and testing.*"
-
-            # Create the PR
-            PR_RESULT=$(gh pr create \
-              --repo "$GITHUB_REPO" \
-              --title "$PR_TITLE" \
-              --body "$PR_BODY" \
-              --base main \
-              --head "$NEW_BRANCH" \
-              2>&1)
-
-            if [ $? -eq 0 ]; then
-              NEW_PR_URL="$PR_RESULT"
-              NEW_PR_NUMBER=$(echo "$NEW_PR_URL" | grep -oE '[0-9]+$')
-              MIGRATION_STATUS="success"
-
-              echo ""
-              echo "✅ Pull Request created successfully!"
-              echo "   URL: $NEW_PR_URL"
-              echo "   PR #: $NEW_PR_NUMBER"
-            else
-              echo "❌ Failed to create Pull Request"
-              echo "   Error: $PR_RESULT"
-              MIGRATION_REASON="Failed to create PR: $PR_RESULT"
-            fi
-          fi
-        fi
-
-        # Return to project root
-        cd "$PROJECT_ROOT"
-
-        # Clean up the git worktree
-        echo ""
-        echo "🧹 Cleaning up git worktree..."
-        git worktree remove "$GIT_WORKTREE_DIR" --force 2>/dev/null || rm -rf "$GIT_WORKTREE_DIR"
-        echo "✅ Worktree cleaned up"
-      fi
-    fi
+    log_success "Pull Request created!"
+    echo "   URL:    $NEW_PR_URL"
+    echo "   Number: #$NEW_PR_NUMBER"
+    echo "   Branch: $NEW_BRANCH"
   fi
 else
   MIGRATION_REASON="${FIX_FAILURE_REASON:-Unknown error}"
-  echo "❌ Migration failed: $MIGRATION_REASON"
+  log_error "Migration failed: $MIGRATION_REASON"
 fi
 
 # ═══════════════════════════════════════════════════════════════
 # PARALLEL-SAFE: Update migration log with file locking
-# Uses flock to prevent race conditions when multiple agents run
+# Uses localstack-update-log.sh for atomic updates
 # ═══════════════════════════════════════════════════════════════
 
-echo ""
-echo "📋 Updating migration log (with file locking for parallel safety)..."
+log_info "Updating migration log (with file locking for parallel safety)..."
 
-MIGRATION_ENTRY=$(cat <<EOF
-{
-  "task_path": "$TASK_PATH",
-  "new_pr_url": $([ -n "$NEW_PR_URL" ] && echo "\"$NEW_PR_URL\"" || echo "null"),
-  "new_pr_number": $([ -n "$NEW_PR_NUMBER" ] && echo "\"$NEW_PR_NUMBER\"" || echo "null"),
-  "branch": "${NEW_BRANCH:-null}",
-  "platform": "$PLATFORM",
-  "language": "$LANGUAGE",
-  "ls_pr_id": "${LS_PR_ID:-null}",
-  "original_pr_id": "${ORIGINAL_PR_ID:-$PR_ID}",
-  "aws_services": $(echo "$METADATA" | jq '.aws_services // []'),
-  "status": "$MIGRATION_STATUS",
-  "reason": $([ -n "$MIGRATION_REASON" ] && echo "\"$MIGRATION_REASON\"" || echo "null"),
-  "iterations_used": ${ITERATIONS_USED:-0},
-  "attempted_at": "$(date -Iseconds)"
-}
-EOF
-)
+# Get AWS services as JSON array
+AWS_SERVICES_JSON=$(jq -c '.aws_services // []' "$WORK_DIR/metadata.json" 2>/dev/null || echo "[]")
 
-# Create lock file directory
-LOCK_FILE="${PROJECT_ROOT}/.claude/reports/.migration-log.lock"
-mkdir -p "$(dirname "$LOCK_FILE")"
+"$PROJECT_ROOT/.claude/scripts/localstack-update-log.sh" \
+  --task-path "$TASK_PATH" \
+  --status "$MIGRATION_STATUS" \
+  --pr-url "${NEW_PR_URL:-}" \
+  --pr-number "${NEW_PR_NUMBER:-}" \
+  --branch "${NEW_BRANCH:-}" \
+  --ls-pr-id "${LS_PR_ID:-}" \
+  --original-pr-id "${ORIGINAL_PR_ID:-$PR_ID}" \
+  --platform "$PLATFORM" \
+  --language "$LANGUAGE" \
+  --services "$AWS_SERVICES_JSON" \
+  --reason "${MIGRATION_REASON:-}" \
+  --iterations "${ITERATIONS_USED:-0}"
 
-# Use flock for atomic update (with timeout to prevent deadlock)
-# If flock is not available (e.g., macOS), use a simple retry mechanism
-if command -v flock &> /dev/null; then
-  # Linux: use flock
-  (
-    flock -w 30 200 || { echo "⚠️  Could not acquire lock, updating anyway..."; }
-
-    jq --argjson entry "$MIGRATION_ENTRY" --arg status "$MIGRATION_STATUS" '
-      .migrations += [$entry] |
-      .summary.total_attempted += 1 |
-      if $status == "success" then .summary.successful += 1 else .summary.failed += 1 end
-    ' "$MIGRATION_LOG" > "${MIGRATION_LOG}.tmp.$$"
-    mv "${MIGRATION_LOG}.tmp.$$" "$MIGRATION_LOG"
-
-  ) 200>"$LOCK_FILE"
-else
-  # macOS: use a simple lock file mechanism with retries
-  MAX_RETRIES=10
-  RETRY_COUNT=0
-  LOCK_ACQUIRED=false
-
-  while [ "$RETRY_COUNT" -lt "$MAX_RETRIES" ]; do
-    # Try to create lock file atomically
-    if (set -o noclobber; echo "$$" > "$LOCK_FILE") 2>/dev/null; then
-      LOCK_ACQUIRED=true
-      trap 'rm -f "$LOCK_FILE"' EXIT
-      break
-    fi
-
-    # Check if lock is stale (older than 60 seconds)
-    if [ -f "$LOCK_FILE" ]; then
-      LOCK_AGE=$(($(date +%s) - $(stat -f %m "$LOCK_FILE" 2>/dev/null || echo 0)))
-      if [ "$LOCK_AGE" -gt 60 ]; then
-        echo "   ⚠️  Stale lock detected, removing..."
-        rm -f "$LOCK_FILE"
-        continue
-      fi
-    fi
-
-    RETRY_COUNT=$((RETRY_COUNT + 1))
-    echo "   ⏳ Waiting for migration log lock (attempt $RETRY_COUNT/$MAX_RETRIES)..."
-    sleep 1
-  done
-
-  if [ "$LOCK_ACQUIRED" = true ]; then
-    jq --argjson entry "$MIGRATION_ENTRY" --arg status "$MIGRATION_STATUS" '
-      .migrations += [$entry] |
-      .summary.total_attempted += 1 |
-      if $status == "success" then .summary.successful += 1 else .summary.failed += 1 end
-    ' "$MIGRATION_LOG" > "${MIGRATION_LOG}.tmp.$$"
-    mv "${MIGRATION_LOG}.tmp.$$" "$MIGRATION_LOG"
-    rm -f "$LOCK_FILE"
-  else
-    echo "   ⚠️  Could not acquire lock after $MAX_RETRIES attempts, updating anyway..."
-    jq --argjson entry "$MIGRATION_ENTRY" --arg status "$MIGRATION_STATUS" '
-      .migrations += [$entry] |
-      .summary.total_attempted += 1 |
-      if $status == "success" then .summary.successful += 1 else .summary.failed += 1 end
-    ' "$MIGRATION_LOG" > "${MIGRATION_LOG}.tmp.$$"
-    mv "${MIGRATION_LOG}.tmp.$$" "$MIGRATION_LOG"
-  fi
-fi
-
-echo "✅ Migration log updated"
+log_success "Migration log updated"
 ```
 
 ### Step 11: Cleanup and Summary
 
 ```bash
-echo ""
-echo "🧹 Cleaning up..."
+log_section "Cleaning up..."
 
 # Clean up work directory
 if [ -d "$WORK_DIR" ]; then
   rm -rf "$WORK_DIR"
-  echo "   ✅ Work directory cleaned: $WORK_DIR"
+  log_success "Work directory cleaned: $WORK_DIR"
 fi
 
-# Clean up git worktree if it still exists (parallel-safe cleanup)
-if [ -n "$GIT_WORKTREE_DIR" ] && [ -d "$GIT_WORKTREE_DIR" ]; then
-  cd "$PROJECT_ROOT"
-  git worktree remove "$GIT_WORKTREE_DIR" --force 2>/dev/null || rm -rf "$GIT_WORKTREE_DIR"
-  echo "   ✅ Git worktree cleaned: $GIT_WORKTREE_DIR"
-fi
-
-# Prune any orphaned worktrees
+# Prune any orphaned worktrees (git worktree cleanup handled by create-pr script)
 git worktree prune 2>/dev/null || true
 
-echo "✅ Cleanup complete"
+log_success "Cleanup complete"
 
-echo ""
-echo "═══════════════════════════════════════════════════"
+# ═══════════════════════════════════════════════════════════════
+# FINAL SUMMARY
+# ═══════════════════════════════════════════════════════════════
+
 if [ "$MIGRATION_STATUS" = "success" ]; then
-  echo "✅ MIGRATION SUCCESSFUL - PR CREATED!"
-  echo "═══════════════════════════════════════════════════"
-  echo ""
+  log_header "✅ MIGRATION SUCCESSFUL - PR CREATED!"
+
   echo "   Original PR ID: ${ORIGINAL_PR_ID:-$PR_ID}"
   echo "   New PR ID:      ${LS_PR_ID:-N/A}"
   echo "   Source:         $TASK_PATH"
@@ -1251,11 +679,9 @@ if [ "$MIGRATION_STATUS" = "success" ]; then
   echo "   1. The PR pipeline will automatically deploy and test"
   echo "   2. Review the PR: $NEW_PR_URL"
   echo "   3. Merge when pipeline passes"
-  echo ""
 else
-  echo "❌ MIGRATION FAILED"
-  echo "═══════════════════════════════════════════════════"
-  echo ""
+  log_header "❌ MIGRATION FAILED"
+
   echo "   Task:   $TASK_PATH"
   echo "   Reason: $MIGRATION_REASON"
   echo ""
@@ -1263,9 +689,9 @@ else
   echo "   - Review errors in migration log"
   echo "   - Try manual migration"
   echo "   - Check if services are supported in LocalStack Community"
-  echo ""
 fi
 
+echo ""
 echo "📋 Migration log: $MIGRATION_LOG"
 echo ""
 

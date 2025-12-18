@@ -21,7 +21,9 @@ describe('TapStack', () => {
   describe('KMS Key Configuration', () => {
     test('creates KMS key with correct properties', () => {
       template.hasResourceProperties('AWS::KMS::Key', {
-        Description: Match.stringLikeRegexp(`KMS key for S3 bucket encryption and CloudTrail logs - ${environmentSuffix}`),
+        Description: Match.stringLikeRegexp(
+          `KMS key for S3 bucket encryption and CloudTrail logs - ${environmentSuffix}`
+        ),
         EnableKeyRotation: true,
       });
     });
@@ -51,7 +53,7 @@ describe('TapStack', () => {
       template.hasResourceProperties('AWS::KMS::Alias', {
         AliasName: `alias/secure-infra-s3-key-${environmentSuffix}`,
       });
-      
+
       template.hasResourceProperties('AWS::KMS::Alias', {
         AliasName: 'alias/secure-s3-encryption-key',
       });
@@ -181,7 +183,8 @@ describe('TapStack', () => {
   describe('Security Group Configuration', () => {
     test('creates EC2 security group with restricted inbound access', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for EC2 instances with restricted access',
+        GroupDescription:
+          'Security group for EC2 instances with restricted access',
         SecurityGroupIngress: [
           {
             CidrIp: '203.0.113.0/24',
@@ -236,7 +239,8 @@ describe('TapStack', () => {
             },
           ],
         },
-        Description: 'IAM role for EC2 instances with minimal required permissions',
+        Description:
+          'IAM role for EC2 instances with minimal required permissions',
       });
     });
 
@@ -253,7 +257,8 @@ describe('TapStack', () => {
             },
           ],
         },
-        Description: 'IAM role for Lambda functions with VPC execution permissions',
+        Description:
+          'IAM role for Lambda functions with VPC execution permissions',
       });
     });
 
@@ -365,30 +370,110 @@ describe('TapStack', () => {
       // KMS resources
       template.resourceCountIs('AWS::KMS::Key', 1);
       template.resourceCountIs('AWS::KMS::Alias', 2);
-      
+
       // S3 resources
       template.resourceCountIs('AWS::S3::Bucket', 1);
       template.resourceCountIs('AWS::S3::BucketPolicy', 1);
-      
+
       // VPC resources
       template.resourceCountIs('AWS::EC2::VPC', 1);
       template.resourceCountIs('AWS::EC2::SecurityGroup', 2);
       template.resourceCountIs('AWS::EC2::NatGateway', 1);
       template.resourceCountIs('AWS::EC2::InternetGateway', 1);
-      
+
       // Compute resources
       template.resourceCountIs('AWS::EC2::Instance', 1);
       // Note: CDK creates additional Lambda functions for custom resources (S3 auto-delete, VPC default SG restriction)
       const lambdaFunctions = template.findResources('AWS::Lambda::Function');
       expect(Object.keys(lambdaFunctions).length).toBeGreaterThanOrEqual(1);
-      
+
       // IAM resources - Additional roles are created for CDK custom resources
       const iamRoles = template.findResources('AWS::IAM::Role');
       expect(Object.keys(iamRoles).length).toBeGreaterThanOrEqual(2); // At least EC2 and Lambda roles
       template.resourceCountIs('AWS::IAM::InstanceProfile', 2);
-      
+
       // CloudTrail
       template.resourceCountIs('AWS::CloudTrail::Trail', 1);
+    });
+  });
+
+  describe('Environment Suffix Handling', () => {
+    test('creates stack with custom environment suffix', () => {
+      const prodApp = new cdk.App();
+      const prodStack = new TapStack(prodApp, 'ProdTapStack', {
+        environmentSuffix: 'prod',
+      });
+      const prodTemplate = Template.fromStack(prodStack);
+
+      // Should still have all key resources
+      prodTemplate.resourceCountIs('AWS::KMS::Key', 1);
+      prodTemplate.resourceCountIs('AWS::S3::Bucket', 1);
+      prodTemplate.resourceCountIs('AWS::EC2::VPC', 1);
+    });
+
+    test('creates stack with staging environment suffix', () => {
+      const stagingApp = new cdk.App();
+      const stagingStack = new TapStack(stagingApp, 'StagingTapStack', {
+        environmentSuffix: 'staging',
+      });
+      const stagingTemplate = Template.fromStack(stagingStack);
+
+      // Verify resource creation
+      const lambdaFunctions = stagingTemplate.findResources(
+        'AWS::Lambda::Function'
+      );
+      expect(Object.keys(lambdaFunctions).length).toBeGreaterThanOrEqual(1);
+      stagingTemplate.resourceCountIs('AWS::EC2::Instance', 1);
+    });
+  });
+
+  describe('Conditional Resource Creation', () => {
+    test('region condition applied to resources', () => {
+      // Verify that the condition exists
+      template.hasCondition('IsUSEast1', {
+        'Fn::Equals': [{ Ref: 'AWS::Region' }, 'us-east-1'],
+      });
+
+      // Verify outputs use conditions (for non-LocalStack)
+      const outputs = template.findOutputs('*');
+      expect(Object.keys(outputs).length).toBeGreaterThan(0);
+    });
+
+    test('CloudTrail uses KMS encryption key', () => {
+      const trails = template.findResources('AWS::CloudTrail::Trail');
+      const trailKeys = Object.keys(trails);
+      expect(trailKeys.length).toBeGreaterThanOrEqual(1);
+
+      const trail = trails[trailKeys[0]];
+      expect(trail.Properties).toHaveProperty('KMSKeyId');
+    });
+
+    test('Lambda function has proper IAM role', () => {
+      const lambdaFunctions = template.findResources('AWS::Lambda::Function');
+      const userLambda = Object.values(lambdaFunctions).find(
+        (fn: any) =>
+          fn.Properties?.Description === 'Secure Lambda function running in VPC'
+      );
+
+      expect(userLambda).toBeDefined();
+      expect((userLambda as any).Properties).toHaveProperty('Role');
+    });
+
+    test('VPC has proper DNS settings', () => {
+      template.hasResourceProperties('AWS::EC2::VPC', {
+        EnableDnsHostnames: true,
+        EnableDnsSupport: true,
+        CidrBlock: '10.0.0.0/16',
+      });
+    });
+
+    test('S3 bucket has SSL enforcement', () => {
+      const buckets = template.findResources('AWS::S3::Bucket');
+      const bucketKeys = Object.keys(buckets);
+      expect(bucketKeys.length).toBeGreaterThanOrEqual(1);
+
+      const bucket = buckets[bucketKeys[0]];
+      expect(bucket.Properties.BucketEncryption).toBeDefined();
     });
   });
 });

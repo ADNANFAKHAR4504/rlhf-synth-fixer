@@ -1,10 +1,25 @@
 # Secure AWS Infrastructure with CDK - Production-Ready Implementation
 
+**Platform:** cdk
+**Language:** ts
+
 ## Overview
 
 This CDK implementation provides a comprehensive, secure AWS infrastructure solution that addresses all requirements from the prompt while following enterprise-grade security best practices and AWS Well-Architected Framework principles.
 
 ## Architecture Components
+
+### Core Dependencies
+
+```typescript
+import * as cdk from 'aws-cdk-lib';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as kms from 'aws-cdk-lib/aws-kms';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
+```
 
 ### 1. KMS Key Management
 

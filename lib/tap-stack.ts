@@ -11,9 +11,10 @@ import { Construct } from 'constructs';
 // import { MyStack } from './my-stack';
 
 // LocalStack detection - CloudTrail not supported in LocalStack Community
-const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                     process.env.LOCALSTACK_HOSTNAME !== undefined ||
-                     process.env.CDK_DEFAULT_ACCOUNT === '000000000000';
+const isLocalStack =
+  process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+  process.env.LOCALSTACK_HOSTNAME !== undefined ||
+  process.env.CDK_DEFAULT_ACCOUNT === '000000000000';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -232,7 +233,9 @@ export class TapStack extends cdk.Stack {
       securityGroup: ec2SecurityGroup,
       role: ec2Role,
       vpcSubnets: {
-        subnetType: isLocalStack ? ec2.SubnetType.PUBLIC : ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        subnetType: isLocalStack
+          ? ec2.SubnetType.PUBLIC
+          : ec2.SubnetType.PRIVATE_WITH_EGRESS,
       },
       userData: ec2.UserData.forLinux(),
       keyName: undefined, // Remove if you want to specify a key pair
@@ -328,7 +331,7 @@ def handler(event, context):
       lambdaRole.node.defaultChild as cdk.CfnResource,
       lambdaFunction.node.defaultChild as cdk.CfnResource,
     ];
-    
+
     // Add CloudTrail to resources list only if created
     if (trail) {
       resources.push(trail.node.defaultChild as cdk.CfnResource);

@@ -255,9 +255,13 @@ platforms:
 
 # ═══════════════════════════════════════════════════════════════
 # GITHUB SETTINGS
+# These settings are used by the modular scripts in .claude/scripts/:
+#   - localstack-common.sh (loads GITHUB_REPO from here)
+#   - localstack-fetch-github.sh (fetches PRs from this repo)
+#   - localstack-create-pr.sh (creates PRs in this repo)
 # ═══════════════════════════════════════════════════════════════
 github:
-  repo: 'TuringGpt/iac-test-automations'
+  repo: 'TuringGpt/iac-test-automations' # Central config - used by all scripts
   fetch_method: 'api' # api, clone, or checkout
   api_timeout: 30 # GitHub API timeout
   clone_depth: 1 # Shallow clone depth
