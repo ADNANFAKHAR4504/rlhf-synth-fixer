@@ -11,7 +11,29 @@
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
-  "aws_services": "API Gateway, Lambda, DynamoDB, ElastiCache, CloudWatch, S3, EventBridge, QuickSight, IAM",
+  "aws_services": [
+    "AWS::EC2::VPC",
+    "AWS::EC2::Subnet",
+    "AWS::EC2::SecurityGroup",
+    "AWS::DynamoDB::Table",
+    "AWS::ElastiCache::SubnetGroup",
+    "AWS::ElastiCache::ReplicationGroup",
+    "AWS::S3::Bucket",
+    "AWS::IAM::Role",
+    "AWS::Lambda::Function",
+    "AWS::ApiGateway::RestApi",
+    "AWS::ApiGateway::Deployment",
+    "AWS::ApiGateway::Stage",
+    "AWS::ApiGateway::Resource",
+    "AWS::ApiGateway::Method",
+    "AWS::ApiGateway::RequestValidator",
+    "AWS::ApiGateway::Model",
+    "AWS::Lambda::Permission",
+    "AWS::Events::Rule",
+    "AWS::CloudWatch::Alarm",
+    "AWS::QuickSight::DataSource",
+    "AWS::QuickSight::DataSet"
+  ],
   "training_quality": 7,
   "coverage": {
     "lines": 100,
