@@ -24,12 +24,35 @@ export class TapStack extends cdk.Stack {
     // ! Instead, create separate stacks for each resource type.
 
     // Create the secure environment stack
-    new SecureEnvironmentStack(this, 'SecureEnvironment', {
-      environmentSuffix: environmentSuffix,
-      env: {
-        account: cdk.Stack.of(this).account,
-        region: cdk.Stack.of(this).region,
-      },
+    const secureEnvStack = new SecureEnvironmentStack(
+      this,
+      'SecureEnvironment',
+      {
+        environmentSuffix: environmentSuffix,
+        env: {
+          account: cdk.Stack.of(this).account,
+          region: cdk.Stack.of(this).region,
+        },
+      }
+    );
+
+    // Export outputs from nested stack to parent stack for CI/CD validation
+    new cdk.CfnOutput(this, 'VpcId', {
+      value: secureEnvStack.vpc.vpcId,
+      description: 'VPC ID for the secure environment',
+      exportName: `SecureVpc-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'SecureBucketName', {
+      value: secureEnvStack.securityBucket.bucketName,
+      description: 'Name of the secure S3 bucket',
+      exportName: `SecureBucket-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'LogsBucketName', {
+      value: secureEnvStack.logsBucket.bucketName,
+      description: 'Name of the logs S3 bucket',
+      exportName: `LogsBucket-${environmentSuffix}`,
     });
   }
 }
