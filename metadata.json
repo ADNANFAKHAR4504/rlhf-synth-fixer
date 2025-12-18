@@ -4,9 +4,9 @@
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "IAC-TAP-215",
-  "team": null,
+  "team": "synth",
   "startedAt": "2025-07-28T11:56:46.836Z",
-  "subtask": "Serverless Infrastructure Deployment",
+  "subtask": "Infrastructure QA and Management",
   "provider": "localstack",
   "subject_labels": [
     "General Infrastructure Tooling QA"
