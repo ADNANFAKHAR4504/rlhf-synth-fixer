@@ -27,9 +27,9 @@ Parameters:
     ConstraintDescription: "Must contain only alphanumeric characters"
 
   EC2AMIId:
-    Type: AWS::EC2::Image::Id
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Description: "AMI ID for EC2 instance"
-    Default: "ami-0c02fb55956c7d316" # Amazon Linux 2 AMI (update as needed)
+    Default: "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
 
   EC2InstanceType:
     Type: String
