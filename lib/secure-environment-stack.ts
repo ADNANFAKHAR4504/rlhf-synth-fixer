@@ -314,6 +314,12 @@ export class SecureEnvironmentStack extends cdk.Stack {
     );
 
     // Create EC2 instance in private subnet
+    // Note: For LocalStack compatibility, we use a simpler configuration without Launch Template
+    // (block devices and requireImdsv2 cause LocalStack to create a Launch Template which has issues)
+    const isLocalStack =
+      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+      process.env.AWS_ENDPOINT_URL?.includes('4566');
+
     const privateInstance = new ec2.Instance(this, 'PrivateInstance', {
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
@@ -327,16 +333,22 @@ export class SecureEnvironmentStack extends cdk.Stack {
       securityGroup: this.ec2SecurityGroup,
       role: this.ec2Role,
       userData: userData,
-      blockDevices: [
-        {
-          deviceName: '/dev/xvda',
-          volume: ec2.BlockDeviceVolume.ebs(20, {
-            encrypted: true,
-            volumeType: ec2.EbsDeviceVolumeType.GP3,
+      // Only add blockDevices and requireImdsv2 for non-LocalStack environments
+      // LocalStack has issues with Launch Templates created by these properties
+      ...(isLocalStack
+        ? {}
+        : {
+            blockDevices: [
+              {
+                deviceName: '/dev/xvda',
+                volume: ec2.BlockDeviceVolume.ebs(20, {
+                  encrypted: true,
+                  volumeType: ec2.EbsDeviceVolumeType.GP3,
+                }),
+              },
+            ],
+            requireImdsv2: true, // Enforce IMDSv2 for enhanced security
           }),
-        },
-      ],
-      requireImdsv2: true, // Enforce IMDSv2 for enhanced security
     });
 
     // Create CloudTrail for comprehensive API logging
