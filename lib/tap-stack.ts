@@ -54,5 +54,36 @@ export class TapStack extends cdk.Stack {
       description: 'AWS Account ID',
       exportName: `Account-${environmentSuffix}`,
     });
+
+    // Re-export nested stack outputs for integration tests
+    new cdk.CfnOutput(this, 'DynamoDBTableName', {
+      value: serverlessStack.dynamoDBTableName,
+      description: 'DynamoDB Table Name for orders',
+    });
+
+    new cdk.CfnOutput(this, 'S3BucketName', {
+      value: serverlessStack.s3BucketName,
+      description: 'S3 bucket name for processed data',
+    });
+
+    new cdk.CfnOutput(this, 'DLQUrl', {
+      value: serverlessStack.dlqUrl,
+      description: 'Dead Letter Queue URL',
+    });
+
+    new cdk.CfnOutput(this, 'LambdaFunctionName', {
+      value: serverlessStack.lambdaFunctionName,
+      description: 'Lambda function name for order processing',
+    });
+
+    new cdk.CfnOutput(this, 'AuditTableName', {
+      value: serverlessStack.auditTableName,
+      description: 'DynamoDB Table Name for audit logs',
+    });
+
+    new cdk.CfnOutput(this, 'AuditLambdaName', {
+      value: serverlessStack.auditLambdaName,
+      description: 'Audit Lambda function name',
+    });
   }
 }

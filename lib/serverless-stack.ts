@@ -17,6 +17,14 @@ interface ServerlessStackProps extends cdk.StackProps {
 }
 
 export class ServerlessStack extends cdk.Stack {
+  // Public properties to expose resource names
+  public readonly dynamoDBTableName: string;
+  public readonly s3BucketName: string;
+  public readonly dlqUrl: string;
+  public readonly lambdaFunctionName: string;
+  public readonly auditTableName: string;
+  public readonly auditLambdaName: string;
+
   constructor(scope: Construct, id: string, props?: ServerlessStackProps) {
     super(scope, id, props);
 
@@ -505,6 +513,14 @@ export class ServerlessStack extends cdk.Stack {
       evaluationPeriods: 1,
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
+
+    // Assign public properties for cross-stack references
+    this.dynamoDBTableName = ordersTable.tableName;
+    this.s3BucketName = processedDataBucket.bucketName;
+    this.dlqUrl = processingDlq.queueUrl;
+    this.lambdaFunctionName = orderProcessorLambda.functionName;
+    this.auditTableName = auditLogsTable.tableName;
+    this.auditLambdaName = auditLambda.functionName;
 
     // CloudFormation Outputs
     new cdk.CfnOutput(this, 'DynamoDBTableName', {
