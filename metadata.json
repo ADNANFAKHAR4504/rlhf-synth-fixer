@@ -4,20 +4,20 @@
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "291562",
-  "team": "1",
+  "team": "2",
   "startedAt": "2025-08-21T09:19:07.894Z",
   "subtask": "Infrastructure QA and Management",
   "subject_labels": [
     "General Infrastructure Tooling QA",
     "IaC Optimization",
     "Web Application Deployment",
-    "Security Configuration",
-    "Database Management",
-    "Network Configuration",
-    "Resource Scaling",
-    "Monitoring Setup",
-    "Access Control",
-    "Performance Optimization"
+    "Security Configuration as Code",
+    "Infrastructure Analysis/Monitoring",
+    "Cloud Environment Setup",
+    "IaC Diagnosis/Edits",
+    "Failure Recovery Automation",
+    "Multi-Environment Consistency",
+    "CI/CD Pipeline"
   ],
   "aws_services": [
     "VPC",
