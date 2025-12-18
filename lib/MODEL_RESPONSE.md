@@ -486,18 +486,18 @@ export const s3BucketNames = Object.fromEntries(
 - KMS encryption for logs
 - Proper naming convention
 
-### ✅ **Storage**
+### **Storage**
 - S3 Buckets in each region with KMS encryption
 - Public access blocked
 - HTTPS-only bucket policy
 - Force destroy enabled for cleanup
 
-### ✅ **IAM Compliance**
+### **IAM Compliance**
 - Account Password Policy in `us-east-1` only
 - Comprehensive password requirements
 - 90-day max age and 5-password reuse prevention
 
-### ✅ **Resource Tagging**
+### **Resource Tagging**
 - All resources tagged with `Environment: Production`
 - Custom tags support through constructor
 - Consistent naming convention
