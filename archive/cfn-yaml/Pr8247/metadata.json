@@ -17,12 +17,17 @@
     "AWS::EC2::RouteTable",
     "AWS::EC2::Route",
     "AWS::EC2::SecurityGroup",
-    "AWS::EC2::Instance",
     "AWS::IAM::Role",
     "AWS::IAM::InstanceProfile",
     "AWS::S3::Bucket",
-    "AWS::S3::BucketPolicy",
-    "AWS::KMS::Key"
+    "AWS::S3::BucketPolicy"
   ],
-  "provider": "localstack"
+  "provider": "localstack",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
 }
