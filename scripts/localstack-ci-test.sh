@@ -672,13 +672,6 @@ main() {
     print_status $GREEN "✅ Detected language: $language"
     echo ""
 
-    # Re-deploy infrastructure to LocalStack before running tests
-    # This is necessary because the test job starts a fresh LocalStack instance
-    # that doesn't have any resources from the deploy job
-    print_status $YELLOW "🔄 Re-deploying infrastructure to LocalStack for testing..."
-    "$SCRIPT_DIR/localstack-ci-deploy.sh"
-    echo ""
-
     # Run tests and capture exit code
     if ! run_tests "$platform" "$language"; then
         echo ""
