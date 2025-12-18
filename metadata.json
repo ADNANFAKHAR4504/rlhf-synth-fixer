@@ -4,24 +4,29 @@
   "complexity": "medium",
   "turn_type": "single",
   "team": "synth",
-  "startedAt": "2025-10-30T11:31:28+00:00",
+  "startedAt": "2025-11-04T14:47:00+00:00",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "po_id": "101000769",
+  "po_id": "101000816",
   "aws_services": [
-    "RDS",
+    "VPC",
+    "EC2::Subnet",
+    "EC2::NatGateway",
+    "EC2::InternetGateway",
+    "EC2::RouteTable",
+    "EC2::SecurityGroup",
+    "RDS::DBCluster",
+    "RDS::DBInstance",
     "Lambda",
-    "API Gateway",
+    "ApiGateway",
     "SQS",
     "CloudWatch",
-    "Secrets Manager",
+    "SecretsManager",
     "KMS",
-    "SSM Parameter Store",
-    "VPC",
-    "NAT Gateway",
-    "IAM"
+    "SSM::Parameter",
+    "IAM::Role"
   ],
   "provider": "localstack"
 }
