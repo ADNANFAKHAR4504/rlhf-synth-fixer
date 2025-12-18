@@ -6,13 +6,10 @@
   "po_id": "291926",
   "team": "1",
   "startedAt": "2025-08-21T11:18:47.324Z",
-  "subtask": "secure-multi-region-infra-ts",
+  "subtask": "Security, Compliance, and Governance",
   "subject_labels": [
-    "Infrastructure as Code",
-    "AWS",
-    "Security",
-    "Networking",
-    "Cloud Engineering"
+    "Security Configuration as Code",
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "VPC",
