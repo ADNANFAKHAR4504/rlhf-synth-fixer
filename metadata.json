@@ -1,0 +1,18 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "TAP-198",
+  "team": "synth",
+  "startedAt": "2025-07-25T23:07:14.140Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code",
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "IAM"
+  ]
+}
