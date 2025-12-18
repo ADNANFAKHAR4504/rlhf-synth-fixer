@@ -263,54 +263,69 @@ class TapStack(cdk.Stack):
         )
 
         # RDS Instance
-        database = rds.DatabaseInstance(
-            self, "SecureDatabase",
-            engine=rds.DatabaseInstanceEngine.mysql(
+        # LocalStack Community has limited RDS support, disable advanced features
+        rds_props = {
+            "engine": rds.DatabaseInstanceEngine.mysql(
                 version=rds.MysqlEngineVersion.VER_8_0
             ),
-            instance_type=ec2.InstanceType.of(
+            "instance_type": ec2.InstanceType.of(
                 ec2.InstanceClass.BURSTABLE3,
                 ec2.InstanceSize.MEDIUM
             ),
-            credentials=rds.Credentials.from_secret(db_secret),
-            vpc=vpc,
-            subnet_group=db_subnet_group,
-            security_groups=[rds_sg],
-            multi_az=True,
-            storage_encrypted=True,
-            storage_encryption_key=rds_kms_key,
-            backup_retention=Duration.days(7),
-            deletion_protection=False,
-            delete_automated_backups=True,
-            removal_policy=RemovalPolicy.DESTROY,
-            allocated_storage=20,
-            max_allocated_storage=100,
-            enable_performance_insights=True,
-            monitoring_interval=Duration.seconds(60),
-            auto_minor_version_upgrade=True
+            "credentials": rds.Credentials.from_secret(db_secret),
+            "vpc": vpc,
+            "subnet_group": db_subnet_group,
+            "security_groups": [rds_sg],
+            "deletion_protection": False,
+            "delete_automated_backups": True,
+            "removal_policy": RemovalPolicy.DESTROY,
+            "allocated_storage": 20,
+            "auto_minor_version_upgrade": True,
+        }
+
+        # Add AWS-only features when not running in LocalStack
+        if not IS_LOCALSTACK:
+            rds_props.update({
+                "multi_az": True,
+                "storage_encrypted": True,
+                "storage_encryption_key": rds_kms_key,
+                "backup_retention": Duration.days(7),
+                "max_allocated_storage": 100,
+                "enable_performance_insights": True,
+                "monitoring_interval": Duration.seconds(60),
+            })
+
+        database = rds.DatabaseInstance(
+            self, "SecureDatabase",
+            **rds_props
         )
 
         # CloudTrail
-        trail = cloudtrail.Trail(
-            self, "SecureCloudTrail",
-            bucket=cloudtrail_bucket,
-            encryption_key=cloudtrail_kms_key,
-            include_global_service_events=True,
-            is_multi_region_trail=True,
-            enable_file_validation=True,
-            send_to_cloud_watch_logs=True,
-            cloud_watch_logs_retention=logs.RetentionDays.ONE_MONTH
-        )
-        trail.add_s3_event_selector(
-            read_write_type=cloudtrail.ReadWriteType.ALL,
-            include_management_events=True,
-            s3_selector=[
-                cloudtrail.S3EventSelector(
-                    bucket=app_data_bucket,
-                    object_prefix=""
-                )
-            ]
-        )
+        # LocalStack Community has limited CloudTrail support
+        if IS_LOCALSTACK:
+            # Skip CloudTrail in LocalStack as it's not fully supported
+            trail = None
+        else:
+            trail = cloudtrail.Trail(
+                self, "SecureCloudTrail",
+                bucket=cloudtrail_bucket,
+                encryption_key=cloudtrail_kms_key,
+                include_global_service_events=True,
+                is_multi_region_trail=True,
+                enable_file_validation=True,
+                send_to_cloud_watch_logs=True,
+                cloud_watch_logs_retention=logs.RetentionDays.ONE_MONTH
+            )
+            trail.add_s3_event_selector(
+                read_write_type=cloudtrail.ReadWriteType.ALL,
+                include_management_events=True,
+                s3_selector=[
+                    cloudtrail.S3EventSelector(
+                        bucket=app_data_bucket,
+                        object_prefix=""
+                    )
+                ]
+            )
 
         # Bastion Host
         amzn_linux = ec2.MachineImage.latest_amazon_linux(
