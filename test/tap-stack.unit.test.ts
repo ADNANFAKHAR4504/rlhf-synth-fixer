@@ -73,13 +73,8 @@ describe('TapStack', () => {
       });
     });
 
-    test('creates auto-delete objects custom resource', () => {
-      template.hasResourceProperties('Custom::S3AutoDeleteObjects', {
-        BucketName: {
-          Ref: Match.anyValue(),
-        },
-      });
-    });
+    // Note: autoDeleteObjects custom resource removed for LocalStack compatibility
+    // LocalStack doesn't support custom resource Lambda upload properly
   });
 
   describe('VPC Configuration', () => {
