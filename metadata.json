@@ -14,5 +14,6 @@
   "aws_services": [
     "S3",
     "KMS"
-  ]
+  ],
+  "training_quality": 8
 }
