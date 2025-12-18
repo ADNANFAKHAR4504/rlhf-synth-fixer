@@ -11,6 +11,7 @@ import json
 import boto3
 import time
 import requests
+import re
 
 
 class TestTapStackLiveIntegration(unittest.TestCase):
@@ -19,6 +20,15 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up integration test with live stack outputs."""
+        # Detect LocalStack mode
+        cls.is_localstack = (
+            os.environ.get('LOCALSTACK_HOSTNAME') is not None or
+            os.environ.get('IS_LOCALSTACK', '').lower() == 'true' or
+            os.environ.get('AWS_ENDPOINT_URL') is not None
+        )
+        
+        cls.localstack_endpoint = os.environ.get('AWS_ENDPOINT_URL', 'http://localhost:4566')
+        
         # Load outputs from flat-outputs.json
         outputs_file = os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
@@ -29,11 +39,53 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         with open(outputs_file, 'r') as f:
             cls.outputs = json.load(f)
 
-        # Initialize AWS clients
-        cls.dynamodb = boto3.client('dynamodb', region_name='us-east-1')
-        cls.sqs = boto3.client('sqs', region_name='us-east-1')
-        cls.lambda_client = boto3.client('lambda', region_name='us-east-1')
-        cls.api_gw = boto3.client('apigateway', region_name='us-east-1')
+        # Initialize AWS clients with LocalStack endpoint if needed
+        if cls.is_localstack:
+            cls.dynamodb = boto3.client(
+                'dynamodb',
+                region_name='us-east-1',
+                endpoint_url=cls.localstack_endpoint
+            )
+            cls.sqs = boto3.client(
+                'sqs',
+                region_name='us-east-1',
+                endpoint_url=cls.localstack_endpoint
+            )
+            cls.lambda_client = boto3.client(
+                'lambda',
+                region_name='us-east-1',
+                endpoint_url=cls.localstack_endpoint
+            )
+            cls.api_gw = boto3.client(
+                'apigateway',
+                region_name='us-east-1',
+                endpoint_url=cls.localstack_endpoint
+            )
+        else:
+            cls.dynamodb = boto3.client('dynamodb', region_name='us-east-1')
+            cls.sqs = boto3.client('sqs', region_name='us-east-1')
+            cls.lambda_client = boto3.client('lambda', region_name='us-east-1')
+            cls.api_gw = boto3.client('apigateway', region_name='us-east-1')
+    
+    def _get_api_endpoint(self):
+        """Get API endpoint, converting to LocalStack format if needed."""
+        api_endpoint = self.outputs['api_endpoint']
+        
+        if self.is_localstack:
+            # Convert AWS API Gateway URL to LocalStack format
+            # AWS format: https://{api_id}.execute-api.{region}.amazonaws.com/{stage}/{path}
+            # LocalStack format: http://localhost:4566/restapis/{api_id}/{stage}/_user_request_/{path}
+            match = re.match(
+                r'https://([^.]+)\.execute-api\.[^/]+/([^/]+)(/.*)?',
+                api_endpoint
+            )
+            if match:
+                api_id = match.group(1)
+                stage = match.group(2)
+                path = match.group(3) or ''
+                api_endpoint = f"{self.localstack_endpoint}/restapis/{api_id}/{stage}/_user_request_{path}"
+        
+        return api_endpoint
 
     def test_dynamodb_table_exists(self):
         """Test that DynamoDB table exists and is active."""
@@ -87,7 +139,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
     def test_api_gateway_endpoint_responds(self):
         """Test that API Gateway endpoint is accessible."""
-        api_endpoint = self.outputs['api_endpoint']
+        api_endpoint = self._get_api_endpoint()
 
         # Test with invalid payload (should return 400)
         response = requests.post(api_endpoint, json={}, timeout=10)
@@ -97,7 +149,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
     def test_end_to_end_webhook_processing(self):
         """Test end-to-end webhook processing flow."""
-        api_endpoint = self.outputs['api_endpoint']
+        api_endpoint = self._get_api_endpoint()
         table_name = self.outputs['dynamodb_table_name']
         payments_queue_url = self.outputs['payments_queue_url']
 
