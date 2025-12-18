@@ -1,7 +1,7 @@
 {
   "platform": "cfn",
   "language": "json",
-  "complexity": "high",
+  "complexity": "hard",
   "turn_type": "single",
   "po_id": "19283746",
   "team": "synth",
