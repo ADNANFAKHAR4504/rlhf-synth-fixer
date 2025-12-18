@@ -1,0 +1,480 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Secure serverless infrastructure with blue/green deployments - LocalStack Compatible",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "EnvironmentSuffix",
+                        "ProjectName"
+                    ]
+                }
+            ]
+        }
+    },
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        },
+        "ProjectName": {
+            "Type": "String",
+            "Default": "nova-serverless-v2",
+            "Description": "Project name for resource naming convention"
+        }
+    },
+    "Resources": {
+        "NovaLogsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-lambda-logs-${AWS::AccountId}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteLogsAfter7Days",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 7,
+                            "AbortIncompleteMultipartUpload": {
+                                "DaysAfterInitiation": 1
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                }
+            }
+        },
+        "NovaLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${ProjectName}-${EnvironmentSuffix}-function"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "NovaLambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "NovaLambdaS3LogsPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject",
+                                        "s3:PutObjectAcl",
+                                        "s3:GetObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${NovaLogsBucket}/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "NovaLogGroup",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "NovaLambdaFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-function"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "NovaLambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "MemorySize": 256,
+                "Environment": {
+                    "Variables": {
+                        "LOG_BUCKET": {
+                            "Ref": "NovaLogsBucket"
+                        },
+                        "PROJECT_NAME": {
+                            "Ref": "ProjectName"
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport logging\nimport os\nfrom datetime import datetime\n\n# Configure logging\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\n# Initialize S3 client\ns3_client = boto3.client('s3')\n\ndef lambda_handler(event, context):\n    try:\n        # Log request details\n        logger.info(f\"Received event: {json.dumps(event)}\")\n        \n        # Extract HTTP method and path\n        http_method = event.get('httpMethod', 'UNKNOWN')\n        path = event.get('path', '/')\n        \n        # Create response based on path\n        if path == '/health':\n            response_body = {\n                'status': 'healthy',\n                'timestamp': datetime.utcnow().isoformat(),\n                'version': '1.0.0'\n            }\n        elif path == '/info':\n            response_body = {\n                'project': os.environ.get('PROJECT_NAME', 'nova-serverless'),\n                'environment': os.environ.get('ENVIRONMENT', 'dev'),\n                'method': http_method,\n                'timestamp': datetime.utcnow().isoformat()\n            }\n        else:\n            response_body = {\n                'message': f'Hello from Nova Serverless! Path: {path}',\n                'method': http_method,\n                'timestamp': datetime.utcnow().isoformat()\n            }\n        \n        # Log to S3 bucket\n        log_entry = {\n            'timestamp': datetime.utcnow().isoformat(),\n            'method': http_method,\n            'path': path,\n            'response': response_body\n        }\n        \n        try:\n            s3_key = f\"logs/{datetime.utcnow().strftime('%Y/%m/%d')}/{context.aws_request_id}.json\"\n            s3_client.put_object(\n                Bucket=os.environ.get('LOG_BUCKET'),\n                Key=s3_key,\n                Body=json.dumps(log_entry),\n                ContentType='application/json'\n            )\n        except Exception as s3_error:\n            logger.error(f\"Failed to write to S3: {str(s3_error)}\")\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',\n                'Access-Control-Allow-Headers': 'Content-Type, Authorization'\n            },\n            'body': json.dumps(response_body)\n        }\n        \n    except Exception as e:\n        logger.error(f\"Error processing request: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json'\n            },\n            'body': json.dumps({\n                'error': 'Internal server error',\n                'timestamp': datetime.utcnow().isoformat()\n            })\n        }\n"
+                }
+            }
+        },
+        "NovaLambdaVersion": {
+            "Type": "AWS::Lambda::Version",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "NovaLambdaFunction"
+                },
+                "Description": "Initial version for blue/green deployment"
+            }
+        },
+        "NovaLambdaAlias": {
+            "Type": "AWS::Lambda::Alias",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "NovaLambdaFunction"
+                },
+                "FunctionVersion": {
+                    "Fn::GetAtt": [
+                        "NovaLambdaVersion",
+                        "Version"
+                    ]
+                },
+                "Name": "LIVE",
+                "Description": "Live alias for blue/green deployments"
+            }
+        },
+        "NovaApiGateway": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-api"
+                },
+                "Description": "Nova Serverless API Gateway",
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                }
+            }
+        },
+        "NovaApiGatewayResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "NovaApiGateway"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "NovaApiGateway",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "{proxy+}"
+            }
+        },
+        "NovaApiGatewayMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "NovaApiGateway"
+                },
+                "ResourceId": {
+                    "Ref": "NovaApiGatewayResource"
+                },
+                "HttpMethod": "ANY",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${NovaLambdaAlias}/invocations"
+                    }
+                }
+            }
+        },
+        "NovaApiGatewayOptionsMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "NovaApiGateway"
+                },
+                "ResourceId": {
+                    "Ref": "NovaApiGatewayResource"
+                },
+                "HttpMethod": "OPTIONS",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "MOCK",
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": "200",
+                            "ResponseParameters": {
+                                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+                                "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+                                "method.response.header.Access-Control-Allow-Origin": "'*'"
+                            },
+                            "ResponseTemplates": {
+                                "application/json": ""
+                            }
+                        }
+                    ],
+                    "RequestTemplates": {
+                        "application/json": "{\"statusCode\": 200}"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": "200",
+                        "ResponseParameters": {
+                            "method.response.header.Access-Control-Allow-Headers": false,
+                            "method.response.header.Access-Control-Allow-Methods": false,
+                            "method.response.header.Access-Control-Allow-Origin": false
+                        }
+                    }
+                ]
+            }
+        },
+        "NovaApiGatewayRootMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "NovaApiGateway"
+                },
+                "ResourceId": {
+                    "Fn::GetAtt": [
+                        "NovaApiGateway",
+                        "RootResourceId"
+                    ]
+                },
+                "HttpMethod": "ANY",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${NovaLambdaAlias}/invocations"
+                    }
+                }
+            }
+        },
+        "NovaApiGatewayRootOptionsMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "NovaApiGateway"
+                },
+                "ResourceId": {
+                    "Fn::GetAtt": [
+                        "NovaApiGateway",
+                        "RootResourceId"
+                    ]
+                },
+                "HttpMethod": "OPTIONS",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "MOCK",
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": "200",
+                            "ResponseParameters": {
+                                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+                                "method.response.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+                                "method.response.header.Access-Control-Allow-Origin": "'*'"
+                            },
+                            "ResponseTemplates": {
+                                "application/json": ""
+                            }
+                        }
+                    ],
+                    "RequestTemplates": {
+                        "application/json": "{\"statusCode\": 200}"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": "200",
+                        "ResponseParameters": {
+                            "method.response.header.Access-Control-Allow-Headers": false,
+                            "method.response.header.Access-Control-Allow-Methods": false,
+                            "method.response.header.Access-Control-Allow-Origin": false
+                        }
+                    }
+                ]
+            }
+        },
+        "NovaLambdaApiGatewayPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "NovaLambdaAlias"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${NovaApiGateway}/*/*"
+                }
+            }
+        },
+        "NovaApiGatewayDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": [
+                "NovaApiGatewayMethod",
+                "NovaApiGatewayOptionsMethod",
+                "NovaApiGatewayRootMethod",
+                "NovaApiGatewayRootOptionsMethod"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "NovaApiGateway"
+                },
+                "Description": "Nova Serverless API Deployment"
+            }
+        },
+        "NovaApiGatewayStage": {
+            "Type": "AWS::ApiGateway::Stage",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "NovaApiGateway"
+                },
+                "DeploymentId": {
+                    "Ref": "NovaApiGatewayDeployment"
+                },
+                "StageName": {
+                    "Ref": "EnvironmentSuffix"
+                },
+                "Description": {
+                    "Fn::Sub": "Nova Serverless API ${EnvironmentSuffix} Stage"
+                }
+            }
+        },
+        "NovaApiLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/apigateway/${ProjectName}-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 7
+            }
+        }
+    },
+    "Outputs": {
+        "ApiGatewayUrl": {
+            "Description": "API Gateway endpoint URL",
+            "Value": {
+                "Fn::Sub": "https://${NovaApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApiGatewayUrl"
+                }
+            }
+        },
+        "LambdaFunctionName": {
+            "Description": "Lambda function name",
+            "Value": {
+                "Ref": "NovaLambdaFunction"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaFunctionName"
+                }
+            }
+        },
+        "LambdaFunctionArn": {
+            "Description": "Lambda function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "NovaLambdaFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaFunctionArn"
+                }
+            }
+        },
+        "S3LogsBucket": {
+            "Description": "S3 bucket for Lambda logs",
+            "Value": {
+                "Ref": "NovaLogsBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3LogsBucket"
+                }
+            }
+        },
+        "StackName": {
+            "Description": "Name of this CloudFormation stack",
+            "Value": {
+                "Ref": "AWS::StackName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StackName"
+                }
+            }
+        },
+        "EnvironmentSuffix": {
+            "Description": "Environment suffix used for this deployment",
+            "Value": {
+                "Ref": "EnvironmentSuffix"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+                }
+            }
+        }
+    }
+}
