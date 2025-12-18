@@ -3,13 +3,6 @@ Description: >
   TapStack — Multi-AZ VPC + EC2 (ASG) + optional RDS + CloudWatch Logs/Alarms with least-privilege IAM.
   Includes LocalStack-safe mode via DeployTarget.
 
-# 🔒 Best-practice CI safeguard:
-# This metadata changes per stack (StackId is unique), which helps avoid "empty changeset" behavior
-# in pipelines where we cannot add --no-fail-on-empty-changeset.
-Metadata:
-  StackFingerprint:
-    StackId: !Ref AWS::StackId
-
 Parameters:
   ProjectName:
     Type: String
@@ -37,7 +30,6 @@ Parameters:
     AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/([0-9]|[1-2][0-9]|3[0-2])$'
     Description: Primary VPC CIDR block.
 
-  # ✅ LocalStack-safe: keep String + Split/Select
   PublicSubnetCidrs:
     Type: String
     Default: 10.0.0.0/20,10.0.16.0/20
@@ -247,36 +239,6 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-subnet-private-b' }]
 
-  NatEipA:
-    Type: AWS::EC2::EIP
-    Condition: IsAws
-    Properties:
-      Domain: vpc
-      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-eip-nat-a' }]
-
-  NatEipB:
-    Type: AWS::EC2::EIP
-    Condition: IsAws
-    Properties:
-      Domain: vpc
-      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-eip-nat-b' }]
-
-  NatGatewayA:
-    Type: AWS::EC2::NatGateway
-    Condition: IsAws
-    Properties:
-      AllocationId: !GetAtt NatEipA.AllocationId
-      SubnetId: !Ref PublicSubnetA
-      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-nat-a' }]
-
-  NatGatewayB:
-    Type: AWS::EC2::NatGateway
-    Condition: IsAws
-    Properties:
-      AllocationId: !GetAtt NatEipB.AllocationId
-      SubnetId: !Ref PublicSubnetB
-      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-nat-b' }]
-
   PublicSubnetARouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -301,23 +263,6 @@ Resources:
       SubnetId: !Ref PrivateSubnetB
       RouteTableId: !Ref PrivateRouteTableB
 
-  PrivateRouteA:
-    Type: AWS::EC2::Route
-    Condition: IsAws
-    Properties:
-      RouteTableId: !Ref PrivateRouteTableA
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGatewayA
-
-  PrivateRouteB:
-    Type: AWS::EC2::Route
-    Condition: IsAws
-    Properties:
-      RouteTableId: !Ref PrivateRouteTableB
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGatewayB
-
-  # ✅ Best-practice: do not set RoleName (avoids collisions + CAPABILITY_NAMED_IAM dependency)
   InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -339,7 +284,6 @@ Resources:
                 Resource: ['*']
       Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-ec2-role' }]
 
-  # ✅ Best-practice: do not set InstanceProfileName (avoids collisions)
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
@@ -357,20 +301,6 @@ Resources:
         - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0 }
       Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-sg-ec2' }]
 
-  SecurityGroupRds:
-    Type: AWS::EC2::SecurityGroup
-    Condition: IsAws
-    Properties:
-      GroupDescription: RDS private access SG
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: !If [EngineIsPg, 5432, 3306]
-          ToPort:   !If [EngineIsPg, 5432, 3306]
-          SourceSecurityGroupId: !Ref SecurityGroupEc2
-      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-sg-rds' }]
-
-  # ✅ Best-practice: avoid fixed LogGroupName (reduces collisions in CI/LocalStack)
   CloudWatchLogGroupEC2:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -381,7 +311,6 @@ Resources:
     Properties:
       RetentionInDays: 30
 
-  # ✅ Best-practice: avoid fixed LaunchTemplateName (reduces collisions)
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -421,25 +350,14 @@ Resources:
 
                 cat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<CFG
                 {
-                  "agent": {
-                    "metrics_collection_interval": ${CWInterval}
-                  },
+                  "agent": { "metrics_collection_interval": ${CWInterval} },
                   "metrics": {
                     "namespace": "CWAgent",
-                    "append_dimensions": {
-                      "InstanceId": "{instance_id}"
-                    },
+                    "append_dimensions": { "InstanceId": "{instance_id}" },
                     "metrics_collected": {
-                      "mem": {
-                        "measurement": ["mem_used_percent"],
-                        "metrics_collection_interval": 60
-                      },
+                      "mem": { "measurement": ["mem_used_percent"], "metrics_collection_interval": 60 },
                       "cpu": {
-                        "measurement": [
-                          "cpu_usage_idle",
-                          "cpu_usage_user",
-                          "cpu_usage_system"
-                        ],
+                        "measurement": ["cpu_usage_idle","cpu_usage_user","cpu_usage_system"],
                         "metrics_collection_interval": 60,
                         "resources": ["*"]
                       }
@@ -449,16 +367,8 @@ Resources:
                     "logs_collected": {
                       "files": {
                         "collect_list": [
-                          {
-                            "file_path": "/var/log/messages",
-                            "log_group_name": "${CloudWatchLogGroupEC2}",
-                            "log_stream_name": "{instance_id}/messages"
-                          },
-                          {
-                            "file_path": "/var/log/cloud-init.log",
-                            "log_group_name": "${CloudWatchLogGroupEC2}",
-                            "log_stream_name": "{instance_id}/cloud-init.log"
-                          }
+                          { "file_path": "/var/log/messages", "log_group_name": "${CloudWatchLogGroupEC2}", "log_stream_name": "{instance_id}/messages" },
+                          { "file_path": "/var/log/cloud-init.log", "log_group_name": "${CloudWatchLogGroupEC2}", "log_stream_name": "{instance_id}/cloud-init.log" }
                         ]
                       }
                     }
@@ -472,7 +382,6 @@ Resources:
                 echo "hello from $(hostname) in ${AWS::Region}" > /var/www/html/index.html || true
               - CWInterval: !FindInMap [CW, Defaults, Interval]
 
-  # ✅ Best-practice: avoid fixed AutoScalingGroupName (reduces collisions)
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
@@ -495,21 +404,6 @@ Resources:
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-ec2'
           PropagateAtLaunch: true
 
-  # ✅ Best-practice: no TopicName to avoid collisions
-  SNSTopicAlarms:
-    Type: AWS::SNS::Topic
-    Condition: EnableSns
-    Properties: {}
-
-  SNSSubscription:
-    Type: AWS::SNS::Subscription
-    Condition: HasAlarmEmail
-    Properties:
-      Protocol: email
-      Endpoint: !Ref AlarmEmail
-      TopicArn: !Ref SNSTopicAlarms
-
-  # ✅ Best-practice: no AlarmName to avoid collisions
   AlarmEc2CpuHigh:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -540,7 +434,19 @@ Resources:
       TreatMissingData: notBreaching
       AlarmActions: !If [EnableSns, [!Ref SNSTopicAlarms], []]
 
-  # AWS secret (AWS mode)
+  SNSTopicAlarms:
+    Type: AWS::SNS::Topic
+    Condition: EnableSns
+    Properties: {}
+
+  SNSSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlarmEmail
+    Properties:
+      Protocol: email
+      Endpoint: !Ref AlarmEmail
+      TopicArn: !Ref SNSTopicAlarms
+
   DbSecret:
     Type: AWS::SecretsManager::Secret
     Condition: IsAws
@@ -552,17 +458,31 @@ Resources:
         PasswordLength: 20
         ExcludePunctuation: true
 
-  # ✅ LocalStack secret (LocalStack mode) - avoids hardcoded password
+  # ✅ FIX: give LocalStack secret a stable Name and reference that name (more reliable in LocalStack)
   DbSecretLocal:
     Type: AWS::SecretsManager::Secret
     Condition: IsLocalStack
     Properties:
+      Name: !Sub '${AWS::StackName}-db-secret-local'
       Description: !Sub 'LocalStack DB credentials for ${ProjectName}-${EnvironmentSuffix}'
       GenerateSecretString:
         SecretStringTemplate: '{"username":"masteruser"}'
         GenerateStringKey: password
         PasswordLength: 20
         ExcludePunctuation: true
+
+  SecurityGroupRds:
+    Type: AWS::EC2::SecurityGroup
+    Condition: IsAws
+    Properties:
+      GroupDescription: RDS private access SG
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !If [EngineIsPg, 5432, 3306]
+          ToPort:   !If [EngineIsPg, 5432, 3306]
+          SourceSecurityGroupId: !Ref SecurityGroupEc2
+      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-sg-rds' }]
 
   RDSSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -580,7 +500,6 @@ Resources:
       Family: !If [EngineIsPg, 'postgres16', 'mysql8.0']
       Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-params' }]
 
-  # ✅ Best-practice: avoid fixed DBInstanceIdentifier to reduce collisions
   RDSInstanceAws:
     Type: AWS::RDS::DBInstance
     Condition: IsAws
@@ -597,8 +516,9 @@ Resources:
       DBSubnetGroupName: !Ref RDSSubnetGroup
       DBParameterGroupName: !Ref RDSParameterGroup
       DeletionProtection: !If [RetainDbSnapshot, true, false]
-      MasterUsername: !Sub '{{resolve:secretsmanager:${DbSecret}::username}}'
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DbSecret}::password}}'
+      # ✅ FIX: correct dynamic reference syntax
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DbSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DbSecret}:SecretString:password}}'
       DBName: !Ref DBName
       BackupRetentionPeriod: 7
       MultiAZ: false
@@ -608,16 +528,18 @@ Resources:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rds'
 
+  # ✅ FIX: ensure secret exists before resolving + reference secret by NAME using documented syntax
   RDSInstanceLocal:
     Type: AWS::RDS::DBInstance
     Condition: IsLocalStack
+    DependsOn: DbSecretLocal
     Properties:
       Engine: postgres
       DBInstanceClass: db.t3.micro
       AllocatedStorage: 20
       PubliclyAccessible: false
       MasterUsername: masteruser
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DbSecretLocal}::password}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${AWS::StackName}-db-secret-local:SecretString:password}}'
 
   AlarmRdsCpuHigh:
     Type: AWS::CloudWatch::Alarm
@@ -674,11 +596,11 @@ Outputs:
     Value: !Ref CloudWatchLogGroupApp
 
   AlarmCpuName:
-    Description: EC2 CPU alarm name
+    Description: EC2 CPU alarm logical id
     Value: !Ref AlarmEc2CpuHigh
 
   AlarmMemName:
-    Description: EC2 memory alarm name
+    Description: EC2 memory alarm logical id
     Value: !Ref AlarmEc2MemoryHigh
 
   RdsEndpoint:
