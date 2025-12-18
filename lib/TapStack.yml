@@ -114,7 +114,7 @@ Parameters:
       - m5.xlarge
 
   LatestAmiId:
-    Type: String
+    Type: AWS::EC2::Image::Id
     Description: Amazon Linux 2 AMI ID (use ami-12345678 for LocalStack)
     Default: ami-12345678
 
