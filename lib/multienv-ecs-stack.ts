@@ -72,10 +72,7 @@ export class MultiEnvEcsStack extends cdk.Stack {
     // For LocalStack, explicitly set the launch template version to avoid LatestVersionNumber issue
     if (isLocalStack && autoScalingGroup.node.defaultChild) {
       const asgResource = autoScalingGroup.node.defaultChild as cdk.CfnResource;
-      asgResource.addPropertyOverride(
-        'LaunchTemplate.Version',
-        '$Default'
-      );
+      asgResource.addPropertyOverride('LaunchTemplate.Version', '$Default');
     }
 
     // Enable ECS Container Insights (only if not LocalStack)
