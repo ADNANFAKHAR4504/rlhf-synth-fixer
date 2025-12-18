@@ -252,53 +252,49 @@ class TapStack(cdk.Stack):
         )
         db_secret.grant_read(ec2_role)
 
-        # RDS Subnet Group
-        db_subnet_group = rds.SubnetGroup(
-            self, "DatabaseSubnetGroup",
-            description="Subnet group for RDS database",
-            vpc=vpc,
-            vpc_subnets=ec2.SubnetSelection(
-                subnet_type=ec2.SubnetType.PRIVATE_ISOLATED
-            )
-        )
-
         # RDS Instance
-        # LocalStack Community has limited RDS support, disable advanced features
-        rds_props = {
-            "engine": rds.DatabaseInstanceEngine.mysql(
-                version=rds.MysqlEngineVersion.VER_8_0
-            ),
-            "instance_type": ec2.InstanceType.of(
-                ec2.InstanceClass.BURSTABLE3,
-                ec2.InstanceSize.MEDIUM
-            ),
-            "credentials": rds.Credentials.from_secret(db_secret),
-            "vpc": vpc,
-            "subnet_group": db_subnet_group,
-            "security_groups": [rds_sg],
-            "deletion_protection": False,
-            "delete_automated_backups": True,
-            "removal_policy": RemovalPolicy.DESTROY,
-            "allocated_storage": 20,
-            "auto_minor_version_upgrade": True,
-        }
+        # LocalStack Community has limited RDS support - skip entirely
+        if IS_LOCALSTACK:
+            # Skip RDS creation in LocalStack as the waiter times out
+            database = None
+            db_subnet_group = None
+        else:
+            # RDS Subnet Group
+            db_subnet_group = rds.SubnetGroup(
+                self, "DatabaseSubnetGroup",
+                description="Subnet group for RDS database",
+                vpc=vpc,
+                vpc_subnets=ec2.SubnetSelection(
+                    subnet_type=ec2.SubnetType.PRIVATE_ISOLATED
+                )
+            )
 
-        # Add AWS-only features when not running in LocalStack
-        if not IS_LOCALSTACK:
-            rds_props.update({
-                "multi_az": True,
-                "storage_encrypted": True,
-                "storage_encryption_key": rds_kms_key,
-                "backup_retention": Duration.days(7),
-                "max_allocated_storage": 100,
-                "enable_performance_insights": True,
-                "monitoring_interval": Duration.seconds(60),
-            })
-
-        database = rds.DatabaseInstance(
-            self, "SecureDatabase",
-            **rds_props
-        )
+            database = rds.DatabaseInstance(
+                self, "SecureDatabase",
+                engine=rds.DatabaseInstanceEngine.mysql(
+                    version=rds.MysqlEngineVersion.VER_8_0
+                ),
+                instance_type=ec2.InstanceType.of(
+                    ec2.InstanceClass.BURSTABLE3,
+                    ec2.InstanceSize.MEDIUM
+                ),
+                credentials=rds.Credentials.from_secret(db_secret),
+                vpc=vpc,
+                subnet_group=db_subnet_group,
+                security_groups=[rds_sg],
+                multi_az=True,
+                storage_encrypted=True,
+                storage_encryption_key=rds_kms_key,
+                backup_retention=Duration.days(7),
+                deletion_protection=False,
+                delete_automated_backups=True,
+                removal_policy=RemovalPolicy.DESTROY,
+                allocated_storage=20,
+                max_allocated_storage=100,
+                enable_performance_insights=True,
+                monitoring_interval=Duration.seconds(60),
+                auto_minor_version_upgrade=True
+            )
 
         # CloudTrail
         # LocalStack Community has limited CloudTrail support
