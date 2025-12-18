@@ -4,11 +4,6 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 
-// LocalStack detection
-const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                     process.env.AWS_ENDPOINT_URL?.includes('4566') ||
-                     process.env.AWS_ENDPOINT_URL?.includes('localstack');
-
 interface ProjectXApiGatewayStackProps extends cdk.StackProps {
   environmentSuffix: string;
   lambdaFunction: lambda.Function;
