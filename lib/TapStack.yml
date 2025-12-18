@@ -771,8 +771,8 @@ Outputs:
     Export:
       Name: !Sub '${Environment}-ec2-instance-id'
 
-  RDSInstanceEndpoint:
-    Description: 'RDS Instance Endpoint'
-    Value: !GetAtt RDSInstance.Endpoint.Address
+  RDSInstanceId:
+    Description: 'RDS Instance Identifier'
+    Value: !Ref RDSInstance
     Export:
-      Name: !Sub '${Environment}-rds-endpoint'
+      Name: !Sub '${Environment}-rds-instance-id'
