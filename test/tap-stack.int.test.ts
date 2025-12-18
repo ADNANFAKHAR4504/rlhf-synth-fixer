@@ -23,9 +23,13 @@ import axios from 'axios';
 import fs from 'fs';
 
 // Check if we should run integration tests
-const shouldRunIntegrationTests = process.env.AWS_ACCESS_KEY_ID && 
-  process.env.AWS_SECRET_ACCESS_KEY && 
-  process.env.INTEGRATION_TESTS === 'true';
+// Enable tests if:
+// 1. INTEGRATION_TESTS is explicitly set to 'true', OR
+// 2. We're running against LocalStack (AWS_ENDPOINT_URL is set) with credentials
+const isLocalStackEnv = !!process.env.AWS_ENDPOINT_URL;
+const hasCredentials = !!(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY);
+const shouldRunIntegrationTests = hasCredentials &&
+  (process.env.INTEGRATION_TESTS === 'true' || isLocalStackEnv);
 
 // Load outputs from deployment
 let outputs: any;
