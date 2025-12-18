@@ -728,6 +728,46 @@ describe("Infrastructure Components End-to-End Tests", () => {
       expect(govCloudNetworking).toBeDefined();
     });
 
+    it("should use fallback AZs for unknown regions", () => {
+      // Use an unknown region that's not in the regionAzMap
+      const unknownRegionNetworking = new NetworkingInfrastructure("unknown-region-networking", {
+        region: "af-south-1",
+        isPrimary: true,
+        environment: "test",
+        tags: testTags,
+      });
+
+      expect(unknownRegionNetworking).toBeDefined();
+      expect(unknownRegionNetworking.publicSubnets.length).toBeGreaterThan(0);
+      expect(unknownRegionNetworking.privateSubnets.length).toBeGreaterThan(0);
+    });
+
+    it("should handle empty subnet arrays in ElasticBeanstalk configuration", async () => {
+      const identity = new IdentityInfrastructure("test-identity-empty-subnets", {
+        tags: testTags,
+      });
+
+      // Create EB with empty subnet arrays to trigger error paths
+      const eb = new ElasticBeanstalkInfrastructure("test-eb-empty-subnets", {
+        region: "us-east-1",
+        isPrimary: true,
+        environment: "test",
+        environmentSuffix: "test",
+        vpcId: pulumi.output("vpc-test"),
+        publicSubnetIds: [],
+        privateSubnetIds: [],
+        albSecurityGroupId: pulumi.output("sg-alb-test"),
+        ebSecurityGroupId: pulumi.output("sg-eb-test"),
+        ebServiceRoleArn: identity.ebServiceRoleArn,
+        ebInstanceProfileName: identity.ebInstanceProfileName,
+        tags: testTags,
+      });
+
+      // The configuration template will be created, but the apply callbacks
+      // will throw when they try to process empty subnet arrays
+      expect(eb.configTemplate).toBeDefined();
+    });
+
     it("should validate VPC CIDR blocks", async () => {
       const primaryNetworking = new NetworkingInfrastructure("primary-net", {
         region: "us-east-1",
