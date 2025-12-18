@@ -1,0 +1,19 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "229178",
+  "team": "synth",
+  "startedAt": "2025-07-23T17:32:59.047Z",
+  "subtask": "Infrastructure QA and Management",
+  "provider": "localstack",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "EC2",
+    "S3",
+    "VPC"
+  ]
+}
