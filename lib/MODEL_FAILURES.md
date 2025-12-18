@@ -80,10 +80,10 @@ const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
 
 ---
 
-## 🔧 **IMPLEMENTATION FAILURES**
+##  **IMPLEMENTATION FAILURES**
 
 ### 5. **INCORRECT RUNTIME VERSION**
-**Severity: MEDIUM** ⚠️
+**Severity: MEDIUM** 
 
 **Model Response:** `nodejs18.x` (lines 106, 230)
 **Required:** `nodejs20.x` (latest supported runtime per PROMPT.md)
@@ -97,7 +97,7 @@ runtime: lambda.Runtime.NODEJS_20_X
 ---
 
 ### 6. **MISSING VISIBILITY TIMEOUT IN DLQ**
-**Severity: MEDIUM** ⚠️
+**Severity: MEDIUM** 
 
 **Model Response:** No visibility timeout specified (line 68-71)
 **Required:** Proper visibility timeout for audit Lambda processing
@@ -111,7 +111,7 @@ visibilityTimeout: cdk.Duration.minutes(12), // 6x audit Lambda timeout
 ---
 
 ### 7. **INCORRECT LAMBDA FUNCTION NAMES**
-**Severity: MEDIUM** ⚠️
+**Severity: MEDIUM** 
 
 **Model Response:**
 - Processing Lambda: `dev-order-processor-lambda-backend`  (correct)  
@@ -122,7 +122,7 @@ visibilityTimeout: cdk.Duration.minutes(12), // 6x audit Lambda timeout
 ---
 
 ### 8. **WRONG EVENT SOURCE DESTINATION**
-**Severity: MEDIUM** ⚠️
+**Severity: MEDIUM** 
 
 **Model Response:** `new lambdaEventSources.SqsDestination(deadLetterQueue)` (line 194)
 **Required:** `new SqsDlq(processingDlq)` 
@@ -136,7 +136,7 @@ onFailure: new SqsDlq(processingDlq)
 ---
 
 ### 9. **MISSING LAMBDA CONTEXT PARAMETER**
-**Severity: MEDIUM** ⚠️
+**Severity: MEDIUM** 
 
 **Model Response:** References `context.awsRequestId` without declaring context parameter (line 140)
 **Impact:** Runtime error - context not available
@@ -145,7 +145,7 @@ onFailure: new SqsDlq(processingDlq)
 ---
 
 ### 10. **INCOMPLETE S3 KEY PATTERN**
-**Severity: MEDIUM** ⚠️
+**Severity: MEDIUM** 
 
 **Required:** `processed-data/year/month/day/record-id-timestamp.json`
 **Model Response:** `processed-data/year/month/day/randomId.json` (line 149)
@@ -161,10 +161,10 @@ const s3Key = `processed-data/${year}/${month}/${day}/${recordId}-${Date.now()}.
 
 ---
 
-## 🔒 **SECURITY & PERMISSIONS ISSUES**
+##  **SECURITY & PERMISSIONS ISSUES**
 
 ### 11. **MISSING ENVIRONMENT PARAMETERIZATION**
-**Severity: MEDIUM** ⚠️
+**Severity: MEDIUM** 
 
 **Model Approach:** Hardcoded 'dev' values throughout
 **Required:** Dynamic environment suffix from props/context
@@ -178,7 +178,7 @@ const environmentSuffix = props?.environmentSuffix || 'dev';
 ---
 
 ### 12. **SUBOPTIMAL AUDIT DATA STRUCTURE**
-**Severity: LOW** ⚠️
+**Severity: LOW** 
 
 **Model Approach:** Manual failure type classification (lines 254-265)
 **Corrected Approach:** Uses actual DLQ message structure with responseContext/requestContext
@@ -186,7 +186,7 @@ const environmentSuffix = props?.environmentSuffix || 'dev';
 
 ---
 
-## 📊 **ARCHITECTURAL CORRECTNESS**
+##  **ARCHITECTURAL CORRECTNESS**
 
 ### ** CORRECT IMPLEMENTATIONS**
 
@@ -205,7 +205,7 @@ The model response got many things right:
 
 ---
 
-## 📋 **REQUIREMENTS COMPLIANCE SCORE**
+##  **REQUIREMENTS COMPLIANCE SCORE**
 
 | Requirement Category | Model Score | Ideal Score | Gap Analysis |
 |---------------------|-------------|-------------|--------------|
@@ -221,7 +221,7 @@ The model response got many things right:
 
 ---
 
-## 🔍 **ROOT CAUSE ANALYSIS**
+##  **ROOT CAUSE ANALYSIS**
 
 ### **Primary Success Factors:**
 1.  **Complete Architecture Understanding:** Model implemented full serverless pipeline including audit system
@@ -249,7 +249,7 @@ The model response got many things right:
 
 ---
 
-## 🎯 **IMPACT ASSESSMENT**
+##  **IMPACT ASSESSMENT**
 
 ### **If Model Response Was Deployed:**
 
@@ -259,13 +259,13 @@ The model response got many things right:
 -  Proper security and monitoring in place
 -  All major requirements implemented
 
-**⚠️ Minor Issues:**
+** Minor Issues:**
 - S3 bucket naming conflicts in multi-account scenarios
 - Deprecated SDK warnings/vulnerabilities
 - Random recordIds instead of meaningful orderId-based IDs
 - Runtime error on context reference
 
-**🔧 Easy Fixes Required:**
+** Easy Fixes Required:**
 - Update bucket naming pattern (5 minutes)
 - Fix audit table name (2 minutes)
 - Update to AWS SDK v3 (10 minutes)
@@ -277,7 +277,7 @@ The model response got many things right:
 
 ---
 
-## 🎯 **RECOMMENDATIONS FOR MODEL IMPROVEMENT**
+##  **RECOMMENDATIONS FOR MODEL IMPROVEMENT**
 
 1. **Naming Convention Precision:** Strict adherence to specified naming patterns
 2. **AWS SDK Version Awareness:** Always use latest supported SDK versions
@@ -287,7 +287,7 @@ The model response got many things right:
 
 ---
 
-## 📊 **OVERALL ASSESSMENT**
+##  **OVERALL ASSESSMENT**
 
 **Model Performance: EXCELLENT (85% compliance)**
 
@@ -303,7 +303,7 @@ This represents an **outstanding** model response that demonstrates:
 
 ---
 
-## 🏆 **COMPARATIVE EXCELLENCE**
+##  **COMPARATIVE EXCELLENCE**
 
 This model response significantly outperforms typical AI-generated infrastructure code by:
 - Including complex audit system implementation
