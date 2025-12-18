@@ -1443,23 +1443,6 @@ Automated by localstack-fixer agent."
     echo "   2. Check for issues not covered by automated fixes"
     echo "   3. Re-run /localstack-fixer $PR_NUMBER after manual fixes"
 
-    # Post escalation comment to PR
-    ESCALATION_COMMENT="## ⚠️ LocalStack Fixer - Escalation Required
-
-**Status**: Maximum iterations reached (${MAX_CICD_ITERATIONS})
-
-The automated fixer has attempted ${MAX_CICD_ITERATIONS} iterations but CI/CD is still failing.
-
-**Recommended Actions**:
-1. Review the latest CI/CD job logs
-2. Check for issues not covered by automated fixes
-3. Apply manual fixes if needed
-4. Re-run \`/localstack-fixer ${PR_NUMBER}\` after fixes
-
----
-🤖 Automated by localstack-fixer agent"
-
-    gh pr comment "${PR_NUMBER}" --repo "$GITHUB_REPO" --body "$ESCALATION_COMMENT" 2>/dev/null || true
   fi
   echo "═══════════════════════════════════════════════════"
 fi
