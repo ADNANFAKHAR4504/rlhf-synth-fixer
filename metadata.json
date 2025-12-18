@@ -1,0 +1,25 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291726",
+  "team": "2",
+  "startedAt": "2025-08-03T18:10:39.360Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "S3",
+    "DynamoDB",
+    "Lambda",
+    "API Gateway",
+    "VPC",
+    "EC2",
+    "CloudWatch",
+    "KMS",
+    "IAM"
+  ]
+}
