@@ -109,20 +109,15 @@ describe('TapStack', () => {
       });
     });
 
-    test('should create public and private subnets', () => {
-      // Check for public subnets
+    test('should create public subnets only (LocalStack compatibility)', () => {
+      // Check for public subnets only (LocalStack compatibility)
       vpcTemplate.hasResourceProperties('AWS::EC2::Subnet', {
         MapPublicIpOnLaunch: true
       });
 
-      // Check for private subnets
-      vpcTemplate.hasResourceProperties('AWS::EC2::Subnet', {
-        MapPublicIpOnLaunch: false
-      });
-
-      // Verify we have at least 4 subnets (2 public, 2 private)
+      // Verify subnet count - only public subnets (2 AZs)
       const subnets = vpcTemplate.findResources('AWS::EC2::Subnet');
-      expect(Object.keys(subnets).length).toBeGreaterThanOrEqual(4);
+      expect(Object.keys(subnets).length).toBe(2);
     });
 
     test('should create Internet Gateway', () => {
@@ -130,11 +125,13 @@ describe('TapStack', () => {
       vpcTemplate.hasResourceProperties('AWS::EC2::VPCGatewayAttachment', {});
     });
 
-    test('should create NAT Gateway for private subnet internet access', () => {
-      vpcTemplate.hasResourceProperties('AWS::EC2::NatGateway', {});
-      vpcTemplate.hasResourceProperties('AWS::EC2::EIP', {
-        Domain: 'vpc'
-      });
+    test('should not create NAT Gateway for LocalStack compatibility', () => {
+      // NAT Gateway requires EIP which is not fully supported in LocalStack Community
+      const natGateways = vpcTemplate.findResources('AWS::EC2::NatGateway');
+      expect(Object.keys(natGateways).length).toBe(0);
+
+      const eips = vpcTemplate.findResources('AWS::EC2::EIP');
+      expect(Object.keys(eips).length).toBe(0);
     });
 
     test('should create Security Group with HTTP and HTTPS rules', () => {
@@ -189,12 +186,13 @@ describe('TapStack', () => {
       });
     });
 
-    test('should create VPC Lattice Service Network', () => {
-      vpcTemplate.hasResourceProperties('AWS::VpcLattice::ServiceNetwork', {
-        AuthType: 'NONE'
-      });
+    test('should not create VPC Lattice for LocalStack compatibility', () => {
+      // VPC Lattice is not supported in LocalStack Community Edition
+      const latticeNetworks = vpcTemplate.findResources('AWS::VpcLattice::ServiceNetwork');
+      expect(Object.keys(latticeNetworks).length).toBe(0);
 
-      vpcTemplate.hasResourceProperties('AWS::VpcLattice::ServiceNetworkVpcAssociation', {});
+      const latticeAssociations = vpcTemplate.findResources('AWS::VpcLattice::ServiceNetworkVpcAssociation');
+      expect(Object.keys(latticeAssociations).length).toBe(0);
     });
 
     test('should have production environment tags', () => {
@@ -216,7 +214,7 @@ describe('TapStack', () => {
     test('should create stack outputs', () => {
       vpcTemplate.hasOutput('VpcId', {});
       vpcTemplate.hasOutput('SecurityGroupId', {});
-      vpcTemplate.hasOutput('LatticeServiceNetworkId', {});
+      // VPC Lattice output removed for LocalStack compatibility
     });
 
     test('should set proper removal policies for clean deletion', () => {
