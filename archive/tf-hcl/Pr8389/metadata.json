@@ -20,5 +20,12 @@
     "Security Groups",
     "VPC Endpoints"
   ],
-  "provider": "localstack"
+  "provider": "localstack",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "adnan-turing",
+  "dockerS3Location": ""
 }
