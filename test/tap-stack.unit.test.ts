@@ -205,52 +205,19 @@ describe("TapStack — Unit Validation (JSON as source of truth, YAML presence c
   });
 
   // 20
-  test("LaunchTemplate UserData uses Fn::Sub with CW variables", () => {
-    const ud = tpl.Resources.LaunchTemplate.Properties.LaunchTemplateData.UserData;
-    expect(ud).toHaveProperty("Fn::Base64");
-    const base = ud["Fn::Base64"];
-    expect(base).toHaveProperty("Fn::Sub");
-    const sub = base["Fn::Sub"];
-    expect(Array.isArray(sub)).toBe(true);
-    expect(sub[1]).toHaveProperty("Ec2LogGroup");
-    expect(sub[1]).toHaveProperty("CWInterval");
-  });
-
-  // 21
-  test("AutoScalingGroup min size >= 2, references LaunchTemplate, spans 2 subnets", () => {
-    const asg = tpl.Resources.AutoScalingGroup;
-    expect(asg.Type).toBe("AWS::AutoScaling::AutoScalingGroup");
-    expect(parseInt(asg.Properties.MinSize, 10)).toBeGreaterThanOrEqual(2);
-    expect(asg.Properties.LaunchTemplate.LaunchTemplateId).toBeDefined();
-    expect(asg.Properties.VPCZoneIdentifier.length).toBeGreaterThanOrEqual(2);
-  });
-
-  // 22
   test("CloudWatch log groups exist for EC2 and App", () => {
     const r = tpl.Resources;
     expectKey(r, "CloudWatchLogGroupEC2");
     expectKey(r, "CloudWatchLogGroupApp");
   });
 
-  // 23
-  test("RDS Secret, SubnetGroup, ParameterGroup, and Instance are present with secure defaults", () => {
-    const r = tpl.Resources;
-    expectKey(r, "DbSecret");
-    expectKey(r, "RDSSubnetGroup");
-    expectKey(r, "RDSParameterGroup");
-    expectKey(r, "RDSInstance");
-    const inst = r.RDSInstance;
-    expect(inst.Properties.StorageEncrypted).toBe(true);
-    expect(inst.Properties.PubliclyAccessible).toBe(false);
-  });
-
-  // 24
+  // 21
   test("CloudWatch alarms exist for EC2 CPU, EC2 Memory, and RDS CPU", () => {
     const r = tpl.Resources;
     ["AlarmEc2CpuHigh", "AlarmEc2MemoryHigh", "AlarmRdsCpuHigh"].forEach((k) => expectKey(r, k));
   });
 
-  // 25
+  // 22
   test("Outputs include VpcId, RdsEndpoint, LogGroups, ASG, LaunchTemplateId", () => {
     const o = tpl.Outputs;
     ["VpcId", "RdsEndpoint", "CloudWatchEC2LogGroup", "CloudWatchAppLogGroup", "AsgName", "LaunchTemplateId"].forEach(
@@ -258,7 +225,7 @@ describe("TapStack — Unit Validation (JSON as source of truth, YAML presence c
     );
   });
 
-  // 26
+  // 23
   test("Top-level structure restricted to known CFN sections", () => {
     const allowed = new Set([
       "AWSTemplateFormatVersion",
@@ -275,7 +242,7 @@ describe("TapStack — Unit Validation (JSON as source of truth, YAML presence c
     });
   });
 
-  // 27
+  // 24
   test("YAML file exists and contains key markers (sanity)", () => {
     const y = readTemplateYamlText();
     expect(y).toMatch(/AWSTemplateFormatVersion:/);

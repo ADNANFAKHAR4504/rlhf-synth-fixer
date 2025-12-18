@@ -30,8 +30,7 @@ Parameters:
     AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/([0-9]|[1-2][0-9]|3[0-2])$'
     Description: Primary VPC CIDR block.
 
-  # ✅ FIX: make these String to avoid LocalStack delete-time list coercion bugs
-  # IMPORTANT: keep them comma-separated with NO SPACES (same as your defaults)
+  # keep String (LocalStack-safe)
   PublicSubnetCidrs:
     Type: String
     Default: 10.0.0.0/20,10.0.16.0/20
@@ -164,7 +163,6 @@ Conditions:
   HasAmiId: !Not [!Equals [!Ref AmiId, '']]
 
 Resources:
-
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -210,7 +208,6 @@ Resources:
       GatewayId: !Ref InternetGateway
     DependsOn: VPCGatewayAttachment
 
-  # ✅ FIX: Select from Split(String) (lint-safe + LocalStack-safe)
   PublicSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
@@ -313,10 +310,10 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NatGatewayB
 
+  # ✅ pipeline-safe: NO RoleName (avoids CAPABILITY_NAMED_IAM + collisions)
   InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ProjectName}-${EnvironmentSuffix}-ec2-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -335,10 +332,10 @@ Resources:
                 Resource: ['*']
       Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-ec2-role' }]
 
+  # ✅ pipeline-safe: NO InstanceProfileName (avoids collisions)
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${ProjectName}-${EnvironmentSuffix}-ec2-profile'
       Roles: [!Ref InstanceRole]
       Path: '/'
 
@@ -366,22 +363,21 @@ Resources:
           SourceSecurityGroupId: !Ref SecurityGroupEc2
       Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-sg-rds' }]
 
+  # ✅ pipeline-safe: no explicit LogGroupName (prevents "AlreadyExists")
   CloudWatchLogGroupEC2:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/${ProjectName}/${EnvironmentSuffix}/ec2'
       RetentionInDays: 30
 
   CloudWatchLogGroupApp:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/${ProjectName}/${EnvironmentSuffix}/app'
       RetentionInDays: 30
 
+  # ✅ pipeline-safe: no LaunchTemplateName (prevents collisions)
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub '${ProjectName}-${EnvironmentSuffix}-lt'
       LaunchTemplateData:
         IamInstanceProfile: { Arn: !GetAtt InstanceProfile.Arn }
         ImageId: !If
@@ -469,10 +465,10 @@ Resources:
                 echo "hello from $(hostname) in ${AWS::Region}" > /var/www/html/index.html || true
               - CWInterval: !FindInMap [CW, Defaults, Interval]
 
+  # ✅ pipeline-safe: no AutoScalingGroupName (prevents collisions)
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: !Sub '${ProjectName}-${EnvironmentSuffix}-asg'
       VPCZoneIdentifier: !If
         - IsLocalStack
         - [!Ref PublicSubnetA, !Ref PublicSubnetB]
@@ -492,11 +488,11 @@ Resources:
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-ec2'
           PropagateAtLaunch: true
 
+  # ✅ pipeline-safe: no TopicName (prevents collisions)
   SNSTopicAlarms:
     Type: AWS::SNS::Topic
     Condition: EnableSns
-    Properties:
-      TopicName: !Sub '${ProjectName}-${EnvironmentSuffix}-alarms'
+    Properties: {}
 
   SNSSubscription:
     Type: AWS::SNS::Subscription
@@ -506,10 +502,10 @@ Resources:
       Endpoint: !Ref AlarmEmail
       TopicArn: !Ref SNSTopicAlarms
 
+  # ✅ pipeline-safe: no AlarmName (prevents collisions)
   AlarmEc2CpuHigh:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${ProjectName}-${EnvironmentSuffix}-ec2-cpu-high'
       Namespace: AWS/EC2
       MetricName: CPUUtilization
       Dimensions:
@@ -526,7 +522,6 @@ Resources:
   AlarmEc2MemoryHigh:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${ProjectName}-${EnvironmentSuffix}-ec2-mem-high'
       Namespace: CWAgent
       MetricName: mem_used_percent
       Dimensions: [{ Name: AutoScalingGroupName, Value: !Ref AutoScalingGroup }]
@@ -538,11 +533,11 @@ Resources:
       TreatMissingData: notBreaching
       AlarmActions: !If [EnableSns, [!Ref SNSTopicAlarms], []]
 
+  # pipeline-safe: no fixed Secret Name (prevents collisions)
   DbSecret:
     Type: AWS::SecretsManager::Secret
     Condition: IsAws
     Properties:
-      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-db-secret'
       Description: !Sub 'Auto-generated credentials for ${ProjectName}-${EnvironmentSuffix} RDS'
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username":"${DbMasterUsername}"}'
@@ -550,12 +545,23 @@ Resources:
         PasswordLength: 20
         ExcludePunctuation: true
 
+  DbSecretLocal:
+    Type: AWS::SecretsManager::Secret
+    Condition: IsLocalStack
+    Properties:
+      Description: !Sub 'LocalStack DB credentials for ${ProjectName}-${EnvironmentSuffix}'
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"masteruser"}'
+        GenerateStringKey: password
+        PasswordLength: 20
+        ExcludePunctuation: true
+
+  # pipeline-safe: no DBSubnetGroupName (prevents collisions)
   RDSSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Condition: IsAws
     Properties:
       DBSubnetGroupDescription: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-subnet-group'
-      DBSubnetGroupName: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-subnets'
       SubnetIds: [!Ref PrivateSubnetA, !Ref PrivateSubnetB]
       Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-subnet-group' }]
 
@@ -567,13 +573,13 @@ Resources:
       Family: !If [EngineIsPg, 'postgres16', 'mysql8.0']
       Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-params' }]
 
+  # ✅ pipeline-safe: no DBInstanceIdentifier (prevents collisions + length issues)
   RDSInstanceAws:
     Type: AWS::RDS::DBInstance
     Condition: IsAws
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub '${ProjectName}-${EnvironmentSuffix}-rds'
       Engine: !Ref RdsEngine
       EngineVersion: !If [EngineIsPg, !Ref RdsEngineVersionPostgres, !Ref RdsEngineVersionMySql]
       DBInstanceClass: !Ref RdsInstanceClass
@@ -599,19 +605,18 @@ Resources:
     Type: AWS::RDS::DBInstance
     Condition: IsLocalStack
     Properties:
-      DBInstanceIdentifier: !Sub '${ProjectName}-${EnvironmentSuffix}-rds'
       Engine: postgres
       DBInstanceClass: db.t3.micro
       AllocatedStorage: 20
       PubliclyAccessible: false
       MasterUsername: masteruser
-      MasterUserPassword: !Ref AWS::NoValue
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DbSecretLocal}::password}}'
+
 
   AlarmRdsCpuHigh:
     Type: AWS::CloudWatch::Alarm
     Condition: IsAws
     Properties:
-      AlarmName: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-cpu-high'
       Namespace: AWS/RDS
       MetricName: CPUUtilization
       Dimensions:
@@ -632,11 +637,11 @@ Outputs:
 
   PublicSubnetIds:
     Description: Comma-separated public subnet IDs
-    Value: !Sub '${PublicSubnetA},${PublicSubnetB}'
+    Value: !Join [",", [!Ref PublicSubnetA, !Ref PublicSubnetB]]
 
   PrivateSubnetIds:
     Description: Comma-separated private subnet IDs
-    Value: !Sub '${PrivateSubnetA},${PrivateSubnetB}'
+    Value: !Join [",", [!Ref PrivateSubnetA, !Ref PrivateSubnetB]]
 
   AsgName:
     Description: Auto Scaling Group name
