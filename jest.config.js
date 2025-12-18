@@ -43,8 +43,8 @@ module.exports = {
     global: {
       branches: 70,
       functions: 100,
-      lines: 97,
-      statements: 97,
+      lines: 100,
+      statements: 99,
     },
   },
   testTimeout: 60000,
