@@ -26,7 +26,8 @@ export const handler: Handler = async event => {
 
     if (event.body) {
       // API Gateway proxy integration
-      parsedBody = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
+      parsedBody =
+        typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
     } else if (event.imageKey !== undefined) {
       // Direct invocation
       parsedBody = event as ImageProcessingEvent;
