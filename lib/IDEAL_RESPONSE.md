@@ -3,6 +3,7 @@
 ## What the Model Should Have Provided
 
 ### 1. **Correct Class Naming and Structure**
+
 ```typescript
 // lib/tap-stack.ts
 export class TapStack extends cdk.Stack {
@@ -18,6 +19,7 @@ new TapStack(app, stackName, props);
 ```
 
 ### 2. **Proper CDK v2 API Usage**
+
 ```typescript
 // Correct ECS Cluster configuration
 const cluster = new ecs.Cluster(this, 'MigrationCluster', {
@@ -27,15 +29,20 @@ const cluster = new ecs.Cluster(this, 'MigrationCluster', {
 });
 
 // Correct ECS Service configuration
-const fargateService = new ecsPatterns.ApplicationLoadBalancedFargateService(this, 'MigrationService', {
-  // ... other config
-  minHealthyPercent: 50,
-  maxHealthyPercent: 200,
-  // ... rest of config
-});
+const fargateService = new ecsPatterns.ApplicationLoadBalancedFargateService(
+  this,
+  'MigrationService',
+  {
+    // ... other config
+    minHealthyPercent: 50,
+    maxHealthyPercent: 200,
+    // ... rest of config
+  }
+);
 ```
 
 ### 3. **Valid RDS Credentials Configuration**
+
 ```typescript
 // Correct credentials without unsupported properties
 credentials: rds.Credentials.fromGeneratedSecret('migrationadmin', {
@@ -44,6 +51,7 @@ credentials: rds.Credentials.fromGeneratedSecret('migrationadmin', {
 ```
 
 ### 4. **Resource Creation Instead of Import**
+
 ```typescript
 // Create new VPC instead of importing existing
 const vpc = new ec2.Vpc(this, 'MigrationVpc', {
@@ -73,6 +81,7 @@ const privateSubnets = vpc.privateSubnets;
 ```
 
 ### 5. **Simplified Interface Design**
+
 ```typescript
 // Clean, simple interface without unnecessary dependencies
 interface TapStackProps extends cdk.StackProps {
@@ -82,9 +91,13 @@ interface TapStackProps extends cdk.StackProps {
 ```
 
 ### 6. **Proper Regional Parameterization**
+
 ```typescript
 // bin/tap.ts - Simple and effective regional configuration
-const region = app.node.tryGetContext('region') || process.env.CDK_DEFAULT_REGION || 'us-east-1';
+const region =
+  app.node.tryGetContext('region') ||
+  process.env.CDK_DEFAULT_REGION ||
+  'us-east-1';
 const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
 const projectName = app.node.tryGetContext('projectName') || 'legacy-migration';
 
@@ -99,12 +112,14 @@ new TapStack(app, stackName, {
 ```
 
 ### 7. **Region-Specific Resource Naming**
+
 ```typescript
 // Automatic region inclusion in resource names
 bucketName: `${projectName}-${environment}-data-${this.account}-${this.region}`,
 ```
 
 ### 8. **Custom IAM Policies Instead of Managed Policies**
+
 ```typescript
 // Create custom backup role with inline policies instead of managed policies
 const backupRole = new iam.Role(this, 'BackupRole', {
@@ -129,14 +144,15 @@ backupRole.addToPolicy(
       'backup:ListBackupPlans',
       'backup:ListBackupSelections',
       'backup:ListRecoveryPointsByBackupVault',
-      'backup:ListRecoveryPointsByResource'
+      'backup:ListRecoveryPointsByResource',
     ],
-    resources: ['*']
+    resources: ['*'],
   })
 );
 ```
 
 ### 9. **Regional RDS Engine Version Verification**
+
 ```typescript
 // Use regionally available PostgreSQL version
 const database = new rds.DatabaseInstance(this, 'MigrationDatabase', {
@@ -148,6 +164,7 @@ const database = new rds.DatabaseInstance(this, 'MigrationDatabase', {
 ```
 
 ### 10. **Simplified CloudWatch Log Group Configuration**
+
 ```typescript
 // Remove KMS encryption from CloudWatch Log Group to avoid permission issues
 const logGroup = new logs.LogGroup(this, 'ApplicationLogGroup', {
@@ -159,6 +176,7 @@ const logGroup = new logs.LogGroup(this, 'ApplicationLogGroup', {
 ```
 
 ### 11. **Default Backup Vault Access Policy**
+
 ```typescript
 // Use default access policy instead of explicit one
 const backupVault = new backup.BackupVault(this, 'MigrationBackupVault', {
@@ -169,6 +187,7 @@ const backupVault = new backup.BackupVault(this, 'MigrationBackupVault', {
 ```
 
 ### 12. **Accurate Integration Test Configuration**
+
 ```typescript
 // Integration tests should match actual implementation
 test('should have load balancer configured', async () => {
@@ -185,42 +204,50 @@ test('should have RDS instance running', async () => {
 
 ## Key Principles for Ideal Response
 
-### ✅ **Compilation-First Approach**
+### **Compilation-First Approach**
+
 - Always ensure TypeScript compiles without errors
 - Use current CDK API versions
 - Validate all imports and exports
 
-### ✅ **Simplicity Over Complexity**
+### **Simplicity Over Complexity**
+
 - Create new resources rather than importing existing ones
 - Use simple interfaces with minimal dependencies
 - Avoid over-engineering solutions
 
-### ✅ **Permission-Aware Design**
+### **Permission-Aware Design**
+
 - Don't assume access to existing AWS resources
 - Create resources that don't require special permissions
 - Use least-privilege principles
 
-### ✅ **Current API Usage**
+### **Current API Usage**
+
 - Use latest CDK v2 APIs
 - Avoid deprecated properties
 - Follow current best practices
 
-### ✅ **Regional Flexibility**
+### **Regional Flexibility**
+
 - Use CDK context for configuration
 - Include region in resource naming
 - Support multiple deployment environments
 
-### ✅ **Production Readiness**
+### **Production Readiness**
+
 - Include proper error handling
 - Add comprehensive monitoring
 - Implement security best practices
 
-### ✅ **AWS Service Verification**
+### **AWS Service Verification**
+
 - Verify AWS managed policy existence before referencing
 - Check regional service availability before deployment
 - Use custom policies instead of assuming managed policy availability
 
-### ✅ **Test-Implementation Alignment**
+### **Test-Implementation Alignment**
+
 - Ensure integration tests match actual resource configurations
 - Update tests when implementation changes
 - Focus on functionality testing rather than implementation details
@@ -228,6 +255,7 @@ test('should have RDS instance running', async () => {
 ## Deployment Examples
 
 ### **Simple Regional Deployment**
+
 ```bash
 # Deploy to different regions
 npx cdk deploy -c region=us-east-1
@@ -236,6 +264,7 @@ npx cdk deploy -c region=eu-west-1
 ```
 
 ### **Environment-Specific Deployment**
+
 ```bash
 # Deploy different environments
 npx cdk deploy -c environmentSuffix=dev
@@ -244,6 +273,7 @@ npx cdk deploy -c environmentSuffix=prod
 ```
 
 ### **Combined Configuration**
+
 ```bash
 # Production in specific region
 npx cdk deploy -c region=us-west-2 -c environmentSuffix=prod
@@ -251,32 +281,38 @@ npx cdk deploy -c region=us-west-2 -c environmentSuffix=prod
 
 ## Success Metrics
 
-### ✅ **Compilation Success**
+### **Compilation Success**
+
 - TypeScript compiles without errors
 - No deprecated API warnings
 - All imports resolve correctly
 
-### ✅ **Deployment Success**
+### **Deployment Success**
+
 - CDK synthesizes without errors
 - No AWS permission issues
 - Resources deploy successfully
 
-### ✅ **Functionality Verification**
+### **Functionality Verification**
+
 - All resources are properly connected
 - Backup and restore mechanisms work
 - Regional deployment functions correctly
 
-### ✅ **Maintainability**
+### **Maintainability**
+
 - Code is well-structured and documented
 - Interfaces are simple and extensible
 - Configuration is flexible and clear
 
-### ✅ **AWS Service Compatibility**
+### **AWS Service Compatibility**
+
 - All referenced AWS services exist and are available
 - Regional service availability is verified
 - Custom policies are used instead of non-existent managed policies
 
-### ✅ **Test Accuracy**
+### **Test Accuracy**
+
 - Integration tests match actual implementation
 - Tests focus on functionality rather than implementation details
 - Tests are updated when implementation changes

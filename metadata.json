@@ -6,18 +6,11 @@
   "po_id": "291562",
   "team": "2",
   "startedAt": "2025-08-21T09:19:07.894Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "General Infrastructure Tooling QA",
-    "IaC Optimization",
-    "Web Application Deployment",
-    "Security Configuration as Code",
-    "Infrastructure Analysis/Monitoring",
+    "Environment Migration",
     "Cloud Environment Setup",
-    "IaC Diagnosis/Edits",
-    "Failure Recovery Automation",
-    "Multi-Environment Consistency",
-    "CI/CD Pipeline"
+    "Multi-Environment Consistency and Replication"
   ],
   "aws_services": [
     "VPC",
