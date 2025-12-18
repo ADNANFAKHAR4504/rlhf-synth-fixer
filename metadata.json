@@ -1,0 +1,22 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr10",
+  "team": "synth",
+  "startedAt": "2025-08-07T17:18:43-05:00",
+  "subtask": "Infrastructure QA and Management",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "dynamodb",
+    "s3",
+    "lambda",
+    "apigateway",
+    "iam",
+    "cloudwatch"
+  ]
+}
