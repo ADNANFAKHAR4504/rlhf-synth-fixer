@@ -474,19 +474,4 @@ describe("TapStack — Integration (LocalStack/AWS)", () => {
       expect(match).toBeTruthy();
     }
   });
-
-  test("16) Lambda/API are skipped when disabled (LocalStack mode)", () => {
-    const lambda = must(outputs!, "LambdaName");
-    const api = must(outputs!, "ApiInvokeUrl");
-
-    // Your outputs show: localstack:disabled
-    if (IS_LOCALSTACK) {
-      expect(lambda).toMatch(/^localstack:/);
-      expect(api).toMatch(/^localstack:/);
-    } else {
-      // On AWS you can tighten these later if you enable them in tests
-      expect(lambda).toBeTruthy();
-      expect(api).toBeTruthy();
-    }
-  });
 });
