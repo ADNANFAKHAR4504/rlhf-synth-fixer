@@ -7,7 +7,7 @@
   "team": "synth-2",
   "startedAt": "2025-08-16T13:17:10.657Z",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": ["Web Application Deployment"],
+  "subject_labels": ["Cloud Environment Setup"],
   "aws_services": [
     "CloudFront",
     "S3",
