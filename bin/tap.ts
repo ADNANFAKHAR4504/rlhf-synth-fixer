@@ -77,14 +77,15 @@ export const primaryPublicSubnetIds =
   stack.regionalNetworks[primaryRegionName].publicSubnetIds;
 export const primaryPrivateSubnetIds =
   stack.regionalNetworks[primaryRegionName].privateSubnetIds;
+// Elastic Beanstalk outputs (undefined when running on LocalStack)
 export const primaryEbApplicationName =
-  stack.regionalElasticBeanstalk[primaryRegionName].applicationName;
+  stack.regionalElasticBeanstalk[primaryRegionName]?.applicationName;
 export const primaryEbEnvironmentName =
-  stack.regionalElasticBeanstalk[primaryRegionName].environmentName;
+  stack.regionalElasticBeanstalk[primaryRegionName]?.environmentName;
 export const primaryEbEnvironmentUrl =
-  stack.regionalElasticBeanstalk[primaryRegionName].environmentUrl;
+  stack.regionalElasticBeanstalk[primaryRegionName]?.environmentUrl;
 export const primaryEbEnvironmentCname =
-  stack.regionalElasticBeanstalk[primaryRegionName].environmentCname;
+  stack.regionalElasticBeanstalk[primaryRegionName]?.environmentCname;
 export const primaryDashboardName =
   stack.regionalMonitoring[primaryRegionName].dashboardName;
 export const primarySnsTopicArn =
@@ -109,21 +110,22 @@ export const secondaryPrivateSubnetIds =
   stack.regions.length > 1
     ? stack.regionalNetworks[stack.regions[1]].privateSubnetIds
     : undefined;
+// Elastic Beanstalk outputs (undefined when running on LocalStack)
 export const secondaryEbApplicationName =
   stack.regions.length > 1
-    ? stack.regionalElasticBeanstalk[stack.regions[1]].applicationName
+    ? stack.regionalElasticBeanstalk[stack.regions[1]]?.applicationName
     : undefined;
 export const secondaryEbEnvironmentName =
   stack.regions.length > 1
-    ? stack.regionalElasticBeanstalk[stack.regions[1]].environmentName
+    ? stack.regionalElasticBeanstalk[stack.regions[1]]?.environmentName
     : undefined;
 export const secondaryEbEnvironmentUrl =
   stack.regions.length > 1
-    ? stack.regionalElasticBeanstalk[stack.regions[1]].environmentUrl
+    ? stack.regionalElasticBeanstalk[stack.regions[1]]?.environmentUrl
     : undefined;
 export const secondaryEbEnvironmentCname =
   stack.regions.length > 1
-    ? stack.regionalElasticBeanstalk[stack.regions[1]].environmentCname
+    ? stack.regionalElasticBeanstalk[stack.regions[1]]?.environmentCname
     : undefined;
 export const secondaryDashboardName =
   stack.regions.length > 1
@@ -134,17 +136,17 @@ export const secondarySnsTopicArn =
     ? stack.regionalMonitoring[stack.regions[1]].snsTopicArn
     : undefined;
 
-// All regions data for reference
+// All regions data for reference (Elastic Beanstalk fields are undefined on LocalStack)
 export const allRegionsData = pulumi.output(
   (() => {
     const data: Record<string, RegionData> = {};
     for (const region of stack.regions) {
+      const ebInfra = stack.regionalElasticBeanstalk[region];
       data[region] = {
         vpcId: stack.regionalNetworks[region].vpcId,
         vpcCidr: stack.regionalNetworks[region].vpc.cidrBlock,
-        ebEnvironmentUrl: stack.regionalElasticBeanstalk[region].environmentUrl,
-        ebEnvironmentName:
-          stack.regionalElasticBeanstalk[region].environmentName,
+        ebEnvironmentUrl: ebInfra?.environmentUrl ?? pulumi.output('N/A'),
+        ebEnvironmentName: ebInfra?.environmentName ?? pulumi.output('N/A'),
         dashboardName: stack.regionalMonitoring[region].dashboardName,
         snsTopicArn: stack.regionalMonitoring[region].snsTopicArn,
       };
