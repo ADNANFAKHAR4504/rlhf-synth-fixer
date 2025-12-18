@@ -67,7 +67,7 @@ describe('Migration Infrastructure - AWS Resource Integration Tests', () => {
       expect(response.Vpcs[0].State).toBe('available');
       expect(response.Vpcs[0].CidrBlock).toBe('10.0.0.0/16');
 
-      console.log(`✅ VPC ${outputs.VPCId} is active with CIDR 10.0.0.0/16`);
+      console.log(`VPC ${outputs.VPCId} is active with CIDR 10.0.0.0/16`);
     }, 25000);
 
     test('should have public and private subnets in different AZs', async () => {
@@ -83,7 +83,7 @@ describe('Migration Infrastructure - AWS Resource Integration Tests', () => {
       const azs = response.Subnets.map((subnet: any) => subnet.AvailabilityZone);
       expect(new Set(azs).size).toBe(2); // All subnets in 2 AZs
 
-      console.log(`✅ Subnets deployed across AZs: ${Array.from(new Set(azs)).join(', ')}`);
+      console.log(`Subnets deployed across AZs: ${Array.from(new Set(azs)).join(', ')}`);
     }, 25000);
   });
 
@@ -96,7 +96,7 @@ describe('Migration Infrastructure - AWS Resource Integration Tests', () => {
       expect(response.VpnGateways).toHaveLength(1);
       expect(response.VpnGateways[0].State).toBe('available');
 
-      console.log(`✅ VPN Gateway ${outputs.VPNGatewayId} is operational`);
+      console.log(`VPN Gateway ${outputs.VPNGatewayId} is operational`);
     }, 25000);
   });
 
@@ -114,7 +114,7 @@ describe('Migration Infrastructure - AWS Resource Integration Tests', () => {
       expect(response.DBClusters[0].Endpoint).toBe(outputs.AuroraClusterEndpoint);
       expect(response.DBClusters[0].Engine).toBe('aurora-mysql');
 
-      console.log(`✅ Aurora cluster ${clusterIdentifier} is active`);
+      console.log(`Aurora cluster ${clusterIdentifier} is active`);
     }, 25000);
 
     test('should have accessible Aurora secrets', async () => {
@@ -125,7 +125,7 @@ describe('Migration Infrastructure - AWS Resource Integration Tests', () => {
       expect(response.ARN).toBe(outputs.AuroraDBSecretArn);
       expect(response.Name).toContain(environmentSuffix);
 
-      console.log(`✅ Aurora secrets ${outputs.AuroraDBSecretArn} are configured`);
+      console.log(`Aurora secrets ${outputs.AuroraDBSecretArn} are configured`);
     }, 25000);
   });
 
@@ -141,7 +141,7 @@ describe('Migration Infrastructure - AWS Resource Integration Tests', () => {
 
       dmsInstances.forEach((instance: any) => {
         expect(instance.ReplicationInstanceStatus).toBe('available');
-        console.log(`✅ DMS instance ${instance.ReplicationInstanceIdentifier} is available`);
+        console.log(`DMS instance ${instance.ReplicationInstanceIdentifier} is available`);
       });
     }, 20000);
 
@@ -156,7 +156,7 @@ describe('Migration Infrastructure - AWS Resource Integration Tests', () => {
 
       dmsTasks.forEach((task: any) => {
         expect(['ready', 'running', 'stopped'].includes(task.Status)).toBeTruthy();
-        console.log(`✅ DMS task ${task.ReplicationTaskIdentifier} is ${task.Status}`);
+        console.log(`DMS task ${task.ReplicationTaskIdentifier} is ${task.Status}`);
       });
     }, 20000);
   });
@@ -171,7 +171,7 @@ describe('Migration Infrastructure - AWS Resource Integration Tests', () => {
       expect(response.LoadBalancers[0].State.Code).toBe('active');
       expect(response.LoadBalancers[0].Type).toBe('application');
 
-      console.log(`✅ ALB ${outputs.ApplicationLoadBalancerArn} is active`);
+      console.log(`ALB ${outputs.ApplicationLoadBalancerArn} is active`);
     }, 25000);
 
     test('should have configured target groups for load balancer', async () => {
@@ -183,7 +183,7 @@ describe('Migration Infrastructure - AWS Resource Integration Tests', () => {
 
       response.TargetGroups.forEach((tg: any) => {
         expect(tg.TargetType).toBeDefined();
-        console.log(`✅ Target group ${tg.TargetGroupName} configured for ${tg.TargetType} targets`);
+        console.log(`Target group ${tg.TargetGroupName} configured for ${tg.TargetType} targets`);
       });
     }, 25000);
   });
@@ -204,7 +204,7 @@ describe('Migration Infrastructure - AWS Resource Integration Tests', () => {
         expect(outputs[output]).not.toBe('');
       });
 
-      console.log(`✅ All ${criticalOutputs.length} critical infrastructure components validated`);
+      console.log(`All ${criticalOutputs.length} critical infrastructure components validated`);
     });
 
     test('should have correct resource naming format', () => {
@@ -218,7 +218,7 @@ describe('Migration Infrastructure - AWS Resource Integration Tests', () => {
       expect(outputs.VPNConnectionId).toMatch(/^vpn-[a-f0-9]+$/);
       expect(outputs.ApplicationLoadBalancerDNS).toMatch(/.*\.elb\.amazonaws\.com$/);
 
-      console.log(`✅ All resource naming follows AWS conventions`);
+      console.log(`All resource naming follows AWS conventions`);
     });
   });
 });
