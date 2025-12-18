@@ -34,17 +34,23 @@ export class TapStack extends cdk.Stack {
 
     if (nestedStackOutputs) {
       new cdk.CfnOutput(this, 'MetadataBucketName', {
-        value: nestedStackOutputs.getAtt('Outputs.MetadataBucketName').toString(),
+        value: nestedStackOutputs
+          .getAtt('Outputs.MetadataBucketName')
+          .toString(),
         description: 'S3 bucket for metadata.json files',
       });
 
       new cdk.CfnOutput(this, 'OpenSearchDomainName', {
-        value: nestedStackOutputs.getAtt('Outputs.OpenSearchDomainName').toString(),
+        value: nestedStackOutputs
+          .getAtt('Outputs.OpenSearchDomainName')
+          .toString(),
         description: 'OpenSearch domain name',
       });
 
       new cdk.CfnOutput(this, 'OpenSearchDomainEndpoint', {
-        value: nestedStackOutputs.getAtt('Outputs.OpenSearchDomainEndpoint').toString(),
+        value: nestedStackOutputs
+          .getAtt('Outputs.OpenSearchDomainEndpoint')
+          .toString(),
         description: 'OpenSearch domain endpoint',
       });
 
@@ -54,7 +60,9 @@ export class TapStack extends cdk.Stack {
       });
 
       new cdk.CfnOutput(this, 'MetadataProcessingWorkflowArn', {
-        value: nestedStackOutputs.getAtt('Outputs.MetadataProcessingWorkflowArn').toString(),
+        value: nestedStackOutputs
+          .getAtt('Outputs.MetadataProcessingWorkflowArn')
+          .toString(),
         description: 'Step Functions state machine ARN',
       });
     }
