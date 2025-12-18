@@ -11,21 +11,24 @@ import {
 import { Construct } from 'constructs';
 
 // Detect LocalStack environment
-const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                     process.env.AWS_ENDPOINT_URL?.includes('4566') ||
-                     process.env.LOCALSTACK === 'true';
+const isLocalStack =
+  process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+  process.env.AWS_ENDPOINT_URL?.includes('4566') ||
+  process.env.LOCALSTACK === 'true';
 
 // Configure AWS SDK clients for LocalStack
-const awsClientConfig = isLocalStack ? {
-  endpoint: process.env.AWS_ENDPOINT_URL || 'http://localhost:4566',
-  region: process.env.AWS_REGION || 'us-east-1',
-  credentials: {
-    accessKeyId: 'test',
-    secretAccessKey: 'test',
-  },
-} : {
-  region: process.env.AWS_REGION || 'us-east-1',
-};
+const awsClientConfig = isLocalStack
+  ? {
+      endpoint: process.env.AWS_ENDPOINT_URL || 'http://localhost:4566',
+      region: process.env.AWS_REGION || 'us-east-1',
+      credentials: {
+        accessKeyId: 'test',
+        secretAccessKey: 'test',
+      },
+    }
+  : {
+      region: process.env.AWS_REGION || 'us-east-1',
+    };
 
 // ? Import your stacks here
 import { MultiEnvEcsStack, EnvironmentConfig } from './multienv-ecs-stack';
@@ -46,7 +49,9 @@ if (require.main === module) {
   (async function generateSelfSignedCertAndStore(): Promise<void> {
     // Skip certificate generation for LocalStack (use HTTP instead)
     if (isLocalStack) {
-      console.log('ℹ️ LocalStack detected - skipping certificate generation (using HTTP)');
+      console.log(
+        'ℹ️ LocalStack detected - skipping certificate generation (using HTTP)'
+      );
       return;
     }
 

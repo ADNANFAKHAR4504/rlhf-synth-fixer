@@ -7,14 +7,13 @@ import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
-import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
-import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 
 // Detect LocalStack environment
-const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                     process.env.AWS_ENDPOINT_URL?.includes('4566') ||
-                     process.env.LOCALSTACK === 'true';
+const isLocalStack =
+  process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+  process.env.AWS_ENDPOINT_URL?.includes('4566') ||
+  process.env.LOCALSTACK === 'true';
 
 export interface EnvironmentConfig {
   envName: string;
@@ -53,7 +52,7 @@ export class MultiEnvEcsStack extends cdk.Stack {
     });
 
     // Add EC2 capacity for LocalStack compatibility (Fargate not fully supported in Community)
-    const autoScalingGroup = cluster.addCapacity(`${config.envName}DefaultAutoScalingGroup`, {
+    cluster.addCapacity(`${config.envName}DefaultAutoScalingGroup`, {
       instanceType: new ec2.InstanceType('t3.small'),
       machineImage: ecs.EcsOptimizedImage.amazonLinux2(),
       minCapacity: 1,
@@ -68,12 +67,16 @@ export class MultiEnvEcsStack extends cdk.Stack {
       });
     }
 
-    const configParam = new ssm.StringParameter(this, `${config.envName}ConfigParameter`, {
-      parameterName: `/${config.envName}/config`,
-      stringValue: config.envName,
-      tier: ssm.ParameterTier.STANDARD, // Use STANDARD for LocalStack compatibility
-      description: 'Environment config',
-    });
+    const configParam = new ssm.StringParameter(
+      this,
+      `${config.envName}ConfigParameter`,
+      {
+        parameterName: `/${config.envName}/config`,
+        stringValue: config.envName,
+        tier: ssm.ParameterTier.STANDARD, // Use STANDARD for LocalStack compatibility
+        description: 'Environment config',
+      }
+    );
 
     // Apply removal policy for LocalStack
     if (isLocalStack) {
@@ -95,11 +98,13 @@ export class MultiEnvEcsStack extends cdk.Stack {
       ),
       memoryLimitMiB: config.memoryLimit,
       cpu: config.cpu,
-      portMappings: [{
-        containerPort: config.port,
-        hostPort: 0, // Dynamic port mapping for EC2
-        protocol: ecs.Protocol.TCP,
-      }],
+      portMappings: [
+        {
+          containerPort: config.port,
+          hostPort: 0, // Dynamic port mapping for EC2
+          protocol: ecs.Protocol.TCP,
+        },
+      ],
       environment: {
         CONFIG_PARAMETER_NAME: `/${config.envName}/config`,
         ENV_NAME: config.envName,
@@ -123,22 +128,20 @@ export class MultiEnvEcsStack extends cdk.Stack {
     configParam.grantRead(taskDefinition.taskRole);
 
     // Use EC2 service instead of Fargate
-    const ecsService = new ecs.Ec2Service(
-      this,
-      `${config.envName}Service`,
-      {
-        cluster,
-        taskDefinition,
-        desiredCount: 2,
-        serviceName: `${config.envName}-svc`,
-        // Cloud Map only if not LocalStack
-        ...(isLocalStack ? {} : {
-          cloudMapOptions: {
-            name: 'app',
-          },
-        }),
-      }
-    );
+    const ecsService = new ecs.Ec2Service(this, `${config.envName}Service`, {
+      cluster,
+      taskDefinition,
+      desiredCount: 2,
+      serviceName: `${config.envName}-svc`,
+      // Cloud Map only if not LocalStack
+      ...(isLocalStack
+        ? {}
+        : {
+            cloudMapOptions: {
+              name: 'app',
+            },
+          }),
+    });
 
     const lb = new elbv2.ApplicationLoadBalancer(this, 'LB', {
       vpc,
@@ -147,7 +150,9 @@ export class MultiEnvEcsStack extends cdk.Stack {
 
     // Apply removal policy for LocalStack
     if (isLocalStack) {
-      (lb.node.defaultChild as cdk.CfnResource).applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
+      (lb.node.defaultChild as cdk.CfnResource).applyRemovalPolicy(
+        cdk.RemovalPolicy.DESTROY
+      );
     }
 
     /** DNS Certificate - optional for LocalStack */
