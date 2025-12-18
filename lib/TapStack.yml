@@ -403,6 +403,11 @@ Resources:
 
   AuroraCluster:
     Type: AWS::RDS::DBCluster
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - W1011  # Using parameter for LocalStack compatibility instead of dynamic reference
     Properties:
       Engine: aurora-mysql
       EngineVersion: 8.0.mysql_aurora.3.04.0
