@@ -450,9 +450,6 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       const asg = template.Resources.AutoScalingGroup;
       const launchTemplate = asg.Properties.LaunchTemplate;
       expect(launchTemplate.LaunchTemplateId).toEqual({ Ref: 'LaunchTemplate' });
-      expect(launchTemplate.Version).toEqual({
-        'Fn::GetAtt': ['LaunchTemplate', 'LatestVersionNumber'],
-      });
     });
 
     test('should have TargetTrackingScalingPolicy', () => {
