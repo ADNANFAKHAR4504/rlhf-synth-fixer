@@ -71,5 +71,36 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(this).add('Environment', environmentSuffix);
     cdk.Tags.of(this).add('Project', 'UserManagementAPI');
     cdk.Tags.of(this).add('ManagedBy', 'CDK');
+
+    // Export main outputs from the parent stack
+    new cdk.CfnOutput(this, 'UsersTableName', {
+      value: dynamoDbStack.usersTable.tableName,
+      exportName: `TapStack-UsersTableName-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'CreateUserFunctionArn', {
+      value: lambdaStack.createUserFunction.functionArn,
+      exportName: `TapStack-CreateUserFunctionArn-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'GetUserFunctionArn', {
+      value: lambdaStack.getUserFunction.functionArn,
+      exportName: `TapStack-GetUserFunctionArn-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'DeleteUserFunctionArn', {
+      value: lambdaStack.deleteUserFunction.functionArn,
+      exportName: `TapStack-DeleteUserFunctionArn-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'ApiGatewayUrl', {
+      value: apiGatewayStack.api.url,
+      exportName: `TapStack-ApiGatewayUrl-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'ApiGatewayId', {
+      value: apiGatewayStack.api.restApiId,
+      exportName: `TapStack-ApiGatewayId-${environmentSuffix}`,
+    });
   }
 }
