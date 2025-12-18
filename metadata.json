@@ -1,0 +1,23 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291551",
+  "team": "2",
+  "startedAt": "2025-08-22T15:14:09.558Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "IAM",
+    "CloudWatch Logs",
+    "S3",
+    "STS"
+  ]
+}
