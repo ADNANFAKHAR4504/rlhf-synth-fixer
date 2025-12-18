@@ -394,7 +394,7 @@ new MultiRegionApp();
 - **Fine-grained IAM permissions** with least-privilege access
 - **Configurable parameters** for flexible capacity management
 
-### 🔒 **Security Features**
+### [SECURITY] **Security Features**
 - IAM policies restricted to specific DynamoDB actions
 - Conditional access policies for enhanced security
 - Environment variable injection for secure configuration
