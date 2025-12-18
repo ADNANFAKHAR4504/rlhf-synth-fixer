@@ -1,0 +1,22 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291730",
+  "team": "2",
+  "startedAt": "2025-12-18T17:11:25.705Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "S3 Bucket",
+    "CloudFormation",
+    "Lambda",
+    "EventBridge",
+    "CloudWatch LogGroup",
+    "VPC"
+  ]
+}
