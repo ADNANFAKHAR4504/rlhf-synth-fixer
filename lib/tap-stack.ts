@@ -78,6 +78,11 @@ export class TapStack extends cdk.Stack {
       exportName: `TapStack-UsersTableName-${environmentSuffix}`,
     });
 
+    new cdk.CfnOutput(this, 'UsersTableArn', {
+      value: dynamoDbStack.usersTable.tableArn,
+      exportName: `TapStack-UsersTableArn-${environmentSuffix}`,
+    });
+
     new cdk.CfnOutput(this, 'CreateUserFunctionArn', {
       value: lambdaStack.createUserFunction.functionArn,
       exportName: `TapStack-CreateUserFunctionArn-${environmentSuffix}`,

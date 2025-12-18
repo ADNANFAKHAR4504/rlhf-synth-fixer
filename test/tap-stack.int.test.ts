@@ -327,20 +327,25 @@ describe('Infrastructure Validation', () => {
 
   test('Resources are deployed in correct region', () => {
     // Check ARNs contain correct region
-    expect(outputs.UsersTableArn).toContain('us-east-1');
-    expect(outputs.CreateUserFunctionArn).toContain('us-east-1');
-    expect(outputs.GetUserFunctionArn).toContain('us-east-1');
-    expect(outputs.DeleteUserFunctionArn).toContain('us-east-1');
+    const expectedRegion = process.env.AWS_REGION || 'us-east-1';
+    expect(outputs.UsersTableArn).toContain(expectedRegion);
+    expect(outputs.CreateUserFunctionArn).toContain(expectedRegion);
+    expect(outputs.GetUserFunctionArn).toContain(expectedRegion);
+    expect(outputs.DeleteUserFunctionArn).toContain(expectedRegion);
   });
 
   test('API Gateway URL is properly formatted', () => {
     const apiUrl = outputs.ApiGatewayUrl;
+    const expectedRegion = process.env.AWS_REGION || 'us-east-1';
     // LocalStack uses a different URL format
     if (process.env.AWS_ENDPOINT_URL) {
       expect(apiUrl).toMatch(/^http:\/\/localhost:4566\/restapis\/[a-z0-9]+\/.+\/$/);
     } else {
+      const regionPattern = expectedRegion.replace('-', '\\-');
       expect(apiUrl).toMatch(
-        /^https:\/\/[a-z0-9]+\.execute-api\.us-east-1\.amazonaws\.com\/.+\/$/
+        new RegExp(
+          `^https:\\/\\/[a-z0-9]+\\.execute-api\\.${regionPattern}\\.amazonaws\\.com\\/.+\\/$`
+        )
       );
     }
     expect(apiUrl).toContain(outputs.ApiGatewayId);
