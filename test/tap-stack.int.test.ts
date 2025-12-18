@@ -298,24 +298,40 @@ describe('Enhanced Serverless Infrastructure Integration Tests', () => {
       });
       await dynamoClient.send(putCommand);
 
-      // Wait for stream processing
-      await wait(3000);
+      // Wait for stream processing (longer for LocalStack)
+      await wait(isLocalStack ? 8000 : 3000);
 
-      // Check if data was processed to analytics table
-      const scanCommand = new ScanCommand({
-        TableName: outputs.AnalyticsTableName,
-        FilterExpression: 'sourceUserId = :userId',
-        ExpressionAttributeValues: {
-          ':userId': { S: testUserId },
-        },
-      });
-      const scanResponse = await dynamoClient.send(scanCommand);
+      // Check if data was processed to analytics table with retries
+      let scanResponse;
+      let retries = 0;
+      const maxRetries = isLocalStack ? 3 : 1;
 
-      expect(scanResponse.Items).toBeDefined();
-      expect(scanResponse.Items?.length).toBeGreaterThan(0);
-      expect(scanResponse.Items?.[0].dataType?.S).toBe('USER_ACTIVITY');
-      expect(scanResponse.Items?.[0].processedBy?.S).toBe('userDataProcessor');
-    }, 10000);
+      while (retries < maxRetries) {
+        const scanCommand = new ScanCommand({
+          TableName: outputs.AnalyticsTableName,
+          FilterExpression: 'sourceUserId = :userId',
+          ExpressionAttributeValues: {
+            ':userId': { S: testUserId },
+          },
+        });
+        scanResponse = await dynamoClient.send(scanCommand);
+
+        if (scanResponse.Items && scanResponse.Items.length > 0) {
+          break;
+        }
+
+        retries++;
+        if (retries < maxRetries) {
+          console.log(`Retry ${retries}/${maxRetries} - waiting for stream processing...`);
+          await wait(3000);
+        }
+      }
+
+      expect(scanResponse?.Items).toBeDefined();
+      expect(scanResponse?.Items?.length).toBeGreaterThan(0);
+      expect(scanResponse?.Items?.[0].dataType?.S).toBe('USER_ACTIVITY');
+      expect(scanResponse?.Items?.[0].processedBy?.S).toBe('userDataProcessor');
+    }, 20000);
 
     test('Should process order data through DynamoDB stream to analytics', async () => {
       const testOrderId = `test-order-${Date.now()}`;

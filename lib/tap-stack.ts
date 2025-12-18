@@ -706,7 +706,7 @@ export class TapStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'DashboardUrl', {
-      value: `https://${this.region}.console.aws.amazon.com/cloudwatch/home?region=${this.region}#dashboards:name=${dashboard.dashboardName}`,
+      value: `https://${this.region}.console.aws.amazon.com/cloudwatch/home?region=${this.region}#dashboards:name=${environmentSuffix}-serverless-dash-synth`,
       description: 'CloudWatch Dashboard URL',
     });
 
