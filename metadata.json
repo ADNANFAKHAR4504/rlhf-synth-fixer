@@ -1,0 +1,23 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "887",
+  "team": "synth-2",
+  "startedAt": "2025-12-18T13:21:53.481Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "S3 Bucket",
+    "CloudFormation",
+    "Lambda",
+    "API Gateway",
+    "IAM",
+    "CloudWatch LogGroup"
+  ],
+  "author": "veera-turing"
+}
