@@ -1,0 +1,77 @@
+[
+  {
+    "OutputKey": "EnvironmentSuffix",
+    "OutputValue": "dev",
+    "ExportName": "TapStackdev-EnvironmentSuffix"
+  },
+  {
+    "OutputKey": "InternetGatewayId",
+    "OutputValue": "igw-ec37e7e8dd6c43bc0",
+    "ExportName": "TapStackdev-InternetGatewayId"
+  },
+  {
+    "OutputKey": "KeyPairId",
+    "OutputValue": "key-7a199c410e50a97b8",
+    "ExportName": "TapStackdev-KeyPairId"
+  },
+  {
+    "OutputKey": "KeyPairName",
+    "OutputValue": "tap-key-dev",
+    "ExportName": "TapStackdev-KeyPairName"
+  },
+  {
+    "OutputKey": "NatGatewayIds",
+    "OutputValue": "N/A-LocalStack",
+    "ExportName": "TapStackdev-NatGatewayId"
+  },
+  {
+    "OutputKey": "PrivateInstanceId",
+    "OutputValue": "i-8dd4d0f43856abbfc",
+    "ExportName": "TapStackdev-PrivateInstanceId"
+  },
+  {
+    "OutputKey": "PrivateInstancePrivateIp",
+    "OutputValue": "10.145.206.173",
+    "ExportName": "TapStackdev-PrivateInstancePrivateIp"
+  },
+  {
+    "OutputKey": "PrivateSubnetIds",
+    "OutputValue": "subnet-2c4b15befa5471dfa,subnet-1d5c3453f9023f86a",
+    "ExportName": "TapStackdev-PrivateSubnetIds"
+  },
+  {
+    "OutputKey": "PublicInstanceId",
+    "OutputValue": "i-c2362e50b14e85163",
+    "ExportName": "TapStackdev-PublicInstanceId"
+  },
+  {
+    "OutputKey": "PublicInstancePrivateIp",
+    "OutputValue": "10.39.31.149",
+    "ExportName": "TapStackdev-PublicInstancePrivateIp"
+  },
+  {
+    "OutputKey": "PublicInstancePublicIp",
+    "OutputValue": "54.214.220.69",
+    "ExportName": "TapStackdev-PublicInstancePublicIp"
+  },
+  {
+    "OutputKey": "PublicSubnetIds",
+    "OutputValue": "subnet-3aff39fe818f2969f,subnet-5638a3937c2a49275",
+    "ExportName": "TapStackdev-PublicSubnetIds"
+  },
+  {
+    "OutputKey": "SecurityGroupId",
+    "OutputValue": "sg-2aacefe729725fc48",
+    "ExportName": "TapStackdev-SecurityGroupId"
+  },
+  {
+    "OutputKey": "VpcCidr",
+    "OutputValue": "10.0.0.0/16",
+    "ExportName": "TapStackdev-VpcCidr"
+  },
+  {
+    "OutputKey": "VpcId",
+    "OutputValue": "vpc-623d1a9be985bf951",
+    "ExportName": "TapStackdev-VpcId"
+  }
+]
