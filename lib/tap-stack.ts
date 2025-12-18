@@ -59,7 +59,7 @@ export class TapStack extends cdk.Stack {
     const imageProcessor = new lambda.Function(this, 'ImageProcessorFunction', {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'imageProcessor.handler',
-      code: lambda.Code.fromAsset('lambda'),
+      code: lambda.Code.fromAsset('lib/lambda'),
       environment: {
         IMAGE_BUCKET: imageBucket.bucketName,
         NOTIFICATION_TOPIC_ARN: notificationTopic.topicArn,
