@@ -541,7 +541,9 @@
       "Metadata": {
         "cfn-lint": {
           "config": {
-            "ignore_checks": ["W1011"]
+            "ignore_checks": [
+              "W1011"
+            ]
           }
         }
       },
