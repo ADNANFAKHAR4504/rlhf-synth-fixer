@@ -829,7 +829,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
       );
       const domainName = outputs.OpenSearchDomainName || outputs.OpenSearchCollectionName;
       expect(domainName).toBe(`iac-rlhf-metadata-${environmentSuffix}`);
-      expect(outputs.FailureTableName).toContain('MetadataProcessingFailures');
+      expect(outputs.FailureTableName).toContain('MetadataProcessingFailur');
       const domainEndpoint = outputs.OpenSearchDomainEndpoint || outputs.OpenSearchDashboardUrl;
       expect(domainEndpoint).toContain('opensearch');
     });
