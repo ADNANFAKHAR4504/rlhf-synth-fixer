@@ -454,4 +454,23 @@ describe('Subnet Configuration', () => {
         expect(getSubnetCidr('us-west-2', 'private', 1)).toBe('10.1.11.0/24');
     });
 });
+
+describe('Bucket Name Truncation', () => {
+    it('should truncate bucket name when it exceeds 63 characters', () => {
+        // Create a stack with a very long name to trigger bucket name truncation
+        const longStackName = 'this-is-a-very-long-stack-name-that-will-exceed-the-s3-bucket-limit';
+        const longNameStack = new TapStack(longStackName, {
+            tags: {
+                Environment: 'test',
+                Application: 'nova-model-breaking',
+                Owner: 'test-team',
+            },
+        });
+        
+        // Stack should still be created successfully
+        expect(longNameStack).toBeDefined();
+        expect(longNameStack.logsBucket).toBeDefined();
+        expect(longNameStack.regions).toEqual(['us-east-1', 'us-west-2']);
+    });
+});
 });

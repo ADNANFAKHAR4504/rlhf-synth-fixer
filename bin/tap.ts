@@ -36,10 +36,38 @@ const defaultTags = {
 
 // Instantiate the main stack component for the infrastructure.
 // This encapsulates all the resources for the platform.
-new TapStack('TapStack', {
+const stack = new TapStack('TapStack', {
   tags: defaultTags,
 });
 
-// To use the stack outputs, you can export them.
-// For example, if TapStack had an output `bucketName`:
-// export const bucketName = stack.bucketName;
+// Export stack outputs for deployment verification
+export const regions = stack.regions;
+export const logsBucketName = stack.logsBucket.bucket;
+export const logsBucketArn = stack.logsBucket.arn;
+export const lambdaFunctionArn = stack.logProcessingLambda.arn;
+export const lambdaFunctionName = stack.logProcessingLambda.name;
+
+// Export VPC IDs for each region
+export const vpcIds = Object.fromEntries(
+  stack.regions.map(region => [region, stack.vpcs[region].id])
+);
+
+// Export KMS Key ARNs for each region
+export const kmsKeyArns = Object.fromEntries(
+  stack.regions.map(region => [region, stack.kmsKeys[region].arn])
+);
+
+// Export WAF WebACL ARNs for each region
+export const wafWebAclArns = Object.fromEntries(
+  stack.regions.map(region => [region, stack.wafWebAcls[region].arn])
+);
+
+// Export RDS endpoints for each region
+export const rdsEndpoints = Object.fromEntries(
+  stack.regions.map(region => [region, stack.rdsInstances[region].endpoint])
+);
+
+// Export Auto Scaling Group names for each region
+export const asgNames = Object.fromEntries(
+  stack.regions.map(region => [region, stack.autoScalingGroups[region].name])
+);
