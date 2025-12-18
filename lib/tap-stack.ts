@@ -17,7 +17,7 @@ export class TapStack extends cdk.Stack {
       'dev';
 
     // Deploy to us-east-1
-    new SecureNetworkStack(this, 'SecureNetworkEast', {
+    const eastStack = new SecureNetworkStack(this, 'SecureNetworkEast', {
       environmentName: `${environmentSuffix}-east`,
       costCenter: 'CC-001-Security',
       env: {
@@ -27,13 +27,34 @@ export class TapStack extends cdk.Stack {
     });
 
     // Deploy to us-west-2
-    new SecureNetworkStack(this, 'SecureNetworkWest', {
+    const westStack = new SecureNetworkStack(this, 'SecureNetworkWest', {
       environmentName: `${environmentSuffix}-west`,
       costCenter: 'CC-001-Security',
       env: {
         account: this.account,
         region: 'us-west-2',
       },
+    });
+
+    // Add outputs to the parent stack for deployment validation
+    new cdk.CfnOutput(this, 'EastVpcId', {
+      value: eastStack.vpc.vpcId,
+      description: 'VPC ID for us-east-1 region',
+    });
+
+    new cdk.CfnOutput(this, 'WestVpcId', {
+      value: westStack.vpc.vpcId,
+      description: 'VPC ID for us-west-2 region',
+    });
+
+    new cdk.CfnOutput(this, 'EastFlowLogsBucket', {
+      value: eastStack.flowLogsBucket.bucketName,
+      description: 'Flow logs bucket for us-east-1',
+    });
+
+    new cdk.CfnOutput(this, 'WestFlowLogsBucket', {
+      value: westStack.flowLogsBucket.bucketName,
+      description: 'Flow logs bucket for us-west-2',
     });
   }
 }
