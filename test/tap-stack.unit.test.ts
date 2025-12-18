@@ -348,6 +348,31 @@ describe('TapStack', () => {
         }
       });
     });
+
+    test('should skip backup resources for LocalStack', () => {
+      // Create a stack with LocalStack account ID
+      const localStackApp = new cdk.App();
+      const localStack = new TapStack(localStackApp, 'LocalStackTapStack', {
+        environment: 'test',
+        projectName: 'test-project',
+        env: {
+          account: '000000000000',
+          region: 'us-east-1'
+        }
+      });
+      const localStackTemplate = Template.fromStack(localStack);
+
+      // Verify BackupStatus output is created
+      localStackTemplate.hasOutput('BackupStatus', {
+        Description: 'Backup Configuration Status',
+        Value: 'Skipped (LocalStack does not fully support AWS Backup)'
+      });
+
+      // Verify backup resources are NOT created
+      localStackTemplate.resourceCountIs('AWS::Backup::BackupVault', 0);
+      localStackTemplate.resourceCountIs('AWS::Backup::BackupPlan', 0);
+      localStackTemplate.resourceCountIs('AWS::Backup::BackupSelection', 0);
+    });
   });
 
   describe('Parameter Store', () => {
