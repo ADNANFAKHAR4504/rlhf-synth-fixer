@@ -4,8 +4,9 @@ import * as networkfirewall from 'aws-cdk-lib/aws-networkfirewall';
 import { Construct } from 'constructs';
 
 // Detect LocalStack environment
-const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                     process.env.AWS_ENDPOINT_URL?.includes('4566');
+const isLocalStack =
+  process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+  process.env.AWS_ENDPOINT_URL?.includes('4566');
 
 export interface SecureNetworkingProps {
   readonly cidr?: string;
