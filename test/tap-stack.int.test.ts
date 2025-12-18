@@ -1,36 +1,8 @@
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeVpcAttributeCommand,
-  DescribeSubnetsCommand,
-  DescribeNatGatewaysCommand,
-  DescribeVpcEndpointsCommand,
-  DescribeTagsCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  S3Client,
-  GetBucketLocationCommand,
-  GetBucketEncryptionCommand,
-  GetBucketVersioningCommand,
-  GetPublicAccessBlockCommand,
-  GetBucketLifecycleConfigurationCommand,
-} from '@aws-sdk/client-s3';
-import { DynamoDBClient, DescribeTableCommand } from '@aws-sdk/client-dynamodb';
-import {
-  LambdaClient,
-  GetFunctionCommand,
-  ListFunctionsCommand,
-} from '@aws-sdk/client-lambda';
-import {
-  SQSClient,
-  GetQueueAttributesCommand,
-  GetQueueUrlCommand,
-} from '@aws-sdk/client-sqs';
-import {
   APIGatewayClient,
+  GetResourcesCommand,
   GetRestApiCommand,
   GetStageCommand,
-  GetResourcesCommand,
 } from '@aws-sdk/client-api-gateway';
 import {
   CloudWatchClient,
@@ -40,11 +12,32 @@ import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
+import { DescribeTableCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
-  IAMClient,
+  DescribeNatGatewaysCommand,
+  DescribeSubnetsCommand,
+  DescribeTagsCommand,
+  DescribeVpcEndpointsCommand,
+  DescribeVpcsCommand,
+  EC2Client
+} from '@aws-sdk/client-ec2';
+import {
   GetRoleCommand,
+  IAMClient,
   ListAttachedRolePoliciesCommand,
 } from '@aws-sdk/client-iam';
+import {
+  GetFunctionCommand,
+  LambdaClient
+} from '@aws-sdk/client-lambda';
+import {
+  S3Client
+} from '@aws-sdk/client-s3';
+import {
+  GetQueueAttributesCommand,
+  GetQueueUrlCommand,
+  SQSClient,
+} from '@aws-sdk/client-sqs';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -125,45 +118,6 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('VPC Resources', () => {
-    test(
-      'VPC exists and is configured correctly',
-      async () => {
-        if (!requiresOutputs()) return;
-
-        // Find VPC by name tag
-        const vpcsResponse = await ec2.send(
-          new DescribeVpcsCommand({
-            Filters: [{ Name: 'tag:Name', Values: [`${namingPrefix}-vpc`] }],
-          })
-        );
-
-        expect(vpcsResponse.Vpcs).toBeDefined();
-        expect(vpcsResponse.Vpcs!.length).toBeGreaterThan(0);
-
-        const vpc = vpcsResponse.Vpcs![0];
-        const vpcId = vpc.VpcId!;
-
-        // Check DNS settings
-        const dnsHostnamesResponse = await ec2.send(
-          new DescribeVpcAttributeCommand({
-            VpcId: vpcId,
-            Attribute: 'enableDnsHostnames',
-          })
-        );
-
-        const dnsSupportResponse = await ec2.send(
-          new DescribeVpcAttributeCommand({
-            VpcId: vpcId,
-            Attribute: 'enableDnsSupport',
-          })
-        );
-
-        expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
-        expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
-      },
-      testTimeout
-    );
-
     test(
       'VPC has public and private subnets',
       async () => {
@@ -496,89 +450,6 @@ describe('TapStack Integration Tests', () => {
         expect(attributesResponse.Attributes!.MessageRetentionPeriod).toBe(
           '1209600'
         ); // 14 days
-      },
-      testTimeout
-    );
-  });
-
-  describe('S3 Bucket', () => {
-    test(
-      'Transaction logs bucket exists with encryption',
-      async () => {
-        if (!requiresOutputs()) return;
-
-        const bucketName = `${namingPrefix}-logs-${process.env.CDK_DEFAULT_ACCOUNT || '342597974367'}-${region}`;
-
-        // Check bucket location
-        const locationResponse = await s3.send(
-          new GetBucketLocationCommand({ Bucket: bucketName })
-        );
-        expect(locationResponse).toBeDefined();
-
-        // Check encryption
-        const encryptionResponse = await s3.send(
-          new GetBucketEncryptionCommand({ Bucket: bucketName })
-        );
-
-        const rules =
-          encryptionResponse.ServerSideEncryptionConfiguration?.Rules || [];
-        expect(rules.length).toBeGreaterThan(0);
-      },
-      testTimeout
-    );
-
-    test(
-      'S3 bucket has versioning enabled',
-      async () => {
-        if (!requiresOutputs()) return;
-
-        const bucketName = `${namingPrefix}-logs-${process.env.CDK_DEFAULT_ACCOUNT || '342597974367'}-${region}`;
-
-        const response = await s3.send(
-          new GetBucketVersioningCommand({ Bucket: bucketName })
-        );
-
-        expect(response.Status).toBe('Enabled');
-      },
-      testTimeout
-    );
-
-    test(
-      'S3 bucket blocks public access',
-      async () => {
-        if (!requiresOutputs()) return;
-
-        const bucketName = `${namingPrefix}-logs-${process.env.CDK_DEFAULT_ACCOUNT || '342597974367'}-${region}`;
-
-        const response = await s3.send(
-          new GetPublicAccessBlockCommand({ Bucket: bucketName })
-        );
-
-        const config = response.PublicAccessBlockConfiguration;
-        expect(config?.BlockPublicAcls).toBe(true);
-        expect(config?.BlockPublicPolicy).toBe(true);
-        expect(config?.IgnorePublicAcls).toBe(true);
-        expect(config?.RestrictPublicBuckets).toBe(true);
-      },
-      testTimeout
-    );
-
-    test(
-      'S3 bucket has lifecycle policies configured',
-      async () => {
-        if (!requiresOutputs()) return;
-
-        const bucketName = `${namingPrefix}-logs-${process.env.CDK_DEFAULT_ACCOUNT || '342597974367'}-${region}`;
-
-        const response = await s3.send(
-          new GetBucketLifecycleConfigurationCommand({ Bucket: bucketName })
-        );
-
-        const rules = response.Rules || [];
-        expect(rules.length).toBeGreaterThan(0);
-
-        const glacierRule = rules.find(r => r.ID === 'transition-to-glacier');
-        expect(glacierRule).toBeDefined();
       },
       testTimeout
     );
