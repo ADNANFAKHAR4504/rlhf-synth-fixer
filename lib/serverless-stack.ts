@@ -5,12 +5,12 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 
-interface ServerlessStackProps extends cdk.StackProps {
+interface ServerlessStackProps extends cdk.NestedStackProps {
   environmentSuffix?: string;
   allowedIpCidrs?: string[];
 }
 
-export class ServerlessStack extends cdk.Stack {
+export class ServerlessStack extends cdk.NestedStack {
   public readonly bucket: s3.Bucket;
   public readonly lambda: lambda.Function;
   public readonly api: apigateway.RestApi;

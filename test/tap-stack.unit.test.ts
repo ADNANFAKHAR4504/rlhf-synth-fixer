@@ -50,12 +50,15 @@ describe('TapStack', () => {
 
 describe('ServerlessStack', () => {
   let app: cdk.App;
+  let parentStack: cdk.Stack;
   let stack: ServerlessStack;
   let template: Template;
 
   beforeEach(() => {
     app = new cdk.App();
-    stack = new ServerlessStack(app, 'TestServerlessStack', {
+    // Create parent stack first since ServerlessStack is now a NestedStack
+    parentStack = new cdk.Stack(app, 'TestParentStack');
+    stack = new ServerlessStack(parentStack, 'TestServerlessStack', {
       environmentSuffix: 'test',
       allowedIpCidrs: ['10.0.0.0/8'],
     });
@@ -65,7 +68,8 @@ describe('ServerlessStack', () => {
   describe('Default Values', () => {
     test('should use default values when props not provided', () => {
       const appDefault = new cdk.App();
-      const stackDefault = new ServerlessStack(appDefault, 'TestServerlessStackDefault');
+      const parentStackDefault = new cdk.Stack(appDefault, 'TestParentStackDefault');
+      const stackDefault = new ServerlessStack(parentStackDefault, 'TestServerlessStackDefault');
       const templateDefault = Template.fromStack(stackDefault);
 
       templateDefault.hasResourceProperties('AWS::Lambda::Function', {

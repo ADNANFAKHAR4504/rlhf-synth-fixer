@@ -24,15 +24,12 @@ export class TapStack extends cdk.Stack {
     ];
 
     // Create the serverless stack for user data processing
-    // Note: ServerlessStack is created as a separate stack (not a nested stack)
-    // to avoid cross-stack reference issues when accessing its resources
+    // Note: ServerlessStack is created as a nested stack to allow
+    // direct resource references in the parent stack outputs
     this.serverlessStack = new ServerlessStack(this, 'ServerlessStack', {
       environmentSuffix,
       allowedIpCidrs,
-      env: {
-        account: this.account,
-        region: 'us-east-1', // Fixed region as per requirements
-      },
+      // Nested stacks automatically inherit env from parent stack
     });
 
     // Outputs - reference the nested stack outputs
