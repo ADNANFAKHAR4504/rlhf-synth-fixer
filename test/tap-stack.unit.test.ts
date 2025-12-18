@@ -229,9 +229,12 @@ describe('Fitness Tracking Backend CloudFormation Template - LocalStack Compatib
       });
     });
 
-    test('UserProfilesTable should NOT have SSE encryption (removed for LocalStack)', () => {
+    test('UserProfilesTable should have SSE encryption with KMS', () => {
       const table = template.Resources.UserProfilesTable;
-      expect(table.Properties.SSESpecification).toBeUndefined();
+      expect(table.Properties.SSESpecification).toBeDefined();
+      expect(table.Properties.SSESpecification.SSEEnabled).toBe(true);
+      expect(table.Properties.SSESpecification.SSEType).toBe('KMS');
+      expect(table.Properties.SSESpecification.KMSMasterKeyId).toEqual({ Ref: 'FitnessKMSKey' });
     });
 
     test('UserProfilesTable should have correct key schema', () => {
@@ -257,9 +260,12 @@ describe('Fitness Tracking Backend CloudFormation Template - LocalStack Compatib
       });
     });
 
-    test('WorkoutHistoryTable should NOT have SSE encryption (removed for LocalStack)', () => {
+    test('WorkoutHistoryTable should have SSE encryption with KMS', () => {
       const table = template.Resources.WorkoutHistoryTable;
-      expect(table.Properties.SSESpecification).toBeUndefined();
+      expect(table.Properties.SSESpecification).toBeDefined();
+      expect(table.Properties.SSESpecification.SSEEnabled).toBe(true);
+      expect(table.Properties.SSESpecification.SSEType).toBe('KMS');
+      expect(table.Properties.SSESpecification.KMSMasterKeyId).toEqual({ Ref: 'FitnessKMSKey' });
     });
 
     test('WorkoutHistoryTable should have correct key schema', () => {
@@ -618,11 +624,15 @@ describe('Fitness Tracking Backend CloudFormation Template - LocalStack Compatib
       expect(resourceTypes).not.toContain('AWS::CloudWatch::Dashboard');
     });
 
-    test('DynamoDB tables should not have SSE encryption', () => {
+    test('DynamoDB tables should have SSE encryption with KMS', () => {
       const userTable = template.Resources.UserProfilesTable;
       const workoutTable = template.Resources.WorkoutHistoryTable;
-      expect(userTable.Properties.SSESpecification).toBeUndefined();
-      expect(workoutTable.Properties.SSESpecification).toBeUndefined();
+      expect(userTable.Properties.SSESpecification).toBeDefined();
+      expect(userTable.Properties.SSESpecification.SSEEnabled).toBe(true);
+      expect(userTable.Properties.SSESpecification.SSEType).toBe('KMS');
+      expect(workoutTable.Properties.SSESpecification).toBeDefined();
+      expect(workoutTable.Properties.SSESpecification.SSEEnabled).toBe(true);
+      expect(workoutTable.Properties.SSESpecification.SSEType).toBe('KMS');
     });
 
     test('S3 bucket should have bucket encryption', () => {

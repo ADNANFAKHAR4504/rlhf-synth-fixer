@@ -392,6 +392,13 @@
                         }
                     }
                 ],
+                "SSESpecification": {
+                    "SSEEnabled": true,
+                    "SSEType": "KMS",
+                    "KMSMasterKeyId": {
+                        "Ref": "FitnessKMSKey"
+                    }
+                },
                 "Tags": [
                     {
                         "Key": "Environment",
@@ -499,6 +506,13 @@
                         }
                     }
                 ],
+                "SSESpecification": {
+                    "SSEEnabled": true,
+                    "SSEType": "KMS",
+                    "KMSMasterKeyId": {
+                        "Ref": "FitnessKMSKey"
+                    }
+                },
                 "Tags": [
                     {
                         "Key": "Environment",

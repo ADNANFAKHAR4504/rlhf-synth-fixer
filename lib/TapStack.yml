@@ -214,6 +214,10 @@ Resources:
           ProvisionedThroughput:
             ReadCapacityUnits: !Ref DynamoDBReadCapacity
             WriteCapacityUnits: !Ref DynamoDBWriteCapacity
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+        KMSMasterKeyId: !Ref FitnessKMSKey
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
@@ -265,6 +269,10 @@ Resources:
           ProvisionedThroughput:
             ReadCapacityUnits: !Ref DynamoDBReadCapacity
             WriteCapacityUnits: !Ref DynamoDBWriteCapacity
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+        KMSMasterKeyId: !Ref FitnessKMSKey
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
