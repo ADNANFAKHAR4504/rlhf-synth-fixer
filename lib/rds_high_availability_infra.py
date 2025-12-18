@@ -510,26 +510,22 @@ class RdsHighAvailabilityInfra(cdk.NestedStack):
         CfnOutput(self,
                   "RdsEndpoint",
                   value=self.db_instance.instance_endpoint.hostname,
-                  description="RDS PostgreSQL endpoint",
-                  export_name=f"RdsEndpoint-{self.props.environment_suffix}")
+                  description="RDS PostgreSQL endpoint")
 
         CfnOutput(self,
                   "RdsPort",
                   value=str(self.db_instance.instance_endpoint.port),
-                  description="RDS PostgreSQL port",
-                  export_name=f"RdsPort-{self.props.environment_suffix}")
+                  description="RDS PostgreSQL port")
 
         CfnOutput(
             self,
             "BackupBucketName",
             value=self.backup_bucket.bucket_name,
-            description="S3 backup bucket name",
-            export_name=f"BackupBucketName-{self.props.environment_suffix}")
+            description="S3 backup bucket name")
 
         CfnOutput(
             self,
             "NotificationTopicArn",
             value=self.notification_topic.topic_arn,
-            description="SNS notification topic ARN",
-            export_name=f"NotificationTopicArn-{self.props.environment_suffix}"
+            description="SNS notification topic ARN"
         )

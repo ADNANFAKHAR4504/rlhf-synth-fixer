@@ -124,30 +124,26 @@ class TapStack(cdk.Stack):
             self,
             "RdsEndpoint",
             value=self.rds_infra.db_instance.instance_endpoint.hostname,
-            description="RDS PostgreSQL endpoint",
-            export_name=f"RdsEndpoint-{environment_suffix}"
+            description="RDS PostgreSQL endpoint"
         )
 
         cdk.CfnOutput(
             self,
             "RdsPort",
             value=str(self.rds_infra.db_instance.instance_endpoint.port),
-            description="RDS PostgreSQL port",
-            export_name=f"RdsPort-{environment_suffix}"
+            description="RDS PostgreSQL port"
         )
 
         cdk.CfnOutput(
             self,
             "BackupBucketName",
             value=self.rds_infra.backup_bucket.bucket_name,
-            description="S3 backup bucket name",
-            export_name=f"BackupBucketName-{environment_suffix}"
+            description="S3 backup bucket name"
         )
 
         cdk.CfnOutput(
             self,
             "NotificationTopicArn",
             value=self.rds_infra.notification_topic.topic_arn,
-            description="SNS notification topic ARN",
-            export_name=f"NotificationTopicArn-{environment_suffix}"
+            description="SNS notification topic ARN"
         )
