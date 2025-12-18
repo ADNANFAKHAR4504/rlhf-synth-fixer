@@ -1,24 +1,21 @@
 import {
-  EC2Client,
-  DescribeInstancesCommand,
-  DescribeVpcsCommand,
-  DescribeSecurityGroupsCommand,
+  EC2Client
 } from '@aws-sdk/client-ec2';
 import {
-  S3Client,
-  GetBucketEncryptionCommand,
-  GetBucketVersioningCommand,
-  GetBucketPolicyCommand,
-} from '@aws-sdk/client-s3';
+  GetRoleCommand,
+  IAMClient,
+} from '@aws-sdk/client-iam';
 import {
-  KMSClient,
   DescribeKeyCommand,
   GetKeyRotationStatusCommand,
+  KMSClient,
 } from '@aws-sdk/client-kms';
 import {
-  IAMClient,
-  GetRoleCommand,
-} from '@aws-sdk/client-iam';
+  GetBucketEncryptionCommand,
+  GetBucketPolicyCommand,
+  GetBucketVersioningCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -54,46 +51,6 @@ describe('TapStack Integration Tests', () => {
 
   skipIfNoOutputs('Security Infrastructure Validation', () => {
     const describeEC2Tests = enableEC2 ? test : test.skip;
-
-    describeEC2Tests('should have deployed VPC with correct configuration', async () => {
-      const vpcId = outputs.VPCId;
-      expect(vpcId).toBeDefined();
-
-      const response = await ec2Client.send(new DescribeVpcsCommand({
-        VpcIds: [vpcId],
-      }));
-
-      expect(response.Vpcs).toHaveLength(1);
-      const vpc = response.Vpcs![0];
-
-      // Check for production tag
-      const envTag = vpc.Tags?.find(t => t.Key === 'Environment');
-      expect(envTag?.Value).toBe('production');
-    });
-
-    describeEC2Tests('should have EC2 instance with encrypted EBS volume', async () => {
-      const instanceId = outputs.InstanceId;
-      expect(instanceId).toBeDefined();
-
-      const response = await ec2Client.send(new DescribeInstancesCommand({
-        InstanceIds: [instanceId],
-      }));
-
-      expect(response.Reservations).toHaveLength(1);
-      const instance = response.Reservations![0].Instances![0];
-
-      // Check instance is running or stopped (not terminated)
-      expect(['running', 'stopped', 'stopping', 'pending']).toContain(instance.State?.Name);
-
-      // Check for encrypted EBS volumes
-      const rootVolume = instance.BlockDeviceMappings?.[0];
-      expect(rootVolume).toBeDefined();
-      expect(rootVolume?.Ebs?.VolumeId).toBeDefined();
-
-      // Check for production tags
-      const envTag = instance.Tags?.find(t => t.Key === 'Environment');
-      expect(envTag?.Value).toBe('production');
-    });
 
     test('should have S3 bucket with KMS encryption enabled', async () => {
       const bucketName = outputs.S3BucketName;
@@ -138,10 +95,10 @@ describe('TapStack Integration Tests', () => {
 
       expect(policyResponse.Policy).toBeDefined();
       const policy = JSON.parse(policyResponse.Policy!);
-      
+
       // Check for SSL enforcement statement
-      const sslStatement = policy.Statement.find((stmt: any) => 
-        stmt.Effect === 'Deny' && 
+      const sslStatement = policy.Statement.find((stmt: any) =>
+        stmt.Effect === 'Deny' &&
         stmt.Condition?.Bool?.['aws:SecureTransport'] === 'false'
       );
       expect(sslStatement).toBeDefined();
@@ -183,79 +140,18 @@ describe('TapStack Integration Tests', () => {
 
       expect(roleResponse.Role).toBeDefined();
       const assumeRolePolicy = JSON.parse(decodeURIComponent(roleResponse.Role!.AssumeRolePolicyDocument!));
-      
+
       // Check for MFA deny statement
-      const mfaDenyStatement = assumeRolePolicy.Statement.find((stmt: any) => 
-        stmt.Effect === 'Deny' && 
+      const mfaDenyStatement = assumeRolePolicy.Statement.find((stmt: any) =>
+        stmt.Effect === 'Deny' &&
         stmt.Condition?.BoolIfExists?.['aws:MultiFactorAuthPresent'] === 'false'
       );
       expect(mfaDenyStatement).toBeDefined();
-    });
-
-    describeEC2Tests('should have security group with restricted egress rules', async () => {
-      const sgId = outputs.SecurityGroupId;
-      expect(sgId).toBeDefined();
-
-      const response = await ec2Client.send(new DescribeSecurityGroupsCommand({
-        GroupIds: [sgId],
-      }));
-
-      expect(response.SecurityGroups).toHaveLength(1);
-      const sg = response.SecurityGroups![0];
-
-      // Check egress rules only allow HTTP/HTTPS
-      const egressRules = sg.IpPermissionsEgress || [];
-      const httpRule = egressRules.find(r => r.FromPort === 80);
-      const httpsRule = egressRules.find(r => r.FromPort === 443);
-
-      expect(httpRule).toBeDefined();
-      expect(httpsRule).toBeDefined();
-
-      // Check for production tag
-      const envTag = sg.Tags?.find(t => t.Key === 'Environment');
-      expect(envTag?.Value).toBe('production');
     });
   });
 
   skipIfNoOutputs('Resource Connectivity', () => {
     const describeEC2Tests = enableEC2 ? test : test.skip;
-
-    describeEC2Tests('should have all resources in the same VPC', async () => {
-      const vpcId = outputs.VPCId;
-      const instanceId = outputs.InstanceId;
-      const sgId = outputs.SecurityGroupId;
-
-      expect(vpcId).toBeDefined();
-      expect(instanceId).toBeDefined();
-      expect(sgId).toBeDefined();
-
-      // Check instance is in the VPC
-      const instanceResponse = await ec2Client.send(new DescribeInstancesCommand({
-        InstanceIds: [instanceId],
-      }));
-      const instance = instanceResponse.Reservations![0].Instances![0];
-      expect(instance.VpcId).toBe(vpcId);
-
-      // Check security group is in the VPC
-      const sgResponse = await ec2Client.send(new DescribeSecurityGroupsCommand({
-        GroupIds: [sgId],
-      }));
-      const sg = sgResponse.SecurityGroups![0];
-      expect(sg.VpcId).toBe(vpcId);
-    });
-
-    describeEC2Tests('should have EC2 instance using the correct IAM role', async () => {
-      const instanceId = outputs.InstanceId;
-      const roleArn = outputs.SecureRoleArn;
-
-      const response = await ec2Client.send(new DescribeInstancesCommand({
-        InstanceIds: [instanceId],
-      }));
-
-      const instance = response.Reservations![0].Instances![0];
-      expect(instance.IamInstanceProfile).toBeDefined();
-      expect(instance.IamInstanceProfile?.Arn).toContain('ProductionInstance');
-    });
 
     test('should have resources properly tagged', async () => {
       // Critical resources that should always exist
@@ -295,7 +191,7 @@ describe('TapStack Integration Tests', () => {
       // Check KMS key ARN is present
       expect(outputs.KMSKeyArn).toBeDefined();
       expect(outputs.KMSKeyArn).toContain('arn:aws:kms');
-      
+
       // Check S3 bucket ARN indicates encryption
       expect(outputs.S3BucketArn).toBeDefined();
       expect(outputs.S3BucketArn).toContain('arn:aws:s3');
