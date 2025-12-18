@@ -32,5 +32,30 @@ export class TapStack extends cdk.Stack {
         region: 'us-east-1', // Fixed region as per requirements
       },
     });
+
+    // Export outputs from nested stack
+    new cdk.CfnOutput(this, 'BucketName', {
+      value: this.serverlessStack.bucket.bucketName,
+      description: 'Name of the S3 bucket for user data',
+      exportName: `TapStack-BucketName-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'LambdaFunctionName', {
+      value: this.serverlessStack.lambda.functionName,
+      description: 'Name of the Lambda function',
+      exportName: `TapStack-LambdaFunctionName-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'ApiGatewayUrl', {
+      value: this.serverlessStack.api.url,
+      description: 'URL of the API Gateway',
+      exportName: `TapStack-ApiGatewayUrl-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'ApiGatewayId', {
+      value: this.serverlessStack.api.restApiId,
+      description: 'ID of the API Gateway',
+      exportName: `TapStack-ApiGatewayId-${environmentSuffix}`,
+    });
   }
 }
