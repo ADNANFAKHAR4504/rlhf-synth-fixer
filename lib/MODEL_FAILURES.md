@@ -6,12 +6,12 @@ This document compares `lib/MODEL_RESPONSE.md` with `lib/IDEAL_RESPONSE.md` and 
 
 ### 1. **S3 Bucket Naming and Configuration**
 
-#### ❌ MODEL_RESPONSE Issues:
+#### MODEL_RESPONSE Issues:
 - **Static bucket name**: Uses hardcoded `bucketName: 'CorpUserDataBucket'` without environment suffix
 - **Deployment conflicts**: This approach fails in multi-environment deployments due to global S3 namespace conflicts
 - **Missing test cleanup**: No `autoDeleteObjects` configuration for proper test teardown
 
-#### ✅ IDEAL_RESPONSE Solutions:
+#### IDEAL_RESPONSE Solutions:
 ```typescript
 bucketName: `corp-user-data-bucket-${environmentSuffix}`.toLowerCase(),
 removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -23,12 +23,12 @@ autoDeleteObjects: true,
 
 ### 2. **Lambda Runtime and AWS SDK Implementation**
 
-#### ❌ MODEL_RESPONSE Issues:
+#### MODEL_RESPONSE Issues:
 - **Deprecated runtime**: Uses `lambda.Runtime.NODEJS_14_X` which is deprecated
 - **No actual S3 integration**: Lambda function only logs data without storing it in S3
 - **Missing core functionality**: Fails to implement the data processing requirement
 
-#### ✅ IDEAL_RESPONSE Solutions:
+#### IDEAL_RESPONSE Solutions:
 ```typescript
 runtime: lambda.Runtime.NODEJS_18_X,
 code: lambda.Code.fromInline(`
@@ -43,7 +43,7 @@ const s3Client = new S3Client({ region: 'us-east-1' });
 
 ### 3. **API Gateway IP Whitelisting Implementation**
 
-#### ❌ MODEL_RESPONSE Issues:
+#### MODEL_RESPONSE Issues:
 - **Complex policy structure**: Uses Allow + Deny pattern which is harder to maintain
 - **L1 Construct manipulation**: Directly modifies `cfnApi.policy` using low-level constructs
 - **Policy complexity**: Uses `NotIpAddress` condition which is less intuitive
@@ -54,7 +54,7 @@ const cfnApi = api.node.defaultChild as apigateway.CfnRestApi;
 cfnApi.policy = apiResourcePolicy.toJSON();
 ```
 
-#### ✅ IDEAL_RESPONSE Solutions:
+#### IDEAL_RESPONSE Solutions:
 ```typescript
 policy: new iam.PolicyDocument({
   statements: [
@@ -78,12 +78,12 @@ policy: new iam.PolicyDocument({
 
 ### 4. **IAM Role and Permissions Structure**
 
-#### ❌ MODEL_RESPONSE Issues:
+#### MODEL_RESPONSE Issues:
 - **Generic role name**: Uses `CorpUserDataProcessorRole` without environment suffix
 - **Over-privileged**: Uses `grantReadWrite()` which provides more permissions than needed
 - **Environment conflicts**: Static role names cause deployment issues
 
-#### ✅ IDEAL_RESPONSE Solutions:
+#### IDEAL_RESPONSE Solutions:
 ```typescript
 const lambdaRole = new iam.Role(this, 'CorpLambdaRole', {
   roleName: `CorpLambdaRole-${environmentSuffix}`,
@@ -96,12 +96,12 @@ const lambdaRole = new iam.Role(this, 'CorpLambdaRole', {
 
 ### 5. **API Gateway Resource Structure**
 
-#### ❌ MODEL_RESPONSE Issues:
+#### MODEL_RESPONSE Issues:
 - **Limited HTTP methods**: Only implements POST method
 - **Missing CORS handling**: No proper OPTIONS method for CORS preflight
 - **No GET endpoint**: Incomplete API implementation
 
-#### ✅ IDEAL_RESPONSE Solutions:
+#### IDEAL_RESPONSE Solutions:
 ```typescript
 userData.addMethod('POST', lambdaIntegration);
 userData.addMethod('GET', lambdaIntegration);
@@ -115,12 +115,12 @@ userData.addMethod('OPTIONS', new apigateway.MockIntegration({
 
 ### 6. **Environment and Configuration Management**
 
-#### ❌ MODEL_RESPONSE Issues:
+#### MODEL_RESPONSE Issues:
 - **Hardcoded values**: Static IP ranges in app file
 - **No parameterization**: Cannot adapt to different environments
 - **Limited flexibility**: Requires code changes for different configurations
 
-#### ✅ IDEAL_RESPONSE Solutions:
+#### IDEAL_RESPONSE Solutions:
 - **Context-driven**: Uses CDK context for environment-specific configurations
 - **Parameter support**: Accepts `allowedIpCidrs` as configurable parameters
 - **Environment suffix**: Comprehensive environment separation strategy

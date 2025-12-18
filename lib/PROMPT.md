@@ -40,11 +40,11 @@ Your AWS CDK TypeScript project must comply with the following detailed requirem
 
 The solution should demonstrate:
 
-1. ✅ Proper CDK TypeScript implementation
-2. ✅ All resources following Corp naming convention
-3. ✅ S3 bucket with versioning enabled
-4. ✅ Lambda function with appropriate IAM role
-5. ✅ API Gateway with Lambda integration
-6. ✅ IP whitelisting security implementation
-7. ✅ Deployment to us-east-1 region
+1. Proper CDK TypeScript implementation
+2. All resources following Corp naming convention
+3. S3 bucket with versioning enabled
+4. Lambda function with appropriate IAM role
+5. API Gateway with Lambda integration
+6. IP whitelisting security implementation
+7. Deployment to us-east-1 region
 
