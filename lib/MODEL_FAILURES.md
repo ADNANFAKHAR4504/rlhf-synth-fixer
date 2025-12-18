@@ -143,15 +143,15 @@ Tags.of(this).add('Environment', 'Test');
 
 The common failure patterns identified above highlight critical areas where models frequently struggle when implementing serverless image processing infrastructure:
 
-### 🎯 Key Failure Categories
+### Key Failure Categories
 
 1. **Security & Permissions** - Overly broad IAM policies or missing permissions
-2. **Configuration Issues** - Missing environment variables and runtime settings  
+2. **Configuration Issues** - Missing environment variables and runtime settings
 3. **Infrastructure Misunderstanding** - Creating new resources instead of referencing existing ones
 4. **Integration Gaps** - Missing API Gateway endpoints or SNS integrations
 5. **Compliance Violations** - Missing required tags and metadata
 
-### 🛠 Prevention Strategies
+### Prevention Strategies
 
 - Always use CDK's built-in `grant*` methods for least-privilege access
 - Reference existing resources using `fromBucketName` or similar patterns
@@ -159,7 +159,7 @@ The common failure patterns identified above highlight critical areas where mode
 - Explicitly specify runtime versions and handler paths
 - Apply consistent resource tagging for QA compliance
 
-### 📋 Testing Requirements
+### Testing Requirements
 
 All implementations must pass:
 - Unit tests validating stack resource creation

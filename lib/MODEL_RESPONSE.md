@@ -4,9 +4,10 @@ This document describes how the CDK constructs infrastructure based on the given
 
 ---
 
-## ✅ Component Overview
+## Component Overview
 
-### 📦 S3 Bucket (Existing)
+### S3 Bucket (Existing)
+
 Referenced instead of being created:
 
 ```ts
@@ -15,7 +16,8 @@ const imageBucket = s3.Bucket.fromBucketName(this, 'ExistingImageBucket', 'exist
 
 ---
 
-### 🧠 Lambda Function (in `lambda/imageProcessor.ts`)
+### Lambda Function (in `lambda/imageProcessor.ts`)
+
 Handles API requests and publishes to SNS:
 
 ```ts
@@ -32,7 +34,8 @@ const imageProcessorLambda = new lambda.Function(this, 'ImageProcessor', {
 
 ---
 
-### 🔐 IAM Permissions
+### IAM Permissions
+
 Use `grant*` methods for least privilege:
 
 ```ts
@@ -42,7 +45,8 @@ notificationTopic.grantPublish(imageProcessorLambda);
 
 ---
 
-### 🌐 API Gateway
+### API Gateway
+
 Expose REST endpoint `/process` to trigger the Lambda:
 
 ```ts
@@ -53,7 +57,8 @@ process.addMethod('POST', new apigateway.LambdaIntegration(imageProcessorLambda)
 
 ---
 
-### 📣 SNS Topic
+### SNS Topic
+
 Created to notify on successful Lambda execution:
 
 ```ts
@@ -63,10 +68,10 @@ notificationTopic.grantPublish(imageProcessorLambda);
 
 ---
 
-## 🔒 Security Best Practices
+## Security Best Practices
 
 - Avoid `*` in IAM policies.
-- Use CDK’s scoped grants (`grantReadWrite`, `grantPublish`).
+- Use CDK's scoped grants (`grantReadWrite`, `grantPublish`).
 - Ensure environment variables are safely injected.
 - Apply resource tagging for QA cleanup:
 
@@ -76,7 +81,7 @@ Tags.of(this).add('Environment', 'Test');
 
 ---
 
-## 🗂 Directory Structure
+## Directory Structure
 
 ```
 .
@@ -100,7 +105,7 @@ Tags.of(this).add('Environment', 'Test');
 
 ---
 
-## 🧪 Testing
+## Testing
 
 Run integration tests via:
 
@@ -116,7 +121,7 @@ curl -X POST https://<api-id>.execute-api.us-east-1.amazonaws.com/prod/process -
 
 ---
 
-## ✅ Summary
+## Summary
 
 This setup ensures:
 
