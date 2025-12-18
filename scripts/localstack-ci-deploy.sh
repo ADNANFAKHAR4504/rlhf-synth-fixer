@@ -132,19 +132,21 @@ install_dependencies() {
 # Fails if no outputs are saved (output_count = 0)
 save_outputs() {
     local output_json=$1
-    
+
     mkdir -p "$PROJECT_ROOT/cfn-outputs"
+    mkdir -p "$PROJECT_ROOT/cdk-outputs"
     echo "$output_json" > "$PROJECT_ROOT/cfn-outputs/flat-outputs.json"
-    
+    echo "$output_json" > "$PROJECT_ROOT/cdk-outputs/flat-outputs.json"
+
     local output_count=$(echo "$output_json" | jq 'keys | length' 2>/dev/null || echo "0")
-    
+
     if [ "$output_count" -eq 0 ]; then
         print_status $RED "❌ No deployment outputs found!"
         print_status $RED "❌ Deployment must produce at least one output"
         exit 1
     fi
-    
-    print_status $GREEN "✅ Saved $output_count outputs to cfn-outputs/flat-outputs.json"
+
+    print_status $GREEN "✅ Saved $output_count outputs to cdk-outputs/flat-outputs.json"
 }
 
 # Function to describe CDK/CloudFormation deployment failure
@@ -413,24 +415,40 @@ deploy_cdk() {
     print_status $YELLOW "📊 Collecting deployment outputs..."
     local stack_name="TapStack${env_suffix}"
     local output_json="{}"
-    
-    if awslocal cloudformation describe-stacks --stack-name "$stack_name" > /dev/null 2>&1; then
-        output_json=$(awslocal cloudformation describe-stacks --stack-name "$stack_name" \
-            --query 'Stacks[0].Outputs' \
-            --output json 2>/dev/null | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    outputs = {}
-    if data:
-        for output in data:
-            outputs[output['OutputKey']] = output['OutputValue']
-    print(json.dumps(outputs, indent=2))
-except:
-    print('{}')
-" || echo "{}")
-    fi
-    
+
+    # Get all stacks (parent and nested)
+    local all_stacks=$(awslocal cloudformation list-stacks \
+        --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE \
+        --query 'StackSummaries[].StackName' \
+        --output json 2>/dev/null | jq -r '.[]' 2>/dev/null | grep -i "TapStack${env_suffix}" || echo "$stack_name")
+
+    # Collect outputs from all matching stacks
+    output_json=$(python3 -c "
+import sys, json, subprocess
+
+all_outputs = {}
+stacks = '''$all_stacks'''.strip().split('\n')
+
+for stack in stacks:
+    if not stack:
+        continue
+    try:
+        result = subprocess.run(
+            ['awslocal', 'cloudformation', 'describe-stacks', '--stack-name', stack],
+            capture_output=True, text=True, check=False
+        )
+        if result.returncode == 0:
+            data = json.loads(result.stdout)
+            if data and 'Stacks' in data and len(data['Stacks']) > 0:
+                outputs = data['Stacks'][0].get('Outputs', [])
+                for output in outputs:
+                    all_outputs[output['OutputKey']] = output['OutputValue']
+    except Exception as e:
+        continue
+
+print(json.dumps(all_outputs, indent=2))
+" 2>/dev/null || echo "{}")
+
     save_outputs "$output_json"
 }
 

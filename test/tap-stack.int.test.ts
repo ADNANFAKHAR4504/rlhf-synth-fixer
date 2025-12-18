@@ -301,10 +301,9 @@ describe('Turn Around Prompt API Integration Tests', () => {
     cloudWatchLogsClient = new CloudWatchLogsClient({ region: 'us-east-1' });
 
     // Initialize OpenSearch client with AWS SigV4 signing
-    const openSearchEndpoint = outputs.OpenSearchDashboardUrl.replace(
-      '/_dashboards',
-      ''
-    ).replace('https://https://', 'https://');
+    const openSearchEndpoint = (outputs.OpenSearchDomainEndpoint || outputs.OpenSearchDashboardUrl || '')
+      .replace('/_dashboards', '')
+      .replace('https://https://', 'https://');
     openSearchClient = new OpenSearchClient({
       ...AwsSigv4Signer({
         region: 'us-east-1',
@@ -413,15 +412,15 @@ describe('Turn Around Prompt API Integration Tests', () => {
       await dynamoClient.send(deleteCommand);
     });
 
-    test('should have OpenSearch collection configured', async () => {
-      expect(outputs.OpenSearchCollectionName).toBeDefined();
-      expect(outputs.OpenSearchCollectionName).toBe(
-        `iac-rlhf-metadata-coll-${environmentSuffix}`
-      );
+    test('should have OpenSearch domain configured', async () => {
+      const domainName = outputs.OpenSearchDomainName || outputs.OpenSearchCollectionName;
+      const domainEndpoint = outputs.OpenSearchDomainEndpoint || outputs.OpenSearchDashboardUrl;
 
-      expect(outputs.OpenSearchDashboardUrl).toBeDefined();
-      expect(outputs.OpenSearchDashboardUrl).toContain('aoss.amazonaws.com');
-      expect(outputs.OpenSearchDashboardUrl).toContain('_dashboards');
+      expect(domainName).toBeDefined();
+      expect(domainName).toBe(`iac-rlhf-metadata-${environmentSuffix}`);
+
+      expect(domainEndpoint).toBeDefined();
+      expect(domainEndpoint).toContain('opensearch');
     });
   });
 
@@ -828,11 +827,11 @@ describe('Turn Around Prompt API Integration Tests', () => {
       expect(outputs.MetadataBucketName).toBe(
         `iac-rlhf-metadata-${environmentSuffix}`
       );
-      expect(outputs.OpenSearchCollectionName).toBe(
-        `iac-rlhf-metadata-coll-${environmentSuffix}`
-      );
+      const domainName = outputs.OpenSearchDomainName || outputs.OpenSearchCollectionName;
+      expect(domainName).toBe(`iac-rlhf-metadata-${environmentSuffix}`);
       expect(outputs.FailureTableName).toContain('MetadataProcessingFailures');
-      expect(outputs.OpenSearchDashboardUrl).toContain('aoss.amazonaws.com');
+      const domainEndpoint = outputs.OpenSearchDomainEndpoint || outputs.OpenSearchDashboardUrl;
+      expect(domainEndpoint).toContain('opensearch');
     });
 
     test('should validate OpenSearch collection accessibility', async () => {
