@@ -1,0 +1,378 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'LocalStack-compatible AWS Infrastructure with VPC, S3 buckets, and IAM roles'
+
+Parameters:
+  YourPublicIP:
+    Type: String
+    Description: 'Your public IP address for SSH access (format: x.x.x.x/32)'
+    Default: '203.0.113.0/32'
+    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/(3[0-2]|[1-2]?[0-9])$'
+    ConstraintDescription: 'Must be a valid CIDR notation (e.g., 203.0.113.0/32)'
+
+  UniqueId:
+    Type: String
+    Description: 'Unique identifier for resource naming. Must be lowercase alphanumeric.'
+    Default: 'secureapp'
+    AllowedPattern: '^[a-z0-9]+$'
+    ConstraintDescription: 'Must be lowercase alphanumeric characters only.'
+
+  Environment:
+    Type: String
+    Description: 'Environment name (e.g., dev, staging, prod)'
+    Default: 'dev'
+    AllowedPattern: '^[a-zA-Z0-9\-]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters or hyphens.'
+
+  StackNameLower:
+    Type: String
+    Description: 'Lowercase version of the stack name for use in S3 bucket names.'
+    AllowedPattern: '^[a-z0-9\-]+$'
+    ConstraintDescription: 'Must be lowercase letters, numbers, and hyphens only.'
+    Default: 'tapstack'
+
+Resources:
+  # VPC Resources - Fully supported in LocalStack
+  SecureVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: '10.0.0.0/16'
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-secure-vpc'
+        - Key: Environment
+          Value: !Ref Environment
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecureVPC
+      CidrBlock: '10.0.1.0/24'
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-public-subnet'
+
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecureVPC
+      CidrBlock: '10.0.2.0/24'
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-private-subnet'
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-igw'
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref SecureVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SecureVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-public-rt'
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  # Security Group - Fully supported in LocalStack
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for application access'
+      VpcId: !Ref SecureVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref YourPublicIP
+          Description: 'SSH access from specified IP'
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTP access'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTPS access'
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: '0.0.0.0/0'
+          Description: 'All outbound traffic'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-ec2-sg'
+        - Key: Purpose
+          Value: 'Application Access'
+
+  # IAM Role - Fully supported in LocalStack
+  ApplicationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-app-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 
+                - ec2.amazonaws.com
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: S3AccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: 'ReadWebsiteContent'
+                Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !Sub 'arn:aws:s3:::website-content-${Environment}-${UniqueId}-${StackNameLower}'
+                  - !Sub 'arn:aws:s3:::website-content-${Environment}-${UniqueId}-${StackNameLower}/*'
+              - Sid: 'WriteApplicationLogs'
+                Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                  - 's3:PutObjectAcl'
+                Resource:
+                  - !Sub 'arn:aws:s3:::application-logs-${Environment}-${UniqueId}-${StackNameLower}/*'
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref ApplicationRole
+
+  # S3 Buckets - Using AES256 encryption for LocalStack compatibility
+  S3AccessLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 's3-access-logs-${Environment}-${UniqueId}-${StackNameLower}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: 'S3 Access Logs Bucket'
+        - Key: Purpose
+          Value: 'Access Logging'
+        - Key: Environment
+          Value: !Ref Environment
+
+  WebsiteContentBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'website-content-${Environment}-${UniqueId}-${StackNameLower}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: 'Website Content Bucket'
+        - Key: Environment
+          Value: !Ref Environment
+
+  ApplicationLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'application-logs-${Environment}-${UniqueId}-${StackNameLower}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: 'Application Logs Bucket'
+        - Key: Environment
+          Value: !Ref Environment
+
+  BackupDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'backup-data-${Environment}-${UniqueId}-${StackNameLower}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: 'Backup Data Bucket'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # S3 Bucket Policies - Simplified for LocalStack
+  WebsiteContentBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebsiteContentBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowRoleReadAccess
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt ApplicationRole.Arn
+            Action:
+              - 's3:GetObject'
+              - 's3:ListBucket'
+            Resource:
+              - !Sub 'arn:aws:s3:::website-content-${Environment}-${UniqueId}-${StackNameLower}/*'
+              - !Sub 'arn:aws:s3:::website-content-${Environment}-${UniqueId}-${StackNameLower}'
+
+  ApplicationLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ApplicationLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowRoleWriteAccess
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt ApplicationRole.Arn
+            Action:
+              - 's3:PutObject'
+              - 's3:PutObjectAcl'
+            Resource:
+              - !Sub 'arn:aws:s3:::application-logs-${Environment}-${UniqueId}-${StackNameLower}/*'
+              - !Sub 'arn:aws:s3:::application-logs-${Environment}-${UniqueId}-${StackNameLower}'
+
+  BackupDataBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref BackupDataBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt BackupDataBucket.Arn
+              - !Sub '${BackupDataBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+
+Outputs:
+  VPCId:
+    Description: 'ID of the created VPC'
+    Value: !Ref SecureVPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCId'
+
+  PublicSubnetId:
+    Description: 'ID of the public subnet'
+    Value: !Ref PublicSubnet
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnetId'
+
+  PrivateSubnetId:
+    Description: 'ID of the private subnet'
+    Value: !Ref PrivateSubnet
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnetId'
+
+  SecurityGroupId:
+    Description: 'ID of the security group'
+    Value: !Ref EC2SecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityGroupId'
+
+  WebsiteContentBucket:
+    Description: 'Name of the website content S3 bucket'
+    Value: !Ref WebsiteContentBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-WebsiteContentBucket'
+
+  ApplicationLogsBucket:
+    Description: 'Name of the application logs S3 bucket'
+    Value: !Ref ApplicationLogsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ApplicationLogsBucket'
+
+  BackupDataBucket:
+    Description: 'Name of the backup data S3 bucket'
+    Value: !Ref BackupDataBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-BackupDataBucket'
+
+  S3AccessLogsBucket:
+    Description: 'Name of the S3 access logs bucket'
+    Value: !Ref S3AccessLogsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3AccessLogsBucket'
+
+  ApplicationRoleArn:
+    Description: 'ARN of the application IAM role'
+    Value: !GetAtt ApplicationRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ApplicationRoleArn'
+
+  InternetGatewayId:
+    Description: 'ID of the Internet Gateway'
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-InternetGatewayId'

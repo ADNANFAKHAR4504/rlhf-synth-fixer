@@ -1,0 +1,1581 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Security Configuration as Code - Secure SaaS application infrastructure with Lambda, API Gateway, CloudFront, and ECS Fargate in us-east-1
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Network Configuration
+        Parameters:
+          - VpcCIDR
+          - PublicSubnet1CIDR
+          - PublicSubnet2CIDR
+          - PrivateSubnet1CIDR
+          - PrivateSubnet2CIDR
+          - DatabaseSubnet1CIDR
+          - DatabaseSubnet2CIDR
+      - Label:
+          default: EC2 Configuration
+        Parameters:
+          - InstanceType
+Parameters:
+  VpcCIDR:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: CIDR block for VPC
+    AllowedPattern: ^(10\.\d{1,3}\.\d{1,3}\.\d{1,3}/16)$
+  PublicSubnet1CIDR:
+    Type: String
+    Default: 10.0.1.0/24
+    Description: CIDR block for Public Subnet in first AZ
+    AllowedPattern: ^(10\.\d{1,3}\.\d{1,3}\.\d{1,3}/24)$
+  PublicSubnet2CIDR:
+    Type: String
+    Default: 10.0.2.0/24
+    Description: CIDR block for Public Subnet in second AZ
+    AllowedPattern: ^(10\.\d{1,3}\.\d{1,3}\.\d{1,3}/24)$
+  PrivateSubnet1CIDR:
+    Type: String
+    Default: 10.0.3.0/24
+    Description: CIDR block for Private Subnet in first AZ
+    AllowedPattern: ^(10\.\d{1,3}\.\d{1,3}\.\d{1,3}/24)$
+  PrivateSubnet2CIDR:
+    Type: String
+    Default: 10.0.4.0/24
+    Description: CIDR block for Private Subnet in second AZ
+    AllowedPattern: ^(10\.\d{1,3}\.\d{1,3}\.\d{1,3}/24)$
+  DatabaseSubnet1CIDR:
+    Type: String
+    Default: 10.0.5.0/24
+    Description: CIDR block for Database Subnet in first AZ
+    AllowedPattern: ^(10\.\d{1,3}\.\d{1,3}\.\d{1,3}/24)$
+  DatabaseSubnet2CIDR:
+    Type: String
+    Default: 10.0.6.0/24
+    Description: CIDR block for Database Subnet in second AZ
+    AllowedPattern: ^(10\.\d{1,3}\.\d{1,3}\.\d{1,3}/24)$
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    Description: EC2 instance type
+    AllowedValues:
+      - t3.micro
+      - t3.small
+      - t3.medium
+Resources:
+  xyzAppVPCMain:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock:
+        Ref: VpcCIDR
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: xyzApp-VPC-Main
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppIGWMain:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: xyzApp-IGW-Main
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppVPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId:
+        Ref: xyzAppIGWMain
+      VpcId:
+        Ref: xyzAppVPCMain
+  xyzAppSubnetPublic1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: xyzAppVPCMain
+      CidrBlock:
+        Ref: PublicSubnet1CIDR
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ''
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: xyzApp-Subnet-Public1
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppSubnetPublic2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: xyzAppVPCMain
+      CidrBlock:
+        Ref: PublicSubnet2CIDR
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: ''
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: xyzApp-Subnet-Public2
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppSubnetPrivate1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: xyzAppVPCMain
+      CidrBlock:
+        Ref: PrivateSubnet1CIDR
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ''
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: xyzApp-Subnet-Private1
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppSubnetPrivate2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: xyzAppVPCMain
+      CidrBlock:
+        Ref: PrivateSubnet2CIDR
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: ''
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: xyzApp-Subnet-Private2
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppSubnetDatabase1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: xyzAppVPCMain
+      CidrBlock:
+        Ref: DatabaseSubnet1CIDR
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ''
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: xyzApp-Subnet-Database1
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppSubnetDatabase2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: xyzAppVPCMain
+      CidrBlock:
+        Ref: DatabaseSubnet2CIDR
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: ''
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: xyzApp-Subnet-Database2
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppEIPNAT1:
+    Type: AWS::EC2::EIP
+    DependsOn: xyzAppVPCGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: xyzApp-EIP-NAT1
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppEIPNAT2:
+    Type: AWS::EC2::EIP
+    DependsOn: xyzAppVPCGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: xyzApp-EIP-NAT2
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppNATGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt xyzAppEIPNAT1.AllocationId
+      SubnetId: !Ref xyzAppSubnetPublic1
+      Tags:
+        - Key: Name
+          Value: xyzApp-NATGateway-1
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppNATGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt xyzAppEIPNAT2.AllocationId
+      SubnetId: !Ref xyzAppSubnetPublic2
+      Tags:
+        - Key: Name
+          Value: xyzApp-NATGateway-2
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppRouteTablePublic:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: xyzAppVPCMain
+      Tags:
+        - Key: Name
+          Value: xyzApp-RouteTable-Public
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppRoutePublicInternet:
+    Type: AWS::EC2::Route
+    DependsOn: xyzAppVPCGatewayAttachment
+    Properties:
+      RouteTableId:
+        Ref: xyzAppRouteTablePublic
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: xyzAppIGWMain
+  xyzAppSubnetRouteTableAssocPublic1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: xyzAppRouteTablePublic
+      SubnetId:
+        Ref: xyzAppSubnetPublic1
+  xyzAppSubnetRouteTableAssocPublic2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: xyzAppRouteTablePublic
+      SubnetId:
+        Ref: xyzAppSubnetPublic2
+  xyzAppRouteTablePrivate1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: xyzAppVPCMain
+      Tags:
+        - Key: Name
+          Value: xyzApp-RouteTable-Private1
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppRoutePrivate1NAT:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: xyzAppRouteTablePrivate1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: xyzAppNATGateway1
+  xyzAppSubnetRouteTableAssocPrivate1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: xyzAppRouteTablePrivate1
+      SubnetId:
+        Ref: xyzAppSubnetPrivate1
+  xyzAppRouteTablePrivate2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: xyzAppVPCMain
+      Tags:
+        - Key: Name
+          Value: xyzApp-RouteTable-Private2
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppRoutePrivate2NAT:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: xyzAppRouteTablePrivate2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: xyzAppNATGateway2
+  xyzAppSubnetRouteTableAssocPrivate2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: xyzAppRouteTablePrivate2
+      SubnetId:
+        Ref: xyzAppSubnetPrivate2
+  xyzAppRouteTableDatabase:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: xyzAppVPCMain
+      Tags:
+        - Key: Name
+          Value: xyzApp-RouteTable-Database
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppSubnetRouteTableAssocDatabase1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: xyzAppRouteTableDatabase
+      SubnetId:
+        Ref: xyzAppSubnetDatabase1
+  xyzAppSubnetRouteTableAssocDatabase2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: xyzAppRouteTableDatabase
+      SubnetId:
+        Ref: xyzAppSubnetDatabase2
+  xyzAppSGEC2:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for EC2 instances
+      VpcId:
+        Ref: xyzAppVPCMain
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP access from internet
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS access from internet
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
+      Tags:
+        - Key: Name
+          Value: xyzApp-SG-EC2
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppSGLambda:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Lambda functions
+      VpcId:
+        Ref: xyzAppVPCMain
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
+      Tags:
+        - Key: Name
+          Value: xyzApp-SG-Lambda
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppKMSKeyMain:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for encrypting S3 bucket and other resources
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS:
+                Fn::Sub: arn:aws:iam::${AWS::AccountId}:root
+            Action: kms:*
+            Resource: '*'
+          - Sid: Allow services to use the key
+            Effect: Allow
+            Principal:
+              Service:
+                - s3.amazonaws.com
+                - lambda.amazonaws.com
+                - logs.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:GenerateDataKey
+              - kms:CreateGrant
+            Resource: '*'
+      EnableKeyRotation: true
+      Tags:
+        - Key: Name
+          Value: xyzApp-KMSKey-Main
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppKMSKeyAliasMain:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/xyzApp-main-key
+      TargetKeyId:
+        Ref: xyzAppKMSKeyMain
+  xyzAppS3BucketData:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName:
+        Fn::Sub: xyzapp-data-${AWS::AccountId}-${AWS::Region}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID:
+                Fn::GetAtt:
+                  - xyzAppKMSKeyMain
+                  - Arn
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LoggingConfiguration:
+        DestinationBucketName:
+          Ref: xyzAppS3BucketLogs
+        LogFilePrefix: access-logs/
+      Tags:
+        - Key: Name
+          Value: xyzApp-S3Bucket-Data
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppS3BucketLogs:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName:
+        Fn::Sub: xyzapp-logs-${AWS::AccountId}-${AWS::Region}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Name
+          Value: xyzApp-S3Bucket-Logs
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppS3BucketPolicyData:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: xyzAppS3BucketData
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - Fn::GetAtt:
+                  - xyzAppS3BucketData
+                  - Arn
+              - Fn::Sub: ${xyzAppS3BucketData.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+  xyzAppIAMRoleLambdaExecution:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Sub: xyzApp-LambdaRole-${AWS::StackName}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: xyzApp-Policy-LambdaCloudWatchLogs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  Fn::Sub: arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*
+        - PolicyName: xyzApp-Policy-LambdaS3ReadOnly
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - Fn::GetAtt:
+                      - xyzAppS3BucketData
+                      - Arn
+                  - Fn::Sub: ${xyzAppS3BucketData.Arn}/*
+        - PolicyName: xyzApp-Policy-LambdaKMSDecrypt
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:DescribeKey
+                Resource:
+                  Fn::GetAtt:
+                    - xyzAppKMSKeyMain
+                    - Arn
+      Tags:
+        - Key: Name
+          Value: xyzApp-IAMRole-LambdaExecution
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/xyzApp-Lambda-ProcessData
+      RetentionInDays: 30
+  xyzAppLambdaProcessData:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: xyzApp-Lambda-ProcessData
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role:
+        Fn::GetAtt:
+          - xyzAppIAMRoleLambdaExecution
+          - Arn
+      Code:
+        ZipFile: "import json\nimport logging\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef lambda_handler(event, context):\n    logger.info('Processing data for xyzApp SaaS platform')\n    return {\n        'statusCode': 200,\n        'body': json.dumps({'message': 'Data processed successfully'}),\n        'headers': {\n            'Content-Type': 'application/json'\n        }\n    }\n"
+      VpcConfig:
+        SecurityGroupIds:
+          - Ref: xyzAppSGLambda
+        SubnetIds:
+          - Ref: xyzAppSubnetPrivate1
+          - Ref: xyzAppSubnetPrivate2
+      Environment:
+        Variables:
+          ENVIRONMENT: Production
+          S3_BUCKET:
+            Ref: xyzAppS3BucketData
+      Timeout: 30
+      MemorySize: 256
+      Tags:
+        - Key: Name
+          Value: xyzApp-Lambda-ProcessData
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppIAMRoleAPIGateway:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+      Tags:
+        - Key: Name
+          Value: xyzApp-IAMRole-APIGateway
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppAPIGatewayRestAPI:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: xyzApp-APIGateway-RestAPI
+      Description: REST API for xyzApp SaaS Application
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Tags:
+        - Key: Name
+          Value: xyzApp-APIGateway-RestAPI
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppAPIGatewayAccount:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn:
+        Fn::GetAtt:
+          - xyzAppIAMRoleAPIGateway
+          - Arn
+  xyzAppAPIGatewayRequestValidator:
+    Type: AWS::ApiGateway::RequestValidator
+    Properties:
+      Name: xyzApp-RequestValidator
+      RestApiId:
+        Ref: xyzAppAPIGatewayRestAPI
+      ValidateRequestBody: true
+      ValidateRequestParameters: true
+  xyzAppAPIGatewayResourceData:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId:
+        Fn::GetAtt:
+          - xyzAppAPIGatewayRestAPI
+          - RootResourceId
+      PathPart: data
+      RestApiId:
+        Ref: xyzAppAPIGatewayRestAPI
+  xyzAppAPIGatewayMethodGetData:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      HttpMethod: GET
+      ResourceId:
+        Ref: xyzAppAPIGatewayResourceData
+      RestApiId:
+        Ref: xyzAppAPIGatewayRestAPI
+      AuthorizationType: NONE
+      RequestValidatorId:
+        Ref: xyzAppAPIGatewayRequestValidator
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${xyzAppLambdaProcessData.Arn}/invocations
+      MethodResponses:
+        - StatusCode: '200'
+  xyzAppLambdaPermissionAPIGateway:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: xyzAppLambdaProcessData
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${xyzAppAPIGatewayRestAPI}/*/*
+  xyzAppAPIGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - xyzAppAPIGatewayMethodGetData
+    Properties:
+      RestApiId:
+        Ref: xyzAppAPIGatewayRestAPI
+      Description: Production deployment
+  xyzAppAPIGatewayStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      StageName: prod
+      RestApiId:
+        Ref: xyzAppAPIGatewayRestAPI
+      DeploymentId:
+        Ref: xyzAppAPIGatewayDeployment
+      Description: Production stage
+      AccessLogSetting:
+        DestinationArn:
+          Fn::GetAtt:
+            - xyzAppAPIGatewayLogGroup
+            - Arn
+        Format: $context.requestId $context.requestTime $context.httpMethod $context.resourcePath $context.status
+      MethodSettings:
+        - ResourcePath: /*
+          HttpMethod: '*'
+          LoggingLevel: INFO
+          DataTraceEnabled: true
+          MetricsEnabled: true
+      Tags:
+        - Key: Name
+          Value: xyzApp-APIGatewayStage-Prod
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppAPIGatewayLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/apigateway/xyzApp-RestAPI
+      RetentionInDays: 30
+  xyzAppAPIGatewayUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn: xyzAppAPIGatewayStage
+    Properties:
+      UsagePlanName: xyzApp-UsagePlan-Standard
+      Description: Usage plan for xyzApp API
+      ApiStages:
+        - ApiId:
+            Ref: xyzAppAPIGatewayRestAPI
+          Stage: prod
+      Throttle:
+        BurstLimit: 500
+        RateLimit: 100
+      Quota:
+        Limit: 10000
+        Period: DAY
+      Tags:
+        - Key: Name
+          Value: xyzApp-APIGatewayUsagePlan
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: CloudFront distribution for xyzApp SaaS Application
+        Enabled: true
+        DefaultRootObject: index.html
+        Origins:
+          - Id: xyzApp-APIGateway-Origin
+            DomainName:
+              Fn::Sub: ${xyzAppAPIGatewayRestAPI}.execute-api.${AWS::Region}.amazonaws.com
+            OriginPath: /prod
+            CustomOriginConfig:
+              HTTPSPort: 443
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols:
+                - TLSv1.2
+        DefaultCacheBehavior:
+          TargetOriginId: xyzApp-APIGateway-Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - DELETE
+            - GET
+            - HEAD
+            - OPTIONS
+            - PATCH
+            - POST
+            - PUT
+          CachedMethods:
+            - GET
+            - HEAD
+          ForwardedValues:
+            QueryString: true
+            Headers:
+              - Authorization
+            Cookies:
+              Forward: none
+          MinTTL: 0
+          DefaultTTL: 0
+          MaxTTL: 0
+        PriceClass: PriceClass_100
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+        Logging:
+          Bucket:
+            Fn::GetAtt:
+              - xyzAppS3BucketLogs
+              - DomainName
+          Prefix: cloudfront/
+          IncludeCookies: false
+      Tags:
+        - Key: Name
+          Value: xyzApp-CloudFrontDistribution
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: xyzApp-ECSCluster-v2
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: FARGATE
+          Weight: 1
+          Base: 1
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+      Tags:
+        - Key: Name
+          Value: xyzApp-ECSCluster-v2
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppIAMRoleECSTaskExecution:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Sub: xyzApp-ECSTaskExecutionRole-${AWS::StackName}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Tags:
+        - Key: Name
+          Value: xyzApp-IAMRole-ECSTaskExecution
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppIAMRoleECSTask:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Sub: xyzApp-ECSTaskRole-${AWS::StackName}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: xyzApp-Policy-ECSTaskMinimal
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource:
+                  Fn::Sub: ${xyzAppS3BucketLogs.Arn}/*
+      Tags:
+        - Key: Name
+          Value: xyzApp-IAMRole-ECSTask
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppECSLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/xyzApp-Container
+      RetentionInDays: 30
+  xyzAppECSTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: xyzApp-TaskDefinition
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: '256'
+      Memory: '512'
+      TaskRoleArn:
+        Fn::GetAtt:
+          - xyzAppIAMRoleECSTask
+          - Arn
+      ExecutionRoleArn:
+        Fn::GetAtt:
+          - xyzAppIAMRoleECSTaskExecution
+          - Arn
+      ContainerDefinitions:
+        - Name: xyzApp-Container-Main
+          Image: nginx:latest
+          Essential: true
+          PortMappings:
+            - ContainerPort: 80
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: /ecs/xyzApp-Container
+              awslogs-region:
+                Ref: AWS::Region
+              awslogs-stream-prefix: ecs
+          Environment:
+            - Name: ENVIRONMENT
+              Value: Production
+      Tags:
+        - Key: Name
+          Value: xyzApp-ECSTaskDefinition
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppECSService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: xyzApp-ECSService
+      Cluster:
+        Ref: xyzAppECSCluster
+      TaskDefinition:
+        Ref: xyzAppECSTaskDefinition
+      DesiredCount: 2
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - Ref: xyzAppSGEC2
+          Subnets:
+            - Ref: xyzAppSubnetPrivate1
+            - Ref: xyzAppSubnetPrivate2
+      Tags:
+        - Key: Name
+          Value: xyzApp-ECSService
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppVPCFlowLogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: xyzApp-Policy-CloudWatchLog
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: xyzApp-VPCFlowLogRole
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppVPCFlowLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/vpc/xyzApp-${AWS::StackName}
+      RetentionInDays: 30
+  xyzAppVPCFlowLog:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      DeliverLogsPermissionArn:
+        Fn::GetAtt:
+          - xyzAppVPCFlowLogRole
+          - Arn
+      LogDestinationType: cloud-watch-logs
+      LogGroupName:
+        Ref: xyzAppVPCFlowLogGroup
+      ResourceId:
+        Ref: xyzAppVPCMain
+      ResourceType: VPC
+      TrafficType: ALL
+      Tags:
+        - Key: Name
+          Value: xyzApp-VPCFlowLog
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppIAMRoleEC2:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Sub: xyzApp-EC2Role-${AWS::StackName}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: xyzApp-Policy-EC2Minimal
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - Fn::GetAtt:
+                      - xyzAppS3BucketLogs
+                      - Arn
+                  - Fn::Sub: ${xyzAppS3BucketLogs.Arn}/*
+      Tags:
+        - Key: Name
+          Value: xyzApp-IAMRole-EC2
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppEC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - Ref: xyzAppIAMRoleEC2
+  xyzAppEC2LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: xyzApp-LaunchTemplate
+      VersionDescription: Initial version
+      LaunchTemplateData:
+        ImageId: ami-12345678
+        InstanceType:
+          Ref: InstanceType
+        SecurityGroupIds:
+          - Ref: xyzAppSGEC2
+        IamInstanceProfile:
+          Arn:
+            Fn::GetAtt:
+              - xyzAppEC2InstanceProfile
+              - Arn
+        UserData:
+          Fn::Base64:
+            Fn::Join:
+              - '
+
+                '
+              - - '#!/bin/bash -xe'
+                - yum update -y
+                - yum install -y amazon-ssm-agent mysql
+                - systemctl enable amazon-ssm-agent
+                - systemctl start amazon-ssm-agent
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 20
+              VolumeType: gp3
+              Encrypted: true
+              DeleteOnTermination: true
+        MetadataOptions:
+          HttpTokens: required
+          HttpPutResponseHopLimit: 1
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: xyzApp-EC2Instance
+              - Key: Environment
+                Value: Production
+              - Key: Project
+                Value: XYZSaaSApp
+              - Key: Owner
+                Value: SecurityTeam
+              - Key: CostCenter
+                Value: Security
+  xyzAppLambdaCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: xyzApp-Lambda-HighDuration
+      AlarmDescription: Alert when Lambda function duration is high
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 25000
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value:
+            Ref: xyzAppLambdaProcessData
+  xyzAppLambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: xyzApp-Lambda-Errors
+      AlarmDescription: Alert when Lambda function has errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value:
+            Ref: xyzAppLambdaProcessData
+  xyzAppAPIGateway4XXErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: xyzApp-APIGateway-4XXErrors
+      AlarmDescription: Alert when API Gateway has high 4XX errors
+      MetricName: 4XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ApiName
+          Value: xyzApp-APIGateway-RestAPI
+  xyzAppAPIGateway5XXErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: xyzApp-APIGateway-5XXErrors
+      AlarmDescription: Alert when API Gateway has 5XX errors
+      MetricName: 5XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ApiName
+          Value: xyzApp-APIGateway-RestAPI
+  xyzAppCloudTrailBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName:
+        Fn::Sub: xyzapp-cloudtrail-${AWS::AccountId}-${AWS::Region}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldTrailLogs
+            Status: Enabled
+            ExpirationInDays: 365
+      Tags:
+        - Key: Name
+          Value: xyzApp-CloudTrailBucket
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+  xyzAppCloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: xyzAppCloudTrailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource:
+              Fn::GetAtt:
+                - xyzAppCloudTrailBucket
+                - Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource:
+              Fn::Sub: ${xyzAppCloudTrailBucket.Arn}/*
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+  xyzAppCloudTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: xyzAppCloudTrailBucketPolicy
+    Properties:
+      TrailName: xyzApp-CloudTrail
+      S3BucketName:
+        Ref: xyzAppCloudTrailBucket
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+      Tags:
+        - Key: Name
+          Value: xyzApp-CloudTrail
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: XYZSaaSApp
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: CostCenter
+          Value: Security
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value:
+      Ref: xyzAppVPCMain
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-VPCId
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID
+    Value:
+      Ref: xyzAppSubnetPublic1
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-PublicSubnet1Id
+  PublicSubnet2Id:
+    Description: Public Subnet 2 ID
+    Value:
+      Ref: xyzAppSubnetPublic2
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-PublicSubnet2Id
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value:
+      Ref: xyzAppSubnetPrivate1
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-PrivateSubnet1Id
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID
+    Value:
+      Ref: xyzAppSubnetPrivate2
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-PrivateSubnet2Id
+  DatabaseSubnet1Id:
+    Description: Database Subnet 1 ID
+    Value:
+      Ref: xyzAppSubnetDatabase1
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-DatabaseSubnet1Id
+  DatabaseSubnet2Id:
+    Description: Database Subnet 2 ID
+    Value:
+      Ref: xyzAppSubnetDatabase2
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-DatabaseSubnet2Id
+  LambdaFunctionArn:
+    Description: Lambda Function ARN
+    Value:
+      Fn::GetAtt:
+        - xyzAppLambdaProcessData
+        - Arn
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-LambdaFunctionArn
+  APIGatewayURL:
+    Description: API Gateway URL
+    Value:
+      Fn::Sub: https://${xyzAppAPIGatewayRestAPI}.execute-api.${AWS::Region}.amazonaws.com/prod/data
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-APIGatewayURL
+  CloudFrontDomainName:
+    Description: CloudFront Distribution Domain Name
+    Value:
+      Fn::GetAtt:
+        - xyzAppCloudFrontDistribution
+        - DomainName
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-CloudFrontDomainName
+  S3DataBucketName:
+    Description: S3 Data Bucket Name
+    Value:
+      Ref: xyzAppS3BucketData
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-S3DataBucketName
+  S3DataBucketArn:
+    Description: S3 Data Bucket ARN
+    Value:
+      Fn::GetAtt:
+        - xyzAppS3BucketData
+        - Arn
+  S3LogsBucketName:
+    Description: S3 Logs Bucket Name
+    Value:
+      Ref: xyzAppS3BucketLogs
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-S3LogsBucketName
+  ECSClusterName:
+    Description: ECS Cluster Name
+    Value:
+      Ref: xyzAppECSCluster
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ECSClusterName
+  KMSKeyId:
+    Description: KMS Key ID for Encryption
+    Value:
+      Ref: xyzAppKMSKeyMain
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-KMSKeyId
+  KMSKeyArn:
+    Description: KMS Key ARN
+    Value:
+      Fn::GetAtt:
+        - xyzAppKMSKeyMain
+        - Arn
+  CloudTrailName:
+    Description: CloudTrail Name
+    Value:
+      Ref: xyzAppCloudTrail
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-CloudTrailName
+  NATGateway1Id:
+    Description: NAT Gateway 1 ID
+    Value:
+      Ref: xyzAppNATGateway1
+  NATGateway2Id:
+    Description: NAT Gateway 2 ID
+    Value:
+      Ref: xyzAppNATGateway2
+  LambdaFunctionName:
+    Description: Lambda Function Name
+    Value:
+      Ref: xyzAppLambdaProcessData
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-LambdaFunctionName
+  APIGatewayId:
+    Description: API Gateway REST API ID
+    Value:
+      Ref: xyzAppAPIGatewayRestAPI
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-APIGatewayId
+  ECSTaskDefinitionArn:
+    Description: ECS Task Definition ARN
+    Value:
+      Ref: xyzAppECSTaskDefinition
+  StackName:
+    Description: CloudFormation Stack Name
+    Value:
+      Ref: AWS::StackName
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-StackName
