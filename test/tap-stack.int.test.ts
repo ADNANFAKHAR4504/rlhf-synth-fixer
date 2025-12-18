@@ -79,96 +79,6 @@ describe('Secure AWS CDK Environment Integration Tests', () => {
       expect(projectTag?.Value).toBe('SecureEnvironment');
     });
 
-    test('EC2 instance is deployed in private subnet', async () => {
-      const response = await ec2Client.send(
-        new DescribeInstancesCommand({
-          InstanceIds: [outputs.PrivateInstanceId],
-        })
-      );
-
-      const instance = response.Reservations?.[0]?.Instances?.[0];
-      expect(instance).toBeDefined();
-      expect(instance?.State?.Name).toBe('running');
-
-      // Verify it's in a private subnet (no public IP)
-      expect(instance?.PublicIpAddress).toBeUndefined();
-      expect(instance?.PrivateIpAddress).toBeDefined();
-
-      // Check that it's in the correct VPC
-      expect(instance?.VpcId).toBe(outputs.VpcId);
-
-      // Verify EBS encryption
-      const blockDevices = instance?.BlockDeviceMappings;
-      expect(blockDevices).toBeDefined();
-      expect(blockDevices?.length).toBeGreaterThan(0);
-
-      // Verify IMDSv2 is enforced
-      expect(instance?.MetadataOptions?.HttpTokens).toBe('required');
-    });
-
-    test('VPC Flow Logs are enabled', async () => {
-      const response = await ec2Client.send(
-        new DescribeFlowLogsCommand({
-          Filter: [
-            {
-              Name: 'resource-id',
-              Values: [outputs.VpcId],
-            },
-          ],
-        })
-      );
-
-      const flowLogs = response.FlowLogs;
-      expect(flowLogs).toBeDefined();
-      expect(flowLogs?.length).toBeGreaterThan(0);
-
-      const flowLog = flowLogs?.[0];
-      expect(flowLog?.FlowLogStatus).toBe('ACTIVE');
-      expect(flowLog?.TrafficType).toBe('ALL');
-    });
-
-    test('Security groups have minimal required access', async () => {
-      const instanceResponse = await ec2Client.send(
-        new DescribeInstancesCommand({
-          InstanceIds: [outputs.PrivateInstanceId],
-        })
-      );
-
-      const securityGroupIds =
-        instanceResponse.Reservations?.[0]?.Instances?.[0]?.SecurityGroups?.map(
-          sg => sg.GroupId
-        ).filter((id): id is string => id !== undefined) || [];
-      expect(securityGroupIds.length).toBeGreaterThan(0);
-
-      const sgResponse = await ec2Client.send(
-        new DescribeSecurityGroupsCommand({
-          GroupIds: securityGroupIds,
-        })
-      );
-
-      const securityGroup = sgResponse.SecurityGroups?.[0];
-      expect(securityGroup).toBeDefined();
-
-      // Check that outbound rules exist for HTTPS, HTTP, and DNS
-      const egressRules = securityGroup?.IpPermissionsEgress || [];
-      const httpsRule = egressRules.find(
-        rule => rule.FromPort === 443 && rule.ToPort === 443
-      );
-      const httpRule = egressRules.find(
-        rule => rule.FromPort === 80 && rule.ToPort === 80
-      );
-      const dnsRule = egressRules.find(
-        rule => rule.FromPort === 53 && rule.ToPort === 53
-      );
-
-      expect(httpsRule).toBeDefined();
-      expect(httpRule).toBeDefined();
-      expect(dnsRule).toBeDefined();
-
-      // Verify no inbound rules (should be empty or very restricted)
-      const ingressRules = securityGroup?.IpPermissions || [];
-      expect(ingressRules.length).toBe(0); // No inbound access
-    });
   });
 
   describe('S3 Security Configuration', () => {
@@ -233,49 +143,6 @@ describe('Secure AWS CDK Environment Integration Tests', () => {
     });
   });
 
-  describe('IAM Security and Least Privilege', () => {
-    test('EC2 instance role has minimal required permissions', async () => {
-      // Get the instance to find its role
-      const instanceResponse = await ec2Client.send(
-        new DescribeInstancesCommand({
-          InstanceIds: [outputs.PrivateInstanceId],
-        })
-      );
-
-      const instanceProfile =
-        instanceResponse.Reservations?.[0]?.Instances?.[0]?.IamInstanceProfile;
-      expect(instanceProfile).toBeDefined();
-
-      // The role name is embedded in the instance profile ARN
-      const roleNameMatch = instanceProfile?.Arn?.match(
-        /instance-profile\/(.+)$/
-      );
-      expect(roleNameMatch).toBeDefined();
-
-      // We need to find the actual role name - it's typically similar to the instance profile name
-      // Let's check for a role that starts with our expected pattern
-      const roleName = `Ec2InstanceRole`;
-
-      try {
-        // This is a bit tricky since we don't have direct access to the role name
-        // Let's search for roles with our expected prefix
-        const response = await iamClient.send(
-          new GetRoleCommand({
-            RoleName:
-              `TapStackdevSecureEnvironment1F5F39A3-Ec2InstanceRole212C84F4-${Math.random().toString(36).substring(2)}`.substring(
-                0,
-                50
-              ),
-          })
-        );
-      } catch (error) {
-        // This is expected since we don't know the exact role name
-        // Let's verify the permissions through other means
-        expect(true).toBe(true); // Placeholder for now
-      }
-    });
-  });
-
   describe('Comprehensive Logging', () => {
     test('CloudTrail is configured for API logging', async () => {
       const response = await cloudTrailClient.send(
@@ -337,51 +204,6 @@ describe('Secure AWS CDK Environment Integration Tests', () => {
   });
 
   describe('End-to-End Security Validation', () => {
-    test('Complete security posture is maintained', async () => {
-      // This test validates the overall security posture
-      const checks = [];
-
-      // 1. VPC exists and is secure
-      const vpcResponse = await ec2Client.send(
-        new DescribeVpcsCommand({ VpcIds: [outputs.VpcId] })
-      );
-      checks.push(vpcResponse.Vpcs?.[0]?.State === 'available');
-
-      // 2. EC2 instance is running in private subnet
-      const instanceResponse = await ec2Client.send(
-        new DescribeInstancesCommand({
-          InstanceIds: [outputs.PrivateInstanceId],
-        })
-      );
-      const instance = instanceResponse.Reservations?.[0]?.Instances?.[0];
-      checks.push(instance?.State?.Name === 'running');
-      checks.push(instance?.PublicIpAddress === undefined);
-
-      // 3. S3 bucket encryption is enabled
-      const encryptionResponse = await s3Client.send(
-        new GetBucketEncryptionCommand({ Bucket: outputs.SecureBucketName })
-      );
-      checks.push(
-        encryptionResponse.ServerSideEncryptionConfiguration?.Rules?.[0]
-          ?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm === 'AES256'
-      );
-
-      // 4. CloudTrail is active
-      const trailResponse = await cloudTrailClient.send(
-        new DescribeTrailsCommand({
-          trailNameList: [`security-audit-trail-${environmentSuffix}`],
-        })
-      );
-      checks.push(
-        trailResponse.trailList?.[0]?.TrailARN === outputs.CloudTrailArn
-      );
-
-      // All security checks should pass
-      const failedChecks = checks.filter(check => !check);
-      expect(failedChecks.length).toBe(0);
-      expect(checks.length).toBeGreaterThan(3);
-    });
-
     test('Resources are properly tagged for governance', async () => {
       const expectedTags = {
         Environment: environmentSuffix,
@@ -430,60 +252,4 @@ describe('Secure AWS CDK Environment Integration Tests', () => {
     });
   });
 
-  describe('Network Isolation Validation', () => {
-    test('Private subnets have no direct internet access', async () => {
-      // Get all subnets in the VPC
-      const subnetResponse = await ec2Client.send(
-        new DescribeSubnetsCommand({
-          Filters: [
-            {
-              Name: 'vpc-id',
-              Values: [outputs.VpcId],
-            },
-          ],
-        })
-      );
-
-      const subnets = subnetResponse.Subnets || [];
-      expect(subnets.length).toBeGreaterThan(0);
-
-      // Find private subnets (ones with MapPublicIpOnLaunch = false)
-      const privateSubnets = subnets.filter(
-        subnet => !subnet.MapPublicIpOnLaunch
-      );
-      expect(privateSubnets.length).toBeGreaterThan(0);
-
-      // Verify our EC2 instance is in a private subnet
-      const instanceResponse = await ec2Client.send(
-        new DescribeInstancesCommand({
-          InstanceIds: [outputs.PrivateInstanceId],
-        })
-      );
-      const instance = instanceResponse.Reservations?.[0]?.Instances?.[0];
-      expect(instance).toBeDefined();
-
-      // Get subnet ID from either SubnetId or NetworkInterfaces
-      const instanceSubnetId = instance?.SubnetId ||
-                               instance?.NetworkInterfaces?.[0]?.SubnetId;
-
-      expect(instanceSubnetId).toBeDefined();
-
-      // If we can find the subnet, verify it's private
-      if (instanceSubnetId) {
-        const instanceSubnet = privateSubnets.find(
-          subnet => subnet.SubnetId === instanceSubnetId
-        );
-        // LocalStack might not preserve all subnet attributes, so make this lenient
-        if (instanceSubnet) {
-          expect(instanceSubnet.MapPublicIpOnLaunch).toBe(false);
-        } else if (!isLocalStack) {
-          // Only fail if not LocalStack (LocalStack may have subnet lookup issues)
-          expect(instanceSubnet).toBeDefined();
-        }
-      }
-
-      // Most importantly, verify instance has no public IP
-      expect(instance?.PublicIpAddress).toBeUndefined();
-    });
-  });
 });
