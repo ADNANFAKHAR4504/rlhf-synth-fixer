@@ -24,7 +24,7 @@ if ! command -v go >/dev/null 2>&1; then
   export PATH="$HOME/go/bin:/usr/local/go/bin:/usr/lib/go/bin:$PATH"
 fi
 if ! command -v go >/dev/null 2>&1; then
-  echo "❌ go not found on PATH. Install Go or export PATH (e.g. /usr/local/go/bin)."
+  echo "ERROR: go not found on PATH. Install Go or export PATH (e.g. /usr/local/go/bin)."
   exit 1
 fi
 ```
