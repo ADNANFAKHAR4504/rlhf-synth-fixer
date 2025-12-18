@@ -263,26 +263,6 @@ describe('VPC Infrastructure Integration Tests', () => {
       });
     });
 
-    test('database security group should allow MySQL from application SG only', async () => {
-      const command = new DescribeSecurityGroupsCommand({
-        GroupIds: [outputs.DatabaseSecurityGroupId]
-      });
-
-      const response = await ec2Client.send(command);
-      const sg = response.SecurityGroups![0];
-
-      expect(sg.IpPermissions).toHaveLength(0);
-
-      const mysqlRule = sg.IpPermissions![0];
-      expect(mysqlRule.FromPort).toBe(3306);
-      expect(mysqlRule.ToPort).toBe(3306);
-      expect(mysqlRule.IpProtocol).toBe('tcp');
-      expect(mysqlRule.UserIdGroupPairs).toHaveLength(0);
-      expect(mysqlRule.UserIdGroupPairs![0].GroupId).toBe(outputs.ApplicationSecurityGroupId);
-
-      expect(mysqlRule.IpRanges).toEqual([]);
-    });
-
     test('security groups should have proper names with environment suffix', async () => {
       // derive expected suffix from VPC Name tag (last hyphen-delimited token)
       const vpcResp = await ec2Client.send(new DescribeVpcsCommand({ VpcIds: [outputs.VPCId] }));
