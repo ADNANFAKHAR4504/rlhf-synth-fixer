@@ -162,9 +162,18 @@ jest.mock('@pulumi/aws', () => ({
     LaunchTemplate: jest.fn().mockImplementation((name: unknown, props: unknown) => {
       const nameStr = name as string;
       const propsObj = props as any;
+      // Return different latestVersion types based on name for testing coverage
+      let latestVersion: string | number | { apply: (fn: (v: number) => string) => string } = '1';
+      if (nameStr.includes('numeric')) {
+        latestVersion = 123; // Test fallback case with number
+      } else if (nameStr.includes('output')) {
+        latestVersion = {
+          apply: (fn: (v: number) => string) => fn(1),
+        }; // Test pulumi output case
+      }
       return {
         id: `${nameStr}_id`,
-        latestVersion: '1',
+        latestVersion,
         ...(propsObj || {})
       };
     }),
@@ -620,6 +629,56 @@ describe('AWS Model Breaking Infrastructure Components', () => {
       });
     });
 
+    describe('SubnetGroupComponent', () => {
+      it('should create subnet group with public and private subnets', async () => {
+        const subnetGroup = new SubnetGroupComponent('test-subnet-group', {
+          vpcId: 'vpc-123',
+          publicSubnets: [
+            { cidrBlock: '10.0.1.0/24', availabilityZone: 'us-east-1a', name: 'public-1' },
+            { cidrBlock: '10.0.2.0/24', availabilityZone: 'us-east-1b', name: 'public-2' },
+          ],
+          privateSubnets: [
+            { cidrBlock: '10.0.10.0/24', availabilityZone: 'us-east-1a', name: 'private-1' },
+            { cidrBlock: '10.0.11.0/24', availabilityZone: 'us-east-1b', name: 'private-2' },
+          ],
+          tags: { Environment: 'test' },
+        });
+
+        expect(subnetGroup).toBeDefined();
+        expect(subnetGroup.publicSubnets).toBeDefined();
+        expect(subnetGroup.privateSubnets).toBeDefined();
+        expect(subnetGroup.publicSubnetIds).toBeDefined();
+        expect(subnetGroup.privateSubnetIds).toBeDefined();
+      });
+
+      it('should create subnet group with empty subnets', async () => {
+        const subnetGroup = new SubnetGroupComponent('test-empty-subnet-group', {
+          vpcId: 'vpc-123',
+          publicSubnets: [],
+          privateSubnets: [],
+        });
+
+        expect(subnetGroup).toBeDefined();
+      });
+    });
+
+    describe('createSubnetGroup function', () => {
+      it('should create subnet group using factory function', async () => {
+        const result = createSubnetGroup('factory-subnet-group', {
+          vpcId: 'vpc-123',
+          publicSubnets: [
+            { cidrBlock: '10.0.1.0/24', availabilityZone: 'us-east-1a', name: 'public-1' },
+          ],
+          privateSubnets: [
+            { cidrBlock: '10.0.10.0/24', availabilityZone: 'us-east-1a', name: 'private-1' },
+          ],
+        });
+
+        expect(result).toBeDefined();
+        expect(result.publicSubnets).toBeDefined();
+        expect(result.privateSubnets).toBeDefined();
+      });
+    });
 
   });
 
@@ -817,6 +876,48 @@ describe('AWS Model Breaking Infrastructure Components', () => {
         expect(routeTables.privateRouteTables).toHaveLength(1);
         expect(routeTables.publicAssociations).toHaveLength(1);
         expect(routeTables.privateAssociations).toHaveLength(1);
+      });
+
+      it('should handle single natGatewayId (not array)', async () => {
+        const routeTables = new RouteTablesComponent(
+          'test-routes-single-nat',
+          {
+            vpcId: 'vpc-123',
+            internetGatewayId: 'igw-123',
+            publicSubnetIds: 'subnet-1' as any,
+            name: 'test-public-single',
+          },
+          {
+            vpcId: 'vpc-123',
+            natGatewayIds: 'nat-123' as any,
+            privateSubnetIds: 'subnet-10' as any,
+            name: 'test-private-single',
+          }
+        );
+
+        expect(routeTables.publicRouteTable).toBeDefined();
+        expect(routeTables.privateRouteTables).toBeDefined();
+      });
+
+      it('should create route tables with multiple NAT gateways', async () => {
+        const routeTables = new RouteTablesComponent(
+          'test-routes-multi-nat',
+          {
+            vpcId: 'vpc-123',
+            internetGatewayId: 'igw-123',
+            publicSubnetIds: ['subnet-1', 'subnet-2'],
+            name: 'test-public-multi',
+          },
+          {
+            vpcId: 'vpc-123',
+            natGatewayIds: ['nat-123', 'nat-456'],
+            privateSubnetIds: ['subnet-10', 'subnet-11'],
+            name: 'test-private-multi',
+          }
+        );
+
+        expect(routeTables.publicRouteTable).toBeDefined();
+        expect(routeTables.privateRouteTables.length).toBeGreaterThanOrEqual(1);
       });
     });
 
@@ -1112,6 +1213,40 @@ describe('AWS Model Breaking Infrastructure Components', () => {
 
         const ltId = await launchTemplate.launchTemplateId;
         expect(ltId).toBe('test-lt-custom-lt_id');
+      });
+
+      it('should handle latestVersion as pulumi output', async () => {
+        // Test with pulumi output-like object (name contains 'output')
+        const launchTemplate = new LaunchTemplateComponent('test-lt-output-version', {
+          name: 'test-lt-output-version',
+          instanceType: 't3.micro',
+          securityGroupIds: ['sg-123'],
+        });
+
+        expect(launchTemplate.latestVersion).toBeDefined();
+      });
+
+      it('should handle latestVersion as numeric fallback case', async () => {
+        // Test with numeric latestVersion (name contains 'numeric')
+        const launchTemplate = new LaunchTemplateComponent('test-lt-numeric-version', {
+          name: 'test-lt-numeric-version',
+          instanceType: 't3.nano',
+          securityGroupIds: ['sg-456'],
+        });
+
+        const latestVersion = await launchTemplate.latestVersion;
+        expect(latestVersion).toBeDefined();
+      });
+
+      it('should handle latestVersion string case', async () => {
+        const launchTemplate = new LaunchTemplateComponent('test-lt-string', {
+          name: 'test-lt-string',
+          instanceType: 't3.micro',
+          securityGroupIds: ['sg-789'],
+        });
+
+        const latestVersion = await launchTemplate.latestVersion;
+        expect(latestVersion).toBe('1');
       });
     });
 
