@@ -1,11 +1,12 @@
 """tap_stack.py
-This module defines the TapStack class, which serves as the main CDK stack for 
+This module defines the TapStack class, which serves as the main CDK stack for
 the TAP (Test Automation Platform) project.
-It orchestrates the instantiation of other resource-specific stacks and 
+It orchestrates the instantiation of other resource-specific stacks and
 manages environment-specific configurations.
 """
 
 from typing import Optional
+import os
 
 import aws_cdk as cdk
 from constructs import Construct
@@ -101,6 +102,10 @@ class TapStack(cdk.Stack):
         project = ((props.project if props else None)
                    or self.node.try_get_context('project') or "tap")
 
+        # Detect if deploying to LocalStack
+        is_localstack = os.environ.get("AWS_ENDPOINT_URL", "").find("localhost") != -1 or \
+                        os.environ.get("LOCALSTACK_HOSTNAME") is not None
+
         # Create RDS High Availability Infrastructure
         self.rds_infra = RdsHighAvailabilityInfra(
             self, "RdsHighAvailabilityInfra",
@@ -109,7 +114,8 @@ class TapStack(cdk.Stack):
                 vpc_id=vpc_id,
                 admin_email=admin_email,
                 cost_center=cost_center,
-                project=project))
+                project=project,
+                is_localstack=is_localstack))
 
         # Add common tags to the entire stack
         cdk.Tags.of(self).add("CostCenter", cost_center)
@@ -124,26 +130,30 @@ class TapStack(cdk.Stack):
             self,
             "RdsEndpoint",
             value=self.rds_infra.db_instance.instance_endpoint.hostname,
-            description="RDS PostgreSQL endpoint"
+            description="RDS PostgreSQL endpoint",
+            export_name=f"RdsEndpoint-{environment_suffix}"
         )
 
         cdk.CfnOutput(
             self,
             "RdsPort",
             value=str(self.rds_infra.db_instance.instance_endpoint.port),
-            description="RDS PostgreSQL port"
+            description="RDS PostgreSQL port",
+            export_name=f"RdsPort-{environment_suffix}"
         )
 
         cdk.CfnOutput(
             self,
             "BackupBucketName",
             value=self.rds_infra.backup_bucket.bucket_name,
-            description="S3 backup bucket name"
+            description="S3 backup bucket name",
+            export_name=f"BackupBucketName-{environment_suffix}"
         )
 
         cdk.CfnOutput(
             self,
             "NotificationTopicArn",
             value=self.rds_infra.notification_topic.topic_arn,
-            description="SNS notification topic ARN"
+            description="SNS notification topic ARN",
+            export_name=f"NotificationTopicArn-{environment_suffix}"
         )

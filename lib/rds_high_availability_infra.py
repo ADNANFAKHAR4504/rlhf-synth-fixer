@@ -34,6 +34,7 @@ class RdsHighAvailabilityInfraProps:
     admin_email (str): Administrator email for notifications
     cost_center (str): Cost center tag value
     project (str): Project tag value
+    is_localstack (bool): Whether deploying to LocalStack
   """
 
     def __init__(self,
@@ -41,12 +42,14 @@ class RdsHighAvailabilityInfraProps:
                  vpc_id: Optional[str] = None,
                  admin_email: str = "admin@company.com",
                  cost_center: str = "engineering",
-                 project: str = "tap"):
+                 project: str = "tap",
+                 is_localstack: bool = False):
         self.environment_suffix = environment_suffix
         self.vpc_id = vpc_id
         self.admin_email = admin_email
         self.cost_center = cost_center
         self.project = project
+        self.is_localstack = is_localstack
 
 
 class RdsHighAvailabilityInfra(cdk.NestedStack):
@@ -342,6 +345,10 @@ class RdsHighAvailabilityInfra(cdk.NestedStack):
             })
 
         # Create RDS instance
+        # LocalStack doesn't support Multi-AZ and Performance Insights
+        multi_az_enabled = not self.props.is_localstack
+        performance_insights_enabled = not self.props.is_localstack
+
         self.db_instance = rds.DatabaseInstance(
             self,
             "PostgresInstance",
@@ -354,7 +361,7 @@ class RdsHighAvailabilityInfra(cdk.NestedStack):
             vpc=self.vpc,
             subnet_group=self.db_subnet_group,
             security_groups=[self.db_security_group],
-            multi_az=True,  # Enable Multi-AZ for high availability
+            multi_az=multi_az_enabled,  # Enable Multi-AZ for high availability (disabled for LocalStack)
             storage_encrypted=True,
             storage_encryption_key=self.rds_kms_key,
             allocated_storage=100,
@@ -370,10 +377,10 @@ class RdsHighAvailabilityInfra(cdk.NestedStack):
             parameter_group=self.parameter_group,
             monitoring_interval=Duration.seconds(60),  # Enhanced monitoring
             monitoring_role=self.rds_monitoring_role,
-            enable_performance_insights=True,
+            enable_performance_insights=performance_insights_enabled,
             performance_insight_retention=rds.PerformanceInsightRetention.
-            DEFAULT,
-            performance_insight_encryption_key=self.rds_kms_key,
+            DEFAULT if performance_insights_enabled else None,
+            performance_insight_encryption_key=self.rds_kms_key if performance_insights_enabled else None,
             cloudwatch_logs_exports=["postgresql"],
             auto_minor_version_upgrade=True,
             removal_policy=RemovalPolicy.
@@ -449,43 +456,46 @@ class RdsHighAvailabilityInfra(cdk.NestedStack):
             removal_policy=RemovalPolicy.DESTROY)
 
         # Create backup plan with hourly backups (minimum AWS Backup interval)
+        # LocalStack doesn't support continuous backups
+        backup_rules = [
+            backup.BackupPlanRule(
+                backup_vault=self.backup_vault,
+                rule_name="FrequentBackups",
+                schedule_expression=events.Schedule.cron(
+                    minute="0",  # Every hour (minimum allowed interval)
+                    hour="*",
+                    day="*",
+                    month="*",
+                    year="*"),
+                delete_after=Duration.days(
+                    7),  # Short retention for frequent backups
+                enable_continuous_backup=not self.props.is_localstack,  # Disabled for LocalStack
+                recovery_point_tags={
+                    "BackupType": "Frequent",
+                    **self.common_tags
+                }),
+            backup.BackupPlanRule(
+                backup_vault=self.backup_vault,
+                rule_name="DailyBackups",
+                schedule_expression=events.Schedule.cron(
+                    minute="0",
+                    hour="2",  # 2 AM UTC
+                    day="*",
+                    month="*",
+                    year="*"),
+                delete_after=Duration.days(
+                    35),  # Longer retention for daily backups
+                recovery_point_tags={
+                    "BackupType": "Daily",
+                    **self.common_tags
+                })
+        ]
+
         self.backup_plan = backup.BackupPlan(
             self,
             "BackupPlan",
             backup_plan_name=f"rds-backup-plan-{self.props.environment_suffix}",
-            backup_plan_rules=[
-                backup.BackupPlanRule(
-                    backup_vault=self.backup_vault,
-                    rule_name="FrequentBackups",
-                    schedule_expression=events.Schedule.cron(
-                        minute="0",  # Every hour (minimum allowed interval)
-                        hour="*",
-                        day="*",
-                        month="*",
-                        year="*"),
-                    delete_after=Duration.days(
-                        7),  # Short retention for frequent backups
-                    enable_continuous_backup=True,
-                    recovery_point_tags={
-                        "BackupType": "Frequent",
-                        **self.common_tags
-                    }),
-                backup.BackupPlanRule(
-                    backup_vault=self.backup_vault,
-                    rule_name="DailyBackups",
-                    schedule_expression=events.Schedule.cron(
-                        minute="0",
-                        hour="2",  # 2 AM UTC
-                        day="*",
-                        month="*",
-                        year="*"),
-                    delete_after=Duration.days(
-                        35),  # Longer retention for daily backups
-                    recovery_point_tags={
-                        "BackupType": "Daily",
-                        **self.common_tags
-                    })
-            ])
+            backup_plan_rules=backup_rules)
 
         # Create backup selection
         backup.BackupSelection(
@@ -510,22 +520,26 @@ class RdsHighAvailabilityInfra(cdk.NestedStack):
         CfnOutput(self,
                   "RdsEndpoint",
                   value=self.db_instance.instance_endpoint.hostname,
-                  description="RDS PostgreSQL endpoint")
+                  description="RDS PostgreSQL endpoint",
+                  export_name=f"RdsEndpoint-{self.props.environment_suffix}")
 
         CfnOutput(self,
                   "RdsPort",
                   value=str(self.db_instance.instance_endpoint.port),
-                  description="RDS PostgreSQL port")
+                  description="RDS PostgreSQL port",
+                  export_name=f"RdsPort-{self.props.environment_suffix}")
 
         CfnOutput(
             self,
             "BackupBucketName",
             value=self.backup_bucket.bucket_name,
-            description="S3 backup bucket name")
+            description="S3 backup bucket name",
+            export_name=f"BackupBucketName-{self.props.environment_suffix}")
 
         CfnOutput(
             self,
             "NotificationTopicArn",
             value=self.notification_topic.topic_arn,
-            description="SNS notification topic ARN"
+            description="SNS notification topic ARN",
+            export_name=f"NotificationTopicArn-{self.props.environment_suffix}"
         )
