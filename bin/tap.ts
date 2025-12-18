@@ -58,8 +58,8 @@ export const primaryRegion = stack.secureStack.kmsStack.primaryKmsKey.arn.apply(
   primaryDbEndpoint = stack.secureStack.rdsStack.primaryRdsInstance.endpoint,
   primaryDbPort = stack.secureStack.rdsStack.primaryRdsInstance.port,
   secondaryDbEndpoint =
-    stack.secureStack.rdsStack.secondaryRdsReadReplica.endpoint,
-  secondaryDbPort = stack.secureStack.rdsStack.secondaryRdsReadReplica.port,
+    stack.secureStack.rdsStack.secondaryRdsReadReplica?.endpoint,
+  secondaryDbPort = stack.secureStack.rdsStack.secondaryRdsReadReplica?.port,
   loadBalancerDnsName =
     stack.secureStack.loadBalancerStack.applicationLoadBalancer.dnsName,
   loadBalancerZoneId =
