@@ -426,22 +426,22 @@ graph TB
 
 ## Security Controls Implementation
 
-### ✅ S3 Bucket Security Controls
+### S3 Bucket Security Controls
 
-1. **Server-side encryption using SSE-S3**: ✅ Implemented with AES256
-2. **VPC endpoint access restrictions**: ✅ VPC endpoint with restrictive policy
-3. **IAM role-based access control**: ✅ Bucket policy restricts access to specified role
-4. **Versioning enabled**: ✅ Configured in bucket properties
-5. **HTTPS-only access**: ✅ Bucket policy denies non-SSL requests
-6. **Production environment tagging**: ✅ Environment=Production tag applied
+1. **Server-side encryption using SSE-S3**: Implemented with AES256
+2. **VPC endpoint access restrictions**: VPC endpoint with restrictive policy
+3. **IAM role-based access control**: Bucket policy restricts access to specified role
+4. **Versioning enabled**: Configured in bucket properties
+5. **HTTPS-only access**: Bucket policy denies non-SSL requests
+6. **Production environment tagging**: Environment=Production tag applied
 
-### ✅ DynamoDB Security Controls
+### DynamoDB Security Controls
 
-1. **KMS encryption enabled**: ✅ Customer-managed KMS key
-2. **IAM role restrictions**: ✅ IAM policy attached to specified role only
-3. **CloudTrail logging**: ✅ Dedicated CloudTrail for DynamoDB operations
-4. **TLS enforcement**: ✅ IAM policy condition requires SecureTransport
-5. **Production environment tagging**: ✅ Environment=Production tag applied
+1. **KMS encryption enabled**: Customer-managed KMS key
+2. **IAM role restrictions**: IAM policy attached to specified role only
+3. **CloudTrail logging**: Dedicated CloudTrail for DynamoDB operations
+4. **TLS enforcement**: IAM policy condition requires SecureTransport
+5. **Production environment tagging**: Environment=Production tag applied
 
 ## Deployment Instructions
 

@@ -345,31 +345,31 @@ graph TB
 
 ## Security Controls Implementation
 
-### ✅ S3 Bucket Security Controls
+### S3 Bucket Security Controls
 
-1. **Server-side encryption using SSE-S3**: ✅ Implemented with AES256 and bucket key
-2. **Access logging**: ✅ Dedicated access logs bucket with lifecycle management
-3. **IAM role-based access control**: ✅ Bucket policy restricts access to TAP role only
-4. **Versioning enabled**: ✅ Configured for data recovery and audit trail
-5. **HTTPS-only access**: ✅ Bucket policy denies non-SSL requests
-6. **Public access blocked**: ✅ All public access blocked at bucket level
-7. **Environment tagging**: ✅ Environment-specific tags applied
+1. **Server-side encryption using SSE-S3**: Implemented with AES256 and bucket key
+2. **Access logging**: Dedicated access logs bucket with lifecycle management
+3. **IAM role-based access control**: Bucket policy restricts access to TAP role only
+4. **Versioning enabled**: Configured for data recovery and audit trail
+5. **HTTPS-only access**: Bucket policy denies non-SSL requests
+6. **Public access blocked**: All public access blocked at bucket level
+7. **Environment tagging**: Environment-specific tags applied
 
-### ✅ DynamoDB Security Controls
+### DynamoDB Security Controls
 
-1. **KMS encryption enabled**: ✅ Customer-managed KMS key with proper key policy
-2. **IAM role restrictions**: ✅ Inline IAM policy attached to TAP role only
-3. **TLS enforcement**: ✅ IAM policy condition requires SecureTransport
-4. **Point-in-time recovery**: ✅ Enabled for data protection
-5. **DynamoDB Streams**: ✅ Enabled for real-time data processing
-6. **Environment tagging**: ✅ Environment-specific tags applied
+1. **KMS encryption enabled**: Customer-managed KMS key with proper key policy
+2. **IAM role restrictions**: Inline IAM policy attached to TAP role only
+3. **TLS enforcement**: IAM policy condition requires SecureTransport
+4. **Point-in-time recovery**: Enabled for data protection
+5. **DynamoDB Streams**: Enabled for real-time data processing
+6. **Environment tagging**: Environment-specific tags applied
 
-### ✅ IAM Security Controls
+### IAM Security Controls
 
-1. **Least privilege access**: ✅ Minimal permissions for required operations
-2. **Service-specific trust policy**: ✅ EC2 and Lambda services only
-3. **Resource-specific permissions**: ✅ Access limited to specific bucket and table
-4. **Environment isolation**: ✅ Resources named with environment suffix
+1. **Least privilege access**: Minimal permissions for required operations
+2. **Service-specific trust policy**: EC2 and Lambda services only
+3. **Resource-specific permissions**: Access limited to specific bucket and table
+4. **Environment isolation**: Resources named with environment suffix
 
 ## Deployment Instructions
 
