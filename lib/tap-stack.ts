@@ -1,14 +1,14 @@
 import * as cdk from 'aws-cdk-lib';
+import * as backup from 'aws-cdk-lib/aws-backup';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as rds from 'aws-cdk-lib/aws-rds';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as backup from 'aws-cdk-lib/aws-backup';
 import * as events from 'aws-cdk-lib/aws-events';
-import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 
@@ -313,155 +313,170 @@ export class TapStack extends cdk.Stack {
     // BACKUP AND RESTORE SOLUTION
     // =============================================================================
 
-    // Backup Vault
-    const backupVault = new backup.BackupVault(this, 'MigrationBackupVault', {
-      backupVaultName: `${projectName}-${environment}-backup-vault`,
-      encryptionKey: encryptionKey,
-    });
+    // Detect LocalStack environment (account ID 000000000000 or AWS_ENDPOINT_URL set)
+    const isLocalStack =
+      this.account === '000000000000' ||
+      process.env.AWS_ENDPOINT_URL !== undefined;
 
-    // Backup Role
-    const backupRole = new iam.Role(this, 'BackupRole', {
-      assumedBy: new iam.ServicePrincipal('backup.amazonaws.com'),
-      managedPolicies: [],
-    });
+    // Skip AWS Backup resources in LocalStack as they are not fully supported
+    let backupVault: backup.BackupVault | undefined;
+    if (!isLocalStack) {
+      // Backup Vault
+      backupVault = new backup.BackupVault(this, 'MigrationBackupVault', {
+        backupVaultName: `${projectName}-${environment}-backup-vault`,
+        encryptionKey: encryptionKey,
+      });
 
-    // Add essential backup permissions (simplified to avoid service scope issues)
-    backupRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'backup:StartBackupJob',
-          'backup:StopBackupJob',
-          'backup:StartRestoreJob',
-          'backup:StopRestoreJob',
-          'backup:DescribeBackupJob',
-          'backup:DescribeRestoreJob',
-          'backup:ListBackupJobs',
-          'backup:ListRestoreJobs',
-          'backup:ListBackupVaults',
-          'backup:ListBackupPlans',
-          'backup:ListBackupSelections',
-          'backup:ListRecoveryPointsByBackupVault',
-          'backup:ListRecoveryPointsByResource',
-        ],
-        resources: ['*'],
-      })
-    );
+      // Backup Role
+      const backupRole = new iam.Role(this, 'BackupRole', {
+        assumedBy: new iam.ServicePrincipal('backup.amazonaws.com'),
+        managedPolicies: [],
+      });
 
-    // S3 permissions for backup and restore
-    backupRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          's3:GetObject',
-          's3:GetObjectVersion',
-          's3:PutObject',
-          's3:DeleteObject',
-          's3:ListBucket',
-          's3:GetBucketLocation',
-          's3:GetBucketVersioning',
-          's3:GetBucketEncryption',
-          's3:PutBucketEncryption',
-        ],
-        resources: [
-          dataBucket.bucketArn,
-          `${dataBucket.bucketArn}/*`,
-          replicationBucket.bucketArn,
-          `${replicationBucket.bucketArn}/*`,
-        ],
-      })
-    );
+      // Add essential backup permissions (simplified to avoid service scope issues)
+      backupRole.addToPolicy(
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'backup:StartBackupJob',
+            'backup:StopBackupJob',
+            'backup:StartRestoreJob',
+            'backup:StopRestoreJob',
+            'backup:DescribeBackupJob',
+            'backup:DescribeRestoreJob',
+            'backup:ListBackupJobs',
+            'backup:ListRestoreJobs',
+            'backup:ListBackupVaults',
+            'backup:ListBackupPlans',
+            'backup:ListBackupSelections',
+            'backup:ListRecoveryPointsByBackupVault',
+            'backup:ListRecoveryPointsByResource',
+          ],
+          resources: ['*'],
+        })
+      );
 
-    // RDS permissions for backup
-    backupRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'rds:DescribeDBInstances',
-          'rds:DescribeDBSnapshots',
-          'rds:CreateDBSnapshot',
-          'rds:DeleteDBSnapshot',
-          'rds:CopyDBSnapshot',
-          'rds:ModifyDBSnapshotAttribute',
-          'rds:DescribeDBSnapshotAttributes',
-          'rds:RestoreDBInstanceFromDBSnapshot',
-          'rds:RestoreDBInstanceToPointInTime',
-        ],
-        resources: ['*'],
-      })
-    );
+      // S3 permissions for backup and restore
+      backupRole.addToPolicy(
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            's3:GetObject',
+            's3:GetObjectVersion',
+            's3:PutObject',
+            's3:DeleteObject',
+            's3:ListBucket',
+            's3:GetBucketLocation',
+            's3:GetBucketVersioning',
+            's3:GetBucketEncryption',
+            's3:PutBucketEncryption',
+          ],
+          resources: [
+            dataBucket.bucketArn,
+            `${dataBucket.bucketArn}/*`,
+            replicationBucket.bucketArn,
+            `${replicationBucket.bucketArn}/*`,
+          ],
+        })
+      );
 
-    // KMS permissions for encryption
-    backupRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'kms:Decrypt',
-          'kms:DescribeKey',
-          'kms:Encrypt',
-          'kms:GenerateDataKey',
-          'kms:GenerateDataKeyWithoutPlaintext',
-          'kms:ReEncryptFrom',
-          'kms:ReEncryptTo',
-          'kms:CreateGrant',
-          'kms:ListGrants',
-          'kms:RetireGrant',
-        ],
-        resources: [encryptionKey.keyArn],
-      })
-    );
+      // RDS permissions for backup
+      backupRole.addToPolicy(
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'rds:DescribeDBInstances',
+            'rds:DescribeDBSnapshots',
+            'rds:CreateDBSnapshot',
+            'rds:DeleteDBSnapshot',
+            'rds:CopyDBSnapshot',
+            'rds:ModifyDBSnapshotAttribute',
+            'rds:DescribeDBSnapshotAttributes',
+            'rds:RestoreDBInstanceFromDBSnapshot',
+            'rds:RestoreDBInstanceToPointInTime',
+          ],
+          resources: ['*'],
+        })
+      );
 
-    // Backup Plan
-    const backupPlan = new backup.BackupPlan(this, 'MigrationBackupPlan', {
-      backupPlanName: `${projectName}-${environment}-backup-plan`,
-      backupPlanRules: [
-        // Daily backups
-        new backup.BackupPlanRule({
-          ruleName: 'DailyBackups',
-          backupVault: backupVault,
-          scheduleExpression: events.Schedule.cron({
-            hour: '2',
-            minute: '0',
+      // KMS permissions for encryption
+      backupRole.addToPolicy(
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'kms:Decrypt',
+            'kms:DescribeKey',
+            'kms:Encrypt',
+            'kms:GenerateDataKey',
+            'kms:GenerateDataKeyWithoutPlaintext',
+            'kms:ReEncryptFrom',
+            'kms:ReEncryptTo',
+            'kms:CreateGrant',
+            'kms:ListGrants',
+            'kms:RetireGrant',
+          ],
+          resources: [encryptionKey.keyArn],
+        })
+      );
+
+      // Backup Plan
+      const backupPlan = new backup.BackupPlan(this, 'MigrationBackupPlan', {
+        backupPlanName: `${projectName}-${environment}-backup-plan`,
+        backupPlanRules: [
+          // Daily backups
+          new backup.BackupPlanRule({
+            ruleName: 'DailyBackups',
+            backupVault: backupVault,
+            scheduleExpression: events.Schedule.cron({
+              hour: '2',
+              minute: '0',
+            }),
+            startWindow: cdk.Duration.hours(1),
+            completionWindow: cdk.Duration.hours(2),
+            deleteAfter: cdk.Duration.days(environment === 'prod' ? 35 : 7),
+            moveToColdStorageAfter:
+              environment === 'prod' ? cdk.Duration.days(30) : undefined,
           }),
-          startWindow: cdk.Duration.hours(1),
-          completionWindow: cdk.Duration.hours(2),
-          deleteAfter: cdk.Duration.days(environment === 'prod' ? 35 : 7),
-          moveToColdStorageAfter:
-            environment === 'prod' ? cdk.Duration.days(30) : undefined,
-        }),
-        // Weekly backups
-        new backup.BackupPlanRule({
-          ruleName: 'WeeklyBackups',
-          backupVault: backupVault,
-          scheduleExpression: events.Schedule.cron({
-            weekDay: 'SUN',
-            hour: '3',
-            minute: '0',
+          // Weekly backups
+          new backup.BackupPlanRule({
+            ruleName: 'WeeklyBackups',
+            backupVault: backupVault,
+            scheduleExpression: events.Schedule.cron({
+              weekDay: 'SUN',
+              hour: '3',
+              minute: '0',
+            }),
+            startWindow: cdk.Duration.hours(1),
+            completionWindow: cdk.Duration.hours(3),
+            deleteAfter: cdk.Duration.days(environment === 'prod' ? 365 : 30),
+            moveToColdStorageAfter:
+              environment === 'prod' ? cdk.Duration.days(90) : undefined,
           }),
-          startWindow: cdk.Duration.hours(1),
-          completionWindow: cdk.Duration.hours(3),
-          deleteAfter: cdk.Duration.days(environment === 'prod' ? 365 : 30),
-          moveToColdStorageAfter:
-            environment === 'prod' ? cdk.Duration.days(90) : undefined,
-        }),
-      ],
-    });
+        ],
+      });
 
-    // Backup Selection - RDS
-    new backup.BackupSelection(this, 'DatabaseBackupSelection', {
-      backupPlan: backupPlan,
-      backupSelectionName: 'DatabaseBackupSelection',
-      role: backupRole,
-      resources: [backup.BackupResource.fromRdsDatabaseInstance(database)],
-    });
+      // Backup Selection - RDS
+      new backup.BackupSelection(this, 'DatabaseBackupSelection', {
+        backupPlan: backupPlan,
+        backupSelectionName: 'DatabaseBackupSelection',
+        role: backupRole,
+        resources: [backup.BackupResource.fromRdsDatabaseInstance(database)],
+      });
 
-    // Backup Selection - S3
-    new backup.BackupSelection(this, 'S3BackupSelection', {
-      backupPlan: backupPlan,
-      backupSelectionName: 'S3BackupSelection',
-      role: backupRole,
-      resources: [backup.BackupResource.fromArn(dataBucket.bucketArn)],
-    });
+      // Backup Selection - S3
+      new backup.BackupSelection(this, 'S3BackupSelection', {
+        backupPlan: backupPlan,
+        backupSelectionName: 'S3BackupSelection',
+        role: backupRole,
+        resources: [backup.BackupResource.fromArn(dataBucket.bucketArn)],
+      });
+    } else {
+      // Add a note that backup is skipped for LocalStack
+      new cdk.CfnOutput(this, 'BackupStatus', {
+        value: 'Skipped (LocalStack does not fully support AWS Backup)',
+        description: 'Backup Configuration Status',
+      });
+    }
 
     // =============================================================================
     // PARAMETER STORE VALUES
@@ -480,11 +495,13 @@ export class TapStack extends cdk.Stack {
       description: 'S3 data bucket name',
     });
 
-    new ssm.StringParameter(this, 'BackupVaultParameter', {
-      parameterName: `/${projectName}/${environment}/backup/vault-name`,
-      stringValue: backupVault.backupVaultName,
-      description: 'Backup vault name',
-    });
+    if (backupVault) {
+      new ssm.StringParameter(this, 'BackupVaultParameter', {
+        parameterName: `/${projectName}/${environment}/backup/vault-name`,
+        stringValue: backupVault.backupVaultName,
+        description: 'Backup vault name',
+      });
+    }
 
     // =============================================================================
     // OUTPUTS
@@ -514,11 +531,13 @@ export class TapStack extends cdk.Stack {
       exportName: `${projectName}-${environment}-alb-dns`,
     });
 
-    new cdk.CfnOutput(this, 'BackupVaultName', {
-      value: backupVault.backupVaultName,
-      description: 'Backup vault name',
-      exportName: `${projectName}-${environment}-backup-vault`,
-    });
+    if (backupVault) {
+      new cdk.CfnOutput(this, 'BackupVaultName', {
+        value: backupVault.backupVaultName,
+        description: 'Backup vault name',
+        exportName: `${projectName}-${environment}-backup-vault`,
+      });
+    }
 
     new cdk.CfnOutput(this, 'EncryptionKeyId', {
       value: encryptionKey.keyId,
