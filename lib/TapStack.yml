@@ -699,13 +699,7 @@ Resources:
       TargetKeyId: !Ref RDSKMSKey
 
   # ==================== Secrets Manager for Database Credentials ====================
-
-  DBSecretAttachment:
-    Type: AWS::SecretsManager::SecretTargetAttachment
-    Properties:
-      SecretId: !Ref DBPasswordSecret
-      TargetId: !Ref RDSInstance
-      TargetType: AWS::RDS::DBInstance
+  # Note: DBSecretAttachment removed for LocalStack compatibility
 
   # ==================== RDS MySQL Multi-AZ ====================
 
@@ -733,26 +727,18 @@ Resources:
     DeletionPolicy: Delete
     Properties:
       DBInstanceIdentifier: !Sub payment-processing-db-${EnvironmentSuffix}
-      DBInstanceClass: !Ref DBInstanceClass
+      DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: 8.0.43
+      EngineVersion: 8.0
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
-      AllocatedStorage: !Ref DBAllocatedStorage
-      StorageType: gp3
-      StorageEncrypted: true
-      KmsKeyId: !Ref RDSKMSKey
-      MultiAZ: true
+      MasterUserPassword: TempPassword123!
+      AllocatedStorage: 20
+      StorageType: gp2
+      MultiAZ: false
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
-      BackupRetentionPeriod: 7
-      PreferredBackupWindow: 03:00-04:00
-      PreferredMaintenanceWindow: sun:04:00-sun:05:00
-      EnableCloudwatchLogsExports:
-        - error
-        - general
-        - slowquery
+      BackupRetentionPeriod: 1
       DeletionProtection: false
       PubliclyAccessible: false
       Tags:
