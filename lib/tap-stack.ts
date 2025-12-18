@@ -234,8 +234,12 @@ export class TapStack extends cdk.Stack {
 
     // LocalStack compatibility: Override LaunchTemplate version reference
     // CDK tries to use Fn::GetAtt for LatestVersionNumber, which doesn't work in LocalStack
-    const cfnAutoScalingGroup = autoScalingGroup.node.defaultChild as CfnAutoScalingGroup;
-    cfnAutoScalingGroup.addOverride('Properties.LaunchTemplate.Version', '$Latest');
+    const cfnAutoScalingGroup = autoScalingGroup.node
+      .defaultChild as CfnAutoScalingGroup;
+    cfnAutoScalingGroup.addOverride(
+      'Properties.LaunchTemplate.Version',
+      '$Latest'
+    );
 
     cdk.Tags.of(autoScalingGroup).add('Owner', commonTags.Owner);
     cdk.Tags.of(autoScalingGroup).add('Purpose', commonTags.Purpose);
