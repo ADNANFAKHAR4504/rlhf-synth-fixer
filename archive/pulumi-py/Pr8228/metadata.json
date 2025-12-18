@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "provider": "localstack",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912526",
+  "team": "synth",
+  "startedAt": "2025-12-01T08:39:00-05:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "RDS",
+    "ELB",
+    "IAM",
+    "S3",
+    "CloudWatch",
+    "Route53",
+    "NAT Gateway"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "adnan-turing",
+  "dockerS3Location": ""
+}
