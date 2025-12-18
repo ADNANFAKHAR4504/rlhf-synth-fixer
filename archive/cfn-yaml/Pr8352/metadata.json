@@ -1,0 +1,35 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291451",
+  "team": "4",
+  "startedAt": "2025-08-19T20:52:46.340Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "KMS",
+    "VPC",
+    "EC2",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "SNS",
+    "Internet Gateway",
+    "NAT Gateway",
+    "CloudWatch Logs",
+    "EBS",
+    "Route Tables"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulpatil118",
+  "dockerS3Location": ""
+}
