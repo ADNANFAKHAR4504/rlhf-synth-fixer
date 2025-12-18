@@ -1,0 +1,27 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "trainr956",
+  "team": "synth",
+  "startedAt": "2025-08-22T00:00:00Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Web Application Deployment",
+    "Cloud Environment Setup",
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "EIP",
+    "SecurityGroup",
+    "RouteTable",
+    "InternetGateway",
+    "IAM",
+    "SSM"
+  ]
+}
