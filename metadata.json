@@ -22,6 +22,5 @@
     "CodeDeploy",
     "IAM",
     "CloudFormation"
-  ],
-  "author": "veera-turing"
+  ]
 }
