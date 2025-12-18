@@ -415,27 +415,32 @@ deploy_cdk() {
     local output_json="{}"
 
     # Get all stacks that match the pattern (handles multi-region deployments)
+    # Use grep to filter because starts_with may not work reliably in LocalStack
     local all_stacks=$(awslocal cloudformation list-stacks \
         --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE \
-        --query "StackSummaries[?starts_with(StackName, '${stack_prefix}')].StackName" \
-        --output text 2>/dev/null || echo "")
+        --query 'StackSummaries[].StackName' \
+        --output text 2>/dev/null | tr '\t' '\n' | grep "^${stack_prefix}" || echo "")
 
     if [ -n "$all_stacks" ]; then
-        print_status $BLUE "   Found stacks: $all_stacks"
+        print_status $BLUE "   Found stacks:"
+        echo "$all_stacks" | while read stack; do
+            print_status $BLUE "     - $stack"
+        done
 
         # Collect outputs from all matching stacks
-        for stack in $all_stacks; do
-            print_status $BLUE "   Collecting outputs from: $stack"
-            local stack_outputs=$(awslocal cloudformation describe-stacks --stack-name "$stack" \
-                --query 'Stacks[0].Outputs' \
-                --output json 2>/dev/null | python3 -c "
+        echo "$all_stacks" | while read stack; do
+            if [ -n "$stack" ]; then
+                print_status $BLUE "   Collecting outputs from: $stack"
+                local stack_outputs=$(awslocal cloudformation describe-stacks --stack-name "$stack" \
+                    --query 'Stacks[0].Outputs' \
+                    --output json 2>/dev/null | python3 -c "
 import sys, json
 try:
     data = json.load(sys.stdin)
     outputs = {}
     if data:
         for output in data:
-            # Prefix keys with stack name to avoid collisions
+            # Keep original key names
             key = output['OutputKey']
             outputs[key] = output['OutputValue']
     print(json.dumps(outputs, indent=2))
@@ -443,23 +448,32 @@ except:
     print('{}')
 " || echo "{}")
 
-            # Merge outputs
-            output_json=$(echo "$output_json $stack_outputs" | python3 -c "
+                # Merge outputs into a temporary file to persist across the while loop
+                echo "$stack_outputs" >> /tmp/stack_outputs_$$.json
+            fi
+        done
+
+        # Merge all collected outputs
+        if [ -f "/tmp/stack_outputs_$$.json" ]; then
+            output_json=$(python3 -c "
 import sys, json
+merged = {}
 try:
-    parts = sys.stdin.read().split()
-    merged = {}
-    for part in parts:
-        try:
-            data = json.loads(part)
-            merged.update(data)
-        except:
-            pass
+    with open('/tmp/stack_outputs_$$.json', 'r') as f:
+        for line in f:
+            line = line.strip()
+            if line and line != '{}':
+                try:
+                    data = json.loads(line)
+                    merged.update(data)
+                except:
+                    pass
     print(json.dumps(merged, indent=2))
 except:
     print('{}')
-" || echo "{}")
-        done
+")
+            rm -f "/tmp/stack_outputs_$$.json"
+        fi
     else
         print_status $YELLOW "   ⚠️  No stacks found matching pattern: ${stack_prefix}*"
     fi
