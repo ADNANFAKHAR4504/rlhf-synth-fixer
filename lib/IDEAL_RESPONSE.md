@@ -1,4 +1,4 @@
-``` yaml
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'production-ready infrastructure baseline with VPC, NLB, EC2, and S3'
 
