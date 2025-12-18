@@ -1,6 +1,7 @@
 {
   "platform": "tf",
   "language": "hcl",
+  "provider": "localstack",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "291551",
@@ -10,7 +11,6 @@
   "subject_labels": [
     "Serverless Infrastructure (Functions as Code)"
   ],
-  "training_quality": 9,
   "aws_services": [
     "Lambda",
     "API Gateway",
