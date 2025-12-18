@@ -1,0 +1,1237 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Payment Processing Infrastructure - Consolidated CloudFormation Template for LocalStack deployment",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    },
+    "DBMasterUsername": {
+      "Type": "String",
+      "Default": "admin",
+      "Description": "Master username for RDS Aurora cluster",
+      "NoEcho": true
+    },
+    "DBMasterPassword": {
+      "Type": "String",
+      "Default": "TempPassword123!",
+      "Description": "Master password for RDS Aurora cluster",
+      "NoEcho": true,
+      "MinLength": 8
+    }
+  },
+  "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-vpc-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-igw-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-private-subnet-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-private-subnet-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet3": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.3.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-private-subnet-3-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.101.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-public-subnet-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.102.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-public-subnet-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PublicSubnet3": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.103.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-public-subnet-3-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "NATGateway1EIP": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-nat-eip-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "NATGateway1": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "NATGateway1EIP",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-nat-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-public-rt-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "PublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "PublicSubnet3RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet3"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-private-rt-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "NATGateway1"
+        }
+      }
+    },
+    "PrivateSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+    "PrivateSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+    "PrivateSubnet3RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PrivateSubnet3"
+        },
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        }
+      }
+    },
+    "KMSKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for payment processing ${EnvironmentSuffix}"
+        },
+        "EnableKeyRotation": true,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow RDS to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "rds.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:DescribeKey",
+                "kms:CreateGrant"
+              ],
+              "Resource": "*"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-kms-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "KMSKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/payment-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "KMSKey"
+        }
+      }
+    },
+    "DBSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for Aurora cluster",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "SourceSecurityGroupId": {
+              "Ref": "LambdaSecurityGroup"
+            },
+            "Description": "Allow MySQL access from Lambda"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-db-sg-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for Lambda functions",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-lambda-sg-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DBSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Properties": {
+        "DBSubnetGroupDescription": "Subnet group for Aurora cluster",
+        "SubnetIds": [
+          {
+            "Ref": "PrivateSubnet1"
+          },
+          {
+            "Ref": "PrivateSubnet2"
+          },
+          {
+            "Ref": "PrivateSubnet3"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-db-subnet-group-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DBSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "payment-db-credentials-${EnvironmentSuffix}"
+        },
+        "Description": "RDS Aurora MySQL credentials",
+        "GenerateSecretString": {
+          "SecretStringTemplate": {
+            "Fn::Sub": "{\"username\":\"${DBMasterUsername}\"}"
+          },
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-db-secret-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DBCluster": {
+      "Type": "AWS::RDS::DBCluster",
+      "Metadata": {
+        "cfn-lint": {
+          "config": {
+            "ignore_checks": [
+              "W1011"
+            ]
+          }
+        }
+      },
+      "Properties": {
+        "Engine": "aurora-mysql",
+        "EngineVersion": "8.0.mysql_aurora.3.04.0",
+        "DatabaseName": "paymentdb",
+        "MasterUsername": "admin",
+        "MasterUserPassword": {
+          "Ref": "DBMasterPassword"
+        },
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "VpcSecurityGroupIds": [
+          {
+            "Ref": "DBSecurityGroup"
+          }
+        ],
+        "StorageEncrypted": false,
+        "BackupRetentionPeriod": 1,
+        "PreferredBackupWindow": "03:00-04:00",
+        "PreferredMaintenanceWindow": "mon:04:00-mon:05:00",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-db-cluster-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DBInstance1": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "Engine": "aurora-mysql",
+        "DBClusterIdentifier": {
+          "Ref": "DBCluster"
+        },
+        "DBInstanceClass": "db.t3.medium",
+        "PubliclyAccessible": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-db-instance-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DBInstance2": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "Engine": "aurora-mysql",
+        "DBClusterIdentifier": {
+          "Ref": "DBCluster"
+        },
+        "DBInstanceClass": "db.t3.medium",
+        "PubliclyAccessible": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-db-instance-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DeadLetterQueue": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "QueueName": {
+          "Fn::Sub": "payment-dlq-${EnvironmentSuffix}"
+        },
+        "MessageRetentionPeriod": 1209600,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-dlq-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "TransactionQueue": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "QueueName": {
+          "Fn::Sub": "payment-transaction-queue-${EnvironmentSuffix}"
+        },
+        "VisibilityTimeout": 300,
+        "MessageRetentionPeriod": 345600,
+        "RedrivePolicy": {
+          "deadLetterTargetArn": {
+            "Fn::GetAtt": [
+              "DeadLetterQueue",
+              "Arn"
+            ]
+          },
+          "maxReceiveCount": 3
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-queue-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "payment-lambda-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "LambdaSecretsAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue",
+                    "secretsmanager:DescribeSecret"
+                  ],
+                  "Resource": {
+                    "Ref": "DBSecret"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:Decrypt",
+                    "kms:DescribeKey"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "KMSKey",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameter",
+                    "ssm:GetParameters"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/payment/${EnvironmentSuffix}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sqs:SendMessage",
+                    "sqs:ReceiveMessage",
+                    "sqs:DeleteMessage",
+                    "sqs:GetQueueAttributes"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "TransactionQueue",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::GetAtt": [
+                        "DeadLetterQueue",
+                        "Arn"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-lambda-role-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PaymentProcessorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "payment-processor-${EnvironmentSuffix}"
+        },
+        "Runtime": "python3.11",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "ZipFile": "import json\nimport os\nimport boto3\nfrom botocore.exceptions import ClientError\n\ndef handler(event, context):\n    secrets_client = boto3.client('secretsmanager')\n    ssm_client = boto3.client('ssm')\n    sqs_client = boto3.client('sqs')\n    \n    try:\n        secret_arn = os.environ.get('DB_SECRET_ARN', '')\n        if secret_arn:\n            secret_response = secrets_client.get_secret_value(SecretId=secret_arn)\n            db_credentials = json.loads(secret_response['SecretString'])\n        \n        environment_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')\n        \n        # Process payment logic\n        transaction_id = context.aws_request_id if hasattr(context, 'aws_request_id') else 'test-transaction'\n        \n        # Send to queue for async processing\n        queue_url = os.environ.get('QUEUE_URL', '')\n        if queue_url:\n            sqs_client.send_message(\n                QueueUrl=queue_url,\n                MessageBody=json.dumps({\n                    'transactionId': transaction_id,\n                    'status': 'processed'\n                })\n            )\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'Payment processed successfully',\n                'transactionId': transaction_id\n            })\n        }\n    except ClientError as e:\n        print(f'Error: {e}')\n        return {\n            'statusCode': 500,\n            'body': json.dumps({'error': 'Payment processing failed'})\n        }\n"
+        },
+        "Environment": {
+          "Variables": {
+            "DB_SECRET_ARN": {
+              "Ref": "DBSecret"
+            },
+            "DB_ENDPOINT": {
+              "Fn::GetAtt": [
+                "DBCluster",
+                "Endpoint.Address"
+              ]
+            },
+            "ENVIRONMENT_SUFFIX": {
+              "Ref": "EnvironmentSuffix"
+            },
+            "QUEUE_URL": {
+              "Ref": "TransactionQueue"
+            }
+          }
+        },
+        "VpcConfig": {
+          "SecurityGroupIds": [
+            {
+              "Ref": "LambdaSecurityGroup"
+            }
+          ],
+          "SubnetIds": [
+            {
+              "Ref": "PrivateSubnet1"
+            },
+            {
+              "Ref": "PrivateSubnet2"
+            },
+            {
+              "Ref": "PrivateSubnet3"
+            }
+          ]
+        },
+        "Timeout": 60,
+        "MemorySize": 512,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "payment-processor-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "payment-lambda-errors-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when Lambda errors exceed threshold",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "PaymentProcessorFunction"
+            }
+          }
+        ]
+      }
+    },
+    "DBCPUAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "payment-db-cpu-alarm-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Alert when DB CPU exceeds 80%",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/RDS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBClusterIdentifier",
+            "Value": {
+              "Ref": "DBCluster"
+            }
+          }
+        ]
+      }
+    },
+    "ApiGatewayRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "payment-api-gateway-role-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "apigateway.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "InvokeLambda",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": "lambda:InvokeFunction",
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "PaymentProcessorFunction",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "RestApi": {
+      "Type": "AWS::ApiGateway::RestApi",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "payment-api-${EnvironmentSuffix}"
+        },
+        "Description": "Payment processing API",
+        "EndpointConfiguration": {
+          "Types": [
+            "REGIONAL"
+          ]
+        }
+      }
+    },
+    "ApiKey": {
+      "Type": "AWS::ApiGateway::ApiKey",
+      "DependsOn": "ApiDeployment",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "payment-api-key-${EnvironmentSuffix}"
+        },
+        "Enabled": true,
+        "StageKeys": [
+          {
+            "RestApiId": {
+              "Ref": "RestApi"
+            },
+            "StageName": "prod"
+          }
+        ]
+      }
+    },
+    "UsagePlan": {
+      "Type": "AWS::ApiGateway::UsagePlan",
+      "DependsOn": "ApiDeployment",
+      "Properties": {
+        "UsagePlanName": {
+          "Fn::Sub": "payment-usage-plan-${EnvironmentSuffix}"
+        },
+        "ApiStages": [
+          {
+            "ApiId": {
+              "Ref": "RestApi"
+            },
+            "Stage": "prod"
+          }
+        ],
+        "Throttle": {
+          "BurstLimit": 200,
+          "RateLimit": 100
+        }
+      }
+    },
+    "UsagePlanKey": {
+      "Type": "AWS::ApiGateway::UsagePlanKey",
+      "Properties": {
+        "KeyId": {
+          "Ref": "ApiKey"
+        },
+        "KeyType": "API_KEY",
+        "UsagePlanId": {
+          "Ref": "UsagePlan"
+        }
+      }
+    },
+    "PaymentResource": {
+      "Type": "AWS::ApiGateway::Resource",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "RestApi"
+        },
+        "ParentId": {
+          "Fn::GetAtt": [
+            "RestApi",
+            "RootResourceId"
+          ]
+        },
+        "PathPart": "process"
+      }
+    },
+    "PaymentMethod": {
+      "Type": "AWS::ApiGateway::Method",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "RestApi"
+        },
+        "ResourceId": {
+          "Ref": "PaymentResource"
+        },
+        "HttpMethod": "POST",
+        "AuthorizationType": "NONE",
+        "ApiKeyRequired": true,
+        "Integration": {
+          "Type": "AWS_PROXY",
+          "IntegrationHttpMethod": "POST",
+          "Uri": {
+            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PaymentProcessorFunction.Arn}/invocations"
+          },
+          "Credentials": {
+            "Fn::GetAtt": [
+              "ApiGatewayRole",
+              "Arn"
+            ]
+          }
+        }
+      }
+    },
+    "ApiDeployment": {
+      "Type": "AWS::ApiGateway::Deployment",
+      "DependsOn": "PaymentMethod",
+      "Properties": {
+        "RestApiId": {
+          "Ref": "RestApi"
+        },
+        "StageName": "prod"
+      }
+    },
+    "ConfigParameter": {
+      "Type": "AWS::SSM::Parameter",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "/payment/${EnvironmentSuffix}/config"
+        },
+        "Type": "String",
+        "Value": "{\"processingTimeout\":30,\"retryAttempts\":3}",
+        "Description": "Payment processing configuration"
+      }
+    }
+  },
+  "Outputs": {
+    "VPCId": {
+      "Description": "VPC ID",
+      "Value": {
+        "Ref": "VPC"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPCId"
+        }
+      }
+    },
+    "PrivateSubnet1Id": {
+      "Description": "Private Subnet 1 ID",
+      "Value": {
+        "Ref": "PrivateSubnet1"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PrivateSubnet1Id"
+        }
+      }
+    },
+    "PrivateSubnet2Id": {
+      "Description": "Private Subnet 2 ID",
+      "Value": {
+        "Ref": "PrivateSubnet2"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PrivateSubnet2Id"
+        }
+      }
+    },
+    "PrivateSubnet3Id": {
+      "Description": "Private Subnet 3 ID",
+      "Value": {
+        "Ref": "PrivateSubnet3"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PrivateSubnet3Id"
+        }
+      }
+    },
+    "PublicSubnet1Id": {
+      "Description": "Public Subnet 1 ID",
+      "Value": {
+        "Ref": "PublicSubnet1"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PublicSubnet1Id"
+        }
+      }
+    },
+    "PublicSubnet2Id": {
+      "Description": "Public Subnet 2 ID",
+      "Value": {
+        "Ref": "PublicSubnet2"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PublicSubnet2Id"
+        }
+      }
+    },
+    "PublicSubnet3Id": {
+      "Description": "Public Subnet 3 ID",
+      "Value": {
+        "Ref": "PublicSubnet3"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PublicSubnet3Id"
+        }
+      }
+    },
+    "NATGatewayId": {
+      "Description": "NAT Gateway ID",
+      "Value": {
+        "Ref": "NATGateway1"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-NATGatewayId"
+        }
+      }
+    },
+    "KMSKeyId": {
+      "Description": "KMS Key ID",
+      "Value": {
+        "Ref": "KMSKey"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-KMSKeyId"
+        }
+      }
+    },
+    "DBClusterEndpoint": {
+      "Description": "Aurora cluster endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "DBCluster",
+          "Endpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBClusterEndpoint"
+        }
+      }
+    },
+    "DBSecretArn": {
+      "Description": "ARN of database credentials secret",
+      "Value": {
+        "Ref": "DBSecret"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBSecretArn"
+        }
+      }
+    },
+    "TransactionQueueUrl": {
+      "Description": "Transaction queue URL",
+      "Value": {
+        "Ref": "TransactionQueue"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TransactionQueueUrl"
+        }
+      }
+    },
+    "DeadLetterQueueUrl": {
+      "Description": "Dead letter queue URL",
+      "Value": {
+        "Ref": "DeadLetterQueue"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DeadLetterQueueUrl"
+        }
+      }
+    },
+    "LambdaFunctionArn": {
+      "Description": "Lambda function ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "PaymentProcessorFunction",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LambdaFunctionArn"
+        }
+      }
+    },
+    "APIEndpoint": {
+      "Description": "API Gateway endpoint URL",
+      "Value": {
+        "Fn::Sub": "https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/process"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-APIEndpoint"
+        }
+      }
+    },
+    "LambdaSecurityGroupId": {
+      "Description": "Lambda security group ID",
+      "Value": {
+        "Ref": "LambdaSecurityGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LambdaSecurityGroupId"
+        }
+      }
+    },
+    "DBSecurityGroupId": {
+      "Description": "Database security group ID",
+      "Value": {
+        "Ref": "DBSecurityGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DBSecurityGroupId"
+        }
+      }
+    }
+  }
+}
