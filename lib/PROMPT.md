@@ -16,6 +16,6 @@ Additionally, I need to integrate AWS Lambda Powertools for enhanced observabili
 
 I also want to implement AWS Step Functions to orchestrate the data processing workflow. The state machine should coordinate the Lambda functions, handle errors gracefully with retry logic, and provide visual workflow monitoring. This will make the data processing pipeline more robust and maintainable.
 
-The infrastructure should be deployed in us-west-2 region and follow the naming pattern dev-<resource>-synth.
+The infrastructure should be deployed in us-east-1 region and follow the naming pattern dev-<resource>-synth.
 
 Please provide the infrastructure code as separate TypeScript CDK files. I need one file per stack or construct to keep things organized.
