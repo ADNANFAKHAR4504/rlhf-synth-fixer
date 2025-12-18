@@ -119,6 +119,7 @@ class TapStack(cdk.Stack):
 
         # Export outputs from nested stack to parent stack
         # Access resources directly from the nested stack
+        # These outputs will be available in the parent CloudFormation stack
         cdk.CfnOutput(
             self,
             "RdsEndpoint",
