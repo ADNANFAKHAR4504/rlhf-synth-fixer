@@ -180,12 +180,16 @@ Resources:
       CidrBlock: !Ref VpcCidr
       EnableDnsSupport: true
       EnableDnsHostnames: true
-      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-vpc' }]
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-vpc'
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
-      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-igw' }]
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-igw'
 
   VPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -197,19 +201,25 @@ Resources:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
-      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rtb-public' }]
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rtb-public'
 
   PrivateRouteTableA:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
-      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rtb-private-a' }]
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rtb-private-a'
 
   PrivateRouteTableB:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
-      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rtb-private-b' }]
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rtb-private-b'
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -225,7 +235,9 @@ Resources:
       VpcId: !Ref VPC
       CidrBlock: !Ref PublicSubnetACidr
       MapPublicIpOnLaunch: true
-      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-subnet-public-a' }]
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-subnet-public-a'
 
   PublicSubnetB:
     Type: AWS::EC2::Subnet
@@ -233,7 +245,9 @@ Resources:
       VpcId: !Ref VPC
       CidrBlock: !Ref PublicSubnetBCidr
       MapPublicIpOnLaunch: true
-      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-subnet-public-b' }]
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-subnet-public-b'
 
   PrivateSubnetA:
     Type: AWS::EC2::Subnet
@@ -241,7 +255,9 @@ Resources:
       VpcId: !Ref VPC
       CidrBlock: !Ref PrivateSubnetACidr
       MapPublicIpOnLaunch: false
-      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-subnet-private-a' }]
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-subnet-private-a'
 
   PrivateSubnetB:
     Type: AWS::EC2::Subnet
@@ -249,21 +265,27 @@ Resources:
       VpcId: !Ref VPC
       CidrBlock: !Ref PrivateSubnetBCidr
       MapPublicIpOnLaunch: false
-      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-subnet-private-b' }]
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-subnet-private-b'
 
   NatEipA:
     Type: AWS::EC2::EIP
     Condition: IsAws
     Properties:
       Domain: vpc
-      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-eip-nat-a' }]
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-eip-nat-a'
 
   NatEipB:
     Type: AWS::EC2::EIP
     Condition: IsAws
     Properties:
       Domain: vpc
-      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-eip-nat-b' }]
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-eip-nat-b'
 
   NatGatewayA:
     Type: AWS::EC2::NatGateway
@@ -271,7 +293,9 @@ Resources:
     Properties:
       AllocationId: !GetAtt NatEipA.AllocationId
       SubnetId: !Ref PublicSubnetA
-      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-nat-a' }]
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-nat-a'
 
   NatGatewayB:
     Type: AWS::EC2::NatGateway
@@ -279,7 +303,9 @@ Resources:
     Properties:
       AllocationId: !GetAtt NatEipB.AllocationId
       SubnetId: !Ref PublicSubnetB
-      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-nat-b' }]
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-nat-b'
 
   PublicSubnetARouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -329,7 +355,8 @@ Resources:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
-            Principal: { Service: ec2.amazonaws.com }
+            Principal:
+              Service: ec2.amazonaws.com
             Action: 'sts:AssumeRole'
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
@@ -339,15 +366,20 @@ Resources:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action: ['s3:Get*','s3:List*']
-                Resource: ['*']
-      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-ec2-role' }]
+                Action:
+                  - 's3:Get*'
+                  - 's3:List*'
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-ec2-role'
 
   # ✅ pipeline-safe: NO InstanceProfileName (avoids collisions)
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      Roles: [!Ref InstanceRole]
+      Roles:
+        - !Ref InstanceRole
       Path: '/'
 
   SecurityGroupEc2:
@@ -356,10 +388,21 @@ Resources:
       GroupDescription: EC2 access SG
       VpcId: !Ref VPC
       SecurityGroupIngress:
-        - { IpProtocol: tcp, FromPort: 22,  ToPort: 22,  CidrIp: !Ref AllowedSshCidr }
-        - { IpProtocol: tcp, FromPort: 80,  ToPort: 80,  CidrIp: 0.0.0.0/0 }
-        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0 }
-      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-sg-ec2' }]
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AllowedSshCidr
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-sg-ec2'
 
   SecurityGroupRds:
     Type: AWS::EC2::SecurityGroup
@@ -370,9 +413,11 @@ Resources:
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: !If [EngineIsPg, 5432, 3306]
-          ToPort:   !If [EngineIsPg, 5432, 3306]
+          ToPort: !If [EngineIsPg, 5432, 3306]
           SourceSecurityGroupId: !Ref SecurityGroupEc2
-      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-sg-rds' }]
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-sg-rds'
 
   # ✅ pipeline-safe: no explicit LogGroupName (prevents "AlreadyExists")
   CloudWatchLogGroupEC2:
@@ -390,24 +435,32 @@ Resources:
     Type: AWS::EC2::LaunchTemplate
     Properties:
       LaunchTemplateData:
-        IamInstanceProfile: { Arn: !GetAtt InstanceProfile.Arn }
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
         ImageId: !If
           - HasAmiId
           - !Ref AmiId
           - ami-1234567890abcdef0
         InstanceType: !Ref InstanceType
         KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
-        SecurityGroupIds: [!Ref SecurityGroupEc2]
-        MetadataOptions: { HttpTokens: required, HttpEndpoint: enabled }
+        SecurityGroupIds:
+          - !Ref SecurityGroupEc2
+        MetadataOptions:
+          HttpTokens: required
+          HttpEndpoint: enabled
         TagSpecifications:
           - ResourceType: instance
             Tags:
-              - { Key: Name,        Value: !Sub '${ProjectName}-${EnvironmentSuffix}-ec2' }
-              - { Key: Project,     Value: !Ref ProjectName }
-              - { Key: Environment, Value: !Ref EnvironmentSuffix }
+              - Key: Name
+                Value: !Sub '${ProjectName}-${EnvironmentSuffix}-ec2'
+              - Key: Project
+                Value: !Ref ProjectName
+              - Key: Environment
+                Value: !Ref EnvironmentSuffix
           - ResourceType: volume
             Tags:
-              - { Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-ec2' }
+              - Key: Name
+                Value: !Sub '${ProjectName}-${EnvironmentSuffix}-ec2'
         UserData:
           Fn::Base64:
             Fn::Sub:
@@ -528,21 +581,29 @@ Resources:
       Threshold: !FindInMap [CW, Defaults, CpuHighThreshold]
       ComparisonOperator: GreaterThanThreshold
       TreatMissingData: notBreaching
-      AlarmActions: !If [EnableSns, [!Ref SNSTopicAlarms], []]
+      AlarmActions: !If
+        - EnableSns
+        - [!Ref SNSTopicAlarms]
+        - !Ref 'AWS::NoValue'
 
   AlarmEc2MemoryHigh:
     Type: AWS::CloudWatch::Alarm
     Properties:
       Namespace: CWAgent
       MetricName: mem_used_percent
-      Dimensions: [{ Name: AutoScalingGroupName, Value: !Ref AutoScalingGroup }]
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroup
       Statistic: Average
       Period: 300
       EvaluationPeriods: 1
       Threshold: 80
       ComparisonOperator: GreaterThanThreshold
       TreatMissingData: notBreaching
-      AlarmActions: !If [EnableSns, [!Ref SNSTopicAlarms], []]
+      AlarmActions: !If
+        - EnableSns
+        - [!Ref SNSTopicAlarms]
+        - !Ref 'AWS::NoValue'
 
   # pipeline-safe: no fixed Secret Name (prevents collisions)
   DbSecret:
@@ -562,8 +623,12 @@ Resources:
     Condition: IsAws
     Properties:
       DBSubnetGroupDescription: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-subnet-group'
-      SubnetIds: [!Ref PrivateSubnetA, !Ref PrivateSubnetB]
-      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-subnet-group' }]
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-subnet-group'
 
   RDSParameterGroup:
     Type: AWS::RDS::DBParameterGroup
@@ -571,7 +636,9 @@ Resources:
     Properties:
       Description: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-params'
       Family: !If [EngineIsPg, 'postgres16', 'mysql8.0']
-      Tags: [{ Key: Name, Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-params' }]
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-rds-params'
 
   # ✅ pipeline-safe: no DBInstanceIdentifier (prevents collisions + length issues)
   RDSInstanceAws:
@@ -586,7 +653,8 @@ Resources:
       AllocatedStorage: !Ref RdsAllocatedStorage
       StorageEncrypted: true
       PubliclyAccessible: false
-      VPCSecurityGroups: [!Ref SecurityGroupRds]
+      VPCSecurityGroups:
+        - !Ref SecurityGroupRds
       DBSubnetGroupName: !Ref RDSSubnetGroup
       DBParameterGroupName: !Ref RDSParameterGroup
       DeletionProtection: !If [RetainDbSnapshot, true, false]
@@ -607,7 +675,8 @@ Resources:
     Metadata:
       cfn-lint:
         config:
-          ignore_checks: ["W2501"]
+          ignore_checks:
+            - "W2501"
     Properties:
       Engine: postgres
       DBInstanceClass: db.t3.micro
@@ -631,7 +700,10 @@ Resources:
       Threshold: 80
       ComparisonOperator: GreaterThanThreshold
       TreatMissingData: notBreaching
-      AlarmActions: !If [EnableSns, [!Ref SNSTopicAlarms], []]
+      AlarmActions: !If
+        - EnableSns
+        - [!Ref SNSTopicAlarms]
+        - !Ref 'AWS::NoValue'
 
 Outputs:
   VpcId:
