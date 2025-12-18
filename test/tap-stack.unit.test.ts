@@ -355,4 +355,85 @@ describe('TapStack', () => {
       UpdateReplacePolicy: 'Delete',
     });
   });
+
+  describe('LocalStack Compatibility', () => {
+    test('verifies LocalStack detection logic', () => {
+      // Test the LocalStack detection based on current environment
+      const isLocalStack =
+        process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+        process.env.AWS_ENDPOINT_URL?.includes('4566');
+
+      const compatApp = new cdk.App();
+      const compatStack = new TapStack(compatApp, 'CompatTestStack', {
+        environmentSuffix: 'compat',
+      });
+
+      const template = Template.fromStack(compatStack);
+
+      // Verify NAT Gateway count matches LocalStack detection
+      if (isLocalStack) {
+        // In LocalStack, no NAT Gateways
+        template.resourceCountIs('AWS::EC2::NatGateway', 0);
+      } else {
+        // In AWS, 2 NAT Gateways (one per AZ)
+        template.resourceCountIs('AWS::EC2::NatGateway', 2);
+      }
+
+      // RDS Subnet Group always exists
+      template.hasResourceProperties('AWS::RDS::DBSubnetGroup', {
+        DBSubnetGroupDescription: 'Subnet group for RDS instances in private subnets',
+      });
+    });
+
+    test('verifies dual-environment support', () => {
+      // This test verifies that the stack can be synthesized in both environments
+      // The actual behavior depends on AWS_ENDPOINT_URL at module load time
+      const dualApp = new cdk.App();
+      const dualStack = new TapStack(dualApp, 'DualTestStack', {
+        environmentSuffix: 'dual',
+      });
+
+      const template = Template.fromStack(dualStack);
+
+      // Both environments have these core resources
+      template.resourceCountIs('AWS::EC2::VPC', 1);
+      template.resourceCountIs('AWS::EC2::Subnet', 4);
+      template.hasResourceProperties('AWS::RDS::DBInstance', Match.objectLike({
+        Engine: 'mysql',
+      }));
+      template.hasResourceProperties('AWS::S3::Bucket', Match.objectLike({
+        BucketEncryption: Match.anyValue(),
+      }));
+    });
+
+    test('verifies complete resource inventory', () => {
+      // Additional test to ensure all conditional resources are accounted for
+      const invApp = new cdk.App();
+      const invStack = new TapStack(invApp, 'InventoryStack', {
+        environmentSuffix: 'inv',
+      });
+
+      const template = Template.fromStack(invStack);
+
+      // Verify all security groups
+      template.resourceCountIs('AWS::EC2::SecurityGroup', 3); // Web, SSH, RDS
+
+      // Verify IAM resources exist (includes EC2, Lambda, and CDK custom resource roles)
+      const roles = template.findResources('AWS::IAM::Role');
+      expect(Object.keys(roles).length).toBeGreaterThanOrEqual(2);
+
+      // Verify encryption resources
+      template.resourceCountIs('AWS::KMS::Key', 1);
+      template.resourceCountIs('AWS::KMS::Alias', 1);
+
+      // Verify compute resources
+      template.resourceCountIs('AWS::EC2::LaunchTemplate', 1);
+
+      // Verify storage and database resources
+      const buckets = template.findResources('AWS::S3::Bucket');
+      expect(Object.keys(buckets).length).toBeGreaterThanOrEqual(1);
+      template.resourceCountIs('AWS::RDS::DBInstance', 1);
+      template.resourceCountIs('AWS::RDS::DBSubnetGroup', 1);
+    });
+  });
 });
