@@ -53,6 +53,13 @@ Parameters:
     MaxLength: 16
     AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]*$'
 
+  DBPassword:
+    Type: String
+    Description: Master password for RDS MySQL database
+    Default: TempPassword123!
+    NoEcho: true
+    MinLength: 8
+
   DBInstanceClass:
     Type: String
     Description: RDS instance class for MySQL database
@@ -608,7 +615,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Sub payment-processing-rds-sg-${EnvironmentSuffix}
-      GroupDescription: Security group for RDS MySQL - allows MySQL traffic only from application servers and DMS
+      GroupDescription: Security group for RDS MySQL - allows MySQL traffic only from application servers
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -616,11 +623,6 @@ Resources:
           ToPort: 3306
           SourceSecurityGroupId: !Ref AppServerSecurityGroup
           Description: Allow MySQL traffic from application servers
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          SourceSecurityGroupId: !Ref DMSSecurityGroup
-          Description: Allow MySQL traffic from DMS replication instance
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
@@ -635,27 +637,7 @@ Resources:
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  DMSSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: !Sub payment-processing-dms-sg-${EnvironmentSuffix}
-      GroupDescription: Security group for DMS replication instance - allows access to source and target databases
-      VpcId: !Ref VPC
-      SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          CidrIp: 0.0.0.0/0
-          Description: Allow MySQL traffic to on-premises and RDS
-      Tags:
-        - Key: Name
-          Value: !Sub payment-processing-dms-sg-${EnvironmentSuffix}
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref Project
-        - Key: CostCenter
-          Value: !Ref CostCenter
+  # DMSSecurityGroup removed - DMS not supported in LocalStack Community
 
   # ==================== KMS Key for RDS Encryption ====================
 
@@ -731,7 +713,7 @@ Resources:
       Engine: mysql
       EngineVersion: "8.0.39"
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}::password}}'
+      MasterUserPassword: !Ref DBPassword
       AllocatedStorage: !Ref DBAllocatedStorage
       StorageType: gp2
       MultiAZ: false
@@ -752,91 +734,7 @@ Resources:
           Value: !Ref CostCenter
 
   # ==================== DMS Resources ====================
-
-  DMSReplicationSubnetGroup:
-    Type: AWS::DMS::ReplicationSubnetGroup
-    Properties:
-      ReplicationSubnetGroupIdentifier: !Sub payment-processing-dms-subnet-group-${EnvironmentSuffix}
-      ReplicationSubnetGroupDescription: Subnet group for DMS replication instance
-      SubnetIds:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
-        - !Ref PrivateSubnet3
-      Tags:
-        - Key: Name
-          Value: !Sub payment-processing-dms-subnet-group-${EnvironmentSuffix}
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref Project
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  DMSReplicationInstance:
-    Type: AWS::DMS::ReplicationInstance
-    DependsOn:
-      - RDSInstance
-    Properties:
-      ReplicationInstanceIdentifier: !Sub payment-processing-dms-${EnvironmentSuffix}
-      ReplicationInstanceClass: !Ref DMSInstanceClass
-      AllocatedStorage: 50
-      VpcSecurityGroupIds:
-        - !Ref DMSSecurityGroup
-      ReplicationSubnetGroupIdentifier: !Ref DMSReplicationSubnetGroup
-      PubliclyAccessible: false
-      MultiAZ: false
-      EngineVersion: 3.5.3
-      Tags:
-        - Key: Name
-          Value: !Sub payment-processing-dms-${EnvironmentSuffix}
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref Project
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  DMSSourceEndpoint:
-    Type: AWS::DMS::Endpoint
-    Properties:
-      EndpointIdentifier: !Sub payment-processing-source-endpoint-${EnvironmentSuffix}
-      EndpointType: source
-      EngineName: mysql
-      ServerName: !Ref OnPremisesDBHost
-      Port: !Ref OnPremisesDBPort
-      DatabaseName: !Ref OnPremisesDBName
-      Username: !Ref OnPremisesDBUsername
-      Password: !Sub '{{resolve:secretsmanager:${OnPremisesDBPasswordSecret}:SecretString:password}}'
-      Tags:
-        - Key: Name
-          Value: !Sub payment-processing-source-endpoint-${EnvironmentSuffix}
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref Project
-        - Key: CostCenter
-          Value: !Ref CostCenter
-
-  DMSTargetEndpoint:
-    Type: AWS::DMS::Endpoint
-    Properties:
-      EndpointIdentifier: !Sub payment-processing-target-endpoint-${EnvironmentSuffix}
-      EndpointType: target
-      EngineName: mysql
-      ServerName: !GetAtt RDSInstance.Endpoint.Address
-      Port: 3306
-      DatabaseName: paymentdb
-      Username: !Ref DBUsername
-      Password: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
-      Tags:
-        - Key: Name
-          Value: !Sub payment-processing-target-endpoint-${EnvironmentSuffix}
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref Project
-        - Key: CostCenter
-          Value: !Ref CostCenter
+  # DMS resources removed - DMS is a LocalStack Pro feature not available in CI
 
   # ==================== IAM Roles ====================
 
@@ -881,28 +779,7 @@ Resources:
       Roles:
         - !Ref EC2InstanceRole
 
-  DMSVPCRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: dms-vpc-role
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: dms.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AmazonDMSVPCManagementRole
-      Tags:
-        - Key: Name
-          Value: dms-vpc-role
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref Project
-        - Key: CostCenter
-          Value: !Ref CostCenter
+  # DMSVPCRole removed - DMS not supported in LocalStack Community
 
   # ==================== Application Load Balancer ====================
 
@@ -1172,23 +1049,7 @@ Outputs:
     Export:
       Name: !Sub ${AWS::StackName}-ALBTargetGroupArn
 
-  DMSReplicationInstanceArn:
-    Description: ARN of DMS replication instance
-    Value: !Ref DMSReplicationInstance
-    Export:
-      Name: !Sub ${AWS::StackName}-DMSReplicationInstanceArn
-
-  DMSSourceEndpointArn:
-    Description: ARN of DMS source endpoint
-    Value: !Ref DMSSourceEndpoint
-    Export:
-      Name: !Sub ${AWS::StackName}-DMSSourceEndpointArn
-
-  DMSTargetEndpointArn:
-    Description: ARN of DMS target endpoint
-    Value: !Ref DMSTargetEndpoint
-    Export:
-      Name: !Sub ${AWS::StackName}-DMSTargetEndpointArn
+  # DMS outputs removed - DMS not supported in LocalStack Community
 
   ALBSecurityGroupId:
     Description: Security Group ID for ALB
