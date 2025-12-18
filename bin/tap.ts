@@ -16,8 +16,10 @@ Tags.of(app).add('Repository', repositoryName);
 Tags.of(app).add('Author', commitAuthor);
 
 // Deploy stack to us-west-1 with fixed capacity
-new TapStack(app, `TapStackUsWest1${environmentSuffix}`, {
-  stackName: `TapStackUsWest1${environmentSuffix}`,
+// Stack naming: TapStack${suffix}UsWest1 ensures get-outputs.sh can find it
+// (it searches for stacks containing "TapStack${ENVIRONMENT_SUFFIX}")
+new TapStack(app, `TapStack${environmentSuffix}UsWest1`, {
+  stackName: `TapStack${environmentSuffix}UsWest1`,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: 'us-west-1',
@@ -27,8 +29,8 @@ new TapStack(app, `TapStackUsWest1${environmentSuffix}`, {
 });
 
 // Deploy stack to us-west-2 with configurable capacity
-new TapStack(app, `TapStackUsWest2${environmentSuffix}`, {
-  stackName: `TapStackUsWest2${environmentSuffix}`,
+new TapStack(app, `TapStack${environmentSuffix}UsWest2`, {
+  stackName: `TapStack${environmentSuffix}UsWest2`,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: 'us-west-2',
