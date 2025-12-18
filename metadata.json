@@ -1,0 +1,19 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "IAC-TAP-214",
+  "team": "synth",
+  "startedAt": "2025-07-28T11:36:09.647Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "vpc",
+    "ec2",
+    "iam"
+  ]
+}
