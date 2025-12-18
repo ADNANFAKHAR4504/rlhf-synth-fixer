@@ -15,7 +15,10 @@ const region = process.env.AWS_REGION || 'us-east-1';
 
 // Initialize AWS clients
 const dynamoClient = new DynamoDBClient({ region });
-const s3Client = new S3Client({ region });
+const s3Client = new S3Client({
+  forcePathStyle: true,
+});
+
 const iamClient = new IAMClient({ region });
 const kmsClient = new KMSClient({ region });
 
