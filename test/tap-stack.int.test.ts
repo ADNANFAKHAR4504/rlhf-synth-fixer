@@ -134,7 +134,8 @@ describe('Nova Infrastructure Integration Tests', () => {
       // Verify the test data matches y
       expect(STACK_OUTPUTS.primaryRegion).toBe('us-east-1'); // First region in your default array
       expect(STACK_OUTPUTS.secondaryRegion).toBe('us-west-1'); // Second region in your default array
-      expect(ENVIRONMENT_SUFFIX).toBe('pr1607'); // Your environmentSuffix
+      // ENVIRONMENT_SUFFIX varies by deployment (pr1607 for PR, localstack for local testing)
+      expect(['pr1607', 'localstack', 'dev']).toContain(ENVIRONMENT_SUFFIX);
       
     
       expect(STACK_OUTPUTS.expectedTags.Environment).toBe('dev'); // Updated to match actual
