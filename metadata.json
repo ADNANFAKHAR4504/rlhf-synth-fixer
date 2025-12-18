@@ -18,5 +18,6 @@
     "EventBridge",
     "CloudWatch LogGroup",
     "VPC"
-  ]
+  ],
+  "training_quality": 9
 }
