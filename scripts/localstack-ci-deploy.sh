@@ -411,26 +411,59 @@ deploy_cdk() {
 
     # Collect outputs
     print_status $YELLOW "📊 Collecting deployment outputs..."
-    local stack_name="TapStack${env_suffix}"
+    local stack_prefix="TapStack"
     local output_json="{}"
-    
-    if awslocal cloudformation describe-stacks --stack-name "$stack_name" > /dev/null 2>&1; then
-        output_json=$(awslocal cloudformation describe-stacks --stack-name "$stack_name" \
-            --query 'Stacks[0].Outputs' \
-            --output json 2>/dev/null | python3 -c "
+
+    # Get all stacks that match the pattern (handles multi-region deployments)
+    local all_stacks=$(awslocal cloudformation list-stacks \
+        --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE \
+        --query "StackSummaries[?starts_with(StackName, '${stack_prefix}')].StackName" \
+        --output text 2>/dev/null || echo "")
+
+    if [ -n "$all_stacks" ]; then
+        print_status $BLUE "   Found stacks: $all_stacks"
+
+        # Collect outputs from all matching stacks
+        for stack in $all_stacks; do
+            print_status $BLUE "   Collecting outputs from: $stack"
+            local stack_outputs=$(awslocal cloudformation describe-stacks --stack-name "$stack" \
+                --query 'Stacks[0].Outputs' \
+                --output json 2>/dev/null | python3 -c "
 import sys, json
 try:
     data = json.load(sys.stdin)
     outputs = {}
     if data:
         for output in data:
-            outputs[output['OutputKey']] = output['OutputValue']
+            # Prefix keys with stack name to avoid collisions
+            key = output['OutputKey']
+            outputs[key] = output['OutputValue']
     print(json.dumps(outputs, indent=2))
 except:
     print('{}')
 " || echo "{}")
+
+            # Merge outputs
+            output_json=$(echo "$output_json $stack_outputs" | python3 -c "
+import sys, json
+try:
+    parts = sys.stdin.read().split()
+    merged = {}
+    for part in parts:
+        try:
+            data = json.loads(part)
+            merged.update(data)
+        except:
+            pass
+    print(json.dumps(merged, indent=2))
+except:
+    print('{}')
+" || echo "{}")
+        done
+    else
+        print_status $YELLOW "   ⚠️  No stacks found matching pattern: ${stack_prefix}*"
     fi
-    
+
     save_outputs "$output_json"
 }
 
