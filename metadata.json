@@ -24,6 +24,5 @@
     "AWS Config",
     "VPC Endpoints",
     "Network ACLs"
-  ],
-  "training_quality": 9
+  ]
 }
