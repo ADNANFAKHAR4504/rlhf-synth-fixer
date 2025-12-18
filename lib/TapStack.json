@@ -836,7 +836,9 @@
                 "AllocatedStorage": 20,
                 "StorageType": "gp2",
                 "MasterUsername": "admin",
-                "MasterUserPassword": "localstack-password",
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{database/${EnvironmentType}/password:1}}"
+                },
                 "DBSubnetGroupName": {
                     "Ref": "DBSubnetGroup"
                 },
