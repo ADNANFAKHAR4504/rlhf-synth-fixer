@@ -77,20 +77,20 @@ describe('TapStack CloudFormation Template - Production Security Infrastructure'
       const kmsKey = template.Resources.ProdKMSKey;
       const keyPolicy = kmsKey.Properties.KeyPolicy;
       expect(keyPolicy.Version).toBe('2012-10-17');
-      
+
       const statements = keyPolicy.Statement;
       expect(statements).toHaveLength(5);
-      
+
       // Check for root permissions
       const rootStatement = statements.find((s: any) => s.Sid === 'Enable IAM User Permissions');
       expect(rootStatement).toBeDefined();
       expect(rootStatement.Effect).toBe('Allow');
-      
+
       // Check for service permissions
       const servicesWithAccess = ['logs', 's3.amazonaws.com', 'ec2.amazonaws.com', 'sns.amazonaws.com'];
       servicesWithAccess.forEach(service => {
-        const serviceStatement = statements.find((s: any) => 
-          s.Principal && s.Principal.Service && 
+        const serviceStatement = statements.find((s: any) =>
+          s.Principal && s.Principal.Service &&
           (s.Principal.Service === service || s.Principal.Service['Fn::Sub'])
         );
         expect(serviceStatement).toBeDefined();
@@ -120,10 +120,10 @@ describe('TapStack CloudFormation Template - Production Security Infrastructure'
     test('should have public and private subnets', () => {
       expect(template.Resources.ProdPublicSubnet).toBeDefined();
       expect(template.Resources.ProdPrivateSubnet).toBeDefined();
-      
+
       const publicSubnet = template.Resources.ProdPublicSubnet;
       const privateSubnet = template.Resources.ProdPrivateSubnet;
-      
+
       expect(publicSubnet.Properties.CidrBlock).toBe('10.0.1.0/24');
       expect(privateSubnet.Properties.CidrBlock).toBe('10.0.2.0/24');
       expect(publicSubnet.Properties.MapPublicIpOnLaunch).toBe(true);
@@ -132,7 +132,7 @@ describe('TapStack CloudFormation Template - Production Security Infrastructure'
     test('should have NAT Gateway for private subnet internet access', () => {
       expect(template.Resources.ProdNATGateway).toBeDefined();
       expect(template.Resources.ProdNATGatewayEIP).toBeDefined();
-      
+
       const natGateway = template.Resources.ProdNATGateway;
       expect(natGateway.Type).toBe('AWS::EC2::NatGateway');
     });
@@ -150,7 +150,7 @@ describe('TapStack CloudFormation Template - Production Security Infrastructure'
       expect(template.Resources.ProdEC2SecurityGroup).toBeDefined();
       const sg = template.Resources.ProdEC2SecurityGroup;
       expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
-      
+
       const ingress = sg.Properties.SecurityGroupIngress;
       const sshRule = ingress.find((rule: any) => rule.FromPort === 22);
       expect(sshRule).toBeDefined();
@@ -160,12 +160,12 @@ describe('TapStack CloudFormation Template - Production Security Infrastructure'
     test('should have security group egress rules for necessary services only', () => {
       const sg = template.Resources.ProdEC2SecurityGroup;
       const egress = sg.Properties.SecurityGroupEgress;
-      
+
       expect(egress).toHaveLength(4); // HTTP, HTTPS, DNS TCP, DNS UDP
-      
+
       const httpRule = egress.find((rule: any) => rule.FromPort === 80);
       const httpsRule = egress.find((rule: any) => rule.FromPort === 443);
-      
+
       expect(httpRule).toBeDefined();
       expect(httpsRule).toBeDefined();
       expect(httpRule.Description).toBe('HTTP outbound for package updates');
@@ -184,7 +184,7 @@ describe('TapStack CloudFormation Template - Production Security Infrastructure'
       expect(template.Resources.ProdEC2Role).toBeDefined();
       const role = template.Resources.ProdEC2Role;
       expect(role.Type).toBe('AWS::IAM::Role');
-      
+
       const trustPolicy = role.Properties.AssumeRolePolicyDocument;
       expect(trustPolicy.Version).toBe('2012-10-17');
       expect(trustPolicy.Statement[0].Principal.Service).toBe('ec2.amazonaws.com');
@@ -193,10 +193,10 @@ describe('TapStack CloudFormation Template - Production Security Infrastructure'
     test('should have minimal S3 permissions policy', () => {
       const role = template.Resources.ProdEC2Role;
       const policies = role.Properties.Policies;
-      
+
       const s3Policy = policies.find((p: any) => p.PolicyName['Fn::Sub'] === 'prod-${EnvironmentSuffix}-s3-access-policy');
       expect(s3Policy).toBeDefined();
-      
+
       const statements = s3Policy.PolicyDocument.Statement;
       expect(statements).toHaveLength(3); // Object actions, list bucket, KMS permissions
     });
@@ -204,10 +204,10 @@ describe('TapStack CloudFormation Template - Production Security Infrastructure'
     test('should have CloudWatch logging permissions', () => {
       const role = template.Resources.ProdEC2Role;
       const policies = role.Properties.Policies;
-      
+
       const cwPolicy = policies.find((p: any) => p.PolicyName['Fn::Sub'] === 'prod-${EnvironmentSuffix}-cloudwatch-policy');
       expect(cwPolicy).toBeDefined();
-      
+
       const statement = cwPolicy.PolicyDocument.Statement[0];
       expect(statement.Action).toContain('logs:CreateLogGroup');
       expect(statement.Action).toContain('logs:PutLogEvents');
@@ -225,7 +225,7 @@ describe('TapStack CloudFormation Template - Production Security Infrastructure'
       expect(template.Resources.ProdS3Bucket).toBeDefined();
       const bucket = template.Resources.ProdS3Bucket;
       expect(bucket.Type).toBe('AWS::S3::Bucket');
-      
+
       const encryption = bucket.Properties.BucketEncryption;
       expect(encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
     });
@@ -233,7 +233,7 @@ describe('TapStack CloudFormation Template - Production Security Infrastructure'
     test('should block all public access', () => {
       const bucket = template.Resources.ProdS3Bucket;
       const publicAccessBlock = bucket.Properties.PublicAccessBlockConfiguration;
-      
+
       expect(publicAccessBlock.BlockPublicAcls).toBe(true);
       expect(publicAccessBlock.BlockPublicPolicy).toBe(true);
       expect(publicAccessBlock.IgnorePublicAcls).toBe(true);
@@ -255,7 +255,7 @@ describe('TapStack CloudFormation Template - Production Security Infrastructure'
       expect(template.Resources.ProdS3BucketPolicy).toBeDefined();
       const policy = template.Resources.ProdS3BucketPolicy;
       const statements = policy.Properties.PolicyDocument.Statement;
-      
+
       const denyInsecure = statements.find((s: any) => s.Sid === 'DenyInsecureConnections');
       expect(denyInsecure).toBeDefined();
       expect(denyInsecure.Effect).toBe('Deny');
@@ -274,7 +274,7 @@ describe('TapStack CloudFormation Template - Production Security Infrastructure'
     test('should have encrypted EBS volumes', () => {
       const instance = template.Resources.ProdEC2Instance;
       const blockDevices = instance.Properties.BlockDeviceMappings;
-      
+
       expect(blockDevices).toHaveLength(1);
       expect(blockDevices[0].Ebs.Encrypted).toBe(true);
       expect(blockDevices[0].Ebs.KmsKeyId).toEqual({ Ref: 'ProdKMSKey' });
@@ -284,7 +284,7 @@ describe('TapStack CloudFormation Template - Production Security Infrastructure'
     test('should have CloudWatch agent user data', () => {
       const instance = template.Resources.ProdEC2Instance;
       expect(instance.Properties.UserData).toBeDefined();
-      
+
       const userData = instance.Properties.UserData['Fn::Base64']['Fn::Sub'];
       expect(userData).toContain('amazon-cloudwatch-agent');
       expect(userData).toContain('yum install -y amazon-cloudwatch-agent');
@@ -312,10 +312,10 @@ describe('TapStack CloudFormation Template - Production Security Infrastructure'
     test('should have network monitoring alarms', () => {
       expect(template.Resources.ProdNetworkInAlarm).toBeDefined();
       expect(template.Resources.ProdNetworkOutAlarm).toBeDefined();
-      
+
       const networkInAlarm = template.Resources.ProdNetworkInAlarm;
       const networkOutAlarm = template.Resources.ProdNetworkOutAlarm;
-      
+
       expect(networkInAlarm.Properties.MetricName).toBe('NetworkIn');
       expect(networkOutAlarm.Properties.MetricName).toBe('NetworkOut');
       expect(networkInAlarm.Properties.Threshold).toBe(1000000000); // 1GB
@@ -343,11 +343,11 @@ describe('TapStack CloudFormation Template - Production Security Infrastructure'
         'ProdCloudWatchLogGroup',
         'ProdSNSTopic'
       ];
-      
+
       resourcesWithNaming.forEach(resourceName => {
         const resource = template.Resources[resourceName];
         expect(resource).toBeDefined();
-        
+
         // Check naming in various property locations
         const props = resource.Properties;
         if (props.Tags) {
@@ -356,7 +356,7 @@ describe('TapStack CloudFormation Template - Production Security Infrastructure'
             expect(nameTag.Value['Fn::Sub']).toContain('prod-${EnvironmentSuffix}');
           }
         }
-        
+
         if (props.RoleName || props.TopicName || props.BucketName || props.LogGroupName) {
           const nameProperty = props.RoleName || props.TopicName || props.BucketName || props.LogGroupName;
           if (nameProperty && nameProperty['Fn::Sub']) {
@@ -392,7 +392,7 @@ describe('TapStack CloudFormation Template - Production Security Infrastructure'
         'ProdNetworkOutAlarm',
         'ProdSNSTopic'
       ];
-      
+
       resourcesWithDeletionPolicy.forEach(resourceName => {
         const resource = template.Resources[resourceName];
         expect(resource.DeletionPolicy).toBe('Delete');
