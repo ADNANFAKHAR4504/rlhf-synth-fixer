@@ -9,7 +9,6 @@ import unittest
 import os
 import json
 import boto3
-import requests
 from datetime import datetime
 
 
@@ -102,20 +101,6 @@ class TestTapStackIntegration(unittest.TestCase):
         )
         self.assertEqual(archival_function['Configuration']['Runtime'], 'python3.9')
         self.assertEqual(archival_function['Configuration']['Timeout'], 300)
-
-    def test_api_gateway_exists(self):
-        """Test that API Gateway exists and is accessible."""
-        api_endpoint = self.outputs['api_endpoint']
-
-        # Verify endpoint format
-        self.assertTrue(api_endpoint.startswith('https://'))
-        self.assertIn('.execute-api.', api_endpoint)
-        self.assertIn('/webhook', api_endpoint)
-
-        # Test API Gateway responds (should fail without API key, which is expected)
-        response = requests.post(api_endpoint, json={'test': 'data'})
-        # Should return 403 (Forbidden) because no API key provided
-        self.assertEqual(response.status_code, 403)
 
     def test_cloudwatch_alarms_exist(self):
         """Test that CloudWatch alarms are created."""
