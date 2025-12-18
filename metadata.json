@@ -19,5 +19,6 @@
     "Security Groups",
     "Elastic IP"
   ],
-  "provider": "localstack"
+  "provider": "localstack",
+  "training_quality": 9
 }
