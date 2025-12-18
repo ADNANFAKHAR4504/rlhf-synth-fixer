@@ -54,8 +54,10 @@ if (fs.existsSync(cfnOutputsPath)) {
   throw new Error('cfn-outputs/flat-outputs.json not found. Run deployment first.');
 }
 
-// Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || outputs.EnvironmentSuffix || 'dev';
+// Get environment suffix from outputs (this is what was actually used during deployment)
+// IMPORTANT: Always use outputs.EnvironmentSuffix for resource name construction
+// as it reflects the actual parameter value used in CloudFormation deployment
+const environmentSuffix = outputs.EnvironmentSuffix || 'dev';
 
 // Read AWS region from lib/AWS_REGION file
 const awsRegion = fs.readFileSync(path.join(__dirname, '../lib/AWS_REGION'), 'utf8').trim();
