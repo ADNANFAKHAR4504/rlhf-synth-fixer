@@ -1,4 +1,4 @@
-Insert here the prompt that made the model fail.# Multi-Environment Infrastructure Deployment
+# Multi-Environment Infrastructure Deployment
 
 Hey team,
 
@@ -47,13 +47,12 @@ Create a multi-environment infrastructure deployment using **CloudFormation with
 
 - All infrastructure defined using **CloudFormation with YAML**
 - Deploy via CloudFormation StackSets for cross-account deployment
-- Use Parameters for environment-specific values (EnvironmentType, EnvironmentSuffix)
+- Use Parameters for environment-specific values
 - Use Conditions to control resource properties based on environment
 - Use Mappings for environment-specific configurations
 - Use Systems Manager Parameter Store for secrets (database passwords)
 - Deploy to **us-east-1** region
 - Resource names must include **environmentSuffix** parameter for uniqueness
-- Follow naming convention: `{resource-type}-{environmentSuffix}`
 
 ### Deployment Requirements (CRITICAL)
 
@@ -61,7 +60,6 @@ Create a multi-environment infrastructure deployment using **CloudFormation with
 - NO DeletionPolicy: Retain or DeletionPolicy: Snapshot on any resources
 - NO deletion protection enabled on any resources
 - All resources must be fully destroyable for testing purposes
-- RDS instances should use DeletionPolicy: Delete
 - S3 buckets should not have deletion protection
 - Resources should be designed for ephemeral test deployments
 
@@ -97,16 +95,3 @@ Create a multi-environment infrastructure deployment using **CloudFormation with
 - Destroyability: All resources can be fully deleted without retain policies
 - Code Quality: Clean YAML, well-structured with Parameters, Conditions, and Mappings
 
-## What to deliver
-
-- Complete CloudFormation YAML template (TapStack.yml)
-- Parameter definitions for EnvironmentType and EnvironmentSuffix
-- Conditions for environment-based logic
-- Mappings for environment-specific values
-- VPC with public/private subnets across 2 AZs
-- Application Load Balancer with target group
-- Lambda functions with IAM roles
-- S3 buckets with environment-appropriate versioning
-- IAM roles with appropriate permissions
-- Outputs for resource identifiers
-- Documentation for StackSet deployment
