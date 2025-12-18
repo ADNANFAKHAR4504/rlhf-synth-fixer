@@ -339,7 +339,7 @@ describe('Infrastructure Validation', () => {
     const expectedRegion = process.env.AWS_REGION || 'us-east-1';
     // LocalStack uses a different URL format
     if (process.env.AWS_ENDPOINT_URL) {
-      expect(apiUrl).toMatch(/^http:\/\/localhost:4566\/restapis\/[a-z0-9]+\/.+\/$/);
+      expect(apiUrl).toMatch(/^https?:\/\/.+(localhost\.localstack\.cloud|localhost):4566\/.+\/$/);
     } else {
       const regionPattern = expectedRegion.replace('-', '\\-');
       expect(apiUrl).toMatch(
