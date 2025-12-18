@@ -14,5 +14,12 @@
   "aws_services": [
     "EC2",
     "VPC"
-  ]
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "jpoola-turing",
+  "dockerS3Location": ""
 }
