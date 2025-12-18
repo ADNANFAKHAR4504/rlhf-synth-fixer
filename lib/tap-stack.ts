@@ -209,13 +209,16 @@ export class TapStack extends cdk.Stack {
     });
 
     // RDS Database Instance
+    // Note: LocalStack RDS can be slow to provision. For faster deployments,
+    // consider using smaller allocatedStorage or skipping RDS in LocalStack environments.
     const database = new rds.DatabaseInstance(this, 'Database', {
       instanceIdentifier: `${environmentSuffix}-db-${environmentSuffix}`,
       engine: rds.DatabaseInstanceEngine.mysql({
         version: rds.MysqlEngineVersion.VER_8_0,
       }),
       instanceType: config.dbInstanceClass,
-      allocatedStorage: config.dbAllocatedStorage,
+      // Use minimal storage for LocalStack to speed up provisioning
+      allocatedStorage: isLocalStack ? 5 : config.dbAllocatedStorage,
       storageType: rds.StorageType.GP2,
       vpc,
       subnetGroup: dbSubnetGroup,
@@ -224,12 +227,15 @@ export class TapStack extends cdk.Stack {
       credentials: rds.Credentials.fromGeneratedSecret('admin', {
         secretName: `${environmentSuffix}-db-creds-${environmentSuffix}`,
       }),
+      // Skip backups in LocalStack for faster provisioning
       backupRetention:
-        environmentSuffix === 'Production'
-          ? cdk.Duration.days(7)
-          : cdk.Duration.days(1),
+        isLocalStack
+          ? cdk.Duration.days(0)
+          : environmentSuffix === 'Production'
+            ? cdk.Duration.days(7)
+            : cdk.Duration.days(1),
       deleteAutomatedBackups: environmentSuffix !== 'Production',
-      deletionProtection: environmentSuffix === 'Production',
+      deletionProtection: isLocalStack ? false : environmentSuffix === 'Production',
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
