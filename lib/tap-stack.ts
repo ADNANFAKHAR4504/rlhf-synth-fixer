@@ -17,9 +17,28 @@ export class TapStack extends cdk.Stack {
       'dev';
 
     // Create the serverless stack
-    new ServerlessStack(this, 'ServerlessStack', {
+    const serverlessStack = new ServerlessStack(this, 'ServerlessStack', {
       environmentSuffix: environmentSuffix,
       env: props?.env,
+    });
+
+    // Add outputs at the parent stack level (required for CI/CD validation)
+    new cdk.CfnOutput(this, 'StackName', {
+      value: this.stackName,
+      description: 'Name of the deployed stack',
+      exportName: `${this.stackName}-StackName`,
+    });
+
+    new cdk.CfnOutput(this, 'Region', {
+      value: this.region,
+      description: 'AWS region where the stack is deployed',
+      exportName: `${this.stackName}-Region`,
+    });
+
+    new cdk.CfnOutput(this, 'EnvironmentSuffix', {
+      value: environmentSuffix,
+      description: 'Environment suffix used for resource naming',
+      exportName: `${this.stackName}-EnvironmentSuffix`,
     });
   }
 }
