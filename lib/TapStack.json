@@ -14,13 +14,6 @@
       "Default": "admin",
       "Description": "Master username for RDS Aurora cluster",
       "NoEcho": true
-    },
-    "DBMasterPassword": {
-      "Type": "String",
-      "Default": "SecurePassword123!",
-      "Description": "Master password for RDS Aurora cluster",
-      "NoEcho": true,
-      "MinLength": 8
     }
   },
   "Resources": {
@@ -518,8 +511,13 @@
           "Fn::Sub": "payment-db-credentials-${EnvironmentSuffix}"
         },
         "Description": "RDS Aurora MySQL credentials",
-        "SecretString": {
-          "Fn::Sub": "{\"username\":\"${DBMasterUsername}\",\"password\":\"${DBMasterPassword}\"}"
+        "GenerateSecretString": {
+          "SecretStringTemplate": {
+            "Fn::Sub": "{\"username\":\"${DBMasterUsername}\"}"
+          },
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "\"@/\\"
         },
         "Tags": [
           {
@@ -533,15 +531,16 @@
     },
     "DBCluster": {
       "Type": "AWS::RDS::DBCluster",
+      "DependsOn": "DBSecret",
       "Properties": {
         "Engine": "aurora-mysql",
         "EngineVersion": "8.0.mysql_aurora.3.04.0",
         "DatabaseName": "paymentdb",
         "MasterUsername": {
-          "Ref": "DBMasterUsername"
+          "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:username}}"
         },
         "MasterUserPassword": {
-          "Ref": "DBMasterPassword"
+          "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"
         },
         "DBSubnetGroupName": {
           "Ref": "DBSubnetGroup"
