@@ -18,11 +18,8 @@ terraform {
     }
   }
 
-  # Use local backend for LocalStack testing
-  # In production, use: backend "s3" {}
-  backend "local" {
-    path = "terraform.tfstate"
-  }
+  # Partial backend config: values are injected at `terraform init` time
+  backend "s3" {}
 }
 
 # Primary AWS provider for general resources
