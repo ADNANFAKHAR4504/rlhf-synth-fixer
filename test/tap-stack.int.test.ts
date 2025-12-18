@@ -42,8 +42,9 @@ const elasticIp = outputs.ElasticIPAddress;
 const loadBalancerDns = outputs.LoadBalancerDNS;
 
 // Detect LocalStack
-const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                    process.env.AWS_ENDPOINT_URL?.includes('4566');
+const isLocalStack =
+  process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+  process.env.AWS_ENDPOINT_URL?.includes('4566');
 
 // AWS Clients configuration
 const region = 'us-west-1';
@@ -53,7 +54,7 @@ const clientConfig: any = { region };
 if (isLocalStack) {
   const endpoint = process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
   clientConfig.endpoint = endpoint;
-  clientConfig.forcePathStyle = true;  // Required for S3 in LocalStack
+  clientConfig.forcePathStyle = true; // Required for S3 in LocalStack
   clientConfig.credentials = {
     accessKeyId: 'test',
     secretAccessKey: 'test',
@@ -107,11 +108,10 @@ describe('TapStack Integration Tests', () => {
       });
       const response = await s3Client.send(command);
 
+      expect(response.ServerSideEncryptionConfiguration?.Rules).toHaveLength(1);
       expect(
-        response.ServerSideEncryptionConfiguration?.Rules
-      ).toHaveLength(1);
-      expect(
-        response.ServerSideEncryptionConfiguration?.Rules![0].ApplyServerSideEncryptionByDefault?.SSEAlgorithm
+        response.ServerSideEncryptionConfiguration?.Rules![0]
+          .ApplyServerSideEncryptionByDefault?.SSEAlgorithm
       ).toBe('AES256');
     });
 
@@ -177,201 +177,230 @@ describe('TapStack Integration Tests', () => {
 
   describe('EC2 Instances', () => {
     // Skip EC2 tests for LocalStack (using Lambda instead)
-    (isLocalStack ? test.skip : test)('Should have 2 EC2 instances running', async () => {
-      const command = new DescribeInstancesCommand({
-        Filters: [
-          {
-            Name: 'vpc-id',
-            Values: [vpcId],
-          },
-          {
-            Name: 'instance-state-name',
-            Values: ['running'],
-          },
-        ],
-      });
-      const response = await ec2Client.send(command);
+    (isLocalStack ? test.skip : test)(
+      'Should have 2 EC2 instances running',
+      async () => {
+        const command = new DescribeInstancesCommand({
+          Filters: [
+            {
+              Name: 'vpc-id',
+              Values: [vpcId],
+            },
+            {
+              Name: 'instance-state-name',
+              Values: ['running'],
+            },
+          ],
+        });
+        const response = await ec2Client.send(command);
 
-      const instances = response.Reservations?.flatMap(
-        (r) => r.Instances || []
-      );
-      expect(instances).toHaveLength(2);
-    });
+        const instances = response.Reservations?.flatMap(
+          r => r.Instances || []
+        );
+        expect(instances).toHaveLength(2);
+      }
+    );
 
-    (isLocalStack ? test.skip : test)('EC2 instances should be in different availability zones', async () => {
-      const command = new DescribeInstancesCommand({
-        Filters: [
-          {
-            Name: 'vpc-id',
-            Values: [vpcId],
-          },
-          {
-            Name: 'instance-state-name',
-            Values: ['running'],
-          },
-        ],
-      });
-      const response = await ec2Client.send(command);
+    (isLocalStack ? test.skip : test)(
+      'EC2 instances should be in different availability zones',
+      async () => {
+        const command = new DescribeInstancesCommand({
+          Filters: [
+            {
+              Name: 'vpc-id',
+              Values: [vpcId],
+            },
+            {
+              Name: 'instance-state-name',
+              Values: ['running'],
+            },
+          ],
+        });
+        const response = await ec2Client.send(command);
 
-      const instances = response.Reservations?.flatMap(
-        (r) => r.Instances || []
-      );
-      const azs = instances?.map((i) => i.Placement?.AvailabilityZone);
-      const uniqueAzs = [...new Set(azs)];
+        const instances = response.Reservations?.flatMap(
+          r => r.Instances || []
+        );
+        const azs = instances?.map(i => i.Placement?.AvailabilityZone);
+        const uniqueAzs = [...new Set(azs)];
 
-      expect(uniqueAzs).toHaveLength(2);
-    });
+        expect(uniqueAzs).toHaveLength(2);
+      }
+    );
 
-    (isLocalStack ? test.skip : test)('EC2 instances should use t3.micro instance type', async () => {
-      const command = new DescribeInstancesCommand({
-        Filters: [
-          {
-            Name: 'vpc-id',
-            Values: [vpcId],
-          },
-          {
-            Name: 'instance-state-name',
-            Values: ['running'],
-          },
-        ],
-      });
-      const response = await ec2Client.send(command);
+    (isLocalStack ? test.skip : test)(
+      'EC2 instances should use t3.micro instance type',
+      async () => {
+        const command = new DescribeInstancesCommand({
+          Filters: [
+            {
+              Name: 'vpc-id',
+              Values: [vpcId],
+            },
+            {
+              Name: 'instance-state-name',
+              Values: ['running'],
+            },
+          ],
+        });
+        const response = await ec2Client.send(command);
 
-      const instances = response.Reservations?.flatMap(
-        (r) => r.Instances || []
-      );
-      instances?.forEach((instance) => {
-        expect(instance.InstanceType).toBe('t3.micro');
-      });
-    });
+        const instances = response.Reservations?.flatMap(
+          r => r.Instances || []
+        );
+        instances?.forEach(instance => {
+          expect(instance.InstanceType).toBe('t3.micro');
+        });
+      }
+    );
 
-    (isLocalStack ? test.skip : test)('EC2 instances should have IMDSv2 required', async () => {
-      const command = new DescribeInstancesCommand({
-        Filters: [
-          {
-            Name: 'vpc-id',
-            Values: [vpcId],
-          },
-          {
-            Name: 'instance-state-name',
-            Values: ['running'],
-          },
-        ],
-      });
-      const response = await ec2Client.send(command);
+    (isLocalStack ? test.skip : test)(
+      'EC2 instances should have IMDSv2 required',
+      async () => {
+        const command = new DescribeInstancesCommand({
+          Filters: [
+            {
+              Name: 'vpc-id',
+              Values: [vpcId],
+            },
+            {
+              Name: 'instance-state-name',
+              Values: ['running'],
+            },
+          ],
+        });
+        const response = await ec2Client.send(command);
 
-      const instances = response.Reservations?.flatMap(
-        (r) => r.Instances || []
-      );
-      instances?.forEach((instance) => {
-        expect(instance.MetadataOptions?.HttpTokens).toBe('required');
-      });
-    });
+        const instances = response.Reservations?.flatMap(
+          r => r.Instances || []
+        );
+        instances?.forEach(instance => {
+          expect(instance.MetadataOptions?.HttpTokens).toBe('required');
+        });
+      }
+    );
   });
 
   describe('Elastic IP', () => {
-    (isLocalStack ? test.skip : test)('Elastic IP should be allocated and associated', async () => {
-      const command = new DescribeAddressesCommand({
-        PublicIps: [elasticIp],
-      });
-      const response = await ec2Client.send(command);
+    (isLocalStack ? test.skip : test)(
+      'Elastic IP should be allocated and associated',
+      async () => {
+        const command = new DescribeAddressesCommand({
+          PublicIps: [elasticIp],
+        });
+        const response = await ec2Client.send(command);
 
-      expect(response.Addresses).toHaveLength(1);
-      expect(response.Addresses![0].InstanceId).toBeDefined();
-      expect(response.Addresses![0].Domain).toBe('vpc');
-    });
+        expect(response.Addresses).toHaveLength(1);
+        expect(response.Addresses![0].InstanceId).toBeDefined();
+        expect(response.Addresses![0].Domain).toBe('vpc');
+      }
+    );
   });
 
   describe('Lambda and API Gateway (LocalStack)', () => {
-    (isLocalStack ? test : test.skip)('API Gateway should be accessible', async () => {
-      const webEndpoint = outputs.WebEndpoint || outputs.ApiUrl;
-      expect(webEndpoint).toBeDefined();
+    (isLocalStack ? test : test.skip)(
+      'API Gateway should be accessible',
+      async () => {
+        const webEndpoint = outputs.WebEndpoint || outputs.ApiUrl;
+        expect(webEndpoint).toBeDefined();
 
-      try {
-        const response = await axios.get(webEndpoint, {
-          timeout: 10000,
-          validateStatus: () => true,
-        });
+        try {
+          const response = await axios.get(webEndpoint, {
+            timeout: 10000,
+            validateStatus: () => true,
+          });
 
-        expect(response.status).toBe(200);
-        expect(response.data).toContain('Hello from');
-      } catch (error: any) {
-        console.error('API Gateway test error:', error.message);
-        throw error;
-      }
-    }, 30000);
+          expect(response.status).toBe(200);
+          expect(response.data).toContain('Hello from');
+        } catch (error: any) {
+          console.error('API Gateway test error:', error.message);
+          throw error;
+        }
+      },
+      30000
+    );
   });
 
   describe('Load Balancer', () => {
-    (isLocalStack ? test.skip : test)('Application Load Balancer should be active', async () => {
-      const command = new DescribeLoadBalancersCommand({});
-      const response = await elbClient.send(command);
+    (isLocalStack ? test.skip : test)(
+      'Application Load Balancer should be active',
+      async () => {
+        const command = new DescribeLoadBalancersCommand({});
+        const response = await elbClient.send(command);
 
-      const alb = response.LoadBalancers?.find((lb) =>
-        lb.DNSName?.includes(loadBalancerDns)
-      );
+        const alb = response.LoadBalancers?.find(lb =>
+          lb.DNSName?.includes(loadBalancerDns)
+        );
 
-      expect(alb).toBeDefined();
-      expect(alb?.State?.Code).toBe('active');
-      expect(alb?.Type).toBe('application');
-      expect(alb?.Scheme).toBe('internet-facing');
-    });
-
-    (isLocalStack ? test.skip : test)('Target group should have healthy targets', async () => {
-      // First get the target group
-      const tgCommand = new DescribeTargetGroupsCommand({});
-      const tgResponse = await elbClient.send(tgCommand);
-
-      const targetGroup = tgResponse.TargetGroups?.find((tg) =>
-        tg.TargetGroupName?.includes('tap')
-      );
-      expect(targetGroup).toBeDefined();
-
-      // Check target health
-      const healthCommand = new DescribeTargetHealthCommand({
-        TargetGroupArn: targetGroup!.TargetGroupArn,
-      });
-      const healthResponse = await elbClient.send(healthCommand);
-
-      expect(healthResponse.TargetHealthDescriptions).toHaveLength(2);
-
-      // Wait for targets to become healthy (they might still be initializing)
-      const healthyTargets = healthResponse.TargetHealthDescriptions?.filter(
-        (t) => t.TargetHealth?.State === 'healthy'
-      );
-
-      // At least one target should be healthy or initializing
-      const viableTargets = healthResponse.TargetHealthDescriptions?.filter(
-        (t) =>
-          t.TargetHealth?.State === 'healthy' ||
-          t.TargetHealth?.State === 'initial'
-      );
-      expect(viableTargets!.length).toBeGreaterThan(0);
-    });
-
-    (isLocalStack ? test.skip : test)('Load Balancer should be accessible via HTTP', async () => {
-      const url = `http://${loadBalancerDns}`;
-
-      try {
-        const response = await axios.get(url, {
-          timeout: 10000,
-          validateStatus: () => true, // Accept any status
-        });
-
-        // Should get a response (even if it's an error from the backend)
-        expect(response.status).toBeDefined();
-        
-        // If targets are healthy, we should get a 200
-        if (response.status === 200) {
-          expect(response.data).toContain('Hello from');
-        }
-      } catch (error: any) {
-        // Network errors are acceptable if targets are still initializing
-        if (error.code !== 'ECONNREFUSED' && error.code !== 'ETIMEDOUT') {
-          throw error;
-        }
+        expect(alb).toBeDefined();
+        expect(alb?.State?.Code).toBe('active');
+        expect(alb?.Type).toBe('application');
+        expect(alb?.Scheme).toBe('internet-facing');
       }
-    }, 30000);
+    );
+
+    (isLocalStack ? test.skip : test)(
+      'Target group should have healthy targets',
+      async () => {
+        // First get the target group
+        const tgCommand = new DescribeTargetGroupsCommand({});
+        const tgResponse = await elbClient.send(tgCommand);
+
+        const targetGroup = tgResponse.TargetGroups?.find(tg =>
+          tg.TargetGroupName?.includes('tap')
+        );
+        expect(targetGroup).toBeDefined();
+
+        // Check target health
+        const healthCommand = new DescribeTargetHealthCommand({
+          TargetGroupArn: targetGroup!.TargetGroupArn,
+        });
+        const healthResponse = await elbClient.send(healthCommand);
+
+        expect(healthResponse.TargetHealthDescriptions).toHaveLength(2);
+
+        // Wait for targets to become healthy (they might still be initializing)
+        const healthyTargets = healthResponse.TargetHealthDescriptions?.filter(
+          t => t.TargetHealth?.State === 'healthy'
+        );
+
+        // At least one target should be healthy or initializing
+        const viableTargets = healthResponse.TargetHealthDescriptions?.filter(
+          t =>
+            t.TargetHealth?.State === 'healthy' ||
+            t.TargetHealth?.State === 'initial'
+        );
+        expect(viableTargets!.length).toBeGreaterThan(0);
+      }
+    );
+
+    (isLocalStack ? test.skip : test)(
+      'Load Balancer should be accessible via HTTP',
+      async () => {
+        const url = `http://${loadBalancerDns}`;
+
+        try {
+          const response = await axios.get(url, {
+            timeout: 10000,
+            validateStatus: () => true, // Accept any status
+          });
+
+          // Should get a response (even if it's an error from the backend)
+          expect(response.status).toBeDefined();
+
+          // If targets are healthy, we should get a 200
+          if (response.status === 200) {
+            expect(response.data).toContain('Hello from');
+          }
+        } catch (error: any) {
+          // Network errors are acceptable if targets are still initializing
+          if (error.code !== 'ECONNREFUSED' && error.code !== 'ETIMEDOUT') {
+            throw error;
+          }
+        }
+      },
+      30000
+    );
   });
 
   describe('Security Groups', () => {
@@ -391,35 +420,35 @@ describe('TapStack Integration Tests', () => {
       if (!isLocalStack) {
         // AWS: Expect EC2 and ALB security groups
         // Find EC2 security group
-        const ec2Sg = securityGroups.find((sg) =>
+        const ec2Sg = securityGroups.find(sg =>
           sg.GroupName?.includes('ec2-sg')
         );
         expect(ec2Sg).toBeDefined();
 
         // Find ALB security group
-        const albSg = securityGroups.find((sg) =>
+        const albSg = securityGroups.find(sg =>
           sg.GroupName?.includes('alb-sg')
         );
         expect(albSg).toBeDefined();
 
         // Check ingress rules for ALB security group
         const httpRule = albSg?.IpPermissions?.find(
-          (rule) => rule.FromPort === 80
+          rule => rule.FromPort === 80
         );
         expect(httpRule).toBeDefined();
         // Check that at least one IP range allows public access
         const hasPublicHttpAccess = httpRule?.IpRanges?.some(
-          (range) => range.CidrIp === '0.0.0.0/0'
+          range => range.CidrIp === '0.0.0.0/0'
         );
         expect(hasPublicHttpAccess).toBe(true);
 
         const httpsRule = albSg?.IpPermissions?.find(
-          (rule) => rule.FromPort === 443
+          rule => rule.FromPort === 443
         );
         expect(httpsRule).toBeDefined();
         // Check that at least one IP range allows public access
         const hasPublicHttpsAccess = httpsRule?.IpRanges?.some(
-          (range) => range.CidrIp === '0.0.0.0/0'
+          range => range.CidrIp === '0.0.0.0/0'
         );
         expect(hasPublicHttpsAccess).toBe(true);
       } else {
@@ -452,13 +481,15 @@ describe('TapStack Integration Tests', () => {
         });
         const policiesResponse = await iamClient.send(policiesCommand);
 
-        const ssmPolicy = policiesResponse.AttachedPolicies?.find((p) =>
+        const ssmPolicy = policiesResponse.AttachedPolicies?.find(p =>
           p.PolicyName?.includes('SSMManagedInstanceCore')
         );
         expect(ssmPolicy).toBeDefined();
       } catch (error: any) {
         // Role might have a different name pattern, that's ok
-        console.log(`Note: Could not find role ${roleName}, it might use a different naming pattern`);
+        console.log(
+          `Note: Could not find role ${roleName}, it might use a different naming pattern`
+        );
       }
     });
   });
@@ -508,7 +539,7 @@ describe('TapStack Integration Tests', () => {
         // 2. Load balancer can route to instances
         const elbCommand = new DescribeLoadBalancersCommand({});
         const elbResponse = await elbClient.send(elbCommand);
-        const alb = elbResponse.LoadBalancers?.find((lb) =>
+        const alb = elbResponse.LoadBalancers?.find(lb =>
           lb.DNSName?.includes(loadBalancerDns)
         );
         expect(alb?.VpcId).toBe(vpcId);

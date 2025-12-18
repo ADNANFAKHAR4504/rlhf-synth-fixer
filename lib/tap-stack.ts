@@ -20,34 +20,37 @@ export class TapStack extends cdk.Stack {
     const project = 'tap';
 
     // Detect LocalStack environment
-    const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                        process.env.AWS_ENDPOINT_URL?.includes('4566') ||
-                        process.env.CDK_DEFAULT_ACCOUNT === '000000000000';
+    const isLocalStack =
+      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+      process.env.AWS_ENDPOINT_URL?.includes('4566') ||
+      process.env.CDK_DEFAULT_ACCOUNT === '000000000000';
 
     // Create VPC with public and private subnets across multiple AZs
     // For LocalStack: Simplified VPC without NAT Gateway (not well supported)
     const vpc = new ec2.Vpc(this, 'VPC', {
       vpcName: `${project}-${environmentSuffix}-vpc`,
-      maxAzs: isLocalStack ? 1 : 2,  // LocalStack: single AZ to reduce complexity
-      natGateways: isLocalStack ? 0 : 1,  // LocalStack: no NAT Gateway
-      subnetConfiguration: isLocalStack ? [
-        {
-          cidrMask: 24,
-          name: `${project}-${environmentSuffix}-public-subnet`,
-          subnetType: ec2.SubnetType.PUBLIC,
-        },
-      ] : [
-        {
-          cidrMask: 24,
-          name: `${project}-${environmentSuffix}-public-subnet`,
-          subnetType: ec2.SubnetType.PUBLIC,
-        },
-        {
-          cidrMask: 24,
-          name: `${project}-${environmentSuffix}-private-subnet`,
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        },
-      ],
+      maxAzs: isLocalStack ? 1 : 2, // LocalStack: single AZ to reduce complexity
+      natGateways: isLocalStack ? 0 : 1, // LocalStack: no NAT Gateway
+      subnetConfiguration: isLocalStack
+        ? [
+            {
+              cidrMask: 24,
+              name: `${project}-${environmentSuffix}-public-subnet`,
+              subnetType: ec2.SubnetType.PUBLIC,
+            },
+          ]
+        : [
+            {
+              cidrMask: 24,
+              name: `${project}-${environmentSuffix}-public-subnet`,
+              subnetType: ec2.SubnetType.PUBLIC,
+            },
+            {
+              cidrMask: 24,
+              name: `${project}-${environmentSuffix}-private-subnet`,
+              subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+            },
+          ],
     });
 
     // Create S3 bucket for application logs with versioning
@@ -164,7 +167,9 @@ export class TapStack extends cdk.Stack {
         roleName: `${project}-${environmentSuffix}-lambda-role`,
         assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
         managedPolicies: [
-          iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+          iam.ManagedPolicy.fromAwsManagedPolicyName(
+            'service-role/AWSLambdaBasicExecutionRole'
+          ),
         ],
       });
 
@@ -215,7 +220,6 @@ exports.handler = async (event) => {
         description: 'API Gateway URL (LocalStack)',
         exportName: `${project}-${environmentSuffix}-api-url`,
       });
-
     } else {
       // ═══════════════════════════════════════════════════════════════
       // AWS PATH: EC2 + ALB (original design)
@@ -290,37 +294,37 @@ exports.handler = async (event) => {
       });
 
       // Application Load Balancer
-      alb = new elbv2.ApplicationLoadBalancer(
-        this,
-        'ApplicationLoadBalancer',
-        {
-          loadBalancerName: `${project}-${environmentSuffix}-alb`,
-          vpc,
-          internetFacing: true,
-          securityGroup: albSecurityGroup,
-          vpcSubnets: {
-            subnetType: ec2.SubnetType.PUBLIC,
-          },
-        }
-      );
+      alb = new elbv2.ApplicationLoadBalancer(this, 'ApplicationLoadBalancer', {
+        loadBalancerName: `${project}-${environmentSuffix}-alb`,
+        vpc,
+        internetFacing: true,
+        securityGroup: albSecurityGroup,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PUBLIC,
+        },
+      });
 
       // Target Group
-      const targetGroup = new elbv2.ApplicationTargetGroup(this, 'TargetGroup', {
-        targetGroupName: `${project}-${environmentSuffix}-tg`,
-        port: 80,
-        protocol: elbv2.ApplicationProtocol.HTTP,
-        vpc,
-        healthCheck: {
-          enabled: true,
-          healthyHttpCodes: '200',
-          path: '/',
-          protocol: elbv2.Protocol.HTTP,
-        },
-        targets: [
-          new targets.InstanceTarget(ec2Instance1, 80),
-          new targets.InstanceTarget(ec2Instance2, 80),
-        ],
-      });
+      const targetGroup = new elbv2.ApplicationTargetGroup(
+        this,
+        'TargetGroup',
+        {
+          targetGroupName: `${project}-${environmentSuffix}-tg`,
+          port: 80,
+          protocol: elbv2.ApplicationProtocol.HTTP,
+          vpc,
+          healthCheck: {
+            enabled: true,
+            healthyHttpCodes: '200',
+            path: '/',
+            protocol: elbv2.Protocol.HTTP,
+          },
+          targets: [
+            new targets.InstanceTarget(ec2Instance1, 80),
+            new targets.InstanceTarget(ec2Instance2, 80),
+          ],
+        }
+      );
 
       // ALB Listener
       alb.addListener('Listener', {
@@ -368,7 +372,9 @@ exports.handler = async (event) => {
     // Output the API/web endpoint
     new cdk.CfnOutput(this, 'WebEndpoint', {
       value: apiUrl,
-      description: isLocalStack ? 'API Gateway URL (LocalStack)' : 'Load Balancer URL (AWS)',
+      description: isLocalStack
+        ? 'API Gateway URL (LocalStack)'
+        : 'Load Balancer URL (AWS)',
       exportName: `${project}-${environmentSuffix}-web-endpoint`,
     });
   }

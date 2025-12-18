@@ -164,21 +164,21 @@ describe('TapStack Unit Tests', () => {
           ]),
         }),
       });
-      
+
       // The SSM policy is attached as a managed policy
       const roleResources = template.findResources('AWS::IAM::Role', {
         Properties: {
           RoleName: `tap-${environmentSuffix}-ec2-role`,
         },
       });
-      
+
       const roleKeys = Object.keys(roleResources);
       expect(roleKeys.length).toBeGreaterThan(0);
-      
+
       const roleProps = roleResources[roleKeys[0]].Properties;
       expect(roleProps.ManagedPolicyArns).toBeDefined();
       expect(roleProps.ManagedPolicyArns.length).toBeGreaterThan(0);
-      
+
       // Check that one of the policies contains SSMManagedInstanceCore
       const hasSsmPolicy = roleProps.ManagedPolicyArns.some((arn: any) => {
         if (typeof arn === 'string') {
@@ -186,13 +186,15 @@ describe('TapStack Unit Tests', () => {
         }
         if (arn['Fn::Join']) {
           const joinParts = arn['Fn::Join'][1];
-          return joinParts.some((part: any) => 
-            typeof part === 'string' && part.includes('SSMManagedInstanceCore')
+          return joinParts.some(
+            (part: any) =>
+              typeof part === 'string' &&
+              part.includes('SSMManagedInstanceCore')
           );
         }
         return false;
       });
-      
+
       expect(hasSsmPolicy).toBe(true);
     });
   });
@@ -230,7 +232,7 @@ describe('TapStack Unit Tests', () => {
 
     test('should configure instances with IMDSv2', () => {
       const instances = template.findResources('AWS::EC2::Instance');
-      Object.values(instances).forEach((instance) => {
+      Object.values(instances).forEach(instance => {
         expect(instance.Properties).toHaveProperty('LaunchTemplate');
       });
     });
@@ -282,13 +284,10 @@ describe('TapStack Unit Tests', () => {
     });
 
     test('should create an ALB listener on port 80', () => {
-      template.hasResourceProperties(
-        'AWS::ElasticLoadBalancingV2::Listener',
-        {
-          Port: 80,
-          Protocol: 'HTTP',
-        }
-      );
+      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
+        Port: 80,
+        Protocol: 'HTTP',
+      });
     });
   });
 
@@ -381,7 +380,7 @@ describe('TapStack Unit Tests', () => {
       const bucketResources = template.findResources('AWS::S3::Bucket');
       const bucketKeys = Object.keys(bucketResources);
       expect(bucketKeys.length).toBeGreaterThan(0);
-      
+
       // Verify the bucket exists and has versioning
       const bucketProps = bucketResources[bucketKeys[0]].Properties;
       expect(bucketProps.VersioningConfiguration?.Status).toBe('Enabled');
