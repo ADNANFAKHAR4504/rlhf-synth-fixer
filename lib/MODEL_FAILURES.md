@@ -76,12 +76,12 @@ After fixing the above issues, all 15 CloudFormation resources were successfully
 
 The deployed infrastructure passed all functional tests:
 
-- ✅ Web server accessible at http://98.87.73.22
-- ✅ Apache HTTP server serving custom content
-- ✅ Instance metadata displayed correctly
-- ✅ Network connectivity through Internet Gateway
-- ✅ Security group rules properly configured
-- ✅ IAM role permissions working correctly
+- - Web server accessible at http://98.87.73.22
+- - Apache HTTP server serving custom content
+- - Instance metadata displayed correctly
+- - Network connectivity through Internet Gateway
+- - Security group rules properly configured
+- - IAM role permissions working correctly
 
 ## Testing Coverage Achieved
 
@@ -101,21 +101,21 @@ All 14 requirements from the original specification were met:
 
 | Requirement | Status | Verification |
 |------------|--------|--------------|
-| CloudFormation format | ✅ | Valid YAML template |
-| us-east-1 region | ✅ | Deployed and verified |
-| VPC CIDR 10.0.0.0/16 | ✅ | Confirmed via AWS API |
-| Subnet 1: 10.0.1.0/24 | ✅ | Confirmed via AWS API |
-| Subnet 2: 10.0.2.0/24 | ✅ | Confirmed via AWS API |
-| Internet Gateway | ✅ | Attached and functional |
-| Route Table | ✅ | Routes verified |
-| Default route to IGW | ✅ | 0.0.0.0/0 → IGW |
-| Security Group ports | ✅ | HTTP:80, SSH:22 |
-| EC2 t2.micro instance | ✅ | Running in subnet 1 |
-| KeyPair 'my-key' | ✅ | Successfully used |
-| Apache installation | ✅ | Web server responding |
-| Elastic IP | ✅ | Associated and accessible |
-| IAM role permissions | ✅ | EC2 describe working |
-| Naming convention | ✅ | All resources tagged |
+| CloudFormation format | - | Valid YAML template |
+| us-east-1 region | - | Deployed and verified |
+| VPC CIDR 10.0.0.0/16 | - | Confirmed via AWS API |
+| Subnet 1: 10.0.1.0/24 | - | Confirmed via AWS API |
+| Subnet 2: 10.0.2.0/24 | - | Confirmed via AWS API |
+| Internet Gateway | - | Attached and functional |
+| Route Table | - | Routes verified |
+| Default route to IGW | - | 0.0.0.0/0 → IGW |
+| Security Group ports | - | HTTP:80, SSH:22 |
+| EC2 t2.micro instance | - | Running in subnet 1 |
+| KeyPair 'my-key' | - | Successfully used |
+| Apache installation | - | Web server responding |
+| Elastic IP | - | Associated and accessible |
+| IAM role permissions | - | EC2 describe working |
+| Naming convention | - | All resources tagged |
 
 ## Key Improvements Made
 
