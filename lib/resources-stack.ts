@@ -63,9 +63,30 @@ export class ResourcesStack extends cdk.Stack {
     this.bucket.grantReadWrite(this.instanceRole);
 
     // Use default VPC
-    this.vpc = Vpc.fromLookup(this, 'DefaultVpc', {
-      isDefault: true,
-    });
+    // LocalStack: VPC lookup doesn't work, so we create a VPC instead
+    const isLocalStack =
+      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+      process.env.AWS_ENDPOINT_URL?.includes('4566');
+
+    if (isLocalStack) {
+      // For LocalStack, create a simple VPC
+      this.vpc = new Vpc(this, `${environmentSuffix}-TapStackVpc`, {
+        maxAzs: 2,
+        natGateways: 0,
+        subnetConfiguration: [
+          {
+            name: 'Public',
+            subnetType: SubnetType.PUBLIC,
+            cidrMask: 24,
+          },
+        ],
+      });
+    } else {
+      // For AWS, use default VPC lookup
+      this.vpc = Vpc.fromLookup(this, 'DefaultVpc', {
+        isDefault: true,
+      });
+    }
 
     // Security Group
     this.securityGroup = new SecurityGroup(
