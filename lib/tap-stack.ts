@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -51,16 +52,21 @@ export class TapStack extends cdk.Stack {
     imageBucket.grantReadWrite(lambdaRole);
     notificationTopic.grantPublish(lambdaRole);
 
-    // Lambda function
-    const imageProcessor = new lambda.Function(this, 'ImageProcessorFunction', {
+    // Lambda function using NodejsFunction for automatic TypeScript bundling
+    const imageProcessor = new NodejsFunction(this, 'ImageProcessorFunction', {
       runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'imageProcessor.handler',
-      code: lambda.Code.fromAsset('lib/lambda'),
+      handler: 'handler',
+      entry: 'lib/lambda/imageProcessor.ts',
       environment: {
         IMAGE_BUCKET: imageBucket.bucketName,
         NOTIFICATION_TOPIC_ARN: notificationTopic.topicArn,
       },
       role: lambdaRole,
+      bundling: {
+        minify: false,
+        sourceMap: true,
+        externalModules: [],
+      },
     });
 
     // API Gateway

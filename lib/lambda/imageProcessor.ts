@@ -21,10 +21,26 @@ export const handler: Handler = async event => {
   console.log('Received event:', JSON.stringify(event, null, 2));
 
   try {
-    // Parse the incoming request
-    const body =
-      typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
-    const { imageKey, metadata } = body as ImageProcessingEvent;
+    // Parse the incoming request - handle both API Gateway proxy and direct invocation
+    let parsedBody: ImageProcessingEvent;
+
+    if (event.body) {
+      // API Gateway proxy integration
+      parsedBody = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
+    } else if (event.imageKey !== undefined) {
+      // Direct invocation
+      parsedBody = event as ImageProcessingEvent;
+    } else {
+      // Invalid format
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          message: 'Invalid request format',
+        }),
+      };
+    }
+
+    const { imageKey, metadata } = parsedBody;
 
     if (!imageKey) {
       return {
