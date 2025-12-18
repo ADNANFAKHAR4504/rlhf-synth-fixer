@@ -1,31 +1,45 @@
-#!/usr/bin/env node
-import * as cdk from 'aws-cdk-lib';
-import { Tags } from 'aws-cdk-lib';
+/* eslint-disable prettier/prettier */
+/**
+ * Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
+ *
+ * This module defines the core Pulumi stack and instantiates the TapStack with appropriate
+ * configuration based on the deployment environment. It handles environment-specific settings,
+ * tagging, and deployment configuration for AWS resources.
+ *
+ * The stack created by this module uses environment suffixes to distinguish between
+ * different deployment environments (development, staging, production, etc.).
+ */
+import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';
 
-const app = new cdk.App();
+// Initialize Pulumi configuration for the current stack.
+const config = new pulumi.Config();
 
-// Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
-const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
-const stackName = `TapStack${environmentSuffix}`;
-const repositoryName = process.env.REPOSITORY || 'unknown';
-const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
+// Get the environment suffix from the Pulumi config, defaulting to 'dev'.
+// You can set this value using the command: `pulumi config set env <value>`
+const environmentSuffix = config.get('env') || 'dev';
 
-// Detect if running on LocalStack (AWS_ENDPOINT_URL is set for LocalStack)
-const isLocalStack = !!process.env.AWS_ENDPOINT_URL?.includes('localhost');
+// Get metadata from environment variables for tagging purposes.
+// These are often injected by CI/CD systems.
+const repository = config.get('repository') || 'unknown';
+const commitAuthor = config.get('commitAuthor') || 'unknown';
 
-// Apply tags to all stacks in this app (optional - you can do this at stack level instead)
-Tags.of(app).add('Environment', environmentSuffix);
-Tags.of(app).add('Repository', repositoryName);
-Tags.of(app).add('Author', commitAuthor);
+// Define a set of default tags to apply to all resources.
+// While not explicitly used in the TapStack instantiation here,
+// this is the standard place to define them. They would typically be passed
+// into the TapStack or configured on the AWS provider.
+const defaultTags = {
+  Environment: environmentSuffix,
+  Repository: repository,
+  Author: commitAuthor,
+};
 
-new TapStack(app, stackName, {
-  stackName: stackName, // This ensures CloudFormation stack name includes the suffix
-  environment: environmentSuffix, // Pass the environment suffix as environment
-  // Enable LocalStack compatibility mode (skips RDS, NAT Gateways)
-  isLocalStack,
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION,
-  },
+// Instantiate the main stack component for the infrastructure.
+// This encapsulates all the resources for the platform.
+new TapStack('pulumi-infra', {
+  tags: defaultTags,
 });
+
+// To use the stack outputs, you can export them.
+// For example, if TapStack had an output `bucketName`:
+// export const bucketName = stack.bucketName;

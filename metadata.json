@@ -1,27 +1,33 @@
 {
-  "platform": "cdk",
+  "platform": "pulumi",
   "language": "ts",
-  "complexity": "hard",
+  "complexity": "expert",
   "turn_type": "single",
-  "po_id": "306957",
-  "team": "6",
-  "startedAt": "2025-08-19T14:11:59.009Z",
-  "subtask": "Security, Compliance, and Governance",
+  "po_id": "291926",
+  "team": "1",
+  "startedAt": "2025-08-21T11:18:47.324Z",
+  "subtask": "secure-multi-region-infra-ts",
   "subject_labels": [
-    "Security Configuration as Code"
+    "Infrastructure as Code",
+    "AWS",
+    "Security",
+    "Networking",
+    "Cloud Engineering"
   ],
+  "training_quality": 8,
   "aws_services": [
-    "KMS",
-    "IAM",
     "VPC",
     "EC2",
-    "RDS",
+    "KMS",
     "S3",
-    "WAF",
-    "ALB",
-    "CloudTrail",
-    "SNS",
-    "GuardDuty"
+    "IAM",
+    "CloudWatch",
+    "API Gateway"
   ],
-  "provider": "localstack"
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raghav-turing",
+  "dockerS3Location": ""
 }

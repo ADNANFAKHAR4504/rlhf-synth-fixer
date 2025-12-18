@@ -1,597 +1,505 @@
-I'll create a comprehensive CDK stack that addresses all your security requirements. Here's the implementation:
+I'll create a comprehensive Pulumi TapStack infrastructure in TypeScript that meets all your requirements. Here's the complete implementation:
 
-```typescript
-// tap-stack.ts
-import * as cdk from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as kms from 'aws-cdk-lib/aws-kms';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
-import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
-import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
-import * as sns from 'aws-cdk-lib/aws-sns';
-import * as guardduty from 'aws-cdk-lib/aws-guardduty';
-import * as logs from 'aws-cdk-lib/aws-logs';
-import { Construct } from 'constructs';
+## Project Structure
 
-export interface TapStackProps extends cdk.StackProps {
-  environment: 'prod' | 'dev';
-  allowedSshIps: string[];
-  trustedPrincipals: string[];
-}
+First, let's set up the project dependencies in `package.json`:
 
-export class TapStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props: TapStackProps) {
-    super(scope, id, props);
-
-    const { environment, allowedSshIps, trustedPrincipals } = props;
-    const resourcePrefix = `${environment}`;
-
-    // 1. KMS Key for encryption (Requirements 2, 7)
-    const kmsKey = new kms.Key(this, `${resourcePrefix}-security-key`, {
-      alias: `${resourcePrefix}-security-key`,
-      description: `KMS key for ${environment} environment encryption`,
-      enableKeyRotation: true,
-      keyPolicy: new iam.PolicyDocument({
-        statements: [
-          new iam.PolicyStatement({
-            sid: 'Enable IAM User Permissions',
-            effect: iam.Effect.ALLOW,
-            principals: [new iam.AccountRootPrincipal()],
-            actions: ['kms:*'],
-            resources: ['*'],
-          }),
-          new iam.PolicyStatement({
-            sid: 'Allow CloudTrail to encrypt logs',
-            effect: iam.Effect.ALLOW,
-            principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
-            actions: [
-              'kms:GenerateDataKey*',
-              'kms:DescribeKey',
-              'kms:Encrypt',
-              'kms:ReEncrypt*',
-              'kms:Decrypt',
-            ],
-            resources: ['*'],
-          }),
-        ],
-      }),
-    });
-
-    // 2. VPC and Security Groups (Requirements 9, 11)
-    const vpc = new ec2.Vpc(this, `${resourcePrefix}-vpc`, {
-      vpcName: `${resourcePrefix}-vpc`,
-      maxAzs: 2,
-      natGateways: 1,
-      subnetConfiguration: [
-        {
-          cidrMask: 24,
-          name: 'public',
-          subnetType: ec2.SubnetType.PUBLIC,
-        },
-        {
-          cidrMask: 24,
-          name: 'private',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        },
-      ],
-    });
-
-    // Security Group for EC2 instances - SSH only from allowed IPs
-    const ec2SecurityGroup = new ec2.SecurityGroup(this, `${resourcePrefix}-ec2-sg`, {
-      vpc,
-      securityGroupName: `${resourcePrefix}-ec2-sg`,
-      description: 'Security group for EC2 instances with restricted SSH access',
-      allowAllOutbound: true,
-    });
-
-    // Add SSH rules only for specified IPs
-    allowedSshIps.forEach((ip, index) => {
-      ec2SecurityGroup.addIngressRule(
-        ec2.Peer.ipv4(ip),
-        ec2.Port.tcp(22),
-        `SSH access from allowed IP ${index + 1}`
-      );
-    });
-
-    // Security Group for ALB
-    const albSecurityGroup = new ec2.SecurityGroup(this, `${resourcePrefix}-alb-sg`, {
-      vpc,
-      securityGroupName: `${resourcePrefix}-alb-sg`,
-      description: 'Security group for Application Load Balancer',
-      allowAllOutbound: false,
-    });
-
-    albSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(80),
-      'HTTP traffic'
-    );
-    albSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(443),
-      'HTTPS traffic'
-    );
-
-    // Security Group for RDS
-    const rdsSecurityGroup = new ec2.SecurityGroup(this, `${resourcePrefix}-rds-sg`, {
-      vpc,
-      securityGroupName: `${resourcePrefix}-rds-sg`,
-      description: 'Security group for RDS instances',
-      allowAllOutbound: false,
-    });
-
-    rdsSecurityGroup.addIngressRule(
-      ec2SecurityGroup,
-      ec2.Port.tcp(3306),
-      'MySQL access from EC2'
-    );
-
-    // 3. IAM Roles with Trust Policies (Requirement 1, 6)
-    const ec2Role = new iam.Role(this, `${resourcePrefix}-ec2-role`, {
-      roleName: `${resourcePrefix}-ec2-role`,
-      assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
-      description: 'IAM role for EC2 instances with S3 read-only access',
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
-      ],
-    });
-
-    // Add S3 read-only permissions to EC2 role
-    ec2Role.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        's3:GetObject',
-        's3:GetObjectVersion',
-        's3:ListBucket',
-        's3:GetBucketLocation',
-      ],
-      resources: [
-        `arn:aws:s3:::${resourcePrefix}-*`,
-        `arn:aws:s3:::${resourcePrefix}-*/*`,
-      ],
-    }));
-
-    const instanceProfile = new iam.InstanceProfile(this, `${resourcePrefix}-instance-profile`, {
-      instanceProfileName: `${resourcePrefix}-instance-profile`,
-      role: ec2Role,
-    });
-
-    // 4. S3 Bucket with security policies (Requirement 3)
-    const s3Bucket = new s3.Bucket(this, `${resourcePrefix}-secure-bucket`, {
-      bucketName: `${resourcePrefix}-secure-bucket-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
-      encryption: s3.BucketEncryption.KMS,
-      encryptionKey: kmsKey,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ACLS,
-      versioned: true,
-      lifecycleRules: [{
-        id: 'DeleteIncompleteMultipartUploads',
-        abortIncompleteMultipartUploadAfter: cdk.Duration.days(7),
-      }],
-    });
-
-    // Policy to restrict public PUT actions
-    s3Bucket.addToResourcePolicy(new iam.PolicyStatement({
-      sid: 'DenyPublicPutActions',
-      effect: iam.Effect.DENY,
-      principals: [new iam.AnyPrincipal()],
-      actions: [
-        's3:PutObject',
-        's3:PutObjectAcl',
-        's3:PutObjectVersionAcl',
-      ],
-      resources: [s3Bucket.arnForObjects('*')],
-      conditions: {
-        StringNotEquals: {
-          'aws:PrincipalServiceName': [
-            'ec2.amazonaws.com',
-            'lambda.amazonaws.com',
-          ],
-        },
-      },
-    }));
-
-    // 5. RDS Instance with KMS encryption (Requirement 2)
-    const rdsSubnetGroup = new rds.SubnetGroup(this, `${resourcePrefix}-rds-subnet-group`, {
-      subnetGroupName: `${resourcePrefix}-rds-subnet-group`,
-      description: 'Subnet group for RDS instances',
-      vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-    });
-
-    const rdsInstance = new rds.DatabaseInstance(this, `${resourcePrefix}-database`, {
-      instanceIdentifier: `${resourcePrefix}-database`,
-      engine: rds.DatabaseEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_0,
-      }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
-      vpc,
-      subnetGroup: rdsSubnetGroup,
-      securityGroups: [rdsSecurityGroup],
-      storageEncrypted: true,
-      storageEncryptionKey: kmsKey,
-      backupRetention: cdk.Duration.days(7),
-      deletionProtection: environment === 'prod',
-      multiAz: environment === 'prod',
-      autoMinorVersionUpgrade: true,
-      enablePerformanceInsights: true,
-      performanceInsightEncryptionKey: kmsKey,
-    });
-
-    // 6. Application Load Balancer
-    const alb = new elbv2.ApplicationLoadBalancer(this, `${resourcePrefix}-alb`, {
-      loadBalancerName: `${resourcePrefix}-alb`,
-      vpc,
-      internetFacing: true,
-      securityGroup: albSecurityGroup,
-    });
-
-    // 7. AWS WAF for Load Balancer protection (Requirement 5)
-    const webAcl = new wafv2.CfnWebACL(this, `${resourcePrefix}-web-acl`, {
-      name: `${resourcePrefix}-web-acl`,
-      scope: 'REGIONAL',
-      defaultAction: { allow: {} },
-      rules: [
-        {
-          name: 'AWSManagedRulesCommonRuleSet',
-          priority: 1,
-          overrideAction: { none: {} },
-          statement: {
-            managedRuleGroupStatement: {
-              vendorName: 'AWS',
-              name: 'AWSManagedRulesCommonRuleSet',
-            },
-          },
-          visibilityConfig: {
-            sampledRequestsEnabled: true,
-            cloudWatchMetricsEnabled: true,
-            metricName: 'CommonRuleSetMetric',
-          },
-        },
-        {
-          name: 'AWSManagedRulesKnownBadInputsRuleSet',
-          priority: 2,
-          overrideAction: { none: {} },
-          statement: {
-            managedRuleGroupStatement: {
-              vendorName: 'AWS',
-              name: 'AWSManagedRulesKnownBadInputsRuleSet',
-            },
-          },
-          visibilityConfig: {
-            sampledRequestsEnabled: true,
-            cloudWatchMetricsEnabled: true,
-            metricName: 'KnownBadInputsRuleSetMetric',
-          },
-        },
-        {
-          name: 'AWSManagedRulesSQLiRuleSet',
-          priority: 3,
-          overrideAction: { none: {} },
-          statement: {
-            managedRuleGroupStatement: {
-              vendorName: 'AWS',
-              name: 'AWSManagedRulesSQLiRuleSet',
-            },
-          },
-          visibilityConfig: {
-            sampledRequestsEnabled: true,
-            cloudWatchMetricsEnabled: true,
-            metricName: 'SQLiRuleSetMetric',
-          },
-        },
-      ],
-      visibilityConfig: {
-        sampledRequestsEnabled: true,
-        cloudWatchMetricsEnabled: true,
-        metricName: `${resourcePrefix}WebAclMetric`,
-      },
-    });
-
-    // Associate WAF with ALB
-    new wafv2.CfnWebACLAssociation(this, `${resourcePrefix}-web-acl-association`, {
-      resourceArn: alb.loadBalancerArn,
-      webAclArn: webAcl.attrArn,
-    });
-
-    // 8. CloudTrail with encrypted logs (Requirement 7)
-    const cloudTrailLogGroup = new logs.LogGroup(this, `${resourcePrefix}-cloudtrail-logs`, {
-      logGroupName: `/aws/cloudtrail/${resourcePrefix}-logs`,
-      retention: logs.RetentionDays.ONE_YEAR,
-      encryptionKey: kmsKey,
-    });
-
-    const cloudTrailBucket = new s3.Bucket(this, `${resourcePrefix}-cloudtrail-bucket`, {
-      bucketName: `${resourcePrefix}-cloudtrail-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
-      encryption: s3.BucketEncryption.KMS,
-      encryptionKey: kmsKey,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      versioned: true,
-    });
-
-    const trail = new cloudtrail.Trail(this, `${resourcePrefix}-cloudtrail`, {
-      trailName: `${resourcePrefix}-cloudtrail`,
-      bucket: cloudTrailBucket,
-      encryptionKey: kmsKey,
-      includeGlobalServiceEvents: true,
-      isMultiRegionTrail: true,
-      enableFileValidation: true,
-      cloudWatchLogGroup: cloudTrailLogGroup,
-    });
-
-    // 9. SNS Topic with restricted access (Requirement 8)
-    const snsTopic = new sns.Topic(this, `${resourcePrefix}-notifications`, {
-      topicName: `${resourcePrefix}-notifications`,
-      masterKey: kmsKey,
-    });
-
-    snsTopic.addToResourcePolicy(new iam.PolicyStatement({
-      sid: 'AllowAWSServicesOnly',
-      effect: iam.Effect.ALLOW,
-      principals: [new iam.ServicePrincipal('cloudwatch.amazonaws.com')],
-      actions: ['sns:Publish'],
-      resources: [snsTopic.topicArn],
-    }));
-
-    snsTopic.addToResourcePolicy(new iam.PolicyStatement({
-      sid: 'DenyUnauthorizedAccess',
-      effect: iam.Effect.DENY,
-      principals: [new iam.AnyPrincipal()],
-      actions: ['sns:*'],
-      resources: [snsTopic.topicArn],
-      conditions: {
-        StringNotEquals: {
-          'aws:PrincipalServiceName': [
-            'cloudwatch.amazonaws.com',
-            'events.amazonaws.com',
-            'lambda.amazonaws.com',
-          ],
-        },
-      },
-    }));
-
-    // 10. GuardDuty Detector (Requirement 10)
-    const guardDutyDetector = new guardduty.CfnDetector(this, `${resourcePrefix}-guardduty`, {
-      enable: true,
-      findingPublishingFrequency: 'FIFTEEN_MINUTES',
-      dataSources: {
-        s3Logs: { enable: true },
-        kubernetes: { 
-          auditLogs: { enable: true }
-        },
-        malwareProtection: {
-          scanEc2InstanceWithFindings: { 
-            ebsVolumes: true 
-          }
-        },
-      },
-    });
-
-    // 11. IAM User with MFA requirement (Requirement 4)
-    const iamUser = new iam.User(this, `${resourcePrefix}-app-user`, {
-      userName: `${resourcePrefix}-app-user`,
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('ReadOnlyAccess'),
-      ],
-    });
-
-    // Policy to enforce MFA
-    const mfaPolicy = new iam.Policy(this, `${resourcePrefix}-mfa-policy`, {
-      policyName: `${resourcePrefix}-mfa-policy`,
-      statements: [
-        new iam.PolicyStatement({
-          sid: 'AllowViewAccountInfo',
-          effect: iam.Effect.ALLOW,
-          actions: [
-            'iam:GetAccountPasswordPolicy',
-            'iam:GetAccountSummary',
-            'iam:ListVirtualMFADevices',
-          ],
-          resources: ['*'],
-        }),
-        new iam.PolicyStatement({
-          sid: 'AllowManageOwnPasswords',
-          effect: iam.Effect.ALLOW,
-          actions: [
-            'iam:ChangePassword',
-            'iam:GetUser',
-          ],
-          resources: [`arn:aws:iam::${cdk.Aws.ACCOUNT_ID}:user/\${aws:username}`],
-        }),
-        new iam.PolicyStatement({
-          sid: 'AllowManageOwnMFA',
-          effect: iam.Effect.ALLOW,
-          actions: [
-            'iam:CreateVirtualMFADevice',
-            'iam:DeleteVirtualMFADevice',
-            'iam:EnableMFADevice',
-            'iam:ListMFADevices',
-            'iam:ResyncMFADevice',
-          ],
-          resources: [
-            `arn:aws:iam::${cdk.Aws.ACCOUNT_ID}:mfa/\${aws:username}`,
-            `arn:aws:iam::${cdk.Aws.ACCOUNT_ID}:user/\${aws:username}`,
-          ],
-        }),
-        new iam.PolicyStatement({
-          sid: 'DenyAllExceptUnlessSignedInWithMFA',
-          effect: iam.Effect.DENY,
-          notActions: [
-            'iam:CreateVirtualMFADevice',
-            'iam:EnableMFADevice',
-            'iam:GetUser',
-            'iam:ListMFADevices',
-            'iam:ListVirtualMFADevices',
-            'iam:ResyncMFADevice',
-            'sts:GetSessionToken',
-          ],
-          resources: ['*'],
-          conditions: {
-            BoolIfExists: {
-              'aws:MultiFactorAuthPresent': 'false',
-            },
-          },
-        }),
-      ],
-    });
-
-    mfaPolicy.attachToUser(iamUser);
-
-    // 12. Access Key Rotation Lambda (Requirement 4)
-    const keyRotationRole = new iam.Role(this, `${resourcePrefix}-key-rotation-role`, {
-      roleName: `${resourcePrefix}-key-rotation-role`,
-      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
-      ],
-    });
-
-    keyRotationRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'iam:CreateAccessKey',
-        'iam:DeleteAccessKey',
-        'iam:ListAccessKeys',
-        'iam:UpdateAccessKey',
-        'sns:Publish',
-      ],
-      resources: [
-        iamUser.userArn,
-        snsTopic.topicArn,
-      ],
-    }));
-
-    // Output important resource ARNs
-    new cdk.CfnOutput(this, 'VpcId', {
-      value: vpc.vpcId,
-      description: 'VPC ID',
-    });
-
-    new cdk.CfnOutput(this, 'KmsKeyId', {
-      value: kmsKey.keyId,
-      description: 'KMS Key ID for encryption',
-    });
-
-    new cdk.CfnOutput(this, 'S3BucketName', {
-      value: s3Bucket.bucketName,
-      description: 'Secure S3 Bucket Name',
-    });
-
-    new cdk.CfnOutput(this, 'RdsEndpoint', {
-      value: rdsInstance.instanceEndpoint.hostname,
-      description: 'RDS Instance Endpoint',
-    });
-
-    new cdk.CfnOutput(this, 'LoadBalancerDns', {
-      value: alb.loadBalancerDnsName,
-      description: 'Application Load Balancer DNS Name',
-    });
-
-    new cdk.CfnOutput(this, 'WebAclArn', {
-      value: webAcl.attrArn,
-      description: 'WAF Web ACL ARN',
-    });
-
-    new cdk.CfnOutput(this, 'GuardDutyDetectorId', {
-      value: guardDutyDetector.ref,
-      description: 'GuardDuty Detector ID',
-    });
-
-    new cdk.CfnOutput(this, 'SnsTopicArn', {
-      value: snsTopic.topicArn,
-      description: 'SNS Topic ARN for notifications',
-    });
+```json
+{
+  "name": "tapstack-infrastructure",
+  "version": "1.0.0",
+  "dependencies": {
+    "@pulumi/pulumi": "^3.0.0",
+    "@pulumi/aws": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "typescript": "^4.0.0"
   }
 }
 ```
 
-## Key Security Features Implemented:
-
-### 1. **IAM Roles with Trust Policies**- EC2 role with explicit trust policy for EC2 service
-- Key rotation role with Lambda service trust policy
-- All roles follow principle of least privilege
-
-### 2. **KMS Encryption**- Centralized KMS key with automatic rotation
-- Encrypts EBS volumes, RDS instances, S3 buckets, and CloudTrail logs
-- Proper key policies for service access
-
-### 3. **S3 Security**- Bucket policy denying public PUT actions
-- KMS encryption enabled
-- Block public access settings
-- Versioning and lifecycle rules
-
-### 4. **MFA and Access Key Management**- IAM policy enforcing MFA for all actions
-- Framework for 90-day key rotation (Lambda role created)
-- Comprehensive MFA management permissions
-
-### 5. **WAF Protection**- AWS managed rule sets for common threats
-- SQL injection protection
-- Known bad inputs filtering
-- Associated with Application Load Balancer
-
-### 6. **EC2 Instance Profile**- Read-only S3 permissions
-- SSM access for secure management
-- No unnecessary permissions
-
-### 7. **CloudTrail Security**- KMS encrypted logs
-- Multi-region trail
-- File validation enabled
-- CloudWatch integration
-
-### 8. **SNS Access Control**- Restricted to authorized AWS services only
-- KMS encryption
-- Explicit deny for unauthorized principals
-
-### 9. **Security Groups**- SSH access only from specified IP addresses
-- Minimal ingress rules
-- Separate security groups for different tiers
-
-### 10. **GuardDuty**- Enabled with comprehensive data sources
-- S3, Kubernetes, and malware protection
-- 15-minute finding frequency
-
-### 11. **Network Security**- Private subnets for databases
-- Public subnets only for load balancers
-- Proper security group relationships
-
-### 12. **Environment-based Naming**- Consistent naming pattern: `{environment}-{resource-name}`
-- Supports both prod and dev environments
-- Region-agnostic deployment
-
-## Usage Example:
+## Main TapStack Implementation
 
 ```typescript
-// app.ts
-import * as cdk from 'aws-cdk-lib';
-import { TapStack } from './tap-stack';
+import * as pulumi from "@pulumi/pulumi";
+import * as aws from "@pulumi/aws";
 
-const app = new cdk.App();
+export interface TapStackArgs {
+    tags?: Record<string, string>;
+    prefix?: string;
+}
 
-// Production environment
-new TapStack(app, 'TapStackProd', {
-  environment: 'prod',
-  allowedSshIps: ['203.0.113.0/24', '198.51.100.0/24'], // Replace with your IPs
-  trustedPrincipals: ['arn:aws:iam::123456789012:root'], // Replace with your account
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-west-2',
-  },
-});
+export class TapStack extends pulumi.ComponentResource {
+    // Outputs
+    public readonly vpcs: Record<string, aws.ec2.Vpc>;
+    public readonly subnets: Record<string, aws.ec2.Subnet[]>;
+    public readonly securityGroups: Record<string, aws.ec2.SecurityGroup>;
+    public readonly kmsKey: aws.kms.Key;
+    public readonly kmsAlias: aws.kms.Alias;
+    public readonly s3Buckets: Record<string, aws.s3.Bucket>;
+    public readonly apiGateway: aws.apigateway.RestApi;
+    public readonly vpcEndpoints: Record<string, aws.ec2.VpcEndpoint>;
+    public readonly logGroup: aws.cloudwatch.LogGroup;
+    public readonly iamRole: aws.iam.Role;
+    public readonly passwordPolicy?: aws.iam.AccountPasswordPolicy;
 
-// Development environment
-new TapStack(app, 'TapStackDev', {
-  environment: 'dev',
-  allowedSshIps: ['203.0.113.0/24'],
-  trustedPrincipals: ['arn:aws:iam::123456789012:root'],
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-east-2',
-  },
-});
+    private readonly regions = ["us-east-1", "us-west-2", "eu-central-1"];
+    private readonly tags: Record<string, string>;
+    private readonly prefix: string;
+
+    constructor(name: string, args: TapStackArgs = {}, opts?: pulumi.ComponentResourceOptions) {
+        super("custom:infrastructure:TapStack", name, {}, opts);
+
+        this.prefix = args.prefix || "tapstack";
+        this.tags = {
+            Environment: "Production",
+            Name: name,
+            ...args.tags
+        };
+
+        // Initialize output objects
+        this.vpcs = {};
+        this.subnets = {};
+        this.securityGroups = {};
+        this.s3Buckets = {};
+        this.vpcEndpoints = {};
+
+        // Create KMS Key (global resource)
+        this.kmsKey = this.createKmsKey();
+        this.kmsAlias = this.createKmsAlias();
+
+        // Create IAM Role for API Gateway
+        this.iamRole = this.createApiGatewayRole();
+
+        // Create CloudWatch Log Group
+        this.logGroup = this.createLogGroup();
+
+        // Create resources in each region
+        this.regions.forEach(region => {
+            this.createRegionalResources(region);
+        });
+
+        // Create API Gateway (in us-east-1)
+        this.apiGateway = this.createApiGateway();
+
+        // Create password policy (us-east-1 only)
+        this.passwordPolicy = this.createPasswordPolicy();
+
+        this.registerOutputs({
+            vpcs: this.vpcs,
+            subnets: this.subnets,
+            securityGroups: this.securityGroups,
+            kmsKey: this.kmsKey,
+            kmsAlias: this.kmsAlias,
+            s3Buckets: this.s3Buckets,
+            apiGateway: this.apiGateway,
+            vpcEndpoints: this.vpcEndpoints,
+            logGroup: this.logGroup,
+            iamRole: this.iamRole,
+            passwordPolicy: this.passwordPolicy
+        });
+    }
+
+    private createKmsKey(): aws.kms.Key {
+        const accountId = aws.getCallerIdentity().then(identity => identity.accountId);
+        
+        const keyPolicy = accountId.apply(accountId => JSON.stringify({
+            Version: "2012-10-17",
+            Statement: [
+                {
+                    Sid: "Enable IAM User Permissions",
+                    Effect: "Allow",
+                    Principal: {
+                        AWS: `arn:aws:iam::${accountId}:root`
+                    },
+                    Action: "kms:*",
+                    Resource: "*"
+                },
+                {
+                    Sid: "Allow CloudWatch Logs",
+                    Effect: "Allow",
+                    Principal: {
+                        Service: "logs.amazonaws.com"
+                    },
+                    Action: [
+                        "kms:Encrypt",
+                        "kms:Decrypt",
+                        "kms:ReEncrypt*",
+                        "kms:GenerateDataKey*",
+                        "kms:DescribeKey"
+                    ],
+                    Resource: "*",
+                    Condition: {
+                        ArnEquals: {
+                            "kms:EncryptionContext:aws:logs:arn": `arn:aws:logs:*:${accountId}:*`
+                        }
+                    }
+                }
+            ]
+        }));
+
+        return new aws.kms.Key(`${this.prefix}-kms-key`, {
+            description: "TapStack KMS Key for encryption",
+            keyUsage: "ENCRYPT_DECRYPT",
+            keySpec: "SYMMETRIC_DEFAULT",
+            enableKeyRotation: true,
+            deletionWindowInDays: 30,
+            policy: keyPolicy,
+            tags: {
+                ...this.tags,
+                Name: `${this.prefix}-kms-key`
+            }
+        }, { parent: this });
+    }
+
+    private createKmsAlias(): aws.kms.Alias {
+        return new aws.kms.Alias(`${this.prefix}-kms-alias`, {
+            name: `alias/${this.prefix}-key`,
+            targetKeyId: this.kmsKey.keyId
+        }, { parent: this });
+    }
+
+    private createApiGatewayRole(): aws.iam.Role {
+        const assumeRolePolicy = {
+            Version: "2012-10-17",
+            Statement: [
+                {
+                    Action: "sts:AssumeRole",
+                    Effect: "Allow",
+                    Principal: {
+                        Service: "apigateway.amazonaws.com"
+                    }
+                }
+            ]
+        };
+
+        const role = new aws.iam.Role(`${this.prefix}-api-gateway-role`, {
+            assumeRolePolicy: JSON.stringify(assumeRolePolicy),
+            tags: {
+                ...this.tags,
+                Name: `${this.prefix}-api-gateway-role`
+            }
+        }, { parent: this });
+
+        new aws.iam.RolePolicyAttachment(`${this.prefix}-api-gateway-policy`, {
+            role: role.name,
+            policyArn: "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+        }, { parent: this });
+
+        return role;
+    }
+
+    private createLogGroup(): aws.cloudwatch.LogGroup {
+        return new aws.cloudwatch.LogGroup(`${this.prefix}-api-gateway-logs`, {
+            name: `/aws/apigateway/${this.prefix}`,
+            retentionInDays: 90,
+            kmsKeyId: this.kmsKey.arn,
+            tags: {
+                ...this.tags,
+                Name: `${this.prefix}-api-gateway-logs`
+            }
+        }, { parent: this });
+    }
+
+    private createRegionalResources(region: string): void {
+        const provider = new aws.Provider(`${region}-provider`, {
+            region: region
+        });
+
+        // Create VPC
+        const vpc = new aws.ec2.Vpc(`${this.prefix}-vpc-${region}`, {
+            cidrBlock: "10.0.0.0/16",
+            enableDnsHostnames: true,
+            enableDnsSupport: true,
+            tags: {
+                ...this.tags,
+                Name: `${this.prefix}-vpc-${region}`
+            }
+        }, { provider, parent: this });
+
+        this.vpcs[region] = vpc;
+
+        // Create Internet Gateway
+        const igw = new aws.ec2.InternetGateway(`${this.prefix}-igw-${region}`, {
+            vpcId: vpc.id,
+            tags: {
+                ...this.tags,
+                Name: `${this.prefix}-igw-${region}`
+            }
+        }, { provider, parent: this });
+
+        // Create Route Table
+        const routeTable = new aws.ec2.RouteTable(`${this.prefix}-rt-${region}`, {
+            vpcId: vpc.id,
+            routes: [
+                {
+                    cidrBlock: "0.0.0.0/0",
+                    gatewayId: igw.id
+                }
+            ],
+            tags: {
+                ...this.tags,
+                Name: `${this.prefix}-rt-${region}`
+            }
+        }, { provider, parent: this });
+
+        // Create Subnets
+        const subnets: aws.ec2.Subnet[] = [];
+        const subnetCidrs = ["10.0.1.0/24", "10.0.2.0/24"];
+        
+        subnetCidrs.forEach((cidr, index) => {
+            const subnet = new aws.ec2.Subnet(`${this.prefix}-subnet-${region}-${index + 1}`, {
+                vpcId: vpc.id,
+                cidrBlock: cidr,
+                availabilityZone: `${region}${String.fromCharCode(97 + index)}`, // a, b, c...
+                tags: {
+                    ...this.tags,
+                    Name: `${this.prefix}-subnet-${region}-${index + 1}`
+                }
+            }, { provider, parent: this });
+
+            // Associate subnet with route table
+            new aws.ec2.RouteTableAssociation(`${this.prefix}-rta-${region}-${index + 1}`, {
+                subnetId: subnet.id,
+                routeTableId: routeTable.id
+            }, { provider, parent: this });
+
+            subnets.push(subnet);
+        });
+
+        this.subnets[region] = subnets;
+
+        // Create Security Group
+        const securityGroup = new aws.ec2.SecurityGroup(`${this.prefix}-sg-${region}`, {
+            name: `${this.prefix}-sg-${region}`,
+            description: "Security group for TapStack resources",
+            vpcId: vpc.id,
+            ingress: [
+                {
+                    protocol: "tcp",
+                    fromPort: 443,
+                    toPort: 443,
+                    cidrBlocks: ["10.0.0.0/16"],
+                    description: "HTTPS from VPC"
+                },
+                {
+                    protocol: "tcp",
+                    fromPort: 22,
+                    toPort: 22,
+                    cidrBlocks: ["10.0.0.0/24"],
+                    description: "SSH from admin subnet"
+                }
+            ],
+            egress: [
+                {
+                    protocol: "-1",
+                    fromPort: 0,
+                    toPort: 0,
+                    cidrBlocks: ["0.0.0.0/0"],
+                    description: "All outbound traffic"
+                }
+            ],
+            tags: {
+                ...this.tags,
+                Name: `${this.prefix}-sg-${region}`
+            }
+        }, { provider, parent: this });
+
+        this.securityGroups[region] = securityGroup;
+
+        // Create VPC Endpoint for API Gateway
+        const vpcEndpoint = new aws.ec2.VpcEndpoint(`${this.prefix}-vpce-${region}`, {
+            vpcId: vpc.id,
+            serviceName: `com.amazonaws.${region}.execute-api`,
+            vpcEndpointType: "Interface",
+            subnetIds: subnets.map(subnet => subnet.id),
+            securityGroupIds: [securityGroup.id],
+            privateDnsEnabled: true,
+            tags: {
+                ...this.tags,
+                Name: `${this.prefix}-vpce-${region}`
+            }
+        }, { provider, parent: this });
+
+        this.vpcEndpoints[region] = vpcEndpoint;
+
+        // Create S3 Bucket
+        const bucket = new aws.s3.Bucket(`${this.prefix}-secure-bucket-${region}`, {
+            bucket: `${this.prefix}-secure-bucket-${region}`,
+            forceDestroy: true,
+            tags: {
+                ...this.tags,
+                Name: `${this.prefix}-secure-bucket-${region}`
+            }
+        }, { provider, parent: this });
+
+        // Configure bucket encryption
+        new aws.s3.BucketServerSideEncryptionConfiguration(`${this.prefix}-bucket-encryption-${region}`, {
+            bucket: bucket.id,
+            rules: [
+                {
+                    applyServerSideEncryptionByDefault: {
+                        kmsKeyId: this.kmsKey.arn,
+                        sseAlgorithm: "aws:kms"
+                    },
+                    bucketKeyEnabled: true
+                }
+            ]
+        }, { provider, parent: this });
+
+        // Block public access
+        new aws.s3.BucketPublicAccessBlock(`${this.prefix}-bucket-pab-${region}`, {
+            bucket: bucket.id,
+            blockPublicAcls: true,
+            blockPublicPolicy: true,
+            ignorePublicAcls: true,
+            restrictPublicBuckets: true
+        }, { provider, parent: this });
+
+        // Bucket policy for HTTPS only
+        const bucketPolicy = bucket.arn.apply(arn => JSON.stringify({
+            Version: "2012-10-17",
+            Statement: [
+                {
+                    Sid: "DenyInsecureConnections",
+                    Effect: "Deny",
+                    Principal: "*",
+                    Action: "s3:*",
+                    Resource: [
+                        arn,
+                        `${arn}/*`
+                    ],
+                    Condition: {
+                        Bool: {
+                            "aws:SecureTransport": "false"
+                        }
+                    }
+                }
+            ]
+        }));
+
+        new aws.s3.BucketPolicy(`${this.prefix}-bucket-policy-${region}`, {
+            bucket: bucket.id,
+            policy: bucketPolicy
+        }, { provider, parent: this });
+
+        this.s3Buckets[region] = bucket;
+    }
+
+    private createApiGateway(): aws.apigateway.RestApi {
+        const usEast1Provider = new aws.Provider("us-east-1-provider", {
+            region: "us-east-1"
+        });
+
+        // Get the VPC endpoint for us-east-1
+        const vpcEndpoint = this.vpcEndpoints["us-east-1"];
+
+        const endpointConfiguration = vpcEndpoint.id.apply(endpointId => ({
+            types: ["PRIVATE" as const],
+            vpcEndpointIds: [endpointId]
+        }));
+
+        return new aws.apigateway.RestApi(`${this.prefix}-api-gateway`, {
+            name: `${this.prefix}-private-api`,
+            description: "Private API Gateway for TapStack",
+            endpointConfiguration: endpointConfiguration,
+            tags: {
+                ...this.tags,
+                Name: `${this.prefix}-api-gateway`
+            }
+        }, { provider: usEast1Provider, parent: this });
+    }
+
+    private createPasswordPolicy(): aws.iam.AccountPasswordPolicy {
+        const usEast1Provider = new aws.Provider("us-east-1-provider", {
+            region: "us-east-1"
+        });
+
+        return new aws.iam.AccountPasswordPolicy(`${this.prefix}-password-policy`, {
+            minimumPasswordLength: 14,
+            requireSymbols: true,
+            requireNumbers: true,
+            requireUppercaseCharacters: true,
+            requireLowercaseCharacters: true,
+            allowUsersToChangePassword: true,
+            hardExpiry: true,
+            maxPasswordAge: 90,
+            passwordReusePrevention: 5
+        }, { provider: usEast1Provider, parent: this });
+    }
+}
 ```
 
-This stack provides a comprehensive security foundation that can be deployed across multiple regions and environments while maintaining strict security controls and compliance requirements.
+## Usage Example
+
+Create an `index.ts` file to use the TapStack:
+
+```typescript
+import { TapStack } from "./tapstack";
+
+const stack = new TapStack("production-tapstack", {
+    prefix: "prod",
+    tags: {
+        Project: "TapStack",
+        Owner: "Infrastructure Team",
+        CostCenter: "Engineering"
+    }
+});
+
+// Export key outputs
+export const vpcIds = stack.vpcs;
+export const kmsKeyId = stack.kmsKey.keyId;
+export const apiGatewayId = stack.apiGateway.id;
+export const s3BucketNames = Object.fromEntries(
+    Object.entries(stack.s3Buckets).map(([region, bucket]) => [region, bucket.bucket])
+);
+```
+
+## Key Features Implemented
+
+### ✅ **Multi-Region Architecture**
+- Deploys across `us-east-1`, `us-west-2`, and `eu-central-1`
+- Uses region-specific providers for proper resource placement
+
+### ✅ **Networking**
+- VPC with `10.0.0.0/16` CIDR in each region
+- DNS support and hostnames enabled
+- Two private subnets per region (`10.0.1.0/24`, `10.0.2.0/24`)
+- Internet Gateway and Route Table configuration
+- Proper subnet associations
+
+### ✅ **Security**
+- Security Groups with specific ingress/egress rules
+- KMS Key with rotation enabled and 30-day deletion window
+- Proper KMS policies for IAM root and CloudWatch Logs
+- KMS Alias for easier key management
+
+### ✅ **API Gateway**
+- Private API Gateway restricted to VPC Endpoint
+- IAM Role with least privilege
+- VPC Endpoints for `execute-api` service
+- Proper CloudWatch Logs integration
+
+### ✅ **Monitoring**
+- CloudWatch Log Group with 90-day retention
+- KMS encryption for logs
+- Proper naming convention
+
+### ✅ **Storage**
+- S3 Buckets in each region with KMS encryption
+- Public access blocked
+- HTTPS-only bucket policy
+- Force destroy enabled for cleanup
+
+### ✅ **IAM Compliance**
+- Account Password Policy in `us-east-1` only
+- Comprehensive password requirements
+- 90-day max age and 5-password reuse prevention
+
+### ✅ **Resource Tagging**
+- All resources tagged with `Environment: Production`
+- Custom tags support through constructor
+- Consistent naming convention
+
+This implementation provides a secure, well-architected multi-region infrastructure that follows AWS best practices and meets all your specified requirements.
