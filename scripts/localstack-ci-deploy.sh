@@ -411,7 +411,7 @@ deploy_cdk() {
 
     # Collect outputs
     print_status $YELLOW "📊 Collecting deployment outputs..."
-    local stack_name="TapStack${env_suffix}"
+    local stack_name="TapStack-${env_suffix}"
     local output_json="{}"
 
     # First check if stack exists
