@@ -7,11 +7,6 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 import { StackProps } from 'aws-cdk-lib';
 
-// LocalStack detection
-const isLocalStack =
-  process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-  process.env.AWS_ENDPOINT_URL?.includes('4566');
-
 export interface TapStackProps extends StackProps {
   environmentSuffix: string;
 }
@@ -38,10 +33,9 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Set removal policy for LocalStack
-    if (isLocalStack) {
-      notificationTopic.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
-    }
+    // Set removal policy for test environments (LocalStack and CI/CD)
+    // This allows proper cleanup after testing
+    notificationTopic.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 
     // Create Lambda execution role with least privilege
     const lambdaRole = new iam.Role(this, 'ImageProcessorRole', {

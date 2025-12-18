@@ -113,5 +113,14 @@ describe('TapStack Unit Tests', () => {
     test('should set region to us-east-1', () => {
       expect(stack.region).toBe('us-east-1');
     });
+
+    test('should apply RemovalPolicy.DESTROY for cleanup', () => {
+      // Verify SNS topic has removal policy set to DESTROY
+      const snsTopics = template.findResources('AWS::SNS::Topic');
+      const snsTopic = Object.values(snsTopics)[0] as any;
+
+      expect(snsTopic.UpdateReplacePolicy).toBe('Delete');
+      expect(snsTopic.DeletionPolicy).toBe('Delete');
+    });
   });
 });
