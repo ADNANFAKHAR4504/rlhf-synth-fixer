@@ -19,17 +19,58 @@ if (hasOutputs) {
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-describe('Turn Around Prompt API Integration Tests', () => {
-  describe('Write Integration TESTS', () => {
+describe('VPC Infrastructure Integration Tests', () => {
+  describe('Deployment Outputs Validation', () => {
     if (!hasOutputs) {
       // If there's no deploy outputs available, skip integration tests with a helpful message
       test.skip('Integration tests skipped — missing cfn-outputs/flat-outputs.json (run CDK deploy or provide mock outputs)', () => { });
     } else {
-      // Minimal integration smoke tests that validate expected outputs exist.
-      test('should have necessary deploy outputs (TurnAroundPromptTableName)', async () => {
+      test('should have deployment outputs defined', async () => {
         expect(outputs).toBeDefined();
-        expect(outputs.TurnAroundPromptTableName).toBeDefined();
-        expect(typeof outputs.TurnAroundPromptTableName).toBe('string');
+        expect(Object.keys(outputs).length).toBeGreaterThan(0);
+      });
+
+      test('should have VPC output with valid ID format', async () => {
+        expect(outputs.VPCId).toBeDefined();
+        expect(typeof outputs.VPCId).toBe('string');
+        expect(outputs.VPCId).toMatch(/^vpc-[a-z0-9]+$/);
+      });
+
+      test('should have VPC CIDR output with valid CIDR format', async () => {
+        expect(outputs.VPCCidr).toBeDefined();
+        expect(typeof outputs.VPCCidr).toBe('string');
+        expect(outputs.VPCCidr).toMatch(/^\d+\.\d+\.\d+\.\d+\/\d+$/);
+      });
+
+      test('should have public subnet outputs with valid IDs', async () => {
+        expect(outputs.PublicSubnet1Id).toBeDefined();
+        expect(outputs.PublicSubnet2Id).toBeDefined();
+        expect(outputs.PublicSubnet3Id).toBeDefined();
+        expect(outputs.PublicSubnet1Id).toMatch(/^subnet-[a-z0-9]+$/);
+        expect(outputs.PublicSubnet2Id).toMatch(/^subnet-[a-z0-9]+$/);
+        expect(outputs.PublicSubnet3Id).toMatch(/^subnet-[a-z0-9]+$/);
+      });
+
+      test('should have private subnet outputs with valid IDs', async () => {
+        expect(outputs.PrivateSubnet1Id).toBeDefined();
+        expect(outputs.PrivateSubnet2Id).toBeDefined();
+        expect(outputs.PrivateSubnet3Id).toBeDefined();
+        expect(outputs.PrivateSubnet1Id).toMatch(/^subnet-[a-z0-9]+$/);
+        expect(outputs.PrivateSubnet2Id).toMatch(/^subnet-[a-z0-9]+$/);
+        expect(outputs.PrivateSubnet3Id).toMatch(/^subnet-[a-z0-9]+$/);
+      });
+
+      test('should have unique subnet IDs across all subnets', async () => {
+        const subnetIds = [
+          outputs.PublicSubnet1Id,
+          outputs.PublicSubnet2Id,
+          outputs.PublicSubnet3Id,
+          outputs.PrivateSubnet1Id,
+          outputs.PrivateSubnet2Id,
+          outputs.PrivateSubnet3Id,
+        ];
+        const uniqueIds = new Set(subnetIds);
+        expect(uniqueIds.size).toBe(subnetIds.length);
       });
     }
   });
