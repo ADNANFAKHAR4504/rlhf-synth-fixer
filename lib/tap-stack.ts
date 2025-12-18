@@ -8,7 +8,9 @@ import { Construct } from 'constructs';
 import { StackProps } from 'aws-cdk-lib';
 
 // LocalStack detection
-const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes("localhost") || process.env.AWS_ENDPOINT_URL?.includes("4566");
+const isLocalStack =
+  process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+  process.env.AWS_ENDPOINT_URL?.includes('4566');
 
 export interface TapStackProps extends StackProps {
   environmentSuffix: string;

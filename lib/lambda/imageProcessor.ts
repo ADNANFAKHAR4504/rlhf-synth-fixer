@@ -4,8 +4,8 @@ import { Handler } from 'aws-lambda';
 const snsClient = new SNSClient({
   region: process.env.AWS_REGION || 'us-east-1',
   ...(process.env.AWS_ENDPOINT_URL && {
-    endpoint: process.env.AWS_ENDPOINT_URL
-  })
+    endpoint: process.env.AWS_ENDPOINT_URL,
+  }),
 });
 
 interface ImageProcessingEvent {
@@ -17,20 +17,21 @@ interface ImageProcessingEvent {
   };
 }
 
-export const handler: Handler = async (event, context) => {
+export const handler: Handler = async event => {
   console.log('Received event:', JSON.stringify(event, null, 2));
 
   try {
     // Parse the incoming request
-    const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
+    const body =
+      typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
     const { imageKey, metadata } = body as ImageProcessingEvent;
 
     if (!imageKey) {
       return {
         statusCode: 400,
         body: JSON.stringify({
-          message: 'Missing required field: imageKey'
-        })
+          message: 'Missing required field: imageKey',
+        }),
       };
     }
 
@@ -45,7 +46,7 @@ export const handler: Handler = async (event, context) => {
       bucket: bucketName,
       status: 'processed',
       timestamp: new Date().toISOString(),
-      metadata: metadata || {}
+      metadata: metadata || {},
     };
 
     // Publish notification to SNS
@@ -53,7 +54,7 @@ export const handler: Handler = async (event, context) => {
       const publishCommand = new PublishCommand({
         TopicArn: topicArn,
         Message: JSON.stringify(processingResult),
-        Subject: 'Image Processing Complete'
+        Subject: 'Image Processing Complete',
       });
 
       await snsClient.send(publishCommand);
@@ -63,12 +64,12 @@ export const handler: Handler = async (event, context) => {
     return {
       statusCode: 200,
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         message: 'Image processing initiated successfully',
-        result: processingResult
-      })
+        result: processingResult,
+      }),
     };
   } catch (error) {
     console.error('Error processing image:', error);
@@ -76,8 +77,8 @@ export const handler: Handler = async (event, context) => {
       statusCode: 500,
       body: JSON.stringify({
         message: 'Internal server error',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      })
+        error: error instanceof Error ? error.message : 'Unknown error',
+      }),
     };
   }
 };
