@@ -15,7 +15,7 @@ const environmentConfigs: Record<string, EnvironmentConfig> = {
     cloudProvider: 'aws',
     awsRegion: process.env.AWS_REGION || 'us-east-1',
     awsVpcCidr: '10.0.0.0/16',
-    awsAmi: 'ami-0c55b159cbfafe1f0', // Amazon Linux 2 AMI (example, region-specific)
+    awsAmi: 'ami-0c02fb55956c7d316', // Amazon Linux 2023 AMI (us-east-1)
     awsInstanceType: 't2.micro',
     awsS3BucketSuffix: 'dev-bucket',
     azureLocation: 'East US',
@@ -27,9 +27,9 @@ const environmentConfigs: Record<string, EnvironmentConfig> = {
   staging: {
     environmentName: 'staging',
     cloudProvider: 'aws',
-    awsRegion: process.env.AWS_REGION || 'us-west-2',
+    awsRegion: process.env.AWS_REGION || 'us-east-1',
     awsVpcCidr: '10.10.0.0/16',
-    awsAmi: 'ami-0c55b159cbfafe1f0',
+    awsAmi: 'ami-0c02fb55956c7d316', // Amazon Linux 2023 AMI (us-east-1)
     awsInstanceType: 't3.small',
     awsS3BucketSuffix: 'staging-bucket',
     azureLocation: 'West US',
@@ -43,7 +43,7 @@ const environmentConfigs: Record<string, EnvironmentConfig> = {
     cloudProvider: 'aws',
     awsRegion: process.env.AWS_REGION || 'us-east-1',
     awsVpcCidr: '10.20.0.0/16',
-    awsAmi: 'ami-0c55b159cbfafe1f0',
+    awsAmi: 'ami-0c02fb55956c7d316', // Amazon Linux 2023 AMI (us-east-1)
     awsInstanceType: 't3.medium',
     awsS3BucketSuffix: 'prod-bucket',
     azureLocation: 'East US',
