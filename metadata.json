@@ -1,0 +1,24 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "p3d6c3m7",
+  "team": "synth",
+  "startedAt": "2025-12-01T14:02:11.608802Z",
+  "subtask": "CI/CD Pipeline Integration",
+  "provider": "localstack",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "CodeCommit",
+    "CodeBuild",
+    "CodePipeline",
+    "S3",
+    "SNS",
+    "IAM",
+    "CloudWatch Logs",
+    "EventBridge"
+  ]
+}
