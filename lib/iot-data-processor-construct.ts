@@ -50,11 +50,8 @@ export class IoTDataProcessorConstruct extends Construct {
       },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST, // Better for unpredictable traffic
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      // PITR not supported in LocalStack Community - commented out for LocalStack compatibility
-      // pointInTimeRecoverySpecification: {
-      //   pointInTimeRecoveryEnabled: true,
-      // },
-      encryption: dynamodb.TableEncryption.DEFAULT, // Changed from AWS_MANAGED for LocalStack compatibility
+      pointInTimeRecovery: true,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
     });
 
     // Create CloudWatch Log Group - let CDK generate unique name to avoid conflicts

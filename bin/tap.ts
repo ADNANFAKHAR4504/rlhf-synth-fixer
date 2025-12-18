@@ -12,7 +12,7 @@ new TapStack(app, `TapStack${environmentSuffix}`, {
   environmentSuffix,
   description: 'Scalable Serverless IoT Data Processor Stack',
   env: {
-    region: process.env.AWS_REGION || process.env.CDK_DEFAULT_REGION || 'us-east-1',
+    region: process.env.AWS_REGION || process.env.CDK_DEFAULT_REGION || 'us-west-2',
   },
   tags: {
     Project: 'IoT-Data-Processor',
