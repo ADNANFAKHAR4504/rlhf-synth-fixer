@@ -16,12 +16,12 @@ The solution consists of the following AWS components:
 
 ## Key Features
 
-✅ **Region Compliance**: All resources deployed to us-west-2 as required  
-✅ **High Scalability**: Lambda configured for 500 concurrent executions  
-✅ **Security**: IAM role with minimal required permissions  
-✅ **Monitoring**: Dedicated CloudWatch log group with structured logging  
-✅ **Error Handling**: Comprehensive error handling for DynamoDB operations  
-✅ **Data Formats**: Supports both JSON and non-JSON IoT data files  
+- **Region Compliance**: All resources deployed to us-west-2 as required
+- **High Scalability**: Lambda configured for 500 concurrent executions
+- **Security**: IAM role with minimal required permissions
+- **Monitoring**: Dedicated CloudWatch log group with structured logging
+- **Error Handling**: Comprehensive error handling for DynamoDB operations
+- **Data Formats**: Supports both JSON and non-JSON IoT data files  
 
 ## Implementation
 
