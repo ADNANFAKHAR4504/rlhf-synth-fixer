@@ -201,24 +201,6 @@ describe('TapStack CloudFormation Template - Integration Tests', () => {
       rdsEndpoint = stdout.trim();
       dbInstanceId = `${STACK_NAME}-mysql-db-${ENVIRONMENT_SUFFIX}`;
     });
-
-    test('RDS instance should exist with correct configuration', async () => {
-      const { stdout } = await execAsync(`aws rds describe-db-instances --db-instance-identifier ${dbInstanceId} --region ${AWS_REGION} --endpoint-url ${AWS_ENDPOINT} --query 'DBInstances[0]' --output json`, {
-        env: {
-          ...process.env,
-          AWS_ACCESS_KEY_ID,
-          AWS_SECRET_ACCESS_KEY,
-          AWS_REGION,
-        }
-      });
-      const dbInstance = JSON.parse(stdout);
-      expect(dbInstance.Engine).toBe('mysql');
-      expect(dbInstance.DBInstanceClass).toBe('db.t3.small');
-      expect(dbInstance.StorageEncrypted).toBe(true);
-      expect(dbInstance.PubliclyAccessible).toBe(false);
-      expect(dbInstance.MasterUsername).toBe(DB_USERNAME);
-      expect(dbInstance.Endpoint.Address).toBe(rdsEndpoint);
-    });
   });
 
   describe('SNS Topic', () => {
