@@ -3,10 +3,11 @@ import pulumi_aws as aws
 import json
 
 class TapStack(pulumi.ComponentResource):
-    def __init__(self, name: str, environment_suffix: str, opts=None):
+    def __init__(self, name: str, environment_suffix: str, is_localstack: bool = False, opts=None):
         super().__init__('custom:stack:TapStack', name, {}, opts)
 
         self.environment_suffix = environment_suffix
+        self.is_localstack = is_localstack
 
         # Get current region dynamically
         self.current_region = aws.get_region()
@@ -358,16 +359,19 @@ class TapStack(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(parent=self)
         )
 
-        # Create WAF WebACL
-        self.waf_acl = self._create_waf_acl()
+        # Create WAF WebACL (skip in LocalStack as WAFv2 is not supported)
+        if not self.is_localstack:
+            self.waf_acl = self._create_waf_acl()
 
-        # Associate WAF with ALB
-        waf_association = aws.wafv2.WebAclAssociation(
-            f"waf-alb-association-{environment_suffix}",
-            resource_arn=self.alb.arn,
-            web_acl_arn=self.waf_acl.arn,
-            opts=pulumi.ResourceOptions(parent=self)
-        )
+            # Associate WAF with ALB
+            waf_association = aws.wafv2.WebAclAssociation(
+                f"waf-alb-association-{environment_suffix}",
+                resource_arn=self.alb.arn,
+                web_acl_arn=self.waf_acl.arn,
+                opts=pulumi.ResourceOptions(parent=self)
+            )
+        else:
+            self.waf_acl = None
 
         # Create Route 53 health checks
         self.blue_health_check = aws.route53.HealthCheck(
