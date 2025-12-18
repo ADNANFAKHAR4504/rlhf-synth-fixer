@@ -100,8 +100,8 @@ describe('TapStack Module Tests', () => {
 
       expect(resources.s3Buckets.length).toBeGreaterThanOrEqual(1);
       expect(resources.dynamoTables.length).toBe(2);
-      expect(resources.lambdaFunctions.length).toBe(2);
-      expect(resources.iamRoles.length).toBe(2);
+      expect(resources.lambdaFunctions.length).toBe(3);
+      expect(resources.iamRoles.length).toBe(4);
       expect(resources.apiGateways.length).toBe(1);
     });
   });

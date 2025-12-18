@@ -531,6 +531,192 @@
                 "PathPart": "results"
             }
         },
+        "QuizRetrievalLambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "quiz-retrieval-lambda-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "DynamoDBAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:Query"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ResultsTable",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${ResultsTable.Arn}/index/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "QuizRetrievalFunction": {
+            "Type": "AWS::Lambda::Function",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "quiz-retrieval-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.12",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "QuizRetrievalLambdaRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "MemorySize": 256,
+                "Environment": {
+                    "Variables": {
+                        "RESULTS_TABLE": {
+                            "Ref": "ResultsTable"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\n\ndynamodb = boto3.resource('dynamodb')\n\ndef handler(event, context):\n    # Get quiz ID from path parameters\n    quiz_id = event.get('pathParameters', {}).get('id')\n    \n    # Check if this is a results request\n    is_results_request = event.get('resource', '').endswith('/results')\n    \n    if not quiz_id:\n        return {\n            'statusCode': 400,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({'error': 'Missing quiz ID'})\n        }\n\n    try:\n        # Get quiz from DynamoDB\n        results_table = dynamodb.Table(os.environ['RESULTS_TABLE'])\n        response = results_table.get_item(Key={'quiz_id': quiz_id})\n\n        if 'Item' not in response:\n            return {\n                'statusCode': 404,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': '*'\n                },\n                'body': json.dumps({'error': 'Quiz not found'})\n            }\n\n        quiz = response['Item']\n        \n        if is_results_request:\n            # Return results data - only if quiz is completed\n            if quiz.get('status') != 'completed':\n                return {\n                    'statusCode': 400,\n                    'headers': {\n                        'Content-Type': 'application/json',\n                        'Access-Control-Allow-Origin': '*'\n                    },\n                    'body': json.dumps({'error': 'Quiz not completed yet'})\n                }\n            \n            results_data = {\n                'quiz_id': quiz['quiz_id'],\n                'user_id': quiz.get('user_id'),\n                'score': quiz.get('score', 0),\n                'percentage': quiz.get('percentage', 0.0),\n                'results': quiz.get('results', []),\n                'completed_at': quiz.get('completed_at'),\n                'total_questions': len(quiz.get('questions', []))\n            }\n            \n            return {\n                'statusCode': 200,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': '*'\n                },\n                'body': json.dumps(results_data)\n            }\n        else:\n            # Return quiz details (hide answers if not completed)\n            quiz_data = {\n                'quiz_id': quiz['quiz_id'],\n                'user_id': quiz.get('user_id'),\n                'questions': quiz.get('questions', []),\n                'created_at': quiz.get('created_at'),\n                'status': quiz.get('status', 'active')\n            }\n\n            return {\n                'statusCode': 200,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': '*'\n                },\n                'body': json.dumps(quiz_data)\n            }\n\n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({\n                'error': 'Failed to retrieve quiz',\n                'message': str(e)\n            })\n        }\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "PersonalizeDatasetGroup": {
+            "Type": "AWS::Personalize::DatasetGroup",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "quiz-personalization-${EnvironmentSuffix}"
+                }
+            }
+        },
+        "PersonalizeSchema": {
+            "Type": "AWS::Personalize::Schema",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "quiz-interactions-schema-${EnvironmentSuffix}"
+                },
+                "Schema": "{\n  \"type\": \"record\",\n  \"name\": \"Interactions\",\n  \"namespace\": \"com.amazonaws.personalize.schema\",\n  \"fields\": [\n    {\n      \"name\": \"USER_ID\",\n      \"type\": \"string\"\n    },\n    {\n      \"name\": \"ITEM_ID\",\n      \"type\": \"string\"\n    },\n    {\n      \"name\": \"TIMESTAMP\",\n      \"type\": \"long\"\n    },\n    {\n      \"name\": \"SCORE\",\n      \"type\": \"float\"\n    }\n  ],\n  \"version\": \"1.0\"\n}\n"
+            }
+        },
+        "PersonalizeDataset": {
+            "Type": "AWS::Personalize::Dataset",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "DatasetGroupArn": {
+                    "Ref": "PersonalizeDatasetGroup"
+                },
+                "DatasetType": "Interactions",
+                "Name": {
+                    "Fn::Sub": "quiz-interactions-${EnvironmentSuffix}"
+                },
+                "SchemaArn": {
+                    "Ref": "PersonalizeSchema"
+                }
+            }
+        },
+        "PersonalizeRole": {
+            "Type": "AWS::IAM::Role",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "personalize-service-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "personalize.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "PersonalizeAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${QuizResultsBucket.Arn}/*"
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "QuizResultsBucket",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "personalize:*"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
         "GenerateMethod": {
             "Type": "AWS::ApiGateway::Method",
             "Properties": {
@@ -571,6 +757,46 @@
                 }
             }
         },
+        "GetQuizMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "QuizAPI"
+                },
+                "ResourceId": {
+                    "Ref": "QuizIdResource"
+                },
+                "HttpMethod": "GET",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${QuizRetrievalFunction.Arn}/invocations"
+                    }
+                }
+            }
+        },
+        "GetResultsMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "QuizAPI"
+                },
+                "ResourceId": {
+                    "Ref": "ResultsResource"
+                },
+                "HttpMethod": "GET",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${QuizRetrievalFunction.Arn}/invocations"
+                    }
+                }
+            }
+        },
         "GenerateLambdaPermission": {
             "Type": "AWS::Lambda::Permission",
             "Properties": {
@@ -597,11 +823,26 @@
                 }
             }
         },
+        "RetrievalLambdaPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "QuizRetrievalFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${QuizAPI}/*/*"
+                }
+            }
+        },
         "APIDeployment": {
             "Type": "AWS::ApiGateway::Deployment",
             "DependsOn": [
                 "GenerateMethod",
-                "SubmitMethod"
+                "SubmitMethod",
+                "GetQuizMethod",
+                "GetResultsMethod"
             ],
             "Properties": {
                 "RestApiId": {
@@ -727,6 +968,31 @@
             "Description": "CloudWatch Dashboard URL",
             "Value": {
                 "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${QuizMetricsDashboard}"
+            }
+        },
+        "PersonalizeDatasetGroupArn": {
+            "Description": "AWS Personalize Dataset Group ARN",
+            "Value": {
+                "Ref": "PersonalizeDatasetGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PersonalizeDatasetGroup"
+                }
+            }
+        },
+        "QuizRetrievalFunctionArn": {
+            "Description": "Quiz Retrieval Lambda Function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "QuizRetrievalFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-RetrievalFunction"
+                }
             }
         }
     }

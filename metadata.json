@@ -17,6 +17,7 @@
     "Lambda",
     "API Gateway",
     "CloudWatch",
-    "IAM"
+    "IAM",
+    "Personalize"
   ]
 }

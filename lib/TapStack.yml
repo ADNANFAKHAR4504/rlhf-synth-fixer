@@ -500,6 +500,241 @@ Resources:
       ParentId: !Ref QuizIdResource
       PathPart: results
 
+  # IAM Role for Quiz Retrieval Lambda
+  QuizRetrievalLambdaRole:
+    Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RoleName: !Sub 'quiz-retrieval-lambda-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt ResultsTable.Arn
+                  - !Sub '${ResultsTable.Arn}/index/*'
+
+  # Quiz Retrieval Lambda Function
+  QuizRetrievalFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      FunctionName: !Sub 'quiz-retrieval-${EnvironmentSuffix}'
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt QuizRetrievalLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          RESULTS_TABLE: !Ref ResultsTable
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+
+          dynamodb = boto3.resource('dynamodb')
+
+          def handler(event, context):
+              # Get quiz ID from path parameters
+              quiz_id = event.get('pathParameters', {}).get('id')
+              
+              # Check if this is a results request
+              is_results_request = event.get('resource', '').endswith('/results')
+              
+              if not quiz_id:
+                  return {
+                      'statusCode': 400,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps({'error': 'Missing quiz ID'})
+                  }
+
+              try:
+                  # Get quiz from DynamoDB
+                  results_table = dynamodb.Table(os.environ['RESULTS_TABLE'])
+                  response = results_table.get_item(Key={'quiz_id': quiz_id})
+
+                  if 'Item' not in response:
+                      return {
+                          'statusCode': 404,
+                          'headers': {
+                              'Content-Type': 'application/json',
+                              'Access-Control-Allow-Origin': '*'
+                          },
+                          'body': json.dumps({'error': 'Quiz not found'})
+                      }
+
+                  quiz = response['Item']
+                  
+                  if is_results_request:
+                      # Return results data - only if quiz is completed
+                      if quiz.get('status') != 'completed':
+                          return {
+                              'statusCode': 400,
+                              'headers': {
+                                  'Content-Type': 'application/json',
+                                  'Access-Control-Allow-Origin': '*'
+                              },
+                              'body': json.dumps({'error': 'Quiz not completed yet'})
+                          }
+                      
+                      results_data = {
+                          'quiz_id': quiz['quiz_id'],
+                          'user_id': quiz.get('user_id'),
+                          'score': quiz.get('score', 0),
+                          'percentage': quiz.get('percentage', 0.0),
+                          'results': quiz.get('results', []),
+                          'completed_at': quiz.get('completed_at'),
+                          'total_questions': len(quiz.get('questions', []))
+                      }
+                      
+                      return {
+                          'statusCode': 200,
+                          'headers': {
+                              'Content-Type': 'application/json',
+                              'Access-Control-Allow-Origin': '*'
+                          },
+                          'body': json.dumps(results_data)
+                      }
+                  else:
+                      # Return quiz details (hide answers if not completed)
+                      quiz_data = {
+                          'quiz_id': quiz['quiz_id'],
+                          'user_id': quiz.get('user_id'),
+                          'questions': quiz.get('questions', []),
+                          'created_at': quiz.get('created_at'),
+                          'status': quiz.get('status', 'active')
+                      }
+
+                      return {
+                          'statusCode': 200,
+                          'headers': {
+                              'Content-Type': 'application/json',
+                              'Access-Control-Allow-Origin': '*'
+                          },
+                          'body': json.dumps(quiz_data)
+                      }
+
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps({
+                          'error': 'Failed to retrieve quiz',
+                          'message': str(e)
+                      })
+                  }
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # AWS Personalize Dataset Group
+  PersonalizeDatasetGroup:
+    Type: AWS::Personalize::DatasetGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: !Sub 'quiz-personalization-${EnvironmentSuffix}'
+
+  # AWS Personalize Schema for Interactions
+  PersonalizeSchema:
+    Type: AWS::Personalize::Schema
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: !Sub 'quiz-interactions-schema-${EnvironmentSuffix}'
+      Schema: |
+        {
+          "type": "record",
+          "name": "Interactions",
+          "namespace": "com.amazonaws.personalize.schema",
+          "fields": [
+            {
+              "name": "USER_ID",
+              "type": "string"
+            },
+            {
+              "name": "ITEM_ID",
+              "type": "string"
+            },
+            {
+              "name": "TIMESTAMP",
+              "type": "long"
+            },
+            {
+              "name": "SCORE",
+              "type": "float"
+            }
+          ],
+          "version": "1.0"
+        }
+
+  # AWS Personalize Dataset
+  PersonalizeDataset:
+    Type: AWS::Personalize::Dataset
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      DatasetGroupArn: !Ref PersonalizeDatasetGroup
+      DatasetType: Interactions
+      Name: !Sub 'quiz-interactions-${EnvironmentSuffix}'
+      SchemaArn: !Ref PersonalizeSchema
+
+  # IAM Role for Personalize
+  PersonalizeRole:
+    Type: AWS::IAM::Role
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RoleName: !Sub 'personalize-service-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: personalize.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PersonalizeAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub '${QuizResultsBucket.Arn}/*'
+                  - !GetAtt QuizResultsBucket.Arn
+              - Effect: Allow
+                Action:
+                  - personalize:*
+                Resource: '*'
+
   # API Gateway Methods
   GenerateMethod:
     Type: AWS::ApiGateway::Method
@@ -525,6 +760,30 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${QuizScoringFunction.Arn}/invocations'
 
+  GetQuizMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref QuizAPI
+      ResourceId: !Ref QuizIdResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${QuizRetrievalFunction.Arn}/invocations'
+
+  GetResultsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref QuizAPI
+      ResourceId: !Ref ResultsResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${QuizRetrievalFunction.Arn}/invocations'
+
   # Lambda Permissions for API Gateway
   GenerateLambdaPermission:
     Type: AWS::Lambda::Permission
@@ -542,12 +801,22 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${QuizAPI}/*/*'
 
+  RetrievalLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref QuizRetrievalFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${QuizAPI}/*/*'
+
   # API Gateway Deployment
   APIDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
       - GenerateMethod
       - SubmitMethod
+      - GetQuizMethod
+      - GetResultsMethod
     Properties:
       RestApiId: !Ref QuizAPI
       StageName: !Ref Environment
@@ -705,3 +974,15 @@ Outputs:
   DashboardURL:
     Description: CloudWatch Dashboard URL
     Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${QuizMetricsDashboard}'
+
+  PersonalizeDatasetGroupArn:
+    Description: AWS Personalize Dataset Group ARN
+    Value: !Ref PersonalizeDatasetGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-PersonalizeDatasetGroup'
+
+  QuizRetrievalFunctionArn:
+    Description: Quiz Retrieval Lambda Function ARN
+    Value: !GetAtt QuizRetrievalFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-RetrievalFunction'

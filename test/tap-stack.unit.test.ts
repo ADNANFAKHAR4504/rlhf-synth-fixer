@@ -149,6 +149,11 @@ describe('TapStack CloudFormation Template - Quiz Platform Infrastructure', () =
       expect(template.Resources.QuizScoringFunction.Type).toBe('AWS::Lambda::Function');
     });
 
+    test('should have QuizRetrievalFunction resource', () => {
+      expect(template.Resources.QuizRetrievalFunction).toBeDefined();
+      expect(template.Resources.QuizRetrievalFunction.Type).toBe('AWS::Lambda::Function');
+    });
+
     test('QuizGenerationFunction should have correct configuration', () => {
       const lambda = template.Resources.QuizGenerationFunction;
       expect(lambda.Properties.Runtime).toBe('python3.12');
@@ -200,6 +205,45 @@ describe('TapStack CloudFormation Template - Quiz Platform Infrastructure', () =
     });
   });
 
+  describe('AWS Personalize', () => {
+    test('should have PersonalizeDatasetGroup resource', () => {
+      expect(template.Resources.PersonalizeDatasetGroup).toBeDefined();
+      expect(template.Resources.PersonalizeDatasetGroup.Type).toBe('AWS::Personalize::DatasetGroup');
+    });
+
+    test('should have PersonalizeSchema resource', () => {
+      expect(template.Resources.PersonalizeSchema).toBeDefined();
+      expect(template.Resources.PersonalizeSchema.Type).toBe('AWS::Personalize::Schema');
+    });
+
+    test('should have PersonalizeDataset resource', () => {
+      expect(template.Resources.PersonalizeDataset).toBeDefined();
+      expect(template.Resources.PersonalizeDataset.Type).toBe('AWS::Personalize::Dataset');
+      expect(template.Resources.PersonalizeDataset.Properties.DatasetType).toBe('Interactions');
+    });
+
+    test('should have PersonalizeRole resource', () => {
+      expect(template.Resources.PersonalizeRole).toBeDefined();
+      expect(template.Resources.PersonalizeRole.Type).toBe('AWS::IAM::Role');
+    });
+
+    test('PersonalizeSchema should have correct interaction schema structure', () => {
+      const schema = template.Resources.PersonalizeSchema;
+      expect(schema.Properties.Schema).toBeDefined();
+      const schemaObj = JSON.parse(schema.Properties.Schema);
+      expect(schemaObj.fields).toBeDefined();
+      expect(schemaObj.fields.length).toBeGreaterThan(0);
+      expect(schemaObj.fields).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: 'USER_ID' }),
+          expect.objectContaining({ name: 'ITEM_ID' }),
+          expect.objectContaining({ name: 'TIMESTAMP' }),
+          expect.objectContaining({ name: 'SCORE' })
+        ])
+      );
+    });
+  });
+
   describe('API Gateway', () => {
     test('should have QuizAPI resource', () => {
       expect(template.Resources.QuizAPI).toBeDefined();
@@ -226,6 +270,12 @@ describe('TapStack CloudFormation Template - Quiz Platform Infrastructure', () =
 
       expect(template.Resources.SubmitMethod).toBeDefined();
       expect(template.Resources.SubmitMethod.Properties.HttpMethod).toBe('POST');
+
+      expect(template.Resources.GetQuizMethod).toBeDefined();
+      expect(template.Resources.GetQuizMethod.Properties.HttpMethod).toBe('GET');
+      
+      expect(template.Resources.GetResultsMethod).toBeDefined();
+      expect(template.Resources.GetResultsMethod.Properties.HttpMethod).toBe('GET');
     });
 
     test('should have API deployment', () => {
