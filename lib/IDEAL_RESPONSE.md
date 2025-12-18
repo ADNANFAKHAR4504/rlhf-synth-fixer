@@ -1016,7 +1016,7 @@ Resources:
       AutoScalingGroupName: !Sub ${EnvironmentName}-ASG
       LaunchTemplate:
         LaunchTemplateId: !Ref WebServerLaunchTemplate
-        Version: !GetAtt WebServerLaunchTemplate.LatestVersionNumber
+        Version: $Latest
       MinSize: 2  # Ensures at least one instance per public subnet
       MaxSize: 6
       DesiredCapacity: 2
