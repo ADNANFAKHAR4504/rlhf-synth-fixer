@@ -388,7 +388,7 @@ new MultiRegionApp();
 
 ## Key Features & Best Practices
 
-### 🏗️ **Architecture Highlights**
+### [ARCH] **Architecture Highlights**
 - **Multi-region deployment** with dedicated stacks for each region
 - **Resource isolation** ensuring no cross-region dependencies
 - **Fine-grained IAM permissions** with least-privilege access
@@ -400,14 +400,14 @@ new MultiRegionApp();
 - Environment variable injection for secure configuration
 - Resource-level permissions with ARN-based access control
 
-### 📊 **Production Readiness**
+### [TABLE] **Production Readiness**
 - Point-in-time recovery enabled for DynamoDB tables
 - Comprehensive CloudFormation outputs for integration
 - Resource tagging for cost allocation and management
 - Error handling in Lambda functions
 - Performance optimizations (connection reuse, appropriate timeouts)
 
-### 🎛️ **Operational Excellence**
+### [OPS] **Operational Excellence**
 - Stack-level tagging for resource organization
 - Descriptive resource names with region identification
 - Comprehensive logging and monitoring setup
