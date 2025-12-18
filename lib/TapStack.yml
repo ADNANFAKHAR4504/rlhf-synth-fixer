@@ -78,36 +78,7 @@ Parameters:
     MinValue: 20
     MaxValue: 1000
 
-  DMSInstanceClass:
-    Type: String
-    Description: DMS replication instance class
-    Default: dms.t3.medium
-    AllowedValues:
-      - dms.t3.small
-      - dms.t3.medium
-      - dms.t3.large
-      - dms.c5.large
-      - dms.c5.xlarge
-
-  OnPremisesDBHost:
-    Type: String
-    Description: Hostname or IP address of on-premises MySQL database
-    Default: 192.168.1.100
-
-  OnPremisesDBPort:
-    Type: Number
-    Description: Port number of on-premises MySQL database
-    Default: 3306
-
-  OnPremisesDBName:
-    Type: String
-    Description: Database name on on-premises MySQL
-    Default: paymentdb
-
-  OnPremisesDBUsername:
-    Type: String
-    Description: Username for on-premises MySQL database
-    Default: migrationuser
+  # DMS parameters removed - DMS not supported in LocalStack Community
 
   EC2InstanceType:
     Type: String
@@ -707,6 +678,11 @@ Resources:
   RDSInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Delete
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - W1011  # Using parameter for LocalStack compatibility instead of dynamic reference
     Properties:
       DBInstanceIdentifier: !Sub payment-processing-db-${EnvironmentSuffix}
       DBInstanceClass: !Ref DBInstanceClass
