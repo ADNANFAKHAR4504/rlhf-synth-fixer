@@ -71,7 +71,9 @@ export class MetadataProcessingStack extends cdk.Stack {
           effect: iam.Effect.ALLOW,
           principals: [new iam.AnyPrincipal()],
           actions: ['es:*'],
-          resources: [`arn:aws:es:${this.region}:${this.account}:domain/iac-rlhf-metadata-${environmentSuffix}/*`],
+          resources: [
+            `arn:aws:es:${this.region}:${this.account}:domain/iac-rlhf-metadata-${environmentSuffix}/*`,
+          ],
         }),
       ],
     });
