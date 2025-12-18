@@ -17,8 +17,9 @@ export class TapStack extends cdk.Stack {
       'dev';
 
     // Detect if running in LocalStack
-    const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                        process.env.AWS_ENDPOINT_URL?.includes('4566');
+    const isLocalStack =
+      process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+      process.env.AWS_ENDPOINT_URL?.includes('4566');
 
     // Create VPC with specified CIDR block
     const vpc = new ec2.CfnVPC(this, `${environmentSuffix}-vpc`, {
