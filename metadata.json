@@ -1,0 +1,15 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "IAC-TAP-215",
+  "team": null,
+  "startedAt": "2025-07-28T11:56:46.836Z",
+  "subtask": "Serverless Infrastructure Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": []
+}
