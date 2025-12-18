@@ -42,8 +42,11 @@ describe('SecureNetworkStack Unit Tests', () => {
       });
     });
 
-    test('should create NAT gateways', () => {
-      template.hasResourceProperties('AWS::EC2::NatGateway', {});
+    test('should not create NAT gateways for LocalStack compatibility', () => {
+      // NAT Gateways are disabled for LocalStack (EIP allocation ID issue)
+      expect(() => {
+        template.hasResourceProperties('AWS::EC2::NatGateway', {});
+      }).toThrow();
     });
   });
 
