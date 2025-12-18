@@ -23,5 +23,12 @@
     "SQS",
     "CloudWatch Logs",
     "IAM"
-  ]
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
 }
