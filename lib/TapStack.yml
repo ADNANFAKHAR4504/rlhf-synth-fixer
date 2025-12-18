@@ -1,0 +1,225 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Secure infra using existing VPC and private subnets behind existing NAT. S3 public-block + SSE-KMS, KMS-encrypted EBS, least-privilege IAM, SSH restricted. No CloudTrail, no NAT creation, no route changes.
+
+Mappings:
+  ExistingNetwork:
+    Primary:
+      VpcId: vpc-0708cdf90c4d88464
+      PrivateSubnetA: subnet-00dfeb752f1cc755e 
+      PrivateSubnetB: subnet-088636eee12ba4844
+
+Parameters:
+  LatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+
+Resources:
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !FindInMap [ExistingNetwork, Primary, VpcId]
+      GroupDescription: EC2 SSH restricted to office CIDR
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 203.0.113.0/24
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: Application
+          Value: SecureInfra
+
+  KMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: key-default-1
+        Statement:
+          - Sid: AllowRootAccount
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: 'kms:*'
+            Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: Application
+          Value: SecureInfra
+
+  KMSAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${AWS::StackName}-secure-infra-cmk'
+      TargetKeyId: !Ref KMSKey
+
+  SecureBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref KMSKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: Application
+          Value: SecureInfra
+
+  SecureBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SecureBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EnforceTLS
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub arn:aws:s3:::${SecureBucket}
+              - !Sub arn:aws:s3:::${SecureBucket}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InstanceLeastPrivilege
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: S3ListBucket
+                Effect: Allow
+                Action: s3:ListBucket
+                Resource: !Sub arn:aws:s3:::${SecureBucket}
+              - Sid: S3ObjectRW
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub arn:aws:s3:::${SecureBucket}/*
+              - Sid: UseKmsKey
+                Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:Encrypt
+                  - kms:ReEncrypt*
+                  - kms:GenerateDataKey*
+                  - kms:DescribeKey
+                Resource: !GetAtt KMSKey.Arn
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: Application
+          Value: SecureInfra
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles: [ !Ref InstanceRole ]
+
+  EC2InstanceA:
+    Type: AWS::EC2::Instance
+    Properties:
+      SubnetId: !FindInMap [ExistingNetwork, Primary, PrivateSubnetA]
+      ImageId: !Ref LatestAmiId
+      InstanceType: t3.micro
+      SecurityGroupIds: [ !Ref InstanceSecurityGroup ]
+      IamInstanceProfile: !Ref InstanceProfile
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: gp3
+            VolumeSize: 8
+            Encrypted: true
+            KmsKeyId: !Ref KMSKey
+            DeleteOnTermination: true
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: Application
+          Value: SecureInfra
+
+  EC2InstanceB:
+    Type: AWS::EC2::Instance
+    Properties:
+      SubnetId: !FindInMap [ExistingNetwork, Primary, PrivateSubnetB]
+      ImageId: !Ref LatestAmiId
+      InstanceType: t3.micro
+      SecurityGroupIds: [ !Ref InstanceSecurityGroup ]
+      IamInstanceProfile: !Ref InstanceProfile
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: gp3
+            VolumeSize: 8
+            Encrypted: true
+            KmsKeyId: !Ref KMSKey
+            DeleteOnTermination: true
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: Application
+          Value: SecureInfra
+
+Outputs:
+  VpcId:
+    Description: Existing VPC ID used by this stack
+    Value: !FindInMap [ExistingNetwork, Primary, VpcId]
+  PrivateSubnetAId:
+    Description: Existing Private Subnet A
+    Value: !FindInMap [ExistingNetwork, Primary, PrivateSubnetA]
+  PrivateSubnetBId:
+    Description: Existing Private Subnet B
+    Value: !FindInMap [ExistingNetwork, Primary, PrivateSubnetB]
+  InstanceSecurityGroupId:
+    Description: Instance Security Group ID
+    Value: !Ref InstanceSecurityGroup
+  KmsKeyArn:
+    Description: KMS Key ARN
+    Value: !GetAtt KMSKey.Arn
+  SecureBucketName:
+    Description: Secure S3 Bucket Name
+    Value: !Ref SecureBucket
+  InstanceAId:
+    Description: EC2 Instance A ID
+    Value: !Ref EC2InstanceA
+  InstanceBId:
+    Description: EC2 Instance B ID
+    Value: !Ref EC2InstanceB
