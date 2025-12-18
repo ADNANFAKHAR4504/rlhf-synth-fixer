@@ -8,8 +8,10 @@ import { Construct } from 'constructs';
 
 // LocalStack Community edition does not support EC2, Security Hub, or GuardDuty
 // Use environment variable to enable/disable EC2 resources
-const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') || process.env.AWS_ENDPOINT_URL?.includes('4566');
-const enableEC2 = !isLocalStack && (process.env.ENABLE_EC2 === 'true');
+const isLocalStack =
+  process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+  process.env.AWS_ENDPOINT_URL?.includes('4566');
+const enableEC2 = !isLocalStack && process.env.ENABLE_EC2 === 'true';
 
 interface SecurityStackProps {
   environmentSuffix?: string;
