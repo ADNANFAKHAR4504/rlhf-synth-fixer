@@ -6,10 +6,10 @@
   "po_id": "229178",
   "team": "synth",
   "startedAt": "2025-07-23T17:32:59.047Z",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Provisioning of Infrastructure Environments",
   "provider": "localstack",
   "subject_labels": [
-    "Multi-Environment Consistency"
+    "Multi-Environment Consistency and Replication"
   ],
   "aws_services": [
     "EC2",
