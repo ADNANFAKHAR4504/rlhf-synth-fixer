@@ -11,17 +11,17 @@
     "Web Application Deployment"
   ],
   "aws_services": [
-    "AWS Elastic Beanstalk",
-    "AWS VPC",
-    "AWS EC2",
-    "AWS IAM",
-    "AWS Auto Scaling",
-    "AWS CloudWatch",
-    "AWS SNS",
-    "AWS Application Load Balancer",
-    "AWS NAT Gateway",
-    "AWS Internet Gateway",
-    "AWS Security Groups"
+    "Elastic Beanstalk",
+    "VPC",
+    "EC2",
+    "IAM",
+    "Auto Scaling",
+    "CloudWatch",
+    "SNS",
+    "Application Load Balancer",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Security Groups"
   ],
   "provider": "localstack"
 }
