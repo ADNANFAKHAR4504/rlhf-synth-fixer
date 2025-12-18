@@ -13,6 +13,8 @@ export interface TapStackArgs {
   environmentSuffix?: string;
   regions?: string[];
   tags?: Record<string, string>;
+  /** Override LocalStack detection (useful for testing) */
+  isLocalStack?: boolean;
 }
 
 export class TapStack extends pulumi.ComponentResource {
@@ -51,9 +53,11 @@ export class TapStack extends pulumi.ComponentResource {
     };
 
     // Detect LocalStack environment - EB not fully supported (ListTagsForResource unavailable)
+    // Can be overridden via args for testing purposes
     this.isLocalStack =
-      !!process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-      !!process.env.AWS_ENDPOINT_URL?.includes('localstack');
+      args?.isLocalStack ??
+      (!!process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+        !!process.env.AWS_ENDPOINT_URL?.includes('localstack'));
 
     console.log(' Creating Identity and Access Infrastructure...');
 
@@ -112,36 +116,27 @@ export class TapStack extends pulumi.ComponentResource {
 
       // Skip Elastic Beanstalk on LocalStack - ListTagsForResource API not supported
       if (this.isLocalStack) {
-        console.log(
-          ` Skipping Elastic Beanstalk for ${region} (LocalStack - not fully supported)`
-        );
+        console.log(` Skipping Elastic Beanstalk for ${region} (LocalStack - not fully supported)`);
       } else {
-        console.log(
-          ` Creating Elastic Beanstalk Infrastructure for ${region}...`
+        console.log(` Creating Elastic Beanstalk Infrastructure for ${region}...`);
+        this.regionalElasticBeanstalk[region] = new ElasticBeanstalkInfrastructure(
+          `${name}-eb-${region}`,
+          {
+            region,
+            isPrimary,
+            environment: this.environmentSuffix,
+            environmentSuffix: this.environmentSuffix,
+            vpcId: this.regionalNetworks[region].vpcId,
+            publicSubnetIds: this.regionalNetworks[region].publicSubnetIds,
+            privateSubnetIds: this.regionalNetworks[region].privateSubnetIds,
+            albSecurityGroupId: this.regionalNetworks[region].albSecurityGroupId,
+            ebSecurityGroupId: this.regionalNetworks[region].ebSecurityGroupId,
+            ebServiceRoleArn: this.identity.ebServiceRoleArn,
+            ebInstanceProfileName: this.identity.ebInstanceProfileName,
+            tags: this.tags,
+          },
+          { parent: this, provider: this.providers[region] }
         );
-
-        // Create regional Elastic Beanstalk
-        this.regionalElasticBeanstalk[region] =
-          new ElasticBeanstalkInfrastructure(
-            `${name}-eb-${region}`,
-            {
-              region,
-              isPrimary,
-              environment: this.environmentSuffix,
-              environmentSuffix: this.environmentSuffix,
-              vpcId: this.regionalNetworks[region].vpcId,
-              publicSubnetIds: this.regionalNetworks[region].publicSubnetIds,
-              privateSubnetIds: this.regionalNetworks[region].privateSubnetIds,
-              albSecurityGroupId:
-                this.regionalNetworks[region].albSecurityGroupId,
-              ebSecurityGroupId:
-                this.regionalNetworks[region].ebSecurityGroupId,
-              ebServiceRoleArn: this.identity.ebServiceRoleArn,
-              ebInstanceProfileName: this.identity.ebInstanceProfileName,
-              tags: this.tags,
-            },
-            { parent: this, provider: this.providers[region] }
-          );
       }
     }
 
