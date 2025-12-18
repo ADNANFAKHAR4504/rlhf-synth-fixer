@@ -13,8 +13,9 @@ import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
 import { Construct } from 'constructs';
 
 // Detect LocalStack environment
-const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                     process.env.AWS_ENDPOINT_URL?.includes('4566');
+const isLocalStack =
+  process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+  process.env.AWS_ENDPOINT_URL?.includes('4566');
 
 export interface ServerlessStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -34,30 +35,32 @@ export class ServerlessStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
       // LocalStack: Simplified lifecycle rules (Glacier not fully supported)
-      lifecycleRules: isLocalStack ? [
-        {
-          id: 'ProcessedDataArchival',
-          enabled: true,
-          prefix: 'processed/',
-          expiration: cdk.Duration.days(90),
-        },
-      ] : [
-        {
-          id: 'ProcessedDataArchival',
-          enabled: true,
-          prefix: 'processed/',
-          transitions: [
+      lifecycleRules: isLocalStack
+        ? [
             {
-              storageClass: s3.StorageClass.INFREQUENT_ACCESS,
-              transitionAfter: cdk.Duration.days(30),
+              id: 'ProcessedDataArchival',
+              enabled: true,
+              prefix: 'processed/',
+              expiration: cdk.Duration.days(90),
             },
+          ]
+        : [
             {
-              storageClass: s3.StorageClass.GLACIER,
-              transitionAfter: cdk.Duration.days(90),
+              id: 'ProcessedDataArchival',
+              enabled: true,
+              prefix: 'processed/',
+              transitions: [
+                {
+                  storageClass: s3.StorageClass.INFREQUENT_ACCESS,
+                  transitionAfter: cdk.Duration.days(30),
+                },
+                {
+                  storageClass: s3.StorageClass.GLACIER,
+                  transitionAfter: cdk.Duration.days(90),
+                },
+              ],
             },
           ],
-        },
-      ],
     });
 
     // Create processed files bucket
@@ -382,15 +385,11 @@ def handler(event, context):
       }
     );
 
-    const mapDefinition = new stepfunctions.Map(
-      this,
-      'DataProcessing',
-      {
-        maxConcurrency: isLocalStack ? 10 : 1000,
-        itemsPath: stepfunctions.JsonPath.stringAt('$.items'),
-        comment: 'Process multiple files in parallel',
-      }
-    ).itemProcessor(processDataTask);
+    const mapDefinition = new stepfunctions.Map(this, 'DataProcessing', {
+      maxConcurrency: isLocalStack ? 10 : 1000,
+      itemsPath: stepfunctions.JsonPath.stringAt('$.items'),
+      comment: 'Process multiple files in parallel',
+    }).itemProcessor(processDataTask);
 
     const stepFunctionDefinition = stepfunctions.Chain.start(
       new stepfunctions.Choice(this, 'CheckFileType')

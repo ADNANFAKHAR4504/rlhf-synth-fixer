@@ -20,7 +20,7 @@ describe('TapStack Unit Tests', () => {
   test('Creates nested ServerlessStack', () => {
     // TapStack creates a nested ServerlessStack
     // In CDK v2, nested stacks create AWS::CloudFormation::Stack resources in parent
-    // Since ServerlessStack is instantiated as a regular stack, not NestedStack, 
+    // Since ServerlessStack is instantiated as a regular stack, not NestedStack,
     // it won't create a CloudFormation::Stack resource
     expect(stack).toBeDefined();
     expect(stack.stackName).toContain('TestTapStack');
@@ -29,7 +29,10 @@ describe('TapStack Unit Tests', () => {
   test('Uses environment suffix from context when not provided in props', () => {
     const appWithContext = new cdk.App();
     appWithContext.node.setContext('environmentSuffix', 'context-test');
-    const stackWithContext = new TapStack(appWithContext, 'TestTapStackContext');
+    const stackWithContext = new TapStack(
+      appWithContext,
+      'TestTapStackContext'
+    );
     expect(stackWithContext).toBeDefined();
   });
 
@@ -56,7 +59,10 @@ describe('ServerlessStack Unit Tests', () => {
 
   test('Uses default environment suffix when not provided', () => {
     const appNoSuffix = new cdk.App();
-    const stackNoSuffix = new ServerlessStack(appNoSuffix, 'TestServerlessStackNoSuffix');
+    const stackNoSuffix = new ServerlessStack(
+      appNoSuffix,
+      'TestServerlessStackNoSuffix'
+    );
     const templateNoSuffix = Template.fromStack(stackNoSuffix);
     // Check that stack is created with default suffix (prod)
     // The bucket name will be a Fn::Join with the pattern enterprise-processing-prod-{account}
@@ -65,10 +71,10 @@ describe('ServerlessStack Unit Tests', () => {
         'Fn::Join': Match.arrayWith([
           '',
           Match.arrayWith([
-            Match.stringLikeRegexp('enterprise-processing-prod-')
-          ])
-        ])
-      }
+            Match.stringLikeRegexp('enterprise-processing-prod-'),
+          ]),
+        ]),
+      },
     });
   });
 
@@ -174,8 +180,11 @@ describe('ServerlessStack Unit Tests', () => {
     });
 
     test('State Machine has proper timeout', () => {
-      const stateMachine = template.findResources('AWS::StepFunctions::StateMachine');
-      const definitionObj = Object.values(stateMachine)[0].Properties.DefinitionString;
+      const stateMachine = template.findResources(
+        'AWS::StepFunctions::StateMachine'
+      );
+      const definitionObj =
+        Object.values(stateMachine)[0].Properties.DefinitionString;
       // DefinitionString is a Fn::Join, extract the string parts
       const definitionParts = definitionObj['Fn::Join']?.[1] || [];
       const definitionStr = JSON.stringify(definitionParts);
@@ -183,8 +192,11 @@ describe('ServerlessStack Unit Tests', () => {
     });
 
     test('State Machine includes distributed map configuration', () => {
-      const stateMachine = template.findResources('AWS::StepFunctions::StateMachine');
-      const definitionObj = Object.values(stateMachine)[0].Properties.DefinitionString;
+      const stateMachine = template.findResources(
+        'AWS::StepFunctions::StateMachine'
+      );
+      const definitionObj =
+        Object.values(stateMachine)[0].Properties.DefinitionString;
       // DefinitionString is a Fn::Join, extract the string parts
       const definitionParts = definitionObj['Fn::Join']?.[1] || [];
       const definitionStr = JSON.stringify(definitionParts);
@@ -284,7 +296,8 @@ describe('ServerlessStack Unit Tests', () => {
 
     test('Dashboard includes required widgets', () => {
       const dashboard = template.findResources('AWS::CloudWatch::Dashboard');
-      const dashboardBodyObj = Object.values(dashboard)[0].Properties.DashboardBody;
+      const dashboardBodyObj =
+        Object.values(dashboard)[0].Properties.DashboardBody;
       // DashboardBody is a Fn::Join, extract the string parts
       const dashboardParts = dashboardBodyObj['Fn::Join']?.[1] || [];
       const dashboardStr = JSON.stringify(dashboardParts);
@@ -347,22 +360,30 @@ describe('ServerlessStack Unit Tests', () => {
 
   describe('S3 Event Notifications', () => {
     test('Creates S3 event notifications for file uploads', () => {
-      const notifications = template.findResources('Custom::S3BucketNotifications');
-      const notifConfig = Object.values(notifications)[0].Properties.NotificationConfiguration;
+      const notifications = template.findResources(
+        'Custom::S3BucketNotifications'
+      );
+      const notifConfig =
+        Object.values(notifications)[0].Properties.NotificationConfiguration;
       const lambdaConfigs = notifConfig.LambdaFunctionConfigurations;
-      
+
       // Check we have 4 configurations for different file types
       expect(lambdaConfigs).toHaveLength(4);
-      
+
       // Check that each configuration has the expected structure
       const suffixes = ['.json', '.csv', '.tsv', '.jsonl'];
       suffixes.forEach(suffix => {
-        const config = lambdaConfigs.find((c: any) => 
-          c.Filter?.Key?.FilterRules?.some((r: any) => r.Name === 'suffix' && r.Value === suffix)
+        const config = lambdaConfigs.find((c: any) =>
+          c.Filter?.Key?.FilterRules?.some(
+            (r: any) => r.Name === 'suffix' && r.Value === suffix
+          )
         );
         expect(config).toBeDefined();
         expect(config.Events).toEqual(['s3:ObjectCreated:*']);
-        expect(config.Filter?.Key?.FilterRules).toContainEqual({ Name: 'prefix', Value: 'input/' });
+        expect(config.Filter?.Key?.FilterRules).toContainEqual({
+          Name: 'prefix',
+          Value: 'input/',
+        });
       });
     });
   });
@@ -377,7 +398,7 @@ describe('ServerlessStack Unit Tests', () => {
         'AWS::Events::EventBus',
       ];
 
-      taggedResources.forEach((resourceType) => {
+      taggedResources.forEach(resourceType => {
         const resources = template.findResources(resourceType);
         Object.values(resources).forEach((resource: any) => {
           if (resource.Properties?.Tags) {
