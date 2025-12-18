@@ -166,67 +166,83 @@ Resources:
       SubnetId: !Ref DevPublicSubnetB
       RouteTableId: !Ref DevPublicRouteTable
 
-  DevEIPA:
-    Type: AWS::EC2::EIP
-    # Condition: CreateNatPerAZ
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: TapStack-Dev-EIP-A
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: Dev
-        - Key: CreatedBy
-          Value: !Ref Owner
+  # LOCALSTACK INCOMPATIBILITY: EIP resource commented out
+  # LocalStack does not properly support AWS::EC2::EIP creation
+  # Error: InvalidAllocationID.NotFound when creating NAT Gateway with EIP allocation
+  
+  # DevEIPA:
+  #   Type: AWS::EC2::EIP
+  #   Condition: CreateNatPerAZ
+  #   Properties:
+  #     Domain: vpc
+  #     Tags:
+  #       - Key: Name
+  #         Value: TapStack-Dev-EIP-A
+  #       - Key: Project
+  #         Value: !Ref ProjectName
+  #       - Key: Environment
+  #         Value: Dev
+  #       - Key: CreatedBy
+  #         Value: !Ref Owner
 
-  DevNatGatewayA:
-    Type: AWS::EC2::NatGateway
-    # Condition: CreateNatPerAZ
-    Properties:
-      SubnetId: !Ref DevPublicSubnetA
-      AllocationId: !GetAtt DevEIPA.AllocationId
-      Tags:
-        - Key: Name
-          Value: TapStack-Dev-NAT-A
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: Dev
-        - Key: CreatedBy
-          Value: !Ref Owner
+  # LOCALSTACK INCOMPATIBILITY: NAT Gateway resource commented out
+  # LocalStack does not properly support AWS::EC2::NatGateway creation
+  # Impact: Private subnets will not have outbound internet connectivity in LocalStack
+  
+  # DevNatGatewayA:
+  #   Type: AWS::EC2::NatGateway
+  #   Condition: CreateNatPerAZ
+  #   Properties:
+  #     SubnetId: !Ref DevPublicSubnetA
+  #     AllocationId: !GetAtt DevEIPA.AllocationId
+  #     Tags:
+  #       - Key: Name
+  #         Value: TapStack-Dev-NAT-A
+  #       - Key: Project
+  #         Value: !Ref ProjectName
+  #       - Key: Environment
+  #         Value: Dev
+  #       - Key: CreatedBy
+  #         Value: !Ref Owner
 
-  DevEIPB:
-    Type: AWS::EC2::EIP
-    # Condition: CreateNatPerAZ
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: TapStack-Dev-EIP-B
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: Dev
-        - Key: CreatedBy
-          Value: !Ref Owner
+  # LOCALSTACK INCOMPATIBILITY: EIP resource commented out
+  # LocalStack does not properly support AWS::EC2::EIP creation
+  # Error: InvalidAllocationID.NotFound when creating NAT Gateway with EIP allocation
+  
+  # DevEIPB:
+  #   Type: AWS::EC2::EIP
+  #   Condition: CreateNatPerAZ
+  #   Properties:
+  #     Domain: vpc
+  #     Tags:
+  #       - Key: Name
+  #         Value: TapStack-Dev-EIP-B
+  #       - Key: Project
+  #         Value: !Ref ProjectName
+  #       - Key: Environment
+  #         Value: Dev
+  #       - Key: CreatedBy
+  #         Value: !Ref Owner
 
-  DevNatGatewayB:
-    Type: AWS::EC2::NatGateway
-    # Condition: CreateNatPerAZ
-    Properties:
-      SubnetId: !Ref DevPublicSubnetB
-      AllocationId: !GetAtt DevEIPB.AllocationId
-      Tags:
-        - Key: Name
-          Value: TapStack-Dev-NAT-B
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: Dev
-        - Key: CreatedBy
-          Value: !Ref Owner
+  # LOCALSTACK INCOMPATIBILITY: NAT Gateway resource commented out
+  # LocalStack does not properly support AWS::EC2::NatGateway creation
+  # Impact: Private subnets will not have outbound internet connectivity in LocalStack
+  
+  # DevNatGatewayB:
+  #   Type: AWS::EC2::NatGateway
+  #   Condition: CreateNatPerAZ
+  #   Properties:
+  #     SubnetId: !Ref DevPublicSubnetB
+  #     AllocationId: !GetAtt DevEIPB.AllocationId
+  #     Tags:
+  #       - Key: Name
+  #         Value: TapStack-Dev-NAT-B
+  #       - Key: Project
+  #         Value: !Ref ProjectName
+  #       - Key: Environment
+  #         Value: Dev
+  #       - Key: CreatedBy
+  #         Value: !Ref Owner
 
   # LOCALSTACK INCOMPATIBILITY: Single NAT Gateway and EIP commented out
   # LocalStack does not properly support AWS::EC2::EIP and AWS::EC2::NatGateway creation
