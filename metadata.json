@@ -7,10 +7,9 @@
   "po_id": "trainr269",
   "team": "5",
   "startedAt": "2025-08-12T17:28:30+05:30",
-  "subtask": "Infrastructure QA and Management",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "General Infrastructure Tooling QA",
-    "Infrastructure Analysis/Monitoring"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "VPC",
