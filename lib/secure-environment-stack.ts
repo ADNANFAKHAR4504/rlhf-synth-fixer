@@ -333,6 +333,8 @@ export class SecureEnvironmentStack extends cdk.Stack {
       securityGroup: this.ec2SecurityGroup,
       role: this.ec2Role,
       userData: userData,
+      // Explicitly disable public IP for private subnet instances
+      associatePublicIpAddress: false,
       // Only add blockDevices and requireImdsv2 for non-LocalStack environments
       // LocalStack has issues with Launch Templates created by these properties
       ...(isLocalStack
@@ -350,6 +352,20 @@ export class SecureEnvironmentStack extends cdk.Stack {
             requireImdsv2: true, // Enforce IMDSv2 for enhanced security
           }),
     });
+
+    // Apply tags explicitly to EC2 instance for LocalStack compatibility
+    cdk.Tags.of(privateInstance).add('Environment', environmentSuffix);
+    cdk.Tags.of(privateInstance).add('Project', 'SecureEnvironment');
+    cdk.Tags.of(privateInstance).add('Owner', 'InfrastructureTeam');
+    cdk.Tags.of(privateInstance).add('CostCenter', 'IT-Security');
+    cdk.Tags.of(privateInstance).add('Compliance', 'Required');
+
+    // Apply tags explicitly to VPC for LocalStack compatibility
+    cdk.Tags.of(this.vpc).add('Environment', environmentSuffix);
+    cdk.Tags.of(this.vpc).add('Project', 'SecureEnvironment');
+    cdk.Tags.of(this.vpc).add('Owner', 'InfrastructureTeam');
+    cdk.Tags.of(this.vpc).add('CostCenter', 'IT-Security');
+    cdk.Tags.of(this.vpc).add('Compliance', 'Required');
 
     // Create CloudTrail for comprehensive API logging
     const trail = new cloudtrail.Trail(this, 'SecurityAuditTrail', {
