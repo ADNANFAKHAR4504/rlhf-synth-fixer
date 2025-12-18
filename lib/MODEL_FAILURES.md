@@ -9,7 +9,7 @@ Implementation of Insecure & Non-Scalable Patterns: It introduced code (dynamodb
 These are compounded by three high-severity failures, including a failure to adhere to the requested persona, inaccurate API implementation, and poor code quality. The result is a solution that is not "production-ready," lacks maintainability, and ignores current best practices, thus failing to meet the primary objective of the prompt.
 
 2. Detailed Analysis of Core Failures
-🔴 Critical Failures
+Critical Failures
 CRITICAL FAILURE 2.1: Complete Disregard for Explicit Instructions
 This is the most severe issue. A model that cannot follow direct, unambiguous instructions is unreliable and dangerous for production systems.
 
@@ -43,7 +43,7 @@ Nova Model's Erroneous Code: The inline Lambda code uses dynamodb.scan() to impl
 
 Analysis of Failure: A scan operation in a production API is a critical performance and cost flaw. It reads every item in a table, does not scale, and can lead to throttled requests and exorbitant costs as the dataset grows. An "expert architect" would never recommend this pattern for an API endpoint, proving the model failed to implement a secure, performant, or scalable design.
 
-🟡 High-Severity Failures
+High-Severity Failures
 HIGH FAILURE 2.4: Failure to Adhere to the Expert Persona
 The combination of multiple errors demonstrates a complete failure to adopt the requested "expert AWS solutions architect" persona.
 
