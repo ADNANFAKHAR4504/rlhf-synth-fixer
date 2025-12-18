@@ -2,9 +2,9 @@
 
 This implementation provides a complete, production-ready VPC infrastructure for a payment processing application with PCI DSS compliance requirements, including comprehensive testing and full lint compliance.
 
-## File: lib/lib/tap_stack.py
+## File: lib/tap_stack.py
 
-```python
+```py
 """
 tap_stack.py
 
@@ -315,14 +315,14 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Configure bucket lifecycle policy (7-day retention)
-        self.flow_logs_lifecycle = aws.s3.BucketLifecycleConfigurationV2(
+        self.flow_logs_lifecycle = aws.s3.BucketLifecycleConfiguration(
             f'production-flow-logs-lifecycle-{self.environment_suffix}',
             bucket=self.flow_logs_bucket.id,
             rules=[
-                aws.s3.BucketLifecycleConfigurationV2RuleArgs(
+                aws.s3.BucketLifecycleConfigurationRuleArgs(
                     id='delete-after-7-days',
                     status='Enabled',
-                    expiration=aws.s3.BucketLifecycleConfigurationV2RuleExpirationArgs(
+                    expiration=aws.s3.BucketLifecycleConfigurationRuleExpirationArgs(
                         days=7
                     )
                 )
@@ -379,6 +379,7 @@ class TapStack(pulumi.ComponentResource):
             traffic_type='ALL',
             log_destination_type='s3',
             log_destination=self.flow_logs_bucket.arn,
+            max_aggregation_interval=600,
             tags={
                 **resource_tags,
                 'Name': f'production-flow-log-{self.environment_suffix}'
@@ -411,31 +412,12 @@ class TapStack(pulumi.ComponentResource):
         pulumi.export('nat_gateway_id', self.nat_gateway.id)
         pulumi.export('internet_gateway_id', self.igw.id)
         pulumi.export('flow_logs_bucket', self.flow_logs_bucket.bucket)
-```
 
-## File: lib/__init__.py
-
-```python
-"""TAP Stack - VPC Infrastructure for Payment Processing."""
-```
-
-## File: lib/__main__.py
-
-```python
-#!/usr/bin/env python3
-"""
-Alternative entry point for Pulumi using __main__.py convention.
-
-This file allows running the Pulumi program using the standard __main__.py pattern.
-It imports and executes the same logic as tap.py.
-"""
-# Import the tap module to execute its stack definition
-import tap  # pylint: disable=unused-import
 ```
 
 ## File: lib/tap.py
 
-```python
+```py
 #!/usr/bin/env python3
 """
 Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
@@ -493,9 +475,9 @@ stack = TapStack(
 )
 ```
 
-## File: lib/tests/unit/test_tap_stack.py
+## File: tests/unit/test_tap_stack.py
 
-```python
+```py
 """
 test_tap_stack.py
 
@@ -605,9 +587,9 @@ if __name__ == '__main__':
     unittest.main()
 ```
 
-## File: lib/tests/integration/test_tap_stack.py
+## File: tests/integration/test_tap_stack.py
 
-```python
+```py
 """
 test_tap_stack_integration.py
 
@@ -739,8 +721,6 @@ if __name__ == '__main__':
 ## Key Differences from MODEL_RESPONSE
 
 1. **Fixed lint errors**:
-   - Created lib/__init__.py
-   - Fixed wildcard import in __main__.py
    - Fixed line length in tap_stack.py
    - Removed duplicate docstrings in test files
    - Added final newlines to all files

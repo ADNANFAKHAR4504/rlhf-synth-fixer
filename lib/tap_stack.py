@@ -308,14 +308,14 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Configure bucket lifecycle policy (7-day retention)
-        self.flow_logs_lifecycle = aws.s3.BucketLifecycleConfigurationV2(
+        self.flow_logs_lifecycle = aws.s3.BucketLifecycleConfiguration(
             f'production-flow-logs-lifecycle-{self.environment_suffix}',
             bucket=self.flow_logs_bucket.id,
             rules=[
-                aws.s3.BucketLifecycleConfigurationV2RuleArgs(
+                aws.s3.BucketLifecycleConfigurationRuleArgs(
                     id='delete-after-7-days',
                     status='Enabled',
-                    expiration=aws.s3.BucketLifecycleConfigurationV2RuleExpirationArgs(
+                    expiration=aws.s3.BucketLifecycleConfigurationRuleExpirationArgs(
                         days=7
                     )
                 )
@@ -372,6 +372,7 @@ class TapStack(pulumi.ComponentResource):
             traffic_type='ALL',
             log_destination_type='s3',
             log_destination=self.flow_logs_bucket.arn,
+            max_aggregation_interval=600,
             tags={
                 **resource_tags,
                 'Name': f'production-flow-log-{self.environment_suffix}'

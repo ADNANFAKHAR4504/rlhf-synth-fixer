@@ -2,9 +2,9 @@
 
 This implementation creates a complete production-ready VPC infrastructure for a payment processing application with PCI DSS compliance requirements.
 
-## File: lib/lib/tap_stack.py
+## File: lib/tap_stack.py
 
-```python
+```py
 """
 tap_stack.py
 
@@ -410,74 +410,6 @@ class TapStack(pulumi.ComponentResource):
         pulumi.export('nat_gateway_id', self.nat_gateway.id)
         pulumi.export('internet_gateway_id', self.igw.id)
         pulumi.export('flow_logs_bucket', self.flow_logs_bucket.bucket)
-```
-
-## File: lib/requirements.txt
-
-```txt
-pulumi>=3.0.0,<4.0.0
-pulumi-aws>=6.0.0,<7.0.0
-```
-
-## File: lib/__main__.py
-
-```python
-#!/usr/bin/env python3
-"""
-Alternative entry point for Pulumi using __main__.py convention.
-
-This file allows running the Pulumi program using the standard __main__.py pattern.
-It imports and executes the same logic as tap.py.
-"""
-from tap import *
-```
-
-## File: lib/README.md
-
-```markdown
-# Production VPC Infrastructure - Pulumi Python
-
-This Pulumi program creates a production-ready VPC infrastructure for a payment processing application with PCI DSS compliance requirements.
-
-## Architecture
-
-The infrastructure includes:
-
-- **VPC**: 10.0.0.0/16 CIDR block with DNS hostnames and resolution enabled
-- **Public Subnets**: 3 subnets across us-east-1a, us-east-1b, us-east-1c
-  - 10.0.1.0/24, 10.0.2.0/24, 10.0.3.0/24
-- **Private Subnets**: 3 subnets across us-east-1a, us-east-1b, us-east-1c
-  - 10.0.11.0/24, 10.0.12.0/24, 10.0.13.0/24
-- **Internet Gateway**: Provides internet access for public subnets
-- **NAT Gateway**: Single NAT Gateway in us-east-1a for private subnet internet access
-- **Security Groups**:
-  - Web Server SG: HTTPS (443) from anywhere, SSH (22) from VPC
-  - Database SG: PostgreSQL (5432) from web server SG only
-- **VPC Flow Logs**: Stored in S3 with 7-day lifecycle policy
-
-## Prerequisites
-
-- Python 3.9 or higher
-- Pulumi CLI 3.x or higher
-- AWS CLI configured with appropriate credentials
-- AWS account with permissions to create VPC resources
-
-## Installation
-
-1. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-2. Configure AWS credentials:
-```bash
-aws configure
-```
-
-3. Set environment variables:
-```bash
-export ENVIRONMENT_SUFFIX=dev
-export AWS_REGION=us-east-1
 ```
 
 ## Deployment
