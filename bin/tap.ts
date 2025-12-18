@@ -36,10 +36,27 @@ const defaultTags = {
 
 // Instantiate the main stack component for the infrastructure.
 // This encapsulates all the resources for the platform.
-new TapStack('pulumi-infra', {
+const stack = new TapStack('pulumi-infra', {
   tags: defaultTags,
 });
 
-// To use the stack outputs, you can export them.
-// For example, if TapStack had an output `bucketName`:
-// export const bucketName = stack.bucketName;
+// Export stack outputs for CI/CD validation
+export const vpcIds = pulumi.output(stack.vpcs).apply(vpcs =>
+  Object.fromEntries(Object.entries(vpcs).map(([region, vpc]) => [region, vpc.id]))
+);
+
+export const s3BucketNames = pulumi.output(stack.s3Buckets).apply(buckets =>
+  Object.fromEntries(Object.entries(buckets).map(([region, bucket]) => [region, bucket.bucket]))
+);
+
+export const kmsKeyArns = pulumi.output(stack.kmsKeys).apply(keys =>
+  Object.fromEntries(Object.entries(keys).map(([region, key]) => [region, key.arn]))
+);
+
+export const apiGatewayIds = pulumi.output(stack.apiGateways).apply(apis =>
+  Object.fromEntries(Object.entries(apis).map(([region, api]) => [region, api.id]))
+);
+
+export const securityGroupIds = pulumi.output(stack.securityGroups).apply(sgs =>
+  Object.fromEntries(Object.entries(sgs).map(([region, sg]) => [region, sg.id]))
+);
