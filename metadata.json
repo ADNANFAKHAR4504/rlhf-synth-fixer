@@ -12,7 +12,7 @@
   },
   "author": "veera-turing",
   "dockerS3Location": "",
+  "provider": "localstack",
   "aws_services": ["EC2", "VPC", "RDS", "ELB", "AutoScaling", "SecretsManager", "IAM"],
-  "localstack_compatible": true,
-  "localstack_notes": "NAT Gateway disabled, using public subnets for ASG"
+  "subtask": "Infrastructure Deployment"
 }
