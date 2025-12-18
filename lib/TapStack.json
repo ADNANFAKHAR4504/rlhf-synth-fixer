@@ -520,6 +520,18 @@
                 "VersioningConfiguration": {
                     "Status": "Enabled"
                 },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "FitnessKMSKey"
+                                }
+                            }
+                        }
+                    ]
+                },
                 "PublicAccessBlockConfiguration": {
                     "BlockPublicAcls": true,
                     "BlockPublicPolicy": true,

@@ -291,9 +291,11 @@ describe('Fitness Tracking Backend CloudFormation Template - LocalStack Compatib
       expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
     });
 
-    test('S3 bucket should NOT have KMS encryption (removed for LocalStack)', () => {
+    test('S3 bucket should have KMS encryption', () => {
       const bucket = template.Resources.FitnessAssetsBucket;
-      expect(bucket.Properties.BucketEncryption).toBeUndefined();
+      expect(bucket.Properties.BucketEncryption).toBeDefined();
+      expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration).toBeDefined();
+      expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
     });
 
     test('S3 bucket should have public access block', () => {
@@ -623,9 +625,10 @@ describe('Fitness Tracking Backend CloudFormation Template - LocalStack Compatib
       expect(workoutTable.Properties.SSESpecification).toBeUndefined();
     });
 
-    test('S3 bucket should not have bucket encryption', () => {
+    test('S3 bucket should have bucket encryption', () => {
       const bucket = template.Resources.FitnessAssetsBucket;
-      expect(bucket.Properties.BucketEncryption).toBeUndefined();
+      expect(bucket.Properties.BucketEncryption).toBeDefined();
+      expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration).toBeDefined();
     });
 
     test('SNS topic should not have KMS encryption', () => {

@@ -1,4 +1,3 @@
-```yml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Fitness Tracking Backend Infrastructure - LocalStack Compatible'
 
@@ -279,6 +278,11 @@ Resources:
       BucketName: 'fitness-assets-cfn'
       VersioningConfiguration:
         Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !Ref FitnessKMSKey
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
