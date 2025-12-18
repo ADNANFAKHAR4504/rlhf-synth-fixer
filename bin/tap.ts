@@ -16,7 +16,7 @@ const environmentConfigs: Record<string, EnvironmentConfig> = {
     awsRegion: process.env.AWS_REGION || 'us-east-1',
     awsVpcCidr: '10.0.0.0/16',
     awsAmi: 'ami-0c02fb55956c7d316', // Amazon Linux 2023 AMI (us-east-1)
-    awsInstanceType: 't2.micro',
+    awsInstanceType: 't3.micro',
     awsS3BucketSuffix: 'dev-bucket',
     azureLocation: 'East US',
     azureVnetCidr: '10.1.0.0/16',
