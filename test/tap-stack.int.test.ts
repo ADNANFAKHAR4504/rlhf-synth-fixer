@@ -32,8 +32,8 @@ const ec2Client = new EC2Client({
 });
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
-// Note: For LocalStack testing, the suffix is always 'dev' as that's the default
-const environmentSuffix = 'dev';
+// Note: For LocalStack testing, use the ENVIRONMENT_SUFFIX env var or fallback to 'dev'
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Load outputs (only when file exists)
 let outputs: any = {};
