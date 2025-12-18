@@ -99,7 +99,9 @@ export class NetworkingInfrastructure extends ComponentResource {
     const regionAzMap: Record<string, string[]> = {
       'us-east-1': ['us-east-1a', 'us-east-1b'],
       'us-east-2': ['us-east-2a', 'us-east-2b'],
-      'us-west-1': isLocalStack ? ['us-west-1a', 'us-west-1b'] : ['us-west-1a', 'us-west-1c'],
+      'us-west-1': isLocalStack
+        ? ['us-west-1a', 'us-west-1b']
+        : ['us-west-1a', 'us-west-1c'],
       'us-west-2': ['us-west-2a', 'us-west-2b'],
       'us-gov-east-1': ['us-gov-east-1a', 'us-gov-east-1b'],
       'us-gov-west-1': ['us-gov-west-1a', 'us-gov-west-1b'],
@@ -111,7 +113,10 @@ export class NetworkingInfrastructure extends ComponentResource {
 
     const availableAzs = regionAzMap[this.region];
     if (availableAzs) {
-      console.log(`Using known AZs for ${this.region}${isLocalStack ? ' (LocalStack)' : ''}:`, availableAzs);
+      console.log(
+        `Using known AZs for ${this.region}${isLocalStack ? ' (LocalStack)' : ''}:`,
+        availableAzs
+      );
       return availableAzs;
     }
 
