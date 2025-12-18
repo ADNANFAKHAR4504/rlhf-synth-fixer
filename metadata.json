@@ -1,0 +1,23 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "TAP-0-4",
+  "team": "synth",
+  "startedAt": "2025-07-18T03:37:39.475Z",
+  "subtask": "Infrastructure QA and Management",
+  "provider": "localstack",
+  "subject_labels": [
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "S3",
+    "EventBridge",
+    "StepFunctions",
+    "OpenSearch",
+    "Lambda",
+    "DynamoDB",
+    "CloudWatch"
+  ]
+}
