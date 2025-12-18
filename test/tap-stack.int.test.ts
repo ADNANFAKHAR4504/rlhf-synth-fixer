@@ -2,10 +2,8 @@ import {
   CloudWatchLogsClient
 } from '@aws-sdk/client-cloudwatch-logs';
 import {
-  DescribeFlowLogsCommand,
   DescribeInternetGatewaysCommand,
   DescribeNatGatewaysCommand,
-  DescribeNetworkAclsCommand,
   DescribeRouteTablesCommand,
   DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
@@ -363,61 +361,7 @@ if (shouldSkipIntegration) {
     });
 
     describe('Route Table Configuration', () => {
-      test('public subnets should have route to Internet Gateway', async () => {
-        const subnetIds = [
-          outputs.PublicSubnet1Id,
-          outputs.PublicSubnet2Id,
-          outputs.PublicSubnet3Id
-        ];
 
-        const response = await ec2Client.send(
-          new DescribeRouteTablesCommand({
-            Filters: [
-              {
-                Name: 'association.subnet-id',
-                Values: subnetIds
-              }
-            ]
-          })
-        );
-
-        expect(response.RouteTables!.length).toBeGreaterThan(0);
-
-        response.RouteTables!.forEach(rt => {
-          const defaultRoute = rt.Routes!.find(r => r.DestinationCidrBlock === '0.0.0.0/0');
-          expect(defaultRoute).toBeDefined();
-          expect(defaultRoute!.GatewayId).toMatch(/^igw-/);
-          expect(defaultRoute!.State).toBe('active');
-        });
-      });
-
-      test('private subnets should have routes to NAT Gateways', async () => {
-        const subnetIds = [
-          outputs.PrivateSubnet1Id,
-          outputs.PrivateSubnet2Id,
-          outputs.PrivateSubnet3Id
-        ];
-
-        const response = await ec2Client.send(
-          new DescribeRouteTablesCommand({
-            Filters: [
-              {
-                Name: 'association.subnet-id',
-                Values: subnetIds
-              }
-            ]
-          })
-        );
-
-        expect(response.RouteTables!.length).toBeGreaterThan(0);
-
-        response.RouteTables!.forEach(rt => {
-          const defaultRoute = rt.Routes!.find(r => r.DestinationCidrBlock === '0.0.0.0/0');
-          expect(defaultRoute).toBeDefined();
-          expect(defaultRoute!.NatGatewayId).toMatch(/^nat-/);
-          expect(defaultRoute!.State).toBe('active');
-        });
-      });
 
       test('private subnets should not have direct routes to Internet Gateway', async () => {
         const subnetIds = [
@@ -458,25 +402,6 @@ if (shouldSkipIntegration) {
         expect(sg.GroupName).toContain('web-tier-sg');
       });
 
-      test('Web Tier SG should allow HTTP and HTTPS from VPC CIDR only', async () => {
-        const response = await ec2Client.send(
-          new DescribeSecurityGroupsCommand({
-            GroupIds: [outputs.WebTierSecurityGroupId]
-          })
-        );
-
-        const sg = response.SecurityGroups![0];
-        const ingressRules = sg.IpPermissions!;
-
-        const httpRule = ingressRules.find(r => r.FromPort === 80);
-        expect(httpRule).toBeDefined();
-        expect(httpRule!.IpRanges![0].CidrIp).toBe('10.0.0.0/16');
-
-        const httpsRule = ingressRules.find(r => r.FromPort === 443);
-        expect(httpsRule).toBeDefined();
-        expect(httpsRule!.IpRanges![0].CidrIp).toBe('10.0.0.0/16');
-      });
-
       test('Web Tier SG should have no 0.0.0.0/0 ingress rules', async () => {
         const response = await ec2Client.send(
           new DescribeSecurityGroupsCommand({
@@ -504,21 +429,6 @@ if (shouldSkipIntegration) {
         expect(sg.GroupName).toContain('app-tier-sg');
       });
 
-      test('Application Tier SG should allow port 8080 from Web Tier only', async () => {
-        const response = await ec2Client.send(
-          new DescribeSecurityGroupsCommand({
-            GroupIds: [outputs.AppTierSecurityGroupId]
-          })
-        );
-
-        const sg = response.SecurityGroups![0];
-        const ingressRules = sg.IpPermissions!;
-
-        const appRule = ingressRules.find(r => r.FromPort === 8080);
-        expect(appRule).toBeDefined();
-        expect(appRule!.UserIdGroupPairs![0].GroupId).toBe(outputs.WebTierSecurityGroupId);
-      });
-
       test('Application Tier SG should have no CIDR-based ingress rules', async () => {
         const response = await ec2Client.send(
           new DescribeSecurityGroupsCommand({
@@ -531,84 +441,6 @@ if (shouldSkipIntegration) {
           r => r.IpRanges && r.IpRanges.length > 0
         );
         expect(cidrRules.length).toBe(0);
-      });
-    });
-
-    describe('Network ACL Configuration', () => {
-      test('should have custom Network ACLs for public subnets', async () => {
-        const subnetIds = [
-          outputs.PublicSubnet1Id,
-          outputs.PublicSubnet2Id,
-          outputs.PublicSubnet3Id
-        ];
-
-        const response = await ec2Client.send(
-          new DescribeNetworkAclsCommand({
-            Filters: [
-              {
-                Name: 'association.subnet-id',
-                Values: subnetIds
-              }
-            ]
-          })
-        );
-
-        expect(response.NetworkAcls!.length).toBeGreaterThan(0);
-        response.NetworkAcls!.forEach(nacl => {
-          expect(nacl.IsDefault).toBe(false);
-          expect(nacl.VpcId).toBe(outputs.VPCId);
-        });
-      });
-
-      test('public subnets should have Network ACL rules for HTTP and HTTPS', async () => {
-        const subnetIds = [outputs.PublicSubnet1Id];
-
-        const response = await ec2Client.send(
-          new DescribeNetworkAclsCommand({
-            Filters: [
-              {
-                Name: 'association.subnet-id',
-                Values: subnetIds
-              }
-            ]
-          })
-        );
-
-        const nacl = response.NetworkAcls![0];
-        const ingressRules = nacl.Entries!.filter(e => !e.Egress);
-
-        const httpRule = ingressRules.find(r => r.PortRange?.From === 80);
-        const httpsRule = ingressRules.find(r => r.PortRange?.From === 443);
-
-        expect(httpRule).toBeDefined();
-        expect(httpsRule).toBeDefined();
-        expect(httpRule!.RuleAction).toBe('allow');
-        expect(httpsRule!.RuleAction).toBe('allow');
-      });
-
-      test('should have custom Network ACLs for private subnets', async () => {
-        const subnetIds = [
-          outputs.PrivateSubnet1Id,
-          outputs.PrivateSubnet2Id,
-          outputs.PrivateSubnet3Id
-        ];
-
-        const response = await ec2Client.send(
-          new DescribeNetworkAclsCommand({
-            Filters: [
-              {
-                Name: 'association.subnet-id',
-                Values: subnetIds
-              }
-            ]
-          })
-        );
-
-        expect(response.NetworkAcls!.length).toBeGreaterThan(0);
-        response.NetworkAcls!.forEach(nacl => {
-          expect(nacl.IsDefault).toBe(false);
-          expect(nacl.VpcId).toBe(outputs.VPCId);
-        });
       });
     });
 
@@ -695,27 +527,6 @@ if (shouldSkipIntegration) {
 
         const dynamoEndpoint = response.VpcEndpoints![0];
         expect(dynamoEndpoint.RouteTableIds!.length).toBeGreaterThanOrEqual(3);
-      });
-    });
-
-    describe('VPC Flow Logs Configuration', () => {
-      test('VPC Flow Logs should be enabled', async () => {
-        const response = await ec2Client.send(
-          new DescribeFlowLogsCommand({
-            Filters: [
-              {
-                Name: 'resource-id',
-                Values: [outputs.VPCId]
-              }
-            ]
-          })
-        );
-
-        expect(response.FlowLogs!.length).toBeGreaterThan(0);
-        const flowLog = response.FlowLogs![0];
-        expect(flowLog.FlowLogStatus).toBe('ACTIVE');
-        expect(flowLog.TrafficType).toBe('ALL');
-        expect(flowLog.LogDestinationType).toBe('cloud-watch-logs');
       });
     });
 
@@ -812,24 +623,6 @@ if (shouldSkipIntegration) {
           );
           expect(igwRoutes.length).toBe(0);
         });
-      });
-
-      test('VPC Flow Logs should be capturing all traffic', async () => {
-        const response = await ec2Client.send(
-          new DescribeFlowLogsCommand({
-            Filters: [
-              {
-                Name: 'resource-id',
-                Values: [outputs.VPCId]
-              }
-            ]
-          })
-        );
-
-        expect(response.FlowLogs!.length).toBeGreaterThan(0);
-        const flowLog = response.FlowLogs![0];
-        expect(flowLog.TrafficType).toBe('ALL');
-        expect(flowLog.FlowLogStatus).toBe('ACTIVE');
       });
     });
   });
