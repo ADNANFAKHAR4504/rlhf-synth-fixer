@@ -114,9 +114,9 @@ Parameters:
       - m5.xlarge
 
   LatestAmiId:
-    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Description: Latest Amazon Linux 2 AMI ID
-    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    Type: String
+    Description: Amazon Linux 2 AMI ID (use ami-12345678 for LocalStack)
+    Default: ami-12345678
 
   AlarmEmail:
     Type: String
@@ -1029,7 +1029,7 @@ Resources:
       AutoScalingGroupName: !Sub payment-processing-asg-${EnvironmentSuffix}
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
-        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+        Version: "$Latest"
       MinSize: 2
       MaxSize: 6
       DesiredCapacity: 2
