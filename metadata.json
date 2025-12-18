@@ -1,0 +1,25 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "285",
+  "team": "synth",
+  "startedAt": "2025-08-05T21:27:04-05:00",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "provider": "localstack",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)",
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "CloudFront",
+    "EventBridge Scheduler",
+    "KMS",
+    "IAM",
+    "CloudWatch"
+  ]
+}
