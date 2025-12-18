@@ -69,7 +69,7 @@ describe('Image Processing Pipeline Integration Tests', () => {
 
       const response = await lambdaClient.send(command);
       expect(response.Configuration?.Runtime).toBe('nodejs18.x');
-      expect(response.Configuration?.Handler).toBe('imageProcessor.handler');
+      expect(response.Configuration?.Handler).toBe('index.handler');
       expect(response.Configuration?.Environment?.Variables?.IMAGE_BUCKET).toBeDefined();
       expect(response.Configuration?.Environment?.Variables?.NOTIFICATION_TOPIC_ARN).toBeDefined();
     });

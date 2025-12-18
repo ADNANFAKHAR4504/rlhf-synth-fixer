@@ -19,7 +19,7 @@ describe('TapStack Unit Tests', () => {
     test('should create Lambda function with correct configuration', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
         Runtime: 'nodejs18.x',
-        Handler: 'imageProcessor.handler'
+        Handler: 'index.handler'
       });
       
       // Check environment variables exist (exact refs may vary)
