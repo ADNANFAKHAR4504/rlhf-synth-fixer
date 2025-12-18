@@ -1,7 +1,7 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 import {
-  APIGatewayTokenAuthorizerEvent,
+  APIGatewayRequestAuthorizerEvent,
   APIGatewayAuthorizerResult,
   PolicyDocument,
   Statement,
@@ -17,13 +17,8 @@ interface ApiKeyItem {
   userId: string;
 }
 
-interface AuthorizerContext {
-  userId: string;
-  permissions: string;
-}
-
 export const handler = async (
-  event: APIGatewayTokenAuthorizerEvent
+  event: APIGatewayRequestAuthorizerEvent
 ): Promise<APIGatewayAuthorizerResult> => {
   console.log('Authorizer event:', JSON.stringify(event, null, 2));
 
@@ -102,7 +97,7 @@ export const handler = async (
       context: {
         userId,
         permissions,
-      } as AuthorizerContext,
+      },
     };
 
     console.log(
