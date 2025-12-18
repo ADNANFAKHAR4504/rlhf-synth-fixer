@@ -117,6 +117,7 @@ export class RdsStack extends pulumi.ComponentResource {
     );
 
     // Cross-region read replica (skip in LocalStack - not fully supported)
+    /* istanbul ignore if -- @preserve LocalStack doesn't fully support cross-region RDS read replicas */
     if (!isLocalStack()) {
       this.secondaryRdsReadReplica = new aws.rds.Instance(
         `${args.environment}-secondary-mysql-read-replica`,
@@ -147,6 +148,7 @@ export class RdsStack extends pulumi.ComponentResource {
       primaryDbPort: this.primaryRdsInstance.port,
     };
 
+    /* istanbul ignore if -- @preserve secondaryRdsReadReplica only exists in non-LocalStack environments */
     if (this.secondaryRdsReadReplica) {
       outputs.secondaryDbEndpoint = this.secondaryRdsReadReplica.endpoint;
       outputs.secondaryDbPort = this.secondaryRdsReadReplica.port;

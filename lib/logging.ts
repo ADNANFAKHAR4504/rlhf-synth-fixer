@@ -192,6 +192,7 @@ export class LoggingStack extends pulumi.ComponentResource {
     );
 
     // VPC Flow Logs for Primary VPC (skip in LocalStack due to unsupported maxAggregationInterval)
+    /* istanbul ignore if -- @preserve LocalStack doesn't support VPC Flow Logs with maxAggregationInterval */
     if (!isLocalStack()) {
       new aws.ec2.FlowLog(
         `${args.environment}-primary-vpc-flow-logs`,

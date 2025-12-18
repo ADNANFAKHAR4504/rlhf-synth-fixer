@@ -192,6 +192,7 @@ export class SecureStack extends pulumi.ComponentResource {
       // RDS Information
       primaryDbEndpoint: this.rdsStack.primaryRdsInstance.endpoint,
       primaryDbPort: this.rdsStack.primaryRdsInstance.port,
+      /* istanbul ignore next -- @preserve secondaryRdsReadReplica only exists in non-LocalStack environments */
       ...(this.rdsStack.secondaryRdsReadReplica
         ? {
             secondaryDbEndpoint: this.rdsStack.secondaryRdsReadReplica.endpoint,
