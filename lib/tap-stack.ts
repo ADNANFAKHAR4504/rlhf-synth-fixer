@@ -24,12 +24,31 @@ export class TapStack extends cdk.Stack {
     // ! Instead, create separate stacks for each resource type.
 
     // Create the serverless data processing stack
-    new ServerlessStack(this, 'ServerlessDataProcessing', {
+    const serverlessStack = new ServerlessStack(this, 'ServerlessDataProcessing', {
       environmentSuffix: environmentSuffix,
       env: {
         account: cdk.Stack.of(this).account,
         region: cdk.Stack.of(this).region,
       },
+    });
+
+    // Export key outputs from nested stack at parent level
+    new cdk.CfnOutput(this, 'ServerlessStackName', {
+      value: serverlessStack.stackName,
+      description: 'Name of the Serverless Data Processing Stack',
+      exportName: `ServerlessStackName-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'Region', {
+      value: this.region,
+      description: 'AWS Region',
+      exportName: `Region-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'Account', {
+      value: this.account,
+      description: 'AWS Account ID',
+      exportName: `Account-${environmentSuffix}`,
     });
   }
 }
