@@ -19,6 +19,5 @@
     "API Gateway",
     "IAM",
     "CloudWatch LogGroup"
-  ],
-  "author": "veera-turing"
+  ]
 }
