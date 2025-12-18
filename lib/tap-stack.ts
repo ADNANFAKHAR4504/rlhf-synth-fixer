@@ -81,13 +81,14 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Enable Contributor Insights
-    void new aws.dynamodb.ContributorInsights(
-      `table-insights-${environmentSuffix}`,
-      {
-        tableName: table.name,
-      },
-      { parent: this }
-    );
+    // Note: Commented out for LocalStack compatibility - Contributor Insights may not be fully supported
+    // void new aws.dynamodb.ContributorInsights(
+    //   `table-insights-${environmentSuffix}`,
+    //   {
+    //     tableName: table.name,
+    //   },
+    //   { parent: this }
+    // );
 
     // CloudWatch Alarm for Read Capacity
     void new aws.cloudwatch.MetricAlarm(
@@ -101,9 +102,9 @@ export class TapStack extends pulumi.ComponentResource {
         period: 300, // 5 minutes
         statistic: 'Sum',
         threshold: 80,
-        dimensions: {
-          TableName: table.name,
-        },
+        dimensions: table.name.apply((name) => ({
+          TableName: name,
+        })),
         alarmDescription: 'Alarm when read capacity exceeds threshold',
         tags: defaultTags,
       },
@@ -122,9 +123,9 @@ export class TapStack extends pulumi.ComponentResource {
         period: 300, // 5 minutes
         statistic: 'Sum',
         threshold: 80,
-        dimensions: {
-          TableName: table.name,
-        },
+        dimensions: table.name.apply((name) => ({
+          TableName: name,
+        })),
         alarmDescription: 'Alarm when write capacity exceeds threshold',
         tags: defaultTags,
       },
