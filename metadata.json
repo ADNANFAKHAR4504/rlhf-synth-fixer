@@ -4,17 +4,12 @@
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "292090",
-  "team": "1",
+  "team": "2",
   "startedAt": "2025-08-15T05:47:05.987Z",
-  "subtask": "Web Application Deployment",
+  "subtask": "Application Deployment",
   "subject_labels": [
-    "General Infrastructure Tooling QA",
     "Web Application Deployment",
-    "Security Configuration",
-    "Database Management",
-    "Network Configuration",
-    "Resource Scaling",
-    "Monitoring Setup"
+    "Serverless Infrastructure (Functions as Code)"
   ],
   "aws_services": [
     "EC2",
