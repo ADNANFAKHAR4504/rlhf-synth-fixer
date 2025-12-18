@@ -103,6 +103,7 @@ fi
 
 DOCKER_CMD="$DOCKER_CMD \
   -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /tmp/localstack:/var/lib/localstack \
   localstack/localstack-pro:stable"
 
 # Execute the docker command
