@@ -105,7 +105,7 @@ interface RegionalMonitoringInfrastructure {
 // FIXED: Simple static AZ mapping based on your working regions
 function getAvailabilityZones(region: string): string[] {
   const regionAzMap: Record<string, string[]> = {
-    'us-west-1': ['us-west-1a', 'us-west-1c'], // These work according to your logs
+    'us-west-1': ['us-west-1a', 'us-west-1b'], // LocalStack only supports us-west-1a and us-west-1b
     // Add other regions later after testing
     // 'us-east-1': ['us-east-1a', 'us-east-1b'], // Add back later
   };
@@ -363,7 +363,7 @@ export class TapStack extends pulumi.ComponentResource {
         {
           vpcId: vpc.vpcId,
           cidrBlock: `${10 + regionIndex}.0.2.0/24`,
-          availabilityZone: availabilityZones[1], // us-west-1c
+          availabilityZone: availabilityZones[1], // us-west-1b
           isPublic: true,
           mapPublicIpOnLaunch: true,
           name: `${name}-public-1-${region}`,
@@ -403,7 +403,7 @@ export class TapStack extends pulumi.ComponentResource {
         {
           vpcId: vpc.vpcId,
           cidrBlock: `${10 + regionIndex}.0.20.0/24`,
-          availabilityZone: availabilityZones[1], // us-west-1c
+          availabilityZone: availabilityZones[1], // us-west-1b
           isPublic: false,
           mapPublicIpOnLaunch: false,
           name: `${name}-private-1-${region}`,

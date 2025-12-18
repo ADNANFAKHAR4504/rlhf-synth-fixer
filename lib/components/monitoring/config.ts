@@ -135,7 +135,9 @@ export class ConfigDeliveryChannelComponent extends pulumi.ComponentResource {
   }
 }
 
-export class ConfigConfigurationRecorderComponent extends pulumi.ComponentResource {
+export class ConfigConfigurationRecorderComponent
+  extends pulumi.ComponentResource
+{
   public readonly configurationRecorder: MockConfigurationRecorder;
 
   constructor(

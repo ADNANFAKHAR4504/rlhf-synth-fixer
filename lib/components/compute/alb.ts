@@ -187,7 +187,7 @@ export class AlbListenerComponent extends pulumi.ComponentResource {
 
     // Convert defaultActions to the format expected by aws.lb.Listener
     const defaultActions = args.defaultActions.map(action => {
-      const baseAction: any = {
+      const baseAction: aws.types.input.lb.ListenerDefaultAction = {
         type: action.type,
       };
 

@@ -84,7 +84,9 @@ export class AcmCertificateComponent extends pulumi.ComponentResource {
   }
 }
 
-export class AcmCertificateValidationComponent extends pulumi.ComponentResource {
+export class AcmCertificateValidationComponent
+  extends pulumi.ComponentResource
+{
   public readonly certificateValidation: aws.acm.CertificateValidation;
 
   constructor(

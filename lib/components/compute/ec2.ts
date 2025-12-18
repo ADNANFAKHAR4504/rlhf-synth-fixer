@@ -356,9 +356,9 @@ yum update -y --security
       'apply' in rawLatestVersion
     ) {
       // Real Pulumi output case: has apply method
-      this.latestVersion = (rawLatestVersion as any).apply((v: any) =>
-        v.toString()
-      );
+      this.latestVersion = (
+        rawLatestVersion as pulumi.Output<number>
+      ).apply((v: number) => v.toString());
     } else {
       // Fallback case: convert to string
       this.latestVersion = pulumi.output(String(rawLatestVersion));

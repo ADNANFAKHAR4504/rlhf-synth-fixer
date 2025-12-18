@@ -229,7 +229,9 @@ export class DatabaseSecurityGroupComponent extends pulumi.ComponentResource {
   }
 }
 
-export class ApplicationSecurityGroupComponent extends pulumi.ComponentResource {
+export class ApplicationSecurityGroupComponent
+  extends pulumi.ComponentResource
+{
   public readonly securityGroup: aws.ec2.SecurityGroup;
   public readonly securityGroupId: pulumi.Output<string>;
   public readonly rules: aws.ec2.SecurityGroupRule[];

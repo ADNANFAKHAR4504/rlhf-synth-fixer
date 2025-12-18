@@ -104,7 +104,9 @@ export class SecretsManagerSecretComponent extends pulumi.ComponentResource {
   }
 }
 
-export class SecretsManagerSecretVersionComponent extends pulumi.ComponentResource {
+export class SecretsManagerSecretVersionComponent
+  extends pulumi.ComponentResource
+{
   public readonly secretVersion: aws.secretsmanager.SecretVersion;
 
   constructor(
