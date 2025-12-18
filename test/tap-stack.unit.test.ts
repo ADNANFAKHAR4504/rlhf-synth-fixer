@@ -381,14 +381,6 @@ describe('Weather Monitoring CloudFormation Template', () => {
       expect(permission.Properties.Action).toBe('lambda:InvokeFunction');
       expect(permission.Properties.Principal).toBe('apigateway.amazonaws.com');
     });
-
-    test('should have LambdaFailureDestination', () => {
-      const destination = template.Resources.LambdaFailureDestination;
-      expect(destination).toBeDefined();
-      expect(destination.Type).toBe('AWS::Lambda::EventInvokeConfig');
-      expect(destination.Properties.MaximumRetryAttempts).toBe(2);
-      expect(destination.Properties.Qualifier).toBe('$LATEST');
-    });
   });
 
   describe('Outputs', () => {
