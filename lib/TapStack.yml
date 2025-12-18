@@ -21,8 +21,11 @@ Parameters:
     Description: Create NAT Gateway per Availability Zone
 
 Conditions:
-  CreateNatPerAZ: !Equals [!Ref CreateNatPerAZ, 'true']
-  SingleNat: !Equals [!Ref CreateNatPerAZ, 'false']
+  # LOCALSTACK INCOMPATIBILITY: NAT Gateway conditions commented out
+  # These conditions are unused because all NAT Gateway resources are commented out
+  # Reason: LocalStack does not support AWS::EC2::NatGateway creation
+  # CreateNatPerAZ: !Equals [!Ref CreateNatPerAZ, 'true']
+  # SingleNat: !Equals [!Ref CreateNatPerAZ, 'false']
   HasTeamPrincipal: !Not [!Equals [!Ref TeamPrincipalARN, '']]
 
 Resources:
