@@ -1,23 +1,13 @@
 ```yml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Fitness Tracking Backend Infrastructure'
-
-Metadata:
-  AWS::CloudFormation::Interface:
-    ParameterGroups:
-      - Label:
-          default: 'Environment Configuration'
-        Parameters:
-          - EnvironmentSuffix
+Description: 'Fitness Tracking Backend Infrastructure - LocalStack Compatible'
 
 Parameters:
   EnvironmentSuffix:
     Type: String
     Default: 'dev'
     Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters'
-
+  
   ApiName:
     Type: String
     Default: 'FitnessAPI'
@@ -37,31 +27,16 @@ Parameters:
     MaxValue: 100
     Description: 'Write capacity units for DynamoDB tables'
   
-  CognitoSocialProvider:
-    Type: String
-    Default: ''
-    Description: 'Social identity provider (e.g., Facebook, Google)'
-  
   NotificationEmail:
     Type: String
-    Default: ''
+    Default: 'test@example.com'
     Description: 'Email for SNS notifications'
-  
-  RedisNodeType:
-    Type: String
-    Default: 'cache.t3.micro'
-    AllowedValues:
-      - cache.t3.micro
-      - cache.t3.small
-      - cache.t3.medium
-    Description: 'ElastiCache Redis node type'
 
 Conditions:
-  HasSocialProvider: !Not [!Equals [!Ref CognitoSocialProvider, '']]
   HasNotificationEmail: !Not [!Equals [!Ref NotificationEmail, '']]
 
 Resources:
-  # VPC Configuration for ElastiCache
+  # VPC Configuration (Simplified for LocalStack)
   FitnessVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -73,8 +48,6 @@ Resources:
           Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: FitnessTracker
-        - Key: Owner
-          Value: FitnessBackendTeam
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -87,8 +60,6 @@ Resources:
           Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: FitnessTracker
-        - Key: Owner
-          Value: FitnessBackendTeam
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -101,8 +72,6 @@ Resources:
           Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: FitnessTracker
-        - Key: Owner
-          Value: FitnessBackendTeam
 
   PublicSubnet1:
     Type: AWS::EC2::Subnet
@@ -116,23 +85,6 @@ Resources:
           Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: FitnessTracker
-        - Key: Owner
-          Value: FitnessBackendTeam
-
-  PublicSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref FitnessVPC
-      AvailabilityZone: !Select [1, !GetAZs '']
-      CidrBlock: '10.0.11.0/24'
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: FitnessTracker
-        - Key: Owner
-          Value: FitnessBackendTeam
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -142,38 +94,12 @@ Resources:
           Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: FitnessTracker
-        - Key: Owner
-          Value: FitnessBackendTeam
 
   VPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref FitnessVPC
       InternetGatewayId: !Ref InternetGateway
-
-  NATGateway1EIP:
-    Type: AWS::EC2::EIP
-    DependsOn: VPCGatewayAttachment
-    Properties:
-      Domain: vpc
-
-  NATGateway2EIP:
-    Type: AWS::EC2::EIP
-    DependsOn: VPCGatewayAttachment
-    Properties:
-      Domain: vpc
-
-  NATGateway1:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NATGateway1EIP.AllocationId
-      SubnetId: !Ref PublicSubnet1
-
-  NATGateway2:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NATGateway2EIP.AllocationId
-      SubnetId: !Ref PublicSubnet2
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -184,8 +110,6 @@ Resources:
           Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: FitnessTracker
-        - Key: Owner
-          Value: FitnessBackendTeam
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -201,13 +125,7 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       RouteTableId: !Ref PublicRouteTable
 
-  PublicSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet2
-      RouteTableId: !Ref PublicRouteTable
-
-  PrivateRouteTable1:
+  PrivateRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref FitnessVPC
@@ -216,46 +134,18 @@ Resources:
           Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: FitnessTracker
-        - Key: Owner
-          Value: FitnessBackendTeam
-
-  PrivateRoute1:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable1
-      DestinationCidrBlock: '0.0.0.0/0'
-      NatGatewayId: !Ref NATGateway1
 
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnet1
-      RouteTableId: !Ref PrivateRouteTable1
-
-  PrivateRouteTable2:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref FitnessVPC
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: FitnessTracker
-        - Key: Owner
-          Value: FitnessBackendTeam
-
-  PrivateRoute2:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable2
-      DestinationCidrBlock: '0.0.0.0/0'
-      NatGatewayId: !Ref NATGateway2
+      RouteTableId: !Ref PrivateRouteTable
 
   PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnet2
-      RouteTableId: !Ref PrivateRouteTable2
+      RouteTableId: !Ref PrivateRouteTable
 
   # Security Groups
   LambdaSecurityGroup:
@@ -271,28 +161,8 @@ Resources:
           Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: FitnessTracker
-        - Key: Owner
-          Value: FitnessBackendTeam
 
-  RedisSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: 'Security group for ElastiCache Redis'
-      VpcId: !Ref FitnessVPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 6379
-          ToPort: 6379
-          SourceSecurityGroupId: !Ref LambdaSecurityGroup
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: FitnessTracker
-        - Key: Owner
-          Value: FitnessBackendTeam
-
-  # KMS Keys
+  # KMS Keys (Simplified for LocalStack)
   FitnessKMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -306,26 +176,11 @@ Resources:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'kms:*'
             Resource: '*'
-          - Sid: Allow services to use the key
-            Effect: Allow
-            Principal:
-              Service:
-                - dynamodb.amazonaws.com
-                - s3.amazonaws.com
-                - sns.amazonaws.com
-                - lambda.amazonaws.com
-            Action:
-              - 'kms:Decrypt'
-              - 'kms:GenerateDataKey'
-              - 'kms:CreateGrant'
-            Resource: '*'
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: FitnessTracker
-        - Key: Owner
-          Value: FitnessBackendTeam
 
   FitnessKMSKeyAlias:
     Type: AWS::KMS::Alias
@@ -360,17 +215,11 @@ Resources:
           ProvisionedThroughput:
             ReadCapacityUnits: !Ref DynamoDBReadCapacity
             WriteCapacityUnits: !Ref DynamoDBWriteCapacity
-      SSESpecification:
-        SSEEnabled: true
-        SSEType: KMS
-        KMSMasterKeyId: !Ref FitnessKMSKey
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: FitnessTracker
-        - Key: Owner
-          Value: FitnessBackendTeam
 
   WorkoutHistoryTable:
     Type: AWS::DynamoDB::Table
@@ -417,30 +266,19 @@ Resources:
           ProvisionedThroughput:
             ReadCapacityUnits: !Ref DynamoDBReadCapacity
             WriteCapacityUnits: !Ref DynamoDBWriteCapacity
-      SSESpecification:
-        SSEEnabled: true
-        SSEType: KMS
-        KMSMasterKeyId: !Ref FitnessKMSKey
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: FitnessTracker
-        - Key: Owner
-          Value: FitnessBackendTeam
 
-  # S3 Bucket
+  # S3 Bucket (Simplified for LocalStack)
   FitnessAssetsBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: 'fitness-assets-cfn'
       VersioningConfiguration:
         Status: Enabled
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: 'aws:kms'
-              KMSMasterKeyID: !Ref FitnessKMSKey
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -451,10 +289,8 @@ Resources:
           Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: FitnessTracker
-        - Key: Owner
-          Value: FitnessBackendTeam
 
-  # Cognito User Pool
+  # Cognito User Pool (Simplified for LocalStack)
   FitnessUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
@@ -468,21 +304,13 @@ Resources:
           AttributeDataType: String
           Required: true
           Mutable: false
-        - Name: name
-          AttributeDataType: String
-          Required: true
-          Mutable: true
       Policies:
         PasswordPolicy:
           MinimumLength: 8
           RequireUppercase: true
           RequireLowercase: true
           RequireNumbers: true
-          RequireSymbols: true
-      UserPoolTags:
-        Environment: fitness-dev
-        Project: FitnessTracker
-        Owner: FitnessBackendTeam
+          RequireSymbols: false
 
   FitnessUserPoolClient:
     Type: AWS::Cognito::UserPoolClient
@@ -493,10 +321,6 @@ Resources:
         - ALLOW_USER_SRP_AUTH
         - ALLOW_REFRESH_TOKEN_AUTH
       GenerateSecret: false
-      PreventUserExistenceErrors: ENABLED
-      SupportedIdentityProviders:
-        - COGNITO
-        - !If [HasSocialProvider, !Ref CognitoSocialProvider, !Ref 'AWS::NoValue']
 
   # SNS Topic
   AchievementTopic:
@@ -504,14 +328,11 @@ Resources:
     Properties:
       TopicName: !Sub '${AWS::StackName}-Achievements'
       DisplayName: 'Fitness Achievement Notifications'
-      KmsMasterKeyId: !Ref FitnessKMSKey
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: FitnessTracker
-        - Key: Owner
-          Value: FitnessBackendTeam
 
   EmailSubscription:
     Type: AWS::SNS::Subscription
@@ -533,7 +354,7 @@ Resources:
               Service: lambda.amazonaws.com
             Action: 'sts:AssumeRole'
       ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole'
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
       Policies:
         - PolicyName: FitnessLambdaPolicy
           PolicyDocument:
@@ -571,24 +392,13 @@ Resources:
                 Action:
                   - 'cloudwatch:PutMetricData'
                 Resource: '*'
-              - Effect: Allow
-                Action:
-                  - 'elasticache:DescribeCacheClusters'
-                Resource: '*'
-              - Effect: Allow
-                Action:
-                  - 'kms:Decrypt'
-                  - 'kms:GenerateDataKey'
-                Resource: !GetAtt FitnessKMSKey.Arn
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: FitnessTracker
-        - Key: Owner
-          Value: FitnessBackendTeam
 
-  # Lambda Functions
+  # Lambda Functions (Removed VPC config and Redis references for LocalStack)
   WorkoutProcessingFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -598,19 +408,12 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 30
       MemorySize: 256
-      VpcConfig:
-        SecurityGroupIds:
-          - !Ref LambdaSecurityGroup
-        SubnetIds:
-          - !Ref PrivateSubnet1
-          - !Ref PrivateSubnet2
       Environment:
         Variables:
           USER_PROFILES_TABLE: !Ref UserProfilesTable
           WORKOUT_HISTORY_TABLE: !Ref WorkoutHistoryTable
           ACHIEVEMENT_TOPIC_ARN: !Ref AchievementTopic
           ASSETS_BUCKET: !Ref FitnessAssetsBucket
-          REDIS_ENDPOINT: !GetAtt RedisCluster.RedisEndpoint.Address
       Code:
         ZipFile: |
           import json
@@ -686,8 +489,6 @@ Resources:
           Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: FitnessTracker
-        - Key: Owner
-          Value: FitnessBackendTeam
 
   LeaderboardFunction:
     Type: AWS::Lambda::Function
@@ -698,16 +499,9 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 30
       MemorySize: 256
-      VpcConfig:
-        SecurityGroupIds:
-          - !Ref LambdaSecurityGroup
-        SubnetIds:
-          - !Ref PrivateSubnet1
-          - !Ref PrivateSubnet2
       Environment:
         Variables:
           WORKOUT_HISTORY_TABLE: !Ref WorkoutHistoryTable
-          REDIS_ENDPOINT: !GetAtt RedisCluster.RedisEndpoint.Address
       Code:
         ZipFile: |
           import json
@@ -725,7 +519,7 @@ Resources:
               end_date = datetime.now()
               start_date = end_date - timedelta(days=7)
               
-              # Placeholder response - would integrate with Redis
+              # Placeholder response
               leaderboard = {
                   'weekly': [],
                   'monthly': [],
@@ -745,8 +539,6 @@ Resources:
           Value: !Ref EnvironmentSuffix
         - Key: Project
           Value: FitnessTracker
-        - Key: Owner
-          Value: FitnessBackendTeam
 
   # API Gateway
   FitnessAPI:
@@ -840,90 +632,7 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${FitnessAPI}/*/*'
 
-  # ElastiCache Redis
-  RedisSubnetGroup:
-    Type: AWS::ElastiCache::SubnetGroup
-    Properties:
-      Description: 'Subnet group for Redis cluster'
-      SubnetIds:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: FitnessTracker
-        - Key: Owner
-          Value: FitnessBackendTeam
-
-  RedisCluster:
-    Type: AWS::ElastiCache::CacheCluster
-    Properties:
-      CacheNodeType: !Ref RedisNodeType
-      Engine: redis
-      NumCacheNodes: 1
-      VpcSecurityGroupIds:
-        - !Ref RedisSecurityGroup
-      CacheSubnetGroupName: !Ref RedisSubnetGroup
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: FitnessTracker
-        - Key: Owner
-          Value: FitnessBackendTeam
-
-  # CloudWatch Dashboard
-  FitnessDashboard:
-    Type: AWS::CloudWatch::Dashboard
-    Properties:
-      DashboardName: !Sub '${AWS::StackName}-FitnessMetrics'
-      DashboardBody: !Sub |
-        {
-          "widgets": [
-            {
-              "type": "metric",
-              "properties": {
-                "metrics": [
-                  ["FitnessTracker", "ActiveUsers", {"stat": "Sum"}]
-                ],
-                "period": 300,
-                "stat": "Average",
-                "region": "${AWS::Region}",
-                "title": "Active Users",
-                "view": "timeSeries"
-              }
-            },
-            {
-              "type": "metric",
-              "properties": {
-                "metrics": [
-                  ["AWS/Lambda", "Errors", "FunctionName", "${WorkoutProcessingFunction}", {"stat": "Sum"}],
-                  ["AWS/Lambda", "Duration", "FunctionName", "${WorkoutProcessingFunction}", {"stat": "Average"}]
-                ],
-                "period": 300,
-                "stat": "Average",
-                "region": "${AWS::Region}",
-                "title": "Lambda Performance"
-              }
-            },
-            {
-              "type": "metric",
-              "properties": {
-                "metrics": [
-                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", "${WorkoutHistoryTable}", {"stat": "Sum"}],
-                  ["AWS/DynamoDB", "ConsumedWriteCapacityUnits", "TableName", "${WorkoutHistoryTable}", {"stat": "Sum"}]
-                ],
-                "period": 300,
-                "stat": "Average",
-                "region": "${AWS::Region}",
-                "title": "DynamoDB Usage"
-              }
-            }
-          ]
-        }
-
-  # CloudWatch Alarms
+  # CloudWatch Alarms (Basic for LocalStack)
   LambdaErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -939,23 +648,6 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref WorkoutProcessingFunction
-      TreatMissingData: notBreaching
-
-  DynamoDBThrottleAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub '${AWS::StackName}-DynamoDBThrottle'
-      AlarmDescription: 'Alert on DynamoDB throttling'
-      MetricName: UserErrors
-      Namespace: AWS/DynamoDB
-      Statistic: Sum
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: 0
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: TableName
-          Value: !Ref WorkoutHistoryTable
       TreatMissingData: notBreaching
 
 Outputs:
@@ -983,6 +675,12 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-WorkoutHistoryTable'
 
+  UserProfilesTableName:
+    Description: 'DynamoDB User Profiles Table Name'
+    Value: !Ref UserProfilesTable
+    Export:
+      Name: !Sub '${AWS::StackName}-UserProfilesTable'
+
   S3BucketName:
     Description: 'S3 Bucket for fitness assets'
     Value: !Ref FitnessAssetsBucket
@@ -995,21 +693,26 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-UserPoolId'
 
+  CognitoUserPoolClientId:
+    Description: 'Cognito User Pool Client ID'
+    Value: !Ref FitnessUserPoolClient
+    Export:
+      Name: !Sub '${AWS::StackName}-UserPoolClientId'
+
   SNSTopicArn:
     Description: 'SNS Topic ARN for achievement notifications'
     Value: !Ref AchievementTopic
     Export:
       Name: !Sub '${AWS::StackName}-AchievementTopicArn'
 
-  RedisClusterEndpoint:
-    Description: 'ElastiCache Redis Cluster Endpoint'
-    Value: !GetAtt RedisCluster.RedisEndpoint.Address
+  VPCId:
+    Description: 'VPC ID'
+    Value: !Ref FitnessVPC
     Export:
-      Name: !Sub '${AWS::StackName}-RedisEndpoint'
+      Name: !Sub '${AWS::StackName}-VPCId'
 
-  CloudWatchDashboardName:
-    Description: 'CloudWatch Dashboard Name'
-    Value: !Sub '${AWS::StackName}-FitnessMetrics'
+  KMSKeyId:
+    Description: 'KMS Key ID for encryption'
+    Value: !Ref FitnessKMSKey
     Export:
-      Name: !Sub '${AWS::StackName}-DashboardName'
-```
+      Name: !Sub '${AWS::StackName}-KMSKeyId'
