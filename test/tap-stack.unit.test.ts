@@ -114,7 +114,9 @@ describe('NetworkStack', () => {
     });
 
     test('creates NAT gateways for private subnets', () => {
-      template.resourceCountIs('AWS::EC2::NatGateway', 2); // One per AZ
+      // LocalStack Community Edition has limited NAT Gateway support
+      // We use PRIVATE_ISOLATED subnets instead, so no NAT Gateways are created
+      template.resourceCountIs('AWS::EC2::NatGateway', 0);
     });
   });
 
