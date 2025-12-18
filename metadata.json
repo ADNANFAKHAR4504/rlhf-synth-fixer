@@ -16,10 +16,7 @@
     "Lambda",
     "API Gateway",
     "IAM",
-    "CloudWatch",
-    "Application Auto Scaling",
-    "SSM Parameter Store",
-    "CloudWatch Logs"
-  ],
-  "training_quality": 8
+    "CloudWatch Logs",
+    "SSM Parameter Store"
+  ]
 }
