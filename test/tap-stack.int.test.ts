@@ -213,7 +213,7 @@ describe('TapStack CloudFormation Template - Integration Tests', () => {
       });
       const dbInstance = JSON.parse(stdout);
       expect(dbInstance.Engine).toBe('mysql');
-      expect(dbInstance.DBInstanceClass).toBe('db.t3.micro');
+      expect(dbInstance.DBInstanceClass).toBe('db.t3.small');
       expect(dbInstance.StorageEncrypted).toBe(true);
       expect(dbInstance.PubliclyAccessible).toBe(false);
       expect(dbInstance.MasterUsername).toBe(DB_USERNAME);

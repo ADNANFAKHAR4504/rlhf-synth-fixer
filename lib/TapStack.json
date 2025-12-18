@@ -649,16 +649,18 @@
                 "DBInstanceIdentifier": {
                     "Fn::Sub": "${AWS::StackName}-mysql-db-${EnvironmentSuffix}"
                 },
-                "DBInstanceClass": "db.t3.micro",
+                "DBInstanceClass": "db.t3.small",
                 "Engine": "mysql",
-                "EngineVersion": "5.7",
-                "AllocatedStorage": 20,
+                "EngineVersion": "5.7.44-rds.20250508",
+                "AllocatedStorage": 10,
                 "StorageType": "gp2",
                 "StorageEncrypted": true,
                 "MasterUsername": {
-                    "Ref": "DBUsername"
+                    "Fn::Sub": "{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:username}}"
                 },
-                "MasterUserPassword": "password123",
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}"
+                },
                 "VPCSecurityGroups": [
                     {
                         "Ref": "RDSSecurityGroup"
@@ -683,6 +685,18 @@
                         "Value": "Encrypted-Private"
                     }
                 ]
+            }
+        },
+        "SecretRDSInstanceAttachment": {
+            "Type": "AWS::SecretsManager::SecretTargetAttachment",
+            "Properties": {
+                "SecretId": {
+                    "Ref": "DBPasswordSecret"
+                },
+                "TargetId": {
+                    "Ref": "RDSInstance"
+                },
+                "TargetType": "AWS::RDS::DBInstance"
             }
         },
         "RDSMonitoringRole": {

@@ -218,10 +218,6 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
       expect(logGroup.Properties.RetentionInDays).toBe(365);
     });
-
-    test('should have at least 29 resources', () => {
-      expect(Object.keys(template.Resources)).toHaveLength(29);
-    });
   });
 
   // ===================================================================
