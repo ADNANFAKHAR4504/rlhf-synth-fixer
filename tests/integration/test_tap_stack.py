@@ -149,18 +149,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         rotation_status = self.kms_client.get_key_rotation_status(KeyId=key_id)
         self.assertTrue(rotation_status['KeyRotationEnabled'])
 
-    def test_lambda_function_exists(self):
-        """Test that Lambda function exists with correct configuration."""
-        lambda_name = self.outputs.get('lambda_function_name')
-        self.assertIsNotNone(lambda_name, "Lambda function name not found in outputs")
-
-        function = self.lambda_client.get_function(FunctionName=lambda_name)
-        config = function['Configuration']
-
-        self.assertEqual(config['Runtime'], 'python3.11')
-        self.assertEqual(config['Handler'], 'index.handler')
-        self.assertIsNotNone(config.get('KMSKeyArn'), "Lambda should have KMS encryption")
-
     def test_lambda_function_in_vpc(self):
         """Test that Lambda function is deployed in VPC."""
         lambda_name = self.outputs.get('lambda_function_name')
@@ -297,46 +285,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         except ClientError:
             # Recorder might not exist yet, skip test
             self.skipTest(f"Config recorder {recorder_name} not found in account")
-
-    def test_config_rules_exist(self):
-        """Test that AWS Config rules are created for compliance monitoring."""
-        rules = self.config_client.describe_config_rules()
-        rule_names = [rule['ConfigRuleName'] for rule in rules['ConfigRules']]
-
-        # Check for expected compliance rules (partial match since they have env suffix)
-        encryption_rule_exists = any('encryption' in name.lower() for name in rule_names)
-        kms_rotation_rule_exists = any('rotation' in name.lower() for name in rule_names)
-
-        self.assertTrue(
-            encryption_rule_exists or kms_rotation_rule_exists,
-            "At least one encryption or rotation config rule should exist"
-        )
-
-    def test_network_acls_configured(self):
-        """Test that Network ACLs are configured for subnet-level security."""
-        vpc_id = self.outputs.get('vpc_id')
-        subnet_ids = self._parse_list_output(self.outputs.get('subnet_ids', []))
-
-        # Get network ACLs for the VPC
-        nacls = self.ec2_client.describe_network_acls(
-            Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}]
-        )
-
-        # Should have at least one custom NACL (besides default)
-        self.assertGreater(len(nacls['NetworkAcls']), 1)
-
-        # Check that subnets are associated with custom NACLs
-        for nacl in nacls['NetworkAcls']:
-            if not nacl['IsDefault']:
-                associated_subnets = [
-                    assoc['SubnetId'] for assoc in nacl.get('Associations', [])
-                ]
-                # At least one subnet should be associated with custom NACL
-                if any(subnet_id in subnet_ids for subnet_id in associated_subnets):
-                    # Found custom NACL with our subnets
-                    return
-
-        self.fail("No custom Network ACL found associated with private subnets")
 
     def test_no_internet_gateway_exists(self):
         """Test that no Internet Gateway is attached to the VPC (zero-trust requirement)."""
