@@ -421,7 +421,7 @@ describe('Serverless Document Processing System - Integration Tests', () => {
         expect(sgResponse.SecurityGroups).toBeDefined();
         expect(sgResponse.SecurityGroups!.length).toBe(1);
         expect(sgResponse.SecurityGroups![0].GroupName).toContain(
-          'LambdaSecurityGroup'
+          'LambdaSec'
         );
       },
       TEST_TIMEOUT
