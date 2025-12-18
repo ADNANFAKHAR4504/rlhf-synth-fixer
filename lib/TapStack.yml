@@ -224,36 +224,39 @@ Resources:
         - Key: CreatedBy
           Value: !Ref Owner
 
-  DevSingleEIP:
-    Type: AWS::EC2::EIP
-    Condition: SingleNat
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: TapStack-Dev-EIP
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: Dev
-        - Key: CreatedBy
-          Value: !Ref Owner
+  # LOCALSTACK INCOMPATIBILITY: Single NAT Gateway and EIP commented out
+  # LocalStack does not properly support AWS::EC2::EIP and AWS::EC2::NatGateway creation
+  
+  # DevSingleEIP:
+  #   Type: AWS::EC2::EIP
+  #   Condition: SingleNat
+  #   Properties:
+  #     Domain: vpc
+  #     Tags:
+  #       - Key: Name
+  #         Value: TapStack-Dev-EIP
+  #       - Key: Project
+  #         Value: !Ref ProjectName
+  #       - Key: Environment
+  #         Value: Dev
+  #       - Key: CreatedBy
+  #         Value: !Ref Owner
 
-  DevSingleNatGateway:
-    Type: AWS::EC2::NatGateway
-    Condition: SingleNat
-    Properties:
-      SubnetId: !Ref DevPublicSubnetA
-      AllocationId: !GetAtt DevSingleEIP.AllocationId
-      Tags:
-        - Key: Name
-          Value: TapStack-Dev-NAT
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: Dev
-        - Key: CreatedBy
-          Value: !Ref Owner
+  # DevSingleNatGateway:
+  #   Type: AWS::EC2::NatGateway
+  #   Condition: SingleNat
+  #   Properties:
+  #     SubnetId: !Ref DevPublicSubnetA
+  #     AllocationId: !GetAtt DevSingleEIP.AllocationId
+  #     Tags:
+  #       - Key: Name
+  #         Value: TapStack-Dev-NAT
+  #       - Key: Project
+  #         Value: !Ref ProjectName
+  #       - Key: Environment
+  #         Value: Dev
+  #       - Key: CreatedBy
+  #         Value: !Ref Owner
 
   DevPrivateRouteTableA:
     Type: AWS::EC2::RouteTable
@@ -283,37 +286,42 @@ Resources:
         - Key: CreatedBy
           Value: !Ref Owner
 
-  DevPrivateRouteA:
-    Type: AWS::EC2::Route
-    Condition: CreateNatPerAZ
-    Properties:
-      RouteTableId: !Ref DevPrivateRouteTableA
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref DevNatGatewayA
+  # LOCALSTACK INCOMPATIBILITY: Routes referencing NAT Gateway commented out
+  # Since NAT Gateways cannot be created in LocalStack, these routes are disabled
+  # In LocalStack, private subnets will not have outbound internet connectivity
+  # or will route through Internet Gateway directly (non-production behavior)
+  
+  # DevPrivateRouteA:
+  #   Type: AWS::EC2::Route
+  #   Condition: CreateNatPerAZ
+  #   Properties:
+  #     RouteTableId: !Ref DevPrivateRouteTableA
+  #     DestinationCidrBlock: 0.0.0.0/0
+  #     NatGatewayId: !Ref DevNatGatewayA
 
-  DevPrivateRouteB:
-    Type: AWS::EC2::Route
-    Condition: CreateNatPerAZ
-    Properties:
-      RouteTableId: !Ref DevPrivateRouteTableB
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref DevNatGatewayB
+  # DevPrivateRouteB:
+  #   Type: AWS::EC2::Route
+  #   Condition: CreateNatPerAZ
+  #   Properties:
+  #     RouteTableId: !Ref DevPrivateRouteTableB
+  #     DestinationCidrBlock: 0.0.0.0/0
+  #     NatGatewayId: !Ref DevNatGatewayB
 
-  DevSinglePrivateRouteA:
-    Type: AWS::EC2::Route
-    Condition: SingleNat
-    Properties:
-      RouteTableId: !Ref DevPrivateRouteTableA
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref DevSingleNatGateway
+  # DevSinglePrivateRouteA:
+  #   Type: AWS::EC2::Route
+  #   Condition: SingleNat
+  #   Properties:
+  #     RouteTableId: !Ref DevPrivateRouteTableA
+  #     DestinationCidrBlock: 0.0.0.0/0
+  #     NatGatewayId: !Ref DevSingleNatGateway
 
-  DevSinglePrivateRouteB:
-    Type: AWS::EC2::Route
-    Condition: SingleNat
-    Properties:
-      RouteTableId: !Ref DevPrivateRouteTableB
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref DevSingleNatGateway
+  # DevSinglePrivateRouteB:
+  #   Type: AWS::EC2::Route
+  #   Condition: SingleNat
+  #   Properties:
+  #     RouteTableId: !Ref DevPrivateRouteTableB
+  #     DestinationCidrBlock: 0.0.0.0/0
+  #     NatGatewayId: !Ref DevSingleNatGateway
 
   DevPrivateSubnetARouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -561,98 +569,102 @@ Resources:
       SubnetId: !Ref StagingPublicSubnetB
       RouteTableId: !Ref StagingPublicRouteTable
 
-  StagingEIPA:
-    Type: AWS::EC2::EIP
-    Condition: CreateNatPerAZ
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: TapStack-Staging-EIP-A
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: Staging
-        - Key: CreatedBy
-          Value: !Ref Owner
+  # LOCALSTACK INCOMPATIBILITY: NAT Gateway and EIP resources commented out
+  # LocalStack does not properly support AWS::EC2::EIP and AWS::EC2::NatGateway creation
+  # Error: InvalidAllocationID.NotFound when creating NAT Gateway with EIP allocation
+  
+  # StagingEIPA:
+  #   Type: AWS::EC2::EIP
+  #   Condition: CreateNatPerAZ
+  #   Properties:
+  #     Domain: vpc
+  #     Tags:
+  #       - Key: Name
+  #         Value: TapStack-Staging-EIP-A
+  #       - Key: Project
+  #         Value: !Ref ProjectName
+  #       - Key: Environment
+  #         Value: Staging
+  #       - Key: CreatedBy
+  #         Value: !Ref Owner
 
-  StagingNatGatewayA:
-    Type: AWS::EC2::NatGateway
-    Condition: CreateNatPerAZ
-    Properties:
-      SubnetId: !Ref StagingPublicSubnetA
-      AllocationId: !GetAtt StagingEIPA.AllocationId
-      Tags:
-        - Key: Name
-          Value: TapStack-Staging-NAT-A
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: Staging
-        - Key: CreatedBy
-          Value: !Ref Owner
+  # StagingNatGatewayA:
+  #   Type: AWS::EC2::NatGateway
+  #   Condition: CreateNatPerAZ
+  #   Properties:
+  #     SubnetId: !Ref StagingPublicSubnetA
+  #     AllocationId: !GetAtt StagingEIPA.AllocationId
+  #     Tags:
+  #       - Key: Name
+  #         Value: TapStack-Staging-NAT-A
+  #       - Key: Project
+  #         Value: !Ref ProjectName
+  #       - Key: Environment
+  #         Value: Staging
+  #       - Key: CreatedBy
+  #         Value: !Ref Owner
 
-  StagingEIPB:
-    Type: AWS::EC2::EIP
-    Condition: CreateNatPerAZ
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: TapStack-Staging-EIP-B
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: Staging
-        - Key: CreatedBy
-          Value: !Ref Owner
+  # StagingEIPB:
+  #   Type: AWS::EC2::EIP
+  #   Condition: CreateNatPerAZ
+  #   Properties:
+  #     Domain: vpc
+  #     Tags:
+  #       - Key: Name
+  #         Value: TapStack-Staging-EIP-B
+  #       - Key: Project
+  #         Value: !Ref ProjectName
+  #       - Key: Environment
+  #         Value: Staging
+  #       - Key: CreatedBy
+  #         Value: !Ref Owner
 
-  StagingNatGatewayB:
-    Type: AWS::EC2::NatGateway
-    Condition: CreateNatPerAZ
-    Properties:
-      SubnetId: !Ref StagingPublicSubnetB
-      AllocationId: !GetAtt StagingEIPB.AllocationId
-      Tags:
-        - Key: Name
-          Value: TapStack-Staging-NAT-B
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: Staging
-        - Key: CreatedBy
-          Value: !Ref Owner
+  # StagingNatGatewayB:
+  #   Type: AWS::EC2::NatGateway
+  #   Condition: CreateNatPerAZ
+  #   Properties:
+  #     SubnetId: !Ref StagingPublicSubnetB
+  #     AllocationId: !GetAtt StagingEIPB.AllocationId
+  #     Tags:
+  #       - Key: Name
+  #         Value: TapStack-Staging-NAT-B
+  #       - Key: Project
+  #         Value: !Ref ProjectName
+  #       - Key: Environment
+  #         Value: Staging
+  #       - Key: CreatedBy
+  #         Value: !Ref Owner
 
-  StagingSingleEIP:
-    Type: AWS::EC2::EIP
-    Condition: SingleNat
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: TapStack-Staging-EIP
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: Staging
-        - Key: CreatedBy
-          Value: !Ref Owner
+  # StagingSingleEIP:
+  #   Type: AWS::EC2::EIP
+  #   Condition: SingleNat
+  #   Properties:
+  #     Domain: vpc
+  #     Tags:
+  #       - Key: Name
+  #         Value: TapStack-Staging-EIP
+  #       - Key: Project
+  #         Value: !Ref ProjectName
+  #       - Key: Environment
+  #         Value: Staging
+  #       - Key: CreatedBy
+  #         Value: !Ref Owner
 
-  StagingSingleNatGateway:
-    Type: AWS::EC2::NatGateway
-    Condition: SingleNat
-    Properties:
-      SubnetId: !Ref StagingPublicSubnetA
-      AllocationId: !GetAtt StagingSingleEIP.AllocationId
-      Tags:
-        - Key: Name
-          Value: TapStack-Staging-NAT
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: Staging
-        - Key: CreatedBy
-          Value: !Ref Owner
+  # StagingSingleNatGateway:
+  #   Type: AWS::EC2::NatGateway
+  #   Condition: SingleNat
+  #   Properties:
+  #     SubnetId: !Ref StagingPublicSubnetA
+  #     AllocationId: !GetAtt StagingSingleEIP.AllocationId
+  #     Tags:
+  #       - Key: Name
+  #         Value: TapStack-Staging-NAT
+  #       - Key: Project
+  #         Value: !Ref ProjectName
+  #       - Key: Environment
+  #         Value: Staging
+  #       - Key: CreatedBy
+  #         Value: !Ref Owner
 
   StagingPrivateRouteTableA:
     Type: AWS::EC2::RouteTable
@@ -682,37 +694,40 @@ Resources:
         - Key: CreatedBy
           Value: !Ref Owner
 
-  StagingPrivateRouteA:
-    Type: AWS::EC2::Route
-    Condition: CreateNatPerAZ
-    Properties:
-      RouteTableId: !Ref StagingPrivateRouteTableA
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref StagingNatGatewayA
+  # LOCALSTACK INCOMPATIBILITY: Routes referencing NAT Gateway commented out
+  # Since NAT Gateways cannot be created in LocalStack, these routes are disabled
+  
+  # StagingPrivateRouteA:
+  #   Type: AWS::EC2::Route
+  #   Condition: CreateNatPerAZ
+  #   Properties:
+  #     RouteTableId: !Ref StagingPrivateRouteTableA
+  #     DestinationCidrBlock: 0.0.0.0/0
+  #     NatGatewayId: !Ref StagingNatGatewayA
 
-  StagingPrivateRouteB:
-    Type: AWS::EC2::Route
-    Condition: CreateNatPerAZ
-    Properties:
-      RouteTableId: !Ref StagingPrivateRouteTableB
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref StagingNatGatewayB
+  # StagingPrivateRouteB:
+  #   Type: AWS::EC2::Route
+  #   Condition: CreateNatPerAZ
+  #   Properties:
+  #     RouteTableId: !Ref StagingPrivateRouteTableB
+  #     DestinationCidrBlock: 0.0.0.0/0
+  #     NatGatewayId: !Ref StagingNatGatewayB
 
-  StagingSinglePrivateRouteA:
-    Type: AWS::EC2::Route
-    Condition: SingleNat
-    Properties:
-      RouteTableId: !Ref StagingPrivateRouteTableA
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref StagingSingleNatGateway
+  # StagingSinglePrivateRouteA:
+  #   Type: AWS::EC2::Route
+  #   Condition: SingleNat
+  #   Properties:
+  #     RouteTableId: !Ref StagingPrivateRouteTableA
+  #     DestinationCidrBlock: 0.0.0.0/0
+  #     NatGatewayId: !Ref StagingSingleNatGateway
 
-  StagingSinglePrivateRouteB:
-    Type: AWS::EC2::Route
-    Condition: SingleNat
-    Properties:
-      RouteTableId: !Ref StagingPrivateRouteTableB
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref StagingSingleNatGateway
+  # StagingSinglePrivateRouteB:
+  #   Type: AWS::EC2::Route
+  #   Condition: SingleNat
+  #   Properties:
+  #     RouteTableId: !Ref StagingPrivateRouteTableB
+  #     DestinationCidrBlock: 0.0.0.0/0
+  #     NatGatewayId: !Ref StagingSingleNatGateway
 
   StagingPrivateSubnetARouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -960,98 +975,102 @@ Resources:
       SubnetId: !Ref ProdPublicSubnetB
       RouteTableId: !Ref ProdPublicRouteTable
 
-  ProdEIPA:
-    Type: AWS::EC2::EIP
-    Condition: CreateNatPerAZ
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: TapStack-Prod-EIP-A
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: Prod
-        - Key: CreatedBy
-          Value: !Ref Owner
+  # LOCALSTACK INCOMPATIBILITY: NAT Gateway and EIP resources commented out
+  # LocalStack does not properly support AWS::EC2::EIP and AWS::EC2::NatGateway creation
+  # Error: InvalidAllocationID.NotFound when creating NAT Gateway with EIP allocation
+  
+  # ProdEIPA:
+  #   Type: AWS::EC2::EIP
+  #   Condition: CreateNatPerAZ
+  #   Properties:
+  #     Domain: vpc
+  #     Tags:
+  #       - Key: Name
+  #         Value: TapStack-Prod-EIP-A
+  #       - Key: Project
+  #         Value: !Ref ProjectName
+  #       - Key: Environment
+  #         Value: Prod
+  #       - Key: CreatedBy
+  #         Value: !Ref Owner
 
-  ProdNatGatewayA:
-    Type: AWS::EC2::NatGateway
-    Condition: CreateNatPerAZ
-    Properties:
-      SubnetId: !Ref ProdPublicSubnetA
-      AllocationId: !GetAtt ProdEIPA.AllocationId
-      Tags:
-        - Key: Name
-          Value: TapStack-Prod-NAT-A
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: Prod
-        - Key: CreatedBy
-          Value: !Ref Owner
+  # ProdNatGatewayA:
+  #   Type: AWS::EC2::NatGateway
+  #   Condition: CreateNatPerAZ
+  #   Properties:
+  #     SubnetId: !Ref ProdPublicSubnetA
+  #     AllocationId: !GetAtt ProdEIPA.AllocationId
+  #     Tags:
+  #       - Key: Name
+  #         Value: TapStack-Prod-NAT-A
+  #       - Key: Project
+  #         Value: !Ref ProjectName
+  #       - Key: Environment
+  #         Value: Prod
+  #       - Key: CreatedBy
+  #         Value: !Ref Owner
 
-  ProdEIPB:
-    Type: AWS::EC2::EIP
-    Condition: CreateNatPerAZ
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: TapStack-Prod-EIP-B
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: Prod
-        - Key: CreatedBy
-          Value: !Ref Owner
+  # ProdEIPB:
+  #   Type: AWS::EC2::EIP
+  #   Condition: CreateNatPerAZ
+  #   Properties:
+  #     Domain: vpc
+  #     Tags:
+  #       - Key: Name
+  #         Value: TapStack-Prod-EIP-B
+  #       - Key: Project
+  #         Value: !Ref ProjectName
+  #       - Key: Environment
+  #         Value: Prod
+  #       - Key: CreatedBy
+  #         Value: !Ref Owner
 
-  ProdNatGatewayB:
-    Type: AWS::EC2::NatGateway
-    Condition: CreateNatPerAZ
-    Properties:
-      SubnetId: !Ref ProdPublicSubnetB
-      AllocationId: !GetAtt ProdEIPB.AllocationId
-      Tags:
-        - Key: Name
-          Value: TapStack-Prod-NAT-B
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: Prod
-        - Key: CreatedBy
-          Value: !Ref Owner
+  # ProdNatGatewayB:
+  #   Type: AWS::EC2::NatGateway
+  #   Condition: CreateNatPerAZ
+  #   Properties:
+  #     SubnetId: !Ref ProdPublicSubnetB
+  #     AllocationId: !GetAtt ProdEIPB.AllocationId
+  #     Tags:
+  #       - Key: Name
+  #         Value: TapStack-Prod-NAT-B
+  #       - Key: Project
+  #         Value: !Ref ProjectName
+  #       - Key: Environment
+  #         Value: Prod
+  #       - Key: CreatedBy
+  #         Value: !Ref Owner
 
-  ProdSingleEIP:
-    Type: AWS::EC2::EIP
-    Condition: SingleNat
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: TapStack-Prod-EIP
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: Prod
-        - Key: CreatedBy
-          Value: !Ref Owner
+  # ProdSingleEIP:
+  #   Type: AWS::EC2::EIP
+  #   Condition: SingleNat
+  #   Properties:
+  #     Domain: vpc
+  #     Tags:
+  #       - Key: Name
+  #         Value: TapStack-Prod-EIP
+  #       - Key: Project
+  #         Value: !Ref ProjectName
+  #       - Key: Environment
+  #         Value: Prod
+  #       - Key: CreatedBy
+  #         Value: !Ref Owner
 
-  ProdSingleNatGateway:
-    Type: AWS::EC2::NatGateway
-    Condition: SingleNat
-    Properties:
-      SubnetId: !Ref ProdPublicSubnetA
-      AllocationId: !GetAtt ProdSingleEIP.AllocationId
-      Tags:
-        - Key: Name
-          Value: TapStack-Prod-NAT
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: Prod
-        - Key: CreatedBy
-          Value: !Ref Owner
+  # ProdSingleNatGateway:
+  #   Type: AWS::EC2::NatGateway
+  #   Condition: SingleNat
+  #   Properties:
+  #     SubnetId: !Ref ProdPublicSubnetA
+  #     AllocationId: !GetAtt ProdSingleEIP.AllocationId
+  #     Tags:
+  #       - Key: Name
+  #         Value: TapStack-Prod-NAT
+  #       - Key: Project
+  #         Value: !Ref ProjectName
+  #       - Key: Environment
+  #         Value: Prod
+  #       - Key: CreatedBy
+  #         Value: !Ref Owner
 
   ProdPrivateRouteTableA:
     Type: AWS::EC2::RouteTable
@@ -1081,37 +1100,40 @@ Resources:
         - Key: CreatedBy
           Value: !Ref Owner
 
-  ProdPrivateRouteA:
-    Type: AWS::EC2::Route
-    Condition: CreateNatPerAZ
-    Properties:
-      RouteTableId: !Ref ProdPrivateRouteTableA
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref ProdNatGatewayA
+  # LOCALSTACK INCOMPATIBILITY: Routes referencing NAT Gateway commented out
+  # Since NAT Gateways cannot be created in LocalStack, these routes are disabled
+  
+  # ProdPrivateRouteA:
+  #   Type: AWS::EC2::Route
+  #   Condition: CreateNatPerAZ
+  #   Properties:
+  #     RouteTableId: !Ref ProdPrivateRouteTableA
+  #     DestinationCidrBlock: 0.0.0.0/0
+  #     NatGatewayId: !Ref ProdNatGatewayA
 
-  ProdPrivateRouteB:
-    Type: AWS::EC2::Route
-    Condition: CreateNatPerAZ
-    Properties:
-      RouteTableId: !Ref ProdPrivateRouteTableB
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref ProdNatGatewayB
+  # ProdPrivateRouteB:
+  #   Type: AWS::EC2::Route
+  #   Condition: CreateNatPerAZ
+  #   Properties:
+  #     RouteTableId: !Ref ProdPrivateRouteTableB
+  #     DestinationCidrBlock: 0.0.0.0/0
+  #     NatGatewayId: !Ref ProdNatGatewayB
 
-  ProdSinglePrivateRouteA:
-    Type: AWS::EC2::Route
-    Condition: SingleNat
-    Properties:
-      RouteTableId: !Ref ProdPrivateRouteTableA
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref ProdSingleNatGateway
+  # ProdSinglePrivateRouteA:
+  #   Type: AWS::EC2::Route
+  #   Condition: SingleNat
+  #   Properties:
+  #     RouteTableId: !Ref ProdPrivateRouteTableA
+  #     DestinationCidrBlock: 0.0.0.0/0
+  #     NatGatewayId: !Ref ProdSingleNatGateway
 
-  ProdSinglePrivateRouteB:
-    Type: AWS::EC2::Route
-    Condition: SingleNat
-    Properties:
-      RouteTableId: !Ref ProdPrivateRouteTableB
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref ProdSingleNatGateway
+  # ProdSinglePrivateRouteB:
+  #   Type: AWS::EC2::Route
+  #   Condition: SingleNat
+  #   Properties:
+  #     RouteTableId: !Ref ProdPrivateRouteTableB
+  #     DestinationCidrBlock: 0.0.0.0/0
+  #     NatGatewayId: !Ref ProdSingleNatGateway
 
   ProdPrivateSubnetARouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation

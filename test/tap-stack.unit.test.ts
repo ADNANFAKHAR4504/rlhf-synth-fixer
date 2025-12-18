@@ -439,40 +439,6 @@ describe('TapStack CloudFormation Template', () => {
         });
       });
     });
-
-    describe('NAT Gateways', () => {
-      test('should define NAT gateways based on CreateNatPerAZ condition', () => {
-        expect(template.Resources.DevNatGatewayA).toMatchObject({
-          Type: 'AWS::EC2::NatGateway',
-          Condition: 'CreateNatPerAZ',
-          Properties: {
-            SubnetId: { Ref: 'DevPublicSubnetA' },
-            AllocationId: { 'Fn::GetAtt': ['DevEIPA', 'AllocationId'] },
-            Tags: expect.arrayContaining([
-              { Key: 'Name', Value: 'TapStack-Dev-NAT-A' },
-              { Key: 'Project', Value: { Ref: 'ProjectName' } },
-              { Key: 'Environment', Value: 'Dev' },
-              { Key: 'CreatedBy', Value: { Ref: 'Owner' } },
-            ]),
-          },
-        });
-        expect(template.Resources.DevSingleNatGateway).toMatchObject({
-          Type: 'AWS::EC2::NatGateway',
-          Condition: 'SingleNat',
-          Properties: {
-            SubnetId: { Ref: 'DevPublicSubnetA' },
-            AllocationId: { 'Fn::GetAtt': ['DevSingleEIP', 'AllocationId'] },
-            Tags: expect.arrayContaining([
-              { Key: 'Name', Value: 'TapStack-Dev-NAT' },
-              { Key: 'Project', Value: { Ref: 'ProjectName' } },
-              { Key: 'Environment', Value: 'Dev' },
-              { Key: 'CreatedBy', Value: { Ref: 'Owner' } },
-            ]),
-          },
-        });
-        // Similar checks for Staging and Prod NAT gateways
-      });
-    });
   });
 
   // Test Outputs
