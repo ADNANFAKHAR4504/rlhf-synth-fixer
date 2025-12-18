@@ -8,17 +8,16 @@ manages environment-specific configurations.
 from typing import Optional
 
 import aws_cdk as cdk
+from aws_cdk import CfnOutput
 from constructs import Construct
 
 # Import your stacks here
-from .rds_high_availability_infra import (
-  RdsHighAvailabilityInfra,
-  RdsHighAvailabilityInfraProps
-)
+from .rds_high_availability_infra import (RdsHighAvailabilityInfra,
+                                          RdsHighAvailabilityInfraProps)
 
 
 class TapStackProps(cdk.StackProps):
-  """
+    """
   TapStackProps defines the properties for the TapStack CDK stack.
 
   Args:
@@ -38,25 +37,23 @@ class TapStackProps(cdk.StackProps):
     project (str): Project name for resource tagging.
   """
 
-  def __init__(
-    self,
-    environment_suffix: Optional[str] = None,
-    vpc_id: Optional[str] = None,
-    admin_email: Optional[str] = None,
-    cost_center: Optional[str] = None,
-    project: Optional[str] = None,
-    **kwargs
-  ):
-    super().__init__(**kwargs)
-    self.environment_suffix = environment_suffix
-    self.vpc_id = vpc_id
-    self.admin_email = admin_email or "admin@company.com"
-    self.cost_center = cost_center or "engineering"
-    self.project = project or "tap"
+    def __init__(self,
+                 environment_suffix: Optional[str] = None,
+                 vpc_id: Optional[str] = None,
+                 admin_email: Optional[str] = None,
+                 cost_center: Optional[str] = None,
+                 project: Optional[str] = None,
+                 **kwargs):
+        super().__init__(**kwargs)
+        self.environment_suffix = environment_suffix
+        self.vpc_id = vpc_id
+        self.admin_email = admin_email or "admin@company.com"
+        self.cost_center = cost_center or "engineering"
+        self.project = project or "tap"
 
 
 class TapStack(cdk.Stack):
-  """
+    """
   Represents the main CDK stack for the Tap project.
 
   This stack is responsible for orchestrating the instantiation of other
@@ -81,55 +78,68 @@ class TapStack(cdk.Stack):
       infrastructure stack.
   """
 
-  def __init__(
-    self,
-    scope: Construct,
-    construct_id: str,
-    props: Optional[TapStackProps] = None,
-    **kwargs
-  ):
-    super().__init__(scope, construct_id, **kwargs)
+    def __init__(self,
+                 scope: Construct,
+                 construct_id: str,
+                 props: Optional[TapStackProps] = None,
+                 **kwargs):
+        super().__init__(scope, construct_id, **kwargs)
 
-    # Get environment suffix from props, context, or use 'dev' as default
-    environment_suffix = (
-      props.environment_suffix if props else None
-    ) or self.node.try_get_context('environmentSuffix') or 'dev'
+        # Get environment suffix from props, context, or use 'dev' as default
+        environment_suffix = (
+            props.environment_suffix if props else
+            None) or self.node.try_get_context('environmentSuffix') or 'dev'
 
-    # Get other configuration values
-    vpc_id = (
-      (props.vpc_id if props else None) or
-      self.node.try_get_context('vpcId')
-    )
-    admin_email = (
-      (props.admin_email if props else None) or
-      self.node.try_get_context('adminEmail') or
-      "admin@company.com"
-    )
-    cost_center = (
-      (props.cost_center if props else None) or
-      self.node.try_get_context('costCenter') or
-      "engineering"
-    )
-    project = (
-      (props.project if props else None) or
-      self.node.try_get_context('project') or
-      "tap"
-    )
+        # Get other configuration values
+        vpc_id = ((props.vpc_id if props else None)
+                  or self.node.try_get_context('vpcId'))
+        admin_email = ((props.admin_email if props else None)
+                       or self.node.try_get_context('adminEmail')
+                       or "admin@company.com")
+        cost_center = ((props.cost_center if props else None)
+                       or self.node.try_get_context('costCenter')
+                       or "engineering")
+        project = ((props.project if props else None)
+                   or self.node.try_get_context('project') or "tap")
 
-    # Create RDS High Availability Infrastructure
-    self.rds_infra = RdsHighAvailabilityInfra(
-      self, "RdsHighAvailabilityInfra",
-      RdsHighAvailabilityInfraProps(
-        environment_suffix=environment_suffix,
-        vpc_id=vpc_id,
-        admin_email=admin_email,
-        cost_center=cost_center,
-        project=project
-      )
-    )
+        # Create RDS High Availability Infrastructure
+        self.rds_infra = RdsHighAvailabilityInfra(
+            self, "RdsHighAvailabilityInfra",
+            RdsHighAvailabilityInfraProps(
+                environment_suffix=environment_suffix,
+                vpc_id=vpc_id,
+                admin_email=admin_email,
+                cost_center=cost_center,
+                project=project))
 
-    # Add common tags to the entire stack
-    cdk.Tags.of(self).add("CostCenter", cost_center)
-    cdk.Tags.of(self).add("Environment", environment_suffix)
-    cdk.Tags.of(self).add("Project", project)
-    cdk.Tags.of(self).add("ManagedBy", "CDK")
+        # Add common tags to the entire stack
+        cdk.Tags.of(self).add("CostCenter", cost_center)
+        cdk.Tags.of(self).add("Environment", environment_suffix)
+        cdk.Tags.of(self).add("Project", project)
+        cdk.Tags.of(self).add("ManagedBy", "CDK")
+
+        # Export outputs from nested stack to parent stack
+        # Access resources directly from the nested stack
+        CfnOutput(self,
+                  "RdsEndpoint",
+                  value=self.rds_infra.db_instance.instance_endpoint.hostname,
+                  description="RDS PostgreSQL endpoint",
+                  export_name=f"RdsEndpoint-{environment_suffix}")
+
+        CfnOutput(self,
+                  "RdsPort",
+                  value=str(self.rds_infra.db_instance.instance_endpoint.port),
+                  description="RDS PostgreSQL port",
+                  export_name=f"RdsPort-{environment_suffix}")
+
+        CfnOutput(self,
+                  "BackupBucketName",
+                  value=self.rds_infra.backup_bucket.bucket_name,
+                  description="S3 backup bucket name",
+                  export_name=f"BackupBucketName-{environment_suffix}")
+
+        CfnOutput(self,
+                  "NotificationTopicArn",
+                  value=self.rds_infra.notification_topic.topic_arn,
+                  description="SNS notification topic ARN",
+                  export_name=f"NotificationTopicArn-{environment_suffix}")
