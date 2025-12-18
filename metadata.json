@@ -8,8 +8,7 @@
   "startedAt": "2025-08-21T11:18:47.324Z",
   "subtask": "Security, Compliance, and Governance",
   "subject_labels": [
-    "Security Configuration as Code",
-    "Cloud Environment Setup"
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "VPC",
