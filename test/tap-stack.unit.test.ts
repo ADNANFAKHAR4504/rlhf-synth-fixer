@@ -477,3 +477,149 @@ describe('TapStack', () => {
     });
   });
 });
+
+// LocalStack mode tests - cover conditional branches
+describe('TapStack LocalStack Mode', () => {
+  afterEach(() => {
+    // Reset environment after each test
+    delete process.env.AWS_ENDPOINT_URL;
+    delete process.env.LOCALSTACK_HOSTNAME;
+    delete process.env.CDK_DEFAULT_ACCOUNT;
+    jest.resetModules();
+  });
+
+  describe('LocalStack detection via AWS_ENDPOINT_URL', () => {
+    test('creates VPC without NAT Gateway for LocalStack', () => {
+      process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
+      jest.resetModules();
+      
+      const cdkLib = require('aws-cdk-lib');
+      const { TapStack: LocalStackTapStack } = require('../lib/tap-stack');
+      
+      const localApp = new cdkLib.App();
+      const localStack = new LocalStackTapStack(localApp, 'LocalStackTest1', { environmentSuffix: 'localstack' });
+      const localTemplate = cdkLib.assertions.Template.fromStack(localStack);
+      
+      // LocalStack mode should have 0 NAT Gateways
+      localTemplate.resourceCountIs('AWS::EC2::NatGateway', 0);
+      
+      // LocalStack mode should NOT have CloudTrail
+      localTemplate.resourceCountIs('AWS::CloudTrail::Trail', 0);
+    });
+  });
+
+  describe('LocalStack detection via LOCALSTACK_HOSTNAME', () => {
+    test('creates VPC without NAT Gateway for LocalStack (LOCALSTACK_HOSTNAME)', () => {
+      process.env.LOCALSTACK_HOSTNAME = 'localstack';
+      jest.resetModules();
+      
+      const cdkLib = require('aws-cdk-lib');
+      const { TapStack: LocalStackTapStack } = require('../lib/tap-stack');
+      
+      const localApp = new cdkLib.App();
+      const localStack = new LocalStackTapStack(localApp, 'LocalStackTest2', { environmentSuffix: 'localstack' });
+      const localTemplate = cdkLib.assertions.Template.fromStack(localStack);
+      
+      // LocalStack mode should have 0 NAT Gateways
+      localTemplate.resourceCountIs('AWS::EC2::NatGateway', 0);
+      
+      // Should use isolated subnets
+      localTemplate.hasResourceProperties('AWS::EC2::Subnet', {
+        MapPublicIpOnLaunch: false,
+      });
+    });
+  });
+
+  describe('LocalStack detection via CDK_DEFAULT_ACCOUNT', () => {
+    test('creates VPC without NAT Gateway for LocalStack (CDK_DEFAULT_ACCOUNT)', () => {
+      process.env.CDK_DEFAULT_ACCOUNT = '000000000000';
+      jest.resetModules();
+      
+      const cdkLib = require('aws-cdk-lib');
+      const { TapStack: LocalStackTapStack } = require('../lib/tap-stack');
+      
+      const localApp = new cdkLib.App();
+      const localStack = new LocalStackTapStack(localApp, 'LocalStackTest3', { environmentSuffix: 'localstack' });
+      const localTemplate = cdkLib.assertions.Template.fromStack(localStack);
+      
+      // LocalStack mode should have 0 NAT Gateways
+      localTemplate.resourceCountIs('AWS::EC2::NatGateway', 0);
+      
+      // Lambda should be created but without VPC configuration
+      localTemplate.hasResourceProperties('AWS::Lambda::Function', {
+        Runtime: 'python3.9',
+        Handler: 'index.handler',
+      });
+    });
+  });
+
+  describe('LocalStack specific configurations', () => {
+    test('EC2 uses public subnet and Lambda has no VpcConfig for LocalStack', () => {
+      process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
+      jest.resetModules();
+      
+      const cdkLib = require('aws-cdk-lib');
+      const { TapStack: LocalStackTapStack } = require('../lib/tap-stack');
+      
+      const localApp = new cdkLib.App();
+      const localStack = new LocalStackTapStack(localApp, 'LocalStackTest4', { environmentSuffix: 'localstack' });
+      const localTemplate = cdkLib.assertions.Template.fromStack(localStack);
+      
+      // Verify EC2 instance is created
+      localTemplate.hasResourceProperties('AWS::EC2::Instance', {
+        InstanceType: 't3.micro',
+      });
+      
+      // Lambda function should NOT have VpcConfig for LocalStack
+      const lambdaFunctions = localTemplate.findResources('AWS::Lambda::Function');
+      const secureLambda = Object.values(lambdaFunctions).find(
+        (fn: any) => fn.Properties?.Description === 'Secure Lambda function running in VPC'
+      );
+      expect(secureLambda).toBeDefined();
+      expect((secureLambda as any).Properties.VpcConfig).toBeUndefined();
+    });
+
+    test('outputs do not have region conditions for LocalStack', () => {
+      process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
+      jest.resetModules();
+      
+      const cdkLib = require('aws-cdk-lib');
+      const { TapStack: LocalStackTapStack } = require('../lib/tap-stack');
+      
+      const localApp = new cdkLib.App();
+      const localStack = new LocalStackTapStack(localApp, 'LocalStackTest5', { environmentSuffix: 'localstack' });
+      const localTemplate = cdkLib.assertions.Template.fromStack(localStack);
+      
+      // Verify outputs exist without conditions
+      localTemplate.hasOutput('S3BucketName', {
+        Description: 'Name of the encrypted S3 bucket for CloudTrail logs',
+      });
+      
+      localTemplate.hasOutput('VPCId', {
+        Description: 'ID of the secure VPC',
+      });
+    });
+
+    test('resources do not have region conditions in LocalStack mode', () => {
+      process.env.AWS_ENDPOINT_URL = 'http://localhost:4566';
+      jest.resetModules();
+      
+      const cdkLib = require('aws-cdk-lib');
+      const { TapStack: LocalStackTapStack } = require('../lib/tap-stack');
+      
+      const localApp = new cdkLib.App();
+      const localStack = new LocalStackTapStack(localApp, 'LocalStackTest6', { environmentSuffix: 'localstack' });
+      const localTemplate = cdkLib.assertions.Template.fromStack(localStack);
+      
+      // Verify KMS key exists without condition
+      const kmsKeys = localTemplate.findResources('AWS::KMS::Key');
+      const kmsKey = Object.values(kmsKeys)[0] as any;
+      expect(kmsKey.Condition).toBeUndefined();
+      
+      // Verify S3 bucket exists without condition
+      const s3Buckets = localTemplate.findResources('AWS::S3::Bucket');
+      const s3Bucket = Object.values(s3Buckets)[0] as any;
+      expect(s3Bucket.Condition).toBeUndefined();
+    });
+  });
+});

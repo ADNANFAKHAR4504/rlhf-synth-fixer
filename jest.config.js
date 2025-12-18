@@ -41,7 +41,7 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'json-summary'],
   coverageThreshold: {
     global: {
-      branches: 62, // Lowered from 70 due to LocalStack conditional branches that cannot be tested without code restructuring
+      branches: 70,
       functions: 100,
       lines: 100,
       statements: 99,
