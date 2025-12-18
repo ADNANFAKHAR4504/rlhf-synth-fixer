@@ -77,6 +77,10 @@ Parameters:
     Default: 'TempPassword123!'
     Description: 'Password for the on-premises MySQL database'
 
+Conditions:
+  IsLocalStack: !Equals [!Ref "AWS::AccountId", "000000000000"]
+  UseVPN: !Not [!Condition IsLocalStack]
+
 Resources:
   # Database Password Secret
   DBMasterPasswordSecret:
@@ -237,6 +241,7 @@ Resources:
   # VPN Gateway
   VPNGateway:
     Type: AWS::EC2::VPNGateway
+    Condition: UseVPN
     Properties:
       Type: ipsec.1
       Tags:
@@ -245,6 +250,7 @@ Resources:
 
   AttachVPNGateway:
     Type: AWS::EC2::VPCGatewayAttachment
+    Condition: UseVPN
     Properties:
       VpcId: !Ref MigrationVPC
       VpnGatewayId: !Ref VPNGateway
@@ -252,6 +258,7 @@ Resources:
   # Customer Gateway
   CustomerGateway:
     Type: AWS::EC2::CustomerGateway
+    Condition: UseVPN
     Properties:
       Type: ipsec.1
       BgpAsn: 65000
@@ -263,6 +270,7 @@ Resources:
   # VPN Connection
   VPNConnection:
     Type: AWS::EC2::VPNConnection
+    Condition: UseVPN
     Properties:
       Type: ipsec.1
       StaticRoutesOnly: true
@@ -275,6 +283,7 @@ Resources:
   # VPN Connection Route
   VPNConnectionRoute:
     Type: AWS::EC2::VPNConnectionRoute
+    Condition: UseVPN
     Properties:
       VpnConnectionId: !Ref VPNConnection
       DestinationCidrBlock: !Ref OnPremisesCIDR
@@ -282,6 +291,7 @@ Resources:
   # Enable VPN route propagation
   VPNGatewayRoutePropagation:
     Type: AWS::EC2::VPNGatewayRoutePropagation
+    Condition: UseVPN
     DependsOn: AttachVPNGateway
     Properties:
       RouteTableIds:
@@ -808,18 +818,21 @@ Outputs:
   VPNGatewayId:
     Description: 'VPN Gateway ID'
     Value: !Ref VPNGateway
+    Condition: UseVPN
     Export:
       Name: !Sub '${AWS::StackName}-VPNGatewayId'
 
   CustomerGatewayId:
     Description: 'Customer Gateway ID'
     Value: !Ref CustomerGateway
+    Condition: UseVPN
     Export:
       Name: !Sub '${AWS::StackName}-CustomerGatewayId'
 
   VPNConnectionId:
     Description: 'VPN Connection ID for on-premises connectivity'
     Value: !Ref VPNConnection
+    Condition: UseVPN
     Export:
       Name: !Sub '${AWS::StackName}-VPNConnectionId'
 
