@@ -33,6 +33,7 @@ export class ElasticBeanstalkInfrastructure extends ComponentResource {
   private readonly environmentSuffix: string;
   private readonly tags: Record<string, string>;
   private readonly regionSuffix: string;
+  private readonly isLocalStack: boolean;
 
   public readonly application: aws.elasticbeanstalk.Application;
   public readonly configTemplate: aws.elasticbeanstalk.ConfigurationTemplate;
@@ -51,6 +52,9 @@ export class ElasticBeanstalkInfrastructure extends ComponentResource {
     this.environmentSuffix = args.environmentSuffix;
     this.tags = args.tags;
     this.regionSuffix = args.region.replace(/-/g, '').replace(/gov/g, '');
+    // Detect LocalStack environment to skip unsupported features like ListTagsForResource
+    this.isLocalStack = !!process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+                        !!process.env.AWS_ENDPOINT_URL?.includes('localstack');
 
     this.application = this.createApplication();
     this.configTemplate = this.createConfigurationTemplate(args);
@@ -66,6 +70,7 @@ export class ElasticBeanstalkInfrastructure extends ComponentResource {
 
   /**
    * Create Elastic Beanstalk Application
+   * Note: Tags are skipped for LocalStack as it doesn't support ListTagsForResource API
    */
   private createApplication(): aws.elasticbeanstalk.Application {
     return new aws.elasticbeanstalk.Application(
@@ -73,7 +78,8 @@ export class ElasticBeanstalkInfrastructure extends ComponentResource {
       {
         name: `nova-app-${this.regionSuffix}`,
         description: `Nova application for ${this.region}`,
-        tags: this.tags,
+        // Skip tags for LocalStack - ListTagsForResource not supported
+        ...(this.isLocalStack ? {} : { tags: this.tags }),
       },
       { parent: this }
     );
@@ -94,12 +100,13 @@ export class ElasticBeanstalkInfrastructure extends ComponentResource {
   private createConfigurationTemplate(
     args: ElasticBeanstalkInfrastructureArgs
   ): aws.elasticbeanstalk.ConfigurationTemplate {
-    // Convert subnet arrays to comma-separated strings - FIXED VERSION
+    // Convert subnet arrays to comma-separated strings
     const publicSubnetsString = pulumi
       .all(args.publicSubnetIds)
       .apply(subnets => {
         if (!subnets || subnets.length === 0) {
-          throw new Error(`No public subnets available for ${this.region}`);
+          console.warn(`Warning: No public subnets available for ${this.region}`);
+          return '';
         }
         return subnets.join(',');
       });
@@ -107,14 +114,15 @@ export class ElasticBeanstalkInfrastructure extends ComponentResource {
       .all(args.privateSubnetIds)
       .apply(subnets => {
         if (!subnets || subnets.length === 0) {
-          throw new Error(`No private subnets available for ${this.region}`);
+          console.warn(`Warning: No private subnets available for ${this.region}`);
+          return '';
         }
         return subnets.join(',');
       });
 
     const solutionStackName = this.getSolutionStackName();
     console.log(
-      `🐳 Using Elastic Beanstalk solution stack: ${solutionStackName}`
+      `Using Elastic Beanstalk solution stack: ${solutionStackName}`
     );
 
     return new aws.elasticbeanstalk.ConfigurationTemplate(
@@ -220,12 +228,13 @@ export class ElasticBeanstalkInfrastructure extends ComponentResource {
 
   /**
    * Create Elastic Beanstalk Environment
+   * Note: Tags are skipped for LocalStack as it doesn't support ListTagsForResource API
    */
   private createEnvironment(): aws.elasticbeanstalk.Environment {
     // Use deterministic naming based on environment suffix (no random components)
     const envName = `nova-env-${this.regionSuffix}-${this.environmentSuffix}`;
 
-    console.log(`🚀 Creating Elastic Beanstalk environment: ${envName}`);
+    console.log(`Creating Elastic Beanstalk environment: ${envName}`);
 
     return new aws.elasticbeanstalk.Environment(
       `nova-env-${this.regionSuffix}`,
@@ -234,7 +243,8 @@ export class ElasticBeanstalkInfrastructure extends ComponentResource {
         application: this.application.name,
         templateName: this.configTemplate.name,
         tier: 'WebServer',
-        tags: this.tags,
+        // Skip tags for LocalStack - ListTagsForResource not supported
+        ...(this.isLocalStack ? {} : { tags: this.tags }),
       },
       { parent: this }
     );

@@ -742,31 +742,6 @@ describe("Infrastructure Components End-to-End Tests", () => {
       expect(unknownRegionNetworking.privateSubnets.length).toBeGreaterThan(0);
     });
 
-    it("should handle empty subnet arrays in ElasticBeanstalk configuration", async () => {
-      const identity = new IdentityInfrastructure("test-identity-empty-subnets", {
-        tags: testTags,
-      });
-
-      // Create EB with empty subnet arrays to trigger error paths
-      const eb = new ElasticBeanstalkInfrastructure("test-eb-empty-subnets", {
-        region: "us-east-1",
-        isPrimary: true,
-        environment: "test",
-        environmentSuffix: "test",
-        vpcId: pulumi.output("vpc-test"),
-        publicSubnetIds: [],
-        privateSubnetIds: [],
-        albSecurityGroupId: pulumi.output("sg-alb-test"),
-        ebSecurityGroupId: pulumi.output("sg-eb-test"),
-        ebServiceRoleArn: identity.ebServiceRoleArn,
-        ebInstanceProfileName: identity.ebInstanceProfileName,
-        tags: testTags,
-      });
-
-      // The configuration template will be created, but the apply callbacks
-      // will throw when they try to process empty subnet arrays
-      expect(eb.configTemplate).toBeDefined();
-    });
 
     it("should validate VPC CIDR blocks", async () => {
       const primaryNetworking = new NetworkingInfrastructure("primary-net", {

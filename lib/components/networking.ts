@@ -105,12 +105,12 @@ export class NetworkingInfrastructure extends ComponentResource {
 
     const availableAzs = regionAzMap[this.region];
     if (availableAzs) {
-      console.log(`📍 Using known AZs for ${this.region}:`, availableAzs);
+      console.log(`Using known AZs for ${this.region}:`, availableAzs);
       return availableAzs;
     }
 
     // Fallback for unknown regions
-    console.log(`⚠️  Unknown region ${this.region}, using fallback AZs`);
+    console.log(`Unknown region ${this.region}, using fallback AZs`);
     return [`${this.region}a`, `${this.region}c`];
   }
 
@@ -125,7 +125,7 @@ export class NetworkingInfrastructure extends ComponentResource {
     const privateBase = 120;
 
     console.log(
-      `🏗️  Creating subnets in ${numAzsToUse} AZs for ${this.region}`
+      `Creating subnets in ${numAzsToUse} AZs for ${this.region}`
     );
 
     for (let i = 0; i < numAzsToUse; i++) {
@@ -133,7 +133,7 @@ export class NetworkingInfrastructure extends ComponentResource {
       const publicCidr = `10.${base}.${publicBase + i}.0/24`;
       const privateCidr = `10.${base}.${privateBase + i}.0/24`;
 
-      console.log(`   📍 Creating subnets in AZ: ${azName}`);
+      console.log(`Creating subnets in AZ: ${azName}`);
 
       const publicSubnet = new aws.ec2.Subnet(
         `public-subnet-${i}-${this.regionSuffix}`,
@@ -195,7 +195,7 @@ export class NetworkingInfrastructure extends ComponentResource {
    * Create NAT Gateways for private subnet internet access
    */
   private createNatGateways(): void {
-    console.log(`🔌 Creating ${this.publicSubnets.length} NAT Gateways...`);
+    console.log(`Creating ${this.publicSubnets.length} NAT Gateways...`);
 
     // Create one NAT Gateway per public subnet
     for (let i = 0; i < this.publicSubnets.length; i++) {
@@ -240,7 +240,7 @@ export class NetworkingInfrastructure extends ComponentResource {
    * Create and configure route tables
    */
   private createRouteTablesAndAssociations(): aws.ec2.RouteTable {
-    console.log('🛣️  Creating route tables and associations...');
+    console.log('Creating route tables and associations...');
 
     const publicRt = new aws.ec2.RouteTable(
       `public-rt-${this.regionSuffix}`,
