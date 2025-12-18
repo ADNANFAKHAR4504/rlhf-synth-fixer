@@ -21,7 +21,7 @@ const stackProps: cdk.StackProps = {
   },
 };
 
-new TapStack(app, `TapStack-${environmentSuffix}`, {
+new TapStack(app, `TapStack${environmentSuffix}`, {
   ...stackProps,
   environmentSuffix,
 });
