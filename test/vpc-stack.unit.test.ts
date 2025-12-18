@@ -27,10 +27,8 @@ describe('VpcStack', () => {
         GroupName: 'web-sg-custom'
       });
       
-      // Check VPC Lattice service network name includes suffix
-      template.hasResourceProperties('AWS::VpcLattice::ServiceNetwork', {
-        Name: 'service-network-custom'
-      });
+      // VPC Lattice removed for LocalStack compatibility
+      // VPC Lattice is not supported in LocalStack Community Edition
     });
 
     test('should use default dev suffix when not provided', () => {
@@ -54,10 +52,8 @@ describe('VpcStack', () => {
         GroupName: 'web-sg-dev'
       });
       
-      // Check VPC Lattice service network name includes default suffix
-      template.hasResourceProperties('AWS::VpcLattice::ServiceNetwork', {
-        Name: 'service-network-dev'
-      });
+      // VPC Lattice removed for LocalStack compatibility
+      // VPC Lattice is not supported in LocalStack Community Edition
     });
   });
 
@@ -83,26 +79,23 @@ describe('VpcStack', () => {
     });
 
     test('should create correct subnet configuration', () => {
-      // Check for public subnets
+      // Check for public subnets only (LocalStack compatibility)
       template.hasResourceProperties('AWS::EC2::Subnet', {
         MapPublicIpOnLaunch: true
       });
 
-      // Check for private subnets
-      template.hasResourceProperties('AWS::EC2::Subnet', {
-        MapPublicIpOnLaunch: false
-      });
-
-      // Verify subnet count
+      // Verify subnet count - only public subnets (2 AZs)
       const subnets = template.findResources('AWS::EC2::Subnet');
-      expect(Object.keys(subnets).length).toBeGreaterThanOrEqual(4);
+      expect(Object.keys(subnets).length).toBe(2);
     });
 
-    test('should create NAT Gateway and EIP', () => {
-      template.hasResourceProperties('AWS::EC2::NatGateway', {});
-      template.hasResourceProperties('AWS::EC2::EIP', {
-        Domain: 'vpc'
-      });
+    test('should not create NAT Gateway for LocalStack compatibility', () => {
+      // NAT Gateway requires EIP which is not fully supported in LocalStack Community
+      const natGateways = template.findResources('AWS::EC2::NatGateway');
+      expect(Object.keys(natGateways).length).toBe(0);
+
+      const eips = template.findResources('AWS::EC2::EIP');
+      expect(Object.keys(eips).length).toBe(0);
     });
 
     test('should create Internet Gateway', () => {
@@ -160,13 +153,13 @@ describe('VpcStack', () => {
       });
     });
 
-    test('should create VPC Lattice Service Network', () => {
-      template.hasResourceProperties('AWS::VpcLattice::ServiceNetwork', {
-        Name: 'service-network-test',
-        AuthType: 'NONE'
-      });
+    test('should not create VPC Lattice for LocalStack compatibility', () => {
+      // VPC Lattice is not supported in LocalStack Community Edition
+      const latticeNetworks = template.findResources('AWS::VpcLattice::ServiceNetwork');
+      expect(Object.keys(latticeNetworks).length).toBe(0);
 
-      template.hasResourceProperties('AWS::VpcLattice::ServiceNetworkVpcAssociation', {});
+      const latticeAssociations = template.findResources('AWS::VpcLattice::ServiceNetworkVpcAssociation');
+      expect(Object.keys(latticeAssociations).length).toBe(0);
     });
 
     test('should create CloudWatch Dashboard', () => {
@@ -203,12 +196,7 @@ describe('VpcStack', () => {
         }
       });
 
-      template.hasOutput('LatticeServiceNetworkId', {
-        Description: 'VPC Lattice Service Network ID',
-        Export: {
-          Name: 'LatticeServiceNetworkId-test'
-        }
-      });
+      // VPC Lattice output removed for LocalStack compatibility
     });
 
     test('should set proper removal policies', () => {
@@ -220,15 +208,15 @@ describe('VpcStack', () => {
   });
 
   describe('Stack Properties', () => {
-    test('should expose VPC, Security Group, and Lattice Service Network as public properties', () => {
+    test('should expose VPC and Security Group as public properties', () => {
       const app = new cdk.App();
-      const stack = new VpcStack(app, 'TestVpcStack', { 
-        environmentSuffix: 'test' 
+      const stack = new VpcStack(app, 'TestVpcStack', {
+        environmentSuffix: 'test'
       });
-      
+
       expect(stack.vpc).toBeDefined();
       expect(stack.securityGroup).toBeDefined();
-      expect(stack.latticeServiceNetwork).toBeDefined();
+      // VPC Lattice removed for LocalStack compatibility
     });
   });
 });
