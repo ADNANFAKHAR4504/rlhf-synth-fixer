@@ -1,0 +1,21 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291573",
+  "team": "2",
+  "startedAt": "2025-08-22T05:34:17.516Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)",
+    "IaC Optimization"
+  ],
+  "aws_services": [
+    "DynamoDB",
+    "Lambda",
+    "IAM",
+    "CloudFormation"
+  ]
+}
