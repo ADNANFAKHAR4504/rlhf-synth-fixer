@@ -334,28 +334,28 @@ curl https://your-api-id.execute-api.us-west-2.amazonaws.com/
 
 ## Security Features Implemented
 
-### 🔒 **IAM Least Privilege**
+### **IAM Least Privilege**
 - Custom execution role with minimal permissions
 - Only CloudWatch logging permissions granted
 - No unnecessary AWS service permissions
 
-### 🛡️ **Lambda Security**
+### **Lambda Security**
 - Input validation and error handling
 - Structured logging without sensitive data exposure
 - Security headers in HTTP responses
 - Environment variables for configuration
 
-### 🌐 **API Gateway Security**
+### **API Gateway Security**
 - CORS configuration with specific methods
 - HTTP API (more secure and cost-effective than REST API)
 - Proper payload format version
 
-### 📊 **Monitoring & Logging**
+### **Monitoring & Logging**
 - CloudWatch Log Group with retention policy
 - Structured logging in Lambda function
 - Request tracking with correlation IDs
 
-### 🏗️ **Infrastructure Security**
+### **Infrastructure Security**
 - Resources deployed in specified region (us-west-2)
 - Proper resource naming and descriptions
 - CDK best practices followed
