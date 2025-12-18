@@ -729,7 +729,7 @@ Resources:
       DBInstanceIdentifier: !Sub payment-processing-db-${EnvironmentSuffix}
       DBInstanceClass: !Ref DBInstanceClass
       Engine: mysql
-      EngineVersion: "8.0.35"
+      EngineVersion: "8.0.39"
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}::password}}'
       AllocatedStorage: !Ref DBAllocatedStorage
