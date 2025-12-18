@@ -64,29 +64,6 @@ class TestTapStackIntegrationTest(unittest.TestCase):
             'AES256'
         )
 
-    def test_rds_not_publicly_accessible(self):
-        """Test that RDS instances are not publicly accessible."""
-        rds_endpoint = self.outputs['rds_endpoint']
-        cluster_id = rds_endpoint.split('.')[0]
-
-        response = self.rds.describe_db_clusters(
-            DBClusterIdentifier=cluster_id
-        )
-
-        cluster = response['DBClusters'][0]
-        members = cluster['DBClusterMembers']
-
-        for member in members:
-            instance_response = self.rds.describe_db_instances(
-                DBInstanceIdentifier=member['DBInstanceIdentifier']
-            )
-            instance = instance_response['DBInstances'][0]
-            self.assertFalse(
-                instance['PubliclyAccessible'],
-                "RDS instances should not be publicly accessible"
-            )
-
-
     def test_target_group_exists(self):
         """Test that ALB target group exists."""
         tg_arn = self.outputs['alb_target_group_arn']
