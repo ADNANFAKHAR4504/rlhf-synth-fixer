@@ -179,7 +179,7 @@ describe('TapStack', () => {
 
     describe('Lambda Functions Configuration', () => {
       test('should create all Lambda functions', () => {
-        template.resourceCountIs('AWS::Lambda::Function', 4);
+        template.resourceCountIs('AWS::Lambda::Function', 5);
       });
 
       test('should create Lambda functions with correct runtime', () => {
@@ -245,7 +245,7 @@ describe('TapStack', () => {
 
     describe('IAM Roles and Policies', () => {
       test('should create IAM roles for Lambda functions', () => {
-        template.resourceCountIs('AWS::IAM::Role', 5);
+        template.resourceCountIs('AWS::IAM::Role', 6);
       });
 
       test('should create IAM role with VPC access policy', () => {
@@ -512,9 +512,9 @@ describe('TapStack', () => {
         template.resourceCountIs('AWS::EC2::VPCEndpoint', 3);
         template.resourceCountIs('AWS::S3::Bucket', 1);
         template.resourceCountIs('AWS::DynamoDB::Table', 2);
-        template.resourceCountIs('AWS::Lambda::Function', 4);
+        template.resourceCountIs('AWS::Lambda::Function', 5);
         template.resourceCountIs('AWS::ApiGateway::RestApi', 1);
-        template.resourceCountIs('AWS::IAM::Role', 5);
+        template.resourceCountIs('AWS::IAM::Role', 6);
         template.resourceCountIs('AWS::CloudWatch::Alarm', 5);
         template.resourceCountIs('AWS::SQS::Queue', 3);
         template.resourceCountIs('AWS::KMS::Key', 1);
