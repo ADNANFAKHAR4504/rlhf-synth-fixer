@@ -26,7 +26,7 @@ const account = isLocalStack
 
 const region = process.env.CDK_DEFAULT_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
 
-new TapStack(app, `TapStack-${environmentSuffix}`, {
+new TapStack(app, `TapStack${environmentSuffix}`, {
   environmentSuffix,
   env: {
     account,
