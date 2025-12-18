@@ -28,6 +28,13 @@ Parameters:
     MaxLength: 16
     AllowedPattern: ^[a-zA-Z][a-zA-Z0-9]*$
 
+  DBMasterPassword:
+    Type: String
+    Description: Master password for Aurora MySQL database
+    Default: TempPassword123!
+    NoEcho: true
+    MinLength: 8
+
   ContainerImage:
     Type: String
     Description: Docker image for payment API (e.g., nginx:latest as placeholder)
@@ -401,7 +408,7 @@ Resources:
       EngineVersion: 8.0.mysql_aurora.3.04.0
       DatabaseName: paymentdb
       MasterUsername: !Ref DBMasterUsername
-      MasterUserPassword: TempPassword123!
+      MasterUserPassword: !Ref DBMasterPassword
       DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
         - !Ref DBSecurityGroup
