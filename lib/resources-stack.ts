@@ -106,6 +106,8 @@ export class ResourcesStack extends cdk.Stack {
     );
 
     // EC2 Instance
+    // Note: requireImdsv2 is removed for LocalStack compatibility
+    // (creates Launch Template which LocalStack doesn't support properly)
     this.instance = new Instance(
       this,
       `${environmentSuffix}-TapStackInstance`,
@@ -118,7 +120,6 @@ export class ResourcesStack extends cdk.Stack {
         vpcSubnets: {
           subnetType: SubnetType.PUBLIC,
         },
-        requireImdsv2: true,
       }
     );
 
