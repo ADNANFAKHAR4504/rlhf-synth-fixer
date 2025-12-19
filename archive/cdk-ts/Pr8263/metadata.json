@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291609",
+  "team": "4",
+  "startedAt": "2025-08-21T10:17:08.188Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "AWS KMS",
+    "Amazon S3",
+    "Amazon VPC",
+    "Amazon EC2",
+    "AWS Lambda",
+    "AWS CloudTrail",
+    "AWS IAM"
+  ],
+  "provider": "localstack",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-turing",
+  "dockerS3Location": ""
+}

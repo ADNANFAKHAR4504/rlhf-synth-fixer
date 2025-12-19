@@ -54,7 +54,7 @@ check_localstack() {
     print_status $YELLOW "🔍 Checking LocalStack status..."
     if ! curl -s http://localhost:4566/_localstack/health > /dev/null; then
         print_status $RED "❌ LocalStack is not running!"
-        print_status $YELLOW "💡 Please start LocalStack first using: docker run -d -p 4566:4566 localstack/localstack"
+        print_status $YELLOW "💡 Please start LocalStack first using: docker run -d -p 4566:4566 localstack/localstack-pro:latest"
         exit 1
     fi
     print_status $GREEN "✅ LocalStack is running"
