@@ -11,7 +11,9 @@ import * as xray from 'aws-cdk-lib/aws-xray';
 import { Construct } from 'constructs';
 
 // LocalStack detection
-const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') || process.env.AWS_ENDPOINT_URL?.includes('4566');
+const isLocalStack =
+  process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+  process.env.AWS_ENDPOINT_URL?.includes('4566');
 
 interface ServerlessStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -40,10 +42,12 @@ export class ServerlessStack extends cdk.Stack {
     });
 
     // Create X-Ray tracing group for distributed tracing (only if not LocalStack)
-    const xrayTracingConfig = isLocalStack ? null : new xray.CfnGroup(this, 'ServerlessXRayGroup', {
-      groupName: `srv-trace-${environmentSuffix}`,
-      filterExpression: `service("srv-handler-${environmentSuffix}")`,
-    });
+    const xrayTracingConfig = isLocalStack
+      ? null
+      : new xray.CfnGroup(this, 'ServerlessXRayGroup', {
+          groupName: `srv-trace-${environmentSuffix}`,
+          filterExpression: `service("srv-handler-${environmentSuffix}")`,
+        });
 
     // Create custom EventBridge bus for event-driven architecture
     const customEventBus = new events.EventBus(this, 'ServerlessEventBus', {
@@ -262,7 +266,9 @@ exports.handler = async (event) => {
         XRAY_TRACING_GROUP: xrayTracingConfig?.groupName || 'not-available',
       },
       logGroup: lambdaLogGroup,
-      insightsVersion: isLocalStack ? undefined : lambda.LambdaInsightsVersion.VERSION_1_0_229_0, // Disable Lambda Insights for LocalStack
+      insightsVersion: isLocalStack
+        ? undefined
+        : lambda.LambdaInsightsVersion.VERSION_1_0_229_0, // Disable Lambda Insights for LocalStack
       tracing: isLocalStack ? lambda.Tracing.DISABLED : lambda.Tracing.ACTIVE, // Disable X-Ray tracing for LocalStack
     });
 

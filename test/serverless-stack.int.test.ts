@@ -16,10 +16,7 @@ import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
-import {
-  KMSClient,
-  DescribeKeyCommand,
-} from '@aws-sdk/client-kms';
+import { KMSClient, DescribeKeyCommand } from '@aws-sdk/client-kms';
 
 // Load outputs from deployment
 const outputs = JSON.parse(
@@ -29,16 +26,26 @@ const outputs = JSON.parse(
 // Configure AWS clients
 const region = 'us-east-1';
 const endpoint = process.env.AWS_ENDPOINT_URL;
-const lambdaClient = new LambdaClient({ region, ...(endpoint && { endpoint }) });
+const lambdaClient = new LambdaClient({
+  region,
+  ...(endpoint && { endpoint }),
+});
 const s3Client = new S3Client({
   region,
-  ...(endpoint && { endpoint, forcePathStyle: true })
+  ...(endpoint && { endpoint, forcePathStyle: true }),
 });
-const cloudWatchClient = new CloudWatchLogsClient({ region, ...(endpoint && { endpoint }) });
+const cloudWatchClient = new CloudWatchLogsClient({
+  region,
+  ...(endpoint && { endpoint }),
+});
 const kmsClient = new KMSClient({ region, ...(endpoint && { endpoint }) });
 
 // Helper function to make HTTP requests
-function makeRequest(url: string, method: string = 'GET', data?: any): Promise<any> {
+function makeRequest(
+  url: string,
+  method: string = 'GET',
+  data?: any
+): Promise<any> {
   return new Promise((resolve, reject) => {
     const urlObj = new URL(url);
     const options = {
@@ -50,9 +57,9 @@ function makeRequest(url: string, method: string = 'GET', data?: any): Promise<a
       },
     };
 
-    const req = https.request(options, (res) => {
+    const req = https.request(options, res => {
       let responseData = '';
-      res.on('data', (chunk) => {
+      res.on('data', chunk => {
         responseData += chunk;
       });
       res.on('end', () => {
@@ -73,11 +80,11 @@ function makeRequest(url: string, method: string = 'GET', data?: any): Promise<a
     });
 
     req.on('error', reject);
-    
+
     if (data) {
       req.write(JSON.stringify(data));
     }
-    
+
     req.end();
   });
 }
@@ -99,17 +106,23 @@ describe('Serverless Infrastructure Integration Tests', () => {
       const response = await makeRequest(apiGatewayUrl);
       expect(response.status).toBe(200);
       expect(response.data).toHaveProperty('message');
-      expect(response.data.message).toBe('Serverless function executed successfully');
+      expect(response.data.message).toBe(
+        'Serverless function executed successfully'
+      );
       expect(response.data).toHaveProperty('bucketName', s3BucketName);
       expect(response.data).toHaveProperty('method', 'GET');
       expect(response.data).toHaveProperty('path', '/');
     });
 
     test('Should respond to POST request at root endpoint', async () => {
-      const response = await makeRequest(apiGatewayUrl, 'POST', { test: 'data' });
+      const response = await makeRequest(apiGatewayUrl, 'POST', {
+        test: 'data',
+      });
       expect(response.status).toBe(200);
       expect(response.data).toHaveProperty('message');
-      expect(response.data.message).toBe('Serverless function executed successfully');
+      expect(response.data.message).toBe(
+        'Serverless function executed successfully'
+      );
       expect(response.data).toHaveProperty('method', 'POST');
     });
 
@@ -118,7 +131,9 @@ describe('Serverless Infrastructure Integration Tests', () => {
       const response = await makeRequest(healthUrl);
       expect(response.status).toBe(200);
       expect(response.data).toHaveProperty('message');
-      expect(response.data.message).toBe('Serverless function executed successfully');
+      expect(response.data.message).toBe(
+        'Serverless function executed successfully'
+      );
       expect(response.data).toHaveProperty('path', '/health');
     });
 
@@ -141,7 +156,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
 
       const response = await lambdaClient.send(command);
       expect(response.StatusCode).toBe(200);
-      
+
       const payload = JSON.parse(new TextDecoder().decode(response.Payload));
       expect(payload.statusCode).toBe(200);
       const body = JSON.parse(payload.body);
@@ -160,8 +175,14 @@ describe('Serverless Infrastructure Integration Tests', () => {
       expect(response.Configuration?.Runtime).toBe('nodejs20.x');
       expect(response.Configuration?.Timeout).toBe(30);
       expect(response.Configuration?.MemorySize).toBe(256);
-      expect(response.Configuration?.Environment?.Variables).toHaveProperty('BUCKET_NAME', s3BucketName);
-      expect(response.Configuration?.Environment?.Variables).toHaveProperty('KMS_KEY_ID', kmsKeyId);
+      expect(response.Configuration?.Environment?.Variables).toHaveProperty(
+        'BUCKET_NAME',
+        s3BucketName
+      );
+      expect(response.Configuration?.Environment?.Variables).toHaveProperty(
+        'KMS_KEY_ID',
+        kmsKeyId
+      );
     });
   });
 
@@ -172,10 +193,12 @@ describe('Serverless Infrastructure Integration Tests', () => {
     afterAll(async () => {
       // Cleanup test object
       try {
-        await s3Client.send(new DeleteObjectCommand({
-          Bucket: s3BucketName,
-          Key: testKey,
-        }));
+        await s3Client.send(
+          new DeleteObjectCommand({
+            Bucket: s3BucketName,
+            Key: testKey,
+          })
+        );
       } catch (error) {
         // Ignore cleanup errors
       }
@@ -204,7 +227,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
       const response = await s3Client.send(command);
       expect(response.$metadata.httpStatusCode).toBe(200);
       expect(response.ServerSideEncryption).toBe('aws:kms');
-      
+
       const body = await response.Body?.transformToString();
       expect(body).toBe(testContent);
     });
@@ -244,8 +267,10 @@ describe('Serverless Infrastructure Integration Tests', () => {
       const response = await cloudWatchClient.send(command);
       expect(response.logGroups).toBeDefined();
       expect(response.logGroups?.length).toBeGreaterThan(0);
-      
-      const logGroup = response.logGroups?.find(lg => lg.logGroupName === logGroupName);
+
+      const logGroup = response.logGroups?.find(
+        lg => lg.logGroupName === logGroupName
+      );
       expect(logGroup).toBeDefined();
       expect(logGroup?.retentionInDays).toBe(7);
     });
@@ -258,30 +283,34 @@ describe('Serverless Infrastructure Integration Tests', () => {
         action: 'test',
         timestamp: Date.now(),
       });
-      
+
       expect(apiResponse.status).toBe(200);
-      expect(apiResponse.data.message).toBe('Serverless function executed successfully');
-      
+      expect(apiResponse.data.message).toBe(
+        'Serverless function executed successfully'
+      );
+
       // 2. Verify S3 bucket is accessible
       const s3Command = new ListObjectsV2Command({
         Bucket: s3BucketName,
         MaxKeys: 1,
       });
-      
+
       const s3Response = await s3Client.send(s3Command);
       expect(s3Response.$metadata.httpStatusCode).toBe(200);
     });
 
     test('Should handle concurrent requests', async () => {
-      const requests = Array(3).fill(null).map((_, index) => 
-        makeRequest(`${apiGatewayUrl}?request=${index}`)
-      );
-      
+      const requests = Array(3)
+        .fill(null)
+        .map((_, index) => makeRequest(`${apiGatewayUrl}?request=${index}`));
+
       const responses = await Promise.all(requests);
-      
+
       responses.forEach(response => {
         expect(response.status).toBe(200);
-        expect(response.data.message).toBe('Serverless function executed successfully');
+        expect(response.data.message).toBe(
+          'Serverless function executed successfully'
+        );
       });
     });
   });
@@ -337,7 +366,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
 
     test('Should use KMS encryption for S3 operations', async () => {
       const testKey = `security-test-${Date.now()}.txt`;
-      
+
       try {
         // Upload without specifying encryption should still use bucket default
         const putCommand = new PutObjectCommand({
@@ -345,25 +374,27 @@ describe('Serverless Infrastructure Integration Tests', () => {
           Key: testKey,
           Body: 'Security test content',
         });
-        
+
         const putResponse = await s3Client.send(putCommand);
         expect(putResponse.ServerSideEncryption).toBe('aws:kms');
-        
+
         // Verify object is encrypted
         const getCommand = new GetObjectCommand({
           Bucket: s3BucketName,
           Key: testKey,
         });
-        
+
         const getResponse = await s3Client.send(getCommand);
         expect(getResponse.ServerSideEncryption).toBe('aws:kms');
         expect(getResponse.SSEKMSKeyId).toBeDefined();
       } finally {
         // Cleanup
-        await s3Client.send(new DeleteObjectCommand({
-          Bucket: s3BucketName,
-          Key: testKey,
-        }));
+        await s3Client.send(
+          new DeleteObjectCommand({
+            Bucket: s3BucketName,
+            Key: testKey,
+          })
+        );
       }
     });
   });
