@@ -23,5 +23,12 @@
     "EventBridge",
     "IAM",
     "SSM Parameter Store"
-  ]
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "veera-turing",
+  "dockerS3Location": ""
 }
