@@ -19,10 +19,11 @@
     "IAM"
   ],
   "region": "us-east-1",
-  "training_quality": 10,
+  "training_quality": 8,
   "author": "mayanksethi-turing",
   "coverage": {
     "lines": 100,
     "branches": 100
-  }
+  },
+  "dockerS3Location": ""
 }
