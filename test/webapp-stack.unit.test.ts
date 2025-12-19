@@ -142,14 +142,12 @@ describe('WebAppStack', () => {
       });
     });
 
-    test('creates Launch Template', () => {
+    test('creates Launch Configuration (LocalStack compatible)', () => {
       stack = new WebAppStack(app, 'TestStack');
       template = Template.fromStack(stack);
 
-      template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
-        LaunchTemplateData: Match.objectLike({
-          InstanceType: 't3.medium',
-        }),
+      template.hasResourceProperties('AWS::AutoScaling::LaunchConfiguration', {
+        InstanceType: 't3.medium',
       });
     });
 
@@ -157,10 +155,8 @@ describe('WebAppStack', () => {
       stack = new WebAppStack(app, 'TestStack');
       template = Template.fromStack(stack);
 
-      template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
-        LaunchTemplateData: Match.objectLike({
-          UserData: Match.anyValue(),
-        }),
+      template.hasResourceProperties('AWS::AutoScaling::LaunchConfiguration', {
+        UserData: Match.anyValue(),
       });
     });
   });
