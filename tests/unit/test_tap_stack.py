@@ -56,18 +56,12 @@ class TestS3Bucket:
         template.resource_count_is("AWS::S3::Bucket", 1)
 
     def test_s3_bucket_has_removal_policy(self, template):
-        """Verify S3 bucket has RemovalPolicy.DESTROY"""
-        template.has_resource_properties(
+        """Verify S3 bucket has DeletionPolicy set to Delete"""
+        # Check for DeletionPolicy in the resource definition
+        template.has_resource(
             "AWS::S3::Bucket",
             {
-                "Tags": cdk_assertions.Match.array_with(
-                    [
-                        {
-                            "Key": "aws-cdk:auto-delete-objects",
-                            "Value": "true",
-                        }
-                    ]
-                )
+                "DeletionPolicy": "Delete",
             },
         )
 
@@ -150,9 +144,9 @@ class TestLambdaFunction:
     """Test Lambda function configuration"""
 
     def test_lambda_function_exists(self, template):
-        """Verify Lambda function is created (at least our main function)"""
-        # Note: auto-delete-objects custom resource also creates a Lambda
-        template.resource_count_is("AWS::Lambda::Function", 2)
+        """Verify Lambda function is created"""
+        # Main Lambda function (auto-delete custom resource removed for LocalStack)
+        template.resource_count_is("AWS::Lambda::Function", 1)
 
     def test_lambda_has_correct_runtime(self, template):
         """Verify Lambda uses Python 3.12 runtime"""
