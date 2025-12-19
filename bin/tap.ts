@@ -11,7 +11,10 @@ const environmentSuffix =
   process.env.ENVIRONMENT_SUFFIX ||
   'synth' + (process.env.PO_ID || 'trainr10');
 
-new TapStack(app, 'TapStack', {
+// Stack name includes environment suffix for proper isolation
+const stackName = `TapStack${environmentSuffix}`;
+
+new TapStack(app, stackName, {
   environmentSuffix,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
