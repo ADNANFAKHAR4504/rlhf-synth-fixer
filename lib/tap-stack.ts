@@ -173,24 +173,29 @@ export class TapStack extends cdk.Stack {
       })
     );
 
-    // Create CloudTrail
-    // For LocalStack: remove KMS encryption (limited support)
-    const trail = new cloudtrail.Trail(this, 'SecureAppTrail', {
-      trailName: `SecureAppTrail-${props.environmentSuffix}`,
-      bucket: cloudTrailBucket,
-      encryptionKey: isLocalStack ? undefined : kmsKey,
-      includeGlobalServiceEvents: true,
-      isMultiRegionTrail: false,
-      enableFileValidation: true,
-    });
+    // Create CloudTrail (conditionally for LocalStack)
+    // For LocalStack: CloudTrail service must be explicitly enabled in SERVICES configuration
+    // Skip CloudTrail creation if LocalStack environment doesn't have CloudTrail service enabled
+    let trail: cloudtrail.Trail | undefined;
 
-    // Add data events for S3 buckets
-    trail.addS3EventSelector([
-      {
-        bucket: webAssetsBucket,
-        objectPrefix: '',
-      },
-    ]);
+    if (!isLocalStack) {
+      trail = new cloudtrail.Trail(this, 'SecureAppTrail', {
+        trailName: `SecureAppTrail-${props.environmentSuffix}`,
+        bucket: cloudTrailBucket,
+        encryptionKey: kmsKey,
+        includeGlobalServiceEvents: true,
+        isMultiRegionTrail: false,
+        enableFileValidation: true,
+      });
+
+      // Add data events for S3 buckets
+      trail.addS3EventSelector([
+        {
+          bucket: webAssetsBucket,
+          objectPrefix: '',
+        },
+      ]);
+    }
 
     // Create RDS database resources (conditionally for LocalStack)
     // For LocalStack: RDS service must be explicitly enabled in SERVICES configuration
@@ -319,14 +324,16 @@ export class TapStack extends cdk.Stack {
       description: 'VPC ID',
     });
 
-    new cdk.CfnOutput(this, 'CloudTrailArn', {
-      value: trail.trailArn,
-      description: 'CloudTrail ARN',
-    });
+    if (trail) {
+      new cdk.CfnOutput(this, 'CloudTrailArn', {
+        value: trail.trailArn,
+        description: 'CloudTrail ARN',
+      });
 
-    new cdk.CfnOutput(this, 'CloudTrailBucketName', {
-      value: cloudTrailBucket.bucketName,
-      description: 'S3 bucket for CloudTrail logs',
-    });
+      new cdk.CfnOutput(this, 'CloudTrailBucketName', {
+        value: cloudTrailBucket.bucketName,
+        description: 'S3 bucket for CloudTrail logs',
+      });
+    }
   }
 }

@@ -500,20 +500,17 @@ describe('TapStack', () => {
       });
     });
 
-    test('should not encrypt CloudTrail with KMS in LocalStack', () => {
-      // CloudTrail should not have KMS encryption key in LocalStack mode
-      const trails = localStackTemplate.findResources('AWS::CloudTrail::Trail');
-      Object.values(trails).forEach((trail: any) => {
-        // KMSKeyId should not be present in LocalStack mode
-        expect(trail.Properties?.KMSKeyId).toBeUndefined();
-      });
-    });
-
     test('should not create RDS resources in LocalStack', () => {
       // RDS service requires explicit enablement in LocalStack SERVICES configuration
       // To avoid deployment failures, RDS resources are not created in LocalStack mode
       localStackTemplate.resourceCountIs('AWS::RDS::DBInstance', 0);
       localStackTemplate.resourceCountIs('AWS::RDS::DBSubnetGroup', 0);
+    });
+
+    test('should not create CloudTrail resources in LocalStack', () => {
+      // CloudTrail service requires explicit enablement in LocalStack SERVICES configuration
+      // To avoid deployment failures, CloudTrail resources are not created in LocalStack mode
+      localStackTemplate.resourceCountIs('AWS::CloudTrail::Trail', 0);
     });
 
     test('should not create GuardDuty detector in LocalStack', () => {
@@ -524,11 +521,11 @@ describe('TapStack', () => {
     test('should create all required outputs for LocalStack', () => {
       localStackTemplate.hasOutput('KMSKeyId', {});
       localStackTemplate.hasOutput('WebAssetsBucketName', {});
-      // DatabaseEndpoint is not created in LocalStack mode (RDS skipped)
+      // DatabaseEndpoint not created in LocalStack mode (RDS skipped)
+      // CloudTrailArn not created in LocalStack mode (CloudTrail skipped)
+      // CloudTrailBucketName not created in LocalStack mode (CloudTrail skipped)
       localStackTemplate.hasOutput('LoadBalancerDNS', {});
       localStackTemplate.hasOutput('VPCId', {});
-      localStackTemplate.hasOutput('CloudTrailArn', {});
-      localStackTemplate.hasOutput('CloudTrailBucketName', {});
     });
   });
 });
