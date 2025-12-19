@@ -9,9 +9,7 @@
   "subtask": "Security, Compliance, and Governance",
   "provider": "localstack",
   "subject_labels": [
-    "Security Configuration as Code",
-    "Cloud Environment Setup",
-    "Infrastructure Analysis/Monitoring"
+    "Security Configuration as Code"
   ],
   "aws_services": [
     "s3",
