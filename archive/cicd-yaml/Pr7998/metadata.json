@@ -1,0 +1,36 @@
+{
+  "platform": "cicd",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "o1r1z1s4",
+  "team": "synth",
+  "startedAt": "2025-12-05T18:35:41+05:30",
+  "subtask": "CI/CD Pipeline Integration",
+  "subject_labels": [
+    "CI/CD Pipeline"
+  ],
+  "aws_services": [
+    "CodePipeline",
+    "CodeCommit",
+    "CodeBuild",
+    "CodeDeploy",
+    "ECS",
+    "Fargate",
+    "ECR",
+    "Application Load Balancer",
+    "VPC",
+    "S3",
+    "CloudWatch Logs",
+    "SNS",
+    "Systems Manager Parameter Store",
+    "IAM"
+  ],
+  "author": "mayanksethi-turing",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

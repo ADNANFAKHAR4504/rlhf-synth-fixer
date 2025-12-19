@@ -1,0 +1,29 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291647_ls",
+  "team": "2",
+  "startedAt": "2025-12-18T14:54:20.369Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "apigateway",
+    "cloudwatch",
+    "dynamodb",
+    "iam",
+    "lambda",
+    "sns"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}

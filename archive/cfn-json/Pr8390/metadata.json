@@ -1,0 +1,39 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "medium",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-04T14:47:00+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "po_id": "101000816",
+  "aws_services": [
+    "VPC",
+    "EC2::Subnet",
+    "EC2::NatGateway",
+    "EC2::InternetGateway",
+    "EC2::RouteTable",
+    "EC2::SecurityGroup",
+    "RDS::DBCluster",
+    "RDS::DBInstance",
+    "Lambda",
+    "ApiGateway",
+    "SQS",
+    "CloudWatch",
+    "SecretsManager",
+    "KMS",
+    "SSM::Parameter",
+    "IAM::Role"
+  ],
+  "provider": "localstack",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "adnan-turing",
+  "dockerS3Location": ""
+}
