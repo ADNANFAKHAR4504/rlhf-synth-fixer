@@ -10,5 +10,10 @@
   "subject_labels": [
     "IaC Optimization"
   ],
-  "provider": "localstack"
+  "aws_services": [
+    "s3"
+  ],
+  "provider": "localstack",
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing"
 }
