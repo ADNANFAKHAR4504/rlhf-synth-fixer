@@ -20,5 +20,11 @@
     "SSM"
   ],
   "training_quality": 9,
-  "startedAt": "2025-12-05T18:00:00Z"
+  "startedAt": "2025-12-05T18:00:00Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
