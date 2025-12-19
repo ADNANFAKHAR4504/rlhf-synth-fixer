@@ -704,13 +704,13 @@ npm test
 
 ## Security Features
 
-- ✅ Encrypted EBS volumes (CIS compliant)
-- ✅ Restrictive security groups
-- ✅ Minimal IAM permissions
-- ✅ IMDSv2 enforcement
-- ✅ CloudWatch monitoring and logging
-- ✅ Outbound traffic restrictions
-- ✅ Multi-AZ deployment for high availability
+-  Encrypted EBS volumes (CIS compliant)
+-  Restrictive security groups
+-  Minimal IAM permissions
+-  IMDSv2 enforcement
+-  CloudWatch monitoring and logging
+-  Outbound traffic restrictions
+-  Multi-AZ deployment for high availability
 
 ## Monitoring
 
