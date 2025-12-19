@@ -220,14 +220,10 @@ export class SecurityStack extends Construct {
     const publicSubnets = this.vpc.publicSubnets;
 
     publicSubnets.forEach((subnet, index) => {
-      // For LocalStack: Use a simple machine image that doesn't require AMI lookup
-      // LocalStack uses mock AMIs, so any AMI ID works
+      // For LocalStack: Use Amazon Linux 2023 which is better supported
+      // For production: Use latest Amazon Linux 2
       const machineImage = isLocalStack
-        ? ec2.MachineImage.genericLinux({
-            'us-east-1': 'ami-12345678', // Mock AMI for LocalStack
-            'us-west-2': 'ami-12345678',
-            'eu-west-1': 'ami-12345678',
-          })
+        ? ec2.MachineImage.latestAmazonLinux2023()
         : ec2.MachineImage.latestAmazonLinux2();
 
       const bastionHost = new ec2.Instance(this, `BastionHost${index + 1}`, {
