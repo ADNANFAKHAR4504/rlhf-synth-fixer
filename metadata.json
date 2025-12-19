@@ -3,21 +3,18 @@
   "language": "yaml",
   "complexity": "hard",
   "turn_type": "single",
-  "po_id": "291622",
+  "po_id": "291622_ls",
   "team": "2",
   "startedAt": "2025-08-19T17:33:35.297Z",
-  "subtask": "Serverless Architecture Implementation",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
   "subject_labels": [
     "General Infrastructure Tooling QA",
-    "Serverless Architecture",
-    "Event-Driven Systems",
-    "API Gateway Integration",
-    "Security Configuration",
-    "Monitoring Setup",
-    "DNS Management",
-    "Certificate Management"
+    "Serverless Infrastructure (Functions as Code)",
+    "Web Application Deployment",
+    "Security Configuration as Code",
+    "Infrastructure Analysis/Monitoring"
   ],
-  "training_quality": 9,
   "aws_services": [
     "AWS::S3::Bucket",
     "AWS::Lambda::Function",
@@ -35,11 +32,5 @@
     "AWS::SNS::Topic",
     "AWS::CloudWatch::Alarm",
     "AWS::Lambda::Permission"
-  ],
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "paulsony13",
-  "dockerS3Location": ""
+  ]
 }
