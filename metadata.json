@@ -20,7 +20,7 @@
     "ElasticLoadBalancingV2"
   ],
   "turn_type": "single",
-  "team": "synth",
+  "team": "synth-2",
   "startedAt": "2025-08-22T10:00:00Z",
   "provider": "localstack"
 }
