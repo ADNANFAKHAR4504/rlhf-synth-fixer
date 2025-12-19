@@ -65,6 +65,25 @@ elif [ "$PLATFORM" = "cdktf" ]; then
 elif [ "$PLATFORM" = "cfn" ]; then
   echo "✅ CloudFormation project detected, running CloudFormation destroy..."
   npm run cfn:destroy || echo "No resources to destroy or destruction failed"
+  
+  # Clean up S3 bucket used for large template deployment (if exists)
+  cfn_bucket="cfn-templates-localstack-${ENVIRONMENT_SUFFIX:-dev}"
+  echo "🧹 Cleaning up template S3 bucket: $cfn_bucket"
+  
+  if [ -n "$AWS_ENDPOINT_URL" ]; then
+    # LocalStack deployment
+    aws s3 rm "s3://${cfn_bucket}" --recursive \
+        --endpoint-url "$AWS_ENDPOINT_URL" \
+        --region "${AWS_DEFAULT_REGION:-us-east-1}" 2>/dev/null || true
+    aws s3 rb "s3://${cfn_bucket}" \
+        --endpoint-url "$AWS_ENDPOINT_URL" \
+        --region "${AWS_DEFAULT_REGION:-us-east-1}" 2>/dev/null || true
+  else
+    # AWS deployment
+    aws s3 rm "s3://${cfn_bucket}" --recursive 2>/dev/null || true
+    aws s3 rb "s3://${cfn_bucket}" 2>/dev/null || true
+  fi
+  echo "✅ S3 bucket cleanup completed"
 
 elif [ "$PLATFORM" = "tf" ]; then
   echo "✅ Terraform HCL project detected, running Terraform destroy..."
