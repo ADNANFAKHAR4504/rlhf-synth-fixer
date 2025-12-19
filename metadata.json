@@ -1,0 +1,21 @@
+{
+  "platform": "cdk",
+  "language": "js",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "291301",
+  "team": "5",
+  "startedAt": "2025-10-01T15:16:09.031Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3",
+    "CloudFront",
+    "KMS",
+    "IAM",
+    "CloudWatch"
+  ],
+  "provider": "localstack"
+}
