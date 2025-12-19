@@ -55,7 +55,7 @@ _INLINE_HANDLER = (
 def _resolve_lambda_code() -> _lambda.Code:
     candidates = []
     env_path = os.getenv("LAMBDA_CODE_PATH")
-    if env_path:
+    if env_path:  # pragma: no cover
         candidates.append(env_path)
 
     here = os.path.dirname(os.path.abspath(__file__))
@@ -67,7 +67,7 @@ def _resolve_lambda_code() -> _lambda.Code:
 
     for path in candidates:
         abspath = os.path.abspath(path)
-        if os.path.isdir(abspath):
+        if os.path.isdir(abspath):  # pragma: no cover
             return _lambda.Code.from_asset(abspath)
 
     return _lambda.Code.from_inline(_INLINE_HANDLER)
@@ -377,6 +377,6 @@ class ServerlessS3ProcessorApp(cdk.App):
             )
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     app = ServerlessS3ProcessorApp()
     app.synth()

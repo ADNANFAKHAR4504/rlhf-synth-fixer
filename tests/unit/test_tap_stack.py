@@ -1,11 +1,12 @@
 # pylint: disable=C0111,C0103,C0303,W0511,R0903,R0913,R0914,R0915
 import unittest
+import os
 
 import aws_cdk as cdk
 from aws_cdk.assertions import Match, Template
 from pytest import mark
 
-from lib.tap_stack import TapStack, TapStackProps
+from lib.tap_stack import TapStack, TapStackProps, ServerlessS3ProcessorApp
 
 ACCOUNT = "111111111111"
 REGION = "us-east-1"
@@ -137,3 +138,58 @@ class TestTapStack(unittest.TestCase):
         template = Template.from_stack(stack)
         # CDK uses Custom::S3BucketNotifications
         template.resource_count_is("Custom::S3BucketNotifications", 1)
+
+    @mark.it("creates production environment with appropriate settings")
+    def test_production_environment(self):
+        stack = TapStack(
+            self.app,
+            "TapStackProd",
+            props=TapStackProps(environment_suffix="prod"),
+            env=self.env,
+        )
+        template = Template.from_stack(stack)
+        # Production should have versioned S3 bucket
+        template.has_resource_properties(
+            "AWS::S3::Bucket",
+            {
+                "VersioningConfiguration": {"Status": "Enabled"}
+            }
+        )
+        # Production should have point-in-time recovery for DynamoDB
+        template.has_resource_properties(
+            "AWS::DynamoDB::Table",
+            {
+                "PointInTimeRecoverySpecification": {"PointInTimeRecoveryEnabled": True}
+            }
+        )
+
+    @mark.it("handles different environment suffix casing")
+    def test_environment_suffix_normalization(self):
+        # Test uppercase environment suffix
+        stack = TapStack(
+            self.app,
+            "TapStackUpperCase",
+            props=TapStackProps(environment_suffix="DEV"),
+            env=self.env,
+        )
+        template = Template.from_stack(stack)
+        # Should normalize to lowercase
+        expected_bucket_name = f"serverless-processor-dev-{ACCOUNT}-{REGION}"
+        template.has_resource_properties("AWS::S3::Bucket", {"BucketName": expected_bucket_name})
+
+
+@mark.describe("ServerlessS3ProcessorApp")
+class TestServerlessS3ProcessorApp(unittest.TestCase):
+    @mark.it("creates stacks for dev and prod environments")
+    def test_app_creates_multiple_environments(self):
+        # Set environment variables for the app
+        os.environ["CDK_DEFAULT_ACCOUNT"] = ACCOUNT
+        os.environ["CDK_DEFAULT_REGION"] = REGION
+
+        app = ServerlessS3ProcessorApp()
+
+        # The app should create stacks for dev and prod
+        stack_ids = [node.id for node in app.node.children if isinstance(node, TapStack)]
+        assert len(stack_ids) == 2, f"Expected 2 stacks but found {len(stack_ids)}"
+        assert "TAP-S3Processor-dev" in stack_ids, "Expected dev stack"
+        assert "TAP-S3Processor-prod" in stack_ids, "Expected prod stack"
