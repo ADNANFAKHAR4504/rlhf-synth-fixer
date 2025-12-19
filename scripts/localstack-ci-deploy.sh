@@ -417,10 +417,11 @@ deploy_cdk() {
     local output_json="{}"
 
     # Get all stacks (parent and nested)
+    # Match any stack starting with "TapStack" (with or without suffix)
     local all_stacks=$(awslocal cloudformation list-stacks \
         --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE \
         --query 'StackSummaries[].StackName' \
-        --output json 2>/dev/null | jq -r '.[]' 2>/dev/null | grep -i "TapStack${env_suffix}" || echo "$stack_name")
+        --output json 2>/dev/null | jq -r '.[]' 2>/dev/null | grep -iE "^TapStack" || echo "$stack_name")
 
     # Collect outputs from all matching stacks
     output_json=$(python3 -c "
