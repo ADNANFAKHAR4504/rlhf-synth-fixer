@@ -38,8 +38,7 @@ describe('TapStack CloudFormation Template - LocalStack Compatible', () => {
         'VerifiedDomain',
         'SesFromAddress',
         'EnableProductionSES',
-        'TestEmailAddress',
-        'AlarmEmail'
+        'TestEmailAddress'
       ];
 
       requiredParams.forEach(param => {
@@ -66,7 +65,6 @@ describe('TapStack CloudFormation Template - LocalStack Compatible', () => {
       expect(template.Parameters.VerifiedDomain.Default).toBe('example.com');
       expect(template.Parameters.SesFromAddress.Default).toBe('no-reply@example.com');
       expect(template.Parameters.TestEmailAddress.Default).toBe('test@example.com');
-      expect(template.Parameters.AlarmEmail.Default).toBe('ops@example.com');
     });
   });
 

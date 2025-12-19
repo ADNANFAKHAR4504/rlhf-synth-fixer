@@ -12,7 +12,6 @@ Metadata:
           - SesFromAddress
           - EnableProductionSES
           - TestEmailAddress
-          - AlarmEmail
 
 Parameters:
   EnvironmentSuffix:
@@ -44,11 +43,6 @@ Parameters:
     Type: String
     Default: "test@example.com"
     Description: "Test email address for sandbox mode"
-
-  AlarmEmail:
-    Type: String
-    Description: "Email address for CloudWatch alarm notifications"
-    Default: "ops@example.com"
 
 Resources:
   # ========== SNS Topics ==========

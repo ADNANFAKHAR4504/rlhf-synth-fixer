@@ -13,8 +13,7 @@
                         "VerifiedDomain",
                         "SesFromAddress",
                         "EnableProductionSES",
-                        "TestEmailAddress",
-                        "AlarmEmail"
+                        "TestEmailAddress"
                     ]
                 }
             ]
@@ -51,11 +50,6 @@
             "Type": "String",
             "Default": "test@example.com",
             "Description": "Test email address for sandbox mode"
-        },
-        "AlarmEmail": {
-            "Type": "String",
-            "Description": "Email address for CloudWatch alarm notifications",
-            "Default": "ops@example.com"
         }
     },
     "Resources": {
