@@ -78,7 +78,15 @@ def test_lambda_invoke_successfully(lambda_client):
 
     assert response['StatusCode'] == 200
 
+    # Read the payload
     payload = json.loads(response['Payload'].read())
+
+    # Check if there was a function error
+    if 'FunctionError' in response:
+        pytest.fail(f"Lambda invocation failed with error: {payload}")
+
+    # Check if payload has statusCode (successful execution)
+    assert 'statusCode' in payload, f"Lambda response missing statusCode. Response: {payload}"
     assert payload['statusCode'] == 200
 
     body = json.loads(payload['body'])
