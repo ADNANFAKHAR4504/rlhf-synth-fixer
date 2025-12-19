@@ -63,9 +63,18 @@ import * as path from 'path';
 // Load stack outputs
 const loadStackOutputs = () => {
   try {
-    const outputsPath = path.join(__dirname, '../cfn-outputs/all-outputs.json');
-    const outputsContent = fs.readFileSync(outputsPath, 'utf8');
-    return JSON.parse(outputsContent);
+    // Try flat-outputs.json first (Pulumi), then all-outputs.json (CDK/CFN)
+    const flatOutputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
+    const allOutputsPath = path.join(__dirname, '../cfn-outputs/all-outputs.json');
+    
+    if (fs.existsSync(flatOutputsPath)) {
+      const outputsContent = fs.readFileSync(flatOutputsPath, 'utf8');
+      return JSON.parse(outputsContent);
+    } else if (fs.existsSync(allOutputsPath)) {
+      const outputsContent = fs.readFileSync(allOutputsPath, 'utf8');
+      return JSON.parse(outputsContent);
+    }
+    throw new Error('No outputs file found');
   } catch (error) {
     throw new Error(`Failed to load stack outputs: ${error}`);
   }
