@@ -4,11 +4,16 @@
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "508400",
-  "team": "2",
+  "team": "synth",
   "startedAt": "2025-11-24T07:09:45.599Z",
-  "subtask": "IaC Program Optimization",
+  "subtask": "Infrastructure QA and Management",
   "subject_labels": [
-    "IaC Optimization"
+    "Infrastructure Analysis/Monitoring"
+  ],
+  "aws_services": [
+    "AWS::SNS::Topic",
+    "AWS::SQS::Queue",
+    "AWS::DynamoDB::Table"
   ],
   "provider": "localstack"
 }

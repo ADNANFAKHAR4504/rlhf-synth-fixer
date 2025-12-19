@@ -36,17 +36,19 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = REPO_ROOT / "lib" / "analyse.py"
-DEFAULT_ENDPOINT = os.environ.get("AWS_ENDPOINT_URL", "http://127.0.0.1:5001")
+DEFAULT_ENDPOINT = os.environ.get("AWS_ENDPOINT_URL", "http://localhost:4566")
 
 
 def boto_client(service: str):
-    """Create a boto3 client that targets the Moto server endpoint."""
+    """Create a boto3 client that targets the LocalStack/Moto server endpoint."""
     return boto3.client(
         service,
         endpoint_url=DEFAULT_ENDPOINT,
         region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
-        aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", "testing"),
-        aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "testing"),
+        aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID", "test"),
+        aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY", "test"),
+        use_ssl=False,
+        verify=False,
     )
 
 
