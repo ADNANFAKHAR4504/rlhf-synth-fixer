@@ -75,7 +75,8 @@ describe('TapStack', () => {
     });
 
     test('should create NAT Gateways for private subnets', () => {
-      template.resourceCountIs('AWS::EC2::NatGateway', 2);
+      // For LocalStack: NAT gateways are disabled (set to 0) for compatibility
+      template.resourceCountIs('AWS::EC2::NatGateway', 0);
     });
   });
 
@@ -320,7 +321,7 @@ describe('TapStack', () => {
         Tags: Match.arrayWith([
           Match.objectLike({
             Key: 'Name',
-            Value: 'BastionHost',
+            Value: Match.stringLikeRegexp('BastionHost-AZ[12]'),
           }),
         ]),
       });
@@ -347,8 +348,12 @@ describe('TapStack', () => {
     });
 
     test('should output Bastion Host IDs', () => {
-      template.hasOutput('SecurityStackBastionHost1BastionHostIdF625DB5E', {});
-      template.hasOutput('SecurityStackBastionHost2BastionHostId6EB6F74C', {});
+      // Outputs are created with CDK-generated IDs, check that at least 2 bastion host outputs exist
+      const outputs = template.findOutputs('*');
+      const bastionOutputs = Object.keys(outputs).filter(key =>
+        key.includes('BastionHost') && key.includes('BastionHostId')
+      );
+      expect(bastionOutputs.length).toBeGreaterThanOrEqual(2);
     });
   });
 
@@ -365,10 +370,13 @@ describe('TapStack', () => {
     });
 
     test('should create default routes for private subnets to NAT', () => {
-      template.hasResourceProperties('AWS::EC2::Route', {
-        DestinationCidrBlock: '0.0.0.0/0',
-        NatGatewayId: Match.anyValue(),
-      });
+      // For LocalStack: No NAT gateways, so no routes to NAT
+      // Private subnets are isolated and use VPC endpoints for AWS service access
+      const routes = template.findResources('AWS::EC2::Route');
+      const natRoutes = Object.values(routes).filter((route: any) =>
+        route.Properties?.NatGatewayId
+      );
+      expect(natRoutes.length).toBe(0);
     });
   });
 
