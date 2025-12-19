@@ -6,8 +6,10 @@
   "po_id": "291568",
   "team": "synth-2",
   "startedAt": "2025-08-17T15:40:00.000Z",
-  "subtask": "Web Application Deployment",
-  "subject_labels": "Web App Deployment, Security Config, Network Config, Access Control, General Infrastructure QA",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
   "aws_services": [
     "VPC",
     "EC2",
