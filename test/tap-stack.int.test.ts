@@ -35,17 +35,33 @@ console.log(`  Endpoint: ${endpoint || 'AWS default'}`);
 // Configuration - Get outputs from CloudFormation stack
 let outputs: any = {};
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr81';
-const stackName = `TapStack${environmentSuffix}`;
 
-try {
-  // Try to read from cfn-outputs file first (CI/CD pipeline writes this)
-  outputs = JSON.parse(
-    fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-  );
-} catch (error) {
-  console.log(
-    'cfn-outputs/flat-outputs.json not found, will fetch from CloudFormation API'
-  );
+// LocalStack uses different stack naming convention
+const stackName = isLocalStack
+  ? `localstack-stack-${environmentSuffix}`
+  : `TapStack${environmentSuffix}`;
+
+console.log(`  Stack Name: ${stackName}`);
+
+// Try multiple possible paths for outputs file
+const outputPaths = [
+  'cfn-outputs/flat-outputs.json',
+  'cdk-outputs/flat-outputs.json',
+  'flat-outputs.json',
+];
+
+for (const outputPath of outputPaths) {
+  try {
+    outputs = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
+    console.log(`  Loaded outputs from: ${outputPath}`);
+    break;
+  } catch (error) {
+    // Try next path
+  }
+}
+
+if (Object.keys(outputs).length === 0) {
+  console.log('  Outputs file not found, will fetch from CloudFormation API');
 }
 
 // AWS SDK clients with LocalStack support
