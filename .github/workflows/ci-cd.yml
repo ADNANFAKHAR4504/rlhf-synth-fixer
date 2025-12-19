@@ -52,40 +52,6 @@ env:
   CICD_PIPELINE_SUBJECT_LABEL: 'CI/CD Pipeline'
 
 jobs:
-  # Pre-pull and cache LocalStack Docker image for faster subsequent runs
-  cache-localstack-image:
-    name: Cache LocalStack Image
-    runs-on: ubuntu-24.04
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') }}
-    steps:
-      - name: Cache Docker images
-        uses: actions/cache@v4
-        id: docker-cache
-        with:
-          path: /tmp/docker-images
-          key: docker-localstack-pro-stable-${{ runner.os }}-${{ hashFiles('.github/workflows/ci-cd.yml') }}
-          restore-keys: |
-            docker-localstack-pro-stable-${{ runner.os }}-
-
-      - name: Load cached Docker image
-        if: steps.docker-cache.outputs.cache-hit == 'true'
-        run: |
-          echo "📦 Loading cached LocalStack image..."
-          if [ -f /tmp/docker-images/localstack-pro.tar ]; then
-            docker load < /tmp/docker-images/localstack-pro.tar
-            echo "✅ LocalStack image loaded from cache"
-          fi
-
-      - name: Pull and save Docker image
-        if: steps.docker-cache.outputs.cache-hit != 'true'
-        run: |
-          echo "📥 Pulling LocalStack Pro image..."
-          docker pull localstack/localstack-pro:stable
-          echo "💾 Saving image to cache..."
-          mkdir -p /tmp/docker-images
-          docker save localstack/localstack-pro:stable > /tmp/docker-images/localstack-pro.tar
-          echo "✅ LocalStack image saved to cache"
-
   detect-metadata:
     name: Detect Project Files
     runs-on: ubuntu-24.04
@@ -447,29 +413,9 @@ jobs:
   deploy:
     name: Deploy
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, synth, cache-localstack-image]
+    needs: [detect-metadata, synth]
     if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
     environment: dev
-    # LocalStack service container - starts automatically with the job
-    services:
-      localstack:
-        image: localstack/localstack-pro:stable
-        ports:
-          - 4566:4566
-        env:
-          LOCALSTACK_API_KEY: ${{ secrets.LOCALSTACK_API_KEY }}
-          # Load only commonly needed services for faster startup
-          SERVICES: s3,lambda,dynamodb,cloudformation,iam,sqs,sns,events,logs,cloudwatch,apigateway,secretsmanager,ssm,stepfunctions,kinesis,kms,sts
-          EAGER_SERVICE_LOADING: 1
-          DEBUG: 0
-          SKIP_INFRA_DOWNLOADS: 1
-          SKIP_SSL_CERT_DOWNLOAD: 1
-        options: >-
-          --health-cmd "curl -sf http://localhost:4566/_localstack/health || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 20
-          --health-start-period 20s
 
     steps:
       - name: Checkout code
@@ -533,27 +479,11 @@ jobs:
           echo "ℹ️ Skipping AWS bootstrap for LocalStack deployment"
           echo "LocalStack bootstrap will be handled during deployment"
 
-      - name: Wait for LocalStack Service (if provider is localstack)
+      - name: Start LocalStack (if provider is localstack)
         if: ${{ needs.detect-metadata.outputs.provider == 'localstack' }}
-        run: |
-          echo "🚀 LocalStack is running as a service container..."
-          echo "⏳ Waiting for LocalStack to be fully ready..."
-          max_attempts=30
-          attempt=0
-          while [ $attempt -lt $max_attempts ]; do
-            if curl -sf http://localhost:4566/_localstack/health > /dev/null 2>&1; then
-              echo "✅ LocalStack is ready!"
-              curl -s http://localhost:4566/_localstack/health | jq . || true
-              break
-            fi
-            echo "⏳ Attempt $((attempt + 1))/$max_attempts - waiting for LocalStack..."
-            sleep 2
-            ((attempt++))
-          done
-          if [ $attempt -eq $max_attempts ]; then
-            echo "❌ LocalStack failed to become ready"
-            exit 1
-          fi
+        run: ./scripts/localstack-start-ci.sh
+        env:
+          LOCALSTACK_API_KEY: ${{ secrets.LOCALSTACK_API_KEY }}
 
       - name: Deploy
         run: |
@@ -760,29 +690,9 @@ jobs:
   integration-tests-live:
     name: Integration Tests (Live)
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, lint, unit-tests, deploy, cache-localstack-image]
+    needs: [detect-metadata, lint, unit-tests, deploy]
     environment: qa
     if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
-    # LocalStack service container for integration tests
-    services:
-      localstack:
-        image: localstack/localstack-pro:stable
-        ports:
-          - 4566:4566
-        env:
-          LOCALSTACK_API_KEY: ${{ secrets.LOCALSTACK_API_KEY }}
-          # Load only commonly needed services for faster startup
-          SERVICES: s3,lambda,dynamodb,cloudformation,iam,sqs,sns,events,logs,cloudwatch,apigateway,secretsmanager,ssm,stepfunctions,kinesis,kms,sts
-          EAGER_SERVICE_LOADING: 1
-          DEBUG: 0
-          SKIP_INFRA_DOWNLOADS: 1
-          SKIP_SSL_CERT_DOWNLOAD: 1
-        options: >-
-          --health-cmd "curl -sf http://localhost:4566/_localstack/health || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 20
-          --health-start-period 20s
 
     steps:
       - name: Checkout code
@@ -811,27 +721,11 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
-      - name: Wait for LocalStack Service (if provider is localstack)
+      - name: Start LocalStack (if provider is localstack)
         if: ${{ needs.detect-metadata.outputs.provider == 'localstack' }}
-        run: |
-          echo "🚀 LocalStack is running as a service container..."
-          echo "⏳ Waiting for LocalStack to be fully ready..."
-          max_attempts=30
-          attempt=0
-          while [ $attempt -lt $max_attempts ]; do
-            if curl -sf http://localhost:4566/_localstack/health > /dev/null 2>&1; then
-              echo "✅ LocalStack is ready!"
-              curl -s http://localhost:4566/_localstack/health | jq . || true
-              break
-            fi
-            echo "⏳ Attempt $((attempt + 1))/$max_attempts - waiting for LocalStack..."
-            sleep 2
-            ((attempt++))
-          done
-          if [ $attempt -eq $max_attempts ]; then
-            echo "❌ LocalStack failed to become ready"
-            exit 1
-          fi
+        run: ./scripts/localstack-start-ci.sh
+        env:
+          LOCALSTACK_API_KEY: ${{ secrets.LOCALSTACK_API_KEY }}
 
       - name: Run integration tests
         run: |
