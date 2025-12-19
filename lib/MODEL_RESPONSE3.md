@@ -781,24 +781,24 @@ Outputs:
 
 ## Fixed Issues:
 
-### ✅ **W1020 - Unnecessary Fn::Sub Fixed:**
+### **W1020 - Unnecessary Fn::Sub Fixed:**
 
 - Changed `Fn::Sub: |` to proper `Fn::Sub:` with `Fn::Base64` wrapper in UserData
 
-### ✅ **ConfigRole Policy Issue Fixed:**
+### **ConfigRole Policy Issue Fixed:**
 
 - **Problem**: `arn:aws:iam::aws:policy/service-role/ConfigRole` doesn't exist
 - **Solution**: Replaced with correct managed policy `arn:aws:iam::aws:policy/service-role/AWS_ConfigServiceRolePolicy`
 - **Added**: Custom inline policy for S3 bucket access permissions
 
-### ✅ **GuardDuty Already Exists Issue Fixed:**
+### **GuardDuty Already Exists Issue Fixed:**
 
 - **Problem**: GuardDuty detector already exists in the account
 - **Solution**: Added conditional creation with parameter `EnableGuardDuty`
 - **Added**: Condition `CreateGuardDuty` to only create if parameter is `true`
 - **Added**: Conditional output that shows status
 
-### ✅ **Enhanced Config Bucket Policy:**
+### **Enhanced Config Bucket Policy:**
 
 - Added proper AWS account conditions for security
 - Fixed S3 bucket policy paths for Config service
@@ -828,17 +828,17 @@ aws cloudformation create-stack \
 
 ## Key Security Features:
 
-1. **✅ HTTPS-only Security Groups**
-2. **✅ S3 Read-only IAM Policy**
-3. **✅ RDS Encryption with KMS**
-4. **✅ S3 VPC Endpoint**
-5. **✅ CloudTrail Logging**
-6. **✅ Restrictive Network ACLs**
-7. **✅ AWS Config Compliance Rules**
-8. **✅ Conditional GuardDuty Threat Detection**
-9. **✅ WAF Web Protection**
-10. **✅ Auto Scaling for Resilience**
-11. **✅ CloudWatch Monitoring**
-12. **✅ TLS 1.2+ Enforcement**
+1. **HTTPS-only Security Groups**
+2. **S3 Read-only IAM Policy**
+3. **RDS Encryption with KMS**
+4. **S3 VPC Endpoint**
+5. **CloudTrail Logging**
+6. **Restrictive Network ACLs**
+7. **AWS Config Compliance Rules**
+8. **Conditional GuardDuty Threat Detection**
+9. **WAF Web Protection**
+10. **Auto Scaling for Resilience**
+11. **CloudWatch Monitoring**
+12. **TLS 1.2+ Enforcement**
 
 The template now handles existing GuardDuty detectors gracefully and uses the correct AWS Config service role policy.

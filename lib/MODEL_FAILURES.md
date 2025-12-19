@@ -4,7 +4,8 @@ This document catalogs the various failures encountered during the AWS infrastru
 
 ## **Failure 1: CloudFormation Template Format Error**
 
-**Error**: 
+**Error**:
+
 ```
 ValidationError: Template format error: Every Default member must be a string.
 ```
@@ -18,6 +19,7 @@ ValidationError: Template format error: Every Default member must be a string.
 ## **Failure 2: CloudFormation Linting Errors (Multiple)**
 
 **Errors**:
+
 ```yaml
 E2001 {'Fn::Sub': '${AWS::StackName}-${AWS::AccountId}'} is not of type 'string'
 W1031 Various naming pattern violations when 'Fn::Sub' is resolved
@@ -27,6 +29,7 @@ E3691 '8.0' is not a valid MySQL engine version
 ```
 
 **Root Cause**: Multiple CloudFormation template syntax and validation issues including:
+
 - Improper use of intrinsic functions
 - Resource naming pattern violations
 - Missing required properties
@@ -39,6 +42,7 @@ E3691 '8.0' is not a valid MySQL engine version
 ## **Failure 3: GuardDuty AlreadyExists Error**
 
 **Error**:
+
 ```
 GuardDutyDetector | Resource handler returned message: "The request is rejected because a detector already exists for the current account. (Service: GuardDuty, Status Code: 400, Request ID: be60b15b-6184-4450-8996-5b7a15e90e26) (SDK Attempt Count: 1)" (RequestToken: e0d671e5-7bfe-55d8-8539-8980ec46a9c1, HandlerErrorCode: AlreadyExists)
 ```
@@ -52,9 +56,10 @@ GuardDutyDetector | Resource handler returned message: "The request is rejected 
 ## **Failure 4: AWS Config Service Role Policy Error**
 
 **Error**:
+
 ```
 ConfigServiceRole | Policy arn:aws:iam::aws:policy/service-role/AWS_ConfigServiceRolePolicy does not exist or is not attachable.
-ConfigServiceRole | Policy arn:aws:iam::aws:policy/service-role/ConfigRole does not exist or is not attachable.  
+ConfigServiceRole | Policy arn:aws:iam::aws:policy/service-role/ConfigRole does not exist or is not attachable.
 ConfigServiceRole | Policy arn:aws:iam::aws:policy/service-role/AWSConfigRole does not exist or is not attachable.
 ```
 
@@ -67,6 +72,7 @@ ConfigServiceRole | Policy arn:aws:iam::aws:policy/service-role/AWSConfigRole do
 ## **Failure 5: CloudTrail DataResources Configuration Error**
 
 **Error**:
+
 ```
 AppCloudTrail | Resource handler returned message: "Invalid request provided: Value my-secure-app-bucket/* for DataResources.Values is invalid. (Service: CloudTrail, Status Code: 400, Request ID: cec5ceed-d1ca-4000-89ac-3e8f0fcf352b) (SDK Attempt Count: 1)" (RequestToken: 42b4a23a-fb75-ed7e-6084-e66cd8b28983, HandlerErrorCode: InvalidRequest)
 ```
@@ -80,6 +86,7 @@ AppCloudTrail | Resource handler returned message: "Invalid request provided: Va
 ## **Failure 6: RDS Performance Insights Configuration Error**
 
 **Error**:
+
 ```
 AppDatabase | Resource handler returned message: "Performance Insights not supported for this configuration. (Service: Rds, Status Code: 400, Request ID: c35ec5d3-0b82-4948-b28d-eb36dd93e7cf) (SDK Attempt Count: 1)" (RequestToken: 36fbf0f9-1341-2fed-99d6-a777bf3ec6df, HandlerErrorCode: InvalidRequest)
 ```
@@ -95,6 +102,7 @@ AppDatabase | Resource handler returned message: "Performance Insights not suppo
 ## **Failure 7: Unit and Integration Test Failures**
 
 **Error**:
+
 ```
 expect(received).toBe(expected)
 Expected: "TAP Stack - Task Assignment Platform CloudFormation Template"
@@ -108,6 +116,7 @@ Output validation failures: Template has 8 outputs instead of expected 4
 **Root Cause**: Unit and integration tests were written for a different infrastructure template (simple DynamoDB table setup) but the actual template was a comprehensive AWS security setup with 46 resources.
 
 **Resolution**: Completely rewrote all unit and integration tests to match the actual CloudFormation template structure, including:
+
 - Updated template description validation
 - Fixed parameter tests for actual parameters (S3BucketName, RandomSuffix, EnableGuardDuty)
 - Updated resource validation for all 46 resources (VPC, RDS, ALB, CloudTrail, GuardDuty, WAF, etc.)
@@ -119,16 +128,19 @@ Output validation failures: Template has 8 outputs instead of expected 4
 ## **Failure 8: Missing Validation Files**
 
 **Error**:
+
 ```
 CRITICAL: IDEAL_RESPONSE.md Validation Failed - contains only placeholder text
 CRITICAL: Required Metadata Fields Missing - missing subtask, subject_labels, training_quality, aws_services
 ```
 
 **Root Cause**: Required validation files were incomplete:
+
 - `IDEAL_RESPONSE.md` contained only placeholder text: "Insert here the ideal response"
 - `metadata.json` was missing required fields for the validation pipeline
 
-**Resolution**: 
+**Resolution**:
+
 - Created comprehensive 857-line `IDEAL_RESPONSE.md` with complete CloudFormation template, infrastructure overview, and deployment instructions
 - Updated `metadata.json` with all required fields: subtask, subject_labels, training_quality, and aws_services
 
@@ -139,7 +151,7 @@ CRITICAL: Required Metadata Fields Missing - missing subtask, subject_labels, tr
 The model encountered a systematic progression of failures that demonstrate common AWS CloudFormation deployment challenges:
 
 1. **Template Syntax Issues**: Basic CloudFormation syntax validation and formatting problems
-2. **Resource Naming Conflicts**: AWS resource naming pattern compliance issues  
+2. **Resource Naming Conflicts**: AWS resource naming pattern compliance issues
 3. **Service Integration Conflicts**: Attempting to create resources that already exist (GuardDuty)
 4. **Policy Reference Errors**: Using incorrect AWS managed policy ARNs
 5. **Resource Configuration Incompatibilities**: Feature support limitations (Performance Insights on micro instances)
@@ -150,4 +162,4 @@ Each failure was systematically diagnosed and resolved, resulting in a productio
 
 **Total Commits Required**: 22 commits to resolve all failures and implement the complete solution.
 
-**Final Status**: ✅ All infrastructure deployment errors resolved, tests passing, validation complete.
+**Final Status**: All infrastructure deployment errors resolved, tests passing, validation complete.

@@ -1,1376 +1,1376 @@
 {
-  "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Comprehensive AWS Security Setup for Application in us-east-1",
-  "Parameters": {
-    "S3BucketName": {
-      "Type": "String",
-      "Default": "my-secure-app-bucket",
-      "Description": "Name of the S3 bucket for read access"
-    },
-    "RandomSuffix": {
-      "Type": "String",
-      "Default": "secure-app-123",
-      "Description": "Random suffix for unique resource naming"
-    },
-    "EnableGuardDuty": {
-      "Type": "String",
-      "Default": "false",
-      "AllowedValues": [
-        "true",
-        "false"
-      ],
-      "Description": "Enable GuardDuty (set to false if already exists in account)"
-    }
-  },
-  "Conditions": {
-    "CreateGuardDuty": {
-      "Fn::Equals": [
-        {
-          "Ref": "EnableGuardDuty"
-        },
-        "true"
-      ]
-    },
-    "IsAws": {
-      "Fn::Not": [
-        {
-          "Fn::Equals": [
-            {
-              "Ref": "AWS::AccountId"
-            },
-            "000000000000"
-          ]
-        }
-      ]
-    },
-    "CreateGuardDutyAws": {
-      "Fn::And": [
-        {
-          "Fn::Not": [
-            {
-              "Fn::Equals": [
-                {
-                  "Ref": "AWS::AccountId"
-                },
-                "000000000000"
-              ]
-            }
-          ]
-        },
-        {
-          "Fn::Equals": [
-            {
-              "Ref": "EnableGuardDuty"
-            },
-            "true"
-          ]
-        }
-      ]
-    }
-  },
-  "Resources": {
-    "DefaultVPC": {
-      "Type": "AWS::EC2::VPC",
-      "Condition": "IsAws",
-      "Properties": {
-        "CidrBlock": "10.0.0.0/16",
-        "EnableDnsHostnames": true,
-        "EnableDnsSupport": true,
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "DefaultVPC-${RandomSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "DefaultRouteTable": {
-      "Type": "AWS::EC2::RouteTable",
-      "Condition": "IsAws",
-      "Properties": {
-        "VpcId": {
-          "Ref": "DefaultVPC"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "DefaultRouteTable-${RandomSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "InternetGateway": {
-      "Type": "AWS::EC2::InternetGateway",
-      "Condition": "IsAws",
-      "Properties": {
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "IGW-${RandomSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "AttachGateway": {
-      "Type": "AWS::EC2::VPCGatewayAttachment",
-      "Condition": "IsAws",
-      "Properties": {
-        "VpcId": {
-          "Ref": "DefaultVPC"
-        },
-        "InternetGatewayId": {
-          "Ref": "InternetGateway"
-        }
-      }
-    },
-    "DefaultRoute": {
-      "Type": "AWS::EC2::Route",
-      "DependsOn": "AttachGateway",
-      "Condition": "IsAws",
-      "Properties": {
-        "RouteTableId": {
-          "Ref": "DefaultRouteTable"
-        },
-        "DestinationCidrBlock": "0.0.0.0/0",
-        "GatewayId": {
-          "Ref": "InternetGateway"
-        }
-      }
-    },
-    "PublicSubnet1": {
-      "Type": "AWS::EC2::Subnet",
-      "Condition": "IsAws",
-      "Properties": {
-        "VpcId": {
-          "Ref": "DefaultVPC"
-        },
-        "CidrBlock": "10.0.1.0/24",
-        "AvailabilityZone": {
-          "Fn::Select": [
-            0,
-            {
-              "Fn::GetAZs": ""
-            }
-          ]
-        },
-        "MapPublicIpOnLaunch": true,
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "PublicSubnet1-${RandomSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "PublicSubnet2": {
-      "Type": "AWS::EC2::Subnet",
-      "Condition": "IsAws",
-      "Properties": {
-        "VpcId": {
-          "Ref": "DefaultVPC"
-        },
-        "CidrBlock": "10.0.2.0/24",
-        "AvailabilityZone": {
-          "Fn::Select": [
-            1,
-            {
-              "Fn::GetAZs": ""
-            }
-          ]
-        },
-        "MapPublicIpOnLaunch": true,
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "PublicSubnet2-${RandomSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "PublicSubnet1RouteTableAssociation": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Condition": "IsAws",
-      "Properties": {
-        "SubnetId": {
-          "Ref": "PublicSubnet1"
-        },
-        "RouteTableId": {
-          "Ref": "DefaultRouteTable"
-        }
-      }
-    },
-    "PublicSubnet2RouteTableAssociation": {
-      "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Condition": "IsAws",
-      "Properties": {
-        "SubnetId": {
-          "Ref": "PublicSubnet2"
-        },
-        "RouteTableId": {
-          "Ref": "DefaultRouteTable"
-        }
-      }
-    },
-    "S3VPCEndpoint": {
-      "Type": "AWS::EC2::VPCEndpoint",
-      "Condition": "IsAws",
-      "Properties": {
-        "VpcId": {
-          "Ref": "DefaultVPC"
-        },
-        "ServiceName": {
-          "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
-        },
-        "VpcEndpointType": "Gateway",
-        "RouteTableIds": [
-          {
-            "Ref": "DefaultRouteTable"
-          }
-        ]
-      }
-    },
-    "RDSKMSKey": {
-      "Type": "AWS::KMS::Key",
-      "Properties": {
-        "Description": "KMS Key for RDS Database Encryption",
-        "KeyPolicy": {
-          "Statement": [
-            {
-              "Sid": "Enable IAM User Permissions",
-              "Effect": "Allow",
-              "Principal": {
-                "AWS": {
-                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
-                }
-              },
-              "Action": "kms:*",
-              "Resource": "*"
-            },
-            {
-              "Sid": "Allow RDS Service",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "rds.amazonaws.com"
-              },
-              "Action": [
-                "kms:Decrypt",
-                "kms:GenerateDataKey"
-              ],
-              "Resource": "*"
-            }
-          ]
-        }
-      }
-    },
-    "RDSKMSKeyAlias": {
-      "Type": "AWS::KMS::Alias",
-      "Properties": {
-        "AliasName": "alias/rds-encryption-key",
-        "TargetKeyId": {
-          "Ref": "RDSKMSKey"
-        }
-      }
-    },
-    "AppSecurityGroup": {
-      "Type": "AWS::EC2::SecurityGroup",
-      "Condition": "IsAws",
-      "Properties": {
-        "GroupDescription": "Security group for application - HTTPS only",
-        "VpcId": {
-          "Ref": "DefaultVPC"
-        },
-        "SecurityGroupIngress": [
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 443,
-            "ToPort": 443,
-            "CidrIp": "0.0.0.0/0",
-            "Description": "HTTPS traffic only"
-          }
-        ],
-        "SecurityGroupEgress": [
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 443,
-            "ToPort": 443,
-            "CidrIp": "0.0.0.0/0",
-            "Description": "Outbound HTTPS"
-          },
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 80,
-            "ToPort": 80,
-            "CidrIp": "0.0.0.0/0",
-            "Description": "Outbound HTTP for updates"
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "AppSecurityGroup-${RandomSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "DBSecurityGroup": {
-      "Type": "AWS::EC2::SecurityGroup",
-      "Condition": "IsAws",
-      "Properties": {
-        "GroupDescription": "Security group for RDS database",
-        "VpcId": {
-          "Ref": "DefaultVPC"
-        },
-        "SecurityGroupIngress": [
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 3306,
-            "ToPort": 3306,
-            "SourceSecurityGroupId": {
-              "Ref": "AppSecurityGroup"
-            },
-            "Description": "MySQL access from app security group"
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "DBSecurityGroup-${RandomSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "RestrictiveNetworkAcl": {
-      "Type": "AWS::EC2::NetworkAcl",
-      "Condition": "IsAws",
-      "Properties": {
-        "VpcId": {
-          "Ref": "DefaultVPC"
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "RestrictiveNetworkAcl-${RandomSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "NetworkAclInboundHTTPS": {
-      "Type": "AWS::EC2::NetworkAclEntry",
-      "Condition": "IsAws",
-      "Properties": {
-        "NetworkAclId": {
-          "Ref": "RestrictiveNetworkAcl"
-        },
-        "RuleNumber": 100,
-        "Protocol": 6,
-        "RuleAction": "allow",
-        "PortRange": {
-          "From": 443,
-          "To": 443
-        },
-        "CidrBlock": "0.0.0.0/0"
-      }
-    },
-    "NetworkAclInboundEphemeral": {
-      "Type": "AWS::EC2::NetworkAclEntry",
-      "Condition": "IsAws",
-      "Properties": {
-        "NetworkAclId": {
-          "Ref": "RestrictiveNetworkAcl"
-        },
-        "RuleNumber": 110,
-        "Protocol": 6,
-        "RuleAction": "allow",
-        "PortRange": {
-          "From": 1024,
-          "To": 65535
-        },
-        "CidrBlock": "0.0.0.0/0"
-      }
-    },
-    "NetworkAclOutboundHTTPS": {
-      "Type": "AWS::EC2::NetworkAclEntry",
-      "Condition": "IsAws",
-      "Properties": {
-        "NetworkAclId": {
-          "Ref": "RestrictiveNetworkAcl"
-        },
-        "RuleNumber": 100,
-        "Protocol": 6,
-        "RuleAction": "allow",
-        "Egress": true,
-        "PortRange": {
-          "From": 443,
-          "To": 443
-        },
-        "CidrBlock": "0.0.0.0/0"
-      }
-    },
-    "NetworkAclOutboundHTTP": {
-      "Type": "AWS::EC2::NetworkAclEntry",
-      "Condition": "IsAws",
-      "Properties": {
-        "NetworkAclId": {
-          "Ref": "RestrictiveNetworkAcl"
-        },
-        "RuleNumber": 110,
-        "Protocol": 6,
-        "RuleAction": "allow",
-        "Egress": true,
-        "PortRange": {
-          "From": 80,
-          "To": 80
-        },
-        "CidrBlock": "0.0.0.0/0"
-      }
-    },
-    "NetworkAclOutboundEphemeral": {
-      "Type": "AWS::EC2::NetworkAclEntry",
-      "Condition": "IsAws",
-      "Properties": {
-        "NetworkAclId": {
-          "Ref": "RestrictiveNetworkAcl"
-        },
-        "RuleNumber": 120,
-        "Protocol": 6,
-        "RuleAction": "allow",
-        "Egress": true,
-        "PortRange": {
-          "From": 1024,
-          "To": 65535
-        },
-        "CidrBlock": "0.0.0.0/0"
-      }
-    },
-    "S3ReadOnlyRole": {
-      "Type": "AWS::IAM::Role",
-      "Properties": {
-        "RoleName": "S3ReadOnlyRole",
-        "AssumeRolePolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "ec2.amazonaws.com"
-              },
-              "Action": "sts:AssumeRole"
-            }
-          ]
-        },
-        "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "S3ReadOnlyRole-${RandomSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "S3ReadOnlyPolicy": {
-      "Type": "AWS::IAM::Policy",
-      "Properties": {
-        "PolicyName": "S3ReadOnlyPolicy",
-        "PolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Action": [
-                "s3:GetObject",
-                "s3:GetObjectVersion",
-                "s3:ListBucket"
-              ],
-              "Resource": [
-                {
-                  "Fn::Sub": "arn:aws:s3:::${S3BucketName}"
-                },
-                {
-                  "Fn::Sub": "arn:aws:s3:::${S3BucketName}/*"
-                }
-              ]
-            },
-            {
-              "Effect": "Allow",
-              "Action": [
-                "s3:ListAllMyBuckets"
-              ],
-              "Resource": "*"
-            }
-          ]
-        },
-        "Roles": [
-          {
-            "Ref": "S3ReadOnlyRole"
-          }
-        ]
-      }
-    },
-    "S3ReadOnlyInstanceProfile": {
-      "Type": "AWS::IAM::InstanceProfile",
-      "Properties": {
-        "InstanceProfileName": "S3ReadOnlyInstanceProfile",
-        "Roles": [
-          {
-            "Ref": "S3ReadOnlyRole"
-          }
-        ]
-      }
-    },
-    "AppLaunchTemplate": {
-      "Type": "AWS::EC2::LaunchTemplate",
-      "Condition": "IsAws",
-      "Properties": {
-        "LaunchTemplateName": {
-          "Fn::Sub": "AppLaunchTemplate-${RandomSuffix}"
-        },
-        "LaunchTemplateData": {
-          "ImageId": "ami-0c02fb55956c7d316",
-          "InstanceType": "t3.micro",
-          "IamInstanceProfile": {
-            "Arn": {
-              "Fn::GetAtt": [
-                "S3ReadOnlyInstanceProfile",
-                "Arn"
-              ]
-            }
-          },
-          "SecurityGroupIds": [
-            {
-              "Ref": "AppSecurityGroup"
-            }
-          ],
-          "UserData": {
-            "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\n# Configure TLS 1.2 minimum\necho \"MinProtocol = TLSv1.2\" >> /etc/ssl/openssl.cnf\n"
-          },
-          "MetadataOptions": {
-            "HttpTokens": "required",
-            "HttpPutResponseHopLimit": 2
-          },
-          "Monitoring": {
-            "Enabled": true
-          },
-          "TagSpecifications": [
-            {
-              "ResourceType": "instance",
-              "Tags": [
-                {
-                  "Key": "Name",
-                  "Value": {
-                    "Fn::Sub": "AppInstance-${RandomSuffix}"
-                  }
-                }
-              ]
-            }
-          ]
-        }
-      }
-    },
-    "AppAutoScalingGroup": {
-      "Type": "AWS::AutoScaling::AutoScalingGroup",
-      "Condition": "IsAws",
-      "Properties": {
-        "AutoScalingGroupName": {
-          "Fn::Sub": "AppAutoScalingGroup-${RandomSuffix}"
-        },
-        "VPCZoneIdentifier": [
-          {
-            "Ref": "PublicSubnet1"
-          },
-          {
-            "Ref": "PublicSubnet2"
-          }
-        ],
-        "LaunchTemplate": {
-          "LaunchTemplateId": {
-            "Ref": "AppLaunchTemplate"
-          },
-          "Version": {
-            "Fn::GetAtt": [
-              "AppLaunchTemplate",
-              "LatestVersionNumber"
-            ]
-          }
-        },
-        "MinSize": 1,
-        "MaxSize": 3,
-        "DesiredCapacity": 2,
-        "HealthCheckType": "EC2",
-        "HealthCheckGracePeriod": 300,
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "AppAutoScalingGroup-${RandomSuffix}"
-            },
-            "PropagateAtLaunch": true
-          }
-        ]
-      }
-    },
-    "AppLoadBalancer": {
-      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
-      "Condition": "IsAws",
-      "Properties": {
-        "Name": "AppLoadBalancer",
-        "Scheme": "internet-facing",
-        "Type": "application",
-        "SecurityGroups": [
-          {
-            "Ref": "AppSecurityGroup"
-          }
-        ],
-        "Subnets": [
-          {
-            "Ref": "PublicSubnet1"
-          },
-          {
-            "Ref": "PublicSubnet2"
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "AppLoadBalancer-${RandomSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "DBSubnetGroup": {
-      "Type": "AWS::RDS::DBSubnetGroup",
-      "Condition": "IsAws",
-      "Properties": {
-        "DBSubnetGroupName": {
-          "Fn::Sub": "db-subnet-group-${RandomSuffix}"
-        },
-        "DBSubnetGroupDescription": "Subnet group for RDS database",
-        "SubnetIds": [
-          {
-            "Ref": "PublicSubnet1"
-          },
-          {
-            "Ref": "PublicSubnet2"
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "DBSubnetGroup-${RandomSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "DBSecret": {
-      "Type": "AWS::SecretsManager::Secret",
-      "Properties": {
-        "Name": {
-          "Fn::Sub": "rds-password-${RandomSuffix}"
-        },
-        "Description": "RDS Database Password",
-        "GenerateSecretString": {
-          "SecretStringTemplate": "{\"username\": \"admin\"}",
-          "GenerateStringKey": "password",
-          "PasswordLength": 32,
-          "ExcludeCharacters": "\"@/\\"
-        }
-      }
-    },
-    "AppDatabase": {
-      "Type": "AWS::RDS::DBInstance",
-      "DeletionPolicy": "Snapshot",
-      "UpdateReplacePolicy": "Snapshot",
-      "Condition": "IsAws",
-      "Properties": {
-        "DBInstanceIdentifier": "app-database",
-        "DBInstanceClass": "db.t3.small",
-        "Engine": "mysql",
-        "EngineVersion": "8.0.43",
-        "AllocatedStorage": 20,
-        "StorageType": "gp2",
-        "StorageEncrypted": true,
-        "KmsKeyId": {
-          "Ref": "RDSKMSKey"
-        },
-        "MasterUsername": "admin",
-        "MasterUserPassword": {
-          "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"
-        },
-        "VPCSecurityGroups": [
-          {
-            "Ref": "DBSecurityGroup"
-          }
-        ],
-        "DBSubnetGroupName": {
-          "Ref": "DBSubnetGroup"
-        },
-        "BackupRetentionPeriod": 7,
-        "MultiAZ": false,
-        "PubliclyAccessible": false,
-        "DeletionProtection": false,
-        "EnablePerformanceInsights": false,
-        "MonitoringInterval": 60,
-        "MonitoringRoleArn": {
-          "Fn::GetAtt": [
-            "RDSMonitoringRole",
-            "Arn"
-          ]
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {
-              "Fn::Sub": "AppDatabase-${RandomSuffix}"
-            }
-          }
-        ]
-      }
-    },
-    "RDSMonitoringRole": {
-      "Type": "AWS::IAM::Role",
-      "Condition": "IsAws",
-      "Properties": {
-        "AssumeRolePolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "monitoring.rds.amazonaws.com"
-              },
-              "Action": "sts:AssumeRole"
-            }
-          ]
-        },
-        "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
-        ]
-      }
-    },
-    "CloudTrailBucket": {
-      "Type": "AWS::S3::Bucket",
-      "Properties": {
-        "BucketName": {
-          "Fn::Sub": "cloudtrail-logs-${AWS::AccountId}"
-        },
-        "BucketEncryption": {
-          "ServerSideEncryptionConfiguration": [
-            {
-              "ServerSideEncryptionByDefault": {
-                "SSEAlgorithm": "AES256"
-              }
-            }
-          ]
-        },
-        "PublicAccessBlockConfiguration": {
-          "BlockPublicAcls": true,
-          "BlockPublicPolicy": true,
-          "IgnorePublicAcls": true,
-          "RestrictPublicBuckets": true
-        },
-        "VersioningConfiguration": {
-          "Status": "Enabled"
-        },
-        "LifecycleConfiguration": {
-          "Rules": [
-            {
-              "Id": "DeleteOldLogs",
-              "Status": "Enabled",
-              "ExpirationInDays": 90
-            }
-          ]
-        }
-      }
-    },
-    "CloudTrailBucketPolicy": {
-      "Type": "AWS::S3::BucketPolicy",
-      "Properties": {
-        "Bucket": {
-          "Ref": "CloudTrailBucket"
-        },
-        "PolicyDocument": {
-          "Statement": [
-            {
-              "Sid": "AWSCloudTrailAclCheck",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "cloudtrail.amazonaws.com"
-              },
-              "Action": "s3:GetBucketAcl",
-              "Resource": {
-                "Fn::GetAtt": [
-                  "CloudTrailBucket",
-                  "Arn"
-                ]
-              }
-            },
-            {
-              "Sid": "AWSCloudTrailWrite",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "cloudtrail.amazonaws.com"
-              },
-              "Action": "s3:PutObject",
-              "Resource": {
-                "Fn::Sub": "${CloudTrailBucket.Arn}/*"
-              },
-              "Condition": {
-                "StringEquals": {
-                  "s3:x-amz-acl": "bucket-owner-full-control"
-                }
-              }
-            }
-          ]
-        }
-      }
-    },
-    "AppCloudTrail": {
-      "Type": "AWS::CloudTrail::Trail",
-      "DependsOn": "CloudTrailBucketPolicy",
-      "Condition": "IsAws",
-      "Properties": {
-        "TrailName": "AppCloudTrail",
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Comprehensive AWS Security Setup for Application in us-east-1",
+    "Parameters": {
         "S3BucketName": {
-          "Ref": "CloudTrailBucket"
+            "Type": "String",
+            "Default": "my-secure-app-bucket",
+            "Description": "Name of the S3 bucket for read access"
         },
-        "IncludeGlobalServiceEvents": true,
-        "IsMultiRegionTrail": true,
-        "EnableLogFileValidation": true,
-        "IsLogging": true,
-        "EventSelectors": [
-          {
-            "ReadWriteType": "All",
-            "IncludeManagementEvents": true,
-            "DataResources": [
-              {
-                "Type": "AWS::S3::Object",
-                "Values": [
-                  {
-                    "Fn::Sub": "arn:aws:s3:::${S3BucketName}/*"
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      }
+        "RandomSuffix": {
+            "Type": "String",
+            "Default": "secure-app-123",
+            "Description": "Random suffix for unique resource naming"
+        },
+        "EnableGuardDuty": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Enable GuardDuty (set to false if already exists in account)"
+        }
     },
-    "ConfigServiceRole": {
-      "Type": "AWS::IAM::Role",
-      "Condition": "IsAws",
-      "Properties": {
-        "AssumeRolePolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "config.amazonaws.com"
-              },
-              "Action": "sts:AssumeRole"
-            }
-          ]
-        },
-        "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
-        ],
-        "Policies": [
-          {
-            "PolicyName": "ConfigS3DeliveryPolicy",
-            "PolicyDocument": {
-              "Version": "2012-10-17",
-              "Statement": [
+    "Conditions": {
+        "CreateGuardDuty": {
+            "Fn::Equals": [
                 {
-                  "Effect": "Allow",
-                  "Action": [
-                    "s3:GetBucketAcl",
-                    "s3:ListBucket"
-                  ],
-                  "Resource": {
-                    "Fn::GetAtt": [
-                      "ConfigBucket",
-                      "Arn"
+                    "Ref": "EnableGuardDuty"
+                },
+                "true"
+            ]
+        },
+        "IsAws": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "AWS::AccountId"
+                        },
+                        "000000000000"
                     ]
-                  }
+                }
+            ]
+        },
+        "CreateGuardDutyAws": {
+            "Fn::And": [
+                {
+                    "Fn::Not": [
+                        {
+                            "Fn::Equals": [
+                                {
+                                    "Ref": "AWS::AccountId"
+                                },
+                                "000000000000"
+                            ]
+                        }
+                    ]
                 },
                 {
-                  "Effect": "Allow",
-                  "Action": [
-                    "s3:PutObject",
-                    "s3:GetBucketAcl"
-                  ],
-                  "Resource": {
-                    "Fn::Sub": "${ConfigBucket.Arn}/*"
-                  },
-                  "Condition": {
-                    "StringEquals": {
-                      "s3:x-amz-acl": "bucket-owner-full-control"
+                    "Fn::Equals": [
+                        {
+                            "Ref": "EnableGuardDuty"
+                        },
+                        "true"
+                    ]
+                }
+            ]
+        }
+    },
+    "Resources": {
+        "DefaultVPC": {
+            "Type": "AWS::EC2::VPC",
+            "Condition": "IsAws",
+            "Properties": {
+                "CidrBlock": "10.0.0.0/16",
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "DefaultVPC-${RandomSuffix}"
+                        }
                     }
-                  }
-                }
-              ]
-            }
-          }
-        ]
-      }
-    },
-    "ConfigBucket": {
-      "Type": "AWS::S3::Bucket",
-      "Properties": {
-        "BucketName": {
-          "Fn::Sub": "aws-config-${AWS::AccountId}"
-        },
-        "BucketEncryption": {
-          "ServerSideEncryptionConfiguration": [
-            {
-              "ServerSideEncryptionByDefault": {
-                "SSEAlgorithm": "AES256"
-              }
-            }
-          ]
-        },
-        "PublicAccessBlockConfiguration": {
-          "BlockPublicAcls": true,
-          "BlockPublicPolicy": true,
-          "IgnorePublicAcls": true,
-          "RestrictPublicBuckets": true
-        }
-      }
-    },
-    "ConfigBucketPolicy": {
-      "Type": "AWS::S3::BucketPolicy",
-      "Properties": {
-        "Bucket": {
-          "Ref": "ConfigBucket"
-        },
-        "PolicyDocument": {
-          "Statement": [
-            {
-              "Sid": "AWSConfigBucketPermissionsCheck",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "config.amazonaws.com"
-              },
-              "Action": "s3:GetBucketAcl",
-              "Resource": {
-                "Fn::GetAtt": [
-                  "ConfigBucket",
-                  "Arn"
                 ]
-              },
-              "Condition": {
-                "StringEquals": {
-                  "AWS:SourceAccount": {
-                    "Ref": "AWS::AccountId"
-                  }
-                }
-              }
-            },
-            {
-              "Sid": "AWSConfigBucketExistenceCheck",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "config.amazonaws.com"
-              },
-              "Action": "s3:ListBucket",
-              "Resource": {
-                "Fn::GetAtt": [
-                  "ConfigBucket",
-                  "Arn"
+            }
+        },
+        "DefaultRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Condition": "IsAws",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "DefaultVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "DefaultRouteTable-${RandomSuffix}"
+                        }
+                    }
                 ]
-              },
-              "Condition": {
-                "StringEquals": {
-                  "AWS:SourceAccount": {
-                    "Ref": "AWS::AccountId"
-                  }
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Condition": "IsAws",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "IGW-${RandomSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "AttachGateway": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Condition": "IsAws",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "DefaultVPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
                 }
-              }
-            },
-            {
-              "Sid": "AWSConfigBucketDelivery",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "config.amazonaws.com"
-              },
-              "Action": "s3:PutObject",
-              "Resource": {
-                "Fn::Sub": "${ConfigBucket.Arn}/AWSLogs/${AWS::AccountId}/Config/*"
-              },
-              "Condition": {
-                "StringEquals": {
-                  "s3:x-amz-acl": "bucket-owner-full-control",
-                  "AWS:SourceAccount": {
-                    "Ref": "AWS::AccountId"
-                  }
+            }
+        },
+        "DefaultRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "AttachGateway",
+            "Condition": "IsAws",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "DefaultRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
                 }
-              }
             }
-          ]
-        }
-      }
-    },
-    "ConfigDeliveryChannel": {
-      "Type": "AWS::Config::DeliveryChannel",
-      "Condition": "IsAws",
-      "Properties": {
-        "Name": {
-          "Fn::Sub": "ConfigDeliveryChannel-${RandomSuffix}"
         },
-        "S3BucketName": {
-          "Ref": "ConfigBucket"
-        }
-      }
-    },
-    "ConfigRecorder": {
-      "Type": "AWS::Config::ConfigurationRecorder",
-      "Condition": "IsAws",
-      "Properties": {
-        "Name": {
-          "Fn::Sub": "ConfigRecorder-${RandomSuffix}"
-        },
-        "RoleARN": {
-          "Fn::GetAtt": [
-            "ConfigServiceRole",
-            "Arn"
-          ]
-        },
-        "RecordingGroup": {
-          "AllSupported": true,
-          "IncludeGlobalResourceTypes": true
-        }
-      }
-    },
-    "S3BucketPublicReadProhibited": {
-      "Type": "AWS::Config::ConfigRule",
-      "DependsOn": "ConfigRecorder",
-      "Condition": "IsAws",
-      "Properties": {
-        "ConfigRuleName": "s3-bucket-public-read-prohibited",
-        "Source": {
-          "Owner": "AWS",
-          "SourceIdentifier": "S3_BUCKET_PUBLIC_READ_PROHIBITED"
-        }
-      }
-    },
-    "S3BucketPublicWriteProhibited": {
-      "Type": "AWS::Config::ConfigRule",
-      "DependsOn": "ConfigRecorder",
-      "Condition": "IsAws",
-      "Properties": {
-        "ConfigRuleName": "s3-bucket-public-write-prohibited",
-        "Source": {
-          "Owner": "AWS",
-          "SourceIdentifier": "S3_BUCKET_PUBLIC_WRITE_PROHIBITED"
-        }
-      }
-    },
-    "RDSStorageEncrypted": {
-      "Type": "AWS::Config::ConfigRule",
-      "DependsOn": "ConfigRecorder",
-      "Condition": "IsAws",
-      "Properties": {
-        "ConfigRuleName": "rds-storage-encrypted",
-        "Source": {
-          "Owner": "AWS",
-          "SourceIdentifier": "RDS_STORAGE_ENCRYPTED"
-        }
-      }
-    },
-    "GuardDutyDetector": {
-      "Type": "AWS::GuardDuty::Detector",
-      "Condition": "CreateGuardDutyAws",
-      "Properties": {
-        "Enable": true,
-        "FindingPublishingFrequency": "FIFTEEN_MINUTES"
-      }
-    },
-    "WebACL": {
-      "Type": "AWS::WAFv2::WebACL",
-      "Condition": "IsAws",
-      "Properties": {
-        "Name": "AppWebACL",
-        "Scope": "REGIONAL",
-        "DefaultAction": {
-          "Allow": {}
-        },
-        "Rules": [
-          {
-            "Name": "AWSManagedRulesCommonRuleSet",
-            "Priority": 1,
-            "OverrideAction": {
-              "None": {}
-            },
-            "Statement": {
-              "ManagedRuleGroupStatement": {
-                "VendorName": "AWS",
-                "Name": "AWSManagedRulesCommonRuleSet"
-              }
-            },
-            "VisibilityConfig": {
-              "SampledRequestsEnabled": true,
-              "CloudWatchMetricsEnabled": true,
-              "MetricName": "CommonRuleSetMetric"
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Condition": "IsAws",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "DefaultVPC"
+                },
+                "CidrBlock": "10.0.1.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "PublicSubnet1-${RandomSuffix}"
+                        }
+                    }
+                ]
             }
-          },
-          {
-            "Name": "AWSManagedRulesKnownBadInputsRuleSet",
-            "Priority": 2,
-            "OverrideAction": {
-              "None": {}
-            },
-            "Statement": {
-              "ManagedRuleGroupStatement": {
-                "VendorName": "AWS",
-                "Name": "AWSManagedRulesKnownBadInputsRuleSet"
-              }
-            },
-            "VisibilityConfig": {
-              "SampledRequestsEnabled": true,
-              "CloudWatchMetricsEnabled": true,
-              "MetricName": "KnownBadInputsRuleSetMetric"
-            }
-          }
-        ],
-        "VisibilityConfig": {
-          "SampledRequestsEnabled": true,
-          "CloudWatchMetricsEnabled": true,
-          "MetricName": "AppWebACLMetric"
-        }
-      }
-    },
-    "AppLogGroup": {
-      "Type": "AWS::Logs::LogGroup",
-      "Properties": {
-        "LogGroupName": "/aws/application/logs",
-        "RetentionInDays": 30
-      }
-    },
-    "HighCPUAlarm": {
-      "Type": "AWS::CloudWatch::Alarm",
-      "Condition": "IsAws",
-      "Properties": {
-        "AlarmName": {
-          "Fn::Sub": "HighCPU-${RandomSuffix}"
         },
-        "AlarmDescription": "High CPU utilization",
-        "MetricName": "CPUUtilization",
-        "Namespace": "AWS/EC2",
-        "Statistic": "Average",
-        "Period": 300,
-        "EvaluationPeriods": 2,
-        "Threshold": 80,
-        "ComparisonOperator": "GreaterThanThreshold",
-        "Dimensions": [
-          {
-            "Name": "AutoScalingGroupName",
+        "PublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Condition": "IsAws",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "DefaultVPC"
+                },
+                "CidrBlock": "10.0.2.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "PublicSubnet2-${RandomSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "IsAws",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "DefaultRouteTable"
+                }
+            }
+        },
+        "PublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "IsAws",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "DefaultRouteTable"
+                }
+            }
+        },
+        "S3VPCEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Condition": "IsAws",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "DefaultVPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
+                },
+                "VpcEndpointType": "Gateway",
+                "RouteTableIds": [
+                    {
+                        "Ref": "DefaultRouteTable"
+                    }
+                ]
+            }
+        },
+        "RDSKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": "KMS Key for RDS Database Encryption",
+                "KeyPolicy": {
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow RDS Service",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "rds.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
+        "RDSKMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": "alias/rds-encryption-key",
+                "TargetKeyId": {
+                    "Ref": "RDSKMSKey"
+                }
+            }
+        },
+        "AppSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Condition": "IsAws",
+            "Properties": {
+                "GroupDescription": "Security group for application - HTTPS only",
+                "VpcId": {
+                    "Ref": "DefaultVPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "HTTPS traffic only"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Outbound HTTPS"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Outbound HTTP for updates"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "AppSecurityGroup-${RandomSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "DBSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Condition": "IsAws",
+            "Properties": {
+                "GroupDescription": "Security group for RDS database",
+                "VpcId": {
+                    "Ref": "DefaultVPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "SourceSecurityGroupId": {
+                            "Ref": "AppSecurityGroup"
+                        },
+                        "Description": "MySQL access from app security group"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "DBSecurityGroup-${RandomSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "RestrictiveNetworkAcl": {
+            "Type": "AWS::EC2::NetworkAcl",
+            "Condition": "IsAws",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "DefaultVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "RestrictiveNetworkAcl-${RandomSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "NetworkAclInboundHTTPS": {
+            "Type": "AWS::EC2::NetworkAclEntry",
+            "Condition": "IsAws",
+            "Properties": {
+                "NetworkAclId": {
+                    "Ref": "RestrictiveNetworkAcl"
+                },
+                "RuleNumber": 100,
+                "Protocol": 6,
+                "RuleAction": "allow",
+                "PortRange": {
+                    "From": 443,
+                    "To": 443
+                },
+                "CidrBlock": "0.0.0.0/0"
+            }
+        },
+        "NetworkAclInboundEphemeral": {
+            "Type": "AWS::EC2::NetworkAclEntry",
+            "Condition": "IsAws",
+            "Properties": {
+                "NetworkAclId": {
+                    "Ref": "RestrictiveNetworkAcl"
+                },
+                "RuleNumber": 110,
+                "Protocol": 6,
+                "RuleAction": "allow",
+                "PortRange": {
+                    "From": 1024,
+                    "To": 65535
+                },
+                "CidrBlock": "0.0.0.0/0"
+            }
+        },
+        "NetworkAclOutboundHTTPS": {
+            "Type": "AWS::EC2::NetworkAclEntry",
+            "Condition": "IsAws",
+            "Properties": {
+                "NetworkAclId": {
+                    "Ref": "RestrictiveNetworkAcl"
+                },
+                "RuleNumber": 100,
+                "Protocol": 6,
+                "RuleAction": "allow",
+                "Egress": true,
+                "PortRange": {
+                    "From": 443,
+                    "To": 443
+                },
+                "CidrBlock": "0.0.0.0/0"
+            }
+        },
+        "NetworkAclOutboundHTTP": {
+            "Type": "AWS::EC2::NetworkAclEntry",
+            "Condition": "IsAws",
+            "Properties": {
+                "NetworkAclId": {
+                    "Ref": "RestrictiveNetworkAcl"
+                },
+                "RuleNumber": 110,
+                "Protocol": 6,
+                "RuleAction": "allow",
+                "Egress": true,
+                "PortRange": {
+                    "From": 80,
+                    "To": 80
+                },
+                "CidrBlock": "0.0.0.0/0"
+            }
+        },
+        "NetworkAclOutboundEphemeral": {
+            "Type": "AWS::EC2::NetworkAclEntry",
+            "Condition": "IsAws",
+            "Properties": {
+                "NetworkAclId": {
+                    "Ref": "RestrictiveNetworkAcl"
+                },
+                "RuleNumber": 120,
+                "Protocol": 6,
+                "RuleAction": "allow",
+                "Egress": true,
+                "PortRange": {
+                    "From": 1024,
+                    "To": 65535
+                },
+                "CidrBlock": "0.0.0.0/0"
+            }
+        },
+        "S3ReadOnlyRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": "S3ReadOnlyRole",
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "S3ReadOnlyRole-${RandomSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "S3ReadOnlyPolicy": {
+            "Type": "AWS::IAM::Policy",
+            "Properties": {
+                "PolicyName": "S3ReadOnlyPolicy",
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "s3:GetObject",
+                                "s3:GetObjectVersion",
+                                "s3:ListBucket"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${S3BucketName}"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${S3BucketName}/*"
+                                }
+                            ]
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "s3:ListAllMyBuckets"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Roles": [
+                    {
+                        "Ref": "S3ReadOnlyRole"
+                    }
+                ]
+            }
+        },
+        "S3ReadOnlyInstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "InstanceProfileName": "S3ReadOnlyInstanceProfile",
+                "Roles": [
+                    {
+                        "Ref": "S3ReadOnlyRole"
+                    }
+                ]
+            }
+        },
+        "AppLaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
+            "Condition": "IsAws",
+            "Properties": {
+                "LaunchTemplateName": {
+                    "Fn::Sub": "AppLaunchTemplate-${RandomSuffix}"
+                },
+                "LaunchTemplateData": {
+                    "ImageId": "ami-0c02fb55956c7d316",
+                    "InstanceType": "t3.micro",
+                    "IamInstanceProfile": {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "S3ReadOnlyInstanceProfile",
+                                "Arn"
+                            ]
+                        }
+                    },
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "AppSecurityGroup"
+                        }
+                    ],
+                    "UserData": {
+                        "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\n# Configure TLS 1.2 minimum\necho \"MinProtocol = TLSv1.2\" >> /etc/ssl/openssl.cnf\n"
+                    },
+                    "MetadataOptions": {
+                        "HttpTokens": "required",
+                        "HttpPutResponseHopLimit": 2
+                    },
+                    "Monitoring": {
+                        "Enabled": true
+                    },
+                    "TagSpecifications": [
+                        {
+                            "ResourceType": "instance",
+                            "Tags": [
+                                {
+                                    "Key": "Name",
+                                    "Value": {
+                                        "Fn::Sub": "AppInstance-${RandomSuffix}"
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "AppAutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "Condition": "IsAws",
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Fn::Sub": "AppAutoScalingGroup-${RandomSuffix}"
+                },
+                "VPCZoneIdentifier": [
+                    {
+                        "Ref": "PublicSubnet1"
+                    },
+                    {
+                        "Ref": "PublicSubnet2"
+                    }
+                ],
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "AppLaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "AppLaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
+                },
+                "MinSize": 1,
+                "MaxSize": 3,
+                "DesiredCapacity": 2,
+                "HealthCheckType": "EC2",
+                "HealthCheckGracePeriod": 300,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "AppAutoScalingGroup-${RandomSuffix}"
+                        },
+                        "PropagateAtLaunch": true
+                    }
+                ]
+            }
+        },
+        "AppLoadBalancer": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Condition": "IsAws",
+            "Properties": {
+                "Name": "AppLoadBalancer",
+                "Scheme": "internet-facing",
+                "Type": "application",
+                "SecurityGroups": [
+                    {
+                        "Ref": "AppSecurityGroup"
+                    }
+                ],
+                "Subnets": [
+                    {
+                        "Ref": "PublicSubnet1"
+                    },
+                    {
+                        "Ref": "PublicSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "AppLoadBalancer-${RandomSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "DBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Condition": "IsAws",
+            "Properties": {
+                "DBSubnetGroupName": {
+                    "Fn::Sub": "db-subnet-group-${RandomSuffix}"
+                },
+                "DBSubnetGroupDescription": "Subnet group for RDS database",
+                "SubnetIds": [
+                    {
+                        "Ref": "PublicSubnet1"
+                    },
+                    {
+                        "Ref": "PublicSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "DBSubnetGroup-${RandomSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "DBSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "rds-password-${RandomSuffix}"
+                },
+                "Description": "RDS Database Password",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\": \"admin\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\"
+                }
+            }
+        },
+        "AppDatabase": {
+            "Type": "AWS::RDS::DBInstance",
+            "DeletionPolicy": "Snapshot",
+            "UpdateReplacePolicy": "Snapshot",
+            "Condition": "IsAws",
+            "Properties": {
+                "DBInstanceIdentifier": "app-database",
+                "DBInstanceClass": "db.t3.small",
+                "Engine": "mysql",
+                "EngineVersion": "8.0.43",
+                "AllocatedStorage": 20,
+                "StorageType": "gp2",
+                "StorageEncrypted": true,
+                "KmsKeyId": {
+                    "Ref": "RDSKMSKey"
+                },
+                "MasterUsername": "admin",
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"
+                },
+                "VPCSecurityGroups": [
+                    {
+                        "Ref": "DBSecurityGroup"
+                    }
+                ],
+                "DBSubnetGroupName": {
+                    "Ref": "DBSubnetGroup"
+                },
+                "BackupRetentionPeriod": 7,
+                "MultiAZ": false,
+                "PubliclyAccessible": false,
+                "DeletionProtection": false,
+                "EnablePerformanceInsights": false,
+                "MonitoringInterval": 60,
+                "MonitoringRoleArn": {
+                    "Fn::GetAtt": [
+                        "RDSMonitoringRole",
+                        "Arn"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "AppDatabase-${RandomSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "RDSMonitoringRole": {
+            "Type": "AWS::IAM::Role",
+            "Condition": "IsAws",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "monitoring.rds.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+                ]
+            }
+        },
+        "CloudTrailBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "cloudtrail-logs-${AWS::AccountId}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldLogs",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 90
+                        }
+                    ]
+                }
+            }
+        },
+        "CloudTrailBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "CloudTrailBucket"
+                },
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Sid": "AWSCloudTrailAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "CloudTrailBucket",
+                                    "Arn"
+                                ]
+                            }
+                        },
+                        {
+                            "Sid": "AWSCloudTrailWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${CloudTrailBucket.Arn}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "AppCloudTrail": {
+            "Type": "AWS::CloudTrail::Trail",
+            "DependsOn": "CloudTrailBucketPolicy",
+            "Condition": "IsAws",
+            "Properties": {
+                "TrailName": "AppCloudTrail",
+                "S3BucketName": {
+                    "Ref": "CloudTrailBucket"
+                },
+                "IncludeGlobalServiceEvents": true,
+                "IsMultiRegionTrail": true,
+                "EnableLogFileValidation": true,
+                "IsLogging": true,
+                "EventSelectors": [
+                    {
+                        "ReadWriteType": "All",
+                        "IncludeManagementEvents": true,
+                        "DataResources": [
+                            {
+                                "Type": "AWS::S3::Object",
+                                "Values": [
+                                    {
+                                        "Fn::Sub": "arn:aws:s3:::${S3BucketName}/*"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        "ConfigServiceRole": {
+            "Type": "AWS::IAM::Role",
+            "Condition": "IsAws",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "ConfigS3DeliveryPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetBucketAcl",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "ConfigBucket",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject",
+                                        "s3:GetBucketAcl"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${ConfigBucket.Arn}/*"
+                                    },
+                                    "Condition": {
+                                        "StringEquals": {
+                                            "s3:x-amz-acl": "bucket-owner-full-control"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "ConfigBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "aws-config-${AWS::AccountId}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                }
+            }
+        },
+        "ConfigBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "ConfigBucket"
+                },
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Sid": "AWSConfigBucketPermissionsCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "ConfigBucket",
+                                    "Arn"
+                                ]
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "AWS:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AWSConfigBucketExistenceCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:ListBucket",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "ConfigBucket",
+                                    "Arn"
+                                ]
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "AWS:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AWSConfigBucketDelivery",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${ConfigBucket.Arn}/AWSLogs/${AWS::AccountId}/Config/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control",
+                                    "AWS:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "ConfigDeliveryChannel": {
+            "Type": "AWS::Config::DeliveryChannel",
+            "Condition": "IsAws",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "ConfigDeliveryChannel-${RandomSuffix}"
+                },
+                "S3BucketName": {
+                    "Ref": "ConfigBucket"
+                }
+            }
+        },
+        "ConfigRecorder": {
+            "Type": "AWS::Config::ConfigurationRecorder",
+            "Condition": "IsAws",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "ConfigRecorder-${RandomSuffix}"
+                },
+                "RoleARN": {
+                    "Fn::GetAtt": [
+                        "ConfigServiceRole",
+                        "Arn"
+                    ]
+                },
+                "RecordingGroup": {
+                    "AllSupported": true,
+                    "IncludeGlobalResourceTypes": true
+                }
+            }
+        },
+        "S3BucketPublicReadProhibited": {
+            "Type": "AWS::Config::ConfigRule",
+            "DependsOn": "ConfigRecorder",
+            "Condition": "IsAws",
+            "Properties": {
+                "ConfigRuleName": "s3-bucket-public-read-prohibited",
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "S3_BUCKET_PUBLIC_READ_PROHIBITED"
+                }
+            }
+        },
+        "S3BucketPublicWriteProhibited": {
+            "Type": "AWS::Config::ConfigRule",
+            "DependsOn": "ConfigRecorder",
+            "Condition": "IsAws",
+            "Properties": {
+                "ConfigRuleName": "s3-bucket-public-write-prohibited",
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "S3_BUCKET_PUBLIC_WRITE_PROHIBITED"
+                }
+            }
+        },
+        "RDSStorageEncrypted": {
+            "Type": "AWS::Config::ConfigRule",
+            "DependsOn": "ConfigRecorder",
+            "Condition": "IsAws",
+            "Properties": {
+                "ConfigRuleName": "rds-storage-encrypted",
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "RDS_STORAGE_ENCRYPTED"
+                }
+            }
+        },
+        "GuardDutyDetector": {
+            "Type": "AWS::GuardDuty::Detector",
+            "Condition": "CreateGuardDutyAws",
+            "Properties": {
+                "Enable": true,
+                "FindingPublishingFrequency": "FIFTEEN_MINUTES"
+            }
+        },
+        "WebACL": {
+            "Type": "AWS::WAFv2::WebACL",
+            "Condition": "IsAws",
+            "Properties": {
+                "Name": "AppWebACL",
+                "Scope": "REGIONAL",
+                "DefaultAction": {
+                    "Allow": {}
+                },
+                "Rules": [
+                    {
+                        "Name": "AWSManagedRulesCommonRuleSet",
+                        "Priority": 1,
+                        "OverrideAction": {
+                            "None": {}
+                        },
+                        "Statement": {
+                            "ManagedRuleGroupStatement": {
+                                "VendorName": "AWS",
+                                "Name": "AWSManagedRulesCommonRuleSet"
+                            }
+                        },
+                        "VisibilityConfig": {
+                            "SampledRequestsEnabled": true,
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": "CommonRuleSetMetric"
+                        }
+                    },
+                    {
+                        "Name": "AWSManagedRulesKnownBadInputsRuleSet",
+                        "Priority": 2,
+                        "OverrideAction": {
+                            "None": {}
+                        },
+                        "Statement": {
+                            "ManagedRuleGroupStatement": {
+                                "VendorName": "AWS",
+                                "Name": "AWSManagedRulesKnownBadInputsRuleSet"
+                            }
+                        },
+                        "VisibilityConfig": {
+                            "SampledRequestsEnabled": true,
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": "KnownBadInputsRuleSetMetric"
+                        }
+                    }
+                ],
+                "VisibilityConfig": {
+                    "SampledRequestsEnabled": true,
+                    "CloudWatchMetricsEnabled": true,
+                    "MetricName": "AppWebACLMetric"
+                }
+            }
+        },
+        "AppLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": "/aws/application/logs",
+                "RetentionInDays": 30
+            }
+        },
+        "HighCPUAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Condition": "IsAws",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "HighCPU-${RandomSuffix}"
+                },
+                "AlarmDescription": "High CPU utilization",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/EC2",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 80,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "AppAutoScalingGroup"
+                        }
+                    }
+                ]
+            }
+        },
+        "TrustedAdvisorRole": {
+            "Type": "AWS::IAM::Role",
+            "Condition": "IsAws",
+            "Properties": {
+                "RoleName": "TrustedAdvisorRole",
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "support.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/AWSSupportAccess"
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "VPCId": {
+            "Description": "VPC ID",
             "Value": {
-              "Ref": "AppAutoScalingGroup"
+                "Fn::If": [
+                    "IsAws",
+                    {
+                        "Ref": "DefaultVPC"
+                    },
+                    "Not available in LocalStack"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPC-ID"
+                }
             }
-          }
-        ]
-      }
-    },
-    "TrustedAdvisorRole": {
-      "Type": "AWS::IAM::Role",
-      "Condition": "IsAws",
-      "Properties": {
-        "RoleName": "TrustedAdvisorRole",
-        "AssumeRolePolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "support.amazonaws.com"
-              },
-              "Action": "sts:AssumeRole"
-            }
-          ]
         },
-        "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/AWSSupportAccess"
-        ]
-      }
+        "AppSecurityGroupId": {
+            "Description": "Application Security Group ID",
+            "Value": {
+                "Fn::If": [
+                    "IsAws",
+                    {
+                        "Ref": "AppSecurityGroup"
+                    },
+                    "Not available in LocalStack"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AppSG-ID"
+                }
+            }
+        },
+        "DatabaseEndpoint": {
+            "Description": "RDS Database Endpoint",
+            "Value": {
+                "Fn::If": [
+                    "IsAws",
+                    {
+                        "Fn::GetAtt": [
+                            "AppDatabase",
+                            "Endpoint.Address"
+                        ]
+                    },
+                    "Not available in LocalStack"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DB-Endpoint"
+                }
+            }
+        },
+        "LoadBalancerDNS": {
+            "Description": "Application Load Balancer DNS Name",
+            "Value": {
+                "Fn::If": [
+                    "IsAws",
+                    {
+                        "Fn::GetAtt": [
+                            "AppLoadBalancer",
+                            "DNSName"
+                        ]
+                    },
+                    "Not available in LocalStack"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ALB-DNS"
+                }
+            }
+        },
+        "S3VPCEndpointId": {
+            "Description": "S3 VPC Endpoint ID",
+            "Value": {
+                "Fn::If": [
+                    "IsAws",
+                    {
+                        "Ref": "S3VPCEndpoint"
+                    },
+                    "Not available in LocalStack"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3-VPCEndpoint"
+                }
+            }
+        },
+        "CloudTrailArn": {
+            "Description": "CloudTrail ARN",
+            "Value": {
+                "Fn::If": [
+                    "IsAws",
+                    {
+                        "Fn::GetAtt": [
+                            "AppCloudTrail",
+                            "Arn"
+                        ]
+                    },
+                    "Not available in LocalStack"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CloudTrail-ARN"
+                }
+            }
+        },
+        "GuardDutyDetectorId": {
+            "Description": "GuardDuty Detector ID (if created)",
+            "Value": {
+                "Fn::If": [
+                    "IsAws",
+                    {
+                        "Fn::If": [
+                            "CreateGuardDuty",
+                            {
+                                "Ref": "GuardDutyDetector"
+                            },
+                            "Not Created - Already Exists"
+                        ]
+                    },
+                    "Not available in LocalStack"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-GuardDuty-ID"
+                }
+            }
+        },
+        "WebACLArn": {
+            "Description": "WAF Web ACL ARN",
+            "Value": {
+                "Fn::If": [
+                    "IsAws",
+                    {
+                        "Fn::GetAtt": [
+                            "WebACL",
+                            "Arn"
+                        ]
+                    },
+                    "Not available in LocalStack"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-WebACL-ARN"
+                }
+            }
+        }
     }
-  },
-  "Outputs": {
-    "VPCId": {
-      "Description": "VPC ID",
-      "Value": {
-        "Fn::If": [
-          "IsAws",
-          {
-            "Ref": "DefaultVPC"
-          },
-          "Not available in LocalStack"
-        ]
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-VPC-ID"
-        }
-      }
-    },
-    "AppSecurityGroupId": {
-      "Description": "Application Security Group ID",
-      "Value": {
-        "Fn::If": [
-          "IsAws",
-          {
-            "Ref": "AppSecurityGroup"
-          },
-          "Not available in LocalStack"
-        ]
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-AppSG-ID"
-        }
-      }
-    },
-    "DatabaseEndpoint": {
-      "Description": "RDS Database Endpoint",
-      "Value": {
-        "Fn::If": [
-          "IsAws",
-          {
-            "Fn::GetAtt": [
-              "AppDatabase",
-              "Endpoint.Address"
-            ]
-          },
-          "Not available in LocalStack"
-        ]
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-DB-Endpoint"
-        }
-      }
-    },
-    "LoadBalancerDNS": {
-      "Description": "Application Load Balancer DNS Name",
-      "Value": {
-        "Fn::If": [
-          "IsAws",
-          {
-            "Fn::GetAtt": [
-              "AppLoadBalancer",
-              "DNSName"
-            ]
-          },
-          "Not available in LocalStack"
-        ]
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-ALB-DNS"
-        }
-      }
-    },
-    "S3VPCEndpointId": {
-      "Description": "S3 VPC Endpoint ID",
-      "Value": {
-        "Fn::If": [
-          "IsAws",
-          {
-            "Ref": "S3VPCEndpoint"
-          },
-          "Not available in LocalStack"
-        ]
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-S3-VPCEndpoint"
-        }
-      }
-    },
-    "CloudTrailArn": {
-      "Description": "CloudTrail ARN",
-      "Value": {
-        "Fn::If": [
-          "IsAws",
-          {
-            "Fn::GetAtt": [
-              "AppCloudTrail",
-              "Arn"
-            ]
-          },
-          "Not available in LocalStack"
-        ]
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-CloudTrail-ARN"
-        }
-      }
-    },
-    "GuardDutyDetectorId": {
-      "Description": "GuardDuty Detector ID (if created)",
-      "Value": {
-        "Fn::If": [
-          "IsAws",
-          {
-            "Fn::If": [
-              "CreateGuardDuty",
-              {
-                "Ref": "GuardDutyDetector"
-              },
-              "Not Created - Already Exists"
-            ]
-          },
-          "Not available in LocalStack"
-        ]
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-GuardDuty-ID"
-        }
-      }
-    },
-    "WebACLArn": {
-      "Description": "WAF Web ACL ARN",
-      "Value": {
-        "Fn::If": [
-          "IsAws",
-          {
-            "Fn::GetAtt": [
-              "WebACL",
-              "Arn"
-            ]
-          },
-          "Not available in LocalStack"
-        ]
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-WebACL-ARN"
-        }
-      }
-    }
-  }
 }
