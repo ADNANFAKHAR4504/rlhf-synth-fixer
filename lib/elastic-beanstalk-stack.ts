@@ -279,33 +279,30 @@ export class ElasticBeanstalkStack extends cdk.Stack {
 
     // Auto Scaling Group using L1 CfnAutoScalingGroup with explicit version
     // This approach avoids CDK's automatic LaunchTemplate versioning which LocalStack doesn't support
-    const cfnAsg = new autoscaling.CfnAutoScalingGroup(
-      this,
-      'ASG',
-      {
-        autoScalingGroupName: `web-app-asg-${environmentSuffix}`,
-        minSize: '2',
-        maxSize: '10',
-        desiredCapacity: '2',
-        vpcZoneIdentifier: this.vpc.selectSubnets({
-          subnetType: ec2.SubnetType.PUBLIC,
-        }).subnetIds,
-        healthCheckType: 'ELB',
-        healthCheckGracePeriod: 300,
-        launchTemplate: {
-          launchTemplateId: launchTemplate.ref,
-          version: '$Latest', // Use $Latest instead of $Default for LocalStack
-        },
-        targetGroupArns: [targetGroup.targetGroupArn],
-      }
-    );
+    new autoscaling.CfnAutoScalingGroup(this, 'ASG', {
+      autoScalingGroupName: `web-app-asg-${environmentSuffix}`,
+      minSize: '2',
+      maxSize: '10',
+      desiredCapacity: '2',
+      vpcZoneIdentifier: this.vpc.selectSubnets({
+        subnetType: ec2.SubnetType.PUBLIC,
+      }).subnetIds,
+      healthCheckType: 'ELB',
+      healthCheckGracePeriod: 300,
+      launchTemplate: {
+        launchTemplateId: launchTemplate.ref,
+        version: '$Latest', // Use $Latest instead of $Default for LocalStack
+      },
+      targetGroupArns: [targetGroup.targetGroupArn],
+    });
 
     // Wrap CfnAutoScalingGroup in L2 construct for easier manipulation
-    this.autoScalingGroup = autoscaling.AutoScalingGroup.fromAutoScalingGroupName(
-      this,
-      'AutoScalingGroup',
-      `web-app-asg-${environmentSuffix}`
-    ) as autoscaling.AutoScalingGroup;
+    this.autoScalingGroup =
+      autoscaling.AutoScalingGroup.fromAutoScalingGroupName(
+        this,
+        'AutoScalingGroup',
+        `web-app-asg-${environmentSuffix}`
+      ) as autoscaling.AutoScalingGroup;
 
     // Note: Target group already attached via targetGroupArns in CfnAutoScalingGroup
 
