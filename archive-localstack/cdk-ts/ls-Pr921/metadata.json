@@ -1,0 +1,15 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "aws_services": [
+    "EC2",
+    "AutoScaling",
+    "ELB",
+    "Route53",
+    "IAM"
+  ],
+  "pr_number": "921",
+  "task_id": "Pr921",
+  "original_pr": "921"
+}
