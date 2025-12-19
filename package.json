@@ -38,7 +38,7 @@
     "cdk": "cdk",
     "cdk:synth": "npx cdk synth --context environmentSuffix=${ENVIRONMENT_SUFFIX:-dev}",
     "cdk:bootstrap": "npx cdk bootstrap --context environmentSuffix=${ENVIRONMENT_SUFFIX:-dev}",
-    "cdk:deploy": "npx cdk deploy --all --require-approval never --context environmentSuffix=${ENVIRONMENT_SUFFIX:-dev}",
+    "cdk:deploy": "npx cdk deploy --all --require-approval never --method=direct --no-bootstrap --context environmentSuffix=${ENVIRONMENT_SUFFIX:-dev}",
     "cdk:destroy": "npx cdk destroy --all --force --context environmentSuffix=${ENVIRONMENT_SUFFIX:-dev}",
     "deploy:staging": "cdk deploy --context environment=staging --context owner=cloud-team",
     "deploy:production": "cdk deploy --context environment=production --context owner=cloud-team",
