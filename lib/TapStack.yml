@@ -821,342 +821,185 @@ Resources:
 # ====================
 # Outputs
 # ====================
+# NOTE: Limited to 42 outputs for LocalStack Community compatibility
+# Only including outputs that are tested in integration tests
 Outputs:
+  # Primary Outputs
   LoadBalancerURL:
     Description: 'URL of the Application Load Balancer'
     Value: !Sub 'http://${ApplicationLoadBalancer.DNSName}'
-    Export:
-      Name: !Sub '${AWS::StackName}-ALB-URL'
-  
+
   S3BucketName:
     Description: 'Name of the S3 bucket'
     Value: !Ref S3Bucket
-    Export:
-      Name: !Sub '${AWS::StackName}-S3-Bucket'
-  
+
   RDSEndpoint:
     Description: 'RDS database endpoint'
     Value: !GetAtt RDSInstance.Endpoint.Address
-    Export:
-      Name: !Sub '${AWS::StackName}-RDS-Endpoint'
-  
+
   DBMasterSecretArn:
     Description: 'Database Master Secret ARN'
     Value: !Ref DBMasterSecret
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-DB-Master-Secret-ARN'
 
-  DBMasterSecretName:
-    Description: 'Database Master Secret Name'
-    Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-db-master-secret'
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-DB-Master-Secret-Name'
-  
   VPCId:
     Description: 'VPC ID'
     Value: !Ref VPC
-    Export:
-      Name: !Sub '${AWS::StackName}-VPC-ID'
 
-  # VPC CIDR Block
   VPCCidr:
     Description: 'VPC CIDR Block'
     Value: !GetAtt VPC.CidrBlock
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-VPC-CIDR'
 
   # Networking Resources
   InternetGatewayId:
     Description: 'Internet Gateway ID'
     Value: !Ref InternetGateway
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-IGW-ID'
 
   PublicSubnet1Id:
     Description: 'Public Subnet 1 ID'
     Value: !Ref PublicSubnet1
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Public-Subnet-1-ID'
 
   PublicSubnet2Id:
     Description: 'Public Subnet 2 ID'
     Value: !Ref PublicSubnet2
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Public-Subnet-2-ID'
 
   PrivateSubnet1Id:
     Description: 'Private Subnet 1 ID'
     Value: !Ref PrivateSubnet1
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Private-Subnet-1-ID'
 
   PrivateSubnet2Id:
     Description: 'Private Subnet 2 ID'
     Value: !Ref PrivateSubnet2
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Private-Subnet-2-ID'
 
-  # NAT Gateways
   NATGateway1Id:
     Description: 'NAT Gateway 1 ID'
     Value: !Ref NATGateway1
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-NAT-Gateway-1-ID'
 
   NATGateway2Id:
     Description: 'NAT Gateway 2 ID'
     Value: !Ref NATGateway2
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-NAT-Gateway-2-ID'
 
-  # Elastic IPs
-  EIPForNATGateway1AllocationId:
-    Description: 'EIP for NAT Gateway 1 Allocation ID'
-    Value: !GetAtt NATGateway1EIP.AllocationId
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-EIP-1-Allocation-ID'
-
-  EIPForNATGateway2AllocationId:
-    Description: 'EIP for NAT Gateway 2 Allocation ID'
-    Value: !GetAtt NATGateway2EIP.AllocationId
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-EIP-2-Allocation-ID'
-
-  # Route Tables
   PublicRouteTableId:
     Description: 'Public Route Table ID'
     Value: !Ref PublicRouteTable
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Public-Route-Table-ID'
 
   PrivateRouteTable1Id:
     Description: 'Private Route Table 1 ID'
     Value: !Ref PrivateRouteTable1
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Private-Route-Table-1-ID'
 
   PrivateRouteTable2Id:
     Description: 'Private Route Table 2 ID'
     Value: !Ref PrivateRouteTable2
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Private-Route-Table-2-ID'
 
   # Security Groups
   ALBSecurityGroupId:
     Description: 'Application Load Balancer Security Group ID'
     Value: !Ref ALBSecurityGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-ALB-Security-Group-ID'
 
   EC2SecurityGroupId:
     Description: 'EC2 Security Group ID'
     Value: !Ref EC2SecurityGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-EC2-Security-Group-ID'
 
   RDSSecurityGroupId:
     Description: 'RDS Security Group ID'
     Value: !Ref RDSSecurityGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-RDS-Security-Group-ID'
 
   # S3 Resources
   S3BucketArn:
     Description: 'S3 Bucket ARN'
     Value: !GetAtt S3Bucket.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-S3-Bucket-ARN'
 
-  S3BucketRegionalDomainName:
-    Description: 'S3 Bucket Regional Domain Name'
-    Value: !GetAtt S3Bucket.RegionalDomainName
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-S3-Bucket-Regional-Domain-Name'
-
-  # Database Resources  
+  # Database Resources
   DBSubnetGroupName:
     Description: 'Database Subnet Group Name'
     Value: !Ref DBSubnetGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-DB-Subnet-Group-Name'
 
   RDSInstanceId:
     Description: 'RDS Instance ID'
     Value: !Ref RDSInstance
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-RDS-Instance-ID'
 
   RDSInstanceArn:
     Description: 'RDS Instance ARN'
     Value: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${RDSInstance}'
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-RDS-Instance-ARN'
 
   RDSPort:
     Description: 'RDS Database Port'
     Value: !GetAtt RDSInstance.Endpoint.Port
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-RDS-Port'
 
   RDSEngineVersion:
     Description: 'RDS Engine Version'
     Value: !FindInMap [DatabaseEngineMap, mysql, EngineVersion]
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-RDS-Engine-Version'
 
   # Load Balancer Resources
   ApplicationLoadBalancerArn:
     Description: 'Application Load Balancer ARN'
     Value: !Ref ApplicationLoadBalancer
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-ALB-ARN'
 
   ApplicationLoadBalancerDNSName:
     Description: 'Application Load Balancer DNS Name'
     Value: !GetAtt ApplicationLoadBalancer.DNSName
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-ALB-DNS-Name'
-
-  ApplicationLoadBalancerHostedZoneID:
-    Description: 'Application Load Balancer Hosted Zone ID'
-    Value: !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-ALB-Hosted-Zone-ID'
 
   TargetGroupArn:
     Description: 'Target Group ARN'
     Value: !Ref TargetGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Target-Group-ARN'
-
-  TargetGroupName:
-    Description: 'Target Group Name'
-    Value: !GetAtt TargetGroup.TargetGroupName
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Target-Group-Name'
 
   # Compute Resources
-  EC2LaunchTemplateId:
-    Description: 'EC2 Launch Template ID'
-    Value: !Ref LaunchTemplate
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Launch-Template-ID'
-
-  EC2LaunchTemplateName:
-    Description: 'EC2 Launch Template Name'
-    Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-lt'
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Launch-Template-Name'
-
   EC2LaunchTemplateLatestVersionNumber:
     Description: 'EC2 Launch Template Latest Version Number'
     Value: !GetAtt LaunchTemplate.LatestVersionNumber
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Launch-Template-Latest-Version'
 
   AutoScalingGroupName:
     Description: 'Auto Scaling Group Name'
     Value: !Ref AutoScalingGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-ASG-Name'
-
-  AutoScalingGroupArn:
-    Description: 'Auto Scaling Group ARN'
-    Value: !Sub 'arn:aws:autoscaling:${AWS::Region}:${AWS::AccountId}:autoScalingGroup:*:autoScalingGroupName/${AutoScalingGroup}'
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-ASG-ARN'
 
   # Project and Environment Information
   ProjectName:
     Description: 'Project Name'
     Value: !Ref ProjectName
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Project-Name'
 
   Environment:
     Description: 'Environment Name'
     Value: !Ref Environment
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Environment'
 
   EnvironmentSuffix:
     Description: 'Environment Suffix'
     Value: !Ref EnvironmentSuffix
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Environment-Suffix'
 
   # IAM Resources
   EC2RoleArn:
     Description: 'EC2 IAM Role ARN'
     Value: !GetAtt EC2Role.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-EC2-Role-ARN'
 
   EC2RoleName:
     Description: 'EC2 IAM Role Name'
     Value: !Ref EC2Role
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-EC2-Role-Name'
 
   EC2InstanceProfileArn:
     Description: 'EC2 Instance Profile ARN'
     Value: !GetAtt EC2InstanceProfile.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-EC2-Instance-Profile-ARN'
-
-  EC2InstanceProfileName:
-    Description: 'EC2 Instance Profile Name'
-    Value: !Ref EC2InstanceProfile
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-EC2-Instance-Profile-Name'
 
   # CloudWatch Log Groups
   ApplicationLogGroupName:
     Description: 'Application Log Group Name'
     Value: !Ref ApplicationLogGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Application-Log-Group-Name'
-
-  ApplicationLogGroupArn:
-    Description: 'Application Log Group ARN'
-    Value: !GetAtt ApplicationLogGroup.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Application-Log-Group-ARN'
 
   RDSLogGroupName:
     Description: 'RDS Log Group Name'
     Value: !Ref RDSLogGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-RDS-Log-Group-Name'
-
-  RDSLogGroupArn:
-    Description: 'RDS Log Group ARN'
-    Value: !GetAtt RDSLogGroup.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-RDS-Log-Group-ARN'
 
   # Auto Scaling Policies
   ScaleUpPolicyArn:
     Description: 'Scale Up Policy ARN'
     Value: !Ref ScaleUpPolicy
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Scale-Up-Policy-ARN'
 
   ScaleDownPolicyArn:
     Description: 'Scale Down Policy ARN'
     Value: !Ref ScaleDownPolicy
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-Scale-Down-Policy-ARN'
 
   # CloudWatch Alarms
   CPUAlarmHighName:
     Description: 'CPU High Alarm Name'
     Value: !Ref CPUAlarmHigh
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-CPU-High-Alarm-Name'
 
   CPUAlarmLowName:
     Description: 'CPU Low Alarm Name'
     Value: !Ref CPUAlarmLow
-    Export:
-      Name: !Sub '${AWS::StackName}-${Environment}-${EnvironmentSuffix}-CPU-Low-Alarm-Name'
