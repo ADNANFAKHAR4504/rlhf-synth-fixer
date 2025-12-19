@@ -156,7 +156,7 @@ export class WebAppStack extends cdk.Stack {
           ec2.InstanceSize.MEDIUM
         ),
         machineImage: ec2.MachineImage.latestAmazonLinux2023(),
-        securityGroups: [webServerSecurityGroup],
+        securityGroup: webServerSecurityGroup,
         userData,
         role: ec2Role,
         minCapacity: 2,
