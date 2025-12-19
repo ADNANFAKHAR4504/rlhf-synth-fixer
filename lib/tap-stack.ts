@@ -11,9 +11,10 @@ import { Construct } from 'constructs';
 
 // LocalStack detection - use environment variable or context
 // For LocalStack, set LOCALSTACK=true before synth/deploy
-const isLocalStack = process.env.LOCALSTACK === 'true' ||
-                     process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
-                     process.env.AWS_ENDPOINT_URL?.includes('4566');
+const isLocalStack =
+  process.env.LOCALSTACK === 'true' ||
+  process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+  process.env.AWS_ENDPOINT_URL?.includes('4566');
 
 export interface TapStackProps extends cdk.StackProps {
   readonly environmentSuffix?: string;
@@ -31,36 +32,38 @@ export class TapStack extends cdk.Stack {
       cidr: '10.0.0.0/16',
       maxAzs: isLocalStack ? 2 : 3,
       natGateways: isLocalStack ? 0 : 3, // LocalStack: no NAT Gateway (not supported reliably)
-      subnetConfiguration: isLocalStack ? [
-        // LocalStack: simplified networking - public and isolated subnets only
-        {
-          cidrMask: 24,
-          name: `${stackName}-${environmentSuffix}-PublicSubnet`,
-          subnetType: ec2.SubnetType.PUBLIC,
-        },
-        {
-          cidrMask: 24,
-          name: `${stackName}-${environmentSuffix}-DatabaseSubnet`,
-          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-        },
-      ] : [
-        // Production: full 3-tier architecture
-        {
-          cidrMask: 24,
-          name: `${stackName}-${environmentSuffix}-PublicSubnet`,
-          subnetType: ec2.SubnetType.PUBLIC,
-        },
-        {
-          cidrMask: 24,
-          name: `${stackName}-${environmentSuffix}-PrivateSubnet`,
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        },
-        {
-          cidrMask: 24,
-          name: `${stackName}-${environmentSuffix}-DatabaseSubnet`,
-          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-        },
-      ],
+      subnetConfiguration: isLocalStack
+        ? [
+            // LocalStack: simplified networking - public and isolated subnets only
+            {
+              cidrMask: 24,
+              name: `${stackName}-${environmentSuffix}-PublicSubnet`,
+              subnetType: ec2.SubnetType.PUBLIC,
+            },
+            {
+              cidrMask: 24,
+              name: `${stackName}-${environmentSuffix}-DatabaseSubnet`,
+              subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+            },
+          ]
+        : [
+            // Production: full 3-tier architecture
+            {
+              cidrMask: 24,
+              name: `${stackName}-${environmentSuffix}-PublicSubnet`,
+              subnetType: ec2.SubnetType.PUBLIC,
+            },
+            {
+              cidrMask: 24,
+              name: `${stackName}-${environmentSuffix}-PrivateSubnet`,
+              subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+            },
+            {
+              cidrMask: 24,
+              name: `${stackName}-${environmentSuffix}-DatabaseSubnet`,
+              subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+            },
+          ],
     });
 
     // Security Groups
@@ -170,7 +173,9 @@ rpm -U ./amazon-cloudwatch-agent.rpm`),
         desiredCapacity: 2,
         vpcSubnets: {
           // LocalStack: use public subnets (no NAT Gateway support)
-          subnetType: isLocalStack ? ec2.SubnetType.PUBLIC : ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          subnetType: isLocalStack
+            ? ec2.SubnetType.PUBLIC
+            : ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
         healthCheck: autoscaling.HealthCheck.elb({
           grace: cdk.Duration.seconds(300),
@@ -304,7 +309,9 @@ rpm -U ./amazon-cloudwatch-agent.rpm`),
         securityGroups: [databaseSecurityGroup],
         multiAz: isLocalStack ? false : true, // LocalStack: single-AZ for simplicity
         storageEncrypted: isLocalStack ? false : true, // LocalStack: disable encryption
-        backupRetention: isLocalStack ? cdk.Duration.days(1) : cdk.Duration.days(7),
+        backupRetention: isLocalStack
+          ? cdk.Duration.days(1)
+          : cdk.Duration.days(7),
         deletionProtection: false,
         parameterGroup,
         credentials: rds.Credentials.fromGeneratedSecret('admin', {
@@ -313,7 +320,9 @@ rpm -U ./amazon-cloudwatch-agent.rpm`),
         allocatedStorage: 20,
         maxAllocatedStorage: isLocalStack ? 20 : 100, // LocalStack: disable auto-scaling storage
         enablePerformanceInsights: false,
-        removalPolicy: isLocalStack ? cdk.RemovalPolicy.DESTROY : cdk.RemovalPolicy.RETAIN,
+        removalPolicy: isLocalStack
+          ? cdk.RemovalPolicy.DESTROY
+          : cdk.RemovalPolicy.RETAIN,
       }
     );
 
