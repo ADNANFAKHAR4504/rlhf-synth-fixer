@@ -1,0 +1,24 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291732",
+  "team": "3",
+  "startedAt": "2025-08-15T11:18:26.107Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "KMS",
+    "ELBv2",
+    "CloudWatch",
+    "SNS"
+  ],
+  "provider": "localstack"
+}
