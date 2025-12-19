@@ -59,7 +59,7 @@ class TestTapStack(unittest.TestCase):
 
     @mark.it("creates RDS MySQL instance with correct settings (non-LocalStack)")
     def test_creates_rds_instance(self):
-        with mock.patch.dict(os.environ, {}, clear=True):
+        with mock.patch('lib.tap_stack.IS_LOCALSTACK', False):
             stack = TapStack(self.app, "TapStackRdsTest")
             template = Template.from_stack(stack)
             template.resource_count_is("AWS::RDS::DBInstance", 1)
@@ -72,7 +72,7 @@ class TestTapStack(unittest.TestCase):
 
     @mark.it("creates CloudTrail resource (non-LocalStack)")
     def test_creates_cloudtrail(self):
-        with mock.patch.dict(os.environ, {}, clear=True):
+        with mock.patch('lib.tap_stack.IS_LOCALSTACK', False):
             stack = TapStack(self.app, "TapStackCloudTrailTest")
             template = Template.from_stack(stack)
             template.resource_count_is("AWS::CloudTrail::Trail", 1)
@@ -85,7 +85,7 @@ class TestTapStack(unittest.TestCase):
 
     @mark.it("outputs key resource identifiers (non-LocalStack)")
     def test_outputs(self):
-        with mock.patch.dict(os.environ, {}, clear=True):
+        with mock.patch('lib.tap_stack.IS_LOCALSTACK', False):
             stack = TapStack(self.app, "TapStackOutputsTest")
             template = Template.from_stack(stack)
             outputs = template.to_json().get("Outputs", {})
@@ -96,21 +96,21 @@ class TestTapStack(unittest.TestCase):
 
     @mark.it("skips RDS creation in LocalStack mode")
     def test_localstack_skips_rds(self):
-        with mock.patch.dict(os.environ, {"AWS_ENDPOINT_URL": "http://localhost:4566"}):
+        with mock.patch('lib.tap_stack.IS_LOCALSTACK', True):
             stack = TapStack(self.app, "TapStackLocalStackRdsTest")
             template = Template.from_stack(stack)
             template.resource_count_is("AWS::RDS::DBInstance", 0)
 
     @mark.it("skips CloudTrail creation in LocalStack mode")
     def test_localstack_skips_cloudtrail(self):
-        with mock.patch.dict(os.environ, {"AWS_ENDPOINT_URL": "http://localhost:4566"}):
+        with mock.patch('lib.tap_stack.IS_LOCALSTACK', True):
             stack = TapStack(self.app, "TapStackLocalStackCloudTrailTest")
             template = Template.from_stack(stack)
             template.resource_count_is("AWS::CloudTrail::Trail", 0)
 
     @mark.it("does not output DatabaseEndpoint in LocalStack mode")
     def test_localstack_no_database_output(self):
-        with mock.patch.dict(os.environ, {"AWS_ENDPOINT_URL": "http://localhost:4566"}):
+        with mock.patch('lib.tap_stack.IS_LOCALSTACK', True):
             stack = TapStack(self.app, "TapStackLocalStackOutputsTest")
             template = Template.from_stack(stack)
             outputs = template.to_json().get("Outputs", {})
