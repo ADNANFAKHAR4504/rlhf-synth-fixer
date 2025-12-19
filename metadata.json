@@ -20,5 +20,6 @@
     "InternetGateway",
     "Subnet",
     "RouteTable"
-  ]
+  ],
+  "training_quality": 8
 }
