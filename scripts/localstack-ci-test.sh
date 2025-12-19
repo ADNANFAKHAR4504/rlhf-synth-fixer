@@ -515,13 +515,21 @@ run_pulumi_tests() {
             ;;
         "go")
             print_status $YELLOW "🧪 Running Go tests..."
-            cd "$test_dir"
+            
+            # Check for Go test files in tests/integration/
+            if ! find "$test_dir/integration" -name "*_test.go" 2>/dev/null | grep -q .; then
+                print_status $RED "❌ No Go test files found in tests/integration/"
+                exit 1
+            fi
+            
+            # Run from PROJECT_ROOT
+            cd "$PROJECT_ROOT"
             
             if [ -f "go.mod" ]; then
                 go mod download
             fi
             
-            go test -v -timeout 30m 2>&1
+            go test -v -timeout 30m ./tests/integration/... 2>&1
             local exit_code=$?
             if [ $exit_code -ne 0 ]; then
                 print_status $RED "❌ Go tests failed with exit code: $exit_code"
@@ -530,6 +538,13 @@ run_pulumi_tests() {
             ;;
         "java")
             print_status $YELLOW "🧪 Running Java tests..."
+            
+            # Check for Java test files in tests/integration/
+            if ! find "$test_dir/integration" -name "*Test.java" -o -name "*Tests.java" 2>/dev/null | grep -q .; then
+                print_status $RED "❌ No Java test files found in tests/integration/"
+                exit 1
+            fi
+            
             cd "$PROJECT_ROOT"
             
             if [ -f "pom.xml" ]; then
@@ -546,6 +561,9 @@ run_pulumi_tests() {
                     print_status $RED "❌ Gradle tests failed with exit code: $exit_code"
                     exit $exit_code
                 fi
+            else
+                print_status $RED "❌ No Java build file (pom.xml or build.gradle) found"
+                exit 1
             fi
             ;;
         *)
@@ -671,14 +689,6 @@ main() {
     print_status $GREEN "✅ Detected platform: $platform"
     print_status $GREEN "✅ Detected language: $language"
     echo ""
-
-    # Re-deploy infrastructure to LocalStack before running tests
-    # This is necessary because the test job starts a fresh LocalStack instance
-    # that doesn't have any resources from the deploy job
-    print_status $YELLOW "🔄 Re-deploying infrastructure to LocalStack for testing..."
-    "$SCRIPT_DIR/localstack-ci-deploy.sh"
-    echo ""
-
     # Run tests and capture exit code
     if ! run_tests "$platform" "$language"; then
         echo ""
