@@ -78,18 +78,16 @@ fi
 # Start LocalStack container
 echo -e "${YELLOW}🔧 Starting LocalStack container...${NC}"
 
-# Build docker run command with optional API key
-# Using LocalStack 3.7.2 - last stable version before 4.0 removed legacy S3 provider
-# This version has better CDK compatibility and fewer S3 XML parsing issues
+# Build docker run command
+# Using LocalStack Pro image with latest version for full AWS service parity
+# CI-optimized settings for GitHub Actions
 DOCKER_CMD="docker run -d \
   --name localstack \
   -p 4566:4566 \
   -e DEBUG=1 \
   -e DATA_DIR=/tmp/localstack/data \
-  -e DOCKER_HOST=unix:///var/run/docker.sock \
   -e S3_SKIP_SIGNATURE_VALIDATION=1 \
-  -e ENFORCE_IAM=0 \
-  -e PROVIDER_OVERRIDE_S3=legacy_v2"
+  -e ENFORCE_IAM=0"
 
 # Add SERVICES only if explicitly set
 if [ -n "$SERVICES" ]; then
@@ -97,7 +95,7 @@ if [ -n "$SERVICES" ]; then
   -e SERVICES=\"${SERVICES}\""
 fi
 
-# Add API key if available
+# Add API key if available (required for Pro features)
 if [ -n "$LOCALSTACK_API_KEY" ]; then
     DOCKER_CMD="$DOCKER_CMD \
   -e LOCALSTACK_API_KEY=\"${LOCALSTACK_API_KEY}\""
@@ -105,7 +103,8 @@ fi
 
 DOCKER_CMD="$DOCKER_CMD \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  localstack/localstack:3.7.2"
+  -v /tmp/localstack:/var/lib/localstack \
+  localstack/localstack-pro:stable"
 
 # Execute the docker command
 eval $DOCKER_CMD
@@ -125,27 +124,43 @@ if ! command -v curl &> /dev/null; then
     sudo apt-get update && sudo apt-get install -y curl || true
 fi
 
-# Give LocalStack a few seconds to start before checking
-echo -e "${BLUE}⏱️  Waiting 5 seconds for LocalStack to initialize...${NC}"
-sleep 5
+# Give LocalStack more time to start before checking (Pro image needs more initialization time)
+echo -e "${BLUE}⏱️  Waiting 10 seconds for LocalStack to initialize...${NC}"
+sleep 60
 
 while [ $attempt -lt $max_attempts ]; do
+    # Show logs on first attempt to debug CI issues immediately
+    if [ $attempt -eq 0 ]; then
+        echo -e "${BLUE}📋 LocalStack startup logs:${NC}"
+        docker logs localstack 2>&1 | tail -30
+        echo ""
+    fi
+
     # Check container is still running
     if ! docker ps | grep -q localstack; then
         echo -e "${RED}❌ LocalStack container stopped unexpectedly!${NC}"
-        echo -e "${YELLOW}💡 Container logs:${NC}"
-        docker logs localstack 2>&1 | tail -50
+        echo -e "${YELLOW}💡 Full container logs:${NC}"
+        docker logs localstack 2>&1
+        echo ""
+        echo -e "${YELLOW}💡 Container exit status:${NC}"
+        docker inspect localstack --format='{{.State.ExitCode}}' 2>/dev/null || echo "Cannot get exit code"
         exit 1
     fi
 
     # Try to connect to LocalStack health endpoint with verbose output on first few attempts
     if [ $attempt -lt 3 ]; then
         echo -e "${BLUE}🔍 Testing connectivity to localhost:4566 (attempt $((attempt + 1)))...${NC}"
-        curl -v --connect-timeout 5 --max-time 10 http://localhost:4566/_localstack/health 2>&1 | head -30 || echo "Connection failed, will retry..."
+        curl -4 -v --connect-timeout 5 --max-time 10 http://localhost:4566/_localstack/health 2>&1 | head -30 || echo "Connection failed, will retry..."
+    fi
+    
+    # Show container logs every 10 attempts to help debug startup issues
+    if [ $((attempt % 10)) -eq 0 ] && [ $attempt -gt 0 ]; then
+        echo -e "${BLUE}📋 Container logs (last 20 lines):${NC}"
+        docker logs localstack 2>&1 | tail -20
     fi
 
-    # Regular health check (suppress output for cleaner logs)
-    HTTP_CODE=$(curl --connect-timeout 5 --max-time 10 -s -o /dev/null -w "%{http_code}" http://localhost:4566/_localstack/health 2>&1 || echo "000")
+    # Regular health check (suppress output for cleaner logs) - force IPv4
+    HTTP_CODE=$(curl -4 --connect-timeout 5 --max-time 10 -s -o /dev/null -w "%{http_code}" http://localhost:4566/_localstack/health 2>&1 || echo "000")
 
     if [ "$HTTP_CODE" = "200" ]; then
         echo -e "${GREEN}✅ LocalStack is ready!${NC}"
