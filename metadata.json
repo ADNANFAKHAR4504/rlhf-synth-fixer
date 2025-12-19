@@ -7,9 +7,9 @@
   "team": "4",
   "provider": "localstack",
   "startedAt": "2025-10-03T09:24:14.351Z",
-  "subtask": "IaC Program Optimization",
+  "subtask": "Application Deployment",
   "subject_labels": [
-    "IaC Optimization"
+    "Serverless Infrastructure (Functions as Code)"
   ],
   "aws_services": [
     "Lambda",
