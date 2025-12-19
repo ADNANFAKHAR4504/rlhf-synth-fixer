@@ -260,26 +260,21 @@ export class ElasticBeanstalkStack extends cdk.Stack {
       defaultTargetGroups: [targetGroup],
     });
 
-    // Create LaunchTemplate explicitly for LocalStack compatibility
-    const launchTemplate = new ec2.LaunchTemplate(this, 'LaunchTemplate', {
-      launchTemplateName: `web-app-lt-${environmentSuffix}`,
-      instanceType: new ec2.InstanceType(instanceType),
-      machineImage: ec2.MachineImage.latestAmazonLinux2023({
-        cpuType: ec2.AmazonLinuxCpuType.X86_64,
-      }),
-      userData: userData,
-      role: instanceRole,
-      securityGroup: instanceSecurityGroup,
-    });
-
-    // Auto Scaling Group with explicit launch template
+    // Auto Scaling Group with LaunchConfiguration (LocalStack compatible)
+    // Using the simpler instanceType/machineImage approach which creates LaunchConfiguration
     this.autoScalingGroup = new autoscaling.AutoScalingGroup(
       this,
       'AutoScalingGroup',
       {
         vpc: this.vpc,
         autoScalingGroupName: `web-app-asg-${environmentSuffix}`,
-        launchTemplate: launchTemplate,
+        instanceType: new ec2.InstanceType(instanceType),
+        machineImage: ec2.MachineImage.latestAmazonLinux2023({
+          cpuType: ec2.AmazonLinuxCpuType.X86_64,
+        }),
+        userData: userData,
+        role: instanceRole,
+        securityGroups: [instanceSecurityGroup],
         minCapacity: 2,
         maxCapacity: 10,
         desiredCapacity: 2,
