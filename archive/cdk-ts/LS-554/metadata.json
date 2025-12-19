@@ -1,0 +1,26 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291216",
+  "team": "6",
+  "startedAt": "2025-08-04T18:06:14.066Z",
+  "subtask": "Security, Compliance, and Governance",
+  "provider": "localstack",
+  "subject_labels": [
+    "Security Configuration as Code",
+    "Web Application Deployment",
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "S3",
+    "KMS",
+    "Cognito",
+    "CloudWatch",
+    "WAF",
+    "IAM"
+  ]
+}
