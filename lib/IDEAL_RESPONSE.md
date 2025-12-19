@@ -191,7 +191,7 @@ Outputs:
 
 The inline Lambda function uses Node.js and AWS SDK v3 for processing S3 events:
 
-```javascript
+```js
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { CloudWatchLogsClient, CreateLogStreamCommand, PutLogEventsCommand } = require('@aws-sdk/client-cloudwatch-logs');
 
@@ -398,7 +398,7 @@ aws cloudwatch put-metric-alarm \
   --alarm-name "S3FileProcessor-Errors" \
   --alarm-description "Alert on Lambda function errors" \
   --metric-name "Errors" \
-  --namespace "AWS/Lambda" \
+  --namespace=AWS/Lambda \
   --statistic "Sum" \
   --period 300 \
   --threshold 1 \
