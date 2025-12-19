@@ -8,6 +8,6 @@
   "startedAt": "2025-08-12T13:27:19-05:00",
   "subtask": "Infrastructure QA and Management",
   "provider": "localstack",
-  "subject_labels": ["Serverless Infrastructure (Functions as Code)", "General Infrastructure Tooling QA"],
+  "subject_labels": ["General Infrastructure Tooling QA"],
   "aws_services": ["Lambda", "API Gateway", "IAM", "CloudWatch Logs"]
 }
