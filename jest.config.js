@@ -37,6 +37,7 @@ module.exports = {
     '!<rootDir>/**/*.test.ts',
     '!<rootDir>/**/*.test.js',
     '!<rootDir>/node_modules/**',
+    '!<rootDir>/lib/**/*.md',
   ],
   coverageReporters: ['text', 'lcov', 'json-summary'],
   coverageThreshold: {
