@@ -493,9 +493,7 @@
         "WebServerInstance": {
             "Type": "AWS::EC2::Instance",
             "Properties": {
-                "ImageId": {
-                    "Fn::Sub": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
-                },
+                "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
                 "InstanceType": {
                     "Fn::FindInMap": [
                         "EnvironmentMap",
