@@ -82,22 +82,28 @@ const loadStackOutputs = () => {
 
 // Initialize AWS clients
 const initializeClients = () => {
-  const region = 'ap-south-1';
+  // Detect LocalStack environment
+  const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') || 
+                       process.env.AWS_ENDPOINT_URL?.includes('localstack');
+  const region = isLocalStack ? 'us-east-1' : 'ap-south-1';
+  const endpoint = isLocalStack ? process.env.AWS_ENDPOINT_URL : undefined;
+
+  const clientConfig = endpoint ? { region, endpoint } : { region };
 
   return {
-    ec2: new EC2Client({ region }),
-    elbv2: new ElasticLoadBalancingV2Client({ region }),
-    autoscaling: new AutoScalingClient({ region }),
-    rds: new RDSClient({ region }),
-    s3: new S3Client({ region }),
-    iam: new IAMClient({ region }),
-    kms: new KMSClient({ region }),
-    sts: new STSClient({ region }),
-    cloudwatchlogs: new CloudWatchLogsClient({ region }),
-    cloudwatch: new CloudWatchClient({ region }),
-    secretsmanager: new SecretsManagerClient({ region }),
-    cloudfront: new CloudFrontClient({ region: 'us-east-1' }), // CloudFront is global
-    wafv2: new WAFV2Client({ region: 'us-east-1' }), // WAF for CloudFront is in us-east-1
+    ec2: new EC2Client(clientConfig),
+    elbv2: new ElasticLoadBalancingV2Client(clientConfig),
+    autoscaling: new AutoScalingClient(clientConfig),
+    rds: new RDSClient(clientConfig),
+    s3: new S3Client(clientConfig),
+    iam: new IAMClient(clientConfig),
+    kms: new KMSClient(clientConfig),
+    sts: new STSClient(clientConfig),
+    cloudwatchlogs: new CloudWatchLogsClient(clientConfig),
+    cloudwatch: new CloudWatchClient(clientConfig),
+    secretsmanager: new SecretsManagerClient(clientConfig),
+    cloudfront: new CloudFrontClient({ region: 'us-east-1', endpoint }), // CloudFront is global
+    wafv2: new WAFV2Client({ region: 'us-east-1', endpoint }), // WAF for CloudFront is in us-east-1
   };
 };
 
@@ -146,7 +152,10 @@ describe('Scalable Web App Infrastructure Integration Tests', () => {
       const identity = await clients.sts.send(new GetCallerIdentityCommand({}));
       accountId = identity.Account!;
       console.log(`Running tests with AWS Account: ${accountId}`);
-      console.log(`Region: 'ap-south-1'`);
+      const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') || 
+                           process.env.AWS_ENDPOINT_URL?.includes('localstack');
+      const region = isLocalStack ? 'us-east-1' : 'ap-south-1';
+      console.log(`Region: '${region}'`);
     } catch (error) {
       console.warn(`AWS credentials not available: ${error}`);
       process.env.SKIP_AWS_TESTS = 'true';
