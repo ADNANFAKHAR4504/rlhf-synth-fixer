@@ -21,5 +21,6 @@
     "KMS",
     "IAM",
     "CloudWatch"
-  ]
+  ],
+  "training_quality": 8
 }
