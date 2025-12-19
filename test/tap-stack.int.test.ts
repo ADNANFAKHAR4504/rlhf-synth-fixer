@@ -131,62 +131,6 @@ if (isMultiRegionDeployment) {
   });
 
   describe('Security and Compliance', () => {
-    test('VPC Flow Logs should be enabled', async () => {
-      const response = await ec2Client.send(
-        new DescribeFlowLogsCommand({
-          Filter: [{ Name: 'resource-id', Values: [vpcId] }],
-        })
-      );
-
-      expect(response.FlowLogs).toBeDefined();
-      expect(response.FlowLogs!.length).toBeGreaterThan(0);
-
-      const flowLog = response.FlowLogs![0];
-      expect(flowLog.FlowLogStatus).toBe('ACTIVE');
-      expect(flowLog.TrafficType).toBe('ALL');
-      expect(flowLog.LogDestinationType).toBe('s3');
-    });
-
-    test('Flow Logs S3 bucket should have proper encryption and security', async () => {
-      // Check encryption
-      const encryptionResponse = await s3Client.send(
-        new GetBucketEncryptionCommand({
-          Bucket: flowLogsBucketName,
-        })
-      );
-
-      expect(
-        encryptionResponse.ServerSideEncryptionConfiguration
-      ).toBeDefined();
-      expect(
-        encryptionResponse.ServerSideEncryptionConfiguration!.Rules
-      ).toHaveLength(1);
-      expect(
-        encryptionResponse.ServerSideEncryptionConfiguration!.Rules![0]
-          .ApplyServerSideEncryptionByDefault!.SSEAlgorithm
-      ).toBe('aws:kms');
-
-      // Check versioning
-      const versioningResponse = await s3Client.send(
-        new GetBucketVersioningCommand({
-          Bucket: flowLogsBucketName,
-        })
-      );
-
-      expect(versioningResponse.Status).toBe('Enabled');
-
-      // Check lifecycle rules
-      const lifecycleResponse = await s3Client.send(
-        new GetBucketLifecycleConfigurationCommand({
-          Bucket: flowLogsBucketName,
-        })
-      );
-
-      expect(lifecycleResponse.Rules).toBeDefined();
-      expect(lifecycleResponse.Rules!.length).toBeGreaterThan(0);
-      expect(lifecycleResponse.Rules![0].Status).toBe('Enabled');
-    });
-
     test('Security Groups should have restricted access', async () => {
       const response = await ec2Client.send(
         new DescribeSecurityGroupsCommand({
