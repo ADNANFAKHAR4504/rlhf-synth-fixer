@@ -127,8 +127,8 @@ echo -e "${YELLOW}📦 Creating CloudFormation stack...${NC}"
 CREATE_RESULT=$(awslocal cloudformation create-stack \
     --stack-name $STACK_NAME \
     --template-body file://$TEMPLATE_FILE \
-    --parameters ParameterKey=Environment,ParameterValue=$ENVIRONMENT_SUFFIX \
-    --capabilities CAPABILITY_IAM \
+    --parameters ParameterKey=EnvironmentSuffix,ParameterValue=$ENVIRONMENT_SUFFIX ParameterKey=ProjectName,ParameterValue=cloud-env \
+    --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
     --output json)
 
 if [ $? -eq 0 ]; then
