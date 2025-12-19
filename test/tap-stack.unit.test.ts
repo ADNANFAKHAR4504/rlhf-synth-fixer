@@ -31,10 +31,10 @@ describe('NetworkStack', () => {
     });
   });
 
-  test('creates public and private subnets', () => {
-    // Check for public subnets
-    template.resourceCountIs('AWS::EC2::Subnet', 4); // 2 public + 2 private
-    
+  test('creates public subnets', () => {
+    // LocalStack: Simplified to public subnets only (no NAT Gateway required)
+    template.resourceCountIs('AWS::EC2::Subnet', 2); // 2 public subnets only
+
     // Verify public subnet configuration
     template.hasResourceProperties('AWS::EC2::Subnet', {
       MapPublicIpOnLaunch: true,
@@ -42,27 +42,16 @@ describe('NetworkStack', () => {
         { Key: 'aws-cdk:subnet-name', Value: 'public' },
       ]),
     });
-
-    // Verify private subnet configuration
-    template.hasResourceProperties('AWS::EC2::Subnet', {
-      MapPublicIpOnLaunch: false,
-      Tags: Match.arrayWith([
-        { Key: 'aws-cdk:subnet-name', Value: 'private' },
-      ]),
-    });
   });
 
-  test('creates NAT gateways for private subnets', () => {
-    // Should have NAT gateways for private subnet egress
-    template.resourceCountIs('AWS::EC2::NatGateway', 2);
+  test('does not create NAT gateways (LocalStack simplified)', () => {
+    // LocalStack: NAT Gateways removed to avoid complexity
+    template.resourceCountIs('AWS::EC2::NatGateway', 0);
   });
 
-  test('creates VPC Flow Logs', () => {
-    template.hasResourceProperties('AWS::EC2::FlowLog', {
-      ResourceType: 'VPC',
-      TrafficType: 'ALL',
-      LogDestinationType: 'cloud-watch-logs',
-    });
+  test('does not create VPC Flow Logs (LocalStack unsupported)', () => {
+    // LocalStack: VPC Flow Logs not fully supported
+    template.resourceCountIs('AWS::EC2::FlowLog', 0);
   });
 
   test('creates security group for web application', () => {
