@@ -6,9 +6,12 @@
   "po_id": "482212",
   "team": "2",
   "startedAt": "2025-11-14T09:54:34.706Z",
-  "subtask": "IaC Program Optimization",
+  "subtask": "Infrastructure QA and Management",
   "subject_labels": [
-    "IaC Optimization"
+    "Infrastructure Analysis/Monitoring"
+  ],
+  "aws_services": [
+    "rds"
   ],
   "provider": "localstack"
 }
