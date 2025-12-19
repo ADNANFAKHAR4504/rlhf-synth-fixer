@@ -13,7 +13,5 @@
   "aws_services": [
     "s3"
   ],
-  "provider": "localstack",
-  "author": "iamarpit-turing",
-  "reviewer": "emmanuel-turing"
+  "provider": "localstack"
 }
