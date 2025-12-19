@@ -20,7 +20,7 @@ Parameters:
     Default: secure-artifacts
     Description: Suffix for S3 bucket name (lowercase)
     AllowedPattern: "^[a-z0-9-]+$"
-  EnvironmentSuffix:
+  Environment:
     Type: String
     Default: dev
     Description: Environment suffix for resource naming
@@ -71,7 +71,7 @@ Resources:
             Resource: "*"
             Condition:
               ArnEquals:
-                kms:EncryptionContext:aws:logs:arn: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/${ResourcePrefix}/central-${EnvironmentSuffix}"
+                kms:EncryptionContext:aws:logs:arn: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/${ResourcePrefix}/central-${Environment}"
       Tags:
         - Key: Owner
           Value: !Ref OwnerTag
@@ -79,13 +79,13 @@ Resources:
   LogsKmsKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub "alias/${ResourcePrefix}-logs-${EnvironmentSuffix}"
+      AliasName: !Sub "alias/${ResourcePrefix}-logs-${Environment}"
       TargetKeyId: !Ref LogsKmsKey
 
   CentralLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "/${ResourcePrefix}/central-${EnvironmentSuffix}"
+      LogGroupName: !Sub "/${ResourcePrefix}/central-${Environment}"
       RetentionInDays: !Ref LogRetentionDays
       KmsKeyId: !GetAtt LogsKmsKey.Arn
       Tags:
@@ -127,13 +127,13 @@ Resources:
   S3KmsKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub "alias/${ResourcePrefix}-s3-${EnvironmentSuffix}"
+      AliasName: !Sub "alias/${ResourcePrefix}-s3-${Environment}"
       TargetKeyId: !Ref S3KmsKey
 
   SecureBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "prod-${BucketNameSuffix}-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
+      BucketName: !Sub "prod-${BucketNameSuffix}-${Environment}-${AWS::AccountId}-${AWS::Region}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -189,7 +189,7 @@ Resources:
   CentralLogsWriterRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${ResourcePrefix}-CentralLogsWriter-${EnvironmentSuffix}"
+      RoleName: !Sub "${ResourcePrefix}-CentralLogsWriter-${Environment}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -219,7 +219,7 @@ Resources:
   MFAEnforcementPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      ManagedPolicyName: !Sub "${ResourcePrefix}-DenyWithoutMFA-${EnvironmentSuffix}"
+      ManagedPolicyName: !Sub "${ResourcePrefix}-DenyWithoutMFA-${Environment}"
       Description: Deny all actions when MFA is not present except MFA enrollment and password change
       PolicyDocument:
         Version: "2012-10-17"
@@ -257,7 +257,7 @@ Resources:
   MFARequiredGroup:
     Type: AWS::IAM::Group
     Properties:
-      GroupName: !Sub "${ResourcePrefix}-MFA-Required-${EnvironmentSuffix}"
+      GroupName: !Sub "${ResourcePrefix}-MFA-Required-${Environment}"
       ManagedPolicyArns:
         - !Ref MFAEnforcementPolicy
 
