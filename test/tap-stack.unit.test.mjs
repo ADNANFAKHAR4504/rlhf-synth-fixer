@@ -42,7 +42,7 @@ describe('TapStack Unit Tests', () => {
 
   describe('Lambda Function', () => {
     test('should create Lambda function', () => {
-      template.resourceCountIs('AWS::Lambda::Function', Match.anyValue());
+      const lambdas = template.findResources('AWS::Lambda::Function'); expect(Object.keys(lambdas).length).toBeGreaterThanOrEqual(1);
     });
 
     test('should have Node.js runtime', () => {
@@ -92,7 +92,7 @@ describe('TapStack Unit Tests', () => {
 
   describe('SSM Parameters', () => {
     test('should create SSM parameter for API rate limit', () => {
-      template.resourceCountIs('AWS::SSM::Parameter', Match.anyValue());
+      const params = template.findResources('AWS::SSM::Parameter'); expect(Object.keys(params).length).toBeGreaterThanOrEqual(1);
     });
   });
 
