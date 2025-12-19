@@ -22,5 +22,12 @@
     "Route Tables",
     "Subnets",
     "Elastic IP"
-  ]
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
 }
