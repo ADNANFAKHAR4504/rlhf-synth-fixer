@@ -14,5 +14,6 @@
   "aws_services": [
     "dynamodb",
     "iam"
-  ]
+  ],
+  "training_quality": 2
 }
