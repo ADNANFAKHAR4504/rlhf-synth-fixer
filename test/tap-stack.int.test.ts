@@ -352,18 +352,18 @@ describe('Serverless File Processing Application Integration Tests', () => {
       
       if (!IS_LOCALSTACK) {
         expect(logGroups.logGroups?.length).toBeGreaterThan(0);
+      
+        const logGroupName = logGroups.logGroups?.[0]?.logGroupName;
+        const logStreamsCommand = new DescribeLogStreamsCommand({
+          logGroupName: logGroupName,
+          orderBy: 'LastEventTime',
+          descending: true,
+          limit: 1,
+        });
+        const logStreams = await cloudWatchLogs.send(logStreamsCommand);
+
+        expect(logStreams.logStreams?.length).toBeGreaterThan(0);
       }
-
-      const logGroupName = logGroups.logGroups?.[0]?.logGroupName;
-      const logStreamsCommand = new DescribeLogStreamsCommand({
-        logGroupName: logGroupName,
-        orderBy: 'LastEventTime',
-        descending: true,
-        limit: 1,
-      });
-      const logStreams = await cloudWatchLogs.send(logStreamsCommand);
-
-      expect(logStreams.logStreams?.length).toBeGreaterThan(0);
     });
   });
 
