@@ -1,0 +1,21 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291915",
+  "team": "synth",
+  "startedAt": "2025-08-08T08:48:45.481Z",
+  "subtask": "Application Deployment",
+  "provider": "localstack",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "Lambda",
+    "CloudWatch Logs",
+    "IAM",
+    "S3",
+    "EventBridge"
+  ]
+}
