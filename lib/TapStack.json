@@ -29,6 +29,12 @@
             "Default": "dev",
             "Description": "Environment suffix for resource naming",
             "AllowedPattern": "^[a-zA-Z0-9]+$"
+        },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (AWS)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$"
         }
     },
     "Metadata": {
