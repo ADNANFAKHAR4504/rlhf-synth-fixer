@@ -381,16 +381,16 @@ Resources:
     Type: AWS::RDS::DBInstance
     Properties:
       Engine: postgres
-      DBInstanceClass: db.t3.medium
+      DBInstanceClass: !If [NotLocalStack, db.t3.medium, db.t3.micro]
       MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref RDSSecret, ':SecretString:username}}']]
       MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref RDSSecret, ':SecretString:password}}']]
       AllocatedStorage: 20
-      StorageEncrypted: true
-      MultiAZ: true
-      BackupRetentionPeriod: 7
+      StorageEncrypted: !If [NotLocalStack, true, false]
+      MultiAZ: !If [NotLocalStack, true, false]
+      BackupRetentionPeriod: !If [NotLocalStack, 7, 0]
       DeletionProtection: false
-      MonitoringInterval: 60
-      MonitoringRoleArn: !GetAtt RDSMonitoringRole.Arn
+      MonitoringInterval: !If [NotLocalStack, 60, 0]
+      MonitoringRoleArn: !If [NotLocalStack, !GetAtt RDSMonitoringRole.Arn, !Ref 'AWS::NoValue']
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !GetAtt DBSecurityGroup.GroupId
