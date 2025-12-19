@@ -1,0 +1,23 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr60",
+  "team": "synth",
+  "startedAt": "2025-08-11T12:29:48-05:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "provider": "localstack",
+  "subject_labels": [
+    "Cloud Environment Setup",
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "EC2",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "IAM",
+    "Secrets Manager",
+    "VPC"
+  ]
+}
