@@ -82,10 +82,18 @@ export class TapStack extends cdk.Stack {
     // Grant S3 bucket access to the EC2 role
     bucket.grantReadWrite(ec2Role);
 
-    // Latest Amazon Linux 2023 AMI
-    const ami = ec2.MachineImage.latestAmazonLinux2023({
-      cpuType: ec2.AmazonLinuxCpuType.X86_64,
-    });
+    // AMI - Use generic Linux AMI for LocalStack, specific AMI for AWS
+    // LocalStack doesn't require specific AMI lookups
+    const isLocalStack = process.env.AWS_ENDPOINT_URL?.includes('localhost') ||
+                         process.env.AWS_ENDPOINT_URL?.includes('4566');
+
+    const ami = isLocalStack
+      ? ec2.MachineImage.genericLinux({
+          'us-east-1': 'ami-12345678', // Dummy AMI for LocalStack
+        })
+      : ec2.MachineImage.latestAmazonLinux2023({
+          cpuType: ec2.AmazonLinuxCpuType.X86_64,
+        });
 
     // EC2 Instance
     const instance = new ec2.Instance(this, 'CloudEnvInstance', {
