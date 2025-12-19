@@ -25,21 +25,29 @@ from constructs import Construct
 # Check both environment variable (runtime) and metadata.json (synth time)
 def _is_localstack_environment():
     """Detect if running in LocalStack environment."""
-    # Check AWS_ENDPOINT_URL environment variable
+    # Check AWS_ENDPOINT_URL environment variable (highest priority)
     endpoint_url = os.environ.get("AWS_ENDPOINT_URL", "")
     if "localhost" in endpoint_url or "4566" in endpoint_url:
         return True
 
-    # Check metadata.json provider field (for CDK synth time)
-    metadata_path = Path(__file__).parent.parent / "metadata.json"
-    if metadata_path.exists():
-        try:
-            with open(metadata_path, 'r') as f:
-                metadata = json.load(f)
-                if metadata.get("provider") == "localstack":
-                    return True
-        except Exception:
-            pass
+    # Check multiple possible metadata.json locations (for CDK synth time)
+    # Try relative to module file first
+    metadata_paths = [
+        Path(__file__).parent.parent / "metadata.json",  # lib/../metadata.json
+        Path.cwd() / "metadata.json",  # ./metadata.json
+        Path(".") / "metadata.json",  # Relative to current dir
+    ]
+
+    for metadata_path in metadata_paths:
+        if metadata_path.exists():
+            try:
+                with open(metadata_path, 'r', encoding='utf-8') as f:
+                    metadata = json.load(f)
+                    if metadata.get("provider") == "localstack":
+                        return True
+            except Exception:
+                # Silently continue to next path
+                continue
 
     return False
 
