@@ -413,7 +413,7 @@ deploy_cdk() {
 
     # Collect outputs
     print_status $YELLOW "📊 Collecting deployment outputs..."
-    local stack_name="TapStack${env_suffix}"
+    local stack_name="TapStack-${env_suffix}"
     local output_json="{}"
 
     # Get all stacks (parent and nested)
@@ -591,24 +591,46 @@ deploy_cloudformation() {
     # Collect outputs
     print_status $YELLOW "📊 Collecting deployment outputs..."
     local output_json="{}"
-    
+
+    # First check if stack exists
     if awslocal cloudformation describe-stacks --stack-name "$stack_name" > /dev/null 2>&1; then
-        output_json=$(awslocal cloudformation describe-stacks --stack-name "$stack_name" \
-            --query 'Stacks[0].Outputs' \
-            --output json 2>/dev/null | python3 -c "
+        print_status $BLUE "   Stack found: $stack_name"
+
+        # Get full stack description and extract outputs with better error handling
+        local stack_desc=$(awslocal cloudformation describe-stacks --stack-name "$stack_name" --output json 2>/dev/null)
+
+        if [ -n "$stack_desc" ]; then
+            print_status $BLUE "   Stack description retrieved, parsing outputs..."
+
+            output_json=$(echo "$stack_desc" | python3 -c "
 import sys, json
 try:
     data = json.load(sys.stdin)
     outputs = {}
-    if data:
-        for output in data:
-            outputs[output['OutputKey']] = output['OutputValue']
+    if data and 'Stacks' in data and len(data['Stacks']) > 0:
+        stack = data['Stacks'][0]
+        if 'Outputs' in stack and stack['Outputs']:
+            for output in stack['Outputs']:
+                if 'OutputKey' in output and 'OutputValue' in output:
+                    outputs[output['OutputKey']] = output['OutputValue']
+        else:
+            print('DEBUG: No Outputs field in stack or Outputs is empty', file=sys.stderr)
+    else:
+        print('DEBUG: No Stacks in response', file=sys.stderr)
     print(json.dumps(outputs, indent=2))
-except:
+except Exception as e:
+    print(f'DEBUG: Exception parsing outputs: {e}', file=sys.stderr)
     print('{}')
-" || echo "{}")
+" 2>&1)
+
+            print_status $BLUE "   Parsed output_json length: $(echo "$output_json" | wc -c)"
+        else
+            print_status $YELLOW "   ⚠️ Stack description is empty"
+        fi
+    else
+        print_status $RED "   ❌ Stack not found: $stack_name"
     fi
-    
+
     save_outputs "$output_json"
 }
 
