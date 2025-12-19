@@ -193,5 +193,5 @@ class TestServerlessS3ProcessorApp(unittest.TestCase):
         assert len(stacks) == 2, f"Expected 2 stacks but found {len(stacks)}"
 
         stack_ids = [stack.node.id for stack in stacks]
-        assert "TAP-S3Processor-dev" in stack_ids, "Expected dev stack"
-        assert "TAP-S3Processor-prod" in stack_ids, "Expected prod stack"
+        assert "TapStackdev" in stack_ids, "Expected dev stack"
+        assert "TapStackprod" in stack_ids, "Expected prod stack"

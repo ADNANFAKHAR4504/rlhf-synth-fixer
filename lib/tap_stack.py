@@ -367,7 +367,7 @@ class ServerlessS3ProcessorApp(cdk.App):
         for env_suffix in environments:
             TapStack(
                 self,
-                f"TAP-S3Processor-{env_suffix}",
+                f"TapStack{env_suffix}",
                 props=TapStackProps(environment_suffix=env_suffix),
                 env=cdk.Environment(
                     account=os.getenv("CDK_DEFAULT_ACCOUNT"),
