@@ -4,11 +4,18 @@
   "complexity": "medium",
   "turn_type": "single",
   "po_id": "350152",
-  "team": "2",
+  "team": "synth",
   "startedAt": "2025-11-19T10:29:35.119Z",
-  "subtask": "IaC Program Optimization",
+  "subtask": "Infrastructure QA and Management",
   "subject_labels": [
-    "IaC Optimization"
+    "Infrastructure Analysis/Monitoring",
+    "General Infrastructure Tooling QA"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "WAF",
+    "CloudWatch",
+    "Lambda"
   ],
   "provider": "localstack"
 }

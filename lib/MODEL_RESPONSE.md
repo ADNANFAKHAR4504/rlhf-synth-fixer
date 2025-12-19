@@ -606,7 +606,7 @@ class APIGatewayAuditor:
     def generate_console_report(self):
         """Generate console report using tabulate"""
         if not self.findings:
-            print("\n✅ No security or performance issues found!")
+            print("\nNo security or performance issues found!")
             return
 
         # Prepare data for tabulate
@@ -796,7 +796,7 @@ def main():
         auditor.generate_audit_json()
         auditor.generate_resources_json()
 
-        print(f"\n✅ Audit complete! Check api_gateway_audit.json and api_gateway_resources.json for detailed results.")
+        print(f"\nAudit complete! Check api_gateway_audit.json and api_gateway_resources.json for detailed results.")
 
     except Exception as e:
         logger.error(f"Audit failed: {str(e)}")
