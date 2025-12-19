@@ -4,7 +4,7 @@ Unit tests for TapStack infrastructure components.
 import os
 import aws_cdk as cdk
 from aws_cdk.assertions import Template
-from lib.tap_stack import TapStack
+from lib.tap_stack import TapStack, TapStackProps
 
 
 def test_tap_stack_creates_expected_resources():
@@ -15,11 +15,16 @@ def test_tap_stack_creates_expected_resources():
     os.environ['CDK_DEFAULT_ACCOUNT'] = '123456789012'
     os.environ['CDK_DEFAULT_REGION'] = 'us-east-1'
 
-    # Create the stack
-    stack = TapStack(app, "TestStack", environment_suffix="test")
+    # Create the parent stack
+    parent_stack = TapStack(app, "TestStack", environment_suffix="test")
 
-    # Prepare assertion template
-    template = Template.from_stack(stack)
+    # Create a standalone nested stack for testing
+    nested_stack = TapStackProps(
+        app, "TestNestedStack", environment_suffix="test"
+    )
+
+    # Get template from nested stack (where resources are defined)
+    template = Template.from_stack(nested_stack)
 
     # Verify S3 bucket is created
     template.resource_count_is("AWS::S3::Bucket", 1)
@@ -41,6 +46,12 @@ def test_tap_stack_creates_expected_resources():
         "AWS::ElasticLoadBalancingV2::LoadBalancer", 1
     )
 
+    # Verify parent stack has outputs
+    parent_template = Template.from_stack(parent_stack)
+    parent_template.has_output(
+        "LogBucketName", {"Description": "Name of the S3 bucket for application logs."}
+    )
+
 
 def test_s3_bucket_has_encryption():
     """Test that S3 bucket has encryption enabled."""
@@ -49,8 +60,11 @@ def test_s3_bucket_has_encryption():
     os.environ['CDK_DEFAULT_ACCOUNT'] = '123456789012'
     os.environ['CDK_DEFAULT_REGION'] = 'us-east-1'
 
-    stack = TapStack(app, "TestStack", environment_suffix="test")
-    template = Template.from_stack(stack)
+    # Create nested stack for testing
+    nested_stack = TapStackProps(
+        app, "TestNestedStack", environment_suffix="test"
+    )
+    template = Template.from_stack(nested_stack)
 
     # Verify S3 bucket encryption
     template.has_resource_properties(
@@ -76,8 +90,11 @@ def test_s3_bucket_has_versioning():
     os.environ['CDK_DEFAULT_ACCOUNT'] = '123456789012'
     os.environ['CDK_DEFAULT_REGION'] = 'us-east-1'
 
-    stack = TapStack(app, "TestStack", environment_suffix="test")
-    template = Template.from_stack(stack)
+    # Create nested stack for testing
+    nested_stack = TapStackProps(
+        app, "TestNestedStack", environment_suffix="test"
+    )
+    template = Template.from_stack(nested_stack)
 
     # Verify S3 bucket versioning
     template.has_resource_properties(

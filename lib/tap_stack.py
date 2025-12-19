@@ -228,9 +228,47 @@ class TapStack(Stack):
         super().__init__(scope, construct_id, **kwargs)
 
         # Instantiate the TapStackProps nested stack with configurable instance type
-        TapStackProps(
+        nested_stack = TapStackProps(
             self,
             f"{construct_id}Props",
             environment_suffix=environment_suffix,
             instance_type=instance_type
+        )
+
+        # Expose outputs from nested stack to parent stack
+        CfnOutput(
+            self,
+            "LogBucketName",
+            value=nested_stack.log_bucket.bucket_name,
+            description="Name of the S3 bucket for application logs.",
+        )
+        CfnOutput(
+            self,
+            "EC2RoleName",
+            value=nested_stack.ec2_role.role_name,
+            description="Name of the IAM role for EC2 instances.",
+        )
+        CfnOutput(
+            self,
+            "ASGName",
+            value=nested_stack.asg.auto_scaling_group_name,
+            description="Name of the Auto Scaling Group.",
+        )
+        CfnOutput(
+            self,
+            "ALBDNS",
+            value=nested_stack.alb.load_balancer_dns_name,
+            description="DNS name of the Application Load Balancer.",
+        )
+        CfnOutput(
+            self,
+            "VPCId",
+            value=nested_stack.vpc.vpc_id,
+            description="ID of the main VPC.",
+        )
+        CfnOutput(
+            self,
+            "SecurityGroupId",
+            value=nested_stack.security_group.security_group_id,
+            description="ID of the EC2 instance Security Group.",
         )
