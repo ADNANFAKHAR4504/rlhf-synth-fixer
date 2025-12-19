@@ -235,29 +235,36 @@ describe('ElasticBeanstalkStack - EC2 Auto Scaling Infrastructure', () => {
       });
     });
 
-    test('Creates Launch Configuration with user data', () => {
+    test('Creates Launch Template with user data', () => {
       const resources = template.toJSON().Resources;
-      const launchConfig = Object.values(resources).find(
-        (r: any) => r.Type === 'AWS::AutoScaling::LaunchConfiguration'
+      const launchTemplate = Object.values(resources).find(
+        (r: any) => r.Type === 'AWS::EC2::LaunchTemplate'
       ) as any;
 
-      expect(launchConfig).toBeDefined();
-      expect(launchConfig.Properties.InstanceType).toBe('t3.micro');
-      expect(launchConfig.Properties.UserData).toBeDefined();
-      expect(launchConfig.Properties.IamInstanceProfile).toBeDefined();
+      expect(launchTemplate).toBeDefined();
+      expect(launchTemplate.Properties.LaunchTemplateData.InstanceType).toBe(
+        't3.micro'
+      );
+      expect(launchTemplate.Properties.LaunchTemplateData.UserData).toBeDefined();
+      expect(
+        launchTemplate.Properties.LaunchTemplateData.IamInstanceProfile
+      ).toBeDefined();
     });
 
     test('User data contains Node.js web server setup', () => {
       const resources = template.toJSON().Resources;
-      const launchConfig = Object.values(resources).find(
-        (r: any) => r.Type === 'AWS::AutoScaling::LaunchConfiguration'
+      const launchTemplate = Object.values(resources).find(
+        (r: any) => r.Type === 'AWS::EC2::LaunchTemplate'
       ) as any;
 
-      expect(launchConfig).toBeDefined();
-      expect(launchConfig.Properties.UserData).toBeDefined();
+      expect(launchTemplate).toBeDefined();
+      expect(
+        launchTemplate.Properties.LaunchTemplateData.UserData
+      ).toBeDefined();
 
       // UserData is in Fn::Base64 with Fn::Join format
-      const userDataObj = launchConfig.Properties.UserData['Fn::Base64'];
+      const userDataObj =
+        launchTemplate.Properties.LaunchTemplateData.UserData['Fn::Base64'];
       expect(userDataObj).toBeDefined();
 
       // Extract user data string from Fn::Join
