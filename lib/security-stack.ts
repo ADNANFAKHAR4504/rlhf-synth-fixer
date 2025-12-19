@@ -204,23 +204,19 @@ export class SecurityStack extends Construct {
     const publicSubnets = this.vpc.publicSubnets;
 
     publicSubnets.forEach((subnet, index) => {
-      const bastionHost = new ec2.Instance(
-        this,
-        `BastionHost${index + 1}`,
-        {
-          vpc: this.vpc,
-          vpcSubnets: {
-            subnets: [subnet],
-          },
-          securityGroup: bastionSecurityGroup,
-          instanceType: ec2.InstanceType.of(
-            ec2.InstanceClass.T3,
-            ec2.InstanceSize.NANO
-          ),
-          machineImage: ec2.MachineImage.latestAmazonLinux2(),
-          role: bastionRole,
-        }
-      );
+      const bastionHost = new ec2.Instance(this, `BastionHost${index + 1}`, {
+        vpc: this.vpc,
+        vpcSubnets: {
+          subnets: [subnet],
+        },
+        securityGroup: bastionSecurityGroup,
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.NANO
+        ),
+        machineImage: ec2.MachineImage.latestAmazonLinux2(),
+        role: bastionRole,
+      });
 
       // Apply removal policy for LocalStack
       bastionHost.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
