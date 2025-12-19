@@ -428,6 +428,7 @@ import sys, json, subprocess
 
 all_outputs = {}
 stacks = '''$all_stacks'''.strip().split('\n')
+primary_stack = '''$stack_name'''
 
 for stack in stacks:
     if not stack:
@@ -446,7 +447,9 @@ for stack in stacks:
     except Exception as e:
         continue
 
-print(json.dumps(all_outputs, indent=2))
+# Nest outputs under primary stack name for compatibility with test expectations
+result = {primary_stack: all_outputs} if all_outputs else {}
+print(json.dumps(result, indent=2))
 " 2>/dev/null || echo "{}")
 
     save_outputs "$output_json"
