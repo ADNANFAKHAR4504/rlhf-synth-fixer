@@ -118,8 +118,8 @@ describeOrSkip('TapStack Integration Tests', () => {
       );
 
       if (isLocalStack) {
-        // Find VPC by CIDR block or by any VPC in the list
-        const vpc = response.Vpcs?.find(v => v.CidrBlock === '10.0.0.0/16') || response.Vpcs?.[0];
+        // Find VPC by CIDR block - must match exactly
+        const vpc = response.Vpcs?.find(v => v.CidrBlock === '10.0.0.0/16');
         expect(vpc).toBeDefined();
         expect(vpc?.State).toBe('available');
         expect(vpc?.CidrBlock).toBe('10.0.0.0/16');
@@ -146,7 +146,7 @@ describeOrSkip('TapStack Integration Tests', () => {
       // DNS attributes might be in a different format in the response
       // Just check that the VPC exists and is available
       if (isLocalStack) {
-        const vpc = response.Vpcs?.find(v => v.CidrBlock === '10.0.0.0/16') || response.Vpcs?.[0];
+        const vpc = response.Vpcs?.find(v => v.CidrBlock === '10.0.0.0/16');
         expect(vpc).toBeDefined();
         expect(vpc?.State).toBe('available');
       } else {
