@@ -22,6 +22,14 @@ export interface ServerlessStackProps extends cdk.StackProps {
 }
 
 export class ServerlessStack extends cdk.Stack {
+  // Public properties for parent stack to access
+  public readonly processingBucket: s3.IBucket;
+  public readonly processedBucket: s3.IBucket;
+  public readonly processingStateMachine: stepfunctions.IStateMachine;
+  public readonly processingBus: events.IEventBus;
+  public readonly alertsTopic: sns.ITopic;
+  public readonly dashboardName: string;
+
   constructor(scope: Construct, id: string, props?: ServerlessStackProps) {
     super(scope, id, props);
 
@@ -535,6 +543,13 @@ def handler(event, context):
       })
     );
 
+    // Assign to public properties for parent stack access
+    this.processingBucket = processingBucket;
+    this.processedBucket = processedBucket;
+    this.processingStateMachine = processingStateMachine;
+    this.processingBus = processingBus;
+    this.alertsTopic = alertsTopic;
+
     // Create CloudWatch Dashboard
     const dashboard = new cloudwatch.Dashboard(this, 'ProcessingDashboard', {
       dashboardName: `file-processing-${environmentSuffix}`,
@@ -583,6 +598,9 @@ def handler(event, context):
         ],
       ],
     });
+
+    // Store dashboard name for parent stack
+    this.dashboardName = dashboard.dashboardName;
 
     // Add comprehensive tags
     const tags = {
