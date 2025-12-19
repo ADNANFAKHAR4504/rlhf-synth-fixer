@@ -113,11 +113,14 @@ describeOrSkip('TapStack Integration Tests', () => {
       // Retry for LocalStack eventual consistency
       const response = await retryWithBackoff(
         () => ec2Client.send(command),
-        isLocalStack ? 3 : 0,
-        isLocalStack ? 1000 : 0
+        isLocalStack ? 5 : 0,
+        isLocalStack ? 2000 : 0
       );
 
       if (isLocalStack) {
+        // Debug: Log all VPCs found
+        console.log('All VPCs found:', response.Vpcs?.map(v => ({ Id: v.VpcId, Cidr: v.CidrBlock })));
+
         // Find VPC by CIDR block - must match exactly
         const vpc = response.Vpcs?.find(v => v.CidrBlock === '10.0.0.0/16');
         expect(vpc).toBeDefined();
@@ -139,13 +142,14 @@ describeOrSkip('TapStack Integration Tests', () => {
       // Retry for LocalStack eventual consistency
       const response = await retryWithBackoff(
         () => ec2Client.send(command),
-        isLocalStack ? 3 : 0,
-        isLocalStack ? 1000 : 0
+        isLocalStack ? 5 : 0,
+        isLocalStack ? 2000 : 0
       );
 
       // DNS attributes might be in a different format in the response
       // Just check that the VPC exists and is available
       if (isLocalStack) {
+        console.log('VPCs for DNS test:', response.Vpcs?.map(v => ({ Id: v.VpcId, Cidr: v.CidrBlock })));
         const vpc = response.Vpcs?.find(v => v.CidrBlock === '10.0.0.0/16');
         expect(vpc).toBeDefined();
         expect(vpc?.State).toBe('available');
